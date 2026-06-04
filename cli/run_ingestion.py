@@ -5904,6 +5904,51 @@ def _detect_scenes(
     }
 
 
+def _is_video_phase6_complete(cfg: Dict[str, Any], video_hash: str, processing_dir: Path) -> bool:
+    """
+    Check if a video was previously successfully and fully ingested (Phase 6 complete).
+    We check:
+    1. The local temporal_index.json file on disk.
+    2. The SQLite database's temporal_index_public table.
+    """
+    temporal_index_path = processing_dir / 'video' / 'temporal_index.json'
+    if temporal_index_path.exists():
+        try:
+            data = json.loads(temporal_index_path.read_text(encoding='utf-8'))
+            if isinstance(data, dict) and data.get('phase6_complete') is True:
+                return True
+        except Exception:
+            pass
+
+    # Check fallback legacy path
+    legacy_temporal_path = processing_dir / 'temporal_index.json'
+    if legacy_temporal_path.exists():
+        try:
+            data = json.loads(legacy_temporal_path.read_text(encoding='utf-8'))
+            if isinstance(data, dict) and data.get('phase6_complete') is True:
+                return True
+        except Exception:
+            pass
+
+    db_path = (cfg.get("paths", {}) or {}).get("db_path")
+    if db_path and os.path.exists(db_path):
+        conn = None
+        try:
+            conn = sqlite3.connect(db_path)
+            cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='temporal_index_public'")
+            if cur.fetchone():
+                cur = conn.execute("SELECT phase6_complete FROM temporal_index_public WHERE video_id=?", (video_hash,))
+                row = cur.fetchone()
+                if row and int(row[0] or 0) == 1:
+                    return True
+        except Exception as e:
+            logger.warning(f"Failed to query temporal_index_public for completion status: {e}")
+        finally:
+            if conn:
+                conn.close()
+    return False
+
+
 @APP.command()
 def run(
     input_dir: Optional[Path] = typer.Option(None, help='Directory containing videos to ingest'),
@@ -6144,7 +6189,13 @@ def run(
 
         stored_manifest = list_scenes_for_video(cfg, video_hash)
         force_redetect = cfg.get('force_reprocess', False)
-        reuse_scenes = bool(stored_manifest.get('scenes')) and not force_redetect and not is_resuming
+        is_previously_complete = _is_video_phase6_complete(cfg, video_hash, processing_dir_target)
+        reuse_scenes = (
+            bool(stored_manifest.get('scenes')) 
+            and is_previously_complete 
+            and not force_redetect 
+            and not is_resuming
+        )
         
         if force_redetect and stored_manifest.get('scenes'):
             if VERBOSE:
@@ -7076,6 +7127,15 @@ def run(
         video_result['faiss_ok'] = _merge_store_statuses(scene_faiss_status, phase6_faiss_status)
         video_result['modality_status'] = _aggregate_modality_status(scene_outputs, phase6_embeddings_result)
         
+        # Clean up progressive ingestion checkpoint on successful completion
+        if video_result.get('phase6_complete') is True:
+            try:
+                if checkpoint_path.exists():
+                    checkpoint_path.unlink()
+                    logger.info(f"Cleaned up progressive ingestion checkpoint for completed video: {video_path.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete completed progressive state checkpoint: {e}")
+
         results.append(video_result)
         if tracker is not None:
             finish_processing("completed")

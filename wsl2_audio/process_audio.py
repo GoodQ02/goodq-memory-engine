@@ -454,32 +454,41 @@ def process_audio(audio_file, output_dir):
     
     # GPU setup (profile-aware defaults)
     cuda_available = torch.cuda.is_available()
+    mps_available = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    
+    env_device = os.getenv("GOODQ_DEVICE")
     gpu_profile_cfg = resolve_wsl_gpu_config({
-        "device": "cuda" if cuda_available else "cpu",
+        "device": env_device.lower() if env_device else ("cuda" if cuda_available else ("mps" if mps_available else "cpu")),
         "compute_type": "float16" if cuda_available else "int8",
         "memory_fraction": 0.8,
         **dict(runtime_cfg.get("gpu") or {}),
     })
-    device = str(gpu_profile_cfg.get("device", "cuda" if cuda_available else "cpu")).lower()
+    device = str(gpu_profile_cfg.get("device", "cuda" if cuda_available else ("mps" if mps_available else "cpu"))).lower()
     compute_type = str(
         gpu_profile_cfg.get(
             "compute_type",
             "float16" if device == "cuda" else "int8",
         )
     ).lower()
+    
     if device == "cuda" and not cuda_available:
         if require_gpu():
             raise RuntimeError("GOODQ_REQUIRE_GPU=1 but CUDA is not available in WSL audio process")
         device = "cpu"
-    if device != "cuda" and require_gpu():
-        raise RuntimeError("GOODQ_REQUIRE_GPU=1 but profile/config resolved WSL audio processing to CPU")
-    if device == "cpu" and compute_type in {"float16", "fp16", "mixed", "bfloat16"}:
-        compute_type = "int8"
+    elif device == "mps" and not mps_available:
+        device = "cpu"
+        
+    is_gpu = device in {"cuda", "mps"}
+    if not is_gpu and require_gpu():
+        raise RuntimeError(f"GOODQ_REQUIRE_GPU=1 but profile/config resolved WSL audio processing to CPU ({device})")
+        
+    if device in {"cpu", "mps"} and compute_type in {"float16", "fp16", "mixed", "bfloat16"}:
+        compute_type = "int8" if device == "cpu" else "float32"
 
     log_runtime_profile_state(
         logger=logging.getLogger(__name__),
         context="wsl2_audio.process_audio",
-        gpu_enabled=(device == "cuda"),
+        gpu_enabled=is_gpu,
         wsl_enabled=True,
     )
 
@@ -519,7 +528,9 @@ def process_audio(audio_file, output_dir):
             transcription_language_raw = str(processing_cfg.get("language", "en") or "").strip()
             transcription_language = None if transcription_language_raw.lower() in {"", "auto", "detect", "none"} else transcription_language_raw
             beam_size = int(processing_cfg.get("beam_size", 5) or 5)
-            whisper_model = WhisperModel(result["whisper_model"], device=device, compute_type=compute_type)
+            whisper_device = "cpu" if device == "mps" else device
+            whisper_compute = "int8" if whisper_device == "cpu" and compute_type not in {"float32", "float64"} else compute_type
+            whisper_model = WhisperModel(result["whisper_model"], device=whisper_device, compute_type=whisper_compute)
             segments, info = whisper_model.transcribe(
                 audio_file,
                 language=transcription_language,
@@ -584,7 +595,8 @@ def process_audio(audio_file, output_dir):
                         hf_token,
                         cache_dir=_resolve_hf_cache_dir(),
                     )
-                    diarization_pipeline.to(torch.device(device))
+                    diarization_device = "cpu" if (device == "mps" and os.getenv("GOODQ_MPS_DIARIZATION") == "0") else device
+                    diarization_pipeline.to(torch.device(diarization_device))
                     
                     diarization_audio = {
                         "waveform": waveform.detach().cpu(),

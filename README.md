@@ -99,6 +99,10 @@ High-precision 32-bit floating point embeddings are persisted in Qdrant and FAIS
 *   **Performance:** Achieves sub-millisecond candidate pre-filtering.
 *   **Accuracy:** 100% search accuracy is maintained by performing the final rank scoring on the uncompressed raw float32 vectors.
 
+> [!NOTE]
+> **Hybrid Precision Caching Model**:
+> GoodQ4All uses an additive **sidecar vector cache** architecture. High-precision 32-bit floating point (`float32`) embeddings remain the authoritative truth of the system, stored in Qdrant and FAISS. Performance-oriented query pre-filtering is handled via lightweight **TurboQuant** fields (Lloyd-Max Polar Quantization + Johnson–Lindenstrauss residual corrections) stored in SQLite. This ensures zero data loss, guarantees rollback capability, and cuts memory usage.
+
 ### 3. Adaptive Hardware Profiles
 The pipeline dynamically adjusts its computational needs to match your system specs:
 *   `BASELINE` (CPU-safe): Fully operational, offline-ready execution on standard CPU hardware. Bypasses GPU requirements gracefully.
@@ -162,6 +166,7 @@ GoodQ4All ships with two local operator console variants:
 *   Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 *   Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
 *   Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
+*   Data Privacy: [`docs/PRIVACY.md`](docs/PRIVACY.md)
 
 ### Technical Details
 *   Architecture: [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)

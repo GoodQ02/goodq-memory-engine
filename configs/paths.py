@@ -34,7 +34,8 @@ MEMORY_DB = drive_path(_PATHS["db_path"])
 KNOWLEDGE_GRAPH_DB = drive_path(_PATHS["knowledge_graph_db"])
 
 # Cache
-CACHE_DIR = DATA_ROOT / "cache"
+from steps.common.platform_config import PlatformHelper
+CACHE_DIR = PlatformHelper.get_cache_root()
 HF_CACHE = CACHE_DIR / "huggingface"
 TORCH_CACHE = CACHE_DIR / "torch"
 

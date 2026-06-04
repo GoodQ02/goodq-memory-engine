@@ -85,6 +85,7 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(run_ingestion, "load_configs", lambda *_: cfg_template)
     monkeypatch.setattr(run_ingestion, "resolve_ffmpeg", lambda *_: "ffmpeg")
     monkeypatch.setattr(run_ingestion, "list_scenes_for_video", lambda *a, **k: stored_scenes)
+    monkeypatch.setattr(run_ingestion, "_is_video_phase6_complete", lambda *a, **k: True)
     monkeypatch.setattr(run_ingestion, "_compute_sha256", lambda *a, **k: "videohash")
     monkeypatch.setattr(run_ingestion, "ensure_scene", lambda *a, **k: "scene_0000")
     monkeypatch.setattr(run_ingestion, "scene_has_materialized", lambda *a, **k: {"keyframe": True, "audio": True})

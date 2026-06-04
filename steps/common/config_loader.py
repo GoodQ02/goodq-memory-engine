@@ -16,6 +16,7 @@ from typing import Any, Dict
 
 import yaml
 from steps.common.profile_config import log_runtime_profile_state
+from steps.common.platform_config import PlatformHelper
 
 
 def _read_yaml(path: str) -> Dict[str, Any]:
@@ -183,43 +184,37 @@ def _ensure_runtime_path_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
         base_host_root = host_data_root.rstrip("/\\")
         paths_cfg.setdefault("models_cache", f"{base_host_root}/models")
         paths_cfg.setdefault("qdrant_storage", f"{base_host_root}/qdrant_storage")
+    else:
+        paths_cfg.setdefault("models_cache", str(PlatformHelper.get_models_root()).replace("\\", "/"))
+        paths_cfg.setdefault("qdrant_storage", str(PlatformHelper.get_data_root() / "qdrant_storage").replace("\\", "/"))
 
-        ffmpeg_cfg = tools_cfg.get("ffmpeg_exe")
-        if not isinstance(ffmpeg_cfg, str) or ffmpeg_cfg.strip() in {"", "ffmpeg"}:
-            ffmpeg_candidate = Path(base_host_root) / "_TOOLS" / "ffmpeg" / "bin" / "ffmpeg.exe"
-            if ffmpeg_candidate.exists():
-                tools_cfg["ffmpeg_exe"] = str(ffmpeg_candidate).replace("\\", "/")
+    from steps.common.tool_resolver import ToolResolver
 
-        tesseract_cfg = tools_cfg.get("tesseract_exe")
-        if not isinstance(tesseract_cfg, str) or tesseract_cfg.strip() in {"", "tesseract"}:
-            tesseract_candidates = []
-            tesseract_on_path = shutil.which("tesseract")
-            if tesseract_on_path:
-                tesseract_candidates.append(Path(tesseract_on_path))
-            for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
-                base_program_files = os.environ.get(env_name)
-                if base_program_files:
-                    tesseract_candidates.append(Path(base_program_files) / "Tesseract-OCR" / "tesseract.exe")
-            for candidate_exe in tesseract_candidates:
-                if candidate_exe.exists():
-                    tools_cfg["tesseract_exe"] = str(candidate_exe).replace("\\", "/")
-                    break
+    ffmpeg_cfg = tools_cfg.get("ffmpeg_exe")
+    if not isinstance(ffmpeg_cfg, str) or ffmpeg_cfg.strip() in {"", "ffmpeg", "ffmpeg.exe"}:
+        res = ToolResolver.resolve_tool("ffmpeg")
+        if res["found"]:
+            tools_cfg["ffmpeg_exe"] = res["path"]
 
-        poppler_cfg = tools_cfg.get("poppler_bin")
-        if not isinstance(poppler_cfg, str) or not poppler_cfg.strip():
-            poppler_candidates = []
-            pdftotext_on_path = shutil.which("pdftotext")
-            if pdftotext_on_path:
-                poppler_candidates.append(Path(pdftotext_on_path).parent)
-            for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
-                base_program_files = os.environ.get(env_name)
-                if base_program_files:
-                    poppler_candidates.append(Path(base_program_files) / "Git" / "mingw64" / "bin")
-            for candidate_dir in poppler_candidates:
-                candidate_exe = candidate_dir / "pdftotext.exe"
-                if candidate_exe.exists():
-                    tools_cfg["poppler_bin"] = str(candidate_dir).replace("\\", "/")
-                    break
+    tesseract_cfg = tools_cfg.get("tesseract_exe")
+    if not isinstance(tesseract_cfg, str) or tesseract_cfg.strip() in {"", "tesseract", "tesseract.exe"}:
+        res = ToolResolver.resolve_tool("tesseract")
+        if res["found"]:
+            tools_cfg["tesseract_exe"] = res["path"]
+
+    poppler_cfg = tools_cfg.get("poppler_bin")
+    if not isinstance(poppler_cfg, str) or not poppler_cfg.strip():
+        res = ToolResolver.resolve_tool("pdftotext")
+        if res["found"]:
+            tools_cfg["poppler_bin"] = str(Path(res["path"]).parent).replace("\\", "/")
+
+    # Specific environment overrides
+    if os.environ.get("GOODQ_LOGS_ROOT"):
+        paths_cfg["log_dir"] = os.environ["GOODQ_LOGS_ROOT"].replace("\\", "/")
+    if os.environ.get("GOODQ_MODELS_ROOT"):
+        paths_cfg["models_cache"] = os.environ["GOODQ_MODELS_ROOT"].replace("\\", "/")
+    if os.environ.get("GOODQ_TEMP_ROOT"):
+        paths_cfg["processing"] = os.environ["GOODQ_TEMP_ROOT"].replace("\\", "/")
 
     return cfg
 
@@ -288,7 +283,10 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
             load_dotenv(env_path)
     except Exception as e:
         print(f'[WARN] Could not load .env.local: {str(e)}')
-        pass
+    # Resolve platform data root default if unset
+    from steps.common.platform_config import PlatformHelper
+    if not os.environ.get("GOODQ_DATA_ROOT"):
+        os.environ["GOODQ_DATA_ROOT"] = str(PlatformHelper.get_data_root()).replace("\\", "/")
 
     _apply_env_aliases()
 

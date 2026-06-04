@@ -16,7 +16,7 @@ def test_pid_exists_with_psutil(monkeypatch) -> None:
         def pid_exists(pid: int) -> bool:
             return pid == 12345
 
-    monkeypatch.setattr("sys.modules", {**sys.modules, "psutil": MockPsutil})
+    monkeypatch.setitem(sys.modules, "psutil", MockPsutil)
     
     assert watchdog._pid_exists(12345) is True
     assert watchdog._pid_exists(99999) is False

@@ -86,7 +86,7 @@ async def submit_ingest(request: IngestSubmitRequest = Body(...)):
     budget_scope, budget_status = _submit_budget_profile()
 
     existing = registry.get(file_hash)
-    if existing:
+    if existing and existing.get("status") == "success":
         record = ledger.create_record(
             source_path=source_path,
             staged_path=None,

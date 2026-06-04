@@ -240,6 +240,35 @@ Verify:
 That distinction matters. A single-scene optional failure and a broken witness
 are not the same problem.
 
+## Ingestion Watchdog Troubleshooting
+
+### Stale Lock File Check
+If the Ingestion Watchdog exits immediately or fails to start, a stale lock file might be present from a dead process. 
+
+To clear this:
+1. Verify if a python process running `cli.watchdog` is actually running.
+2. If no process is running, locate the lock file:
+   `${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/logs/watchdog.lock`
+3. Delete the `watchdog.lock` file or run `.\start_goodq_dev.ps1` (which automatically checks and removes stale locks on startup).
+
+### Retry Behavior for Failed Ingestions
+Files that failed ingestion (e.g. due to VRAM limits or transient errors) write a `failed` record to the watchdog state registry. The watchdog and API duplicate check are configured so that only `success` statuses skip ingestion. If a previous run failed, the watchdog will automatically re-queue and retry the file when re-scanned.
+
+### Restarting the Dev Environment Background Services
+If the Watchdog or API Server processes need to be restarted to enact changes, run the following in a local PowerShell console:
+
+```powershell
+# Navigate to the project root
+cd <ProjectRoot>
+
+# Terminate any orphaned/stale service sessions
+Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" | Where-Object { $_.CommandLine -like "*api.server*" -or $_.CommandLine -like "*cli.watchdog*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Get-CimInstance Win32_Process -Filter "name = 'python.exe'" | Where-Object { $_.CommandLine -like "*api.server*" -or $_.CommandLine -like "*cli.watchdog*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# Start the services persistently using the auto-start script
+.\start_goodq_dev.ps1
+```
+
 ## Related Docs
 
 - `README.md`
@@ -248,3 +277,4 @@ are not the same problem.
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
 - `docs/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/SCENE_MANIFEST_SPECIFICATION.md`
+

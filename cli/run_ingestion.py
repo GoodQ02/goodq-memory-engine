@@ -6681,7 +6681,7 @@ def run(
                 window_scenes = grouped_scenes[w_idx]
                 typer.echo(f"\n[WINDOW {w_idx}] Processing progressive window index {w_idx} with {len(window_scenes)} scenes...")
                 
-                scene_tasks = [process_scene(idx + 1, s) for idx, s in enumerate(window_scenes)]
+                scene_tasks = [process_scene(s.get('index', idx) + 1, s) for idx, s in enumerate(window_scenes)]
                 window_results = await asyncio.gather(*scene_tasks, return_exceptions=False)
                 
                 audio_timings = {}

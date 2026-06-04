@@ -7096,13 +7096,33 @@ def run(
             video_result['phase6_audio_overlay'] = segmentation_shadow_overlay
 
         # Rehydrate temporal index if Phase 6 was run
-        temporal_index_path = processing_dir / 'video' / 'temporal_index.json'
+        temporal_index_path = processing_dir / 'temporal_index.json'
+        if not temporal_index_path.exists():
+            temporal_index_path = processing_dir / 'video' / 'temporal_index.json'
+
         if temporal_index_path.exists():
             try:
-                video_result['temporal_index'] = json.loads(temporal_index_path.read_text(encoding='utf-8'))
-                video_result['temporal_index_path'] = str(temporal_index_path)
+                temporal_index_data = json.loads(temporal_index_path.read_text(encoding='utf-8'))
+                if isinstance(temporal_index_data, dict):
+                    if video_result.get('phase6_complete') is True:
+                        temporal_index_data['phase6_complete'] = True
+                        atomic_write_json(temporal_index_path, temporal_index_data)
+                    video_result['temporal_index'] = temporal_index_data
+                    video_result['temporal_index_path'] = str(temporal_index_path)
             except Exception as e:
-                logger.warning(f"Failed to read final temporal index: {e}")
+                logger.warning(f"Failed to read/update final temporal index: {e}")
+
+        # Also update phase6_complete in scene_manifest.json on disk if complete
+        scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
+        if scene_manifest_path.exists() and video_result.get('phase6_complete') is True:
+            try:
+                manifest_data = json.loads(scene_manifest_path.read_text(encoding='utf-8'))
+                if isinstance(manifest_data, dict):
+                    manifest_data['phase6_complete'] = True
+                    atomic_write_json(scene_manifest_path, manifest_data)
+            except Exception as e:
+                logger.warning(f"Failed to update phase6_complete in scene_manifest.json: {e}")
+
 
         segmentation_shadow_result = _attach_segmentation_shadow_metrics(
             cfg,

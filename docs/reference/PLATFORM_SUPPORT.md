@@ -2,27 +2,29 @@
 <!-- DOC_STATUS: AUTHORITATIVE -->
 <!-- DOC_LAST_VERIFIED: 2026-04-19 -->
 
-# Dual-Host Runtime Contract (Desktop + Laptop)
+# Multi-Platform Runtime Contract
 
 ## Purpose
 
 Define the current supported runtime contract for:
 
-- desktop as the canonical Windows host
-- laptop as the follower host
-- `BASELINE` as the CPU-safe profile
-- `GPU_ENHANCED` as the additive CUDA + WSL acceleration profile
-
-This document describes the live contract, not proposed future flags.
+- **Windows Desktop:** The primary canonical host and coordination baseline.
+- **Windows Laptop:** A follower host aligning from the desktop.
+- **macOS (Apple Silicon):** Native direct execution environment with MPS (Metal Performance Shaders) acceleration.
+- **Linux:** Native direct execution environment with CUDA/CPU options.
+- **`BASELINE` Profile:** CPU-safe portable execution.
+- **`GPU_ENHANCED` Profile:** CUDA / MPS / WSL-accelerated execution.
 
 ---
 
-## Host Roles
+## Host Roles & Platform Contracts
 
-| Role | Contract |
+| Platform / Role | Contract |
 | --- | --- |
-| Desktop | Canonical source of truth for code, epochs, ingestion state, and validation baselines |
-| Laptop | Follower host that aligns from desktop and must preserve CPU-safe correctness |
+| **Windows Desktop** | Canonical source of truth for code, epochs, ingestion state, and validation baselines. |
+| **Windows Laptop** | Follower host that aligns from the desktop and must preserve CPU-safe correctness. |
+| **macOS (Apple Silicon)** | Direct native execution host; leverages MPS for perception embeddings, CPU/MPS for Whisper transcription, and CPU for PyAnnote diarization. |
+| **Linux (Ubuntu/Arch)** | Direct native execution host; leverages local CUDA or CPU backends natively. |
 
 ---
 
@@ -30,11 +32,11 @@ This document describes the live contract, not proposed future flags.
 
 | Requirement | Why it matters |
 | --- | --- |
-| Windows host + `conda run` execution model | Current launcher and interpreter bindings are Windows-first and environment-bound |
-| Config loaded through `config_loader` | Runtime paths and overrides depend on layered config + `.env.local` |
-| Local persistence available | SQLite + Qdrant remain the authoritative local storage layer |
-| CPU-safe behavior preserved | `BASELINE` must remain functional without GPU acceleration |
-| Deterministic WSL binding when enabled | WSL is a compute extension and must be invoked through explicit distro/workspace identity |
+| Platform-appropriate execution model | Supports Windows (`conda run` or embedded), macOS, and Linux direct execution. |
+| Config loaded through `config_loader` | Runtime paths and overrides depend on layered config + `.env.local` and PlatformHelper resolution. |
+| Local persistence available | SQLite + Qdrant remain the authoritative local storage layer. |
+| CPU-safe behavior preserved | `BASELINE` must remain functional on CPU across all platforms. |
+| WSL binding (Windows-only) | WSL is a compute extension for audio acceleration under Windows only, and must be explicitly bound. |
 
 ---
 

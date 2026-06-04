@@ -3,6 +3,7 @@ GoodQ4All WSL2 Audio Bridge
 Simple interface to WSL2 audio processing
 """
 
+import sys
 import subprocess
 import json
 import time
@@ -57,8 +58,19 @@ def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-class WSL2AudioBridge:
-    """Bridge to WSL2 audio processing"""
+class AudioRunner:
+    def process_audio(self, audio_file: str, output_file: Optional[str] = None, timeout: Optional[int] = None, audio_duration: Optional[float] = None) -> dict:
+        raise NotImplementedError()
+
+    def check_status(self) -> bool:
+        raise NotImplementedError()
+
+    def get_info(self) -> str:
+        raise NotImplementedError()
+
+
+class WindowsWSL2AudioRunner(AudioRunner):
+    """Bridge to WSL2 audio processing on Windows"""
     _workspace_warning_keys: set[str] = set()
     
     def __init__(self):
@@ -194,18 +206,6 @@ class WSL2AudioBridge:
         return wsl_path
         
     def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
-        """
-        Process audio file using WSL2
-        
-        Args:
-            audio_file: Path to audio file on Windows
-            output_file: Optional output path (auto-generated if None)
-            timeout: Processing timeout in seconds (auto-calculated if None)
-            audio_duration: Audio duration in seconds (for timeout calculation)
-            
-        Returns:
-            dict: Processing results with transcription segments
-        """
         audio_path = Path(audio_file)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
@@ -213,23 +213,16 @@ class WSL2AudioBridge:
         self._ensure_workspace_ready()
             
         # Calculate dynamic timeout based on audio duration
-        # Formula: base_overhead + (duration * processing_factor)
         if timeout is None:
             if audio_duration:
-                # 120s base + 4x duration (for transcription + diarization + emotion + embeddings)
                 timeout = max(300, int(120 + (audio_duration * 4)))
             else:
-                timeout = 1200  # Default 20min fallback
+                timeout = 1200
             
-        # Convert to WSL path
         wsl_input = self.wsl_path(audio_path)
-        
-        # Output directory for results
         wsl_output = f"{self.audio_workspace}/output"
-        
         request_uuid = str(uuid.uuid4())
 
-        # Build command - use CUDA environment setup (includes venv + cuDNN paths)
         cmd = (
             f"source {self.audio_workspace}/setup_cuda_env.sh && "
             f"GOODQ_BRIDGE_REQUEST_UUID='{request_uuid}' "
@@ -265,7 +258,6 @@ class WSL2AudioBridge:
             return parsed if isinstance(parsed, dict) else None
 
         def _read_result_json_debug() -> dict | None:
-            # Debug-only fallback: never authoritative for success.
             try:
                 read_cmd = ["wsl", "-d", self.wsl_distro, "--", "cat", f"{wsl_output}/result.json"]
                 read_result = subprocess.run(read_cmd, capture_output=True, text=True, timeout=10)
@@ -352,7 +344,6 @@ class WSL2AudioBridge:
                 payload["bridge_runtime_probe"] = compact_probe
             return payload
 
-        # Execute in WSL2
         try:
             runtime_probe = probe_wsl_audio_runtime(self.wsl_distro, self.audio_workspace)
             if not bool(runtime_probe.get("runtime_ready")):
@@ -558,7 +549,6 @@ class WSL2AudioBridge:
                     env_warnings=env_warnings,
                 )
 
-            # Always attach warnings and explicit bridge metadata for observability.
             if stderr_warnings:
                 output.setdefault("stderr_warnings", stderr_warnings)
             if env_warnings:
@@ -615,7 +605,6 @@ class WSL2AudioBridge:
             capture_output=True,
             text=True
         )
-        # Check if CUDA environment works
         return result.returncode == 0 and "True" in result.stdout
         
     def get_info(self):
@@ -629,6 +618,149 @@ class WSL2AudioBridge:
             text=True
         )
         return result.stdout if result.returncode == 0 else "Not available"
+
+
+class NativeAudioRunner(AudioRunner):
+    """Bridge to native local audio processing for macOS (Apple Silicon) and Linux"""
+    def __init__(self):
+        self.audio_workspace = str(Path(__file__).resolve().parent.parent / "wsl2_audio")
+        self.output_dir = f"{self.audio_workspace}/output"
+
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
+        audio_path = Path(audio_file)
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_file}")
+
+        if timeout is None:
+            if audio_duration:
+                timeout = max(300, int(120 + (audio_duration * 4)))
+            else:
+                timeout = 1200
+
+        import sys
+        import uuid
+        request_uuid = str(uuid.uuid4())
+        
+        # Ensure output directory exists
+        out_path = Path(self.output_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        
+        cmd = [
+            sys.executable,
+            str(Path(self.audio_workspace) / "process_audio.py"),
+            str(audio_path.resolve()),
+            str(out_path.resolve())
+        ]
+        
+        env = os.environ.copy()
+        env["GOODQ_BRIDGE_REQUEST_UUID"] = request_uuid
+        
+        # Audio device logic: macOS defaults to CPU for Diarization unless overridden
+        device_override = os.environ.get("GOODQ_AUDIO_DEVICE")
+        if device_override:
+            env["GOODQ_DEVICE"] = device_override.lower()
+        else:
+            if sys.platform == "darwin":
+                env["GOODQ_DEVICE"] = "mps"
+                env["GOODQ_MPS_DIARIZATION"] = "0"
+            elif sys.platform.startswith("linux"):
+                import torch
+                env["GOODQ_DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
+
+        print(f"Processing: {audio_path.name}")
+        requested_scene_file = audio_path.name
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env
+            )
+            
+            output = None
+            if result.returncode == 0:
+                try:
+                    output = json.loads(result.stdout)
+                except json.JSONDecodeError:
+                    pass
+
+            if output is None:
+                result_json_file = out_path / "result.json"
+                if result_json_file.exists():
+                    try:
+                        output = json.loads(result_json_file.read_text())
+                    except json.JSONDecodeError:
+                        pass
+
+            if output is None:
+                error_msg = result.stderr or "No valid JSON output from audio processor"
+                return {
+                    "status": "error",
+                    "error": error_msg,
+                    "bridge_error_reason": "stdout_json_parse_failed",
+                    "returncode": result.returncode,
+                    "requested_scene_file": requested_scene_file
+                }
+
+            output.setdefault("returncode", result.returncode)
+            output.setdefault("requested_scene_file", requested_scene_file)
+            output.setdefault("returned_scene_file", Path(output.get("audio_file", "")).name)
+            output.setdefault("requested_request_uuid", request_uuid)
+            output.setdefault("returned_request_uuid", output.get("request_uuid", request_uuid))
+            output.setdefault("used_fallback_result_json", result.returncode != 0)
+            return output
+
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "error": f"Processing timeout after {timeout}s",
+                "bridge_error_reason": "native_timeout",
+                "returncode": None,
+                "requested_scene_file": requested_scene_file
+            }
+
+    def check_status(self) -> bool:
+        try:
+            import torch
+            return True
+        except ImportError:
+            return False
+
+    def get_info(self) -> str:
+        try:
+            import torch
+            device_kind = "cpu"
+            if torch.cuda.is_available():
+                device_kind = f"cuda ({torch.cuda.get_device_name(0)})"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device_kind = "mps"
+            return f"Device: {device_kind}\nPython: {sys.version}"
+        except ImportError:
+            return "Not available"
+
+
+class WSL2AudioBridge(AudioRunner):
+    """Polymorphic entry point proxying Windows-WSL2 and native macOS/Linux audio runners"""
+    def __init__(self):
+        self.native_mode = sys.platform != "win32" or os.environ.get("GOODQ_NATIVE_AUDIO") == "1"
+        if self.native_mode:
+            self.runner = NativeAudioRunner()
+        else:
+            self.runner = WindowsWSL2AudioRunner()
+
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
+        return self.runner.process_audio(audio_file, output_file, timeout, audio_duration)
+
+    def check_status(self):
+        return self.runner.check_status()
+
+    def get_info(self):
+        return self.runner.get_info()
+
+    def __getattr__(self, name):
+        return getattr(self.runner, name)
 
 # Example usage
 if __name__ == "__main__":

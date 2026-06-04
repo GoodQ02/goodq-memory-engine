@@ -41,7 +41,7 @@ if %ERRORLEVEL% neq 0 (
 :: 2. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor...
 if exist "..\..\LAUNCH_GOODQ.exe" del "..\..\LAUNCH_GOODQ.exe"
-go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go
+go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go launcher_windows.go
 if exist "resource.syso" del "resource.syso"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
@@ -61,6 +61,17 @@ if not exist "staged\runtime" mkdir "staged\runtime"
 if not exist "staged\python-3.10-embed-amd64.zip" (
     echo Downloading portable Python 3.10.11 zip...
     powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip' -OutFile 'staged\python-3.10-embed-amd64.zip'"
+)
+
+echo Verifying portable Python 3.10.11 zip SHA256 checksum...
+powershell -NoProfile -Command "$hash = (Get-FileHash -Path 'staged\python-3.10-embed-amd64.zip' -Algorithm SHA256).Hash.ToLower(); if ($hash -ne '608619f8619075629c9c69f361352a0da6ed7e62f83a0e19c63e0ea32eb7629d') { throw 'Hash mismatch' }"
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Python ZIP SHA256 verification failed.
+    exit /b 6
+)
+
+if not exist "staged\runtime\python.exe" (
+    echo Extracting portable Python 3.10.11...
     powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 )
 
@@ -77,6 +88,15 @@ echo ..\vendor
 if not exist "staged\qdrant\qdrant.exe" (
     echo Downloading Qdrant Windows x64 binary...
     powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://github.com/qdrant/qdrant/releases/download/v1.9.0/qdrant-x86_64-pc-windows-msvc.zip' -OutFile 'staged\qdrant.zip'"
+    
+    echo Verifying Qdrant v1.9.0 zip SHA256 checksum...
+    powershell -NoProfile -Command "$hash = (Get-FileHash -Path 'staged\qdrant.zip' -Algorithm SHA256).Hash.ToLower(); if ($hash -ne 'fe1eab78c24157b21988b3480ce75709e76ca0168ba644fc5a49017bacfec1c6') { throw 'Hash mismatch' }"
+    if !ERRORLEVEL! neq 0 (
+        echo [ERROR] Qdrant ZIP SHA256 verification failed.
+        exit /b 7
+    )
+    
+    echo Extracting Qdrant binary...
     powershell -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
     del staged\qdrant.zip
 )
@@ -109,8 +129,8 @@ echo Staging vendor packages...
 if not exist "staged\vendor" mkdir "staged\vendor"
 xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
 
-echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg)...
-pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1
+echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg, faster-whisper)...
+pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1 faster-whisper==1.0.3
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to install sandboxed dependencies.
     exit /b 4

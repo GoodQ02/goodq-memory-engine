@@ -77,6 +77,8 @@ Current operator-validated additions on the active line:
   [`docs/agent/README.md`](agent/README.md)
 - System snapshot:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
+- Data privacy statement:
+  [`docs/PRIVACY.md`](PRIVACY.md)
 - Architecture index:
   [`docs/architecture/README.md`](architecture/README.md)
 - System architecture:

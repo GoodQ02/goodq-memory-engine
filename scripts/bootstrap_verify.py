@@ -134,6 +134,19 @@ def _detect_conda() -> Path | None:
                 user_profile / "anaconda3" / "Scripts" / "conda.exe",
             ]
         )
+    # UNIX home directories candidate locations
+    try:
+        home_dir = Path.home()
+        candidates.extend(
+            [
+                home_dir / "miniconda3" / "bin" / "conda",
+                home_dir / "anaconda3" / "bin" / "conda",
+                home_dir / "opt" / "miniconda3" / "bin" / "conda",
+            ]
+        )
+    except Exception:
+        pass
+
     for candidate in candidates:
         if candidate and candidate.exists():
             return candidate
@@ -174,10 +187,12 @@ def _check_step_env_pack(profile: str = "desktop") -> List[CheckResult]:
 
 
 def _check_qdrant_binary() -> CheckResult:
-    binary = REPO_ROOT / "vendor" / "qdrant" / "qdrant.exe"
-    if binary.exists():
-        return CheckResult("qdrant_binary", "pass", str(binary))
-    return CheckResult("qdrant_binary", "warn", f"not found at {binary}")
+    from steps.common.tool_resolver import ToolResolver
+    res = ToolResolver.resolve_tool("qdrant")
+    if res["found"]:
+        return CheckResult("qdrant_binary", "pass", res["path"])
+    return CheckResult("qdrant_binary", "warn", f"not found: {res['install_hint']}")
+
 
 
 def _run_powershell(command: str) -> subprocess.CompletedProcess[str]:
@@ -231,23 +246,35 @@ def _check_qdrant_runtime(cfg: Dict[str, Any], profile: str = "desktop") -> Chec
     else:
         detail = "unexpected response"
 
-    service = _inspect_windows_service(QDRANT_SERVICE_NAME)
-    installer = REPO_ROOT / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat"
-    if service.get("exists") == "true":
-        service_detail = (
-            f"service status={service.get('status', 'unknown')} "
-            f"start_mode={service.get('start_mode', 'unknown')}"
+    from steps.common.tool_resolver import ToolResolver
+    res = ToolResolver.resolve_tool("qdrant")
+
+    if sys.platform == "win32":
+        service = _inspect_windows_service(QDRANT_SERVICE_NAME)
+        installer = REPO_ROOT / "scripts" / "qdrant" / "INSTALL_QDRANT_SERVICE.bat"
+        if service.get("exists") == "true":
+            service_detail = (
+                f"service status={service.get('status', 'unknown')} "
+                f"start_mode={service.get('start_mode', 'unknown')}"
+            )
+        else:
+            service_detail = "service not installed"
+        remediation = (
+            f"{service_detail}; "
+            f"{'CI profile does not prove desktop Qdrant service readiness; ' if profile == 'ci' else ''}"
+            f"preferred remediation: {installer}"
         )
     else:
-        service_detail = "service not installed"
+        docker_hint = "Make sure Qdrant is running. You can start it via Docker: 'docker run -p 6333:6333 qdrant/qdrant'"
+        if res["found"]:
+            remediation = f"local binary found at {res['path']}; start it or run docker container"
+        else:
+            remediation = f"install hint: {res['install_hint']} or {docker_hint}"
+
     return CheckResult(
         "qdrant_runtime",
         "warn",
-        (
-            f"unreachable at {url} ({detail}); {service_detail}; "
-            f"{'CI profile does not prove desktop Qdrant service readiness; ' if profile == 'ci' else ''}"
-            f"preferred remediation: {installer}"
-        ),
+        f"unreachable at {url} ({detail}); {remediation}",
     )
 
 
@@ -263,17 +290,12 @@ def _check_ffmpeg() -> CheckResult:
                     break
         if override_path.exists():
             return CheckResult("ffmpeg", "pass", f"GOODQ_FFMPEG_EXE={override_path}")
-    ffmpeg_path = shutil.which("ffmpeg")
-    if ffmpeg_path:
-        return CheckResult("ffmpeg", "pass", ffmpeg_path)
 
-    remediation: List[str] = []
-    if shutil.which("winget"):
-        remediation.append("winget install --id Gyan.FFmpeg.Essentials -e --accept-package-agreements --accept-source-agreements")
-    if shutil.which("choco"):
-        remediation.append("choco install ffmpeg -y")
-    remediation.append("or set GOODQ_FFMPEG_EXE in .env.local")
-    return CheckResult("ffmpeg", "warn", "; ".join(remediation))
+    from steps.common.tool_resolver import ToolResolver
+    res = ToolResolver.resolve_tool("ffmpeg")
+    if res["found"]:
+        return CheckResult("ffmpeg", "pass", res["path"])
+    return CheckResult("ffmpeg", "warn", f"not found: {res['install_hint']}")
 
 
 def _resolve_pdftotext_from_hint(raw: str) -> Optional[Path]:
@@ -293,34 +315,18 @@ def _resolve_pdftotext_from_hint(raw: str) -> Optional[Path]:
 
 
 def _check_pdftotext(cfg: Dict[str, Any]) -> CheckResult:
-    tools_cfg = {}
-    if isinstance(cfg, dict):
-        config_cfg = cfg.get("config")
-        if isinstance(config_cfg, dict):
-            tools_cfg = config_cfg.get("tools") or {}
-            if not isinstance(tools_cfg, dict):
-                tools_cfg = {}
-
     env_hint = os.environ.get("GOODQ_POPPLER_BIN", "").strip()
     if env_hint:
         resolved = _resolve_pdftotext_from_hint(env_hint)
         if resolved:
             return CheckResult("pdftotext", "pass", f"GOODQ_POPPLER_BIN={resolved}")
 
-    cfg_hint = str(tools_cfg.get("poppler_bin") or "").strip()
-    if cfg_hint:
-        resolved = _resolve_pdftotext_from_hint(cfg_hint)
-        if resolved:
-            return CheckResult("pdftotext", "pass", f"config.tools.poppler_bin={resolved}")
-
-    path_hit = shutil.which("pdftotext")
-    if path_hit:
-        return CheckResult("pdftotext", "pass", path_hit)
-
-    remediation = ["install Poppler/pdftotext and set GOODQ_POPPLER_BIN or add pdftotext to PATH"]
-    if shutil.which("winget") or shutil.which("choco"):
-        remediation.insert(0, "use an existing package manager to install Poppler/pdftotext")
-    return CheckResult("pdftotext", "warn", "; ".join(remediation))
+    # Fallback to ToolResolver
+    from steps.common.tool_resolver import ToolResolver
+    res = ToolResolver.resolve_tool("pdftotext")
+    if res["found"]:
+        return CheckResult("pdftotext", "pass", res["path"])
+    return CheckResult("pdftotext", "warn", f"not found: {res['install_hint']}")
 
 
 def _resolve_models_cache_root(cfg: Dict[str, Any]) -> Path:
@@ -412,6 +418,8 @@ def _check_required_model_cache(cfg: Dict[str, Any]) -> List[CheckResult]:
 
 
 def _check_wsl_flag() -> CheckResult:
+    if sys.platform != "win32":
+        return CheckResult("wsl_flag", "pass", "WSL check skipped on non-Windows platform")
     value = _env_or_file("GOODQ_WSL_DISTRO")
     if value:
         return CheckResult("wsl_flag", "pass", f"GOODQ_WSL_DISTRO={value}")
@@ -428,6 +436,8 @@ def _is_truthy(value: str) -> bool:
 
 
 def _check_wsl_audio_workspace() -> List[CheckResult]:
+    if sys.platform != "win32":
+        return []
     if not _is_truthy(_env_or_file("GOODQ_REQUIRE_WSL_AUDIO")):
         return []
 
@@ -492,36 +502,57 @@ def _check_torch_cuda_runtime() -> List[CheckResult]:
         severity = "fail" if require_gpu or profile == "GPU_ENHANCED" else "warn"
         return [CheckResult("torch_cuda_runtime", severity, f"torch import failed: {type(exc).__name__}: {exc}")]
 
-    cuda_compiled = torch.version.cuda
-    cuda_available = bool(torch.cuda.is_available())
-    device_count = int(torch.cuda.device_count())
+    from steps.common.device_config import device_config
     torch_version = torch.__version__
-    if not cuda_compiled:
+
+    if device_config.device_kind == "cuda":
+        cuda_compiled = torch.version.cuda
+        cuda_available = bool(torch.cuda.is_available())
+        device_count = int(torch.cuda.device_count())
+        if not cuda_compiled:
+            return [
+                CheckResult(
+                    "torch_cuda_runtime",
+                    "fail",
+                    f"torch {torch_version} is CPU-only (torch.version.cuda is unset)",
+                )
+            ]
+        if not cuda_available or device_count < 1:
+            return [
+                CheckResult(
+                    "torch_cuda_runtime",
+                    "fail",
+                    (
+                        f"torch {torch_version} is CUDA-compiled ({cuda_compiled}) but no GPU is visible "
+                        f"(cuda_available={cuda_available} device_count={device_count})"
+                    ),
+                )
+            ]
         return [
             CheckResult(
                 "torch_cuda_runtime",
-                "fail",
-                f"torch {torch_version} is CPU-only (torch.version.cuda is unset)",
+                "pass",
+                f"torch {torch_version} CUDA {cuda_compiled} device_count={device_count}",
             )
         ]
-    if not cuda_available or device_count < 1:
+    elif device_config.device_kind == "mps":
         return [
             CheckResult(
                 "torch_cuda_runtime",
-                "fail",
-                (
-                    f"torch {torch_version} is CUDA-compiled ({cuda_compiled}) but no GPU is visible "
-                    f"(cuda_available={cuda_available} device_count={device_count})"
-                ),
+                "pass",
+                f"torch {torch_version} MPS acceleration available (Apple Silicon)",
             )
         ]
-    return [
-        CheckResult(
-            "torch_cuda_runtime",
-            "pass",
-            f"torch {torch_version} CUDA {cuda_compiled} device_count={device_count}",
-        )
-    ]
+    else:
+        severity = "fail" if require_gpu or profile == "GPU_ENHANCED" else "warn"
+        return [
+            CheckResult(
+                "torch_cuda_runtime",
+                severity,
+                f"torch {torch_version} running on CPU; no CUDA or MPS hardware acceleration detected/enabled",
+            )
+        ]
+
 
 
 def _check_env_resolution(cfg: Dict[str, Any]) -> List[CheckResult]:

@@ -25,6 +25,7 @@ STEP_MEMORY_LIMITS = {
 }
 
 # Apply memory limit for current environment
+# Apply memory limit for current environment
 def configure_gpu_memory():
     '''Call this at the start of each step to configure GPU memory'''
     try:
@@ -33,15 +34,21 @@ def configure_gpu_memory():
         print("[GPU] WARNING: PyTorch not available, falling back to CPU")
         return False
         
+    from steps.common.device_config import device_config
+    if device_config.device_kind == "cpu":
+        print("[GPU] WARNING: GPU not available, falling back to CPU")
+        return False
+        
     env_name = os.environ.get('CONDA_DEFAULT_ENV', 'unknown')
     
     if env_name in GPU_MEMORY_LIMITS:
         fraction = GPU_MEMORY_LIMITS[env_name]
-        try:
-            torch.cuda.set_per_process_memory_fraction(fraction, 0)
-            print(f"[GPU] Configured {env_name} to use {fraction*100:.0f}% of GPU memory")
-        except Exception as e:
-            print(f"[GPU] WARNING: Failed to configure memory: {e}")
+        if device_config.supports_memory_fraction:
+            try:
+                torch.cuda.set_per_process_memory_fraction(fraction, 0)
+                print(f"[GPU] Configured {env_name} to use {fraction*100:.0f}% of GPU memory")
+            except Exception as e:
+                print(f"[GPU] WARNING: Failed to configure memory: {e}")
     
     # Enable memory growth
     try:
@@ -49,8 +56,8 @@ def configure_gpu_memory():
     except Exception:
         pass
     
-    # Verify CUDA is available
-    if torch.cuda.is_available():
+    # Verify device is available
+    if device_config.device_kind == "cuda":
         try:
             device_name = torch.cuda.get_device_name(0)
             total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
@@ -58,17 +65,21 @@ def configure_gpu_memory():
             return True
         except Exception:
             return False
+    elif device_config.device_kind == "mps":
+        print("[GPU] Using Apple Metal Performance Shaders (MPS)")
+        return True
     else:
-        print("[GPU] WARNING: CUDA not available, falling back to CPU")
+        print("[GPU] WARNING: GPU not available, falling back to CPU")
         return False
 
 def setup_step_gpu(step_name):
     '''Setup GPU configuration for a specific step'''
     try:
         import torch
-        cuda_available = torch.cuda.is_available()
     except (ImportError, ModuleNotFoundError):
-        cuda_available = False
+        pass
+    
+    from steps.common.device_config import device_config
     
     # Map step names to environment names
     step_to_env = {
@@ -88,15 +99,17 @@ def setup_step_gpu(step_name):
     fraction = STEP_MEMORY_LIMITS.get(step_name, GPU_MEMORY_LIMITS.get(env_name, 0.15))
     
     # Determine device
-    device = "cuda" if cuda_available else "cpu"
+    device = device_config.device_kind
     
     # Configure memory if using GPU
-    if device == "cuda":
+    if device_config.supports_memory_fraction:
         try:
             torch.cuda.set_per_process_memory_fraction(fraction, 0)
             torch.backends.cudnn.benchmark = True
         except Exception as e:
             print(f"[GPU] WARNING: Failed to configure GPU memory: {e}")
+    elif device_config.supports_empty_cache:
+        device_config.empty_cache()
     
     return {
         "device": device,
@@ -112,10 +125,8 @@ class GPUManager:
     def clear_cache():
         '''Clear GPU cache to free memory'''
         try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+            from steps.common.device_config import device_config
+            device_config.empty_cache()
         except Exception:
             pass
     
@@ -124,7 +135,8 @@ class GPUManager:
         '''Get current GPU memory usage'''
         try:
             import torch
-            if not torch.cuda.is_available():
+            from steps.common.device_config import device_config
+            if device_config.device_kind != "cuda":
                 return {"available": False}
             
             allocated = torch.cuda.memory_allocated(0) / 1024**3
@@ -146,7 +158,8 @@ class GPUManager:
         '''Reset peak memory statistics'''
         try:
             import torch
-            if torch.cuda.is_available():
+            from steps.common.device_config import device_config
+            if device_config.device_kind == "cuda":
                 torch.cuda.reset_peak_memory_stats(0)
         except Exception:
             pass

@@ -13,13 +13,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 // Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
-// (In production, replace with your actual trusted developer public key)
 const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af9678176d7b3438ac7b6"
 
 func main() {
@@ -33,10 +30,34 @@ func main() {
 	// 1. Storage & Layout Resolutions
 	programFilesDir := filepath.Dir(os.Args[0])
 
-	programDataDir := "C:\\ProgramData\\GoodQ4All"
+	var programDataDir string
+	var appDataDir string
+
+	if runtime.GOOS == "windows" {
+		programDataDir = "C:\\ProgramData\\GoodQ4All"
+		appDataDir = filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
+	} else if runtime.GOOS == "darwin" {
+		home := os.Getenv("HOME")
+		programDataDir = filepath.Join(home, "Library", "Application Support", "GoodQ4All")
+		appDataDir = filepath.Join(home, "Library", "Preferences", "GoodQ4All")
+	} else { // Linux
+		home := os.Getenv("HOME")
+		xdgData := os.Getenv("XDG_DATA_HOME")
+		if xdgData != "" {
+			programDataDir = filepath.Join(xdgData, "goodq4all")
+		} else {
+			programDataDir = filepath.Join(home, ".local", "share", "goodq4all")
+		}
+		xdgConfig := os.Getenv("XDG_CONFIG_HOME")
+		if xdgConfig != "" {
+			appDataDir = filepath.Join(xdgConfig, "goodq4all")
+		} else {
+			appDataDir = filepath.Join(home, ".config", "goodq4all")
+		}
+	}
+
 	_ = os.Setenv("GOODQ_DATA_ROOT", programDataDir)
 	_ = os.Setenv("GOODQ_SANDBOXED", "1")
-	appDataDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
 
 	_ = os.MkdirAll(programDataDir, 0755)
 	_ = os.MkdirAll(appDataDir, 0700)
@@ -90,7 +111,13 @@ func main() {
 	_ = os.MkdirAll(logsDir, 0755)
 
 	// 5. Start Qdrant in Personal Mode (bound to localhost only)
-	qdrantExe := filepath.Join(programFilesDir, "qdrant", "qdrant.exe")
+	var qdrantExeName string
+	if runtime.GOOS == "windows" {
+		qdrantExeName = "qdrant.exe"
+	} else {
+		qdrantExeName = "qdrant"
+	}
+	qdrantExe := filepath.Join(programFilesDir, "qdrant", qdrantExeName)
 	if _, err := os.Stat(qdrantExe); err == nil {
 		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
 		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
@@ -109,9 +136,7 @@ func main() {
 			defer qdrantLogFile.Close()
 		}
 		// Hide Qdrant console window on Windows
-		if runtime.GOOS == "windows" {
-			qdrantCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		}
+		prepareCmd(qdrantCmd)
 		if err := qdrantCmd.Start(); err != nil {
 			fmt.Printf("[WARN] Could not launch Personal Mode Qdrant: %v\n", err)
 		} else {
@@ -121,12 +146,22 @@ func main() {
 	}
 
 	// 6. Launch Python Control Agent
-	pythonExe := filepath.Join(programFilesDir, "runtime", "python.exe")
-	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
-
-	if _, err := os.Stat(pythonExe); err != nil {
-		fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
+	var pythonExe string
+	if runtime.GOOS == "windows" {
+		pythonExe = filepath.Join(programFilesDir, "runtime", "python.exe")
+		if _, err := os.Stat(pythonExe); err != nil {
+			fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
+		}
+	} else {
+		pythonExe = "python3"
+		if path, err := exec.LookPath("python3"); err == nil {
+			pythonExe = path
+		} else if path, err := exec.LookPath("python"); err == nil {
+			pythonExe = path
+		}
 	}
+
+	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
 
 	fmt.Println("[LAUNCHER] Starting GoodQ4All Python Control Agent...")
 	agentCmd := exec.Command(pythonExe, controlScript, 
@@ -140,9 +175,7 @@ func main() {
 		agentCmd.Stderr = agentLogFile
 		defer agentLogFile.Close()
 	}
-	if runtime.GOOS == "windows" {
-		agentCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	}
+	prepareCmd(agentCmd)
 
 	if err := agentCmd.Start(); err != nil {
 		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python control agent: %v", err))
@@ -159,9 +192,7 @@ func main() {
 		apiCmd.Stderr = apiLogFile
 		defer apiLogFile.Close()
 	}
-	if runtime.GOOS == "windows" {
-		apiCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	}
+	prepareCmd(apiCmd)
 
 	if err := apiCmd.Start(); err != nil {
 		fatalError("Service Startup Failed", fmt.Sprintf("Failed to start Python API server: %v", err))
@@ -181,9 +212,7 @@ func main() {
 		watchdogCmd.Stderr = watchdogLogFile
 		defer watchdogLogFile.Close()
 	}
-	if runtime.GOOS == "windows" {
-		watchdogCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	}
+	prepareCmd(watchdogCmd)
 
 	if err := watchdogCmd.Start(); err != nil {
 		fmt.Printf("[WARN] Failed to start Python Ingestion Watchdog: %v\n", err)
@@ -209,7 +238,7 @@ func main() {
 		fmt.Println("[LAUNCHER] Dashboard is online. Opening browser...")
 		openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
 	} else {
-		fatalError("Service Startup Timeout", "The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at C:\\ProgramData\\GoodQ4All\\logs\\api.log for details.")
+		fatalError("Service Startup Timeout", fmt.Sprintf("The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at %s for details.", filepath.Join(logsDir, "api.log")))
 	}
 
 	// Keep launcher alive and monitor processes
@@ -288,31 +317,4 @@ func openBrowser(url string) {
 		cmd = exec.Command("xdg-open", url)
 	}
 	_ = cmd.Run()
-}
-
-func checkVCRuntime() error {
-	dll, err := syscall.LoadDLL("vcruntime140.dll")
-	if err != nil {
-		return fmt.Errorf("Microsoft Visual C++ Redistributable (vcruntime140.dll) is missing. Please install it.")
-	}
-	_ = dll.Release()
-	return nil
-}
-
-func fatalError(title, text string) {
-	fmt.Printf("[FATAL] %s: %s\n", title, text)
-	if runtime.GOOS == "windows" {
-		user32, err := syscall.LoadDLL("user32.dll")
-		if err == nil {
-			defer user32.Release()
-			messageBox, err := user32.FindProc("MessageBoxW")
-			if err == nil {
-				titlePtr, _ := syscall.UTF16PtrFromString(title)
-				textPtr, _ := syscall.UTF16PtrFromString(text)
-				_, _, _ = messageBox.Call(0, uintptr(unsafe.Pointer(textPtr)), uintptr(unsafe.Pointer(titlePtr)), 0x10)
-			}
-		}
-	}
-	time.Sleep(5 * time.Second)
-	os.Exit(1)
 }

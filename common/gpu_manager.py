@@ -41,28 +41,32 @@ class GPUManager:
             return True
             
         try:
-            # 1. Pin GPU access - only see specified GPU
-            os.environ['CUDA_VISIBLE_DEVICES'] = str(self.gpu_id)
-            logger.info(f"[SYMBOL] Set CUDA_VISIBLE_DEVICES={self.gpu_id}")
+            from steps.common.device_config import device_config
             
-            # 2. Check if CUDA is available
-            if not torch.cuda.is_available():
-                logger.warning("CUDA not available, running on CPU")
+            # 1. Pin GPU access - only see specified GPU (CUDA only)
+            if device_config.device_kind == "cuda":
+                os.environ['CUDA_VISIBLE_DEVICES'] = str(self.gpu_id)
+                logger.info(f"[SYMBOL] Set CUDA_VISIBLE_DEVICES={self.gpu_id}")
+            
+            # 2. Check if device is available
+            if device_config.device_kind == "cpu":
+                logger.warning("GPU not available, running on CPU")
                 self._initialized = True
                 return False
                 
-            # 3. Set memory fraction
-            try:
-                torch.cuda.set_per_process_memory_fraction(
-                    self.memory_fraction, 
-                    0  # Always 0 since we set CUDA_VISIBLE_DEVICES
-                )
-                logger.info(f"[SYMBOL] Set memory fraction to {self.memory_fraction*100:.0f}%")
-            except Exception as e:
-                logger.warning(f"Could not set memory fraction: {e}")
+            # 3. Set memory fraction (CUDA only)
+            if device_config.supports_memory_fraction:
+                try:
+                    torch.cuda.set_per_process_memory_fraction(
+                        self.memory_fraction, 
+                        0  # Always 0 since we set CUDA_VISIBLE_DEVICES
+                    )
+                    logger.info(f"[SYMBOL] Set memory fraction to {self.memory_fraction*100:.0f}%")
+                except Exception as e:
+                    logger.warning(f"Could not set memory fraction: {e}")
             
             # 4. Enable memory growth (PyTorch equivalent)
-            torch.cuda.empty_cache()
+            device_config.empty_cache()
             
             # 5. Set determinism if requested
             if self.enable_determinism:
@@ -103,19 +107,23 @@ class GPUManager:
     def _log_gpu_info(self):
         """Log GPU information"""
         try:
-            if torch.cuda.is_available():
+            from steps.common.device_config import device_config
+            if device_config.device_kind == "cuda":
                 gpu_name = torch.cuda.get_device_name(0)
                 total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
                 logger.info(f"GPU: {gpu_name}")
                 logger.info(f"Total Memory: {total_memory:.2f} GB")
                 logger.info(f"Allocated Memory Limit: {total_memory * self.memory_fraction:.2f} GB")
+            elif device_config.device_kind == "mps":
+                logger.info("GPU: Apple Metal Performance Shaders (MPS)")
         except Exception as e:
             logger.warning(f"Could not log GPU info: {e}")
     
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get current GPU memory statistics"""
-        if not torch.cuda.is_available():
-            return {"cuda_available": False}
+        from steps.common.device_config import device_config
+        if device_config.device_kind != "cuda":
+            return {"cuda_available": False, "device": device_config.device_kind}
             
         try:
             allocated = torch.cuda.memory_allocated(0) / 1e9
@@ -136,15 +144,14 @@ class GPUManager:
     
     def clear_cache(self):
         """Clear GPU cache"""
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.debug("Cleared GPU cache")
+        from steps.common.device_config import device_config
+        device_config.empty_cache()
+        logger.debug("Cleared GPU cache")
     
     def get_device(self) -> torch.device:
         """Get the torch device to use"""
-        if torch.cuda.is_available():
-            return torch.device('cuda:0')  # Always 0 since we set CUDA_VISIBLE_DEVICES
-        return torch.device('cpu')
+        from steps.common.device_config import device_config
+        return device_config.torch_device
     
     @staticmethod
     def set_exclusive_mode(enable: bool = True):

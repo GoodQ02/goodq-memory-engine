@@ -228,9 +228,12 @@ class ProcessedRegistry:
                 logger.error(f"Failed to save state file: {e}")
     
     def is_processed(self, file_hash: str) -> bool:
-        """Check if file hash has been processed"""
+        """Check if file hash has been processed successfully"""
         with self.lock:
-            return file_hash in self.processed
+            if file_hash not in self.processed:
+                return False
+            record = self.processed[file_hash]
+            return record.get('status') == 'success'
     
     def mark_processed(
         self,

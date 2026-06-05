@@ -55,6 +55,7 @@ class KnowledgeGraph:
         cur.executescript(
             """
             PRAGMA journal_mode=WAL;
+            PRAGMA busy_timeout=5000;
 
             CREATE TABLE IF NOT EXISTS nodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

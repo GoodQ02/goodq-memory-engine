@@ -185,7 +185,8 @@ def build_identity_ledger(
     import sqlite3
 
     graph_db_path = Path(graph_db_path)
-    conn = sqlite3.connect(str(graph_db_path))
+    read_only_uri = f"{graph_db_path.resolve().as_uri()}?mode=ro"
+    conn = sqlite3.connect(read_only_uri, uri=True, timeout=5.0)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-05 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-05-28._
+_Operational restart checkpoint aligned: 2026-06-05._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,18 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-06-05:
+  - status: Complete forensic quality audit and hardening pass of Subsystems 1 to 8 validated and committed.
+  - Subsystems audited and verified:
+    - Subsystem 1 (Packaging & Installer): dynamically resolve ProgramData/AppData and grant recursive Users Modify permission (`icacls`).
+    - Subsystem 2 (Watchdog Ingestion): Windows sharing violation exclusive write-locks checks, 0-byte file guard, corrupt destination file cleanups, collision ceiling, and empty/stale lockfile auto-healing.
+    - Subsystem 3 (Phased Ingestion Pipeline): unified GPU step memory fraction configuration loadings, cv2 VideoCapture bounds protection, and keyframe selection timestamp deduplication.
+    - Subsystem 4 (WSL2 Audio Lane): WSL configs dynamic resolution, cache CRLF line endings normalization, proactive mount existence checks, and offline Transformer fallback-first cache loaders.
+    - Subsystem 5 (Web API Server): socket port collision fallback searches, case-insensitive log token redaction filters, progress track freshness limits, and drop zone redirects preventions.
+    - Subsystem 6 (Vector Database & Search): process-safe exclusive-file FAISS HNSW locking (`FaissLock`), upsert/query connection loss auto-healing, and dynamic model dimension register mappings.
+    - Subsystem 7 (Relational & Graph Memory): SQLite concurrent transaction WAL busy timeout queuing (5000ms), and read-only URI mapping `?mode=ro` with timeouts.
+    - Subsystem 8 (Healer & Control Agent): robust `dry_run` constructors and try-except LLM connection timeout exceptions guards.
+  - Verification: 493 tests passing, concurrent FAISS writes verified, concurrent WAL database writes verified, and Healer dry-run verified.
 - Pause checkpoint, 2026-05-28:
   - status: unified sandboxed Setup Installer and local logs/GPU config mitigations are validated and committed.
   - Setup Installer features:
@@ -588,6 +600,7 @@ Audit Status: ACTIVE (2026-04-10)
   desktop-side blocker.
 
 ## Recent Notable Changes
+- Hardened and audited all 8 core subsystems (Installer paths & permissions, watchdog folder drop checks, ingestion pipeline seeks & GPU variables, WSL2 audio bridge configs & cache references, Web API socket & drop redirects, Vector DB concurrency locks & dimensions, Relational memory busy timeouts, and Healer dry-run & LLM exception guards). Verified all changes with 493 unit/integration tests and concurrent stress test runs in both dev and public repositories.
 - Upgraded and optimized the visual processing pipeline: upgraded CLIP to `openai/clip-vit-large-patch14` (768-d) and DINOv2 to `facebook/dinov2-large` (1024-d); vectorized PyTorch GPU scene detection; added OpenCV-native seeking/decoding keyframe extraction; implemented Shannon-entropy, Laplacian-variance, and motion-peaks keyframe selection; and implemented mixed-precision (AMP) batching.
 - Optimised local LLM services: tuned WSL2 vLLM to cap memory utilization at 0.20 and enable FP8 KV-cache (~3.3 GB footprint) for Qwen2.5-0.5B-Instruct; configured Windows Ollama fallback (Phi-4 14B) with Flash Attention and Q8 KV cache quantization (reducing VRAM footprint to 13.42 GB and accelerating inference speed by 50-70%), enabling simultaneous local hosting of both models.
 - Added the first safe read-only control-agent substrate: a recurrence report CLI/library that groups persisted run signals, classifies recurrence families, emits deterministic operator hints, compares two run ids, and can export markdown/JSON artifacts plus an index without enabling healing or changing canonical ingestion.

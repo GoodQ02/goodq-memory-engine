@@ -14,7 +14,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | :--- | :--- | :--- | :--- |
 | **1. Packaging & Installer** | Offline dependency staging, path alignment, and recursive standard user folder write permission grants. | [scripts/install/](file:///l:/GOODCUBE/projects/goodq4all/scripts/install) | `[x]` Audited |
 | **2. Watchdog Ingestion** | Directory polling (`import_inbox`), file locking, safe moves/renaming, and AI Control Agent integration. | [cli/watchdog.py](file:///l:/GOODCUBE/projects/goodq4all/cli/watchdog.py) | `[x]` Audited |
-| **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[ ]` Pending |
+| **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[x]` Audited |
 | **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[ ]` Pending |
 | **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[ ]` Pending |
 | **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[ ]` Pending |
@@ -62,10 +62,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - Phase Modules: [steps/](file:///l:/GOODCUBE/projects/goodq4all/steps) (normalization, WebRTC-VAD, frame visual feature extractors, Wav2Vec).
 - **Role**: Coordinate chronological execution of Phase 0 (audio normalization), Phase 1 (WebRTC-VAD voice separation), Phase 3 (smart chunking), Phase 4 (WSL audio), Phase 5 (vectorized GPU scene detection), and Phase 6 (CLIP/DINOv2 visual embeddings and cross-modal fusion).
 - **Checklist**:
-  - `[ ]` Audit progressive ingestion window index resets (monotonically increasing scene checks).
-  - `[ ]` Verify GPU budget mappings across CLIP, DINOv2, and PySceneDetect.
-  - `[ ]` Validate scene skip/retry logic when resuming a partial pipeline execution.
-  - `[ ]` Verify frame sampling seeking logic via Python-native OpenCV.
+  - `[x]` Audit progressive ingestion window index resets (monotonically increasing scene checks).
+  - `[x]` Verify GPU budget mappings across CLIP, DINOv2, and PySceneDetect.
+  - `[x]` Validate scene skip/retry logic when resuming a partial pipeline execution.
+  - `[x]` Verify frame sampling seeking logic via Python-native OpenCV.
 
 ---
 

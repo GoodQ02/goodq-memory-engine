@@ -350,22 +350,16 @@ def main() -> None:
     # Initialize GPU management for this step
     try:
         from common.gpu_manager import initialize_gpu_for_step
-        import yaml
         
-        # Load GPU config
-        gpu_config_path = REPO_ROOT / 'config' / 'gpu_config.yaml'
-        if gpu_config_path.exists():
-            with open(gpu_config_path, 'r') as f:
-                gpu_cfg = yaml.safe_load(f) or {}
-        else:
-            gpu_cfg = {}
+        # Load GPU config from master config
+        gpu_cfg = cfg.get('gpu', {})
         
-        # Get memory fraction for this step
-        step_mem_fractions = gpu_cfg.get('step_memory_fractions', {})
-        memory_fraction = step_mem_fractions.get(args.step, step_mem_fractions.get('default', 0.5))
+        # Get memory fraction for this step from step_memory_fractions, step_memory, or the global memory_fraction
+        step_mem_fractions = gpu_cfg.get('step_memory_fractions') or gpu_cfg.get('step_memory') or {}
+        memory_fraction = step_mem_fractions.get(args.step, gpu_cfg.get('memory_fraction', 0.5))
         
         # Get determinism setting
-        deterministic = gpu_cfg.get('gpu', {}).get('deterministic', False)
+        deterministic = gpu_cfg.get('deterministic', False)
         
         # Initialize GPU
         gpu_manager = initialize_gpu_for_step(
@@ -375,7 +369,7 @@ def main() -> None:
         )
         
         # Clear cache if configured
-        if gpu_cfg.get('memory', {}).get('clear_cache_before_step', True):
+        if gpu_cfg.get('clear_cache_before_step', True):
             gpu_manager.clear_cache()
             
     except Exception as e:
@@ -397,7 +391,7 @@ def main() -> None:
         duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
         log_status, log_error, extra = _derive_step_log_outcome(args.step, res, verbose=args.verbose)
         log_step_run(cfg, args.step, item, duration_ms, log_status, log_error, extra=extra)
-
+ 
         # CRITICAL: Save step results to memory database for context enrichment
         try:
             _save_memory_context(args.step, item, res, cfg)
@@ -408,12 +402,12 @@ def main() -> None:
         # Clear GPU cache after step if configured
         if gpu_manager is not None:
             try:
-                gpu_cfg_reload = yaml.safe_load(open(REPO_ROOT / 'config' / 'gpu_config.yaml', 'r')) if (REPO_ROOT / 'config' / 'gpu_config.yaml').exists() else {}
-                if gpu_cfg_reload.get('memory', {}).get('clear_cache_after_step', True):
+                gpu_cfg = cfg.get('gpu', {})
+                if gpu_cfg.get('clear_cache_after_step', True):
                     gpu_manager.clear_cache()
                     
                 # Log final memory stats
-                if gpu_cfg_reload.get('memory', {}).get('log_memory_stats', True):
+                if gpu_cfg.get('log_memory_stats', True):
                     stats = gpu_manager.get_memory_stats()
                     if stats.get('cuda_available'):
                         import logging

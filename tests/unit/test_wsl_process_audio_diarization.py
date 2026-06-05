@@ -344,9 +344,9 @@ def test_process_audio_wav2vec_loads_use_canonical_hf_cache(monkeypatch, tmp_pat
     monkeypatch.setattr(mod.torchaudio, "load", lambda _: (waveform.clone(), 16000))
     monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
     monkeypatch.setattr(mod, "TRANSFORMERS_AVAILABLE", True)
-    monkeypatch.setattr(mod, "Wav2Vec2ForSequenceClassification", _FakeEmotionModel)
-    monkeypatch.setattr(mod, "Wav2Vec2FeatureExtractor", _FakeFeatureExtractor)
-    monkeypatch.setattr(mod, "Wav2Vec2Model", _FakeEmbeddingModel)
+    monkeypatch.setattr(mod, "Wav2Vec2ForSequenceClassification", _FakeEmotionModel, raising=False)
+    monkeypatch.setattr(mod, "Wav2Vec2FeatureExtractor", _FakeFeatureExtractor, raising=False)
+    monkeypatch.setattr(mod, "Wav2Vec2Model", _FakeEmbeddingModel, raising=False)
     monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
 

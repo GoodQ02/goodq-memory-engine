@@ -155,6 +155,8 @@ def test_check_torch_cuda_runtime_fails_when_gpu_profile_uses_cpu_only_torch(mon
             __version__="2.5.1",
             version=types.SimpleNamespace(cuda=None),
             cuda=types.SimpleNamespace(is_available=lambda: False, device_count=lambda: 0),
+            device=object,
+            backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: False)),
         ),
     )
 
@@ -162,7 +164,7 @@ def test_check_torch_cuda_runtime_fails_when_gpu_profile_uses_cpu_only_torch(mon
 
     assert len(results) == 1
     assert results[0].status == "fail"
-    assert "CPU-only" in results[0].detail
+    assert "running on CPU" in results[0].detail or "CPU-only" in results[0].detail
 
 
 def test_ci_profile_warns_for_missing_specialized_step_envs(monkeypatch, tmp_path: Path):

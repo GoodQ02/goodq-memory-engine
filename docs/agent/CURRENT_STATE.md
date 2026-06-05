@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-29 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-05 -->
 
 # GoodQ4All Current Agent State
 
@@ -634,6 +634,22 @@ Features implemented:
 - **Recovery Checkpoints**: Updates to a durable `progressive_ingestion_state.json` track committed window indices. On orchestrator restarts, completed windows are bypassed, resuming from the first uncompleted window.
 - **Deduplication Scene Guard**: Configured the orchestrator to bypass database scene list reuse if a progressive checkpoint file exists, loading the complete scene boundaries from the authoritative segmentation cache instead.
 - **Sequential-Progressive Parity Check**: Validated sequential and progressive ingestion paths on `samples/onboarding_fixture.mp4`, generating `progressive_parity_report.json` to confirm exact database, Qdrant, and KG node alignment.
+
+## Subsystems 1 - 8 Forensic Hardening Pass on 2026-06-05
+
+Completed a comprehensive forensic quality audit and hardening pass across all 8 core subsystems of GoodQ4All.
+
+Key improvements implemented:
+- **Subsystem 1 (Packaging & Installer)**: Upgraded Go launcher to dynamically resolve ProgramData/AppData and added recursive SID-based (`*S-1-5-32-545`) Users Modify permission grants (`icacls`) to NSIS setup.
+- **Subsystem 2 (Watchdog Ingestion)**: Hardened file stability wait tests using exclusive Windows sharing violation write-lock checks, ignored 0-byte files, added corrupt destination file cleanup on cross-drive move failures, established safety collision ceilings, and programmed empty/stale lockfile auto-healing.
+- **Subsystem 3 (Phased Segmentation & Ingestion Pipeline)**: Consolidated GPU step memory fraction resolution from configuration and hardened Python-native OpenCV keyframe extraction with out-of-bounds duration seeks protection and rounded candidate timestamp deduplication.
+- **Subsystem 4 (WSL2 Audio Lane)**: Programmed WSL configs dynamic resolution, normalized HuggingFace cache CRLF line endings offline, added mount existence check pre-validations, and optimized Transformer loaders to try `local_files_only=True` first.
+- **Subsystem 5 (Web API Server)**: Added port collision fallback search (probing up to 100 ports starting from configured default), implemented a case-insensitive logging token-redacting filter, extended progress track age freshness limit to 7200 seconds, and added front-end drag-and-drop window drop zones to prevent browser redirects.
+- **Subsystem 6 (Vector Database & Search)**: Implemented process-safe mutual exclusion FAISS index locking (`FaissLock`), upsert/query connection loss auto-healing, and aligned models and dimension registries dynamically (CLIP 768-d, DINOv2 1024-d, CLAP 512-d).
+- **Subsystem 7 (Relational & Graph Memory)**: Aligned relational SQLite connections with `PRAGMA busy_timeout=5000` WAL queuing to prevent concurrency collisions, and modified Web API and identity ledger lookups to use read-only SQLite URI format `?mode=ro`.
+- **Subsystem 8 (Healer & Control Agent)**: Hardened ControlAgent and ConfigHealer with a robust `dry_run` construct (bypassing configs/backup writes) and try-except LLM connection timeout exceptions guards to prevent pipeline execution crashes.
+
+All changes were verified using pytest unit/integration suites (493 tests passing) and targeted concurrent validation scripts for FAISS, SQLite concurrency, and LLM dry-runs.
 
 ## Do Not Investigate First
 

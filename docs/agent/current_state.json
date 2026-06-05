@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-05-29",
+  "last_verified": "2026-06-05",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -788,6 +788,21 @@
       "path": "docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md",
       "use_when": "a runtime capability looks absent, stale, partially proven, or mismatched across config, API, persistence, and UI surfaces",
       "validated_from": "runtime_fallback_audio_entity_validation"
+    }
+  },
+  "subsystem_hardening_verification": {
+    "last_verified": "2026-06-05",
+    "status": "completed",
+    "details": "completed forensic quality audit and hardening pass across all 8 subsystems with all tests passing",
+    "subsystems": {
+      "subsystem1_installer": "Upgraded LAUNCH_GOODQ to resolve paths dynamically relative to program env; added icacls modify grants recursively for standard Users",
+      "subsystem2_watchdog": "Hardened is_stable via sharing violations exclusive lock checks; added 0-byte file guard, cross-drive copy destination cleanups, and empty/stale lockfile auto-healing",
+      "subsystem3_pipeline": "Consolidated GPU step memory fraction configuration loadings; added native cv2.VideoCapture seek bounds checking and advanced keyframe candidate timestamps deduplication",
+      "subsystem4_wsl_audio": "Resolved WSL overrides dynamically; normalized HuggingFace cache CRLF line endings offline; added mount existence pre-checks and fallback-first offline transformer loaders",
+      "subsystem5_api_server": "Added port conflict collision fallback searches; case-insensitive log token redaction filters; extended progress track freshness to 7200 seconds; disabled drop redirects",
+      "subsystem6_vector_db": "Implemented process-safe exclusive file FAISS HNSW locking (FaissLock) and serialized updates; added Qdrant auto-healing retries and dynamic registries dimensions lookup mapping",
+      "subsystem7_relational_memory": "Hardened SQLite busy_timeout to WAL concurrent queue; mapped read-only SQL URIs with timeouts for API and identity ledgers",
+      "subsystem8_healer_agent": "Hardened ControlAgent and ConfigHealer with dry_run constructors and LLM timeout connection failure try-except exception guards"
     }
   }
 }

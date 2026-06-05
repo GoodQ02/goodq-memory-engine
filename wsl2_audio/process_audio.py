@@ -192,19 +192,33 @@ def _resolve_hf_cache_dir() -> Optional[str]:
 
 
 def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir: Optional[str] = None):
-    """Load pyannote across the 3.x/4.x auth kwarg boundary."""
-    kwargs = {"use_auth_token": token}
+    """Load pyannote across the 3.x/4.x auth kwarg boundary, trying local_files_only=True first."""
+    base_kwargs = {}
     if cache_dir:
-        kwargs["cache_dir"] = cache_dir
-    try:
-        return pipeline_cls.from_pretrained(model_name, **kwargs)
-    except TypeError as exc:
-        message = str(exc)
-        if "use_auth_token" not in message or "unexpected keyword" not in message:
+        base_kwargs["cache_dir"] = cache_dir
+
+    for local_only in (True, False):
+        kwargs = dict(base_kwargs)
+        if local_only:
+            kwargs["local_files_only"] = True
+        else:
+            kwargs["use_auth_token"] = token
+        try:
+            try:
+                return pipeline_cls.from_pretrained(model_name, **kwargs)
+            except TypeError as exc:
+                message = str(exc)
+                if "use_auth_token" not in message or "unexpected keyword" not in message:
+                    raise
+                if local_only:
+                    continue
+                kwargs.pop("use_auth_token", None)
+                kwargs["token"] = token
+                return pipeline_cls.from_pretrained(model_name, **kwargs)
+        except Exception:
+            if local_only:
+                continue
             raise
-        kwargs.pop("use_auth_token", None)
-        kwargs["token"] = token
-        return pipeline_cls.from_pretrained(model_name, **kwargs)
 
 
 def clear_gpu_memory():
@@ -662,14 +676,30 @@ def process_audio(audio_file, output_dir):
         if TRANSFORMERS_AVAILABLE:
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
-                emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
-                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
-                    cache_dir=wav2vec_cache_dir,
-                )
-                emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
-                    cache_dir=wav2vec_cache_dir,
-                )
+                model_repo = "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+                try:
+                    emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
+                        model_repo,
+                        cache_dir=wav2vec_cache_dir,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
+                        model_repo,
+                        cache_dir=wav2vec_cache_dir,
+                    )
+
+                try:
+                    emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+                        model_repo,
+                        cache_dir=wav2vec_cache_dir,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+                        model_repo,
+                        cache_dir=wav2vec_cache_dir,
+                    )
                 emotion_model.to(emotion_device)
                 
                 # Resample if needed
@@ -744,10 +774,18 @@ def process_audio(audio_file, output_dir):
         if TRANSFORMERS_AVAILABLE:
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
-                embed_model = Wav2Vec2Model.from_pretrained(
-                    "facebook/wav2vec2-base-960h",
-                    cache_dir=wav2vec_cache_dir,
-                )
+                embed_repo = "facebook/wav2vec2-base-960h"
+                try:
+                    embed_model = Wav2Vec2Model.from_pretrained(
+                        embed_repo,
+                        cache_dir=wav2vec_cache_dir,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    embed_model = Wav2Vec2Model.from_pretrained(
+                        embed_repo,
+                        cache_dir=wav2vec_cache_dir,
+                    )
                 embed_model.to(device)
                 
                 if sr != 16000:
@@ -756,10 +794,17 @@ def process_audio(audio_file, output_dir):
                 else:
                     waveform_16k = waveform
                 
-                embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                    "facebook/wav2vec2-base-960h",
-                    cache_dir=wav2vec_cache_dir,
-                )
+                try:
+                    embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+                        embed_repo,
+                        cache_dir=wav2vec_cache_dir,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+                        embed_repo,
+                        cache_dir=wav2vec_cache_dir,
+                    )
                 inputs = embed_extractor(
                     waveform_16k.numpy().flatten(),
                     sampling_rate=16000,

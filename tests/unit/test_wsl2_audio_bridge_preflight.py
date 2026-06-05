@@ -42,3 +42,59 @@ def test_workspace_preflight_retries_once_after_timeout(monkeypatch):
 
     assert bridge._ensure_workspace_ready() is True
     assert calls["count"] == 2
+
+
+def test_process_audio_raises_on_inaccessible_mount(monkeypatch, tmp_path):
+    bridge_module = _load_bridge_module()
+
+    dummy_file = tmp_path / "test.wav"
+    dummy_file.touch()
+
+    bridge = bridge_module.WindowsWSL2AudioRunner()
+    bridge._workspace_checked = True
+    bridge._workspace_ready = True
+
+    run_calls = []
+    def _fake_run(cmd, capture_output=True, timeout=None):
+        run_calls.append(cmd)
+        return _Result(returncode=1)
+
+    monkeypatch.setattr(bridge_module.subprocess, "run", _fake_run)
+
+    import pytest
+    with pytest.raises(FileNotFoundError) as exc_info:
+        bridge.process_audio(str(dummy_file))
+
+    assert "is not mounted or accessible" in str(exc_info.value)
+    assert len(run_calls) == 2
+    assert "-f" in run_calls[0]
+    assert "-d" in run_calls[1]
+
+
+def test_process_audio_raises_on_missing_file_in_mounted_drive(monkeypatch, tmp_path):
+    bridge_module = _load_bridge_module()
+
+    dummy_file = tmp_path / "test.wav"
+    dummy_file.touch()
+
+    bridge = bridge_module.WindowsWSL2AudioRunner()
+    bridge._workspace_checked = True
+    bridge._workspace_ready = True
+
+    run_calls = []
+    def _fake_run(cmd, capture_output=True, timeout=None):
+        run_calls.append(cmd)
+        if "-f" in cmd:
+            return _Result(returncode=1)
+        if "-d" in cmd:
+            return _Result(returncode=0)
+        return _Result(returncode=0)
+
+    monkeypatch.setattr(bridge_module.subprocess, "run", _fake_run)
+
+    import pytest
+    with pytest.raises(FileNotFoundError) as exc_info:
+        bridge.process_audio(str(dummy_file))
+
+    assert "Ensure the file has been successfully written" in str(exc_info.value)
+

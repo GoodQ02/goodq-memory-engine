@@ -93,6 +93,8 @@ def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
         @classmethod
         def from_pretrained(cls, model_name, **kwargs):
             cls.calls += 1
+            if kwargs.get("local_files_only"):
+                raise ValueError("Local cache miss")
             if "use_auth_token" in kwargs:
                 raise TypeError("Pipeline.from_pretrained() got an unexpected keyword argument 'use_auth_token'")
             captured["model_name"] = model_name
@@ -108,7 +110,7 @@ def test_process_audio_diarization_loader_falls_back_to_token_kwarg():
     )
 
     assert isinstance(pipeline, _FakePipeline)
-    assert _FakePipelineFactory.calls == 2
+    assert _FakePipelineFactory.calls == 3
     assert captured["model_name"] == "pyannote/speaker-diarization-3.1"
     assert captured["token"] == "test-token"
     assert captured["cache_dir"] == "/mnt/c/models/hub"

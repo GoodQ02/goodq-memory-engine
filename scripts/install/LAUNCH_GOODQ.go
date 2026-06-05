@@ -34,8 +34,24 @@ func main() {
 	var appDataDir string
 
 	if runtime.GOOS == "windows" {
-		programDataDir = "C:\\ProgramData\\GoodQ4All"
-		appDataDir = filepath.Join(os.Getenv("LOCALAPPDATA"), "GoodQ4All")
+		progData := os.Getenv("ProgramData")
+		if progData == "" {
+			progData = os.Getenv("ALLUSERSPROFILE")
+		}
+		if progData == "" {
+			progData = "C:\\ProgramData"
+		}
+		programDataDir = filepath.Join(progData, "GoodQ4All")
+
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			userProfile := os.Getenv("USERPROFILE")
+			if userProfile == "" {
+				userProfile = "C:\\Users\\Default"
+			}
+			localAppData = filepath.Join(userProfile, "AppData", "Local")
+		}
+		appDataDir = filepath.Join(localAppData, "GoodQ4All")
 	} else if runtime.GOOS == "darwin" {
 		home := os.Getenv("HOME")
 		programDataDir = filepath.Join(home, "Library", "Application Support", "GoodQ4All")
@@ -55,6 +71,10 @@ func main() {
 			appDataDir = filepath.Join(home, ".config", "goodq4all")
 		}
 	}
+
+	// Log the resolved paths immediately on startup
+	fmt.Printf("[LAUNCHER] Resolved ProgramDataDir: %s\n", programDataDir)
+	fmt.Printf("[LAUNCHER] Resolved AppDataDir: %s\n", appDataDir)
 
 	_ = os.Setenv("GOODQ_DATA_ROOT", programDataDir)
 	_ = os.Setenv("GOODQ_SANDBOXED", "1")

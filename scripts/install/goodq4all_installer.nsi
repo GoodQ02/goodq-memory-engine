@@ -130,6 +130,10 @@ runtime_ok:
   SetOutPath "$APPDATA\GoodQ4All\qdrant\config"
   File "staged\qdrant\config\qdrant_config.yaml"
 
+  ; Grant modify permissions on ProgramData folder to standard users (Using SID to support international Windows)
+  DetailPrint "Configuring folder permissions for standard users..."
+  nsExec::ExecToLog 'icacls "$APPDATA\GoodQ4All" /grant *S-1-5-32-545:(OI)(CI)M /T /C'
+
   ; --- STATE 5: configure service ---
   DetailPrint "Step 5/10: Configuring service registrations..."
   ${If} $AlwaysOnService == 1
@@ -240,7 +244,7 @@ skip_service_cleanup:
   ; If YES, delete everything under ProgramData
   RMDir /r "$APPDATA\GoodQ4All"
   Goto end_uninstall
-
+  
 preserve_data:
   ; Only delete temporary install receipts but preserve models & databases
   Delete "$APPDATA\GoodQ4All\install_receipt.json"

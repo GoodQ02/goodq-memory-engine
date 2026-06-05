@@ -6,6 +6,7 @@ import os
 import uuid
 import string
 import requests
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -89,44 +90,50 @@ class QdrantClient:
             return True
         if not self.cfg.enabled:
             return False
-        try:
-            # Check if collection exists
-            r = self.session.get(f"{self.cfg.host}/collections/{self.cfg.collection}", timeout=3)
-            if r.status_code == 200:
-                self._collection_ready = True
-                return True
-            # Create if missing
-            payload = {
-                "vectors": {
-                    "size": self.cfg.dim,
-                    "distance": self.cfg.distance
+        for attempt in range(2):
+            try:
+                # Check if collection exists
+                r = self.session.get(f"{self.cfg.host}/collections/{self.cfg.collection}", timeout=3)
+                if r.status_code == 200:
+                    self._collection_ready = True
+                    return True
+                # Create if missing
+                payload = {
+                    "vectors": {
+                        "size": self.cfg.dim,
+                        "distance": self.cfg.distance
+                    }
                 }
-            }
-            r = self.session.put(
-                f"{self.cfg.host}/collections/{self.cfg.collection}",
-                json=payload,
-                timeout=5,
-            )
-            self._collection_ready = r.status_code == 200
-            if not self._collection_ready:
-                body = _truncate_http_body(getattr(r, "text", None))
-                logger.warning(
-                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
-                    "ensure_collection.create",
-                    self.cfg.collection,
-                    getattr(r, "status_code", None),
-                    body,
+                r = self.session.put(
+                    f"{self.cfg.host}/collections/{self.cfg.collection}",
+                    json=payload,
+                    timeout=5,
                 )
-            return self._collection_ready
-        except Exception as e:
-            logger.warning(
-                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
-                "ensure_collection",
-                self.cfg.collection,
-                type(e).__name__,
-                e,
-            )
-            return False
+                self._collection_ready = r.status_code == 200
+                if not self._collection_ready:
+                    body = _truncate_http_body(getattr(r, "text", None))
+                    logger.warning(
+                        "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                        "ensure_collection.create",
+                        self.cfg.collection,
+                        getattr(r, "status_code", None),
+                        body,
+                        attempt + 1,
+                    )
+                else:
+                    return True
+            except Exception as e:
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                    "ensure_collection",
+                    self.cfg.collection,
+                    type(e).__name__,
+                    e,
+                    attempt + 1,
+                )
+            if attempt == 0:
+                time.sleep(0.5)
+        return False
 
     def upsert(self, points: List[Dict[str, Any]]) -> bool:
         if not self.cfg.enabled:
@@ -181,26 +188,45 @@ class QdrantClient:
                     f" points_in={points_in} dropped={points_dropped} ids_normalized={ids_normalized}"
                     f" modalities={modalities}{scene_note}"
                 )
-            r = self.session.put(
-                f"{self.cfg.host}/collections/{self.cfg.collection}/points?wait=true",
-                json={"points": normalized},
-                timeout=5,
-            )
-            ok = r.status_code in (200, 202)
-            if ok:
-                self._upsert_metrics["points_written"] += len(normalized)
-            if not ok:
-                body = _truncate_http_body(getattr(r, "text", None))
-                logger.warning(
-                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
-                    "upsert",
-                    self.cfg.collection,
-                    getattr(r, "status_code", None),
-                    body,
-                )
-            if not ok and self._debug_enabled():
-                print(f"[VECTOR_DEBUG] qdrant.upsert failed status={r.status_code} collection={self.cfg.collection} body={body}")
-            return ok
+            for attempt in range(2):
+                try:
+                    r = self.session.put(
+                        f"{self.cfg.host}/collections/{self.cfg.collection}/points?wait=true",
+                        json={"points": normalized},
+                        timeout=5,
+                    )
+                    ok = r.status_code in (200, 202)
+                    if ok:
+                        self._upsert_metrics["points_written"] += len(normalized)
+                        return True
+                    else:
+                        body = _truncate_http_body(getattr(r, "text", None))
+                        logger.warning(
+                            "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                            "upsert",
+                            self.cfg.collection,
+                            getattr(r, "status_code", None),
+                            body,
+                            attempt + 1,
+                        )
+                        if self._debug_enabled():
+                            print(f"[VECTOR_DEBUG] qdrant.upsert failed status={r.status_code} collection={self.cfg.collection} body={body}")
+                        self._collection_ready = False
+                except Exception as e:
+                    logger.warning(
+                        "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                        "upsert",
+                        self.cfg.collection,
+                        type(e).__name__,
+                        e,
+                        attempt + 1,
+                    )
+                    self._collection_ready = False
+                if attempt == 0:
+                    time.sleep(0.5)
+                    if not self.ensure_collection():
+                        return False
+            return False
         except Exception as e:
             logger.warning(
                 "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
@@ -225,22 +251,44 @@ class QdrantClient:
             }
             if payload_filter:
                 body["filter"] = payload_filter
-            r = self.session.post(
-                f"{self.cfg.host}/collections/{self.cfg.collection}/points/search",
-                json=body,
-                timeout=5,
-            )
-            if r.status_code != 200:
-                body_text = _truncate_http_body(getattr(r, "text", None))
-                logger.warning(
-                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s",
-                    "query",
-                    self.cfg.collection,
-                    getattr(r, "status_code", None),
-                    body_text,
-                )
+            res = None
+            for attempt in range(2):
+                try:
+                    r = self.session.post(
+                        f"{self.cfg.host}/collections/{self.cfg.collection}/points/search",
+                        json=body,
+                        timeout=5,
+                    )
+                    if r.status_code == 200:
+                        res = r.json().get("result", []) or []
+                        break
+                    else:
+                        body_text = _truncate_http_body(getattr(r, "text", None))
+                        logger.warning(
+                            "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                            "query",
+                            self.cfg.collection,
+                            getattr(r, "status_code", None),
+                            body_text,
+                            attempt + 1,
+                        )
+                        self._collection_ready = False
+                except Exception as e:
+                    logger.warning(
+                        "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                        "query",
+                        self.cfg.collection,
+                        type(e).__name__,
+                        e,
+                        attempt + 1,
+                    )
+                    self._collection_ready = False
+                if attempt == 0:
+                    time.sleep(0.5)
+                    if not self.ensure_collection():
+                        return []
+            if res is None:
                 return []
-            res = r.json().get("result", []) or []
             hits = [
                 {
                     "id": hit.get("id"),

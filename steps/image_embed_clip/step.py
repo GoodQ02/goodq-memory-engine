@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 import logging
 import sys
-from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
 
 logger = logging.getLogger(__name__)
 
@@ -123,18 +123,18 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             else:
                 out = _CLIP["model"].get_image_features(**ipt)
         feats = out.detach().cpu().numpy().astype("float32")
-        os.makedirs(os.path.dirname(index_path), exist_ok=True)
-        if os.path.isfile(index_path):
-            index = faiss.read_index(index_path)
-        else:
-            index = create_hnsw_id_index(faiss, feats.shape[1])
-        # stable ID from content fingerprint
         h = _content_fingerprint(item)
         import numpy as np  # type: ignore
         uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-        add_with_required_ids(index, feats.astype("float32"), uid)
         faiss_id = int(uid[0])
-        faiss.write_index(index, index_path)
+
+        with FaissLock(index_path):
+            if os.path.isfile(index_path):
+                index = faiss.read_index(index_path)
+            else:
+                index = create_hnsw_id_index(faiss, feats.shape[1])
+            add_with_required_ids(index, feats.astype("float32"), uid)
+            faiss.write_index(index, index_path)
 
         # Optional Qdrant dual-write
         qdrant_attempted = False

@@ -102,72 +102,72 @@ def _write_scene_faiss_points(
         import faiss  # type: ignore
         import numpy as np  # type: ignore
 
-        from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
+        from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
         from steps.common.memory import to_faiss_id, upsert_embedding
 
-        os.makedirs(os.path.dirname(index_path), exist_ok=True)
-        if os.path.isfile(index_path):
-            index = faiss.read_index(index_path)
-        else:
-            index = create_hnsw_id_index(faiss, dim)
+        with FaissLock(index_path):
+            if os.path.isfile(index_path):
+                index = faiss.read_index(index_path)
+            else:
+                index = create_hnsw_id_index(faiss, dim)
 
-        vectors: List[List[float]] = []
-        faiss_ids: List[int] = []
-        provenance_rows: List[Dict[str, Any]] = []
-        for point in points:
-            if not isinstance(point, dict):
-                continue
-            vector = point.get("vector")
-            point_id = point.get("id")
-            payload = point.get("payload") if isinstance(point.get("payload"), dict) else {}
-            if point_id is None or not isinstance(vector, list) or len(vector) != dim:
-                continue
-            faiss_id = to_faiss_id(point_id)
-            vectors.append(vector)
-            faiss_ids.append(faiss_id)
-            source_path = payload.get("source_path") or payload.get("representative_frame") or payload.get("video_path") or ""
-            hash_hex = hashlib.sha256(str(point_id).encode("utf-8")).hexdigest()
-            provenance_rows.append(
-                {
-                    "faiss_id": faiss_id,
-                    "hash": hash_hex,
-                    "source_path": str(source_path or ""),
-                    "scene_id": str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
-                    "vector": vector,
+            vectors: List[List[float]] = []
+            faiss_ids: List[int] = []
+            provenance_rows: List[Dict[str, Any]] = []
+            for point in points:
+                if not isinstance(point, dict):
+                    continue
+                vector = point.get("vector")
+                point_id = point.get("id")
+                payload = point.get("payload") if isinstance(point.get("payload"), dict) else {}
+                if point_id is None or not isinstance(vector, list) or len(vector) != dim:
+                    continue
+                faiss_id = to_faiss_id(point_id)
+                vectors.append(vector)
+                faiss_ids.append(faiss_id)
+                source_path = payload.get("source_path") or payload.get("representative_frame") or payload.get("video_path") or ""
+                hash_hex = hashlib.sha256(str(point_id).encode("utf-8")).hexdigest()
+                provenance_rows.append(
+                    {
+                        "faiss_id": faiss_id,
+                        "hash": hash_hex,
+                        "source_path": str(source_path or ""),
+                        "scene_id": str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
+                        "vector": vector,
+                    }
+                )
+
+            if not vectors:
+                return {
+                    "attempted": True,
+                    "committed": False,
+                    "reason": "no_valid_vectors",
+                    "count": 0,
+                    "index_path": index_path,
                 }
-            )
 
-        if not vectors:
-            return {
-                "attempted": True,
-                "committed": False,
-                "reason": "no_valid_vectors",
-                "count": 0,
-                "index_path": index_path,
-            }
+            np_vecs = np.array(vectors, dtype="float32")
+            np_ids = np.array(faiss_ids, dtype="int64")
+            try:
+                add_with_required_ids(index, np_vecs, np_ids)
+            except Exception as add_exc:
+                logger.warning(
+                    "[PHASE6] FAISS scene vector write failed operation=%s modality=%s index_path=%s exc_type=%s exc=%s",
+                    "add_with_ids",
+                    modality,
+                    index_path,
+                    type(add_exc).__name__,
+                    add_exc,
+                )
+                return {
+                    "attempted": True,
+                    "committed": False,
+                    "reason": "add_with_ids_failed",
+                    "count": 0,
+                    "index_path": index_path,
+                }
 
-        np_vecs = np.array(vectors, dtype="float32")
-        np_ids = np.array(faiss_ids, dtype="int64")
-        try:
-            add_with_required_ids(index, np_vecs, np_ids)
-        except Exception as add_exc:
-            logger.warning(
-                "[PHASE6] FAISS scene vector write failed operation=%s modality=%s index_path=%s exc_type=%s exc=%s",
-                "add_with_ids",
-                modality,
-                index_path,
-                type(add_exc).__name__,
-                add_exc,
-            )
-            return {
-                "attempted": True,
-                "committed": False,
-                "reason": "add_with_ids_failed",
-                "count": 0,
-                "index_path": index_path,
-            }
-
-        faiss.write_index(index, index_path)
+            faiss.write_index(index, index_path)
 
         if isinstance(id_map_db, str) and id_map_db.strip():
             os.makedirs(os.path.dirname(id_map_db), exist_ok=True)

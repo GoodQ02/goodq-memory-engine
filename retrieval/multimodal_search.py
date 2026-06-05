@@ -207,7 +207,7 @@ class MultimodalSearchEngine:
         self.audio_collection = collections_cfg.get("audio") or "goodq_audio"
         self.collection_dims = {
             self.text_collection: int(embedding_dims_cfg.get("text", 384)),
-            self.visual_collection: int(embedding_dims_cfg.get("clip", 512)),
+            self.visual_collection: int(embedding_dims_cfg.get("clip", 768)),
             self.audio_collection: int(embedding_dims_cfg.get("audio", 512)),
         }
         
@@ -1028,12 +1028,25 @@ class MultimodalSearchEngine:
         try:
             import torch
             from transformers import CLIPModel, CLIPProcessor
+            from pathlib import Path
+            import yaml
             
-            processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True).eval()
+            repo_root = Path(__file__).resolve().parent.parent
+            registry_path = repo_root / "configs" / "model_registry.yaml"
+            repo_id = "openai/clip-vit-large-patch14"  # Default fallback
+            if registry_path.exists():
+                try:
+                    with open(registry_path, "r", encoding="utf-8") as f:
+                        registry = yaml.safe_load(f) or {}
+                    repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
+                except Exception:
+                    pass
+            
+            processor = CLIPProcessor.from_pretrained(repo_id)
+            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True).eval()
             
             self._clip_model = {'model': model, 'processor': processor}
-            logger.info("[OK] CLIP model loaded for text encoding")
+            logger.info(f"[OK] CLIP model ({repo_id}) loaded for text encoding")
         except Exception as e:
             logger.error(f"Failed to load CLIP model: {e}")
     
@@ -1122,9 +1135,14 @@ class MultimodalSearchEngine:
         dim = self.collection_dims.get(collection)
         if dim is None:
             lower_collection = collection.lower()
-            dim = 512 if 'clip' in lower_collection or 'audio' in lower_collection else 384
-            if 'dino' in lower_collection:
+            if 'clip' in lower_collection:
                 dim = 768
+            elif 'audio' in lower_collection:
+                dim = 512
+            elif 'dino' in lower_collection:
+                dim = 1024
+            else:
+                dim = 384
         
         client = QdrantClient(QdrantConfig(
             host=self.qdrant_host,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
 
@@ -511,18 +511,18 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     e,
                 )
             return {"clap_meta": {"status": "no_index_path"}}
-        os.makedirs(os.path.dirname(index_path), exist_ok=True)
-        if os.path.isfile(index_path):
-            index = faiss.read_index(index_path)
-        else:
-            index = create_hnsw_id_index(faiss, feats.shape[1])
-
         # Stable 64-bit ID derived from content fingerprint
         h = _content_fingerprint(item)
         uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
-        add_with_required_ids(index, feats.astype("float32"), uid)
         faiss_id = int(uid[0])
-        faiss.write_index(index, index_path)
+
+        with FaissLock(index_path):
+            if os.path.isfile(index_path):
+                index = faiss.read_index(index_path)
+            else:
+                index = create_hnsw_id_index(faiss, feats.shape[1])
+            add_with_required_ids(index, feats.astype("float32"), uid)
+            faiss.write_index(index, index_path)
         faiss_ok = True
         try:
             from steps.common.memory_commit_events import utc_now_iso

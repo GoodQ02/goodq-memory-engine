@@ -65,25 +65,30 @@ class ConfigHealer:
         }
     }
     
-    def __init__(self, config_dir: Path = None, llm_client: LLMClient = None):
+    def __init__(self, config_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False):
         """Initialize Config Healer"""
         self.root = Path(__file__).parent.parent
         self.config_dir = config_dir or self.root / "configs"
         if llm_client is None:
             raise ValueError("ConfigHealer requires an injected llm_client")
         self.llm = llm_client
+        self.dry_run = dry_run
         
         # Backup directory for config safety (resolve under writeable GOODQ_DATA_ROOT)
         import os
         data_root = os.environ.get("GOODQ_DATA_ROOT") or "C:\\ProgramData\\GoodQ4All"
         self.backup_dir = Path(data_root) / "config_backups"
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Load current configs
         self.config_path = self.config_dir / "config.yaml"
         self.gpu_config_path = None
         
-        print("[CONFIG HEALER] Initialized")
+        if self.dry_run:
+            print("[CONFIG HEALER] Initialized in DRY RUN mode")
+        else:
+            print("[CONFIG HEALER] Initialized")
         print(f"   Config: {self.config_path}")
         print(f"   Backup: {self.backup_dir}")
     
@@ -197,45 +202,52 @@ CONFIDENCE: high/medium/low
             step_name = error_context.get("step_name") or error_context.get("step")
 
             if action == "reduce_batch_size":
-                return self._reduce_batch_size()
+                success, msg = self._reduce_batch_size()
             elif action in {"switch_to_cpu", "fallback_to_cpu"}:
-                return self._switch_to_cpu(step_name)
+                success, msg = self._switch_to_cpu(step_name)
             elif action in {"use_smaller_model", "downgrade_model"}:
-                return self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
+                success, msg = self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
             elif action == "fallback_local_model":
-                return self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
+                success, msg = self._use_smaller_model(step_name, target_model=error_context.get("to_model"))
             elif action == "increase_timeout":
-                return self._increase_timeout()
+                success, msg = self._increase_timeout()
             elif action in {"skip_audio_step", "skip_step", "skip_missing_file"}:
-                return self._skip_step(step_name or "audio_extraction")
+                success, msg = self._skip_step(step_name or "audio_extraction")
             elif action == "partition_audio":
-                return self._partition_audio(error_context)
+                success, msg = self._partition_audio(error_context)
             elif action in {"enable_retry", "retry_with_backoff"}:
-                return self._enable_retry(error_context)
+                success, msg = self._enable_retry(error_context)
             elif action == "adjust_thresholds":
-                return self._adjust_thresholds(error_context)
+                success, msg = self._adjust_thresholds(error_context)
             elif action == "skip_diarization":
-                return self._skip_step("diarization")
+                success, msg = self._skip_step("diarization")
             elif action == "skip_audio_steps":
-                return self._skip_step("audio_extraction")
+                success, msg = self._skip_step("audio_extraction")
             elif action == "mark_as_silent":
-                return self._mark_as_silent()
+                success, msg = self._mark_as_silent()
             elif action == "increase_warmup_delay":
-                return self._increase_warmup_delay()
+                success, msg = self._increase_warmup_delay()
             elif action == "switch_to_cpu_diarization":
-                return self._switch_to_cpu("diarization")
+                success, msg = self._switch_to_cpu("diarization")
             elif action == "use_smaller_whisper_model":
-                return self._use_smaller_whisper(error_context.get("to_model"))
+                success, msg = self._use_smaller_whisper(error_context.get("to_model"))
             else:
-                return False, f"Unknown action: {action}"
+                success, msg = False, f"Unknown action: {action}"
+
+            if self.dry_run and success:
+                msg = f"[DRY RUN] (Simulated) {msg}"
+            return success, msg
                 
         except Exception as e:
             # Restore backup on failure
-            shutil.copy(backup_path, self.config_path)
+            if backup_path and backup_path.exists():
+                shutil.copy(backup_path, self.config_path)
             return False, f"Healing failed, config restored: {e}"
     
-    def _backup_config(self) -> Path:
+    def _backup_config(self) -> Optional[Path]:
         """Create timestamped backup of current config"""
+        if self.dry_run:
+            return None
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"{self.config_path.name}.backup_{timestamp}"
         shutil.copy(self.config_path, backup_path)
@@ -248,6 +260,9 @@ CONFIDENCE: high/medium/low
     
     def _save_config(self, config: Dict[str, Any]) -> None:
         """Save config with pretty formatting"""
+        if self.dry_run:
+            print(f"[CONFIG HEALER] [DRY RUN] Bypassing config write to {self.config_path}")
+            return
         with open(self.config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 

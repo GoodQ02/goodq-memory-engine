@@ -77,9 +77,10 @@ class ControlAgent:
     - Build knowledge base for self-improvement
     """
     
-    def __init__(self, data_dir: Path = None, llm_client: LLMClient = None):
+    def __init__(self, data_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False):
         """Initialize the Control Agent"""
         self.root = Path(__file__).parent.parent
+        self.dry_run = dry_run
 
         if llm_client is None:
             raise ValueError(CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT)
@@ -87,7 +88,7 @@ class ControlAgent:
         self.data_dir = _resolve_control_agent_data_dir(data_dir)
         
         # Initialize Config Healer (Phase 2)
-        self.healer = ConfigHealer(llm_client=self.llm)
+        self.healer = ConfigHealer(llm_client=self.llm, dry_run=self.dry_run)
         
         # Initialize Recovery Database (Phase 2)
         self.recovery_db = RecoveryDatabase(
@@ -265,21 +266,24 @@ Provide:
 Be concise and actionable."""
 
         print("\n[SEARCH] Analyzing with LLM...")
-        response = self.llm.chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=800
-        )
-        
-        # Extract text
-        if isinstance(response, dict):
-            response_text = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
-        else:
-            response_text = str(response)
+        try:
+            response = self.llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=800
+            )
+            # Extract text
+            if isinstance(response, dict):
+                response_text = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
+            else:
+                response_text = str(response)
+        except Exception as e:
+            print(f"[Control Agent] LLM chat failed in diagnose_error: {e}")
+            response_text = f"ROOT CAUSE: LLM connection failed.\nRECOMMENDED FIX: Check LLM service connection.\nPREVENTION: Ensure LLM service is active.\nCONFIDENCE: 0%"
         
         return {
             "timestamp": datetime.now().isoformat(),
-            "llm_provider": getattr(self.llm, 'last_provider_used', 'Unknown'),
+            "llm_provider": getattr(self.llm, 'last_provider_used', 'Unknown') if hasattr(self, 'llm') else 'Unknown',
             "diagnosis": response_text,
             "root_cause": response_text.split('\n')[0] if response_text else "Unknown",
             "recommended_action": "See full diagnosis",
@@ -302,17 +306,20 @@ Be concise and actionable."""
         
         # Query LLM
         print("\n[SEARCH] Analyzing with LLM...")
-        response = self.llm.chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,  # Lower temp for more consistent analysis
-            max_tokens=1000
-        )
-        
-        # Extract text content from response
-        if isinstance(response, dict):
-            response_text = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
-        else:
-            response_text = str(response)
+        try:
+            response = self.llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,  # Lower temp for more consistent analysis
+                max_tokens=1000
+            )
+            # Extract text content from response
+            if isinstance(response, dict):
+                response_text = response.get('choices', [{}])[0].get('message', {}).get('content', str(response))
+            else:
+                response_text = str(response)
+        except Exception as e:
+            print(f"[Control Agent] LLM chat failed in diagnose_with_llm: {e}")
+            response_text = f"ROOT CAUSE: LLM connection failed.\nSEVERITY: high\nRECOMMENDED FIX: Check vLLM/Ollama fallback services.\nCONFIDENCE: 0%"
         
         diagnosis = {
             "timestamp": datetime.now().isoformat(),

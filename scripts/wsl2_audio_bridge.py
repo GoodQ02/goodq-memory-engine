@@ -69,16 +69,61 @@ class AudioRunner:
         raise NotImplementedError()
 
 
+def normalize_huggingface_cache_refs(cache_dir: Path) -> None:
+    """Normalize CRLF line endings in Hugging Face cache ref files to prevent local_files_only errors in WSL/Linux."""
+    if not cache_dir.exists():
+        return
+    try:
+        # Search for all ref files in the cache directory (typically under hub/models--*/refs/*)
+        for ref_path in cache_dir.glob("hub/models--*/refs/*"):
+            if ref_path.is_file():
+                try:
+                    content = ref_path.read_bytes()
+                    # Strip any trailing carriage return (\r) or newline (\n) or whitespace
+                    cleaned = content.strip()
+                    if cleaned != content:
+                        ref_path.write_bytes(cleaned)
+                        print(f"[WSL2AudioBridge][INFO] Normalized CRLF line endings in HF ref: {ref_path.name}")
+                except Exception as e:
+                    print(f"[WSL2AudioBridge][WARN] Failed to normalize HF ref {ref_path}: {e}")
+    except Exception as e:
+        print(f"[WSL2AudioBridge][WARN] Failed to scan HF cache directory for normalization: {e}")
+
+
 class WindowsWSL2AudioRunner(AudioRunner):
     """Bridge to WSL2 audio processing on Windows"""
     _workspace_warning_keys: set[str] = set()
     
     def __init__(self):
         self.require_wsl_audio = self._is_truthy(os.environ.get("GOODQ_REQUIRE_WSL_AUDIO", ""))
-        self.wsl_user = self._resolve_wsl_user()
-        self.workspace = self._resolve_wsl_workspace()
+        
+        # Load unified configuration
+        REPO_ROOT = Path(__file__).resolve().parents[1]
+        if str(REPO_ROOT) not in sys.path:
+            sys.path.insert(0, str(REPO_ROOT))
+        try:
+            from steps.common.config_loader import load_configs
+            cfg = load_configs()
+        except Exception:
+            cfg = {}
+        host_cfg = cfg.get('host', {})
+        
+        config_user = host_cfg.get('wsl_user')
+        if config_user == "auto":
+            config_user = None
+        self.wsl_user = os.environ.get("GOODQ_WSL_USER") or config_user or self._resolve_wsl_user()
+        
+        config_workspace = host_cfg.get('wsl_workspace')
+        if config_workspace == "auto":
+            config_workspace = None
+        self.workspace = os.environ.get("GOODQ_WSL_WORKSPACE") or config_workspace or self._resolve_wsl_workspace()
         self.audio_workspace = self.workspace.rstrip("/")
-        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO", "Ubuntu")
+        
+        config_distro = host_cfg.get('wsl_distro')
+        if config_distro == "auto":
+            config_distro = None
+        self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO") or config_distro or "Ubuntu"
+        
         self._workspace_checked = False
         self._workspace_warned = False
         self._workspace_ready = False
@@ -130,6 +175,22 @@ class WindowsWSL2AudioRunner(AudioRunner):
     def _ensure_workspace_ready(self):
         if self._workspace_checked and (self._workspace_ready or not self.require_wsl_audio):
             return self._workspace_ready
+
+        # Normalize carriage returns in HF refs if models directory exists
+        try:
+            from bootstrap_models import resolve_models_root
+        except ImportError:
+            try:
+                from scripts.bootstrap_models import resolve_models_root
+            except ImportError:
+                resolve_models_root = None
+        if resolve_models_root:
+            try:
+                models_root = resolve_models_root()
+                if models_root:
+                    normalize_huggingface_cache_refs(models_root)
+            except Exception as e:
+                print(f"[WSL2AudioBridge][WARN] Failed to resolve models root for HF ref normalization: {e}")
 
         check = None
         last_exception: Optional[Exception] = None
@@ -220,6 +281,30 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 timeout = 1200
             
         wsl_input = self.wsl_path(audio_path)
+        
+        # Verify if input file is accessible inside WSL distribution
+        file_check = subprocess.run(
+            ["wsl", "-d", self.wsl_distro, "--", "test", "-f", wsl_input],
+            capture_output=True
+        )
+        if file_check.returncode != 0:
+            drive_letter = audio_path.drive
+            mount_point = f"/mnt/{drive_letter[0].lower()}" if drive_letter else ""
+            mount_check = subprocess.run(
+                ["wsl", "-d", self.wsl_distro, "--", "test", "-d", mount_point],
+                capture_output=True
+            )
+            if mount_check.returncode != 0:
+                raise FileNotFoundError(
+                    f"WSL cannot access the path '{wsl_input}'. "
+                    f"The mount point '{mount_point}' is not mounted or accessible in WSL distro '{self.wsl_distro}'."
+                )
+            else:
+                raise FileNotFoundError(
+                    f"WSL cannot find the file at '{wsl_input}'. "
+                    "Ensure the file has been successfully written and has appropriate read permissions."
+                )
+
         wsl_output = f"{self.audio_workspace}/output"
         request_uuid = str(uuid.uuid4())
 

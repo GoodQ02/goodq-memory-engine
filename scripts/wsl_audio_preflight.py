@@ -579,11 +579,53 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     return result
 
 
-def _default_wsl_workspace() -> str:
-    explicit = str(os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
+def _get_config_and_host_cfg() -> Dict[str, Any]:
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+    import sys
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    try:
+        from steps.common.config_loader import load_configs
+        cfg = load_configs()
+    except Exception:
+        cfg = {}
+    return cfg.get("host", {}) if isinstance(cfg, dict) else {}
+
+
+def _default_wsl_distro() -> str:
+    explicit = os.environ.get("GOODQ_WSL_DISTRO")
     if explicit:
-        return explicit.rstrip("/")
-    wsl_user = str(os.environ.get("GOODQ_WSL_USER") or os.environ.get("USERNAME") or "goodq").strip()
+        return explicit.strip()
+    host_cfg = _get_config_and_host_cfg()
+    config_distro = host_cfg.get("wsl_distro")
+    if config_distro and config_distro != "auto":
+        return str(config_distro).strip()
+    return "Ubuntu"
+
+
+def _default_wsl_user() -> str:
+    explicit = os.environ.get("GOODQ_WSL_USER")
+    if explicit:
+        return explicit.strip()
+    host_cfg = _get_config_and_host_cfg()
+    config_user = host_cfg.get("wsl_user")
+    if config_user and config_user != "auto":
+        return str(config_user).strip()
+    for candidate in (os.environ.get("USER"), os.environ.get("USERNAME"), os.environ.get("LOGNAME")):
+        if candidate:
+            return candidate.strip()
+    return "goodq"
+
+
+def _default_wsl_workspace() -> str:
+    explicit = os.environ.get("GOODQ_WSL_WORKSPACE")
+    if explicit:
+        return explicit.strip().rstrip("/")
+    host_cfg = _get_config_and_host_cfg()
+    config_workspace = host_cfg.get("wsl_workspace")
+    if config_workspace and config_workspace != "auto":
+        return str(config_workspace).strip().rstrip("/")
+    wsl_user = _default_wsl_user()
     return f"/home/{wsl_user}/goodq_audio"
 
 
@@ -591,13 +633,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Inspect the WSL audio runtime without mutating it.")
     parser.add_argument(
         "--distro",
-        default=str(os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu").strip() or "Ubuntu",
-        help="WSL distro to inspect. Defaults to GOODQ_WSL_DISTRO or Ubuntu.",
+        default=_default_wsl_distro(),
+        help="WSL distro to inspect. Defaults to configuration or GOODQ_WSL_DISTRO or Ubuntu.",
     )
     parser.add_argument(
         "--workspace",
         default=_default_wsl_workspace(),
-        help="WSL audio workspace. Defaults to GOODQ_WSL_WORKSPACE or /home/<user>/goodq_audio.",
+        help="WSL audio workspace. Defaults to configuration or GOODQ_WSL_WORKSPACE or /home/<user>/goodq_audio.",
     )
     parser.add_argument(
         "--compact",
@@ -616,3 +658,4 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

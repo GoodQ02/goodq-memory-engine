@@ -15,7 +15,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | **1. Packaging & Installer** | Offline dependency staging, path alignment, and recursive standard user folder write permission grants. | [scripts/install/](file:///l:/GOODCUBE/projects/goodq4all/scripts/install) | `[x]` Audited |
 | **2. Watchdog Ingestion** | Directory polling (`import_inbox`), file locking, safe moves/renaming, and AI Control Agent integration. | [cli/watchdog.py](file:///l:/GOODCUBE/projects/goodq4all/cli/watchdog.py) | `[x]` Audited |
 | **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[x]` Audited |
-| **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[ ]` Pending |
+| **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[x]` Audited |
 | **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[ ]` Pending |
 | **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[ ]` Pending |
 | **7. Relational & Graph Memory**| SQLite relational storage, schema upgrades, fact stitching, and temporal knowledge graph queries. | [steps/common/memory_store.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/memory_store.py) | `[ ]` Pending |
@@ -75,10 +75,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - WSL Script assets: [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) (Whisper workers, environment setups).
 - **Role**: Bridges Windows hosts to WSL2 Linux environments for accelerated Faster-Whisper transcription, speaker speaker-diarization, and speech emotion classifications.
 - **Checklist**:
-  - `[ ]` Audit WSL distro detection fallback logic when the target distro is changed.
-  - `[ ]` Validate Python subprocess bindings and path translation (Windows roots to WSL mounts).
-  - `[ ]` Test offline HuggingFace cache loading behavior in WSL (CRLF refs line endings).
-  - `[ ]` Verify Pyannote pipeline load caches are passed explicitly to prevent remote checks.
+  - `[x]` Audit WSL distro detection fallback logic when the target distro is changed.
+  - `[x]` Validate Python subprocess bindings and path translation (Windows roots to WSL mounts).
+  - `[x]` Test offline HuggingFace cache loading behavior in WSL (CRLF refs line endings).
+  - `[x]` Verify Pyannote pipeline load caches are passed explicitly to prevent remote checks.
 
 ---
 

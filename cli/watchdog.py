@@ -101,6 +101,8 @@ def safe_move_file(src: Path, dst: Path) -> Path:
                 dst = candidate
                 break
             counter += 1
+            if counter > 1000:
+                raise RuntimeError(f"Too many file naming collisions (limit 1000) for {dst.name}")
 
     # 2. Ensure parent directory exists
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -118,6 +120,12 @@ def safe_move_file(src: Path, dst: Path) -> Path:
             src.unlink(missing_ok=True)
             return dst
         except Exception as copy_err:
+            # Clean up the partial destination file if it was created during failed copy/delete
+            if dst.exists():
+                try:
+                    dst.unlink(missing_ok=True)
+                except Exception as cleanup_err:
+                    logger.warning(f"Failed to clean up partial file {dst} after copy failure: {cleanup_err}")
             raise OSError(f"Failed to move file from {src} to {dst} via rename or copy/delete fallback: {copy_err}")
 
 
@@ -215,10 +223,26 @@ class FileState:
         """Check if file has stopped changing"""
         if not self.path.exists():
             return False
+            
+        # Guard: 0-byte files are not ready or valid for ingestion
         current_size = self.path.stat().st_size
+        if current_size == 0:
+            return False
+            
         current_mtime = self.path.stat().st_mtime
         
         if current_size == self.size and current_mtime == self.mtime:
+            # Check if locked by another writing process (Windows-specific check)
+            if os.name == 'nt':
+                try:
+                    with open(self.path, 'ab'):
+                        pass
+                except PermissionError as e:
+                    # WinError 32: Sharing violation, WinError 33: Lock violation
+                    if getattr(e, 'winerror', None) in (32, 33):
+                        logger.debug(f"File {self.path.name} is locked by another process (WinError {e.winerror}), waiting...")
+                        return False
+            
             elapsed = time.time() - self.last_check
             return elapsed >= STABILITY_WAIT
         
@@ -1231,7 +1255,10 @@ def main():
         # Check if existing lock is from a dead process
         try:
             with open(lockfile, 'r') as f:
-                old_pid = int(f.read().strip())
+                content = f.read().strip()
+            if not content:
+                raise ValueError("Lockfile is empty")
+            old_pid = int(content)
             # Check if process still exists
             if _pid_exists(old_pid):
                 logger.error(f"Watchdog already running (PID {old_pid}). Exiting.")
@@ -1244,6 +1271,17 @@ def main():
                 lock_handle = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(lock_handle, str(os.getpid()).encode())
                 os.close(lock_handle)
+        except (ValueError, OSError) as e:
+            # Stale, malformed, or unreadable lock file
+            logger.warning(f"Lockfile exists but is invalid, empty, or unreadable ({e}). Overwriting stale lock.")
+            try:
+                lockfile.unlink(missing_ok=True)
+                lock_handle = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(lock_handle, str(os.getpid()).encode())
+                os.close(lock_handle)
+            except Exception as force_err:
+                logger.error(f"Failed to force-acquire lock: {force_err}")
+                sys.exit(1)
         except Exception as e:
             logger.error(f"Failed to acquire lock: {e}")
             sys.exit(1)

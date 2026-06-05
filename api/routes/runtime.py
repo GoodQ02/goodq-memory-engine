@@ -3195,7 +3195,8 @@ def _sqlite_table_count(path: str, table: str) -> int:
     if not path or not os.path.isfile(path):
         return 0
     try:
-        con = sqlite3.connect(path)
+        read_only_uri = f"{Path(path).resolve().as_uri()}?mode=ro"
+        con = sqlite3.connect(read_only_uri, uri=True, timeout=1.0)
         try:
             row = con.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()
         finally:
@@ -3209,7 +3210,8 @@ def _sqlite_embedding_count(db_path: str, modalities: tuple[str, ...]) -> int:
     if not db_path or not os.path.isfile(db_path):
         return 0
     try:
-        con = sqlite3.connect(db_path)
+        read_only_uri = f"{Path(db_path).resolve().as_uri()}?mode=ro"
+        con = sqlite3.connect(read_only_uri, uri=True, timeout=1.0)
         try:
             placeholders = ",".join("?" for _ in modalities)
             row = con.execute(

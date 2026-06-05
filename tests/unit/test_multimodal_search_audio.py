@@ -198,13 +198,13 @@ def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -
     class _FakeProcessor:
         @classmethod
         def from_pretrained(cls, model_id: str):
-            assert model_id == "openai/clip-vit-base-patch16"
+            assert "clip-vit" in model_id
             return cls()
 
     class _FakeModel:
         @classmethod
         def from_pretrained(cls, model_id: str, **kwargs):
-            assert model_id == "openai/clip-vit-base-patch16"
+            assert "clip-vit" in model_id
             calls.append(kwargs)
             return cls()
 

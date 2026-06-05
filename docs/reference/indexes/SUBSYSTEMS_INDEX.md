@@ -17,7 +17,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[x]` Audited |
 | **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[x]` Audited |
 | **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[x]` Audited |
-| **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[ ]` Pending |
+| **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[x]` Audited |
 | **7. Relational & Graph Memory**| SQLite relational storage, schema upgrades, fact stitching, and temporal knowledge graph queries. | [steps/common/memory_store.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/memory_store.py) | `[ ]` Pending |
 | **8. Control Agent & Healer** | Background LLM-powered diagnostics, config integrity healing, and error analysis recommendations. | [agents/](file:///l:/GOODCUBE/projects/goodq4all/agents) | `[ ]` Pending |
 
@@ -104,10 +104,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - Multimodal Search Engine: [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval)
 - **Role**: Handles vector collection creation and queries in Qdrant (CLIP, DINOv2, Text, Audio CLAP/Wav2Vec) and synchronizes equivalent IndexIDMap2 mappings inside local FAISS files.
 - **Checklist**:
-  - `[ ]` Validate vector index dimensional compatibility (768 for CLIP, 1024 for DINOv2).
-  - `[ ]` Verify FAISS index parity checks and write locks during progressive uploads.
-  - `[ ]` Audit hybrid multimodal retrieval fusion weights (text vs visual vs audio).
-  - `[ ]` Test vector database connection loss healing routes.
+  - `[x]` Validate vector index dimensional compatibility (768 for CLIP, 1024 for DINOv2).
+  - `[x]` Verify FAISS index parity checks and write locks during progressive uploads.
+  - `[x]` Audit hybrid multimodal retrieval fusion weights (text vs visual vs audio).
+  - `[x]` Test vector database connection loss healing routes.
 
 ---
 

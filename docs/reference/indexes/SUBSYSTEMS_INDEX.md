@@ -18,8 +18,8 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[x]` Audited |
 | **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[x]` Audited |
 | **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[x]` Audited |
-| **7. Relational & Graph Memory**| SQLite relational storage, schema upgrades, fact stitching, and temporal knowledge graph queries. | [steps/common/memory_store.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/memory_store.py) | `[ ]` Pending |
-| **8. Control Agent & Healer** | Background LLM-powered diagnostics, config integrity healing, and error analysis recommendations. | [agents/](file:///l:/GOODCUBE/projects/goodq4all/agents) | `[ ]` Pending |
+| **7. Relational & Graph Memory**| SQLite relational storage, schema upgrades, fact stitching, and temporal knowledge graph queries. | [steps/common/memory_store.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/memory_store.py) | `[x]` Audited |
+| **8. Control Agent & Healer** | Background LLM-powered diagnostics, config integrity healing, and error analysis recommendations. | [agents/](file:///l:/GOODCUBE/projects/goodq4all/agents) | `[x]` Audited |
 
 ---
 
@@ -117,10 +117,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - SQLite DBs: `memory.db` (relational metadata) and `knowledge_graph.db` (semantic connections).
 - **Role**: Manage SQLite schema migration, write transaction locking, and query interfaces for scenes, dialogue transcriptions, entity linking, interaction metrics, and temporal facts.
 - **Checklist**:
-  - `[ ]` Audit SQLite write locks under concurrent ingestion status updates.
-  - `[ ]` Audit entity normalization rules and identity stitching ladders.
-  - `[ ]` Validate knowledge graph temporal relationship bindings (scene links).
-  - `[ ]` Verify database read-only URI mapping when served via API.
+  - `[x]` Audit SQLite write locks under concurrent ingestion status updates.
+  - `[x]` Audit entity normalization rules and identity stitching ladders.
+  - `[x]` Validate knowledge graph temporal relationship bindings (scene links).
+  - `[x]` Verify database read-only URI mapping when served via API.
 
 ---
 
@@ -130,7 +130,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - Command Launcher: [run_control_agent.py](file:///l:/GOODCUBE/projects/goodq4all/scripts/run_control_agent.py)
 - **Role**: Monitor pipeline status, analyze failures (e.g. out of memory, file copy blocks) via LLM contexts, recommend healing configs, and compile trend recurrence reports.
 - **Checklist**:
-  - `[ ]` Audit LLM API connection timeout handling.
-  - `[ ]` Verify read-only limitations (preventing unauthorized config adjustments/healing).
-  - `[ ]` Validate recurrence trend diagnostics generation from historical JSON run records.
-  - `[ ]` Test vLLM vs Ollama fallback switching under VRAM restrictions.
+  - `[x]` Audit LLM API connection timeout handling.
+  - `[x]` Verify read-only limitations (preventing unauthorized config adjustments/healing).
+  - `[x]` Validate recurrence trend diagnostics generation from historical JSON run records.
+  - `[x]` Test vLLM vs Ollama fallback switching under VRAM restrictions.

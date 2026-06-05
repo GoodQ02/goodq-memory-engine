@@ -16,7 +16,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | **2. Watchdog Ingestion** | Directory polling (`import_inbox`), file locking, safe moves/renaming, and AI Control Agent integration. | [cli/watchdog.py](file:///l:/GOODCUBE/projects/goodq4all/cli/watchdog.py) | `[x]` Audited |
 | **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[x]` Audited |
 | **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[x]` Audited |
-| **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[ ]` Pending |
+| **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[x]` Audited |
 | **6. Vector Database & Search** | Qdrant multimodal indexing, FAISS sub-indices integration, and hybrid search weights fusion. | [retrieval/](file:///l:/GOODCUBE/projects/goodq4all/retrieval) | `[ ]` Pending |
 | **7. Relational & Graph Memory**| SQLite relational storage, schema upgrades, fact stitching, and temporal knowledge graph queries. | [steps/common/memory_store.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/memory_store.py) | `[ ]` Pending |
 | **8. Healer & Control Agent** | Background LLM-powered diagnostics, config integrity healing, and error analysis recommendations. | [agents/](file:///l:/GOODCUBE/projects/goodq4all/agents) | `[ ]` Pending |
@@ -90,10 +90,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - User Console Interface: [retro_console_v1/](file:///l:/GOODCUBE/projects/goodq4all/ui/retro_console_v1)
 - **Role**: Host the FastAPI server process serving console layouts, file upload overlays, video timelines, queue stats, and multimodal vector searches.
 - **Checklist**:
-  - `[ ]` Audit socket binding fallback logic on port conflicts.
-  - `[ ]` Audit token redacting filters inside uvicorn log handlers (security/privacy).
-  - `[ ]` Verify progress tracker JSON freshness thresholds under slow pipeline steps.
-  - `[ ]` Validate upload drag-and-drop panel integrations in retro memory explorer.
+  - `[x]` Audit socket binding fallback logic on port conflicts.
+  - `[x]` Audit token redacting filters inside uvicorn log handlers (security/privacy).
+  - `[x]` Verify progress tracker JSON freshness thresholds under slow pipeline steps.
+  - `[x]` Validate upload drag-and-drop panel integrations in retro memory explorer.
 
 ---
 

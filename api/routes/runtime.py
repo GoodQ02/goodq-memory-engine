@@ -536,7 +536,7 @@ def _collect_cli_progress(*, now: datetime | None = None) -> Dict[str, Any]:
         age_seconds = max(0.0, (now_value - updated_at).total_seconds())
     status = str(payload.get("status") or "unknown").lower()
     details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
-    fresh = age_seconds is not None and age_seconds <= 1800
+    fresh = age_seconds is not None and age_seconds <= 7200
     active = fresh and status in {"active", "running", "processing", "in_progress"}
     return {
         "available": True,

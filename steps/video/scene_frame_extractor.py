@@ -71,6 +71,14 @@ def extract_frame_at_timestamp(
         if use_opencv and active_cap is not None and active_cap.isOpened():
             try:
                 import cv2
+                # Hardening: Cap timestamp to video duration if available to prevent out-of-bounds seeks
+                fps = active_cap.get(cv2.CAP_PROP_FPS)
+                total_frames = active_cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                if fps > 0 and total_frames > 0:
+                    video_duration = total_frames / fps
+                    if timestamp >= video_duration:
+                        timestamp = max(0.0, video_duration - 0.05)
+
                 # Seek to timestamp in milliseconds
                 active_cap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000.0)
                 ret, frame = active_cap.read()
@@ -310,10 +318,30 @@ def extract_keyframe_candidates(
     num_candidates = max(max_frames * 3, 10)
     candidate_ts = [start + (duration * i / (num_candidates - 1)) for i in range(num_candidates)]
     
+    # Hardening: Retrieve video duration to prevent out-of-bound seeking
+    video_duration = None
+    try:
+        fps = use_cap.get(cv2.CAP_PROP_FPS)
+        total_frames = use_cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if fps > 0 and total_frames > 0:
+            video_duration = total_frames / fps
+    except Exception:
+        pass
+
     candidates = []
     prev_frame_gray = None
+    evaluated_timestamps = set()
     
     for ts in candidate_ts:
+        if video_duration is not None and ts >= video_duration:
+            ts = max(0.0, video_duration - 0.05)
+            
+        # Skip duplicate timestamps resulting from capping to avoid redundant seeks
+        ts_rounded = round(ts, 3)
+        if ts_rounded in evaluated_timestamps:
+            continue
+        evaluated_timestamps.add(ts_rounded)
+
         use_cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000.0)
         ret, frame = use_cap.read()
         if not ret or frame is None:

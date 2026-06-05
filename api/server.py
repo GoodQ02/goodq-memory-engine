@@ -35,6 +35,20 @@ def _resolve_api_bind_defaults() -> tuple[str, int]:
     return host, port
 
 
+def _find_available_port(host: str, start_port: int) -> int:
+    import socket
+    for p in range(start_port, start_port + 100):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((host, p))
+                return p
+        except OSError:
+            print(f"[api] [WARNING] Port {p} is occupied. Probing fallback port...")
+            continue
+    print(f"[api] [ERROR] Port exhaustion: All ports from {start_port} to {start_port + 99} are in use.")
+    raise OSError(f"Could not find an available port in range {start_port} to {start_port + 99}")
+
+
 def main() -> None:
     # Ensure repo root is on sys.path so 'goodq4all' is importable
     here = pathlib.Path(__file__).resolve()
@@ -46,13 +60,17 @@ def main() -> None:
     class TokenRedactingFilter(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
             import re
+            pattern = r'\b(token|session_token|api_key|auth_token|password|secret)\s*=\s*[a-zA-Z0-9_\-\%\.\+\/\~\@]+'
+            def redact(val: str) -> str:
+                return re.sub(pattern, lambda m: f"{m.group(1)}=REDACTED", val, flags=re.IGNORECASE)
+
             if isinstance(record.msg, str):
-                record.msg = re.sub(r'token=[a-zA-Z0-9_-]+', 'token=REDACTED', record.msg)
+                record.msg = redact(record.msg)
             if record.args:
                 new_args = []
                 for arg in record.args:
                     if isinstance(arg, str):
-                        new_args.append(re.sub(r'token=[a-zA-Z0-9_-]+', 'token=REDACTED', arg))
+                        new_args.append(redact(arg))
                     else:
                         new_args.append(arg)
                 record.args = tuple(new_args)
@@ -63,7 +81,12 @@ def main() -> None:
         if not any(isinstance(f, TokenRedactingFilter) for f in logger_obj.filters):
             logger_obj.addFilter(TokenRedactingFilter())
 
-    host, port = _resolve_api_bind_defaults()
+    host, start_port = _resolve_api_bind_defaults()
+    try:
+        port = _find_available_port(host, start_port)
+    except OSError as e:
+        print(f"[api] [CRITICAL] {e}")
+        sys.exit(1)
 
     from uvicorn import run  # type: ignore
     from api.main import app

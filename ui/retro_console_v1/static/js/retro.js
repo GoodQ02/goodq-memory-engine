@@ -3178,6 +3178,14 @@
       const uploadStatus = document.getElementById("upload-status");
       if (!dropZone || !fileInput) return;
 
+      // Prevent default drag/drop behaviors on window level to avoid accidental page navigation/redirects
+      window.addEventListener("dragover", (e) => {
+        e.preventDefault();
+      }, false);
+      window.addEventListener("drop", (e) => {
+        e.preventDefault();
+      }, false);
+
       dropZone.addEventListener("click", (e) => {
         if (e.target.closest("#upload-status")) return;
         fileInput.click();

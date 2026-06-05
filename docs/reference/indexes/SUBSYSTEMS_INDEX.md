@@ -13,7 +13,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 | Subsystem Name | Key Responsibility | Primary Folder/Files | Audit Status |
 | :--- | :--- | :--- | :--- |
 | **1. Packaging & Installer** | Offline dependency staging, path alignment, and recursive standard user folder write permission grants. | [scripts/install/](file:///l:/GOODCUBE/projects/goodq4all/scripts/install) | `[x]` Audited |
-| **2. Watchdog Ingestion** | Directory polling (`import_inbox`), file locking, safe moves/renaming, and AI Control Agent integration. | [cli/watchdog.py](file:///l:/GOODCUBE/projects/goodq4all/cli/watchdog.py) | `[ ]` Pending |
+| **2. Watchdog Ingestion** | Directory polling (`import_inbox`), file locking, safe moves/renaming, and AI Control Agent integration. | [cli/watchdog.py](file:///l:/GOODCUBE/projects/goodq4all/cli/watchdog.py) | `[x]` Audited |
 | **3. Ingestion Pipeline** | Orchestration of Phases 0-5 (WebRTC-VAD, Whisper, PySceneDetect, CLIP/DINOv2 embedding batching). | [cli/run_ingestion.py](file:///l:/GOODCUBE/projects/goodq4all/cli/run_ingestion.py) | `[ ]` Pending |
 | **4. WSL2 Audio Lane** | Linux-accelerated speaker diarization, voice signature extraction, and speech emotion classification. | [wsl2_audio/](file:///l:/GOODCUBE/projects/goodq4all/wsl2_audio) | `[ ]` Pending |
 | **5. Web API Server** | FastAPI server hosting queue management,timeline rendering, search routes, and serving retro UI consoles. | [api/](file:///l:/GOODCUBE/projects/goodq4all/api) | `[ ]` Pending |
@@ -48,10 +48,10 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
   - Progress Ledger: [progress_tracker.py](file:///l:/GOODCUBE/projects/goodq4all/steps/common/progress_tracker.py)
 - **Role**: Monitors the inbox, checks file stability (stops growing), computes SHA256 hashes, locks records in `watchdog_state.json` to prevent duplicates, and delegates file ingest to `pipelines.direct_ingestion`.
 - **Checklist**:
-  - `[ ]` Audit file stability wait timeouts under fast-write operations.
-  - `[ ]` Audit safe move collision limits and cross-drive copy fail-safe paths.
-  - `[ ]` Validate duplicate ingestion requests handling when a previous run failed.
-  - `[ ]` Test AI Control Agent callback hooks on copy/processing failures.
+  - `[x]` Audit file stability wait timeouts under fast-write operations.
+  - `[x]` Audit safe move collision limits and cross-drive copy fail-safe paths.
+  - `[x]` Validate duplicate ingestion requests handling when a previous run failed.
+  - `[x]` Test AI Control Agent callback hooks on copy/processing failures.
 
 ---
 

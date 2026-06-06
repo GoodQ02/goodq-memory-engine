@@ -98,8 +98,15 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_06_02_family_clean_01` epoch. It currently reports the onboarding
-  verification run (1 video, 1 scene) under a completely fresh, wiped blank slate.
+  `epoch_2026_06_02_family_clean_01` epoch.
+
+### 🛡️ Onboarding Cleanup Audit Seal (2026-06-06)
+
+The onboarding fixture (`da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62`) has been formally purged from all memory surfaces and verified under a strict audit seal:
+- **Relational Memory (`memory.db`)**: Purged 43 matching rows across 14 tables (including `scenes`, `segments`, `embeddings`, `links`, `scene_text_fts`, `memory_commit_events`).
+- **Qdrant Multimodal Collections**: Purged matching points across `goodq_text`, `goodq_clip`, `goodq_dino`, and `goodq_audio` collections.
+- **Filesystem**: Cleaned up the `processing/onboarding_fixture` directory and all cached frame data.
+- **Post-Purge Status**: Relational DB and Qdrant collections verified clean of onboarding metadata. Ready for personal memory ingestion.
 
 Latest full home-memory validation epoch:
 

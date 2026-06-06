@@ -18,6 +18,7 @@ from pathlib import Path
 
 L_PATH_PATTERN = re.compile(r"\bL:(?:/|\\)")
 DRIVE_ROOT_PATTERN = re.compile(r"\b[A-Za-z]:[\\/]")
+GHOST_PATH_PATTERN = re.compile(r"file:///|L:/GOODCUBE|L:\\GOODCUBE|C:/Users|C:\\Users|/GOODCUBE/", re.IGNORECASE)
 LEGACY_HINT_PATTERN = re.compile(r"\blegacy\b", re.IGNORECASE)
 ARCHIVE_WARNING_PATTERN = re.compile(r"ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS")
 CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]")
@@ -38,6 +39,7 @@ ALLOWED_LEGACY_DOCS = [
     "docs/diagnostics/HOST_COMPAT_PATCH_NOTES.md",
     "docs/diagnostics/LAUNCHER_PORTABILITY_DISCOVERY.md",
     "docs/diagnostics/LAUNCHER_PORTABILITY_PATCH_NOTES.md",
+    "docs/technical/PIPELINE_RESTORATION_BACKLOG.md",
 ]
 
 CUDA_MANDATORY_PATTERNS = [
@@ -92,6 +94,7 @@ def main() -> int:
     targets = collect_targets(repo_root)
     l_path_violations: list[tuple[Path, int, str]] = []
     drive_root_violations: list[tuple[Path, int, str]] = []
+    ghost_path_violations: list[tuple[Path, int, str]] = []
     cuda_violations: list[tuple[Path, int, str]] = []
     archive_banner_violations: list[tuple[Path, str]] = []
     corrupt_char_violations: list[tuple[Path, int, str]] = []
@@ -161,6 +164,7 @@ def main() -> int:
             )
             has_l_path = bool(L_PATH_PATTERN.search(line))
             has_drive_root = bool(DRIVE_ROOT_PATTERN.search(line))
+            has_ghost_path = bool(GHOST_PATH_PATTERN.search(line))
             has_control_char = bool(CONTROL_CHAR_PATTERN.search(line))
             has_replacement_char = bool(REPLACEMENT_CHAR_PATTERN.search(line))
 
@@ -176,6 +180,9 @@ def main() -> int:
 
             if not skip_path_checks and has_drive_root:
                 drive_root_violations.append((file_path, line_no, stripped))
+
+            if not skip_path_checks and has_ghost_path:
+                ghost_path_violations.append((file_path, line_no, stripped))
 
             if (not enforce_contract_checks) or in_archive or in_gpu_guide:
                 if stripped:
@@ -203,6 +210,9 @@ def main() -> int:
     for path, line_no, line in drive_root_violations:
         print(f"[DRIVE_ROOT] {path}:{line_no}: {sanitize_console(line)}")
 
+    for path, line_no, line in ghost_path_violations:
+        print(f"[GHOST_PATH] {path}:{line_no}: {sanitize_console(line)}")
+
     for path, line_no, line in cuda_violations:
         print(f"[CUDA_MANDATORY] {path}:{line_no}: {sanitize_console(line)}")
 
@@ -219,6 +229,7 @@ def main() -> int:
         f"doc_drift_lint summary: files_scanned={len(targets)} "
         f"active_l_path_violations={len(l_path_violations)} "
         f"active_drive_root_violations={len(drive_root_violations)} "
+        f"ghost_path_violations={len(ghost_path_violations)} "
         f"cuda_mandatory_violations={len(cuda_violations)} "
         f"archive_literal_docs={archive_literal_doc_count} "
         f"archive_literal_lines={archive_literal_line_count} "
@@ -230,6 +241,7 @@ def main() -> int:
     return 1 if (
         l_path_violations
         or drive_root_violations
+        or ghost_path_violations
         or cuda_violations
         or archive_banner_violations
         or corrupt_char_violations

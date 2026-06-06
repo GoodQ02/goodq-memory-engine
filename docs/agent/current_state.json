@@ -104,7 +104,15 @@
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
     "fresh_epoch": "epoch_2026_06_02_family_clean_01",
-    "fresh_epoch_note": "wiped all legacy memory stores, initialized fresh collections, and verified blank slate with a 1-scene onboarding fixture probe run",
+    "fresh_epoch_note": "wiped all legacy memory stores, initialized fresh collections, and applied a strict audit seal after purging the 1-scene onboarding fixture probe run",
+    "onboarding_cleanup_audit_seal": {
+      "certified_date": "2026-06-06",
+      "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",
+      "relational_db_purged_rows": 43,
+      "relational_db_tables_cleared": 14,
+      "qdrant_collections_purged": 4,
+      "processing_folder_unlinked": "processing/onboarding_fixture"
+    },
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "tracked_home_memory_witness": "docs/diagnostics/HOME_MEMORY_WITNESS_RUN_2026-05-22.md",

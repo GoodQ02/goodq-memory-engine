@@ -6183,9 +6183,9 @@ def run(
             build_llm_models(cfg)
             control_agent_status = 'disabled'
             control_agent_reason = 'Control Agent is disabled by default (not activated)'
-        except Exception:
+        except Exception as exc:
             control_agent_status = CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
-            control_agent_reason = CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT
+            control_agent_reason = f"{CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT}: {exc}"
     else:
         # Activated path
         try:
@@ -6217,7 +6217,7 @@ def run(
             )
             typer.echo(f"[CONTROL] Control Agent disabled: LLM client initialization failed ({exc})")
             control_agent_status = CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
-            control_agent_reason = f"LLM client initialization failed: {exc}"
+            control_agent_reason = f"{CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT}: {exc}"
             control_agent = None
 
     run_context['control_agent_status'] = control_agent_status

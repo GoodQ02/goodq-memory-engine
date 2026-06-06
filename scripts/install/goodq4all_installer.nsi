@@ -35,10 +35,12 @@ RequestExecutionLevel admin
 
 ; Component selection variables
 Var AlwaysOnService
+Var COMMONAPPDATA
 
 Section "Base Application (Required)" SecBase
   SectionIn RO
   SetShellVarContext all
+  StrCpy $COMMONAPPDATA $APPDATA
   SetOutPath "$INSTDIR"
 
   ; --- STATE 1: preflight ---
@@ -116,33 +118,33 @@ runtime_ok:
   File /r "..\..\branding\*.*"
 
   ; Create data directories under ProgramData
-  CreateDirectory "$APPDATA\GoodQ4All"
-  CreateDirectory "$APPDATA\GoodQ4All\qdrant\storage"
-  CreateDirectory "$APPDATA\GoodQ4All\qdrant\logs"
-  CreateDirectory "$APPDATA\GoodQ4All\qdrant\config"
-  CreateDirectory "$APPDATA\GoodQ4All\models"
-  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data"
-  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\import_inbox"
-  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\processed"
-  CreateDirectory "$APPDATA\GoodQ4All\GoodQ_Data\failed"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\storage"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\logs"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\config"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\models"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\import_inbox"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
   ; Write default config to ProgramData
-  SetOutPath "$APPDATA\GoodQ4All\qdrant\config"
+  SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"
   File "staged\qdrant\config\qdrant_config.yaml"
 
   ; Grant modify permissions on ProgramData folder to standard users (Using SID to support international Windows)
   DetailPrint "Configuring folder permissions for standard users..."
-  nsExec::ExecToLog 'icacls "$APPDATA\GoodQ4All" /grant *S-1-5-32-545:(OI)(CI)M /T /C'
+  nsExec::ExecToLog 'icacls "$COMMONAPPDATA\GoodQ4All" /grant *S-1-5-32-545:(OI)(CI)M /T /C'
 
   ; --- STATE 5: configure service ---
   DetailPrint "Step 5/10: Configuring service registrations..."
   ${If} $AlwaysOnService == 1
     SetOutPath "$INSTDIR\nssm"
     File "staged\nssm\nssm.exe"
-    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" install GoodQ_Qdrant "$INSTDIR\qdrant\qdrant.exe" "--config-path $APPDATA\GoodQ4All\qdrant\config\qdrant_config.yaml"'
+    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" install GoodQ_Qdrant "$INSTDIR\qdrant\qdrant.exe" "--config-path $COMMONAPPDATA\GoodQ4All\qdrant\config\qdrant_config.yaml"'
     nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" set GoodQ_Qdrant AppDirectory "$INSTDIR\qdrant"'
-    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" set GoodQ_Qdrant AppStdout "$APPDATA\GoodQ4All\qdrant\logs\service_stdout.log"'
-    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" set GoodQ_Qdrant AppStderr "$APPDATA\GoodQ4All\qdrant\logs\service_stderr.log"'
+    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" set GoodQ_Qdrant AppStdout "$COMMONAPPDATA\GoodQ4All\qdrant\logs\service_stdout.log"'
+    nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" set GoodQ_Qdrant AppStderr "$COMMONAPPDATA\GoodQ4All\qdrant\logs\service_stderr.log"'
     nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" start GoodQ_Qdrant'
   ${Else}
     DetailPrint "Personal Mode selected. Qdrant will start on-demand under LAUNCH_GOODQ.exe."
@@ -152,7 +154,7 @@ runtime_ok:
   DetailPrint "Step 6/10: Hydrating sandboxed runtime and downloading model packs..."
   ; Note: Core Memory Pack is downloaded by default. Other selected components trigger additional flags.
   DetailPrint "Executing environment setup and downloading Core Memory Pack..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$APPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "Error: Hydration or Core Model Pack download failed. Code $0"
@@ -161,7 +163,7 @@ runtime_ok:
 
   ; --- STATE 7: verify assets ---
   DetailPrint "Step 7/10: Running asset checksum verification..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --verify-only --data-dir "$APPDATA\GoodQ4All"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --verify-only --data-dir "$COMMONAPPDATA\GoodQ4All"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "Error: Asset verification failed. One or more model checksums are invalid."
@@ -171,13 +173,13 @@ runtime_ok:
   ; --- STATE 8: run health check ---
   DetailPrint "Step 8/10: Executing startup health checks..."
   ; Run python preflight diagnostics check inside sandbox
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\system_readiness_check.py" --data-dir "$APPDATA\GoodQ4All"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\system_readiness_check.py" --data-dir "$COMMONAPPDATA\GoodQ4All"'
   Pop $0
   DetailPrint "System health readiness test completed with code $0."
 
   ; --- STATE 9: write install receipt ---
   DetailPrint "Step 9/10: Writing installation receipt..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$APPDATA\GoodQ4All" --service-mode "$AlwaysOnService"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService"'
 
   ; --- STATE 10: enable launch ---
   DetailPrint "Step 10/10: Creating shortcuts and enabling launcher..."
@@ -205,6 +207,7 @@ SectionEnd
 ; Uninstaller Section
 Section "Uninstall"
   SetShellVarContext all
+  StrCpy $COMMONAPPDATA $APPDATA
   ; Stop and delete Windows service if registered
   IfFileExists "$INSTDIR\nssm\nssm.exe" stop_service skip_service_cleanup
 stop_service:
@@ -242,12 +245,12 @@ skip_service_cleanup:
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Would you like to delete your personal GoodQ4All memory database and downloaded model packs? (Warning: This will destroy all ingested memory and cannot be undone.)" IDNO preserve_data
   
   ; If YES, delete everything under ProgramData
-  RMDir /r "$APPDATA\GoodQ4All"
+  RMDir /r "$COMMONAPPDATA\GoodQ4All"
   Goto end_uninstall
   
 preserve_data:
   ; Only delete temporary install receipts but preserve models & databases
-  Delete "$APPDATA\GoodQ4All\install_receipt.json"
+  Delete "$COMMONAPPDATA\GoodQ4All\install_receipt.json"
 
 end_uninstall:
   ; Remove uninstall keys from registry

@@ -79,21 +79,26 @@ def _load_clip_model():
         from pathlib import Path
         import yaml
         
-        # Resolve repo_id from registry
+        # Resolve repo_id and revision from registry
         repo_root = Path(__file__).resolve().parents[2]
         registry_path = repo_root / "configs" / "model_registry.yaml"
         repo_id = "openai/clip-vit-large-patch14"  # Default fallback
+        revision = None
         if registry_path.exists():
             try:
                 with open(registry_path, "r", encoding="utf-8") as f:
                     registry = yaml.safe_load(f) or {}
                 repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
+                revision = registry.get("huggingface_models", {}).get("clip_vit", {}).get("revision") or revision
             except Exception:
                 pass
         
-        processor = CLIPProcessor.from_pretrained(repo_id)
+        kwargs = {}
+        if revision is not None:
+            kwargs["revision"] = revision
+        processor = CLIPProcessor.from_pretrained(repo_id, **kwargs)
         try:
-            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True)
+            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True, **kwargs)
         except Exception as safetensors_exc:
             logger.warning(
                 "[PHASE6] CLIP safetensors load unavailable; falling back to cached default weights "
@@ -101,7 +106,7 @@ def _load_clip_model():
                 type(safetensors_exc).__name__,
                 safetensors_exc,
             )
-            model = CLIPModel.from_pretrained(repo_id)
+            model = CLIPModel.from_pretrained(repo_id, **kwargs)
         model = model.to(device).eval()
         
         _MODELS["clip"].update({
@@ -110,7 +115,7 @@ def _load_clip_model():
             "device": device
         })
         
-        logger.info(f"[OK] CLIP model ({repo_id}) loaded on {device}")
+        logger.info(f"[OK] CLIP model ({repo_id}) loaded on {device} (revision: {revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {e}")
         _MODELS["clip"].update({"model": None, "processor": None, "device": "cpu"})
@@ -129,20 +134,25 @@ def _load_dino_model():
         from pathlib import Path
         import yaml
         
-        # Resolve repo_id from registry
+        # Resolve repo_id and revision from registry
         repo_root = Path(__file__).resolve().parents[2]
         registry_path = repo_root / "configs" / "model_registry.yaml"
         repo_id = "facebook/dinov2-large"  # Default fallback
+        revision = None
         if registry_path.exists():
             try:
                 with open(registry_path, "r", encoding="utf-8") as f:
                     registry = yaml.safe_load(f) or {}
                 repo_id = registry.get("huggingface_models", {}).get("dinov2", {}).get("repo_id") or repo_id
+                revision = registry.get("huggingface_models", {}).get("dinov2", {}).get("revision") or revision
             except Exception:
                 pass
         
-        processor = AutoImageProcessor.from_pretrained(repo_id)
-        model = AutoModel.from_pretrained(repo_id).to(device).eval()
+        kwargs_dino = {}
+        if revision is not None:
+            kwargs_dino["revision"] = revision
+        processor = AutoImageProcessor.from_pretrained(repo_id, **kwargs_dino)
+        model = AutoModel.from_pretrained(repo_id, **kwargs_dino).to(device).eval()
         
         _MODELS["dino"].update({
             "model": model,
@@ -150,7 +160,7 @@ def _load_dino_model():
             "device": device
         })
         
-        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device}")
+        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device} (revision: {revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load DINO model: {e}")
         _MODELS["dino"].update({"model": None, "processor": None, "device": "cpu"})

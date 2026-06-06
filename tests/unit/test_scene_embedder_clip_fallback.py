@@ -14,7 +14,7 @@ def test_clip_loader_falls_back_when_safetensors_weights_are_unavailable(monkeyp
 
     class _FakeProcessor:
         @classmethod
-        def from_pretrained(cls, model_id):
+        def from_pretrained(cls, model_id, **kwargs):
             assert model_id in ("openai/clip-vit-base-patch16", "openai/clip-vit-large-patch14")
             return object()
 
@@ -44,7 +44,8 @@ def test_clip_loader_falls_back_when_safetensors_weights_are_unavailable(monkeyp
     try:
         scene_embedder._load_clip_model()
 
-        assert calls == [{"use_safetensors": True}, {}]
+        cleaned_calls = [{k: v for k, v in c.items() if k != "revision"} for c in calls]
+        assert cleaned_calls == [{"use_safetensors": True}, {}]
         assert scene_embedder._MODELS["clip"]["model"] is not None
         assert scene_embedder._MODELS["clip"]["device"] == "cpu"
     finally:

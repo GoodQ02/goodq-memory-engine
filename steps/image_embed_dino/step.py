@@ -107,22 +107,27 @@ def _load() -> bool:
         from pathlib import Path
         import yaml
         
-        # Resolve repo_id from registry
+        # Resolve repo_id and revision from registry
         repo_root = Path(__file__).resolve().parents[2]
         registry_path = repo_root / "configs" / "model_registry.yaml"
         repo_id = "facebook/dinov2-large"  # Default fallback
+        revision = None
         if registry_path.exists():
             try:
                 with open(registry_path, "r", encoding="utf-8") as f:
                     registry = yaml.safe_load(f) or {}
                 repo_id = registry.get("huggingface_models", {}).get("dinov2", {}).get("repo_id") or repo_id
+                revision = registry.get("huggingface_models", {}).get("dinov2", {}).get("revision") or revision
             except Exception:
                 pass
         
-        proc = AutoProcessor.from_pretrained(repo_id)
-        model = AutoModel.from_pretrained(repo_id).to(device).eval()
+        kwargs = {}
+        if revision is not None:
+            kwargs["revision"] = revision
+        proc = AutoProcessor.from_pretrained(repo_id, **kwargs)
+        model = AutoModel.from_pretrained(repo_id, **kwargs).to(device).eval()
         _DINO.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
+        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device} (revision: {revision})")
         return True
     except Exception as e:
         logger.error(f"[FAIL] Failed to load DINO model: {str(e)}")

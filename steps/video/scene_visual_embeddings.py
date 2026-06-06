@@ -347,7 +347,10 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     
     force_reprocess = cfg.get('force_reprocess', False)
     if not force_reprocess:
-        scenes_to_process = [s for s in scenes if s.get('qdrant_ok') != True]
+        scenes_to_process = [
+            s for s in scenes
+            if not s.get('clip_id') or not s.get('dino_id') or not s.get('representative_frame')
+        ]
     else:
         scenes_to_process = list(scenes)
 

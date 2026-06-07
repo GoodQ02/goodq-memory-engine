@@ -18,4 +18,5 @@ REM Stop Qdrant service on Windows if running
 net stop "GoodQ_Qdrant" >nul 2>&1
 
 echo [DEV OFF] Game mode activated. All dev services stopped and VRAM reclaimed.
-timeout /t 3 >nul
+ping 127.0.0.1 -n 4 >nul
+

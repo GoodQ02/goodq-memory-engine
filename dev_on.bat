@@ -32,4 +32,5 @@ start "GoodQ_Watchdog" /min "%PYTHON_EXE%" -m cli.watchdog
 echo [DEV ON] Local agent mode activated.
 echo vLLM endpoint:  http://127.0.0.1:38005/v1
 echo GoodQ API:      http://127.0.0.1:30000
-timeout /t 3 >nul
+ping 127.0.0.1 -n 4 >nul
+

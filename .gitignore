@@ -180,6 +180,7 @@ temp_repo_inventory.json
 branding/*.html
 reports/control_recurrence/*.md
 reports/control_recurrence/*.json
+reports/benchmarks/
 
 # ===== DOCUMENTATION BUILD =====
 docs/_build/

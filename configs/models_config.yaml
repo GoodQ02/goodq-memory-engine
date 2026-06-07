@@ -1,8 +1,16 @@
 # GoodQ4All LLM Models Configuration
 # This file defines all available LLM models for the system
 
+# GPU VRAM budget limits (especially for Windows WDDM environments)
+gpu_budget:
+  total_vram_gb: 16.0
+  reserved_display_gb: 1.5
+  reserved_cuda_fragmentation_gb: 1.0
+  usable_target_gb: 13.5
+  emergency_stop_gb: 14.5
+
 models:
-  # Fast inference model (vLLM on WSL2)
+  # Fast inference model (vLLM on WSL2) - Stable Default
   llama1b_speed:
     name: "Llama-1B-Speed"
     base_url: "http://localhost:38005/v1"
@@ -14,7 +22,7 @@ models:
     temperature: 0.7
     description: "Fastest model for quick responses"
     
-  # Balanced model (Ollama)
+  # Balanced model (Ollama) - Stable Default
   phi4_ollama:
     name: "Phi4-Ollama"
     base_url: "http://localhost:31434/v1"
@@ -26,7 +34,69 @@ models:
     temperature: 0.7
     description: "Microsoft Phi-4 via Ollama for quality responses"
 
-# Model selection strategies
+  # SOTA Candidate: DeepSeek R1 14B Distilled
+  deepseek_r1_14b:
+    name: "DeepSeek-R1-Distill-Qwen-14B"
+    base_url: "http://localhost:31434/v1"
+    model_id: "deepseek-r1:14b"
+    engine: "ollama"
+    category: "reasoning"
+    gpu_accelerated: true
+    max_tokens: 16384
+    temperature: 0.6
+    description: "DeepSeek R1 14B Q4_K_M for heavy reasoning tasks"
+
+  # SOTA Candidate: DeepSeek R1 7B Distilled
+  deepseek_r1_7b:
+    name: "DeepSeek-R1-Distill-Qwen-7B"
+    base_url: "http://localhost:31434/v1"
+    model_id: "deepseek-r1:7b"
+    engine: "ollama"
+    category: "reasoning"
+    gpu_accelerated: true
+    max_tokens: 16384
+    temperature: 0.6
+    description: "DeepSeek R1 7B for interactive light reasoning"
+
+  # SOTA Candidate: Qwen2.5 VL 7B (Vision)
+  qwen2_5_vl_7b:
+    name: "Qwen2.5-VL-7B-Instruct"
+    base_url: "http://localhost:38005/v1"
+    model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
+    engine: "vllm"
+    category: "vision"
+    gpu_accelerated: true
+    max_tokens: 4096
+    temperature: 0.2
+    description: "SOTA VL model for scene analysis and OCR"
+
+  # SOTA Candidate: Qwen2.5 VL 3B (Vision)
+  qwen2_5_vl_3b:
+    name: "Qwen2.5-VL-3B-Instruct"
+    base_url: "http://localhost:31434/v1"
+    model_id: "qwen2.5-vision:3b"
+    engine: "ollama"
+    category: "vision"
+    gpu_accelerated: true
+    max_tokens: 4096
+    temperature: 0.2
+    description: "Lightweight VLM for concurrent desktop usage"
+
+  # Experimental: Gemma 4 Unified (Disabled by default, opt-in only)
+  gemma_4_experimental:
+    name: "Gemma-4-12B-it-Experimental"
+    base_url: "http://localhost:31434/v1"
+    model_id: "gemma4:12b"
+    engine: "ollama"
+    category: "multimodal"
+    gpu_accelerated: true
+    max_tokens: 8192
+    temperature: 0.7
+    enabled: false
+    requires_license_acceptance: true
+    description: "Unified multimodal Gemma 4 candidate (opt-in only)"
+
+# Model selection strategies (Defaults remain unchanged)
 strategies:
   prefer_speed:
     primary: "llama1b_speed"
@@ -38,6 +108,24 @@ strategies:
     
   default: "prefer_speed"
 
+# Hardened VRAM Profiles (Opt-In)
+profiles:
+  GPU_16GB_INGEST_QUALITY:
+    reasoning: "deepseek_r1_14b"
+    vision: "qwen2_5_vl_7b"
+    audio: "whisper_large_v3_turbo"
+    load_policy: "sequential_only"
+    concurrency_allowed: false
+    estimated_vram_peak_gb: 9.5
+    
+  GPU_16GB_INTERACTIVE_LIGHT:
+    reasoning: "deepseek_r1_7b"
+    vision: "qwen2_5_vl_3b"
+    audio: "whisper_large_v3_turbo"
+    load_policy: "concurrent_safe"
+    concurrency_allowed: true
+    estimated_vram_peak_gb: 10.6
+
 # Health check settings
 health:
   enabled: false  # Disable healthchecks during ingestion
@@ -45,7 +133,7 @@ health:
   timeout_seconds: 10
   retry_attempts: 3
   
-# Usage quotas (optional, for future rate limiting)
+# Usage quotas
 quotas:
   requests_per_minute: 60
   tokens_per_day: 1000000

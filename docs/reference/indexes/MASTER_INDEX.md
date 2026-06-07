@@ -20,6 +20,7 @@
 | [AGENT_FILE_INDEX.md](AGENT_FILE_INDEX.md) | **Repository file registry** mapping every source file and folder on disk. | File mappings, registry |
 | [CODE_CLEANUP_INDEX.md](CODE_CLEANUP_INDEX.md) | **Housekeeping index** tracking manual-review helper scripts and quarantines. | Cleanup status, active utilities |
 | [DOCS_FORENSICS_INDEX.md](DOCS_FORENSICS_INDEX.md) | **Forensics lookup index** for documentation cleanup and historical status. | Archive status, legacy tracking |
+| [GLOSSARY.md](GLOSSARY.md) | **Terminology & Concept Glossary** mapping system nouns to files/docs. | Nouns, databases, tools, APIs, paths |
 | [AGENT_COMMS_INDEX.md](AGENT_COMMS_INDEX.md) | **Historical communications** from previous agent sessions and briefs. | Morning briefs, checklists |
 | [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | **Legacy pointer** retained for backwards-compatibility of incoming links. | Pointer to `QUICK_INDEX.md` |
 

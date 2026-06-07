@@ -1,0 +1,303 @@
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "strict_validation": true,
+  "default_strategy": "delegate_hybrid",
+  "worker_types": {
+    "search_agent": {
+      "description": "Parallel discovery, source retrieval, and context harvesting.",
+      "capabilities": [
+        "search",
+        "read",
+        "summarize"
+      ],
+      "max_context_chars": 32000,
+      "max_retries": 2
+    },
+    "code_agent": {
+      "description": "Implements file changes and local refactors.",
+      "capabilities": [
+        "read",
+        "write",
+        "refactor"
+      ],
+      "max_context_chars": 48000,
+      "max_retries": 2,
+      "requires_confirmation": true
+    },
+    "verify_agent": {
+      "description": "Runs tests/lint/typecheck/build and reports results.",
+      "capabilities": [
+        "execute_commands",
+        "verify",
+        "report"
+      ],
+      "max_context_chars": 24000,
+      "max_retries": 1
+    },
+    "integration_agent": {
+      "description": "Handles external integrations and service adapters.",
+      "capabilities": [
+        "integration_calls",
+        "mapping",
+        "safety_checks"
+      ],
+      "max_context_chars": 28000,
+      "max_retries": 1,
+      "requires_confirmation": true
+    },
+    "oracle_agent": {
+      "description": "Second-opinion analysis for architecture/risk decisions.",
+      "capabilities": [
+        "review",
+        "risk_analysis",
+        "tradeoff_recommendation"
+      ],
+      "max_context_chars": 20000,
+      "max_retries": 1
+    }
+  },
+  "parallel_policy": {
+    "allow_parallel": true,
+    "max_parallel_workers": 6,
+    "require_disjoint_write_targets": true,
+    "serialize_when_conflict": true
+  },
+  "context_contract": {
+    "required_fields": [
+      "objective",
+      "constraints",
+      "acceptance_criteria",
+      "input_artifacts",
+      "output_contract",
+      "timebox_ms",
+      "risk_tier"
+    ],
+    "max_objective_chars": 4000
+  },
+  "message_contract": {
+    "enabled": true,
+    "version": "1.0.0",
+    "require_message_ids": true,
+    "require_parent_message_for_dependent_subtasks": true,
+    "max_payload_bytes": 262144,
+    "include_trace": true,
+    "include_shared_context": true,
+    "normalize_labels": true,
+    "allowed_message_kinds": [
+      "task_request",
+      "task_result",
+      "checkpoint",
+      "escalation",
+      "verification",
+      "reflection"
+    ]
+  },
+  "quality_gate": {
+    "enabled": true,
+    "min_confidence": 0.65,
+    "require_non_empty_summary": true,
+    "require_outputs": true,
+    "retry_on_quality_failure": true,
+    "fallback_on_quality_failure": true
+  },
+  "checkpointing": {
+    "enabled": true,
+    "checkpoint_dir": "checkpoints",
+    "save_after_batch": true,
+    "save_after_phase": true,
+    "save_final_state": true,
+    "write_latest_pointer": true,
+    "keep_last_n": 100,
+    "resume_mode": "manual"
+  },
+  "uncertainty_policy": {
+    "enabled": true,
+    "warn_below_confidence": 0.69,
+    "escalate_below_confidence": 0.67,
+    "max_uncertain_subtasks": 0,
+    "require_human_confirmation_for_risk_tiers": [
+      "high"
+    ],
+    "consider_critic_failure_as_uncertainty": true,
+    "action_on_escalation": "block_final"
+  },
+  "failure_taxonomy": {
+    "enabled": true,
+    "retryable_classes": [
+      "worker_timeout",
+      "worker_nonzero_exit",
+      "output_parse_error",
+      "quality_gate_failed"
+    ],
+    "fallback_preferred_classes": [
+      "quality_gate_failed",
+      "worker_nonzero_exit",
+      "worker_command_missing"
+    ],
+    "abort_classes": [
+      "budget_exhausted",
+      "policy_blocked",
+      "schema_invalid"
+    ],
+    "action_on_abort_class": "abort_run",
+    "max_error_excerpt_chars": 240,
+    "track_archetypes": true,
+    "include_failure_fingerprint": true
+  },
+  "state_transition_loop": {
+    "enabled": true,
+    "required_states": [
+      "plan",
+      "act",
+      "verify",
+      "reflect",
+      "done"
+    ],
+    "require_verify_for_task_types": [
+      "code",
+      "ops",
+      "qa"
+    ],
+    "require_verify_for_risk_tiers": [
+      "high"
+    ],
+    "verify_worker_types": [
+      "verify_agent",
+      "oracle_agent"
+    ],
+    "allow_reflect_replan": true,
+    "max_reflect_cycles": 2,
+    "block_on_missing_states": true,
+    "block_on_missing_verify": true
+  },
+  "execution_budget": {
+    "enabled": true,
+    "max_total_worker_calls": 24,
+    "max_total_retries": 10,
+    "max_total_fallbacks": 4,
+    "max_wall_clock_ms": 180000,
+    "max_phase_count": 12,
+    "enforce_preflight_estimate": true,
+    "on_exhaustion": "continue_partial"
+  },
+  "critic_harness": {
+    "enabled": true,
+    "min_overall_score": 0.7,
+    "require_reasoning_trace": true,
+    "require_verify_worker_for_task_types": [
+      "code",
+      "ops",
+      "qa"
+    ],
+    "verify_worker_types": [
+      "verify_agent",
+      "oracle_agent"
+    ],
+    "metrics": [
+      {
+        "metric": "success_ratio",
+        "weight": 0.25,
+        "min_score": 0.5
+      },
+      {
+        "metric": "avg_weighted_score",
+        "weight": 0.35,
+        "min_score": 0.7
+      },
+      {
+        "metric": "evidence_coverage",
+        "weight": 0.2,
+        "min_score": 0.8
+      },
+      {
+        "metric": "summary_coverage",
+        "weight": 0.1,
+        "min_score": 0.8
+      },
+      {
+        "metric": "verify_presence",
+        "weight": 0.1,
+        "min_score": 0.0
+      }
+    ],
+    "on_fail": "block_final"
+  },
+  "merge_quality_gate": {
+    "enabled": true,
+    "min_successful_subtasks": 1,
+    "min_confidence_per_subtask": 0.65,
+    "min_weighted_score_per_subtask": 0.7
+  },
+  "merge_scoring": {
+    "enabled": true,
+    "weights": {
+      "confidence": 0.6,
+      "recency": 0.15,
+      "worker_trust": 0.25
+    },
+    "worker_trust": {
+      "search_agent": 0.8,
+      "code_agent": 0.9,
+      "verify_agent": 0.95,
+      "integration_agent": 0.85,
+      "oracle_agent": 0.9
+    },
+    "default_worker_trust": 0.7,
+    "recency_window_seconds": 3600
+  },
+  "merge_policy": {
+    "strategy": "synthesize",
+    "conflict_resolution": "planner_decides"
+  },
+  "failure_policy": {
+    "on_worker_failure": "continue_partial",
+    "max_failed_workers_before_abort": 2
+  },
+  "routing_rules": [
+    {
+      "name": "high_complexity_coding",
+      "priority": 100,
+      "strategy": "delegate_hybrid",
+      "when": {
+        "task_type_any": [
+          "code",
+          "ops"
+        ],
+        "estimated_steps_gte": 4,
+        "requires_tools": true
+      }
+    },
+    {
+      "name": "research_parallel",
+      "priority": 90,
+      "strategy": "delegate_parallel",
+      "when": {
+        "task_type_any": [
+          "research"
+        ],
+        "estimated_steps_gte": 3,
+        "requires_tools": true
+      }
+    },
+    {
+      "name": "high_risk_serial",
+      "priority": 80,
+      "strategy": "delegate_serial",
+      "when": {
+        "risk_tier_any": [
+          "high"
+        ],
+        "requires_tools": true
+      }
+    },
+    {
+      "name": "default_single",
+      "priority": 10,
+      "strategy": "single_agent",
+      "when": {
+        "estimated_steps_gte": 1
+      }
+    }
+  ]
+}

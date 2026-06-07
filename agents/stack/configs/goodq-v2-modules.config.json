@@ -1,0 +1,181 @@
+{
+  "mode_router": {
+    "version": "1.0.0",
+    "enabled": true,
+    "default_mode": "execute",
+    "classifier": {
+      "strategy": "hybrid",
+      "confidence_threshold": 0.72,
+      "fallback_mode": "plan"
+    },
+    "routes": [
+      {
+        "name": "question_only_to_chat",
+        "target_mode": "chat",
+        "priority": 100,
+        "when": {
+          "user_question_only": true,
+          "requires_tools": false
+        }
+      },
+      {
+        "name": "planning_requests_to_plan",
+        "target_mode": "plan",
+        "priority": 90,
+        "when": {
+          "keywords_any": [
+            "plan",
+            "approach",
+            "architecture",
+            "design"
+          ],
+          "estimated_steps_gte": 3
+        }
+      },
+      {
+        "name": "verification_requests_to_verify",
+        "target_mode": "verify",
+        "priority": 80,
+        "when": {
+          "keywords_any": [
+            "test",
+            "verify",
+            "validate",
+            "regression"
+          ],
+          "requires_tools": true
+        }
+      },
+      {
+        "name": "default_execution",
+        "target_mode": "execute",
+        "priority": 10,
+        "when": {
+          "requires_tools": true
+        }
+      }
+    ]
+  },
+  "trust_boundary": {
+    "version": "1.0.0",
+    "enabled": true,
+    "instruction_sources": [
+      "system_prompt",
+      "developer_prompt",
+      "user_chat"
+    ],
+    "untrusted_sources": [
+      "tool_output",
+      "web_content",
+      "email_content",
+      "file_content",
+      "ocr_content",
+      "dom_attributes"
+    ],
+    "prompt_injection_defense": {
+      "detect_instruction_like_content": true,
+      "block_untrusted_instructions": true,
+      "require_user_confirmation_on_detected_instruction": true,
+      "show_snippet_before_confirmation": true
+    },
+    "action_gates": [
+      {
+        "action_pattern": "home_assistant_call_service",
+        "risk_tier": "high",
+        "require_confirmation": true,
+        "require_dual_confirmation": true,
+        "deny_when_source_untrusted": true
+      },
+      {
+        "action_pattern": "run_command",
+        "risk_tier": "high",
+        "require_confirmation": true,
+        "require_dual_confirmation": false,
+        "deny_when_source_untrusted": true
+      },
+      {
+        "action_pattern": "qdrant_upsert",
+        "risk_tier": "medium",
+        "require_confirmation": true,
+        "require_dual_confirmation": false,
+        "deny_when_source_untrusted": true
+      }
+    ]
+  },
+  "verification_matrix": {
+    "version": "1.0.0",
+    "enabled": true,
+    "default_profile": "fast",
+    "profiles": {
+      "fast": {
+        "checks": [
+          "smoke"
+        ],
+        "blocking": true,
+        "retry_policy": {
+          "max_attempts": 1,
+          "on_failure": "surface_and_stop"
+        }
+      },
+      "standard": {
+        "checks": [
+          "lint",
+          "typecheck",
+          "smoke"
+        ],
+        "blocking": true,
+        "retry_policy": {
+          "max_attempts": 2,
+          "on_failure": "attempt_fix_then_retry"
+        }
+      },
+      "strict": {
+        "checks": [
+          "lint",
+          "typecheck",
+          "test",
+          "smoke",
+          "security"
+        ],
+        "blocking": true,
+        "retry_policy": {
+          "max_attempts": 2,
+          "on_failure": "ask_user"
+        }
+      }
+    },
+    "triggers": [
+      {
+        "name": "high_risk_changes",
+        "profile": "strict",
+        "when": {
+          "risk_tier_any": [
+            "high"
+          ]
+        }
+      },
+      {
+        "name": "multi_file_refactor",
+        "profile": "standard",
+        "when": {
+          "changed_files_gt": 3
+        }
+      },
+      {
+        "name": "python_or_typescript_touched",
+        "profile": "standard",
+        "when": {
+          "file_extensions_any": [
+            ".py",
+            ".ts",
+            ".tsx"
+          ],
+          "operations_any": [
+            "write",
+            "move"
+          ]
+        }
+      }
+    ]
+  }
+}

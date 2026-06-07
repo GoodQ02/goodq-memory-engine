@@ -1,0 +1,570 @@
+{
+  "contract_version": "1.0.0",
+  "agent": {
+    "name": "GoodQ_o2 Local Multimodal Agent",
+    "type": "orchestrator",
+    "default_mode": "execute",
+    "supported_modes": [
+      "chat",
+      "plan",
+      "execute",
+      "verify",
+      "research"
+    ]
+  },
+  "tools": [
+    {
+      "name": "qdrant_query",
+      "description": "Query vector memory collections in local Qdrant.",
+      "category": "integration",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "type": "string"
+          },
+          "query_vector": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "collection",
+          "query_vector"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "matches"
+        ]
+      },
+      "side_effects": [
+        "network_access"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 60000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "qdrant_upsert",
+      "description": "Write embeddings and metadata into Qdrant collections.",
+      "category": "integration",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "collection",
+          "points"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written"
+        ]
+      },
+      "side_effects": [
+        "network_access",
+        "external_mutation"
+      ],
+      "risk_tier": "high",
+      "idempotency": "conditionally_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 120000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute",
+        "verify"
+      ],
+      "mutability_class": "external_mutation"
+    },
+    {
+      "name": "faiss_search",
+      "description": "Search local FAISS indices for text/image/audio retrieval.",
+      "category": "filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "index_path": {
+            "type": "string"
+          },
+          "query_vector": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "index_path",
+          "query_vector"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "matches"
+        ]
+      },
+      "side_effects": [
+        "reads_files"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 90000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "llm_chat_local",
+      "description": "Call local LM Studio-compatible chat endpoint.",
+      "category": "integration",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8192
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "side_effects": [
+        "network_access"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 60000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "chat",
+        "plan",
+        "execute",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "home_assistant_get_state",
+      "description": "Read entity states and attributes from Home Assistant.",
+      "category": "integration",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "entity_ids"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "states": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "states"
+        ]
+      },
+      "side_effects": [
+        "network_access",
+        "sensitive_data_access"
+      ],
+      "risk_tier": "medium",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 45000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "research",
+        "verify"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "home_assistant_call_service",
+      "description": "Invoke Home Assistant service actions (actuations).",
+      "category": "integration",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "domain",
+          "service"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "side_effects": [
+        "network_access",
+        "external_mutation"
+      ],
+      "risk_tier": "high",
+      "idempotency": "non_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 45000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "external_mutation"
+    },
+    {
+      "name": "process_video_scene",
+      "description": "Run local video scene extraction and summarization pipeline.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "video_path": {
+            "type": "string"
+          },
+          "scene_threshold": {
+            "type": "number",
+            "minimum": 0
+          },
+          "min_scene_len_sec": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "video_path"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "scene_count": {
+            "type": "integer"
+          },
+          "summary_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scene_count"
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "executes_commands"
+      ],
+      "risk_tier": "medium",
+      "idempotency": "conditionally_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 3600000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute",
+        "verify"
+      ],
+      "mutability_class": "local_mutation"
+    },
+    {
+      "name": "transcribe_audio",
+      "description": "Run local transcription and diarization pipeline.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "audio_path": {
+            "type": "string"
+          },
+          "chunk_seconds": {
+            "type": "number",
+            "minimum": 1
+          },
+          "enable_diarization": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "audio_path"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "transcript_path": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "transcript_path"
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "executes_commands"
+      ],
+      "risk_tier": "medium",
+      "idempotency": "conditionally_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 3600000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute",
+        "verify"
+      ],
+      "mutability_class": "local_mutation"
+    }
+  ],
+  "policies": {
+    "strict_tool_contract": {
+      "reject_undeclared_tools": true,
+      "reject_extra_arguments": true,
+      "require_all_required_arguments": true,
+      "require_argument_schema_validation": true,
+      "require_justification_for_side_effects": true,
+      "require_explicit_user_confirmation_for": [
+        "medium",
+        "high"
+      ]
+    },
+    "planning": {
+      "enabled": true,
+      "mandatory_when": {
+        "estimated_steps_gte": 3,
+        "files_touched_gt": 2,
+        "cross_subsystem_change": true
+      }
+    },
+    "persistence": {
+      "enabled": true,
+      "termination_conditions": [
+        "task_completed",
+        "blocked_on_missing_user_input",
+        "policy_prevents_action"
+      ]
+    },
+    "verification": {
+      "enabled": true,
+      "required_checks": [
+        "smoke",
+        "test"
+      ],
+      "on_failure": "attempt_fix_then_retry"
+    },
+    "safety": {
+      "prompt_injection_defense": true,
+      "treat_tool_output_as_untrusted": true,
+      "blocked_action_patterns": [
+        "unapproved_home_automation_actuation",
+        "exfiltrate_private_context",
+        "write_without_confirmed_target"
+      ]
+    },
+    "output": {
+      "response_format": "markdown",
+      "include_file_references": true,
+      "include_citations_when_external_sources": true,
+      "max_summary_lines": 24
+    },
+    "audit": {
+      "log_tool_calls": true,
+      "log_failed_calls": true,
+      "redact_keys": [
+        "HA_TOKEN",
+        "ELEVENLABS_VOICE_ID",
+        "authorization",
+        "token",
+        "password"
+      ],
+      "log_path": ".goodq/logs/tool-audit.jsonl"
+    }
+  },
+  "protocol": {
+    "call_envelope": {
+      "required_fields": [
+        "request_id",
+        "tool_name",
+        "arguments",
+        "mode",
+        "reason",
+        "risk_ack"
+      ],
+      "request_id_pattern": "^[A-Za-z0-9._:-]{8,128}$",
+      "enforce_mode_allowlist": true,
+      "allow_parallel_calls": true,
+      "max_parallel_calls": 8,
+      "require_argument_schema_validation": true,
+      "reject_calls_without_reason": true,
+      "reject_extra_fields": true
+    },
+    "result_envelope": {
+      "required_fields": [
+        "request_id",
+        "tool_name",
+        "status",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "side_effect_report"
+      ],
+      "allowed_status_values": [
+        "success",
+        "recoverable_error",
+        "fatal_error",
+        "rejected_by_policy"
+      ],
+      "require_error_object_on_failure": true,
+      "require_side_effect_report": true,
+      "include_tool_stdout_stderr": true
+    }
+  }
+}

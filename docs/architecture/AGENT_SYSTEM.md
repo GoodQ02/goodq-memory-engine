@@ -14,12 +14,28 @@
 
 - `cli/watchdog.py` is the canonical automatic ingestion entrypoint.
 - `cli/run_ingestion.py` and `cli/watchdog.py` persist explicit control-plane state for every run.
+- `agents/mini_agent_client.py` is the canonical policy-gated interface for future interactive/generative agent queries, planning, research, and tool operations.
+- `agents/stack/` contains the version-controlled schemas, policies, contracts, and configs for the `goodq_mini_agent` validation engine.
 - `agents/control_agent.py` is conditional and disabled by default unless an `llm_client` is explicitly injected.
 - `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are retired legacy surfaces.
 - The current truth anchors are:
   - `docs/CONTROL_AGENT.md`
   - `docs/systems/WATCHDOG_SYSTEM.md`
   - `docs/CLI-REFERENCE.md`
+
+## Active Production Agent Stack (goodq_agent Integration)
+
+The custom, local-first agent security, governance, and policy-gating framework is integrated under `agents/stack/` and `agents/mini_agent_client.py`.
+
+- **Governance Wrapper:** `agents/mini_agent_client.py` defines `MiniAgentClient`, which wraps LLM reasoning and local tool executions.
+- **Policy Engine:** Driven by the pure-Python `goodq_mini_agent` package (v0.1.0) installed in the `goodq_core` conda environment.
+- **Version-Controlled Stack:** Configs, schemas, policies, and contracts are stored under `agents/stack/` and monkeypatched as the assets target for the engine at runtime.
+- **Gated Tools:** The following native tools are routed, validated, and gated (with optional user-confirmation loops):
+  - `qdrant_query` & `qdrant_upsert` (via `steps/common/qdrant_client.py`)
+  - `faiss_search` (with process-safe `FaissLock` protection via `steps/common/faiss_utils.py`)
+  - `llm_chat_local` (integrated with the codebase's unified `LLMClient` in `lib/llm_client.py`)
+  - `home_assistant_get_state` & `home_assistant_call_service`
+- **Validation:** Enforced via comprehensive pytest suites (`tests/agents/test_mini_agent_client.py`).
 
 ## What Still Matters
 

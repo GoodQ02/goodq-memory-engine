@@ -1,43 +1,27 @@
 # Clean Memory Start Guide
 
-Use this guide when you want to start a fresh memory run (e.g. after a testing phase) by clearing historical Qdrant vector database collections and resetting local relational database memory, without completely reinstalling the system.
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-06-07 -->
 
-## 1. Delete Historical Qdrant Collections
+Use this guide when you want to start a fresh memory run by clearing historical vector collections and local database storage without reinstalling.
 
-To delete all Qdrant vector collections that begin with `goodq_`, run this script from the repository root:
+## Concept & Safety Boundaries
 
-```powershell
-python -c "
-import json, urllib.request, urllib.parse
-base='http://127.0.0.1:6333'
-try:
-    collections=json.load(urllib.request.urlopen(base + '/collections', timeout=5))['result']['collections']
-    deleted=[]
-    for col in collections:
-        name=col['name']
-        if name.startswith('goodq_'):
-            req=urllib.request.Request(base + '/collections/' + urllib.parse.quote(name, safe=''), method='DELETE')
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                deleted.append(name)
-    print(f'Deleted collections: {deleted}')
-except Exception as e:
-    print(f'Qdrant cleanup skipped or failed: {e}')
-"
-```
+Before resetting your databases and collections, understand what is cleared and what is preserved:
 
-## 2. Initialize Fresh Empty Collections
+1. **Relational & Knowledge Graph Memory**: Clears all parsed scenes, timeline segment metadata, co-occurrence nodes, and links.
+2. **Qdrant Vector Collections**: Clears all Clip, Dino, Text, and Audio embedding collection points.
+3. **Persisted File Artifacts**: Filesystem epochs (e.g., video files, extracted frame JPGs, Wav audio segments) are **preserved**. The system does not delete raw files unless you manually clean them.
 
-Recreate the empty collections required by the pipeline:
+## Authoritative Step-by-Step Runbook
 
-```powershell
-conda run --no-capture-output -n goodq_core python scripts/init_qdrant_collections.py
-```
+To prevent manual command-line errors and document drift, the step-by-step cleanup commands are maintained in the authoritative agent runbook:
 
-## 3. Reset Relational Memory Databases
+👉 **[Clean Memory Start Runbook](../../agent/workflows/CLEAN_MEMORY_START.md)**
 
-Delete the SQLite and Knowledge Graph database files from your data root (default is `%USERPROFILE%\GoodQ_Data\db\`). They will be recreated empty when the pipeline starts next:
-
-```powershell
-Remove-Item -Path \"$env:USERPROFILE\GoodQ_Data\db\*.db\" -Force -ErrorAction SilentlyContinue
-```
-*(If you have configured a custom `GOODQ_DATA_ROOT` in `.env.local`, delete the databases under `<GOODQ_DATA_ROOT>\db\` instead).*
+Please follow the runbook to:
+- Capture pre-cleanup Qdrant manifests and count statistics.
+- Safely initialize a fresh epoch configuration.
+- Execute clean-up scripts under the `goodq_core` conda environment.
+- Verify that fresh vector collections are initialized empty (`points = 0`) before starting new media ingestion.

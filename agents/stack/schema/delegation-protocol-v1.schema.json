@@ -1,0 +1,856 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goodq.dev/schemas/delegation-protocol-v1.schema.json",
+  "title": "GoodQ Delegation Protocol v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "enabled",
+    "strict_validation",
+    "default_strategy",
+    "worker_types",
+    "parallel_policy",
+    "context_contract",
+    "message_contract",
+    "quality_gate",
+    "checkpointing",
+    "uncertainty_policy",
+    "failure_taxonomy",
+    "state_transition_loop",
+    "execution_budget",
+    "critic_harness",
+    "merge_scoring",
+    "merge_quality_gate",
+    "merge_policy",
+    "failure_policy",
+    "routing_rules"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "strict_validation": {
+      "type": "boolean",
+      "default": true
+    },
+    "default_strategy": {
+      "enum": [
+        "single_agent",
+        "delegate_parallel",
+        "delegate_serial",
+        "delegate_hybrid"
+      ]
+    },
+    "worker_types": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_-]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description",
+          "capabilities",
+          "max_context_chars",
+          "max_retries"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "max_context_chars": {
+            "type": "integer",
+            "minimum": 500
+          },
+          "max_retries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "requires_confirmation": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "parallel_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow_parallel",
+        "max_parallel_workers",
+        "require_disjoint_write_targets",
+        "serialize_when_conflict"
+      ],
+      "properties": {
+        "allow_parallel": {
+          "type": "boolean"
+        },
+        "max_parallel_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "require_disjoint_write_targets": {
+          "type": "boolean"
+        },
+        "serialize_when_conflict": {
+          "type": "boolean"
+        }
+      }
+    },
+    "context_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_fields",
+        "max_objective_chars"
+      ],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "objective",
+              "constraints",
+              "acceptance_criteria",
+              "input_artifacts",
+              "output_contract",
+              "timebox_ms",
+              "risk_tier"
+            ]
+          }
+        },
+        "max_objective_chars": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 20000
+        }
+      }
+    },
+    "message_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "version",
+        "require_message_ids",
+        "require_parent_message_for_dependent_subtasks",
+        "max_payload_bytes",
+        "include_trace",
+        "include_shared_context",
+        "normalize_labels",
+        "allowed_message_kinds"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+        },
+        "require_message_ids": {
+          "type": "boolean"
+        },
+        "require_parent_message_for_dependent_subtasks": {
+          "type": "boolean"
+        },
+        "max_payload_bytes": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 10485760
+        },
+        "include_trace": {
+          "type": "boolean"
+        },
+        "include_shared_context": {
+          "type": "boolean"
+        },
+        "normalize_labels": {
+          "type": "boolean"
+        },
+        "allowed_message_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "task_request",
+              "task_result",
+              "checkpoint",
+              "escalation",
+              "verification",
+              "reflection"
+            ]
+          }
+        }
+      }
+    },
+    "quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "min_confidence",
+        "require_non_empty_summary",
+        "require_outputs",
+        "retry_on_quality_failure",
+        "fallback_on_quality_failure"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "require_non_empty_summary": {
+          "type": "boolean"
+        },
+        "require_outputs": {
+          "type": "boolean"
+        },
+        "retry_on_quality_failure": {
+          "type": "boolean"
+        },
+        "fallback_on_quality_failure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "checkpointing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "checkpoint_dir",
+        "save_after_batch",
+        "save_after_phase",
+        "save_final_state",
+        "write_latest_pointer",
+        "keep_last_n",
+        "resume_mode"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "checkpoint_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "save_after_batch": {
+          "type": "boolean"
+        },
+        "save_after_phase": {
+          "type": "boolean"
+        },
+        "save_final_state": {
+          "type": "boolean"
+        },
+        "write_latest_pointer": {
+          "type": "boolean"
+        },
+        "keep_last_n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000
+        },
+        "resume_mode": {
+          "enum": [
+            "manual",
+            "auto_best_effort"
+          ]
+        }
+      }
+    },
+    "uncertainty_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "warn_below_confidence",
+        "escalate_below_confidence",
+        "max_uncertain_subtasks",
+        "require_human_confirmation_for_risk_tiers",
+        "consider_critic_failure_as_uncertainty",
+        "action_on_escalation"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "warn_below_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "escalate_below_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_uncertain_subtasks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "require_human_confirmation_for_risk_tiers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "consider_critic_failure_as_uncertainty": {
+          "type": "boolean"
+        },
+        "action_on_escalation": {
+          "enum": [
+            "block_final",
+            "warn_only"
+          ]
+        }
+      }
+    },
+    "failure_taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "retryable_classes",
+        "fallback_preferred_classes",
+        "abort_classes",
+        "action_on_abort_class",
+        "max_error_excerpt_chars",
+        "track_archetypes",
+        "include_failure_fingerprint"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "retryable_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "dependency_blocked",
+              "quality_gate_failed",
+              "worker_timeout",
+              "worker_command_missing",
+              "worker_nonzero_exit",
+              "output_parse_error",
+              "budget_exhausted",
+              "schema_invalid",
+              "policy_blocked",
+              "unknown_failure"
+            ]
+          }
+        },
+        "fallback_preferred_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "dependency_blocked",
+              "quality_gate_failed",
+              "worker_timeout",
+              "worker_command_missing",
+              "worker_nonzero_exit",
+              "output_parse_error",
+              "budget_exhausted",
+              "schema_invalid",
+              "policy_blocked",
+              "unknown_failure"
+            ]
+          }
+        },
+        "abort_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "dependency_blocked",
+              "quality_gate_failed",
+              "worker_timeout",
+              "worker_command_missing",
+              "worker_nonzero_exit",
+              "output_parse_error",
+              "budget_exhausted",
+              "schema_invalid",
+              "policy_blocked",
+              "unknown_failure"
+            ]
+          }
+        },
+        "action_on_abort_class": {
+          "enum": [
+            "abort_run",
+            "block_final"
+          ]
+        },
+        "max_error_excerpt_chars": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4000
+        },
+        "track_archetypes": {
+          "type": "boolean"
+        },
+        "include_failure_fingerprint": {
+          "type": "boolean"
+        }
+      }
+    },
+    "state_transition_loop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "required_states",
+        "require_verify_for_task_types",
+        "require_verify_for_risk_tiers",
+        "verify_worker_types",
+        "allow_reflect_replan",
+        "max_reflect_cycles",
+        "block_on_missing_states",
+        "block_on_missing_verify"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "required_states": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "plan",
+              "act",
+              "verify",
+              "reflect",
+              "done"
+            ]
+          }
+        },
+        "require_verify_for_task_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "code",
+              "research",
+              "ops",
+              "review",
+              "qa",
+              "general"
+            ]
+          }
+        },
+        "require_verify_for_risk_tiers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "verify_worker_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allow_reflect_replan": {
+          "type": "boolean"
+        },
+        "max_reflect_cycles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "block_on_missing_states": {
+          "type": "boolean"
+        },
+        "block_on_missing_verify": {
+          "type": "boolean"
+        }
+      }
+    },
+    "execution_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "max_total_worker_calls",
+        "max_total_retries",
+        "max_total_fallbacks",
+        "max_wall_clock_ms",
+        "max_phase_count",
+        "enforce_preflight_estimate",
+        "on_exhaustion"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_total_worker_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "max_total_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "max_total_fallbacks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "max_wall_clock_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 86400000
+        },
+        "max_phase_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "enforce_preflight_estimate": {
+          "type": "boolean"
+        },
+        "on_exhaustion": {
+          "enum": [
+            "abort",
+            "continue_partial"
+          ]
+        }
+      }
+    },
+    "critic_harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "min_overall_score",
+        "require_reasoning_trace",
+        "require_verify_worker_for_task_types",
+        "verify_worker_types",
+        "metrics",
+        "on_fail"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_overall_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "require_reasoning_trace": {
+          "type": "boolean"
+        },
+        "require_verify_worker_for_task_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "code",
+              "research",
+              "ops",
+              "review",
+              "qa",
+              "general"
+            ]
+          }
+        },
+        "verify_worker_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "metric",
+              "weight",
+              "min_score"
+            ],
+            "properties": {
+              "metric": {
+                "enum": [
+                  "success_ratio",
+                  "avg_weighted_score",
+                  "evidence_coverage",
+                  "summary_coverage",
+                  "verify_presence"
+                ]
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0
+              },
+              "min_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "on_fail": {
+          "enum": [
+            "block_final",
+            "warn_only"
+          ]
+        }
+      }
+    },
+    "merge_quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "min_successful_subtasks",
+        "min_confidence_per_subtask",
+        "min_weighted_score_per_subtask"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_successful_subtasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "min_confidence_per_subtask": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_weighted_score_per_subtask": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "merge_scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "weights",
+        "worker_trust",
+        "default_worker_trust",
+        "recency_window_seconds"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "confidence",
+            "recency",
+            "worker_trust"
+          ],
+          "properties": {
+            "confidence": {
+              "type": "number",
+              "minimum": 0
+            },
+            "recency": {
+              "type": "number",
+              "minimum": 0
+            },
+            "worker_trust": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "worker_trust": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "default_worker_trust": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "recency_window_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31536000
+        }
+      }
+    },
+    "merge_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy",
+        "conflict_resolution"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "first_success",
+            "consensus",
+            "synthesize",
+            "best_score"
+          ]
+        },
+        "conflict_resolution": {
+          "enum": [
+            "prefer_high_confidence",
+            "prefer_latest",
+            "ask_user",
+            "planner_decides"
+          ]
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "on_worker_failure",
+        "max_failed_workers_before_abort"
+      ],
+      "properties": {
+        "on_worker_failure": {
+          "enum": [
+            "retry_worker",
+            "fallback_worker",
+            "continue_partial",
+            "abort"
+          ]
+        },
+        "max_failed_workers_before_abort": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        }
+      }
+    },
+    "routing_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "priority",
+          "strategy",
+          "when"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "strategy": {
+            "enum": [
+              "single_agent",
+              "delegate_parallel",
+              "delegate_serial",
+              "delegate_hybrid"
+            ]
+          },
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "task_type_any": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "code",
+                    "research",
+                    "ops",
+                    "review",
+                    "qa",
+                    "general"
+                  ]
+                }
+              },
+              "estimated_steps_gte": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "risk_tier_any": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                }
+              },
+              "requires_external_integration": {
+                "type": "boolean"
+              },
+              "requires_tools": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,436 @@
+{
+  "contract_version": "1.0.0",
+  "agent": {
+    "name": "GoodQ Coding Agent",
+    "type": "code_agent",
+    "default_mode": "execute",
+    "supported_modes": [
+      "chat",
+      "plan",
+      "execute",
+      "verify",
+      "research"
+    ]
+  },
+  "tools": [
+    {
+      "name": "list_files",
+      "description": "List files in a directory.",
+      "category": "filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "recursive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "entries"
+        ]
+      },
+      "side_effects": [
+        "reads_files"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 30000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "read_file",
+      "description": "Read a file from workspace.",
+      "category": "filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "start_line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "end_line": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "side_effects": [
+        "reads_files"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 30000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "search_files",
+      "description": "Search content in files by pattern.",
+      "category": "search",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "file_glob": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "pattern"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "matches"
+        ]
+      },
+      "side_effects": [
+        "reads_files"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 30000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ],
+      "mutability_class": "read_only"
+    },
+    {
+      "name": "edit_file",
+      "description": "Apply targeted changes to a file.",
+      "category": "filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "patch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "patch"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "applied"
+        ]
+      },
+      "side_effects": [
+        "writes_files"
+      ],
+      "risk_tier": "medium",
+      "idempotency": "conditionally_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 120000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "local_mutation"
+    },
+    {
+      "name": "run_command",
+      "description": "Run shell commands in workspace.",
+      "category": "terminal",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "working_directory": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "exit_code": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exit_code"
+        ]
+      },
+      "side_effects": [
+        "executes_commands",
+        "writes_files"
+      ],
+      "risk_tier": "high",
+      "idempotency": "non_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 180000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute",
+        "verify"
+      ],
+      "mutability_class": "local_mutation"
+    },
+    {
+      "name": "web_search",
+      "description": "Fetch external references for unstable facts.",
+      "category": "web",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "side_effects": [
+        "network_access"
+      ],
+      "risk_tier": "medium",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 90000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "plan",
+        "research",
+        "verify"
+      ],
+      "mutability_class": "read_only"
+    }
+  ],
+  "policies": {
+    "strict_tool_contract": {
+      "reject_undeclared_tools": true,
+      "reject_extra_arguments": true,
+      "require_all_required_arguments": true,
+      "require_argument_schema_validation": true,
+      "require_justification_for_side_effects": true,
+      "require_explicit_user_confirmation_for": [
+        "high"
+      ]
+    },
+    "planning": {
+      "enabled": true,
+      "mandatory_when": {
+        "estimated_steps_gte": 3,
+        "files_touched_gt": 3,
+        "cross_subsystem_change": true
+      }
+    },
+    "persistence": {
+      "enabled": true,
+      "termination_conditions": [
+        "task_completed",
+        "blocked_on_missing_user_input",
+        "policy_prevents_action"
+      ]
+    },
+    "verification": {
+      "enabled": true,
+      "required_checks": [
+        "lint",
+        "typecheck",
+        "test"
+      ],
+      "on_failure": "attempt_fix_then_retry"
+    },
+    "safety": {
+      "prompt_injection_defense": true,
+      "treat_tool_output_as_untrusted": true,
+      "blocked_action_patterns": [
+        "exfiltrate_secret",
+        "mass_delete_without_confirmation",
+        "disable_authentication"
+      ]
+    },
+    "output": {
+      "response_format": "markdown",
+      "include_file_references": true,
+      "include_citations_when_external_sources": true,
+      "max_summary_lines": 20
+    },
+    "audit": {
+      "log_tool_calls": true,
+      "log_failed_calls": true,
+      "redact_keys": [
+        "api_key",
+        "token",
+        "password",
+        "authorization"
+      ],
+      "log_path": ".goodq/logs/tool-audit.jsonl"
+    }
+  },
+  "protocol": {
+    "call_envelope": {
+      "required_fields": [
+        "request_id",
+        "tool_name",
+        "arguments",
+        "mode",
+        "reason",
+        "risk_ack"
+      ],
+      "request_id_pattern": "^[A-Za-z0-9._:-]{8,128}$",
+      "enforce_mode_allowlist": true,
+      "allow_parallel_calls": true,
+      "max_parallel_calls": 6,
+      "require_argument_schema_validation": true,
+      "reject_calls_without_reason": true,
+      "reject_extra_fields": true
+    },
+    "result_envelope": {
+      "required_fields": [
+        "request_id",
+        "tool_name",
+        "status",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "side_effect_report"
+      ],
+      "allowed_status_values": [
+        "success",
+        "recoverable_error",
+        "fatal_error",
+        "rejected_by_policy"
+      ],
+      "require_error_object_on_failure": true,
+      "require_side_effect_report": true,
+      "include_tool_stdout_stderr": true
+    }
+  }
+}

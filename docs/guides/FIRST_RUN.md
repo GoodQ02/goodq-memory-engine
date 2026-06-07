@@ -15,6 +15,7 @@ GoodQ4All runs as a set of coordinated local services:
 2. **API & Engine Process**: A FastAPI backend performing scene perception, audio transcription, speaker diarization, and Phase 6 memory harmonization.
 3. **Control Plane**: The Control Agent supervising execution and generating health reports.
 4. **Visual Cockpit**: The **Retro Memory Explorer** (and Classic Operator Console), served locally to let you browse your media, view transcripts, and inspect the knowledge graph.
+5. **Agent Governance & Security**: The `goodq_agent` / `MiniAgentClient` safety middleware gating that intercepts LLM reasoning queries and local tool executions (Qdrant, FAISS, and Home Assistant) to protect local system integrity.
 
 ---
 

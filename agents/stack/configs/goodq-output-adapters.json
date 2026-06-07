@@ -1,0 +1,82 @@
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "default_adapter": "dev_markdown",
+  "adapters": {
+    "dev_markdown": {
+      "format": "markdown",
+      "include_file_references": true,
+      "include_citations": true,
+      "max_sections": 6,
+      "tone": "collaborative",
+      "emit_summary_first": true
+    },
+    "strict_json": {
+      "format": "json",
+      "include_file_references": false,
+      "include_citations": false,
+      "max_sections": 3,
+      "tone": "professional",
+      "emit_summary_first": false
+    },
+    "brief_text": {
+      "format": "plain_text",
+      "include_file_references": false,
+      "include_citations": false,
+      "max_sections": 2,
+      "tone": "minimal",
+      "emit_summary_first": true
+    }
+  },
+  "routing_rules": [
+    {
+      "name": "research_needs_citations",
+      "priority": 100,
+      "adapter": "dev_markdown",
+      "when": {
+        "task_type_any": [
+          "research"
+        ],
+        "requires_citations": true
+      }
+    },
+    {
+      "name": "qa_or_verify_json",
+      "priority": 80,
+      "adapter": "strict_json",
+      "when": {
+        "mode_any": [
+          "verify"
+        ],
+        "task_type_any": [
+          "qa",
+          "review"
+        ]
+      }
+    },
+    {
+      "name": "user_pref_plain_text",
+      "priority": 60,
+      "adapter": "brief_text",
+      "when": {
+        "user_pref_response_format_in": [
+          "plain_text"
+        ]
+      }
+    },
+    {
+      "name": "default_dev",
+      "priority": 10,
+      "adapter": "dev_markdown",
+      "when": {
+        "mode_any": [
+          "chat",
+          "plan",
+          "execute",
+          "verify",
+          "research"
+        ]
+      }
+    }
+  ]
+}

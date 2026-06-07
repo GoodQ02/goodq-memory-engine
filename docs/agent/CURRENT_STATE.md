@@ -67,6 +67,7 @@ test runs, is disposable and should not seed the next run.
   Optimizations reclaimed 1.81 GB VRAM (reducing peak usage from 15.23 GB to 13.42 GB)
   and yielded a 50% to 70% speedup (up to ~59 tok/sec) and a 12-14% decrease in TTFT.
   Windows logon fixture `GoodQ4All Ollama Fallback Startup` invokes the same wrapper.
+- Agent Governance & Security Stack: Integrated `goodq_agent` as a local-first, zero-dependency policy enforcement system. Gated LLM reasoning and local tool execution through the `MiniAgentClient` middleware wrapper (implemented in `agents/mini_agent_client.py`), which loads schemas, policies, configurations, and contracts dynamically from the version-controlled `agents/stack/` directory. Checked actions are verified by pytest suite (`tests/agents/test_mini_agent_client.py`).
 
 ## Clean-Start Checkpoint
 
@@ -343,8 +344,7 @@ Scope:
 - Ollama fallback at that time: offline. This is superseded by the
   2026-05-22 runtime fallback validation above, where Windows Ollama/Phi4 is
   healthy.
-- Control Agent: still disabled because it requires an injected `llm_client`;
-  this is separate from vLLM API health.
+- Control Agent: Conditionally configured; all interactive and tool reasoning is now gated and validated by `MiniAgentClient` (refer to `agents/mini_agent_client.py`) using the unified codebase `LLMClient` and local `goodq_mini_agent` policies.
 
 Validated improvements:
 

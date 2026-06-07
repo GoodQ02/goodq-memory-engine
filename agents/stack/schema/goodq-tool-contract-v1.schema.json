@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goodq.dev/schemas/goodq-tool-contract-v1.schema.json",
+  "title": "GoodQ Tool Contract v1",
+  "description": "Master schema for defining tool registry, execution policy, and runtime protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "agent",
+    "tools",
+    "policies",
+    "protocol"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "default_mode",
+        "supported_modes"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "code_agent",
+            "web_agent",
+            "ide_agent",
+            "orchestrator",
+            "research_agent",
+            "general_agent"
+          ]
+        },
+        "default_mode": {
+          "$ref": "#/$defs/mode"
+        },
+        "supported_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/mode"
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/toolDefinition"
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strict_tool_contract",
+        "planning",
+        "persistence",
+        "verification",
+        "safety",
+        "output",
+        "audit"
+      ],
+      "properties": {
+        "strict_tool_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reject_undeclared_tools",
+            "reject_extra_arguments",
+            "require_all_required_arguments",
+            "require_argument_schema_validation",
+            "require_justification_for_side_effects",
+            "require_explicit_user_confirmation_for"
+          ],
+          "properties": {
+            "reject_undeclared_tools": {
+              "type": "boolean"
+            },
+            "reject_extra_arguments": {
+              "type": "boolean"
+            },
+            "require_all_required_arguments": {
+              "type": "boolean"
+            },
+            "require_argument_schema_validation": {
+              "type": "boolean"
+            },
+            "require_justification_for_side_effects": {
+              "type": "boolean"
+            },
+            "require_explicit_user_confirmation_for": {
+              "type": "array",
+              "minItems": 0,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/riskTier"
+              }
+            }
+          }
+        },
+        "planning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "mandatory_when"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "mandatory_when": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "estimated_steps_gte",
+                "files_touched_gt",
+                "cross_subsystem_change"
+              ],
+              "properties": {
+                "estimated_steps_gte": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "files_touched_gt": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cross_subsystem_change": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "termination_conditions"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "termination_conditions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "required_checks",
+            "on_failure"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required_checks": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/checkType"
+              }
+            },
+            "on_failure": {
+              "enum": [
+                "attempt_fix_then_retry",
+                "surface_and_stop",
+                "ask_user"
+              ]
+            }
+          }
+        },
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "prompt_injection_defense",
+            "treat_tool_output_as_untrusted",
+            "blocked_action_patterns"
+          ],
+          "properties": {
+            "prompt_injection_defense": {
+              "type": "boolean"
+            },
+            "treat_tool_output_as_untrusted": {
+              "type": "boolean"
+            },
+            "blocked_action_patterns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "response_format",
+            "include_file_references",
+            "include_citations_when_external_sources"
+          ],
+          "properties": {
+            "response_format": {
+              "enum": [
+                "markdown",
+                "plain_text",
+                "json",
+                "xml"
+              ]
+            },
+            "include_file_references": {
+              "type": "boolean"
+            },
+            "include_citations_when_external_sources": {
+              "type": "boolean"
+            },
+            "max_summary_lines": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "log_tool_calls",
+            "log_failed_calls",
+            "redact_keys"
+          ],
+          "properties": {
+            "log_tool_calls": {
+              "type": "boolean"
+            },
+            "log_failed_calls": {
+              "type": "boolean"
+            },
+            "redact_keys": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "log_path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_envelope",
+        "result_envelope"
+      ],
+      "properties": {
+        "call_envelope": {
+          "$ref": "#/$defs/callEnvelopeSpec"
+        },
+        "result_envelope": {
+          "$ref": "#/$defs/resultEnvelopeSpec"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "mode": {
+      "enum": [
+        "chat",
+        "plan",
+        "execute",
+        "verify",
+        "research"
+      ]
+    },
+    "riskTier": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "checkType": {
+      "enum": [
+        "none",
+        "lint",
+        "typecheck",
+        "test",
+        "build",
+        "smoke"
+      ]
+    },
+    "sideEffect": {
+      "enum": [
+        "none",
+        "reads_files",
+        "writes_files",
+        "executes_commands",
+        "network_access",
+        "external_mutation",
+        "sensitive_data_access"
+      ]
+    },
+    "mutabilityClass": {
+      "enum": [
+        "read_only",
+        "local_mutation",
+        "external_mutation",
+        "hybrid_mutation"
+      ]
+    },
+    "toolCategory": {
+      "enum": [
+        "filesystem",
+        "terminal",
+        "search",
+        "web",
+        "browser",
+        "vcs",
+        "planning",
+        "memory",
+        "integration",
+        "ui",
+        "custom"
+      ]
+    },
+    "toolDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "category",
+        "input_schema",
+        "output_schema",
+        "side_effects",
+        "risk_tier",
+        "idempotency",
+        "mutability_class",
+        "requires_confirmation",
+        "allowed_in_modes"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_\\.-]*$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "$ref": "#/$defs/toolCategory"
+        },
+        "input_schema": {
+          "type": "object"
+        },
+        "output_schema": {
+          "type": "object"
+        },
+        "side_effects": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sideEffect"
+          }
+        },
+        "risk_tier": {
+          "$ref": "#/$defs/riskTier"
+        },
+        "idempotency": {
+          "enum": [
+            "idempotent",
+            "conditionally_idempotent",
+            "non_idempotent"
+          ]
+        },
+        "mutability_class": {
+          "$ref": "#/$defs/mutabilityClass"
+        },
+        "requires_confirmation": {
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 120000
+        },
+        "retry_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_attempts",
+            "backoff"
+          ],
+          "properties": {
+            "max_attempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "backoff": {
+              "enum": [
+                "none",
+                "fixed",
+                "exponential"
+              ]
+            }
+          }
+        },
+        "allowed_in_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/mode"
+          }
+        }
+      }
+    },
+    "callEnvelopeSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_fields",
+        "request_id_pattern",
+        "enforce_mode_allowlist",
+        "allow_parallel_calls",
+        "max_parallel_calls",
+        "require_argument_schema_validation",
+        "reject_calls_without_reason",
+        "reject_extra_fields"
+      ],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "request_id",
+              "tool_name",
+              "arguments",
+              "mode",
+              "reason",
+              "risk_ack"
+            ]
+          }
+        },
+        "request_id_pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforce_mode_allowlist": {
+          "type": "boolean"
+        },
+        "allow_parallel_calls": {
+          "type": "boolean"
+        },
+        "max_parallel_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "require_argument_schema_validation": {
+          "type": "boolean"
+        },
+        "reject_calls_without_reason": {
+          "type": "boolean"
+        },
+        "reject_extra_fields": {
+          "type": "boolean"
+        }
+      }
+    },
+    "resultEnvelopeSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_fields",
+        "allowed_status_values",
+        "require_error_object_on_failure",
+        "require_side_effect_report",
+        "include_tool_stdout_stderr"
+      ],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "request_id",
+              "tool_name",
+              "status",
+              "started_at",
+              "completed_at",
+              "duration_ms",
+              "output",
+              "error",
+              "side_effect_report"
+            ]
+          }
+        },
+        "allowed_status_values": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "success",
+              "recoverable_error",
+              "fatal_error",
+              "rejected_by_policy"
+            ]
+          }
+        },
+        "require_error_object_on_failure": {
+          "type": "boolean"
+        },
+        "require_side_effect_report": {
+          "type": "boolean"
+        },
+        "include_tool_stdout_stderr": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

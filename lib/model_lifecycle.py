@@ -72,7 +72,12 @@ class ModelLifecycleManager:
             pass
         return 0.0
 
-    def preflight_check(self, model_name: str, requested_vram_gb: Optional[float] = None) -> bool:
+    def preflight_check(
+        self,
+        model_name: str,
+        requested_vram_gb: Optional[float] = None,
+        target_engine: Optional[str] = None
+    ) -> bool:
         """
         Verify if loading the target model fits inside the usable target budget and free VRAM.
         Automatically unloads other resident models if the active profile is sequential_only.
@@ -80,13 +85,33 @@ class ModelLifecycleManager:
         Args:
             model_name: The name of the model registered in model_registry.yaml
             requested_vram_gb: Override VRAM requirement estimate (if not in registry)
+            target_engine: The engine to load the model (e.g. Ollama, vLLM, CTranslate2, Transformers)
             
         Returns:
             bool: True if budget constraints are met, False or raises MemoryError otherwise.
         """
+        model_entry = self.model_registry.get(model_name, {}) or {}
+        
+        # 1. Check engine compatibility
+        if target_engine:
+            supported_engines = model_entry.get("engines", {}) or {}
+            # Allow case insensitive matching or direct keys
+            supported = False
+            for eng, capability in supported_engines.items():
+                if eng.lower() == target_engine.lower() and capability == "yes":
+                    supported = True
+                    break
+            if not supported:
+                err_msg = (
+                    f"Compatibility Block: Model '{model_name}' does not declare support for "
+                    f"engine '{target_engine}' in the registry. Supported: "
+                    f"{[e for e, cap in supported_engines.items() if cap == 'yes']}"
+                )
+                logger.error(err_msg)
+                raise ValueError(err_msg)
+
         # Resolve VRAM estimate from registry
         if requested_vram_gb is None:
-            model_entry = self.model_registry.get(model_name, {}) or {}
             requested_vram_gb = float(model_entry.get("vram_estimate_gb", 2.0))
 
         logger.info(
@@ -95,7 +120,6 @@ class ModelLifecycleManager:
         )
         
         # Check active load policy for the target model
-        model_entry = self.model_registry.get(model_name, {}) or {}
         load_policy = model_entry.get("load_policy", "concurrent_safe")
         
         # Enforce sequential unloading of other resident models if required
@@ -149,35 +173,62 @@ class ModelLifecycleManager:
         model_name: str,
         load_fn: Callable[[], Any],
         unload_fn: Optional[Callable[[], None]] = None,
-        requested_vram_gb: Optional[float] = None
+        requested_vram_gb: Optional[float] = None,
+        target_engine: Optional[str] = None
     ) -> ModelContext:
         """
         Execute preflight VRAM audits and load the model.
         Returns a context manager ensuring clean unloads.
         """
-        # Run budget checks
-        self.preflight_check(model_name, requested_vram_gb)
+        # Run budget & compatibility checks
+        self.preflight_check(model_name, requested_vram_gb, target_engine)
         
-        # Get VRAM estimate
+        # Resolve registry metadata
+        model_entry = self.model_registry.get(model_name, {}) or {}
         if requested_vram_gb is None:
-            model_entry = self.model_registry.get(model_name, {}) or {}
             requested_vram_gb = float(model_entry.get("vram_estimate_gb", 2.0))
             
-        logger.info("Loading model '%s' into VRAM...", model_name)
+        engine = target_engine or next(iter([eng for eng, cap in model_entry.get("engines", {}).items() if cap == "yes"]), "unknown")
+        quantization = model_entry.get("quantization", ["FP16"])[0]
+        
+        # Telemetry: Record starting VRAM state
+        vram_before = self.get_free_vram_gb()
+        
+        logger.info(
+            "[TELEMETRY] LOADING MODEL - ID: %s | Engine: %s | Quantization: %s | VRAM Before: %.2f GB",
+            model_name, engine, quantization, vram_before
+        )
+        
         start_time = time.monotonic()
         
+        # Reset peak memory tracking if PyTorch is available
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
+            
         # Execute model loader
         model_instance = load_fn()
         
         duration = time.monotonic() - start_time
-        logger.info("Model '%s' successfully loaded in %.2f seconds.", model_name, duration)
+        vram_after = self.get_free_vram_gb()
+        
+        logger.info(
+            "[TELEMETRY] LOAD SUCCESS - ID: %s | Load Time: %.2f sec | VRAM After Load: %.2f GB",
+            model_name, duration, vram_after
+        )
         
         # Register model as resident in VRAM
         _RESIDENT_MODELS[model_name] = {
             "instance": model_instance,
             "unload_fn": unload_fn,
             "size_gb": requested_vram_gb,
-            "loaded_at": time.time()
+            "loaded_at": time.time(),
+            "vram_before": vram_before,
+            "engine": engine,
+            "quantization": quantization
         }
         
         return ModelContext(self, model_name, model_instance)
@@ -189,8 +240,15 @@ class ModelLifecycleManager:
             
         record = _RESIDENT_MODELS.pop(model_name)
         unload_hook = record.get("unload_fn")
+        size_gb = record.get("size_gb", 0.0)
+        vram_before_load = record.get("vram_before", 0.0)
+        engine = record.get("engine", "unknown")
+        quantization = record.get("quantization", "unknown")
+        duration = time.time() - record.get("loaded_at", time.time())
         
-        logger.info("Unloading model '%s'...", model_name)
+        vram_before_unload = self.get_free_vram_gb()
+        
+        logger.info("[TELEMETRY] UNLOADING MODEL - ID: %s | Engine: %s | Quantization: %s", model_name, engine, quantization)
         
         if unload_hook:
             try:
@@ -198,7 +256,10 @@ class ModelLifecycleManager:
             except Exception as e:
                 logger.error("Unload hook for model '%s' failed: %s", model_name, e)
                 
-        # Attempt PyTorch cache cleaning
+        # Release references
+        record.clear()
+        
+        # Attempt PyTorch cache cleaning & garbage collection
         try:
             import torch
             if torch.cuda.is_available():
@@ -208,7 +269,34 @@ class ModelLifecycleManager:
         except Exception:
             pass
             
-        logger.info("Model '%s' successfully evicted from memory.", model_name)
+        # Telemetry: Record VRAM stats after eviction
+        vram_after_unload = self.get_free_vram_gb()
+        vram_returned = vram_after_unload - vram_before_unload
+        
+        # Track peak usage via PyTorch if available
+        peak_vram_gb = 0.0
+        try:
+            import torch
+            if torch.cuda.is_available():
+                peak_vram_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        except Exception:
+            pass
+            
+        logger.info(
+            "[TELEMETRY] UNLOAD COMPLETE - ID: %s | Duration: %.2f sec | VRAM Before: %.2f GB | Peak VRAM: %.2f GB | VRAM After: %.2f GB",
+            model_name, duration, vram_before_load, peak_vram_gb, vram_after_unload
+        )
+        
+        # Verify VRAM was successfully returned
+        if vram_returned < (size_gb * 0.5):
+            logger.warning(
+                "[WARN] Memory leakage warning: Model '%s' was expected to release ~%.2f GB VRAM, "
+                "but only %.2f GB was reclaimed by the system.",
+                model_name, size_gb, vram_returned
+            )
+        else:
+            logger.info("[OK] VRAM returned successfully: %.2f GB reclaimed.", vram_returned)
+            
         return True
 
     def unload_all(self) -> None:

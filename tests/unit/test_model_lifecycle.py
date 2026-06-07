@@ -21,11 +21,18 @@ class TestModelLifecycleManager(unittest.TestCase):
             "huggingface_models": {
                 "mock_stable_model": {
                     "vram_estimate_gb": 2.0,
-                    "load_policy": "concurrent_safe"
+                    "load_policy": "concurrent_safe",
+                    "engines": {
+                        "Transformers": "yes",
+                        "llama.cpp/GGUF": "no"
+                    }
                 },
                 "mock_heavy_model": {
                     "vram_estimate_gb": 12.0,
-                    "load_policy": "sequential_only"
+                    "load_policy": "sequential_only",
+                    "engines": {
+                        "Ollama": "yes"
+                    }
                 },
                 "mock_massive_model": {
                     "vram_estimate_gb": 15.0,
@@ -92,6 +99,25 @@ class TestModelLifecycleManager(unittest.TestCase):
         
         # Assert first model was evicted
         self.assertNotIn("mock_stable_model", _RESIDENT_MODELS)
+
+    @patch("lib.model_lifecycle.ModelLifecycleManager.get_free_vram_gb")
+    def test_preflight_check_engine_compatibility_success(self, mock_free_vram):
+        mock_free_vram.return_value = 12.0
+        # Should pass when target_engine is supported (case-insensitive matching)
+        self.assertTrue(self.manager.preflight_check("mock_stable_model", target_engine="transformers"))
+        self.assertTrue(self.manager.preflight_check("mock_stable_model", target_engine="Transformers"))
+
+    @patch("lib.model_lifecycle.ModelLifecycleManager.get_free_vram_gb")
+    def test_preflight_check_engine_compatibility_failure(self, mock_free_vram):
+        mock_free_vram.return_value = 12.0
+        # Should raise ValueError when target_engine is unsupported
+        with self.assertRaises(ValueError):
+            self.manager.preflight_check("mock_stable_model", target_engine="llama.cpp/GGUF")
+        with self.assertRaises(ValueError):
+            self.manager.preflight_check("mock_stable_model", target_engine="Ollama")
+        # Should raise ValueError when requesting any engine on a model with no engines declared
+        with self.assertRaises(ValueError):
+            self.manager.preflight_check("mock_massive_model", target_engine="Transformers")
 
 
 if __name__ == "__main__":

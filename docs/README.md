@@ -61,6 +61,8 @@ Current operator-validated additions on the active line:
   [`docs/reference/API.md`](reference/API.md)
 - Quick references:
   [`docs/reference/indexes/QUICK_INDEX.md`](reference/indexes/QUICK_INDEX.md)
+- Master index of all sub-indexes:
+  [`docs/reference/indexes/MASTER_INDEX.md`](reference/indexes/MASTER_INDEX.md)
 
 ## Paths By Role
 

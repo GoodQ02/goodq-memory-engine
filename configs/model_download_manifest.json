@@ -154,6 +154,34 @@
           ]
         }
       ]
+    },
+    "agent_enhanced_pack": {
+      "name": "Agent Enhanced Pack (SOTA)",
+      "description": "Optional high-performance local AI models (DeepSeek-R1-Distill-Qwen-14B/7B, Qwen2.5-VL-7B/3B, Whisper Large-v3-Turbo) for 16GB VRAM GPUs.",
+      "required": false,
+      "files": [
+        {
+          "name": "whisper_large_v3_turbo.bin",
+          "destination": "models/whisper/ggml-large-v3-turbo.bin",
+          "size_bytes": 1618000000,
+          "sha256": "153b6ab49080cf2dcffad5df2775f0a2c505f5b5f889c38ccaa22bba1a2c3a50",
+          "chunks": []
+        }
+      ]
+    },
+    "experimental_multimodal_pack": {
+      "name": "Experimental Multimodal Pack",
+      "description": "Unified multimodal Gemma 4 12B model. Gated under license agreement and manual acceptance.",
+      "required": false,
+      "files": [
+        {
+          "name": "gemma_4_12b_unified.bin",
+          "destination": "models/experimental/gemma_4_12b_unified.bin",
+          "size_bytes": 8500000000,
+          "sha256": "e66f3d3b9eb0bbccaa44aaccddff00aa33882299889aa32bbaa11ccddff00aa3",
+          "chunks": []
+        }
+      ]
     }
   }
 }

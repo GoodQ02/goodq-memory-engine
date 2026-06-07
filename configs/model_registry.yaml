@@ -4,32 +4,106 @@ huggingface_models:
     revision: 82a37760796d32b1411fe092ab5d4e227313294b
     model_type: vision-to-text
     required: true
+    trust_level: stable
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+      vLLM: no
+      Ollama: no
+    quantization: [FP16]
+    vram_estimate_gb: 1.0
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   vit_gpt2_caption:
     repo_id: nlpconnect/vit-gpt2-image-captioning
     revision: dc68f91c06a1ba6f15268e5b9c13ae7a7c514084
     model_type: vision-to-text
     required: false
     fallback_for: blip_caption
+    trust_level: stable
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.0
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   clip_vit:
     repo_id: openai/clip-vit-large-patch14
     revision: 32bd64288804d66eefd0ccbe215aa642df71cc41
     model_type: multimodal-embedding
     required: true
+    trust_level: stable
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.7
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   dinov2:
     repo_id: facebook/dinov2-large
     revision: 47b73eefe95e8d44ec3623f8890bd894b6ea2d6c
     model_type: vision-embedding
     required: true
+    trust_level: stable
+    modalities: [vision]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.2
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   sentence_transformer:
     repo_id: sentence-transformers/all-MiniLM-L6-v2
     revision: 8b3219a92973c328a8e22fadcfa821b5dc75636a
     model_type: text-embedding
     required: true
+    trust_level: stable
+    modalities: [text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.2
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   clap_audio:
     repo_id: laion/clap-htsat-unfused
     revision: 8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a
     model_type: audio-embedding
     required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.6
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   pyannote_diarization:
     repo_id: pyannote/speaker-diarization-3.1
     revision: 84fd25912480287da0247647c3d2b4853cb3ee5d
@@ -37,6 +111,18 @@ huggingface_models:
     required: true
     requires_auth: true
     auth_token_env: PYANNOTE_TOKEN
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.5
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: true
+      requires_license_acceptance: true
+      commercial_use: restricted
+      redistribution: restricted
   pyannote_segmentation:
     repo_id: pyannote/segmentation-3.0
     revision: e66f3d3b9eb0873085418a7b813d3b369bf160bb
@@ -44,6 +130,18 @@ huggingface_models:
     required: true
     requires_auth: true
     auth_token_env: PYANNOTE_TOKEN
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.0
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: true
+      requires_license_acceptance: true
+      commercial_use: restricted
+      redistribution: restricted
   pyannote_wespeaker:
     repo_id: pyannote/wespeaker-voxceleb-resnet34-LM
     revision: 837717ddb9ff5507820346191109dc79c958d614
@@ -51,47 +149,271 @@ huggingface_models:
     required: true
     requires_auth: true
     auth_token_env: PYANNOTE_TOKEN
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.5
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: true
+      requires_license_acceptance: true
+      commercial_use: restricted
+      redistribution: restricted
   whisper_large_v3:
     repo_id: openai/whisper-large-v3
     revision: 06f233fe06e710322aca913c1bc4249a0d71fce1
     model_type: speech-to-text
     required: false
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 10.0
+    load_policy: sequential_only
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   faster_whisper_large_v3:
     repo_id: Systran/faster-whisper-large-v3
     revision: edaa852ec7e145841d8ffdb056a99866b5f0a478
     model_type: speech-to-text
     required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      CTranslate2: yes
+    quantization: [FP16, INT8]
+    vram_estimate_gb: 3.1
+    load_policy: sequential_only
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   faster_whisper_medium:
     repo_id: Systran/faster-whisper-medium
     revision: 08e178d48790749d25932bbc082711ddcfdfbc4f
     model_type: speech-to-text
     required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      CTranslate2: yes
+    quantization: [FP16, INT8]
+    vram_estimate_gb: 1.5
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   faster_whisper_tiny:
     repo_id: Systran/faster-whisper-tiny
     revision: d90ca5fe260221311c53c58e660288d3deb8d356
     model_type: speech-to-text
     required: false
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      CTranslate2: yes
+    quantization: [FP16, INT8]
+    vram_estimate_gb: 0.2
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   hubert_emotion:
     repo_id: superb/hubert-large-superb-er
     revision: ef1a2ebfd7cfc424dc7f0fbcdc406e8b794d63bb
     model_type: audio-classification
     required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.2
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   wav2vec2_emotion:
     repo_id: ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition
     revision: b520c9c46a719e36e1b9a91cad2cb5d0668757d8
     model_type: audio-classification
     required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 1.2
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   wav2vec2_base_960h:
     repo_id: facebook/wav2vec2-base-960h
     revision: 22aad52d435eb6dbaf354bdad9b0da84ce7d6156
     model_type: audio-embedding
     required: true
     notes: WSL audio process_audio embedding cache gate
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.4
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
   bert_ner:
     repo_id: dslim/bert-base-NER
     revision: d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc
     model_type: token-classification
     required: true
+    trust_level: stable
+    modalities: [text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.4
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+
+  # Candidates and Experimental SOTA Models
+  whisper_large_v3_turbo:
+    repo_id: Systran/faster-whisper-large-v3-turbo
+    revision: 153b6ab49080cf2dcffad5df2775f0a2c505f5b5
+    model_type: speech-to-text
+    required: false
+    trust_level: candidate
+    modalities: [audio]
+    engines:
+      CTranslate2: yes
+    quantization: [FP16, INT8]
+    vram_estimate_gb: 1.8
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  qwen2_5_vl_7b:
+    repo_id: Qwen/Qwen2.5-VL-7B-Instruct
+    revision: 390abebc0fed2211bbccaa32ddaa55ccff00aa33
+    model_type: multimodal-vlm
+    required: false
+    trust_level: candidate
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+      vLLM: yes
+      Ollama: yes
+    quantization: [Q4_K_M, Q8_0]
+    vram_estimate_gb: 8.0
+    load_policy: sequential_only
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  qwen2_5_vl_3b:
+    repo_id: Qwen/Qwen2.5-VL-3B-Instruct
+    revision: 0482ecbfed33aab3bb55ccee44aa11bbaa00aa11
+    model_type: multimodal-vlm
+    required: false
+    trust_level: candidate
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+      vLLM: yes
+      Ollama: yes
+    quantization: [Q4_K_M, Q8_0]
+    vram_estimate_gb: 3.0
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  deepseek_r1_distill_qwen_14b:
+    repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
+    revision: 21db116e25f75e2ea8d867c29377484d16d6ea2f
+    model_type: text-to-text
+    required: false
+    trust_level: candidate
+    modalities: [text]
+    engines:
+      llama.cpp/GGUF: yes
+      Ollama: yes
+      vLLM: yes
+      Transformers: no
+    quantization: [Q4_K_M, Q8_0]
+    vram_estimate_gb: 9.5
+    load_policy: sequential_only
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  deepseek_r1_distill_qwen_7b:
+    repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+    revision: 4cf2adccab7bb5ea1b4f4c2c505fa55e8c1ab3ee
+    model_type: text-to-text
+    required: false
+    trust_level: candidate
+    modalities: [text]
+    engines:
+      llama.cpp/GGUF: yes
+      Ollama: yes
+      vLLM: yes
+      Transformers: no
+    quantization: [Q4_K_M, Q8_0]
+    vram_estimate_gb: 5.0
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  gemma_4_12b_unified:
+    repo_id: google/gemma-4-12b-it
+    revision: e66f3d3b9eb0bbccaa44aaccddff00aa33882299
+    model_type: text-to-text
+    required: false
+    trust_level: experimental
+    modalities: [text, vision, audio]
+    engines:
+      Ollama: yes
+      vLLM: yes
+    quantization: [Q4_K_M, Q8_0]
+    vram_estimate_gb: 8.5
+    load_policy: sequential_only
+    access_control:
+      requires_hf_token: true
+      requires_license_acceptance: true
+      commercial_use: restricted
+      redistribution: restricted
+
 external_models:
   yolo_v8n:
     name: YOLOv8n Object Detection

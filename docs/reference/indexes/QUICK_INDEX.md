@@ -36,6 +36,7 @@
 - `docs/CLI-REFERENCE.md` – Full canonical CLI reference.
 - `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` – Compatibility pointer to the current CLI surfaces.
 - `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` – Agent/operator lookup index for documentation cleanup and historical intel.
+- `docs/reference/indexes/MASTER_INDEX.md` – Master entrypoint mapping all sub-indexes in the system.
 - `docs/bootstrap/CORPUS_PACK_MANIFEST.md` – Corpus/reference/debug/memory pack classification for offline bundle decisions.
 - `docs/bootstrap/CORPUS_PACK_INVENTORY_LEDGER.md` – First candidate inventory ledger for corpus, reference-bank, scaffold, private-media, and optional dataset pack selection.
 - `docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md` – Conservative first optional reference-pack candidate proposal; no payload movement authorized.

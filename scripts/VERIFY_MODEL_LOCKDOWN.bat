@@ -12,7 +12,7 @@ echo.
 cd /d "%~dp0.."
 
 echo Running lockdown verification...
-"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python scripts\verify_model_lockdown.py
+"%CONDA_EXE%" run -n %GOODQ_CONDA_ENV% python scripts\utils\verify_model_lockdown.py
 
 echo.
 pause

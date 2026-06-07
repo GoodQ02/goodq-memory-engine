@@ -19,7 +19,10 @@ os.environ.setdefault("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agen
 
 # Monkeypatch the assets directory to point to our version-controlled Stack directory
 import goodq_mini_agent.paths
+ORIGINAL_ASSETS_DIR = goodq_mini_agent.paths.ASSETS_DIR
 goodq_mini_agent.paths.ASSETS_DIR = Path(__file__).resolve().parent / "stack"
+# Keep scripts resolving from the package assets dir
+goodq_mini_agent.paths.assets_script = lambda name: ORIGINAL_ASSETS_DIR / "scripts" / name
 
 # Import stack runner after monkeypatching
 import goodq_mini_agent.stack_runner as runner

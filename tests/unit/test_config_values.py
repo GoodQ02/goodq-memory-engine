@@ -185,5 +185,41 @@ def test_config_values():
     print("=" * 70)
 
 
+def test_build_llm_models_profile_injection(monkeypatch):
+    from steps.common.llm_model_factory import build_llm_models
+    
+    # 1. Default case (no profile)
+    monkeypatch.delenv("GOODQ_HOST_PROFILE", raising=False)
+    cfg = load_configs({
+        "llm": {
+            "vllm_url": "http://localhost:38005/v1",
+            "ollama_url": "http://localhost:31434/v1",
+            "vllm_model": "meta-llama/Llama-3.2-1B-Instruct",
+            "ollama_model": "phi4"
+        }
+    })
+    models = build_llm_models(cfg)
+    assert len(models) == 2
+    assert models[0].name == "Llama-1B-Speed"
+    assert models[1].name == "Llama3.2-Ollama"
+    
+    # 2. Ingest quality profile case
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "GPU_16GB_INGEST_QUALITY")
+    cfg = load_configs({
+        "llm": {
+            "vllm_url": "http://localhost:38005/v1",
+            "ollama_url": "http://localhost:31434/v1",
+            "vllm_model": "meta-llama/Llama-3.2-1B-Instruct",
+            "ollama_model": "phi4"
+        }
+    })
+    models = build_llm_models(cfg)
+    assert len(models) == 3
+    assert models[0].name == "DeepSeek-R1-Distill-Qwen-14B"
+    assert models[0].backend == "ollama"
+    assert models[0].vram_gb == 9.5
+    assert models[0].priority == 200
+
+
 if __name__ == "__main__":
     test_config_values()

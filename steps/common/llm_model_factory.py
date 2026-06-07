@@ -30,7 +30,7 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
     )
     ollama_model_id = llm_cfg.get("ollama_model", "phi4")
 
-    return [
+    models_list = [
         ModelConfig(
             name="Llama-1B-Speed",
             base_url=vllm_base,
@@ -56,6 +56,67 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
             priority=90,
         ),
     ]
+
+    # Dynamically integrate profile-selected reasoning models if profile is set
+    host_profile = (os.environ.get("GOODQ_HOST_PROFILE") or cfg.get("host", {}).get("profile") or "").strip().upper()
+    
+    if host_profile in ("GPU_16GB_INGEST_QUALITY", "GPU_16GB_INTERACTIVE_LIGHT"):
+        import yaml
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        models_config_path = os.path.join(repo_root, "configs", "models_config.yaml")
+        model_registry_path = os.path.join(repo_root, "configs", "model_registry.yaml")
+        
+        try:
+            if os.path.isfile(models_config_path):
+                with open(models_config_path, "r", encoding="utf-8") as f:
+                    models_cfg = yaml.safe_load(f) or {}
+                
+                profile_info = models_cfg.get("profiles", {}).get(host_profile, {})
+                reasoning_model_key = profile_info.get("reasoning")
+                
+                if reasoning_model_key:
+                    model_entry = models_cfg.get("models", {}).get(reasoning_model_key, {})
+                    if model_entry:
+                        # Load registry to get exact VRAM estimate
+                        vram_estimate = 2.0
+                        if os.path.isfile(model_registry_path):
+                            with open(model_registry_path, "r", encoding="utf-8") as rf:
+                                registry_cfg = yaml.safe_load(rf) or {}
+                            registry_models = registry_cfg.get("huggingface_models", {}) or {}
+                            registry_entry = registry_models.get(reasoning_model_key, {})
+                            if not registry_entry:
+                                # Fallback fuzzy key matching
+                                for k, entry in registry_models.items():
+                                    if (k.startswith(reasoning_model_key) or 
+                                        reasoning_model_key.startswith(k) or 
+                                        k.replace("_distill_qwen", "") == reasoning_model_key or
+                                        reasoning_model_key.replace("_", "") in k.replace("_", "")):
+                                        registry_entry = entry
+                                        break
+                            vram_estimate = float(registry_entry.get("vram_estimate_gb", 2.0))
+                        
+                        raw_base_url = model_entry.get("base_url", "http://localhost:31434/v1")
+                        m_base, m_port = _split_base_and_port(raw_base_url)
+                        
+                        profile_model = ModelConfig(
+                            name=model_entry.get("name", reasoning_model_key),
+                            base_url=m_base,
+                            port=m_port,
+                            model_id=model_entry.get("model_id", reasoning_model_key),
+                            backend=model_entry.get("engine", "ollama"),
+                            vram_gb=vram_estimate,
+                            tokens_per_sec=150,
+                            context_length=int(model_entry.get("max_tokens", 16384)),
+                            capabilities=["chat", "reasoning", "profile_primary"],
+                            priority=200,  # Ensure it is prioritized
+                        )
+                        # Insert at the beginning of the list to be primary
+                        models_list.insert(0, profile_model)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Failed to dynamically load models from models_config.yaml: %s", e)
+
+    return models_list
 
 
 build_llm_models = _build_llm_models

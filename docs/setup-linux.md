@@ -61,10 +61,43 @@ If no GPU is present or if you want to enforce CPU processing:
 export GOODQ_DEVICE="cpu"
 ```
 
-## 5. Verification
+## 5. Automated Installation & Verification
 
-Verify your installation by running the preflight checks:
+For a fully automated setup, you can use the Unix bootstrap script. Note that while the Windows Installer (`.exe`) remains the primary packaged distribution path for end-users, macOS and Linux environments are fully supported for native developer-source installations.
+
+### Running the Unix Bootstrap
+The bootstrap installer handles dependency checks, core and isolated step conda environment provisioning, model weight prefetching, and compilation of the Go launcher:
 
 ```bash
-python scripts/bootstrap_verify.py --profile desktop
+# Sourced platform bootstrap installation:
+chmod +x scripts/bootstrap_install_unix.sh
+./scripts/bootstrap_install_unix.sh
 ```
+
+### Bootstrap Flags
+Customize the installation using the following flags:
+* `--check-only`: Runs system dependency checks (conda, ffmpeg, tesseract, etc.) and exits without modification.
+* `--skip-model-prefetch`: Skips downloading large deep learning model caches.
+* `--skip-step-envs`: Skips creating isolated sub-environments for different pipeline stages.
+* `--no-start`: Skips launching backend services automatically.
+
+### Manual Verification
+To manually run the verification check at any time:
+```bash
+conda run -n goodq_core python scripts/bootstrap_verify.py --profile desktop
+```
+
+## 6. Managing Services (Control Scripts)
+
+You can manage the native backend daemons (Qdrant, API Server, Ingestion Watchdog) using the Unix control scripts in the project root:
+
+* **Activate Dev Mode**: Starts Qdrant (falling back to background execution if systemd is unavailable), kills any existing API server on port 30000 (after verifying its process identity), and starts the API and Watchdog in the background:
+  ```bash
+  chmod +x dev_on.sh
+  ./dev_on.sh
+  ```
+* **Deactivate Services**: Stops only the wrapper-owned services based on PID files or command-line matching, leaving system-wide/docker services untouched:
+  ```bash
+  chmod +x dev_off.sh
+  ./dev_off.sh
+  ```

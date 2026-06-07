@@ -138,11 +138,34 @@ func main() {
 		qdrantExeName = "qdrant"
 	}
 	qdrantExe := filepath.Join(programFilesDir, "qdrant", qdrantExeName)
+	qdrantPath := ""
+	qdrantDir := filepath.Join(programDataDir, "qdrant")
+
 	if _, err := os.Stat(qdrantExe); err == nil {
-		fmt.Println("[LAUNCHER] Starting Qdrant engine in Personal Mode...")
+		qdrantPath = qdrantExe
+		fmt.Println("[LAUNCHER] Starting local Qdrant engine in Personal Mode...")
+	} else {
+		// Fallback to system-wide PATH lookup
+		if path, err := exec.LookPath(qdrantExeName); err == nil {
+			qdrantPath = path
+			fmt.Printf("[LAUNCHER] Local Qdrant not found. Starting system-wide Qdrant from: %s\n", qdrantPath)
+		} else {
+			fmt.Println("[LAUNCHER] [WARN] Qdrant binary not found in local bundle or system PATH. Skipping startup.")
+		}
+	}
+
+	if qdrantPath != "" {
+		_ = os.MkdirAll(qdrantDir, 0755)
 		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
-		qdrantCmd := exec.Command(qdrantExe, "--config-path", qdrantConfig)
-		qdrantCmd.Dir = filepath.Join(programDataDir, "qdrant")
+		
+		var qdrantCmd *exec.Cmd
+		if _, err := os.Stat(qdrantConfig); err == nil {
+			qdrantCmd = exec.Command(qdrantPath, "--config-path", qdrantConfig)
+		} else {
+			qdrantCmd = exec.Command(qdrantPath)
+		}
+		
+		qdrantCmd.Dir = qdrantDir
 		qdrantCmd.Env = append(os.Environ(),
 			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
 			"QDRANT__SERVICE__HOST=127.0.0.1",
@@ -158,7 +181,7 @@ func main() {
 		// Hide Qdrant console window on Windows
 		prepareCmd(qdrantCmd)
 		if err := qdrantCmd.Start(); err != nil {
-			fmt.Printf("[WARN] Could not launch Personal Mode Qdrant: %v\n", err)
+			fmt.Printf("[WARN] Could not launch Qdrant: %v\n", err)
 		} else {
 			// Ensure Qdrant process terminates if the launcher is killed
 			defer qdrantCmd.Process.Kill()

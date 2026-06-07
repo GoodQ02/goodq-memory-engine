@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-06-05 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-07 -->
 
 # GoodQ4All Agent Status
 
-_Operational restart checkpoint aligned: 2026-06-05._
+_Operational restart checkpoint aligned: 2026-06-07._
 
 This document is a bounded operator snapshot of the current release-era
 stitching and offline-package baseline.
@@ -13,6 +13,11 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-06-07:
+  - status: Native macOS and Linux cross-platform parity enabled.
+  - Control scripts: Added `dev_on.sh` and `dev_off.sh` in the workspace root to manage Qdrant, API Server, and Ingestion Watchdog background processes with PID tracking and port 30000 safety guards.
+  - Unix Bootstrap: Added `scripts/bootstrap_install_unix.sh` for dependency preflights, conda environment creation (Python 3.10), platform-tailored PyTorch stack configuration (MPS for macOS, CUDA/CPU for Linux), step environment provisioning, model cache prefetching, and Go launcher compilation.
+  - Documentation: Aligned setup guides, scene manifest specs, and assessments to support native POSIX execution paths (`audio_backend_effective=native`).
 - Pause checkpoint, 2026-06-05:
   - status: Complete forensic quality audit and hardening pass of Subsystems 1 to 8 validated and committed.
   - Subsystems audited and verified:

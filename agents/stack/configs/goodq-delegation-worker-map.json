@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "workers": {
+    "search_agent": {
+      "command": [
+        "python",
+        "../scripts/mock_worker.py"
+      ],
+      "timeout_ms": 120000
+    },
+    "code_agent": {
+      "command": [
+        "python",
+        "../scripts/mock_worker.py"
+      ],
+      "timeout_ms": 120000,
+      "fallback_worker": "oracle_agent"
+    },
+    "verify_agent": {
+      "command": [
+        "python",
+        "../scripts/mock_worker.py"
+      ],
+      "timeout_ms": 90000
+    },
+    "integration_agent": {
+      "command": [
+        "python",
+        "../scripts/mock_worker.py"
+      ],
+      "timeout_ms": 120000
+    },
+    "oracle_agent": {
+      "command": [
+        "python",
+        "../scripts/mock_worker.py"
+      ],
+      "timeout_ms": 90000
+    }
+  }
+}

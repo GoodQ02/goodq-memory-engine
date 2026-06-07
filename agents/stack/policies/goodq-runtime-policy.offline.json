@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "name": "goodq-o2-runtime-policy-trusted-offline",
+  "base_contract_path": "contracts/goodq-o2-local.contract.json",
+  "modules_path": "configs/goodq-v2-modules.config.json",
+  "preferences_path": "configs/goodq-preferences.json",
+  "service_policies_path": "configs/goodq-service-policies.json",
+  "output_adapters_path": "configs/goodq-output-adapters.json",
+  "persona_pack_path": "configs/goodq-persona-pack.json",
+  "delegation_protocol_path": "delegation/goodq-delegation-protocol.offline.json",
+  "delegation_runner": {
+    "worker_map_path": "configs/goodq-delegation-worker-map.json",
+    "simulate_workers": false,
+    "dry_run": false,
+    "default_task_type": "general",
+    "default_risk_tier": "low",
+    "default_estimated_steps": 1,
+    "default_requires_tools": true,
+    "default_requires_external_integration": false,
+    "default_confirmation_count": 1,
+    "shared_context": {
+      "constraints": [],
+      "acceptance_criteria": [
+        "done"
+      ],
+      "input_artifacts": [],
+      "output_contract": {},
+      "timebox_ms": 60000,
+      "risk_tier": "low"
+    }
+  },
+  "enforcement": {
+    "strict_tool_contract": true,
+    "mode_router": true,
+    "trust_boundary": true,
+    "verification_matrix": true,
+    "preference_memory": true,
+    "service_policy_boundary": true,
+    "output_adapter_routing": true,
+    "persona_pack_routing": true,
+    "delegation_protocol": true
+  },
+  "defaults": {
+    "mode": "execute",
+    "verification_profile": "standard"
+  },
+  "logging": {
+    "decision_log_path": "logs/runtime-policy-decisions.jsonl",
+    "redact_keys": [
+      "token",
+      "authorization",
+      "password",
+      "HA_TOKEN",
+      "ELEVENLABS_VOICE_ID"
+    ],
+    "emit_decision_trace": true
+  }
+}

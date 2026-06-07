@@ -129,6 +129,7 @@ def safe_move_file(src: Path, dst: Path) -> Path:
             raise OSError(f"Failed to move file from {src} to {dst} via rename or copy/delete fallback: {copy_err}")
 
 
+
 def _resolve_watchdog_paths(cfg: Dict[str, Any]) -> Dict[str, Path]:
     runtime_paths = get_runtime_paths(
         cfg,

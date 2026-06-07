@@ -78,17 +78,16 @@ Status: recommended next polish after the public-preview checkpoint.
 
 ### P2: Packaging And Portability
 
-Status: Active v1.0.0 release development.
+Status: Completed & Fully Integrated.
 
-- Implement a unified Windows Installer (`.exe`) compiled via NSIS, ensuring clean directory separations (binaries under Program Files, storage under ProgramData, user preferences under AppData).
-- Hydrate a locked Python runtime from a verified offline wheelhouse, using pip strictly inside a sandboxed environment.
-- Compile a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute system readiness/port health checks and run background daemons silently without PowerShell execution warnings.
-- Build a manifest-driven, resumable model downloader (with SHA256 chunk/merged validation and mirror-ready url fallback abstractions) supporting optional, selectable model packs (Core, Vision, Audio Standard, Audio Heavy, and Diarization).
-- Keep required runtime model caches separate from optional dataset, corpus, reference-pack, witness, and private-memory payloads.
+- Implemented a unified Windows Installer (`.exe`) compiled via NSIS, ensuring clean directory separations (binaries under Program Files, storage under ProgramData, user preferences under AppData).
+- Hydrates a locked Python runtime from a verified offline wheelhouse, using pip strictly inside a sandboxed environment.
+- Compiled a supervising native Go launcher (`LAUNCH_GOODQ.exe`) to execute system readiness/port health checks and run background daemons silently without PowerShell execution warnings.
+- Built a manifest-driven, resumable model downloader (with SHA256 chunk/merged validation and mirror-ready url fallback abstractions) supporting optional, selectable model packs (Core, Vision, Audio Standard, Audio Heavy, and Diarization).
+- Keeps required runtime model caches separate from optional dataset, corpus, reference-pack, witness, and private-memory payloads.
 - Linux support is fully enabled natively for developer-source installations.
 - macOS (Apple Silicon) support is fully enabled natively via Metal Performance Shaders (MPS) for developer-source installations.
-- Treat Docker or Docker Compose as an experimental future lane, not a supported public-preview install path.
-
+- Treated Docker or Docker Compose as an experimental future lane, not a supported public-preview install path.
 
 ### P3: Contributor Growth
 
@@ -102,6 +101,15 @@ Status: later public-facing polish.
   artifacts are owned, synthetic, or clearly redistributable.
 - Keep all claims evidence-backed and avoid turning historical reports into
   active release promises.
+
+### P4: Local Agent Security & Governance
+
+Status: Completed & Fully Integrated.
+
+- Integrated the local-first `goodq_agent` governance stack (`MiniAgentClient` middleware) to secure and gate all generative and tool reasoning (Qdrant, FAISS, and Home Assistant).
+- Version-controlled Stack files (configs, contracts, policies, schemas) under `agents/stack/` to prevent environment drift.
+- Wired native tool execution validation conforming to standard schema protocols and transaction logging.
+- Formally validated executing processes with comprehensive pytest unit and integration suites under the `goodq_core` conda environment.
 
 ## Decision Gates
 

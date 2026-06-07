@@ -46,6 +46,8 @@ Start here for current truth:
   [`docs/README.md`](../../README.md)
 - quick reference index:
   [`docs/reference/indexes/QUICK_INDEX.md`](QUICK_INDEX.md)
+- concept glossary:
+  [`docs/reference/indexes/GLOSSARY.md`](GLOSSARY.md)
 
 Do not use this file to override a canonical contract.
 

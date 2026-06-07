@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-$rootDir = 'L:\GOODCUBE\projects\goodq4all_public'
+$rootDir = 'L:\GOODCUBE\projects\goodq4all'
 
 # Import interpreter bindings to locate conda and environment python
 . "$rootDir\scripts\_lib\interpreter_bindings.ps1"

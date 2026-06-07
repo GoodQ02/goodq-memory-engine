@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goodq.dev/schemas/runtime-policy-v1.schema.json",
+  "title": "GoodQ Runtime Policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "base_contract_path",
+    "modules_path",
+    "preferences_path",
+    "service_policies_path",
+    "output_adapters_path",
+    "persona_pack_path",
+    "delegation_protocol_path",
+    "delegation_runner",
+    "enforcement",
+    "defaults",
+    "logging"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_contract_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modules_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "preferences_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "service_policies_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_adapters_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "persona_pack_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delegation_protocol_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delegation_runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker_map_path",
+        "simulate_workers",
+        "dry_run",
+        "default_task_type",
+        "default_risk_tier",
+        "default_estimated_steps",
+        "default_requires_tools",
+        "default_requires_external_integration",
+        "default_confirmation_count",
+        "shared_context"
+      ],
+      "properties": {
+        "worker_map_path": {
+          "type": "string"
+        },
+        "simulate_workers": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "default_task_type": {
+          "enum": [
+            "code",
+            "research",
+            "ops",
+            "review",
+            "qa",
+            "general"
+          ]
+        },
+        "default_risk_tier": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "default_estimated_steps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "default_requires_tools": {
+          "type": "boolean"
+        },
+        "default_requires_external_integration": {
+          "type": "boolean"
+        },
+        "default_confirmation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shared_context": {
+          "type": "object"
+        }
+      }
+    },
+    "enforcement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strict_tool_contract",
+        "mode_router",
+        "trust_boundary",
+        "verification_matrix",
+        "preference_memory",
+        "service_policy_boundary",
+        "output_adapter_routing",
+        "persona_pack_routing",
+        "delegation_protocol"
+      ],
+      "properties": {
+        "strict_tool_contract": {
+          "type": "boolean"
+        },
+        "mode_router": {
+          "type": "boolean"
+        },
+        "trust_boundary": {
+          "type": "boolean"
+        },
+        "verification_matrix": {
+          "type": "boolean"
+        },
+        "preference_memory": {
+          "type": "boolean"
+        },
+        "service_policy_boundary": {
+          "type": "boolean"
+        },
+        "output_adapter_routing": {
+          "type": "boolean"
+        },
+        "persona_pack_routing": {
+          "type": "boolean"
+        },
+        "delegation_protocol": {
+          "type": "boolean"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "verification_profile"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "chat",
+            "plan",
+            "execute",
+            "verify",
+            "research"
+          ]
+        },
+        "verification_profile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_log_path",
+        "redact_keys",
+        "emit_decision_trace"
+      ],
+      "properties": {
+        "decision_log_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "redact_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "emit_decision_trace": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "default_action": "allow",
+  "domains": {
+    "billing_membership": {
+      "description": "Pricing, refunds, and membership changes are handled through official support channels.",
+      "keywords_any": [
+        "refund",
+        "billing",
+        "membership",
+        "subscription",
+        "charge",
+        "invoice",
+        "payment"
+      ],
+      "action": "redirect",
+      "message_template": "I can't process billing or membership changes directly here.",
+      "redirect_to": "support:poke@interaction.co",
+      "restricted_tools": [
+        "home_assistant_call_service",
+        "qdrant_upsert"
+      ],
+      "requires_human_review": false
+    },
+    "account_deletion": {
+      "description": "Account deletion/cancellation requires explicit user path to privacy settings.",
+      "keywords_any": [
+        "delete account",
+        "cancel membership",
+        "close account",
+        "erase account"
+      ],
+      "action": "soft_block",
+      "message_template": "I can point you to the account settings flow, but I can't perform deletion from here.",
+      "redirect_to": "https://poke.com/settings/privacy",
+      "restricted_tools": [
+        "qdrant_upsert"
+      ],
+      "requires_human_review": false
+    },
+    "malicious_intent": {
+      "description": "Block requests suggesting malware, exploit generation, or abuse automation.",
+      "keywords_any": [
+        "malware",
+        "ransomware",
+        "exploit",
+        "phishing",
+        "credential stuffing",
+        "ddos"
+      ],
+      "action": "hard_block",
+      "message_template": "I can't help with that request.",
+      "restricted_tools": [
+        "run_command",
+        "home_assistant_call_service",
+        "qdrant_upsert"
+      ],
+      "requires_human_review": true
+    }
+  }
+}

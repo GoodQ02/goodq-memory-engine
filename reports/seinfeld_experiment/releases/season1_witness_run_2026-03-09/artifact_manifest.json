@@ -1,0 +1,54 @@
+{
+  "bundle_created_on": "2026-03-09",
+  "source_runs": [
+    {
+      "label": "formal_witness_run",
+      "source_rerun_dir": "reports/seinfeld_experiment/reruns/20260308_season1_witness_run",
+      "source_artifacts": [
+        "ingestion_results.json",
+        "ingestion_stderr.log",
+        "ingestion_stdout.log",
+        "workspace/_resolved_config.json"
+      ]
+    },
+    {
+      "label": "clean_reliability_validation",
+      "source_rerun_dir": "reports/seinfeld_experiment/reruns/20260309_235047_season1_reliability_rerun_v2",
+      "source_artifacts": [
+        "ingestion_results.json",
+        "step_runs.jsonl",
+        "resolved_config_snapshot.json",
+        "semantic_comparison_report.md",
+        "semantic_comparison_metrics.json",
+        "scene_embedding_map_2d.png",
+        "scene_embedding_map_2d.svg",
+        "scene_embedding_map_2d_labeled.png",
+        "scene_embedding_map_2d_labeled.svg",
+        "scene_embedding_map_2d.csv",
+        "scene_embedding_map_2d_metadata.json",
+        "ingestion_stderr.log"
+      ]
+    }
+  ],
+  "bundle_artifacts": [
+    "README.md",
+    "witness_metrics.json",
+    "per_episode_coverage.csv",
+    "optional_step_failures.json",
+    "retrieval_anchor_checks.json",
+    "resolved_config_snapshot.json",
+    "ingestion_stderr.log",
+    "reliability_validation_metrics_2026-03-10.json",
+    "reliability_validation_optional_status_2026-03-10.json",
+    "reliability_validation_stderr_2026-03-10.log",
+    "resolved_config_snapshot_2026-03-10.json",
+    "semantic_comparison_report_2026-03-10.md",
+    "semantic_comparison_metrics_2026-03-10.json",
+    "scene_embedding_map_2d_2026-03-10.png",
+    "scene_embedding_map_2d_2026-03-10.svg",
+    "scene_embedding_map_2d_labeled_2026-03-10.png",
+    "scene_embedding_map_2d_labeled_2026-03-10.svg",
+    "scene_embedding_map_2d_2026-03-10.csv",
+    "scene_embedding_map_2d_2026-03-10_metadata.json"
+  ]
+}

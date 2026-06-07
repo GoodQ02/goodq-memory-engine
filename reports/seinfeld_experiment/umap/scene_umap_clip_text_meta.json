@@ -1,0 +1,23 @@
+{
+  "method": "UMAP on concatenated L2-normalized CLIP(512)+Text(384) vectors",
+  "clip_collection": "goodq_clip_epoch_2025_12_22",
+  "text_collection": "goodq_text_epoch_2025_12_22",
+  "scene_count": 182,
+  "vector_dim_combined": 896,
+  "umap_params": {
+    "n_components": 2,
+    "n_neighbors": 15,
+    "min_dist": 0.1,
+    "metric": "cosine",
+    "random_state": 42
+  },
+  "episodes": [
+    "01x01 - Good News, Bad News",
+    "01x02 - The Stakeout",
+    "01x03 - The Robbery",
+    "01x04 - Male Unbonding",
+    "01x05 - The Stock Tip"
+  ],
+  "output_png": "L:\\GOODCUBE\\projects\\goodq4all\\reports\\seinfeld_experiment\\scene_umap_clip_text.png",
+  "output_csv": "L:\\GOODCUBE\\projects\\goodq4all\\reports\\seinfeld_experiment\\scene_umap_clip_text_coords.csv"
+}

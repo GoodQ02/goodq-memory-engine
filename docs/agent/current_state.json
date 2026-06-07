@@ -47,6 +47,22 @@
         "drilldown_id": "timeline_video_id_processing_folder_id_not_sqlite_hash"
       }
     },
+    "agent_governance": {
+      "status": "integrated",
+      "client_class": "MiniAgentClient",
+      "path": "agents/mini_agent_client.py",
+      "test_suite": "tests/agents/test_mini_agent_client.py",
+      "policy_engine": "goodq_mini_agent (v0.1.0)",
+      "monkeypatched_assets": "agents/stack/",
+      "native_tools_gated": [
+        "qdrant_query",
+        "qdrant_upsert",
+        "faiss_search",
+        "llm_chat_local",
+        "home_assistant_get_state",
+        "home_assistant_call_service"
+      ]
+    },
     "llm": {
       "vllm_primary": "healthy",
       "vllm_base": "http://127.0.0.1:38005/v1",
@@ -322,7 +338,7 @@
       },
       "known_followups": [
         "latest-run direct output selector seam superseded by direct_output_selector_validation",
-        "Control Agent remains disabled until an llm_client is explicitly injected"
+        "Control Agent is conditionally configured; all interactive/tool reasoning is gated by MiniAgentClient"
       ]
     },
     "direct_output_selector_validation": {
@@ -357,7 +373,7 @@
         "new selector considers both report roots and configured CLI output, then chooses the freshest read-only scope"
       ],
       "known_followups": [
-        "Control Agent remains disabled until an llm_client is explicitly injected"
+        "Control Agent is conditionally configured; all interactive/tool reasoning is gated by MiniAgentClient"
       ]
     },
     "faiss_memory_path_validation": {

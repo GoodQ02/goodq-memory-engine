@@ -268,3 +268,6 @@ scripts/install/go_bin/
 
 # ===== PUBLIC ONBOARDING DEMO FIXTURE =====
 !samples/onboarding_fixture.mp4
+
+# ===== AGENT CHECKPOINTS =====
+.goodq-mini-agent/

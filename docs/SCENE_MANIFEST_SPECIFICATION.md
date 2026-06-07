@@ -264,14 +264,13 @@ The `audio` object contains scene audio outputs, backend attribution, diarizatio
 
 These fields are authoritative:
 
-- `audio_backend_selected`
-- `audio_backend_effective`
-- `audio_backend_downgraded`
+- `audio_backend_selected`: Requested backend policy (e.g., `wsl`, `native`).
+- `audio_backend_effective`: Backend that actually completed the scene. On Windows, this may map to `wsl` or fall back to `windows`. On Linux and macOS hosts, this maps to `native`.
+- `audio_backend_downgraded`: Whether fallback occurred during the scene.
 
-Interpretation:
-- `selected`: requested backend policy
-- `effective`: backend that actually completed the scene
-- `downgraded`: whether fallback occurred during the scene
+Under POSIX hosts (Linux/macOS), the audio pipeline runs natively on the host without WSL or container redirection:
+- **macOS (Apple Silicon)**: Utilizes `mps` (Metal Performance Shaders) for Whisper transcription acceleration, and `cpu` for speaker diarization to ensure floating-point precision correctness.
+- **Linux**: Utilizes `cuda` if an NVIDIA GPU is present, otherwise falls back to `cpu`.
 
 ### Speaker Transcript and Stitching Fields
 

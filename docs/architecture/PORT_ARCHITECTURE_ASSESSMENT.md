@@ -1,10 +1,14 @@
 <!-- DOC_BADGE: HISTORICAL -->
 <!-- DOC_STATUS: REFERENCE_ONLY -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-07 -->
 
 > Historical note: This assessment captures a dated WSL/vLLM port investigation.
 > It is not a live runtime status source. Verify current ports through active
 > config, health checks, and operator docs before acting on this snapshot.
+>
+> **Operational Note (2026-06-07)**: Stage 2 (polymorphic native POSIX audio execution)
+> and Stage 4 (Go launcher conditional compilation splits) have been fully implemented
+> and verified natively on Linux and macOS.
 
 # Port Architecture Assessment - WSL/vLLM Integration Issues
 

@@ -59,3 +59,27 @@ def test_safe_upload_name_unsupported_extension():
         ingest_module.safe_upload_name("test.exe")
     assert exc.value.status_code == 400
     assert "Unsupported ingest file type" in exc.value.detail
+
+def test_get_allowed_import_roots(tmp_path):
+    runtime_paths = {
+        "import_inbox": tmp_path / "inbox",
+        "processing": tmp_path / "processing",
+    }
+    roots = ingest_module.get_allowed_import_roots(runtime_paths)
+    # Roots should contain inbox, inbox's parent (tmp_path), processing, processing's parent
+    assert tmp_path.resolve() in roots
+    assert (tmp_path / "inbox").resolve() in roots
+
+def test_require_allowed_source_valid(tmp_path):
+    allowed = [tmp_path]
+    target = tmp_path / "subdir" / "file.mp4"
+    res = ingest_module.require_allowed_source(target, allowed)
+    assert res == target.resolve()
+
+def test_require_allowed_source_invalid(tmp_path):
+    allowed = [tmp_path / "inbox"]
+    target = tmp_path / "outside.mp4"
+    with pytest.raises(HTTPException) as exc:
+        ingest_module.require_allowed_source(target, allowed)
+    assert exc.value.status_code == 403
+    assert "Source path is outside allowed import roots" in exc.value.detail

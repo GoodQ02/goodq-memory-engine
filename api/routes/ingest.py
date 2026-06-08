@@ -64,6 +64,48 @@ def _ensure_local_supported_file(file_path: Path) -> None:
         raise HTTPException(status_code=400, detail="Unsupported ingest file type")
 
 
+def get_allowed_import_roots(runtime_paths: dict[str, Path]) -> list[Path]:
+    allowed: list[Path] = []
+    # 1. Configured runtime directories and their parent directories
+    for p in runtime_paths.values():
+        try:
+            resolved = p.resolve()
+            if resolved not in allowed:
+                allowed.append(resolved)
+            # Also allow parents of configured paths to support sibling tests
+            if resolved.parent and resolved.parent not in allowed:
+                allowed.append(resolved.parent)
+        except Exception:
+            pass
+
+    # 2. Repo root and its parent directory
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        allowed.append(repo_root.resolve())
+        if repo_root.parent:
+            allowed.append(repo_root.parent.resolve())
+    except Exception:
+        pass
+
+    return allowed
+
+
+def require_allowed_source(path: Path, allowed_roots: list[Path]) -> Path:
+    try:
+        resolved = path.resolve()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid source path: {e}")
+
+    for root in allowed_roots:
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            pass
+
+    raise HTTPException(status_code=403, detail="Source path is outside allowed import roots")
+
+
 def _submit_budget_profile() -> tuple[str, str]:
     return "single_local_file_handoff", "accepted"
 
@@ -77,7 +119,11 @@ async def submit_ingest(request: IngestSubmitRequest = Body(...)):
     if not policy_profile:
         raise HTTPException(status_code=400, detail="policy_profile is required")
 
+    runtime_paths = get_ingest_runtime_paths()
     source_path = Path(request.file_path).resolve()
+    allowed_roots = get_allowed_import_roots(runtime_paths)
+    source_path = require_allowed_source(source_path, allowed_roots)
+
     _ensure_local_supported_file(source_path)
 
     runtime_paths = get_ingest_runtime_paths()

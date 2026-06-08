@@ -6016,6 +6016,12 @@ def run(
     if not isinstance(chunk_overlap, (int, float)):
         chunk_overlap = getattr(chunk_overlap, 'default', 10.0)
 
+    # Resolve scene_start_index and scene_end_index if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
+    if scene_start_index is not None and not isinstance(scene_start_index, int):
+        scene_start_index = getattr(scene_start_index, 'default', None)
+    if scene_end_index is not None and not isinstance(scene_end_index, int):
+        scene_end_index = getattr(scene_end_index, 'default', None)
+
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size

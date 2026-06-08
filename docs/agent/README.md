@@ -13,7 +13,9 @@ basement-era handoff logs.
 1. `docs/agent/CURRENT_STATE.md` - human-readable current operating state.
 2. `docs/agent/current_state.json` - machine-readable mirror of the same state.
 3. `AGENTS.md` - durable operating protocol and engineering constraints.
-4. The canonical contract named by the current task.
+4. `gemini.md` - desktop agent & workstation environment integration guide.
+5. `PLAN.md` - coding agent execution plan (ExecPlan) guidelines.
+6. The canonical contract named by the current task.
 
 ## What Lives Here
 

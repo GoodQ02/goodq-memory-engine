@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import patch, MagicMock
 
 from steps.audio_transcribe.step import _transcribe_chunk_fw
 
@@ -59,3 +60,78 @@ def test_transcribe_chunk_fw_matches_installed_faster_whisper_contract():
     assert len(result["segments"][0]["words"]) == 2
     assert result["segments"][0]["words"][0]["start"] == 12.0
     assert result["segments"][0]["words"][1]["end"] == 13.0
+
+
+@patch("steps.audio_transcribe.step._detect_transcription_device")
+@patch("steps.audio_transcribe.step._audio_duration")
+@patch("steps.audio_transcribe.step._build_chunks")
+@patch("steps.audio_transcribe.step._load_fw_model")
+@patch("lib.model_lifecycle.ModelLifecycleManager.load")
+def test_audio_transcribe_lifecycle_guard(
+    mock_load_lifecycle,
+    mock_load_fw,
+    mock_build_chunks,
+    mock_duration,
+    mock_device
+):
+    from unittest.mock import patch, MagicMock
+    from steps.audio_transcribe.step import audio_transcribe
+    
+    # Setup mocks
+    mock_device.return_value = ("cpu", "probe")
+    mock_duration.return_value = 5.0
+    mock_build_chunks.return_value = [{"start": 0.0, "end": 5.0, "speaker": None}]
+    
+    mock_fw_model = MagicMock()
+    mock_load_fw.return_value = mock_fw_model
+    
+    # Mock context manager
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__.return_value = mock_fw_model
+    mock_load_lifecycle.return_value = mock_ctx
+    
+    cfg = {
+        "audio": {
+            "transcribe": {
+                "model": "medium",
+                "chunk_seconds": 10.0,
+                "use_wsl2": False
+            }
+        },
+        "config": {
+            "tools": {
+                "whisper_cli": None
+            }
+        },
+        "gpu_budget": {
+            "total_vram_gb": 16.0
+        },
+        "huggingface_models": {
+            "faster_whisper_medium": {
+                "vram_estimate_gb": 1.5,
+                "engines": {"CTranslate2": "yes"}
+            }
+        }
+    }
+    
+    # We patch _transcribe_chunk_fw to avoid real transcription runs
+    with patch("steps.audio_transcribe.step._transcribe_chunk_fw") as mock_transcribe, \
+         patch("steps.audio_transcribe.step._slice_to_wav") as mock_slice:
+        mock_slice.return_value = "chunk_temp.wav"
+        mock_transcribe.return_value = {
+            "transcript": "mock transcript",
+            "segments": [{"start": 0.0, "end": 5.0, "text": "mock transcript"}]
+        }
+        
+        # Run audio_transcribe with the path to this test file itself (guaranteed to exist)
+        res = audio_transcribe({"source_path": __file__}, cfg)
+        
+    # Verify ModelLifecycleManager.load was called for faster_whisper_medium
+    mock_load_lifecycle.assert_called_once()
+    args, kwargs = mock_load_lifecycle.call_args
+    assert args[0] == "faster_whisper_medium"
+    assert kwargs.get("target_engine") == "CTranslate2"
+    
+    # Verify context manager entered and exited
+    mock_ctx.__enter__.assert_called_once()
+    mock_ctx.__exit__.assert_called_once()

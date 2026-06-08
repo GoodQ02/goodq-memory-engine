@@ -571,6 +571,25 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     Tracks performance metrics for continuous optimization.
     
     Tries WSL2 GPU acceleration first (2-5x faster), falls back to Windows if unavailable.
+    Wraps the underlying implementation in ModelLifecycleManager to guarantee clean VRAM unloading.
+    """
+    model_ctx_holder = [None]
+    try:
+        return _audio_transcribe_impl(item, cfg, model_ctx_holder)
+    finally:
+        if model_ctx_holder[0]:
+            try:
+                model_ctx_holder[0].__exit__(None, None, None)
+            except Exception:
+                pass
+
+
+def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_holder: list) -> Dict[str, Any]:
+    """
+    Transcribe audio using Whisper with GPU optimization.
+    Tracks performance metrics for continuous optimization.
+    
+    Tries WSL2 GPU acceleration first (2-5x faster), falls back to Windows if unavailable.
     """
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
@@ -740,11 +759,40 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or models_root)
     os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or models_root)
     
-    # Load model with duration hint for optimal configuration
-    fw_model = _load_fw_model(model_id, device, compute_type, duration_minutes)
-
-    if not (whisper_cli and whisper_model_path and os.path.isfile(str(whisper_cli)) and os.path.isfile(str(whisper_model_path))):
+    use_fw = True
+    if whisper_cli and whisper_model_path and os.path.isfile(str(whisper_cli)) and os.path.isfile(str(whisper_model_path)):
+        use_fw = False
+    else:
         whisper_cli = None
+
+    fw_model = None
+    if use_fw:
+        from lib.model_lifecycle import ModelLifecycleManager
+        manager = ModelLifecycleManager(cfg)
+        
+        # Resolve the model name for the registry (e.g. mapping "medium" to "faster_whisper_medium")
+        registry_key = f"faster_whisper_{model_id}".replace("-", "_")
+        if registry_key not in manager.model_registry:
+            found_key = None
+            for k in manager.model_registry.keys():
+                if model_id.replace("-", "_") in k or k in model_id.replace("-", "_"):
+                    found_key = k
+                    break
+            registry_key = found_key or registry_key
+
+        def load_fn():
+            return _load_fw_model(model_id, device, compute_type, duration_minutes)
+
+        def unload_fn():
+            _FW_CACHE.clear()
+
+        try:
+            model_ctx = manager.load(registry_key, load_fn, unload_fn, target_engine="CTranslate2")
+            model_ctx_holder[0] = model_ctx
+            fw_model = model_ctx.__enter__()
+        except Exception as e:
+            logger.error(f"[TRANSCRIBE] Lifecycle load failed: {e}")
+            fw_model = None
 
     # No transcription backend available: preserve flow with explicit deterministic status.
     if fw_model is None and whisper_cli is None:

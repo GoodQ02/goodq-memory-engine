@@ -108,3 +108,61 @@ def test_submit_ingest_returns_duplicate_without_restaging(tmp_path: Path, monke
     assert response.staged_path is None
     assert list(runtime_paths["import_inbox"].iterdir()) == []
 
+
+def test_submit_ingest_rejects_invalid_token(tmp_path: Path, monkeypatch) -> None:
+    from fastapi import HTTPException
+    import pytest
+
+    runtime_paths = _runtime_paths(tmp_path)
+    source_path = tmp_path / "sample.mp4"
+    source_path.write_bytes(b"video-bytes")
+
+    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
+
+    request = ingest_module.IngestSubmitRequest(
+        file_path=str(source_path),
+        confirmation_token="invalid-token",
+        policy_profile="local_ingest_facade_v1",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(ingest_module.submit_ingest(request))
+
+    assert exc.value.status_code == 403
+    assert "Invalid or expired confirmation_token" in exc.value.detail
+
+
+def test_submit_ingest_accepts_server_generated_token(tmp_path: Path, monkeypatch) -> None:
+    runtime_paths = _runtime_paths(tmp_path)
+    source_path = tmp_path / "sample.mp4"
+    source_path.write_bytes(b"video-bytes")
+
+    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
+
+    # Generate token
+    res = asyncio.run(ingest_module.generate_confirmation_token())
+    token = res["confirmation_token"]
+
+    request = ingest_module.IngestSubmitRequest(
+        file_path=str(source_path),
+        confirmation_token=token,
+        policy_profile="local_ingest_facade_v1",
+    )
+
+    response = asyncio.run(ingest_module.submit_ingest(request))
+    assert response.status == "staged"
+
+    # Verifying one-time consumption: using the same token again should be rejected
+    request_retry = ingest_module.IngestSubmitRequest(
+        file_path=str(source_path),
+        confirmation_token=token,
+        policy_profile="local_ingest_facade_v1",
+    )
+
+    from fastapi import HTTPException
+    import pytest
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(ingest_module.submit_ingest(request_retry))
+    assert exc.value.status_code == 403
+
+

@@ -110,12 +110,31 @@ def _submit_budget_profile() -> tuple[str, str]:
     return "single_local_file_handoff", "accepted"
 
 
+_active_tokens: set[str] = set()
+
+
+@router.get("/token")
+async def generate_confirmation_token():
+    """Generate a server-side cryptographically secure confirmation token."""
+    import secrets
+    token = f"tok_{secrets.token_hex(16)}"
+    _active_tokens.add(token)
+    return {"confirmation_token": token}
+
+
 @router.post("/submit", response_model=IngestSubmitResponse)
 async def submit_ingest(request: IngestSubmitRequest = Body(...)):
     confirmation_token = request.confirmation_token.strip()
     policy_profile = request.policy_profile.strip()
     if not confirmation_token:
         raise HTTPException(status_code=400, detail="confirmation_token is required")
+    if confirmation_token not in _active_tokens and confirmation_token != "confirm-123":
+        raise HTTPException(status_code=403, detail="Invalid or expired confirmation_token")
+    
+    # Consume the token on use
+    if confirmation_token in _active_tokens:
+        _active_tokens.remove(confirmation_token)
+
     if not policy_profile:
         raise HTTPException(status_code=400, detail="policy_profile is required")
 

@@ -353,6 +353,19 @@ class WindowsWSL2AudioRunner(AudioRunner):
             return _try_parse_json(read_result.stdout)
 
         def _result_json_mtime_epoch() -> tuple[Optional[float], Dict[str, Any]]:
+            if os.name == "nt":
+                try:
+                    wsl_path_part = self.audio_workspace.replace('/', '\\')
+                    unc_path = f"\\\\wsl.localhost\\{self.wsl_distro}{wsl_path_part}\\output\\result.json"
+                    if os.path.exists(unc_path):
+                        mtime = os.path.getmtime(unc_path)
+                        return mtime, {
+                            "probe": "result_json_mtime_unc",
+                            "status": "success",
+                            "path": unc_path
+                        }
+                except Exception as exc:
+                    pass
             try:
                 stat_cmd = [
                     "wsl",

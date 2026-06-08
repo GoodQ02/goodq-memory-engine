@@ -13,6 +13,11 @@ Use canonical runtime contracts and released evidence surfaces as source of
 truth for live claims. Do not treat this document as a live witness monitor.
 
 ## Current Restart Checkpoint
+- Pause checkpoint, 2026-06-08:
+  - status: PowerShell environment recovery, registry path normalization, and agent instructions alignment completed.
+  - Shell & PATH recovery: Corrected dynamic path restoration bug in the PowerShell profile (`Add-GoodCubePersistedPathEntries`), resolved nested environment variables, and broadcasted `WM_SETTINGCHANGE` to normalize global system paths without restarting terminal sessions.
+  - MCP & SDK Integration: Unlocked `sequentialthinking` reasoning tool and registered official reference `everything` server in `mcp_config.json`; whitelisted `read_url(*)` global permission grant to support web search results parsing.
+  - Agent instructions alignment: Added `gemini.md` and `PLAN.md` to the authoritative documentation list in `AGENTS.md` and indices in both `goodq4all` and `goodq4all_public` repositories to prevent documentation drift; corrected hardcoded ProgramData path to `%PROGRAMDATA%` in `current_state.json`.
 - Pause checkpoint, 2026-06-07:
   - status: Native macOS and Linux cross-platform parity enabled.
   - Control scripts: Added `dev_on.sh` and `dev_off.sh` in the workspace root to manage Qdrant, API Server, and Ingestion Watchdog background processes with PID tracking and port 30000 safety guards.

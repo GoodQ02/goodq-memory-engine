@@ -18,7 +18,7 @@
       "launcher": "LAUNCH_GOODQ.exe",
       "sandboxed": true,
       "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],
-      "logs_dir": "C:\\ProgramData\\GoodQ4All\\logs",
+      "logs_dir": "%PROGRAMDATA%\\GoodQ4All\\logs",
       "gpu_fallback_cpu_safe": true,
       "offline_api_docs": true
     },

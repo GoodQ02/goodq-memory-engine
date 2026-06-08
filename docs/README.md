@@ -18,6 +18,10 @@ Machine memory should earn every claim it makes.
   [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
 - Current operator baseline:
   [`docs/goodq4all_agent_status.md`](goodq4all_agent_status.md)
+- Agent environment integration:
+  [`gemini.md`](../gemini.md)
+- Coding agent execution plan guidelines:
+  [`PLAN.md`](../PLAN.md)
 - Current system baseline:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Current roadmap:

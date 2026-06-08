@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Body, UploadFile, File
 
@@ -137,23 +138,46 @@ async def get_ingest_status(request_id: str):
     return IngestStatusResponse(**resolved)
 
 
+def safe_upload_name(raw: str) -> str:
+    if not raw:
+        raise HTTPException(status_code=400, detail="Filename is missing")
+
+    # Reject both POSIX and Windows path components.
+    if raw != PurePath(raw).name or raw != PureWindowsPath(raw).name:
+        raise HTTPException(status_code=400, detail="Filename must not contain path components")
+
+    if "/" in raw or "\\" in raw or "\x00" in raw:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    p = Path(raw)
+
+    if p.name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    if not is_supported_ingest_path(p):
+        raise HTTPException(status_code=400, detail="Unsupported ingest file type")
+
+    return f"{uuid4().hex}{p.suffix.lower()}"
+
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Directly upload a media file and save it to the import inbox folder."""
-    filename = file.filename
-    if not filename:
-        raise HTTPException(status_code=400, detail="Filename is missing")
-    
-    if not is_supported_ingest_path(Path(filename)):
-        raise HTTPException(status_code=400, detail="Unsupported ingest file type")
+    filename = file.filename or ""
+    safe_name = safe_upload_name(filename)
 
     runtime_paths = get_ingest_runtime_paths()
-    import_inbox = runtime_paths["import_inbox"]
+    import_inbox = runtime_paths["import_inbox"].resolve()
     import_inbox.mkdir(parents=True, exist_ok=True)
     
-    staged_path = import_inbox / filename
+    staged_path = (import_inbox / safe_name).resolve()
     try:
-        with staged_path.open("wb") as buffer:
+        staged_path.relative_to(import_inbox)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid upload path")
+
+    try:
+        with staged_path.open("xb") as buffer:
             shutil.copyfileobj(file.file, buffer)
     except Exception as exc:
         logger.error("Failed to upload file=%s error=%s", filename, exc)

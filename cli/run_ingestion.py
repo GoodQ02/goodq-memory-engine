@@ -6003,6 +6003,8 @@ def run(
     chunk_size: float = typer.Option(300.0, '--chunk-size', help='Progressive ingestion window chunk size in seconds'),
     chunk_overlap: float = typer.Option(10.0, '--chunk-overlap', help='Progressive ingestion window overlap in seconds'),
     enable_control_agent: bool = typer.Option(False, '--enable-control-agent', help='Enable LLM-based Control Agent for diagnostics and recovery'),
+    scene_start_index: Optional[int] = typer.Option(None, "--scene-start-index", help="Start processing at this scene index (inclusive)"),
+    scene_end_index: Optional[int] = typer.Option(None, "--scene-end-index", help="Stop processing at this scene index (inclusive)"),
 ) -> None:
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER
     VERBOSE = verbose
@@ -6382,6 +6384,33 @@ def run(
                 manifest_hasher.update(f"{start:.6f}|{end:.6f}|".encode('utf-8'))
             detection_meta['scene_manifest_hash'] = manifest_hasher.hexdigest()
             detection['meta'] = detection_meta
+
+        # Apply scene start/end index filtering
+        if scene_start_index is not None or scene_end_index is not None:
+            start_idx = scene_start_index if scene_start_index is not None else 0
+            end_idx = scene_end_index if scene_end_index is not None else 10**12
+            
+            def get_scene_index_value(s: Dict[str, Any]) -> int:
+                val = s.get("index")
+                if val is None:
+                    return -1
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    return -1
+                    
+            scenes = [
+                scene for scene in scenes
+                if start_idx <= get_scene_index_value(scene) <= end_idx
+            ]
+            
+            # Recalculate tracker steps if tracker is present
+            if tracker is not None:
+                total_progress_steps = 1 + len(scenes) + (2 if phase6_enabled and len(scenes) > 0 else 0)
+                tracker.set_total_steps(total_progress_steps)
+                
+            if VERBOSE:
+                typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
 
         # Resolve shadow pipeline overlay settings before the scene loop
         segmentation_shadow_result = _run_segmentation_shadow_pipeline(

@@ -27,6 +27,16 @@ class _Result:
 class WSL2BridgeIntegrityTests(unittest.TestCase):
     TEST_UUID = "11111111-1111-1111-1111-111111111111"
 
+    def setUp(self) -> None:
+        self.exists_patcher = patch("wsl2_audio_bridge.os.path.exists", return_value=False)
+        self.getmtime_patcher = patch("wsl2_audio_bridge.os.path.getmtime", return_value=0.0)
+        self.mock_exists = self.exists_patcher.start()
+        self.mock_getmtime = self.getmtime_patcher.start()
+
+    def tearDown(self) -> None:
+        self.exists_patcher.stop()
+        self.getmtime_patcher.stop()
+
     def _make_bridge(self) -> WSL2AudioBridge:
         bridge = WSL2AudioBridge()
         # Mock on the runner since WSL2AudioBridge delegates to runner
@@ -317,6 +327,100 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(details.get("processor_transcription_status"), "success")
         self.assertEqual(details.get("processor_diarization_status"), "error")
         self.assertIn("Traceback", details.get("processor_traceback_tail", ""))
+
+    def test_result_json_freshness_via_direct_windows_path(self) -> None:
+        scene_file = self._make_scene_file("scene_0004.wav")
+        bridge = self._make_bridge()
+        bridge.runner.audio_workspace = "/mnt/l/goodq_audio"
+        
+        expected_win_path = "L:\\goodq_audio\\output\\result.json"
+        
+        def fake_exists(path):
+            if path == expected_win_path:
+                return True
+            return False
+            
+        self.mock_exists.side_effect = fake_exists
+        self.mock_getmtime.return_value = 10.0
+
+        def fake_run(cmd, capture_output=True, text=True, timeout=None):
+            cmd_str = " ".join(str(part) for part in cmd)
+            if "process_audio.py" in cmd_str:
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"success","audio_file":"/mnt/l/goodq_audio/scene_0004.wav",'
+                        f'"transcription":"hello","request_uuid":"{self.TEST_UUID}"}}'
+                    ),
+                )
+            return _Result(returncode=0, stdout="")
+
+        with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
+            "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": True,
+                "detail": "workspace and Python runtime are ready",
+            },
+        ):
+            result = bridge.process_audio(str(scene_file), timeout=5)
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertEqual(result.get("bridge_error_reason"), "stale_or_mismatched_result")
+        details = result.get("bridge_error_details", {})
+        freshness_probe = details.get("freshness_probe", {})
+        self.assertEqual(freshness_probe.get("probe"), "result_json_mtime_unc")
+        self.assertEqual(freshness_probe.get("path"), expected_win_path)
+
+    def test_result_json_freshness_via_unc_path(self) -> None:
+        scene_file = self._make_scene_file("scene_0004.wav")
+        bridge = self._make_bridge()
+        bridge.runner.audio_workspace = "/home/testuser/goodq_audio"
+        
+        expected_unc_path = "\\\\wsl.localhost\\Ubuntu-22.04\\home\\testuser\\goodq_audio\\output\\result.json"
+        
+        def fake_exists(path):
+            if path == expected_unc_path:
+                return True
+            return False
+            
+        self.mock_exists.side_effect = fake_exists
+        self.mock_getmtime.return_value = 10.0
+
+        def fake_run(cmd, capture_output=True, text=True, timeout=None):
+            cmd_str = " ".join(str(part) for part in cmd)
+            if "process_audio.py" in cmd_str:
+                return _Result(
+                    returncode=0,
+                    stdout=(
+                        f'{{"status":"success","audio_file":"/home/testuser/goodq_audio/scene_0004.wav",'
+                        f'"transcription":"hello","request_uuid":"{self.TEST_UUID}"}}'
+                    ),
+                )
+            return _Result(returncode=0, stdout="")
+
+        with patch("wsl2_audio_bridge.uuid.uuid4", return_value=uuid.UUID(self.TEST_UUID)), patch(
+            "wsl2_audio_bridge.subprocess.run", side_effect=fake_run
+        ), patch(
+            "wsl2_audio_bridge.probe_wsl_audio_runtime",
+            return_value={
+                "workspace_ready": True,
+                "runtime_ready": True,
+                "abi_ready": True,
+                "detail": "workspace and Python runtime are ready",
+            },
+        ):
+            result = bridge.process_audio(str(scene_file), timeout=5)
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertEqual(result.get("bridge_error_reason"), "stale_or_mismatched_result")
+        details = result.get("bridge_error_details", {})
+        freshness_probe = details.get("freshness_probe", {})
+        self.assertEqual(freshness_probe.get("probe"), "result_json_mtime_unc")
+        self.assertEqual(freshness_probe.get("path"), expected_unc_path)
 
 
 if __name__ == "__main__":

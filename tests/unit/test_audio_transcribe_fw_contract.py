@@ -62,6 +62,7 @@ def test_transcribe_chunk_fw_matches_installed_faster_whisper_contract():
     assert result["segments"][0]["words"][1]["end"] == 13.0
 
 
+@patch("steps.audio_transcribe.step.require_wsl_audio", return_value=False)
 @patch("steps.audio_transcribe.step._detect_transcription_device")
 @patch("steps.audio_transcribe.step._audio_duration")
 @patch("steps.audio_transcribe.step._build_chunks")
@@ -72,7 +73,8 @@ def test_audio_transcribe_lifecycle_guard(
     mock_load_fw,
     mock_build_chunks,
     mock_duration,
-    mock_device
+    mock_device,
+    mock_require_wsl_audio
 ):
     from unittest.mock import patch, MagicMock
     from steps.audio_transcribe.step import audio_transcribe

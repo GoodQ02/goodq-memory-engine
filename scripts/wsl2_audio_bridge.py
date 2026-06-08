@@ -308,11 +308,8 @@ class WindowsWSL2AudioRunner(AudioRunner):
         wsl_output = f"{self.audio_workspace}/output"
         request_uuid = str(uuid.uuid4())
 
-        cmd = (
-            f"source {self.audio_workspace}/setup_cuda_env.sh && "
-            f"GOODQ_BRIDGE_REQUEST_UUID='{request_uuid}' "
-            f"python3 {self.audio_workspace}/process_audio.py '{wsl_input}' '{wsl_output}'"
-        )
+        setup_script = f"{self.audio_workspace}/setup_cuda_env.sh"
+        processor = f"{self.audio_workspace}/process_audio.py"
         
         print(f"Processing: {audio_path.name}")
         process_started_epoch = time.time()
@@ -342,7 +339,31 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 return None
             return parsed if isinstance(parsed, dict) else None
 
+        def _get_windows_result_json_path() -> Optional[str]:
+            if os.name != "nt":
+                return None
+            try:
+                if self.audio_workspace.startswith("/mnt/"):
+                    win_workspace = self.windows_path(self.audio_workspace)
+                    return os.path.join(win_workspace, "output", "result.json")
+                
+                wsl_path_part = self.audio_workspace.replace('/', '\\')
+                if not wsl_path_part.startswith("\\"):
+                    wsl_path_part = "\\" + wsl_path_part
+                unc_path = f"\\\\wsl.localhost\\{self.wsl_distro}{wsl_path_part}\\output\\result.json"
+                return unc_path
+            except Exception:
+                return None
+
         def _read_result_json_debug() -> dict | None:
+            win_path = _get_windows_result_json_path()
+            if win_path:
+                try:
+                    if os.path.exists(win_path):
+                        with open(win_path, "r", encoding="utf-8", errors="ignore") as f:
+                            return _try_parse_json(f.read())
+                except Exception:
+                    pass
             try:
                 read_cmd = ["wsl", "-d", self.wsl_distro, "--", "cat", f"{wsl_output}/result.json"]
                 read_result = subprocess.run(read_cmd, capture_output=True, text=True, timeout=10)
@@ -353,16 +374,15 @@ class WindowsWSL2AudioRunner(AudioRunner):
             return _try_parse_json(read_result.stdout)
 
         def _result_json_mtime_epoch() -> tuple[Optional[float], Dict[str, Any]]:
-            if os.name == "nt":
+            win_path = _get_windows_result_json_path()
+            if win_path:
                 try:
-                    wsl_path_part = self.audio_workspace.replace('/', '\\')
-                    unc_path = f"\\\\wsl.localhost\\{self.wsl_distro}{wsl_path_part}\\output\\result.json"
-                    if os.path.exists(unc_path):
-                        mtime = os.path.getmtime(unc_path)
+                    if os.path.exists(win_path):
+                        mtime = os.path.getmtime(win_path)
                         return mtime, {
                             "probe": "result_json_mtime_unc",
                             "status": "success",
-                            "path": unc_path
+                            "path": win_path
                         }
                 except Exception as exc:
                     pass
@@ -372,9 +392,10 @@ class WindowsWSL2AudioRunner(AudioRunner):
                     "-d",
                     self.wsl_distro,
                     "--",
-                    "bash",
+                    "stat",
                     "-c",
-                    f"stat -c %Y '{wsl_output}/result.json'",
+                    "%Y",
+                    f"{wsl_output}/result.json",
                 ]
                 stat_result = subprocess.run(stat_cmd, capture_output=True, text=True, timeout=10)
             except Exception as exc:
@@ -473,8 +494,28 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 ).strip()
                 if diarization_warning and diarization_warning not in env_warnings:
                     env_warnings.append(diarization_warning)
+            bridge_script = """
+set -euo pipefail
+source "$1"
+export GOODQ_BRIDGE_REQUEST_UUID="$2"
+exec python3 "$3" "$4" "$5"
+"""
             result = subprocess.run(
-                ["wsl", "-d", self.wsl_distro, "--", "bash", "-c", cmd],
+                [
+                    "wsl",
+                    "-d",
+                    self.wsl_distro,
+                    "--",
+                    "bash",
+                    "-lc",
+                    bridge_script,
+                    "goodq-wsl-bridge",
+                    setup_script,
+                    request_uuid,
+                    processor,
+                    wsl_input,
+                    wsl_output,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=timeout

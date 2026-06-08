@@ -53,7 +53,9 @@ async def get_scene_frame(
             raise HTTPException(status_code=404, detail="Frame not found")
         
         # Security: Ensure path doesn't escape data directory
-        if not str(frame_path).startswith(str(loader.data_root)):
+        try:
+            frame_path.resolve().relative_to(loader.data_root.resolve())
+        except ValueError:
             raise HTTPException(status_code=403, detail="Access denied")
         
         return FileResponse(
@@ -92,7 +94,9 @@ async def get_audio_chunk(
             raise HTTPException(status_code=404, detail="Audio chunk not found")
         
         # Security: Ensure path doesn't escape data directory
-        if not str(chunk_path).startswith(str(loader.data_root)):
+        try:
+            chunk_path.resolve().relative_to(loader.data_root.resolve())
+        except ValueError:
             raise HTTPException(status_code=403, detail="Access denied")
         
         return FileResponse(
@@ -137,7 +141,9 @@ async def get_frame_by_name(
             raise HTTPException(status_code=404, detail="Frame not found")
         
         # Security: Ensure path doesn't escape data directory and filename is safe
-        if not str(frame_path).startswith(str(loader.data_root)):
+        try:
+            frame_path.resolve().relative_to(loader.data_root.resolve())
+        except ValueError:
             raise HTTPException(status_code=403, detail="Access denied")
         
         if ".." in frame_name or "/" in frame_name or "\\" in frame_name:

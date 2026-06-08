@@ -24,6 +24,27 @@ def setup_test_databases(monkeypatch, tmp_path):
     
     db_path = epoch_dir / "memory.db"
     kg_path = epoch_dir / "knowledge_graph.db"
+
+    # Force paths to point to our isolated tmp_path, ignoring config.local.yaml overrides
+    import steps.common.config_loader
+    import retrieval.temporal_reasoning
+    import sys
+    orig_load = steps.common.config_loader.load_configs
+    def mocked_load(overrides=None):
+        cfg = orig_load(overrides)
+        if "paths" in cfg:
+            cfg["paths"]["db_path"] = str(db_path).replace("\\", "/")
+            cfg["paths"]["knowledge_graph_db"] = str(kg_path).replace("\\", "/")
+            cfg["paths"]["db_dir"] = str(epoch_dir).replace("\\", "/")
+        return cfg
+    monkeypatch.setattr(steps.common.config_loader, "load_configs", mocked_load)
+    monkeypatch.setattr(retrieval.temporal_reasoning, "load_configs", mocked_load)
+    monkeypatch.setattr(sys.modules[__name__], "load_configs", mocked_load)
+    try:
+        import api.routes.search
+        monkeypatch.setattr(api.routes.search, "load_configs", mocked_load)
+    except (ImportError, AttributeError):
+        pass
     
     # 1. Populate mock memory.db
     conn = sqlite3.connect(db_path)

@@ -260,6 +260,8 @@ scripts/install/go_compiler/
 scripts/install/nsis_compiler/
 scripts/install/nssm_bin/
 scripts/install/staged/
+scripts/install/staged_cache/
+scripts/install/test_*.zip
 LAUNCH_GOODQ.exe
 GoodQ4All_Setup_1.0.0.exe
 

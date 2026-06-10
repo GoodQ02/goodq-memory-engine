@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0.0",
+  "corrections": [
+    {
+      "id": "corr_001_wsl_freshness_timeout",
+      "date": "2026-06-08",
+      "issue": "WSL transcript result verification freshness checks (using stat command) timed out due to slow network file sharing access.",
+      "target_scenes": ["scene_0021", "scene_0022"],
+      "source_material": {
+        "file_name": "broad_sample.mp4",
+        "description": "Standard multi-scene video sequence with speaker overlap and visual objects."
+      },
+      "failed_attempts": [
+        "Attempted to increase global timeout of ZenML orchestration (increased boot latency without fixing underlying filesystem lag)."
+      ],
+      "solution": "Refactored stat/freshness verification in client/WSL bridge calls to directly check file presence and comparison via native PowerShell and Go bindings rather than executing slow subprocess stat commands.",
+      "notable_results": "Live witness rerun of scenes 18-25 verified 100% completion of WSL transcription with zero visual-only fallbacks.",
+      "variables_changed": [
+        {
+          "name": "wsl_file_access_method",
+          "before": "subprocess wsl stat",
+          "after": "native UNC test-path and file comparison"
+        }
+      ]
+    },
+    {
+      "id": "corr_002_headless_web_client_hangs",
+      "date": "2026-06-08",
+      "issue": "Headless web client hangs in background shells because Invoke-WebRequest initializes the Internet Explorer engine, blocking on first-run configuration prompts.",
+      "target_scenes": [],
+      "source_material": {
+        "file_name": "stage_dependencies.ps1",
+        "description": "Staging downloader script for offline resources."
+      },
+      "failed_attempts": [
+        "Tried using raw Invoke-WebRequest without additional parameters."
+      ],
+      "solution": "Used .NET System.Net.WebClient for headless downloading, bypassing the IE rendering engine entirely.",
+      "notable_results": "Headless WebClient downloads successfully in headless/CI runner environments.",
+      "variables_changed": [
+        {
+          "name": "web_request_engine",
+          "before": "Invoke-WebRequest",
+          "after": "System.Net.WebClient"
+        }
+      ]
+    },
+    {
+      "id": "corr_003_sourceforge_nssm_ua_blocks",
+      "date": "2026-06-08",
+      "issue": "SourceForge and NSSM.cc block standard automation/python User-Agents with 503 or redirect loops.",
+      "target_scenes": [],
+      "source_material": {
+        "file_name": "stage_dependencies.ps1",
+        "description": "Staging downloader script for offline resources."
+      },
+      "failed_attempts": [
+        "Used default User-Agent strings which resulted in HTML redirection payload size checks failing."
+      ],
+      "solution": "Implemented a fallback retry mechanism changing User-Agent headers dynamically from 'Wget' to 'Mozilla/5.0' to force direct asset download redirection.",
+      "notable_results": "Headless downloading of nsis and nssm packages succeeds reliably.",
+      "variables_changed": [
+        {
+          "name": "user_agent_header",
+          "before": "Default System/Python User-Agent",
+          "after": "Dynamic fallback from Wget to Mozilla/5.0"
+        }
+      ]
+    },
+    {
+      "id": "corr_004_cmd_parenthesis_parser",
+      "date": "2026-06-08",
+      "issue": "Multi-line PowerShell commands inside CMD/BAT files break if they contain parentheses because the CMD parser mistakenly treats them as batch blocks.",
+      "target_scenes": [],
+      "source_material": {
+        "file_name": "build_installer.bat",
+        "description": "Installer compilation driver script."
+      },
+      "failed_attempts": [
+        "Attempted escaping parentheses with caret (^) in CMD string block."
+      ],
+      "solution": "Extracted the multi-line PowerShell logic out of build_installer.bat and into dedicated, isolated preflight_check.ps1 and generate_manifest.ps1 scripts.",
+      "notable_results": "Zero CMD string evaluation syntax failures.",
+      "variables_changed": [
+        {
+          "name": "inline_command_structure",
+          "before": "PowerShell inline block in batch",
+          "after": "Isolated dedicated .ps1 scripts"
+        }
+      ]
+    },
+    {
+      "id": "corr_005_write_error_termination",
+      "date": "2026-06-08",
+      "issue": "With $ErrorActionPreference = 'Stop', calling Write-Error within a try-catch block throws a terminating exception that is captured by its own catch block, creating self-masking success states.",
+      "target_scenes": [],
+      "source_material": {
+        "file_name": "preflight_check.ps1",
+        "description": "Staged verification script."
+      },
+      "failed_attempts": [
+        "Wrapping Write-Error in try-catch to log it gracefully."
+      ],
+      "solution": "Set state tracking variables inside try-catch, and throw or call a dedicated Fail-Build function outside the block to ensure exit codes propagate to CMD parent.",
+      "notable_results": "Precise propagation of error codes (e.g. 10, 11, 12, 13) to parent scripts.",
+      "variables_changed": [
+        {
+          "name": "error_raising_mechanism",
+          "before": "Write-Error in try-catch",
+          "after": "State flags + Fail-Build outside block"
+        }
+      ]
+    }
+  ]
+}

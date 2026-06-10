@@ -46,7 +46,7 @@ After implementing a fix or change:
 
 ### 6. Catalog the Correction
 To prevent "wack-a-mole" scenarios and duplicate debugging, all findings must be logged in the project's corrections index file:
-- File location: [corrections.json](file:///l:/GOODCUBE/projects/goodq4all/.agents/index/corrections.json)
+- File location: [corrections.json](../../../.agents/index/corrections.json)
 - Log format requirement:
   ```json
   {

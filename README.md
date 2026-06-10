@@ -24,6 +24,7 @@
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg" alt="Doc Drift Linter" /></a>
   <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml/badge.svg" alt="Dependency Review" /></a>
+  <a href="https://context7.com/goodq02/goodq4all"><img src="https://img.shields.io/badge/Context7-Verified-059669?style=flat" alt="Context7 Verified" /></a>
 </p>
 
 ---

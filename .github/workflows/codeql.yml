@@ -5,12 +5,10 @@ on:
     branches:
       - main
       - dev
-      - public
   pull_request:
     branches:
       - main
       - dev
-      - public
   schedule:
     - cron: "0 9 * * 1"
 

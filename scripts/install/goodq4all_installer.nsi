@@ -1,4 +1,4 @@
-; GoodQ4All Unified Installer Script (NSIS)
+; GoodQ4All Hardened Offline Installer Script (NSIS)
 ; ---------------------------------------
 ; State-Machine driven installer for Windows 11.
 ; Allocates binaries to Program Files and mutable data/storage to ProgramData.
@@ -16,8 +16,8 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v1.0.0 Installer"
-!define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine.\r\n\r\nIt will configure a sandboxed runtime environment (No Conda required) and download selected model weights."
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v1.0.0 Offline Installer"
+!define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\..\LICENSE"
@@ -35,7 +35,19 @@ RequestExecutionLevel admin
 
 ; Component selection variables
 Var AlwaysOnService
+Var GpuEnhancedMode
+Var WslStatus
+Var GpuStatus
 Var COMMONAPPDATA
+Var WslTarPath
+
+Function .onInit
+  SetShellVarContext all
+  StrCpy $AlwaysOnService 0
+  StrCpy $GpuEnhancedMode 0
+  StrCpy $WslStatus "skipped_wsl_unavailable"
+  StrCpy $GpuStatus "skipped"
+FunctionEnd
 
 Section "Base Application (Required)" SecBase
   SectionIn RO
@@ -44,36 +56,35 @@ Section "Base Application (Required)" SecBase
   SetOutPath "$INSTDIR"
 
   ; --- STATE 1: preflight ---
-  DetailPrint "Step 1/10: Running preflight system checks..."
+  DetailPrint "Step 1/12: Running preflight system checks..."
   ; Verify Windows 11 / Windows 10
   ${IfNot} ${AtLeastWin10}
+    IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: GoodQ4All requires Windows 10 or Windows 11."
     Abort
   ${EndIf}
   
   ; --- STATE 2: install runtime ---
-  DetailPrint "Step 2/10: Installing sandboxed Python 3.10 runtime..."
+  DetailPrint "Step 2/12: Installing sandboxed Python 3.10 runtime..."
   SetOutPath "$INSTDIR\runtime"
-  ; (During build_installer.bat, python-3.10-embed-amd64.zip is staged here)
-  File "staged\python-3.10-embed-amd64.zip"
-  ; Expand the zip using a lightweight utility or built-in cmd
-  ; For safety, build_installer.bat pre-extracts it into a folder, or we bundle unzip.exe
   File /r "staged\runtime\*.*"
 
   ; --- STATE 3: verify runtime ---
-  DetailPrint "Step 3/10: Verifying isolated Python runtime..."
+  DetailPrint "Step 3/12: Verifying isolated Python runtime..."
   IfFileExists "$INSTDIR\runtime\python.exe" runtime_ok runtime_fail
 runtime_fail:
+  IfSilent +2
   MessageBox MB_OK|MB_ICONSTOP "Error: Failed to verify embedded Python runtime."
   Abort
 runtime_ok:
   DetailPrint "Isolated runtime verified successfully."
 
   ; --- STATE 4: install app ---
-  DetailPrint "Step 4/10: Copying application binaries and codefiles..."
+  DetailPrint "Step 4/12: Copying application binaries and codefiles..."
   SetOutPath "$INSTDIR"
   File "..\..\LAUNCH_GOODQ.exe"
   File "..\..\goodq_version.py"
+  File "..\..\requirements-baseline-lock.txt"
   
   SetOutPath "$INSTDIR\qdrant"
   File "staged\qdrant\qdrant.exe"
@@ -132,12 +143,33 @@ runtime_ok:
   SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"
   File "staged\qdrant\config\qdrant_config.yaml"
 
-  ; Grant modify permissions on ProgramData folder to standard users (Using SID to support international Windows)
+  ; Grant modify permissions on ProgramData folder to standard users
   DetailPrint "Configuring folder permissions for standard users..."
   nsExec::ExecToLog 'icacls "$COMMONAPPDATA\GoodQ4All" /grant *S-1-5-32-545:(OI)(CI)M /T /C'
 
-  ; --- STATE 5: configure service ---
-  DetailPrint "Step 5/10: Configuring service registrations..."
+  ; --- STATE 5: install VC++ Redistributable ---
+  DetailPrint "Step 5/12: Installing VC++ Runtime prerequisites..."
+  SetOutPath "$INSTDIR\binaries"
+  File "staged\binaries\vc_redist.x64.exe"
+  File "staged\binaries\tesseract_setup.exe"
+  nsExec::ExecToLog '"$INSTDIR\binaries\vc_redist.x64.exe" /q /norestart'
+  Pop $0
+  DetailPrint "VC++ Redistributable setup completed. exit code = $0"
+
+  ; --- STATE 6: copy local wheelhouse & install offline ---
+  DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
+  SetOutPath "$INSTDIR\wheels"
+  File /r "staged\wheels\*.*"
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --no-index --find-links="$INSTDIR\wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Offline Python package installation failed. Code $0"
+    Abort
+  ${EndIf}
+
+  ; --- STATE 7: configure background service if requested ---
+  DetailPrint "Step 7/12: Configuring service registrations..."
   ${If} $AlwaysOnService == 1
     SetOutPath "$INSTDIR\nssm"
     File "staged\nssm\nssm.exe"
@@ -150,48 +182,87 @@ runtime_ok:
     DetailPrint "Personal Mode selected. Qdrant will start on-demand under LAUNCH_GOODQ.exe."
   ${EndIf}
 
-  ; --- STATE 6: download selected model packs ---
-  DetailPrint "Step 6/10: Hydrating sandboxed runtime and downloading model packs..."
-  ; Note: Core Memory Pack is downloaded by default. Other selected components trigger additional flags.
-  DetailPrint "Executing environment setup and downloading Core Memory Pack..."
+  ; --- STATE 8: WSL pre-baked distro import ---
+  DetailPrint "Step 8/12: Configuring WSL2 audio compute environment..."
+  ; Stage wsl distro folder
+  SetOutPath "$INSTDIR\wsl"
+  IfFileExists "staged\wsl\goodq_audio_wsl.tar" 0 wsl_tar_staged_skip
+  File /nonfatal "staged\wsl\goodq_audio_wsl.tar"
+wsl_tar_staged_skip:
+
+  ; Check if wsl tar is present side-by-side or staged
+  StrCpy $WslTarPath "$EXEDIR\goodq_audio_wsl.tar"
+  IfFileExists "$WslTarPath" wsl_tar_found 0
+  StrCpy $WslTarPath "$INSTDIR\wsl\goodq_audio_wsl.tar"
+  IfFileExists "$WslTarPath" wsl_tar_found wsl_tar_missing
+
+wsl_tar_missing:
+  ${If} $GpuEnhancedMode == 1
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Pre-baked WSL2 audio container (goodq_audio_wsl.tar) is required for GPU-Accelerated mode but was not found."
+    Abort
+  ${Else}
+    DetailPrint "WSL2 tar package missing. Skipping WSL setup for baseline mode."
+    StrCpy $WslStatus "skipped_wsl_unavailable"
+    Goto wsl_done
+  ${EndIf}
+
+wsl_tar_found:
+  DetailPrint "Importing pre-baked WSL2 Linux container..."
+  nsExec::ExecToLog 'wsl --import GoodQ_Audio_Distro "$COMMONAPPDATA\GoodQ4All\wsl_runtime" "$WslTarPath"'
+  Pop $0
+  ${If} $0 != 0
+    ${If} $GpuEnhancedMode == 1
+      IfSilent +2
+      MessageBox MB_OK|MB_ICONSTOP "Error: Failed to import WSL2 audio compute container. Code: $0"
+      Abort
+    ${Else}
+      DetailPrint "WSL2 import failed in baseline mode. Proceeding with warning."
+      StrCpy $WslStatus "failed_import"
+      Goto wsl_done
+    ${EndIf}
+  ${Else}
+    DetailPrint "WSL2 audio compute container imported successfully."
+    StrCpy $WslStatus "imported"
+  ${EndIf}
+
+wsl_done:
+
+  ; --- STATE 9: merge and verify model zips ---
+  DetailPrint "Step 9/12: Extracting and registering pre-staged model packs..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONSTOP "Error: Hydration or Core Model Pack download failed. Code $0"
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Model pack extraction or registration failed. Code $0"
     Abort
   ${EndIf}
 
-  ; --- STATE 7: verify assets ---
-  DetailPrint "Step 7/10: Running asset checksum verification..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --verify-only --data-dir "$COMMONAPPDATA\GoodQ4All"'
-  Pop $0
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONSTOP "Error: Asset verification failed. One or more model checksums are invalid."
-    Abort
-  ${EndIf}
-
-  ; --- STATE 8: run health check ---
-  DetailPrint "Step 8/10: Executing startup health checks..."
-  ; Run python preflight diagnostics check inside sandbox
+  ; --- STATE 10: run health check ---
+  DetailPrint "Step 10/12: Running system readiness verification..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\system_readiness_check.py" --data-dir "$COMMONAPPDATA\GoodQ4All"'
   Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: System readiness check failed. Code $0"
+    Abort
+  ${EndIf}
   DetailPrint "System health readiness test completed with code $0."
 
-  ; --- STATE 9: write install receipt ---
-  DetailPrint "Step 9/10: Writing installation receipt..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService"'
+  ; --- STATE 11: write install receipt ---
+  DetailPrint "Step 11/12: Writing installation receipt..."
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService" --wsl-status "$WslStatus" --baseline-status "ok" --gpu-enhanced-status "$GpuStatus"'
 
-  ; --- STATE 10: enable launch ---
-  DetailPrint "Step 10/10: Creating shortcuts and enabling launcher..."
+  ; --- STATE 12: shortcuts & uninstaller ---
+  DetailPrint "Step 12/12: Completing installation shortcuts..."
   SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\GoodQ4All"
   CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
   CreateShortcut "$DESKTOP\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
 
-  ; Write Uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
-  ; Write uninstall keys to Windows Registry for Add/Remove Programs
+  ; Write Add/Remove Programs Registry Keys
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -204,10 +275,16 @@ Section "Always-On Background Service" SecService
   StrCpy $AlwaysOnService 1
 SectionEnd
 
+Section "GPU-Accelerated WSL2 Audio" SecGpu
+  StrCpy $GpuEnhancedMode 1
+  StrCpy $GpuStatus "ok"
+SectionEnd
+
 ; Uninstaller Section
 Section "Uninstall"
   SetShellVarContext all
   StrCpy $COMMONAPPDATA $APPDATA
+  
   ; Stop and delete Windows service if registered
   IfFileExists "$INSTDIR\nssm\nssm.exe" stop_service skip_service_cleanup
 stop_service:
@@ -215,9 +292,13 @@ stop_service:
   nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" remove GoodQ_Qdrant confirm'
 skip_service_cleanup:
 
-  ; Delete binaries and application directories from Program Files
+  ; Delete WSL2 Imported Distro if exists
+  nsExec::ExecToLog 'wsl --unregister GoodQ_Audio_Distro'
+
+  ; Delete Program Files directories
   Delete "$INSTDIR\LAUNCH_GOODQ.exe"
   Delete "$INSTDIR\goodq_version.py"
+  Delete "$INSTDIR\requirements-baseline-lock.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\qdrant"
@@ -233,6 +314,9 @@ skip_service_cleanup:
   RMDir /r "$INSTDIR\retrieval"
   RMDir /r "$INSTDIR\pipelines"
   RMDir /r "$INSTDIR\vendor"
+  RMDir /r "$INSTDIR\wheels"
+  RMDir /r "$INSTDIR\binaries"
+  RMDir /r "$INSTDIR\wsl"
   RMDir /r "$INSTDIR\branding"
   RMDir "$INSTDIR"
 
@@ -241,19 +325,16 @@ skip_service_cleanup:
   RMDir "$SMPROGRAMS\GoodQ4All"
   Delete "$DESKTOP\GoodQ4All.lnk"
 
-  ; Prompt user to delete ProgramData user databases (default is preserve)
+  ; Prompt user to delete user data
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Would you like to delete your personal GoodQ4All memory database and downloaded model packs? (Warning: This will destroy all ingested memory and cannot be undone.)" IDNO preserve_data
   
-  ; If YES, delete everything under ProgramData
   RMDir /r "$COMMONAPPDATA\GoodQ4All"
   Goto end_uninstall
   
 preserve_data:
-  ; Only delete temporary install receipts but preserve models & databases
   Delete "$COMMONAPPDATA\GoodQ4All\install_receipt.json"
 
 end_uninstall:
-  ; Remove uninstall keys from registry
   SetRegView 64
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All"
 SectionEnd

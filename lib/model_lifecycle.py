@@ -98,14 +98,14 @@ class ModelLifecycleManager:
             # Allow case insensitive matching or direct keys
             supported = False
             for eng, capability in supported_engines.items():
-                if eng.lower() == target_engine.lower() and capability == "yes":
+                if eng.lower() == target_engine.lower() and capability in ("yes", True):
                     supported = True
                     break
             if not supported:
                 err_msg = (
                     f"Compatibility Block: Model '{model_name}' does not declare support for "
                     f"engine '{target_engine}' in the registry. Supported: "
-                    f"{[e for e, cap in supported_engines.items() if cap == 'yes']}"
+                    f"{[e for e, cap in supported_engines.items() if cap in ('yes', True)]}"
                 )
                 logger.error(err_msg)
                 raise ValueError(err_msg)
@@ -188,7 +188,7 @@ class ModelLifecycleManager:
         if requested_vram_gb is None:
             requested_vram_gb = float(model_entry.get("vram_estimate_gb", 2.0))
             
-        engine = target_engine or next(iter([eng for eng, cap in model_entry.get("engines", {}).items() if cap == "yes"]), "unknown")
+        engine = target_engine or next(iter([eng for eng, cap in model_entry.get("engines", {}).items() if cap in ("yes", True)]), "unknown")
         quantization = model_entry.get("quantization", ["FP16"])[0]
         
         # Telemetry: Record starting VRAM state

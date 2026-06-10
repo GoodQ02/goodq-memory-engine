@@ -100,6 +100,7 @@ Preferred escalation order:
 - docs/agent/README.md
 - gemini.md
 - PLAN.md
+- docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md
 - docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md
 - docs/agent/workflows/CLEAN_MEMORY_START.md
 - docs/architecture/AGENT_DECISION_PROTOCOL.md

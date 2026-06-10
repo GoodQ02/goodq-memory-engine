@@ -1,148 +1,164 @@
 @echo off
 setlocal enabledelayedexpansion
-title GoodQ4All Installer Compiler
+title GoodQ4All Hardened Offline Installer Compiler
 
 echo ==============================================
-echo GoodQ4All Installer Compilation Runner
+echo GoodQ4All Offline Installer Compilation Runner
 echo ==============================================
 
 cd "%~dp0"
 
-:: 1. Load build_toolchain_manifest.json and download dependencies securely via PowerShell
-echo Securing and fetching compilers from build_toolchain_manifest.json...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$manifest = Get-Content -Raw -Path '..\..\configs\build_toolchain_manifest.json' | ConvertFrom-Json; foreach ($toolName in $manifest.toolchains.psobject.properties.name) { $tool = $manifest.toolchains.$toolName; $destZip = Join-Path $env:TEMP \"$toolName.zip\"; $destDir = $tool.local_dir; if (-not (Test-Path $destDir)) { Write-Host \"Downloading $toolName from $($tool.url)...\" -ForegroundColor Cyan; Invoke-WebRequest -UserAgent \"Wget\" -UseBasicParsing -Uri $tool.url -OutFile $destZip; $hash = (Get-FileHash -Path $destZip -Algorithm SHA256).Hash.ToLower(); if ($hash -ne $tool.sha256.ToLower()) { Write-Error \"SHA256 checksum mismatch for $toolName (Got: $hash, Expected: $($tool.sha256))\"; exit 1; }; Write-Host \"Extracting $toolName to $destDir...\" -ForegroundColor Green; Expand-Archive -Path $destZip -DestinationPath $destDir -Force; Remove-Item $destZip -ErrorAction SilentlyContinue; } else { Write-Host \"$toolName compiler is already cached.\" -ForegroundColor Yellow; } }"
+:: 1. Enforce strict offline environment variables
+set PIP_NO_INDEX=1
+set HF_HUB_OFFLINE=1
+set TRANSFORMERS_OFFLINE=1
+set HF_DATASETS_OFFLINE=1
+set GOODQ_OFFLINE_BUILD=1
+set NETWORK_POLICY=blocked
+
+:: 2. Preflight Check: Run Poison Scan and Script Verification via PowerShell
+echo Running pre-build security audits and network blocks...
+powershell -NoProfile -ExecutionPolicy Bypass -File preflight_check.ps1
 
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Failed to fetch or verify compilers from manifest.
+    echo [ERROR] Pre-build security audits failed. Code: %ERRORLEVEL%
     exit /b 1
 )
 
-:: 1a. Sign the model manifest
-echo Compiling and running manifest signer...
-go_compiler\go\bin\go.exe run sign_manifest.go
+:: 3. Run stage_dependencies.ps1 in Verify and Audit modes
+echo Running offline cache checksum verification...
+powershell -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Failed to sign model manifest.
-    exit /b 11
+    echo [ERROR] Staging verification failed. Cache files are missing or corrupt.
+    exit /b 2
 )
 
-:: 1b. Embed Version Info & Icon Resource
-echo Embedding version metadata and icon into launcher...
-if not exist "go_bin\goversioninfo.exe" (
-    echo Building goversioninfo compiler helper...
-    set GOBIN=%cd%\go_bin
-    go_compiler\go\bin\go.exe install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-)
-go_bin\goversioninfo.exe
+echo Running offline licensing compliance audit...
+powershell -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Failed to compile version resource.
-    exit /b 12
+    echo [ERROR] Staging licensing audit failed. Non-permissive files found.
+    exit /b 3
 )
 
-:: 2. Compile Supervising Launcher LAUNCH_GOODQ.go
-echo Compiling LAUNCH_GOODQ.exe supervisor...
+:: 4. Compile Supervising Launcher LAUNCH_GOODQ.go
+echo Compiling LAUNCH_GOODQ.exe supervisor offline...
 if exist "..\..\LAUNCH_GOODQ.exe" del "..\..\LAUNCH_GOODQ.exe"
 go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go launcher_windows.go
-if exist "resource.syso" del "resource.syso"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
-    exit /b 2
+    exit /b 4
 )
 echo [OK] Supervising Go Launcher compiled successfully.
 
-:: 3. Stage Binaries for Installer Bundle
-echo Staging embedded Python runtime and DB engines...
+:: 5. Copy and Stage Checked-out Binaries from Local Cache
+echo Extracting and staging components from verified cache...
 if not exist "staged" mkdir "staged"
 if not exist "staged\qdrant" mkdir "staged\qdrant"
 if not exist "staged\qdrant\config" mkdir "staged\qdrant\config"
 if not exist "staged\nssm" mkdir "staged\nssm"
 if not exist "staged\runtime" mkdir "staged\runtime"
+if not exist "staged\binaries" mkdir "staged\binaries"
+if not exist "staged\wheels" mkdir "staged\wheels"
+if not exist "staged\wsl" mkdir "staged\wsl"
 
-:: Download embedded Python 3.10.11 if not present
-if not exist "staged\python-3.10-embed-amd64.zip" (
-    echo Downloading portable Python 3.10.11 zip...
-    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip' -OutFile 'staged\python-3.10-embed-amd64.zip'"
-)
+:: Copy from staged_cache to staging folder
+copy /y "staged_cache\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
+powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 
-echo Verifying portable Python 3.10.11 zip SHA256 checksum...
-powershell -NoProfile -Command "$hash = (Get-FileHash -Path 'staged\python-3.10-embed-amd64.zip' -Algorithm SHA256).Hash.ToLower(); if ($hash -ne '608619f8619075629c9c69f361352a0da6ed7e62f83a0e19c63e0ea32eb7629d') { throw 'Hash mismatch' }"
-if !ERRORLEVEL! neq 0 (
-    echo [ERROR] Python ZIP SHA256 verification failed.
-    exit /b 6
-)
-
-if not exist "staged\runtime\python.exe" (
-    echo Extracting portable Python 3.10.11...
-    powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
-)
-
-:: Ensure python310._pth includes project root and vendor paths
 (
 echo python310.zip
 echo .
 echo ..
 echo ..\vendor
+echo Lib\site-packages
+echo import site
 ) > staged\runtime\python310._pth
 
-
-:: Download Qdrant Windows binary if not present
-if not exist "staged\qdrant\qdrant.exe" (
-    echo Downloading Qdrant Windows x64 binary...
-    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://github.com/qdrant/qdrant/releases/download/v1.9.0/qdrant-x86_64-pc-windows-msvc.zip' -OutFile 'staged\qdrant.zip'"
-    
-    echo Verifying Qdrant v1.9.0 zip SHA256 checksum...
-    powershell -NoProfile -Command "$hash = (Get-FileHash -Path 'staged\qdrant.zip' -Algorithm SHA256).Hash.ToLower(); if ($hash -ne 'fe1eab78c24157b21988b3480ce75709e76ca0168ba644fc5a49017bacfec1c6') { throw 'Hash mismatch' }"
-    if !ERRORLEVEL! neq 0 (
-        echo [ERROR] Qdrant ZIP SHA256 verification failed.
-        exit /b 7
-    )
-    
-    echo Extracting Qdrant binary...
-    powershell -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
-    del staged\qdrant.zip
+echo Bootstrapping pip in staged runtime folder...
+copy /y "staged_cache\build_tools\get-pip.py" "staged\get-pip.py" >nul
+staged\runtime\python.exe staged\get-pip.py --no-warn-script-location --no-index --find-links=staged_cache\wheels
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to bootstrap pip in staged runtime.
+    exit /b 98
 )
+del staged\get-pip.py
+
+copy /y "staged_cache\db\qdrant.zip" "staged\qdrant.zip" >nul
+powershell -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
+
+copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul
+powershell -NoProfile -Command "Expand-Archive -Path 'staged\nssm.zip' -DestinationPath 'staged\nssm_bin' -Force"
+copy /y staged\nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.exe >nul
+
+copy /y "staged_cache\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
+copy /y "staged_cache\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul
+
+:: Copy cuBLAS DLLs from verified staged_cache
+echo Staging cuBLAS DLLs from verified cache...
+if not exist "staged_cache\runtime\cublas64_12.dll" (
+    echo [ERROR] cublas64_12.dll missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
+    exit /b 6
+)
+if not exist "staged_cache\runtime\cublasLt64_12.dll" (
+    echo [ERROR] cublasLt64_12.dll missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
+    exit /b 7
+)
+copy /y "staged_cache\runtime\cublas64_12.dll" "staged\runtime\" >nul
+copy /y "staged_cache\runtime\cublasLt64_12.dll" "staged\runtime\" >nul
+
+:: Copy certifi CA bundle from verified staged_cache
+echo Staging certifi CA bundle from verified cache...
+if not exist "staged_cache\runtime\cacert.pem" (
+    echo [ERROR] cacert.pem missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
+    exit /b 8
+)
+if not exist "staged\vendor\certifi" mkdir "staged\vendor\certifi"
+copy /y "staged_cache\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nul
+
+:: Copy wheels and WSL distro tar if present
+xcopy /s /e /y "staged_cache\wheels" "staged\wheels" >nul
+if exist "staged_cache\wsl\goodq_audio_wsl.tar" (
+    if not exist "..\..\dist" mkdir "..\..\dist"
+    copy /y "staged_cache\wsl\goodq_audio_wsl.tar" "..\..\dist\goodq_audio_wsl.tar" >nul
+)
+
 
 :: Stage Qdrant Config
-if not exist "staged\qdrant\config\qdrant_config.yaml" (
-    (
-    echo log_level: INFO
-    echo telemetry_disabled: true
-    echo storage:
-    echo   storage_path: C:\ProgramData\GoodQ4All\qdrant\storage
-    echo service:
-    echo   host: 127.0.0.1
-    echo   http_port: 6333
-    ) > staged\qdrant\config\qdrant_config.yaml
-)
+(
+echo log_level: INFO
+echo telemetry_disabled: true
+echo storage:
+echo   storage_path: C:\ProgramData\GoodQ4All\qdrant\storage
+echo service:
+echo   host: 127.0.0.1
+echo   http_port: 6333
+) > staged\qdrant\config\qdrant_config.yaml
 
-:: Copy NSSM binary from toolchain directory
-copy /y nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.exe >nul
-
-:: 3a. Stage Swagger / ReDoc Offline Documentation assets
-echo Staging offline swagger/redoc assets...
+:: Stage Offline Swagger/ReDoc
 if not exist "..\..\ui\docs_offline" mkdir "..\..\ui\docs_offline"
 copy /y "..\..\branding\favicon.ico" "..\..\ui\docs_offline\favicon.ico" >nul
 
-powershell -NoProfile -Command "$files = @{'swagger-ui-bundle.js' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js'; 'swagger-ui.css' = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css'; 'redoc.standalone.js' = 'https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js'}; foreach ($name in $files.Keys) { $path = Join-Path '..\..\ui\docs_offline' $name; if (-not (Test-Path $path)) { Write-Host \"Downloading $name to $path...\" -ForegroundColor Cyan; try { Invoke-WebRequest -UserAgent 'Wget' -UseBasicParsing -Uri $files[$name] -OutFile $path -TimeoutSec 15 } catch { Write-Host \"Warning: Failed to download $name. Docs might not render offline. error: $_\" -ForegroundColor Yellow } } else { Write-Host \"$name is already cached offline.\" -ForegroundColor Yellow } }"
-
-:: 3b. Stage Vendor Directory and Sandboxed Dependencies
-echo Staging vendor packages...
-if not exist "staged\vendor" mkdir "staged\vendor"
+:: Copy staged vendor directory
 xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
 
-echo Installing extra sandboxed dependencies (opencv-python, scenedetect, imageio-ffmpeg, faster-whisper)...
-pip install --target "staged\vendor" --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp opencv-python==4.10.0.84 scenedetect==0.6.2 imageio-ffmpeg==0.5.1 faster-whisper==1.0.3
+echo Verifying offline wheels integrity...
+staged\runtime\python.exe -m pip install --dry-run --no-index --find-links="staged\wheels" -r ..\..\requirements-baseline-lock.txt
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Failed to install sandboxed dependencies.
-    exit /b 4
+    echo [ERROR] Offline wheelhouse verification failed. Missing dependencies detected.
+    exit /b 99
 )
 
-:: 4. Compile NSIS setup package
+:: 6. Compile NSIS Setup Package Offline
 echo Compiling final NSIS Setup Installer package...
 nsis_compiler\nsis-3.09\makensis.exe goodq4all_installer.nsi
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile NSIS installer.
-    exit /b 3
+    exit /b 5
 )
+
+:: 7. Write Release Manifest dist/GoodQ4All_Setup_1.0.0.release_manifest.json
+echo Generating Release Manifest...
+powershell -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1
 
 echo ==============================================
 echo [OK] Installer compilation successfully complete.

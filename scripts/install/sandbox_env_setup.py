@@ -22,6 +22,27 @@ def _log(msg: str) -> None:
 def _err(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr, flush=True)
 
+def resolve_cached_file(cache_path: Path | None, filename: str) -> Path | None:
+    if not cache_path or not filename:
+        return None
+    # 1. Search directly in the cache directory
+    direct_path = cache_path / filename
+    if direct_path.exists():
+        return direct_path
+    # 2. Check: cache_path / ".." / "models" / "hub" / filename (standard offline suite payload layout)
+    alt_suite_path = cache_path / ".." / "models" / "hub" / filename
+    if alt_suite_path.exists():
+         return alt_suite_path
+    # 3. Check: cache_path / "payloads" / "models" / "hub" / filename (root-level layout)
+    alt_root_path = cache_path / "payloads" / "models" / "hub" / filename
+    if alt_root_path.exists():
+         return alt_root_path
+    # 4. Check: cache_path / "models" / "hub" / filename (standard local path)
+    alt_local_path = cache_path / "models" / "hub" / filename
+    if alt_local_path.exists():
+         return alt_local_path
+    return None
+
 def compute_sha256(filepath: Path) -> str:
     sha256 = hashlib.sha256()
     with open(filepath, "rb") as f:
@@ -193,6 +214,9 @@ def main() -> None:
     parser.add_argument("--write-receipt", action="store_true", help="Write installation receipt to data directory")
     parser.add_argument("--install-dir", default="", help="Directory where GoodQ4All is installed")
     parser.add_argument("--service-mode", default="0", help="Service mode selection (0=Personal, 1=Always-On)")
+    parser.add_argument("--wsl-status", default="skipped_wsl_unavailable", help="WSL import status log")
+    parser.add_argument("--baseline-status", default="ok", help="Baseline profile status log")
+    parser.add_argument("--gpu-enhanced-status", default="skipped", help="GPU enhanced profile status log")
     args = parser.parse_args()
 
     data_root = Path(args.data_dir)
@@ -206,7 +230,10 @@ def main() -> None:
             "version": "1.0.0",
             "install_dir": install_dir_clean,
             "data_dir": data_dir_clean,
-            "service_mode": args.service_mode
+            "service_mode": args.service_mode,
+            "wsl_status": args.wsl_status,
+            "baseline_status": args.baseline_status,
+            "gpu_enhanced_status": args.gpu_enhanced_status
         }
         with open(receipt_path, "w", encoding="utf-8") as f:
             json.dump(receipt_data, f, indent=2)
@@ -233,8 +260,11 @@ def main() -> None:
             for p_key, p_manifest in manifest["model_packs"].items():
                 for f_info in p_manifest.get("files", []):
                     zip_name = f_info["name"]
-                    first_chunk = f_info.get("chunks", [{}])[0].get("name", "")
-                    if (cache_path / zip_name).exists() or (first_chunk and (cache_path / first_chunk).exists()):
+                    chunks = f_info.get("chunks", [])
+                    first_chunk = chunks[0].get("name", "") if (chunks and len(chunks) > 0) else ""
+                    candidate_zip = resolve_cached_file(cache_path, zip_name)
+                    candidate_chunk = resolve_cached_file(cache_path, first_chunk) if first_chunk else None
+                    if candidate_zip or candidate_chunk:
                         if p_key not in selected_pack_keys:
                             selected_pack_keys.append(p_key)
     if args.verify_only:
@@ -306,15 +336,15 @@ def main() -> None:
             # Check local cache directory for final file first
             final_file_copied = False
             if args.cache_dir:
-                local_candidate = Path(args.cache_dir) / file_info["name"]
-                if local_candidate.exists():
-                    _log(f"Found local candidate for {file_info['name']} in cache-dir: {local_candidate}")
+                local_candidate = resolve_cached_file(Path(args.cache_dir), file_info["name"])
+                if local_candidate and local_candidate.exists():
+                    _log(f"Found local candidate for {file_info['name']} in cache: {local_candidate}")
                     if compute_sha256(local_candidate) == file_info["sha256"]:
                         _log(f"Local candidate verified successfully. Copying to destination...")
                         shutil.copy2(local_candidate, final_file)
                         final_file_copied = True
                     else:
-                        _log(f"Local candidate in cache-dir has incorrect hash. Skipping.")
+                        _log(f"Local candidate in cache has incorrect hash. Skipping.")
 
             if final_file_copied:
                 # Extract ZIP package
@@ -336,15 +366,15 @@ def main() -> None:
                 # Check cache-dir first for individual chunks
                 found_local_chunk = False
                 if args.cache_dir:
-                    local_chunk_candidate = Path(args.cache_dir) / chunk_info["name"]
-                    if local_chunk_candidate.exists():
-                        _log(f"Found local chunk candidate for {chunk_info['name']} in cache-dir.")
+                    local_chunk_candidate = resolve_cached_file(Path(args.cache_dir), chunk_info["name"])
+                    if local_chunk_candidate and local_chunk_candidate.exists():
+                        _log(f"Found local chunk candidate for {chunk_info['name']} in cache: {local_chunk_candidate}")
                         if compute_sha256(local_chunk_candidate) == chunk_info["sha256"]:
                             _log(f"Local chunk verified successfully. Copying to destination...")
                             shutil.copy2(local_chunk_candidate, chunk_temp_file)
                             found_local_chunk = True
                         else:
-                            _log(f"Local chunk in cache-dir has incorrect hash. Skipping.")
+                            _log(f"Local chunk in cache has incorrect hash. Skipping.")
 
                 if not found_local_chunk:
                     if not download_chunk(

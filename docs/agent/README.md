@@ -17,21 +17,19 @@ basement-era handoff logs.
 5. `PLAN.md` - coding agent execution plan (ExecPlan) guidelines.
 6. The canonical contract named by the current task.
 
-## What Lives Here
-
-- `CURRENT_STATE.md`: current pause point, runtime posture, clean-start status,
-  and known non-issues.
-- `current_state.json`: compact normalized state for agents and tools.
-- `workflows/`: durable operator runbooks that should stay smaller than the
-  canonical architecture docs.
-
 ## Active Workflows
 
-- `workflows/CLEAN_MEMORY_START.md`: safe clean-slate Qdrant/epoch/FAISS
-  preparation before personal-memory ingestion.
-- `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop
-  for capability gaps where config, API, persistence, and UI evidence must be
-  reconciled before broad reruns.
+- `workflows/PIPELINE_TROUBLESHOOTING_FLOW.md`: step-by-step pipeline threshold tuning, bug isolation, and regression verification against verified source ground truth.
+- `workflows/CLEAN_MEMORY_START.md`: safe clean-slate Qdrant/epoch/FAISS preparation before personal-memory ingestion.
+- `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop for capability gaps where config, API, persistence, and UI evidence must be reconciled before broad reruns.
+
+## What Lives Here
+
+- `CURRENT_STATE.md`: current pause point, runtime posture, clean-start status, and known non-issues.
+- `current_state.json`: compact normalized state for agents and tools.
+- `workflows/`: durable operator runbooks that should stay smaller than the canonical architecture docs.
+- `.agents/index/`: project corrections directory containing `corrections.json` to timeline issue, solution, failed attempts, and variables changed.
+
 
 ## What Does Not Live Here
 

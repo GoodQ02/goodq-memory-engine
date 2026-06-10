@@ -15,9 +15,28 @@ from typing import Dict, Any, Tuple
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REGISTRY_DIR = REPO_ROOT / "processing"
+
+def _get_registry_dir() -> Path:
+    repo_processing = REPO_ROOT / "processing"
+    try:
+        repo_processing.mkdir(parents=True, exist_ok=True)
+        test_file = repo_processing / ".write_test"
+        test_file.touch()
+        test_file.unlink()
+        return repo_processing
+    except (PermissionError, OSError):
+        program_data = os.environ.get("ProgramData", "C:\\ProgramData")
+        fallback_dir = Path(program_data) / "GoodQ4All" / "processing"
+        try:
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return fallback_dir
+
+REGISTRY_DIR = _get_registry_dir()
 REGISTRY_PATH = REGISTRY_DIR / "vram_registry.json"
 LOCK_PATH = REGISTRY_DIR / "vram_registry.lock"
+
 
 # Fraction allocations for GPU steps (matching steps.common.gpu_config)
 STEP_VRAM_FRACTIONS = {

@@ -36,6 +36,18 @@ class ModelLifecycleManager:
         
         # Load model registry definitions
         self.model_registry = config.get("huggingface_models", {}) or {}
+        if not self.model_registry:
+            try:
+                from pathlib import Path
+                import yaml
+                repo_root = Path(__file__).resolve().parents[1]
+                registry_path = repo_root / "configs" / "model_registry.yaml"
+                if registry_path.exists():
+                    with open(registry_path, "r", encoding="utf-8") as f:
+                        registry = yaml.safe_load(f) or {}
+                    self.model_registry = registry.get("huggingface_models", {}) or {}
+            except Exception as e:
+                logger.warning("Failed to auto-load model_registry.yaml: %s", e)
         
     def get_free_vram_gb(self) -> float:
         """

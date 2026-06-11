@@ -208,6 +208,10 @@ class VRAMAllocator:
             # Non-GPU step, always succeeds
             return True
 
+        if os.getenv("GOODQ_BYPASS_VRAM_LIMITS") == "1":
+            logger.info(f"Bypassing VRAM limit checks for step '{step_name}' via GOODQ_BYPASS_VRAM_LIMITS=1")
+            return True
+
         with FileLock():
             registry = self._read_registry()
             registry = self.clean_stale_claims(registry)

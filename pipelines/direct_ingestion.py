@@ -115,6 +115,9 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
             temp_video.unlink()
         temp_video.symlink_to(video_path.absolute())
         
+        chunk_size = cfg.get("progressive_chunk_size", 300.0)
+        chunk_overlap = cfg.get("progressive_chunk_overlap", 10.0)
+        
         try:
             scene_ingest_run(
                 input_dir=temp_inbox,
@@ -122,6 +125,8 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
                 workspace=processing_root,  # Use configured processing directory
                 max_videos=1,  # Process only this video
                 verbose=True,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
             )
         finally:
             # Cleanup temp directory

@@ -17,16 +17,6 @@ from typing import Dict, Any, List, Tuple, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agent"))
 
-# Monkeypatch the assets directory to point to our version-controlled Stack directory
-import goodq_mini_agent.paths
-ORIGINAL_ASSETS_DIR = goodq_mini_agent.paths.ASSETS_DIR
-goodq_mini_agent.paths.ASSETS_DIR = Path(__file__).resolve().parent / "stack"
-# Keep scripts resolving from the package assets dir
-goodq_mini_agent.paths.assets_script = lambda name: ORIGINAL_ASSETS_DIR / "scripts" / name
-
-# Import stack runner after monkeypatching
-import goodq_mini_agent.stack_runner as runner
-
 # Codebase configuration and client imports
 from steps.common.config_loader import load_configs
 from steps.common.llm_model_factory import build_llm_models
@@ -34,10 +24,77 @@ from lib.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
+# Explicit tool safety classification lists for fallback gating
+READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
+    "qdrant_query",
+    "faiss_search",
+    "status_read",
+    "manifest_read",
+    "timeline_read",
+    "memory_search",
+}
+
+MUTATING_DENY_ON_AGENT_FAILURE = {
+    "home_assistant_call_service",
+    "qdrant_upsert",
+    "faiss_write",
+    "kg_write",
+    "config_write",
+    "file_delete",
+    "file_move",
+    "run_ingestion",
+    "watchdog_trigger",
+    "process_start",
+    "process_stop",
+}
+
+# Module-level deferred bootstrapping of the policy engine package
+_DEFAULT_AGENT_AVAILABLE = False
+_DEFAULT_LAST_ERROR_TYPE: Optional[str] = None
+_DEFAULT_LAST_ERROR_MESSAGE: Optional[str] = None
+_DEFAULT_RUNNER = None
+_DEFAULT_ASSETS_DIR: Optional[Path] = None
+
+
+def _bootstrap_module_layer() -> None:
+    global _DEFAULT_AGENT_AVAILABLE, _DEFAULT_LAST_ERROR_TYPE, _DEFAULT_LAST_ERROR_MESSAGE, _DEFAULT_RUNNER, _DEFAULT_ASSETS_DIR
+    try:
+        # 1. Attempt package imports
+        import goodq_mini_agent.paths
+        import goodq_mini_agent.stack_runner
+        
+        # 2. Check if we already monkeypatched to prevent nested wrapping
+        if not getattr(goodq_mini_agent.paths, "_goodq_monkeypatched", False):
+            original_assets_dir = goodq_mini_agent.paths.ASSETS_DIR
+            goodq_mini_agent.paths.ASSETS_DIR = Path(__file__).resolve().parent / "stack"
+            goodq_mini_agent.paths.assets_script = lambda name: original_assets_dir / "scripts" / name
+            goodq_mini_agent.paths._goodq_monkeypatched = True
+            
+        _DEFAULT_RUNNER = goodq_mini_agent.stack_runner
+        _DEFAULT_ASSETS_DIR = goodq_mini_agent.paths.ASSETS_DIR
+        _DEFAULT_AGENT_AVAILABLE = True
+        logger.info("MiniAgentClient module successfully bootstrapped goodq_mini_agent stack runner")
+    except Exception as e:
+        _DEFAULT_AGENT_AVAILABLE = False
+        _DEFAULT_LAST_ERROR_TYPE = type(e).__name__
+        _DEFAULT_LAST_ERROR_MESSAGE = str(e)
+        logger.warning(
+            f"MiniAgentClient module could not bootstrap goodq_mini_agent on import. "
+            f"Fallback policy active. Details: {_DEFAULT_LAST_ERROR_TYPE}: {_DEFAULT_LAST_ERROR_MESSAGE}"
+        )
+
+
+# Run bootstrap immediately on import
+_bootstrap_module_layer()
+
 
 class MiniAgentClient:
     """
     A policy-gated client wrapping LLM invocations and tool execution in GoodQ4All.
+
+    Execution Mode (GOODQ_AGENT_EXECUTION_MODE):
+      Default: in-process for speed and simplicity. Use subprocess for stronger
+      isolation during hardening or release validation.
     """
     
     def __init__(self, profile: str = "safe", config: Optional[Dict[str, Any]] = None):
@@ -47,9 +104,31 @@ class MiniAgentClient:
         Args:
             profile: "safe" or "offline" (determines policy strictness)
             config: Optional config dictionary (falls back to load_configs({}))
+
+        Note on execution mode configuration:
+            Can be configured via environment variable `GOODQ_AGENT_EXECUTION_MODE`
+            or config settings `agent.execution_mode`. Allowed values are:
+            - `in_process`: runs within the current process context (default).
+            - `subprocess`: executes validation checks via the `goodq` CLI wrapper.
         """
         self.profile = profile
         self.config = config or load_configs({})
+        
+        # Retrieve execution mode config setting: 'in_process' or 'subprocess'
+        self.execution_mode = os.environ.get(
+            "GOODQ_AGENT_EXECUTION_MODE",
+            self.config.get("agent", {}).get("execution_mode", "in_process")
+        ).lower()
+        if self.execution_mode not in ("in_process", "subprocess"):
+            self.execution_mode = "in_process"
+            
+        # Bind status from module-level bootstrap
+        self.agent_available = _DEFAULT_AGENT_AVAILABLE
+        self.last_error_type = _DEFAULT_LAST_ERROR_TYPE
+        self.last_error_message = _DEFAULT_LAST_ERROR_MESSAGE
+        self._runner = _DEFAULT_RUNNER
+        self._assets_dir = _DEFAULT_ASSETS_DIR
+        
         self.llm_client: Optional[LLMClient] = None
         self._init_llm_client()
         
@@ -70,6 +149,122 @@ class MiniAgentClient:
         except Exception as e:
             logger.warning("MiniAgentClient starting without LLMClient: %s", e)
             self.llm_client = None
+
+    def _offline_fallback_validation(
+        self,
+        task: Dict[str, Any],
+        tool_name: str,
+        error_exc: Optional[Exception] = None
+    ) -> Tuple[Dict[str, Any], int]:
+        """
+        Deterministic offline fallback policy.
+        Allows read-only actions, blocks mutating actions, and formats a safe result envelope.
+        """
+        request_id = task.get("request_id", f"task-{uuid.uuid4().hex[:8]}")
+        
+        # Log error traceback safely if an exception occurred, but do not return it in the envelope
+        if error_exc:
+            logger.error(
+                f"Agent layer encountered a runtime exception during validation for tool '{tool_name}'. "
+                f"Invoking offline fallback policy.",
+                exc_info=True
+            )
+            
+        # Determine safety based on tool safety lists
+        if not tool_name:
+            # Empty tool or prompt-only validation: allow by default in fallback mode
+            allowed = True
+            status = "ok"
+            errors = []
+            rc = 0
+        elif tool_name in READ_ONLY_ALLOW_ON_AGENT_FAILURE:
+            allowed = True
+            status = "ok"
+            errors = []
+            rc = 0
+        else:
+            # Deny by default for mutating actions or any undeclared actions
+            allowed = False
+            status = "error"
+            errors = [{
+                "code": "agent_offline_mutation_blocked",
+                "message": f"Tool '{tool_name}' blocked under offline fallback policy (agent layer unavailable)."
+            }]
+            rc = 1
+            
+        envelope = {
+            "request_id": request_id,
+            "profile": self.profile,
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "result": {
+                "allowed": allowed,
+                "offline_fallback_active": True
+            },
+            "events": [{
+                "ts": datetime.utcnow().isoformat() + "Z",
+                "kind": "offline_fallback",
+                "tool": tool_name,
+                "allowed": allowed
+            }],
+            "errors": errors,
+            "artifacts": []
+        }
+        return envelope, rc
+
+    def _validate_action_subprocess(
+        self,
+        task: Dict[str, Any],
+        confirm: bool,
+        confirmation_token: str,
+        contract_path: Path,
+    ) -> Tuple[Dict[str, Any], int]:
+        """
+        Runs policy check validation in an isolated subprocess calling the `goodq` CLI.
+        """
+        import tempfile
+        import subprocess
+        import json
+        
+        # Write task to a temp JSON file
+        fd, temp_path_str = tempfile.mkstemp(suffix=".json", prefix="gq_task_")
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(task, f, ensure_ascii=False)
+            
+            cmd = [
+                sys.executable,
+                "-m", "goodq_mini_agent.cli",
+                "run",
+                "--profile", self.profile,
+                "--input", temp_path_str,
+                "--contract", str(contract_path)
+            ]
+            if confirm:
+                cmd.append("--confirm")
+            if confirmation_token:
+                cmd.extend(["--confirmation-token", confirmation_token])
+                
+            # Execute subprocess
+            cp = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            
+            if cp.returncode not in (0, 1, 2, 3) or not cp.stdout.strip():
+                # Subprocess returned unexpected exit code or empty stdout: treat as failure and trigger fallback
+                raise RuntimeError(
+                    f"Subprocess agent execution failed (exit code {cp.returncode}). stderr: {cp.stderr.strip()}"
+                )
+                
+            envelope = json.loads(cp.stdout)
+            return envelope, cp.returncode
+            
+        except Exception as e:
+            return self._offline_fallback_validation(task, task.get("context", {}).get("tool_name", ""), error_exc=e)
+        finally:
+            # Clean up temp file
+            try:
+                os.remove(temp_path_str)
+            except Exception:
+                pass
 
     def validate_action(
         self,
@@ -115,18 +310,26 @@ class MiniAgentClient:
             "context": context,
         }
         
-        # Retrieve the correct local stack contract path
+        if not self.agent_available:
+            return self._offline_fallback_validation(task, tool_name)
+            
         contract_filename = "goodq-coding-agent.contract.json" if mode == "coding" else "goodq-o2-local.contract.json"
-        contract_path = goodq_mini_agent.paths.ASSETS_DIR / "contracts" / contract_filename
+        contract_path = self._assets_dir / "contracts" / contract_filename
         
-        envelope, rc = runner.run_task(
-            profile=self.profile,
-            task=task,
-            confirm_flag=confirm,
-            confirmation_token=confirmation_token,
-            contract_override=str(contract_path),
-        )
-        return envelope, rc
+        try:
+            if self.execution_mode == "subprocess":
+                return self._validate_action_subprocess(task, confirm, confirmation_token, contract_path)
+            
+            envelope, rc = self._runner.run_task(
+                profile=self.profile,
+                task=task,
+                confirm_flag=confirm,
+                confirmation_token=confirmation_token,
+                contract_override=str(contract_path),
+            )
+            return envelope, rc
+        except Exception as e:
+            return self._offline_fallback_validation(task, tool_name, error_exc=e)
 
     def execute_tool(
         self,

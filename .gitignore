@@ -274,3 +274,6 @@ scripts/install/go_bin/
 
 # ===== AGENT CHECKPOINTS =====
 .goodq-mini-agent/
+.agents/
+ORIGINAL_REQUEST.md
+

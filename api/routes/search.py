@@ -29,6 +29,12 @@ _data_loader = None
 _config = None
 
 
+def configure_search_from_cfg(cfg: Dict[str, Any]) -> None:
+    """Configure search config from canonical runtime config."""
+    global _config
+    _config = cfg
+
+
 def _extract_sentiment_fields(result: dict) -> Dict[str, Any]:
     """Project sentiment from scene context first, then payload, without altering ranking behavior."""
     scene_context = result.get("scene_context") if isinstance(result.get("scene_context"), dict) else {}
@@ -630,7 +636,8 @@ def get_search_engine():
     global _search_engine, _config
     
     if _search_engine is None:
-        _config = load_configs({})
+        if _config is None:
+            _config = load_configs({})
         _search_engine = MultimodalSearchEngine(_config)
         logger.info("[OK] Search engine initialized")
     

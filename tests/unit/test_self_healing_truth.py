@@ -35,7 +35,7 @@ def test_config_healer_enable_retry_updates_pipeline_retry_fields(tmp_path: Path
         encoding="utf-8",
     )
 
-    healer = ConfigHealer(config_dir=config_dir, llm_client=object())
+    healer = ConfigHealer(config_dir=config_dir, llm_client=object(), enable_mutation=True)
 
     success, _ = healer.apply_healing_action("enable_retry", {"max_retries": 5})
 
@@ -60,7 +60,7 @@ def test_config_healer_adjust_thresholds_lowers_scene_detection_thresholds(tmp_p
         encoding="utf-8",
     )
 
-    healer = ConfigHealer(config_dir=config_dir, llm_client=object())
+    healer = ConfigHealer(config_dir=config_dir, llm_client=object(), enable_mutation=True)
 
     success, _ = healer.apply_healing_action("adjust_thresholds", {"step_name": "scene_detect"})
 

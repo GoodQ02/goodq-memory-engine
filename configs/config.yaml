@@ -40,7 +40,7 @@ model:
 # ============================================================================
 host:
   profile: ${GOODQ_HOST_PROFILE:-UNSET}
-  data_root: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}
+  data_root: ${GOODQ_DATA_ROOT}
   wsl_distro: ${GOODQ_WSL_DISTRO:-Ubuntu}
   wsl_user: ${GOODQ_WSL_USER:-auto}
   wsl_workspace: ${GOODQ_WSL_WORKSPACE:-auto}
@@ -51,25 +51,25 @@ host:
 # ============================================================================
 paths:
   # Core directories
-  log_dir: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/logs
-  output_directory: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/output
-  db_dir: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22
-  db_path: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
-  knowledge_graph_db: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
-  faiss_dir: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
-  faiss_audio_path: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
-  qdrant_storage: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/qdrant_storage
-  watchdog_state_file: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog_state.json
-  watchdog_lock_file: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog.lock
+  log_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs
+  output_directory: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/output
+  db_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22
+  db_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
+  faiss_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
+  faiss_audio_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
+  qdrant_storage: ${GOODQ_DATA_ROOT}/qdrant_storage
+  watchdog_state_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog_state.json
+  watchdog_lock_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog.lock
   config_dir: configs
   
   # Data paths
-  data_root: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data
-  import_inbox: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/import_inbox
-  processing: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/processing
-  processed: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/processed
-  failed: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/failed
-  models_cache: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/models
+  data_root: ${GOODQ_DATA_ROOT}/GoodQ_Data
+  import_inbox: ${GOODQ_DATA_ROOT}/GoodQ_Data/import_inbox
+  processing: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/processing
+  processed: ${GOODQ_DATA_ROOT}/GoodQ_Data/processed
+  failed: ${GOODQ_DATA_ROOT}/GoodQ_Data/failed
+  models_cache: ${GOODQ_DATA_ROOT}/models
   
   # Segmentation output paths
   chunk_subdir: chunks
@@ -78,8 +78,8 @@ paths:
   metadata_subdir: metadata
   
   # External paths
-  csv_path: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/epochs/epoch_2025_12_22/logs/system_metrics.csv
-  nas_path: ${GOODQ_DATA_ROOT:-C:/ProgramData/GoodQ4All}/GoodQ_Data/archive
+  csv_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/system_metrics.csv
+  nas_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/archive
 
 # ============================================================================
 # TOOL BINDINGS

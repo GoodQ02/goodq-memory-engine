@@ -300,6 +300,7 @@ def _parse_step_result_json(
 
 # Populated by CLI options at runtime
 VERBOSE: bool = False
+ENABLE_AUTO_HEALING: bool = False
 # Timeout per step in seconds - prevents infinite hangs
 # Audio steps (diarize, transcribe) can take 5-10 min for long scenes
 # Image steps should complete in <30s
@@ -348,7 +349,7 @@ def _control_agent_runtime_enabled() -> bool:
 
 
 def _get_control_agent(cfg_json: Optional[Path] = None) -> ControlAgent:
-    global _GLOBAL_LLM_CLIENT
+    global _GLOBAL_LLM_CLIENT, ENABLE_AUTO_HEALING
     dry_run_val = True
     if cfg_json is not None and cfg_json.exists():
         try:
@@ -358,7 +359,7 @@ def _get_control_agent(cfg_json: Optional[Path] = None) -> ControlAgent:
             dry_run_val = step_cfg.get('control_agent', {}).get('dry_run', True)
         except Exception:
             pass
-    return ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val)
+    return ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val, enable_mutation=ENABLE_AUTO_HEALING)
 
 
 def _resolve_step_timeout_value(step_timeout: Optional[int]) -> Optional[int]:
@@ -6003,12 +6004,14 @@ def run(
     chunk_size: float = typer.Option(300.0, '--chunk-size', help='Progressive ingestion window chunk size in seconds'),
     chunk_overlap: float = typer.Option(10.0, '--chunk-overlap', help='Progressive ingestion window overlap in seconds'),
     enable_control_agent: bool = typer.Option(False, '--enable-control-agent', help='Enable LLM-based Control Agent for diagnostics and recovery'),
+    enable_auto_healing: bool = typer.Option(False, '--enable-auto-healing', help='Enable config mutation/auto-healing'),
     scene_start_index: Optional[int] = typer.Option(None, "--scene-start-index", help="Start processing at this scene index (inclusive)"),
     scene_end_index: Optional[int] = typer.Option(None, "--scene-end-index", help="Stop processing at this scene index (inclusive)"),
 ) -> None:
-    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER
+    global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
+    ENABLE_AUTO_HEALING = enable_auto_healing
 
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
@@ -6212,7 +6215,7 @@ def run(
                 )
             # Default to dry_run = True for safety unless explicitly configured False
             dry_run_val = control_agent_cfg.get('dry_run', True)
-            control_agent = ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val)
+            control_agent = ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val, enable_mutation=ENABLE_AUTO_HEALING)
             control_agent_status = 'initialized'
             control_agent_reason = None
             if VERBOSE:

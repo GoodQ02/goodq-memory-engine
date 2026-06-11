@@ -220,7 +220,7 @@ def safe_upload_name(raw: str) -> str:
     if raw != PurePath(raw).name or raw != PureWindowsPath(raw).name:
         raise HTTPException(status_code=400, detail="Filename must not contain path components")
 
-    if "/" in raw or "\\" in raw or "\x00" in raw:
+    if "/" in raw or "\\" in raw or any(ord(c) < 32 or ord(c) == 127 for c in raw):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     p = Path(raw)

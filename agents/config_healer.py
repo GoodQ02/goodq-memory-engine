@@ -66,7 +66,14 @@ class ConfigHealer:
         }
     }
     
-    def __init__(self, config_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False):
+    def __init__(
+        self,
+        config_dir: Path = None,
+        llm_client: LLMClient = None,
+        dry_run: bool = False,
+        data_root: Optional[Path] = None,
+        enable_mutation: bool = False,
+    ):
         """Initialize Config Healer"""
         if config_dir is None:
             raise ValueError("config_dir is required and must be explicitly passed")
@@ -76,13 +83,20 @@ class ConfigHealer:
             raise ValueError("ConfigHealer requires an injected llm_client")
         self.llm = llm_client
         self.dry_run = dry_run
+        self.enable_mutation = enable_mutation
         
-        # Backup directory for config safety (resolve under writeable GOODQ_DATA_ROOT)
-        data_root = os.environ.get("GOODQ_DATA_ROOT")
-        if not data_root:
-            raise ValueError("GOODQ_DATA_ROOT environment variable is unset")
-        self.backup_dir = Path(data_root) / "config_backups"
-        if not self.dry_run:
+        # Backup directory for config safety (resolve under writeable data_root or GOODQ_DATA_ROOT env var)
+        if data_root is None:
+            env_data_root = os.environ.get("GOODQ_DATA_ROOT")
+            if env_data_root:
+                data_root = Path(env_data_root)
+            else:
+                data_root = Path(config_dir).parent if config_dir else self.root
+        else:
+            data_root = Path(data_root)
+
+        self.backup_dir = data_root / "config_backups"
+        if not self.dry_run and self.enable_mutation:
             self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Load current configs
@@ -199,6 +213,9 @@ CONFIDENCE: high/medium/low
         Returns:
             (success, message) tuple
         """
+        if not self.enable_mutation:
+            return False, f"Config mutation is disabled. Healing action '{action}' skipped."
+
         # Backup config first
         backup_path = self._backup_config()
         
@@ -250,7 +267,7 @@ CONFIDENCE: high/medium/low
     
     def _backup_config(self) -> Optional[Path]:
         """Create timestamped backup of current config"""
-        if self.dry_run:
+        if self.dry_run or not self.enable_mutation:
             return None
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"{self.config_path.name}.backup_{timestamp}"

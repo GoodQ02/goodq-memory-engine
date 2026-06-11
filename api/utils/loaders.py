@@ -16,18 +16,10 @@ _DEFAULT_DATA_ROOT_WARNED = False
 
 
 def _resolve_default_data_root() -> Path:
-    global _DEFAULT_DATA_ROOT_WARNED
     explicit = os.environ.get("GOODQ_DATA_ROOT")
     if explicit:
         return Path(explicit) / "GoodQ_Data"
-    if not _DEFAULT_DATA_ROOT_WARNED:
-        logger.warning(
-            "api.utils.loaders path fallback used path_key=%s derived_from=%s",
-            "data_root",
-            "cwd",
-        )
-        _DEFAULT_DATA_ROOT_WARNED = True
-    return Path.cwd()
+    raise ValueError("GOODQ_DATA_ROOT environment variable is not set. A valid data root is required.")
 
 
 _DEFAULT_DATA_ROOT = _resolve_default_data_root()

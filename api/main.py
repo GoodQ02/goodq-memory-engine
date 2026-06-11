@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
+# Load configuration first to establish environment defaults (e.g. GOODQ_DATA_ROOT)
+from steps.common.config_loader import load_configs
+_CFG = load_configs({})
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +17,6 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from api.routes import control_recurrence, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
-from steps.common.config_loader import load_configs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +27,6 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
-_CFG = load_configs({})
 _API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _UI_SUBDIR = _CFG.get("ui", {}).get("serve_from", "ui")
@@ -155,10 +157,8 @@ async def custom_redoc_html():
     )
 
 # Enforce CONFIG_LOADING_CONTRACT: reuse the already-loaded cfg in submodules.
-# (api/routes/search.py lazily calls load_configs() otherwise; keep it lazy but non-reloading.)
 try:
-    search._config = _CFG  # type: ignore[attr-defined]
-    search.load_configs = lambda overrides=None: _CFG  # type: ignore[assignment]
+    search.configure_search_from_cfg(_CFG)
 except Exception as e:
     logger.warning(f"Search route config injection failed: {e}")
 

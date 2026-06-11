@@ -37,31 +37,19 @@ def _resolve_control_agent_data_dir(explicit_data_dir: Optional[Path]) -> Path:
     if explicit_data_dir is not None:
         return Path(explicit_data_dir)
 
+    try:
+        from steps.common.config_loader import load_configs
+        cfg = load_configs()
+        data_root = cfg.get("paths", {}).get("data_root")
+        if data_root:
+            return Path(data_root)
+    except Exception:
+        pass
+
     env_data_root = (os.environ.get("GOODQ_DATA_ROOT") or "").strip()
     if env_data_root:
         env_path = Path(env_data_root)
         return env_path if env_path.name == "GoodQ_Data" else env_path / "GoodQ_Data"
-
-    cfg: Dict[str, Any] = {}
-    try:
-        from steps.common.config_loader import load_configs
-
-        loaded = load_configs({})
-        if isinstance(loaded, dict):
-            cfg = loaded
-    except Exception:
-        cfg = {}
-
-    paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
-    cfg_data_root = paths_cfg.get("data_root")
-    if isinstance(cfg_data_root, str) and cfg_data_root and "${" not in cfg_data_root:
-        return Path(cfg_data_root)
-
-    host_cfg = (cfg.get("host") or {}) if isinstance(cfg, dict) else {}
-    host_data_root = host_cfg.get("data_root")
-    if isinstance(host_data_root, str) and host_data_root and "${" not in host_data_root:
-        host_path = Path(host_data_root)
-        return host_path if host_path.name == "GoodQ_Data" else host_path / "GoodQ_Data"
 
     raise ValueError(CONTROL_AGENT_DATA_ROOT_UNRESOLVED)
 
@@ -77,10 +65,11 @@ class ControlAgent:
     - Build knowledge base for self-improvement
     """
     
-    def __init__(self, data_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False):
+    def __init__(self, data_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False, enable_mutation: bool = False):
         """Initialize the Control Agent"""
         self.root = Path(__file__).parent.parent
         self.dry_run = dry_run
+        self.enable_mutation = enable_mutation
 
         if llm_client is None:
             raise ValueError(CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT)
@@ -88,7 +77,13 @@ class ControlAgent:
         self.data_dir = _resolve_control_agent_data_dir(data_dir)
         
         # Initialize Config Healer (Phase 2)
-        self.healer = ConfigHealer(config_dir=self.root / "configs", llm_client=self.llm, dry_run=self.dry_run)
+        self.healer = ConfigHealer(
+            config_dir=self.root / "configs",
+            llm_client=self.llm,
+            dry_run=self.dry_run,
+            data_root=self.data_dir,
+            enable_mutation=self.enable_mutation,
+        )
         
         # Initialize Recovery Database (Phase 2)
         self.recovery_db = RecoveryDatabase(

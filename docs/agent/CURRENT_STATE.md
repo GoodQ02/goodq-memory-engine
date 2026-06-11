@@ -672,9 +672,9 @@ Key improvements implemented:
 ## Codebase Audit Corrections & Repository Sync on 2026-06-11
 
 Validated and corrected all true positives from `reports/llm_audit_report.md`:
-- **Local Path Refactoring**: Updated `configs/config.local.yaml` to dynamically resolve paths using `${GOODQ_DATA_ROOT}` environment variable instead of hardcoded `L:\_DATA` prefixes.
+- **Local Path Refactoring**: Updated `configs/config.local.yaml` to dynamically resolve paths using `${GOODQ_DATA_ROOT}` environment variable instead of hardcoded drive prefixes.
 - **Import Normalization**: Cleaned up config healer inline imports, moving `import os` to top-level in `agents/config_healer.py`.
-- **Durable Database Fallbacks**: Updated `agents/recovery_db.py` and `agents/recovery_strategies.py` default paths to resolve fallback paths under `GOODQ_DATA_ROOT` (defaulting to standard fallback `C:/ProgramData/GoodQ4All` if environment is unset).
+- **Durable Database Fallbacks**: Updated `agents/recovery_db.py` and `agents/recovery_strategies.py` default paths to resolve fallback paths under `GOODQ_DATA_ROOT` (defaulting to standard fallback folder defaults if environment is unset).
 - **FastAPI Mount & Decoupling**: Hardened UI static asset mount paths in `api/main.py` using configuration-driven `ui.serve_from` lookup and elevated config injection warnings.
 - **Legacy Purge**: Deleted retired CLI scripts (`graph_query.py`, `list_runs.py`, `run_narrative.py`, `run_summary.py`) from `cli/` to eliminate maintenance overhead.
 - **Repository Alignment**: Successfully synchronized and pushed the clean `dev` branch history to both `origin` (dev repository) and `public` (public repository) remotes. All 734 pytest tests passed post-execution.

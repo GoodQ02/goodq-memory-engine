@@ -36,7 +36,7 @@ conda run -n base python scripts/audit_llm.py --project project-begood
 ## Verification & Conformance Checklist
 
 When auditing the codebase, ensure that:
-1. **No Hardcoded Absolute Paths:** Check that no literal Windows drive roots (e.g., `C:\\` or `C:/`) exist in runtime code. Use environment variables (like `GOODQ_DATA_ROOT`) instead.
+1. **No Hardcoded Absolute Paths:** Check that no literal Windows drive roots (e.g., drive prefix followed by a slash or backslash) exist in runtime code. Use environment variables (like `GOODQ_DATA_ROOT`) instead.
 2. **Explicit Config Gating:** Ensure config dependencies fail fast (`ValueError`) when required directories or environment variables are not supplied.
 3. **Concurrency Locks:** Wrap mutable global data structures accessed by ASGI web entry points (like `_active_tokens` in `api/routes/ingest.py`) with thread-safe synchronization locks (`threading.Lock`).
 4. **Observable Exception Handling:** Avoid silent suppression or bare `except:` clauses. Always catch specific exceptions (like `json.JSONDecodeError` or `ValueError`) and log descriptive warnings to preserve the "fail visible, not loud" protocol.

@@ -197,9 +197,9 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         assert item is not None
         return object_detect(item, cfg)
     if step_name == "object_track":
-        from steps.object_track.step import object_track
+        from steps.object_track_yolo.step import object_track_yolo
         assert item is not None
-        return object_track(item, cfg)
+        return object_track_yolo(item, cfg)
     if step_name == "object_track_yolo":
         from steps.object_track_yolo.step import object_track_yolo
         assert item is not None

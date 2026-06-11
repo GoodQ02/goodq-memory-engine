@@ -832,14 +832,18 @@
   "codebase_audit_and_hardening_2026_06_11": {
     "last_verified": "2026-06-11",
     "status": "completed",
-    "details": "completed automated codebase audit using Gemini 2.5 Pro and resolved path fallbacks, thread safety locks, bare exceptions, and ingest backdoor check",
+    "details": "completed automated codebase audit using Gemini 2.5 Pro, resolved path fallbacks, thread safety locks, bare exceptions, and ingest backdoor check. Validated and corrected true positives from the audit report including config paths, top-level imports, recovery database fallbacks, static API mounts, and deleted retired CLI scripts.",
     "files_hardened": [
       "agents/config_healer.py",
       "agents/llm_agent.py",
+      "agents/recovery_db.py",
+      "agents/recovery_strategies.py",
+      "api/main.py",
       "api/routes/ingest.py",
       "cli/links.py",
       "tests/unit/test_ingest_submit_route.py"
     ],
-    "verification": "reports/llm_audit_report.md"
+    "verification": "reports/llm_audit_report.md",
+    "repository_sync": "pushed dev branch to origin/dev and public/main remotes"
   }
 }

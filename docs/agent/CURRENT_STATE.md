@@ -669,6 +669,16 @@ Key improvements implemented:
 - **Observable Error Handling**: Hardened exception blocks in `llm_agent.py` and `cli/links.py` to catch specific `json.JSONDecodeError` exceptions and log descriptive warnings, enforcing "fail visible, not loud" logging.
 - **Automated LLM Audit**: Built and executed `scripts/audit_llm.py` using Vertex AI's Gemini 2.5 Pro model to analyze repository files, publish findings to `reports/llm_audit_report.md`, and verify zero remaining security bypass warnings.
 
+## Codebase Audit Corrections & Repository Sync on 2026-06-11
+
+Validated and corrected all true positives from `reports/llm_audit_report.md`:
+- **Local Path Refactoring**: Updated `configs/config.local.yaml` to dynamically resolve paths using `${GOODQ_DATA_ROOT}` environment variable instead of hardcoded `L:\_DATA` prefixes.
+- **Import Normalization**: Cleaned up config healer inline imports, moving `import os` to top-level in `agents/config_healer.py`.
+- **Durable Database Fallbacks**: Updated `agents/recovery_db.py` and `agents/recovery_strategies.py` default paths to resolve fallback paths under `GOODQ_DATA_ROOT` (defaulting to standard fallback `C:/ProgramData/GoodQ4All` if environment is unset).
+- **FastAPI Mount & Decoupling**: Hardened UI static asset mount paths in `api/main.py` using configuration-driven `ui.serve_from` lookup and elevated config injection warnings.
+- **Legacy Purge**: Deleted retired CLI scripts (`graph_query.py`, `list_runs.py`, `run_narrative.py`, `run_summary.py`) from `cli/` to eliminate maintenance overhead.
+- **Repository Alignment**: Successfully synchronized and pushed the clean `dev` branch history to both `origin` (dev repository) and `public` (public repository) remotes. All 734 pytest tests passed post-execution.
+
 ## Do Not Investigate First
 
 These are known historical/proving-ground echoes unless a current audit proves

@@ -34,15 +34,15 @@ As the codebase has transitioned toward a unified, WSL2-based GPU-accelerated au
     *   **Status**: **Legacy Compatibility**.
     *   **Recommendation**: Keep for backwards compatibility with older pipelines but avoid using in new runs.
 
-### [ ] Broken Step Mapping in `cli/step_runner.py`
+### [x] Broken Step Mapping in `cli/step_runner.py` (RESOLVED)
 *   **Path**: `cli/step_runner.py` (Line 199 or surrounding)
     *   **Issue**: Mismatch in `object_track` key mapping.
-    *   **Details**: The registry contains:
+    *   **Details**: The registry contained:
         ```python
         "object_track": lambda cfg: import_module("steps.object_track.step").object_track
         ```
-        However, there is no directory `steps/object_track` in the codebase; only `steps/object_track_yolo` exists. Attempting to execute `object_track` via `step_runner.py` throws an immediate `ImportError`.
-    *   **Recommendation**: Correct the mapping in `cli/step_runner.py` to point to `steps.object_track_yolo.step.object_track_yolo` (if desired) or remove/clean up the broken registry entry.
+        However, there was no directory `steps/object_track` in the codebase; only `steps/object_track_yolo` exists. Attempting to execute `object_track` via `step_runner.py` threw an immediate `ImportError`.
+    *   **Status**: **Resolved**. The step registry mapping has been updated to import and run `object_track_yolo` as a fallback/alias, ensuring safety.
 
 ### [ ] Redundant or Underutilized Steps
 *   **Path**: `steps/tts/step.py` (Voice Synthesis)

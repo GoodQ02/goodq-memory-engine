@@ -11,6 +11,7 @@ Date: 2025-11-16
 """
 
 import json
+import os
 import shutil
 import sys
 import yaml
@@ -77,7 +78,6 @@ class ConfigHealer:
         self.dry_run = dry_run
         
         # Backup directory for config safety (resolve under writeable GOODQ_DATA_ROOT)
-        import os
         data_root = os.environ.get("GOODQ_DATA_ROOT")
         if not data_root:
             raise ValueError("GOODQ_DATA_ROOT environment variable is unset")

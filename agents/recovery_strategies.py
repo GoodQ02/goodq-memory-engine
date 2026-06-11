@@ -21,11 +21,8 @@ def _default_control_memory_path() -> Path:
     if explicit_db:
         return Path(explicit_db)
 
-    data_root = os.environ.get("GOODQ_DATA_ROOT")
-    if data_root:
-        return Path(data_root) / "control_memory.db"
-
-    return Path("GoodQ_Data") / "control_memory.db"
+    data_root = os.environ.get("GOODQ_DATA_ROOT") or "C:/ProgramData/GoodQ4All"
+    return Path(data_root) / "control_memory.db"
 
 
 class RecoveryStrategies:

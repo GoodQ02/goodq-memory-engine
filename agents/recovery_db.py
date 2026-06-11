@@ -5,6 +5,7 @@ Tracks pipeline failures, recovery attempts, and outcomes for learning.
 
 import sqlite3
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -23,7 +24,11 @@ class RecoveryDatabase:
             db_path: Path to SQLite database file
         """
         if db_path is None:
-            db_path = Path(__file__).parent.parent / "data" / "recovery.db"
+            data_root = os.environ.get("GOODQ_DATA_ROOT")
+            if data_root:
+                db_path = Path(data_root) / "data" / "recovery.db"
+            else:
+                db_path = Path(__file__).parent.parent / "data" / "recovery.db"
         
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

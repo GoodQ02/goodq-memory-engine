@@ -483,6 +483,30 @@ class WatchdogProcessor:
                     files.append(item)
         return files
     
+    def check_video_completion_on_disk(self, file_path: Path, file_hash: str) -> bool:
+        """Check if the video has a complete temporal_index indicating phase 6 completion."""
+        try:
+            # Check potential processing paths (both stem and hash based)
+            candidates = [
+                self.processing_dir / file_path.stem / 'video' / 'temporal_index.json',
+                self.processing_dir / file_path.stem / 'temporal_index.json',
+                self.processing_dir / file_hash / 'video' / 'temporal_index.json',
+                self.processing_dir / file_hash / 'temporal_index.json'
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    try:
+                        with open(candidate, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        if isinstance(data, dict) and data.get('phase6_complete') is True:
+                            logger.debug(f"Found completed phase6 index at {candidate}")
+                            return True
+                    except Exception as e:
+                        logger.debug(f"Failed to read/parse candidate {candidate}: {e}")
+        except Exception as e:
+            logger.warning(f"Error checking video completion on disk for {file_path.name}: {e}")
+        return False
+
     def monitor_loop(self):
         """Main monitoring loop"""
         logger.info("Starting file monitor...")
@@ -519,7 +543,15 @@ class WatchdogProcessor:
                         # Compute hash and check if already processed
                         file_hash = state.compute_hash()
                         
-                        if self.registry.is_processed(file_hash):
+                        # Check registry first, then perform structural disk check for completion
+                        already_processed = self.registry.is_processed(file_hash)
+                        if not already_processed:
+                            already_processed = self.check_video_completion_on_disk(file_path, file_hash)
+                            if already_processed:
+                                logger.info(f"Detected previous completed ingestion for {file_path.name} (hash: {file_hash[:8]}...) on disk. Syncing registry.")
+                                self.registry.mark_processed(file_hash, file_path.name, 'success', run_id='pre-existing-on-disk')
+                        
+                        if already_processed:
                             logger.info(f"File already processed (hash: {file_hash[:8]}...), skipping: {file_path.name}")
                             # Optionally mark the file to avoid repeated checks
                             self.mark_file_processed(file_path)

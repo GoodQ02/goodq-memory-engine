@@ -27,11 +27,12 @@ app = FastAPI(
 _CFG = load_configs({})
 _API_CFG: Dict[str, Any] = _CFG.get("api", {}) or {}
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_OPERATOR_CONSOLE_DIR = _REPO_ROOT / "ui" / "operator_console_v1"
-_RETRO_CONSOLE_DIR = _REPO_ROOT / "ui" / "retro_console_v1"
-_STITCHING_WORKBENCH_DIR = _REPO_ROOT / "ui" / "stitching_workbench"
-_SUMMARY_CONSOLE_DIR = _REPO_ROOT / "ui" / "summary_console"
-_JUSTIFICATION_DIR = _REPO_ROOT / "ui" / "justification_v1"
+_UI_SUBDIR = _CFG.get("ui", {}).get("serve_from", "ui")
+_OPERATOR_CONSOLE_DIR = _REPO_ROOT / _UI_SUBDIR / "operator_console_v1"
+_RETRO_CONSOLE_DIR = _REPO_ROOT / _UI_SUBDIR / "retro_console_v1"
+_STITCHING_WORKBENCH_DIR = _REPO_ROOT / _UI_SUBDIR / "stitching_workbench"
+_SUMMARY_CONSOLE_DIR = _REPO_ROOT / _UI_SUBDIR / "summary_console"
+_JUSTIFICATION_DIR = _REPO_ROOT / _UI_SUBDIR / "justification_v1"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -116,7 +117,7 @@ if _JUSTIFICATION_DIR.exists():
         name="justification_v1",
     )
 
-_DOCS_OFFLINE_DIR = _REPO_ROOT / "ui" / "docs_offline"
+_DOCS_OFFLINE_DIR = _REPO_ROOT / _UI_SUBDIR / "docs_offline"
 if _DOCS_OFFLINE_DIR.exists():
     app.mount(
         "/ui/docs_static",
@@ -159,14 +160,14 @@ try:
     search._config = _CFG  # type: ignore[attr-defined]
     search.load_configs = lambda overrides=None: _CFG  # type: ignore[assignment]
 except Exception as e:
-    logger.debug(f"Search route config injection failed: {e}")
+    logger.warning(f"Search route config injection failed: {e}")
 
 try:
     from api.utils import loaders as api_loaders
 
     api_loaders.configure_from_cfg(_CFG)
 except Exception as e:
-    logger.debug(f"DataLoader config injection failed: {e}")
+    logger.warning(f"DataLoader config injection failed: {e}")
 
 
 # Legacy UI/log static mounts intentionally disabled.

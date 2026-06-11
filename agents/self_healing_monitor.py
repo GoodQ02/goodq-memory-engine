@@ -365,7 +365,7 @@ async def run_monitor():
             cache_ttl=300,
             enable_health_checks=False,
         )
-        healer = ConfigHealer(llm_client=llm)
+        healer = ConfigHealer(config_dir=Path(__file__).parent.parent / "configs", llm_client=llm)
     except Exception as exc:
         logger.warning("Self-healing monitor starting without ConfigHealer: %s", exc)
 

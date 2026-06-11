@@ -88,7 +88,7 @@ class ControlAgent:
         self.data_dir = _resolve_control_agent_data_dir(data_dir)
         
         # Initialize Config Healer (Phase 2)
-        self.healer = ConfigHealer(llm_client=self.llm, dry_run=self.dry_run)
+        self.healer = ConfigHealer(config_dir=self.root / "configs", llm_client=self.llm, dry_run=self.dry_run)
         
         # Initialize Recovery Database (Phase 2)
         self.recovery_db = RecoveryDatabase(

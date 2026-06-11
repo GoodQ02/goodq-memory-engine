@@ -67,8 +67,10 @@ class ConfigHealer:
     
     def __init__(self, config_dir: Path = None, llm_client: LLMClient = None, dry_run: bool = False):
         """Initialize Config Healer"""
+        if config_dir is None:
+            raise ValueError("config_dir is required and must be explicitly passed")
         self.root = Path(__file__).parent.parent
-        self.config_dir = config_dir or self.root / "configs"
+        self.config_dir = config_dir
         if llm_client is None:
             raise ValueError("ConfigHealer requires an injected llm_client")
         self.llm = llm_client
@@ -76,7 +78,9 @@ class ConfigHealer:
         
         # Backup directory for config safety (resolve under writeable GOODQ_DATA_ROOT)
         import os
-        data_root = os.environ.get("GOODQ_DATA_ROOT") or "C:\\ProgramData\\GoodQ4All"
+        data_root = os.environ.get("GOODQ_DATA_ROOT")
+        if not data_root:
+            raise ValueError("GOODQ_DATA_ROOT environment variable is unset")
         self.backup_dir = Path(data_root) / "config_backups"
         if not self.dry_run:
             self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -593,7 +597,7 @@ def main():
         cache_ttl=300,
         enable_health_checks=False,
     )
-    healer = ConfigHealer(llm_client=llm)
+    healer = ConfigHealer(config_dir=Path(__file__).parent.parent / "configs", llm_client=llm)
     
     # Test error scenarios
     test_errors = [

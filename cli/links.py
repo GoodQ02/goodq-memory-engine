@@ -35,7 +35,7 @@ def main() -> None:
         if meta:
             try:
                 json.loads(meta)
-            except Exception:
+            except json.JSONDecodeError:
                 meta = json.dumps({"meta": meta})
         insert_link(cfg, args.parent_hash, args.child_hash, args.relation, args.timestamp, meta)
         print("ok")
@@ -46,7 +46,7 @@ def main() -> None:
         if meta:
             try:
                 meta_obj = json.loads(meta)
-            except Exception:
+            except json.JSONDecodeError:
                 meta_obj = {"meta": meta}
         sid = upsert_scene(cfg, args.video_hash, args.start, args.end, meta_obj)
         print(sid)
@@ -57,7 +57,7 @@ def main() -> None:
         if meta:
             try:
                 meta_obj = json.loads(meta)
-            except Exception:
+            except json.JSONDecodeError:
                 meta_obj = {"meta": meta}
         sid = upsert_segment(cfg, args.video_hash, args.start, args.end, args.speaker, meta_obj)
         print(sid)

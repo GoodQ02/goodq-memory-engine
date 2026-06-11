@@ -26,7 +26,9 @@ class LLMAgent(BaseAgent):
         )
         self.config = cfg
         self.llm_config = self.config.get('llm', {})
-        self.api_url = self.llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
+        self.api_url = self.llm_config.get('api_url')
+        if not self.api_url:
+            raise ValueError("api_url is required and must be explicitly configured in config['llm']")
         self.model_id = self.llm_config.get('model_id', 'LM_STUDIO_GOODQ')
         self.timeout = self.llm_config.get('timeout', 30)
         self.temperature = self.llm_config.get('temperature', 0.3)
@@ -35,9 +37,18 @@ class LLMAgent(BaseAgent):
     async def initialize(self):
         """Initialize LLM agent - check if LM Studio is available."""
         try:
+            # Construct validation models URL dynamically from api_url
+            check_url = self.api_url
+            if "/chat/completions" in check_url:
+                check_url = check_url.replace("/chat/completions", "/models")
+            elif "/v1" in check_url:
+                check_url = check_url.split("/v1")[0] + "/v1/models"
+            else:
+                check_url = check_url.rstrip("/") + "/models"
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    "http://localhost:1234/v1/models",
+                    check_url,
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as response:
                     if response.status == 200:
@@ -323,7 +334,8 @@ Format as JSON."""
         # Try to parse JSON response
         try:
             analysis = json.loads(response)
-        except:
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response in _analyze_error: {e}")
             # If not valid JSON, return structured error
             analysis = {
                 "root_cause": response,
@@ -366,7 +378,8 @@ Format as JSON list: [{"name": "...", "type": "...", "context": "..."}]"""
         
         try:
             entities = json.loads(response)
-        except:
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response in _extract_entities: {e}")
             # Parse from text format
             entities = []
             for line in response.split('\n'):

@@ -48,9 +48,13 @@ def test_submit_ingest_stages_file_and_returns_request_handle(tmp_path: Path, mo
 
     monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
 
+    # Generate token
+    res = asyncio.run(ingest_module.generate_confirmation_token())
+    token = res["confirmation_token"]
+
     request = ingest_module.IngestSubmitRequest(
         file_path=str(source_path),
-        confirmation_token="confirm-123",
+        confirmation_token=token,
         policy_profile="local_ingest_facade_v1",
     )
 
@@ -95,9 +99,13 @@ def test_submit_ingest_returns_duplicate_without_restaging(tmp_path: Path, monke
 
     monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
 
+    # Generate token
+    res = asyncio.run(ingest_module.generate_confirmation_token())
+    token = res["confirmation_token"]
+
     request = ingest_module.IngestSubmitRequest(
         file_path=str(source_path),
-        confirmation_token="confirm-123",
+        confirmation_token=token,
         policy_profile="local_ingest_facade_v1",
     )
 

@@ -110,7 +110,10 @@ def _submit_budget_profile() -> tuple[str, str]:
     return "single_local_file_handoff", "accepted"
 
 
+import threading
+
 _active_tokens: set[str] = set()
+_tokens_lock = threading.Lock()
 
 
 @router.get("/token")
@@ -118,7 +121,8 @@ async def generate_confirmation_token():
     """Generate a server-side cryptographically secure confirmation token."""
     import secrets
     token = f"tok_{secrets.token_hex(16)}"
-    _active_tokens.add(token)
+    with _tokens_lock:
+        _active_tokens.add(token)
     return {"confirmation_token": token}
 
 
@@ -128,12 +132,17 @@ async def submit_ingest(request: IngestSubmitRequest = Body(...)):
     policy_profile = request.policy_profile.strip()
     if not confirmation_token:
         raise HTTPException(status_code=400, detail="confirmation_token is required")
-    if confirmation_token not in _active_tokens and confirmation_token != "confirm-123":
+    
+    with _tokens_lock:
+        is_valid = confirmation_token in _active_tokens
+    
+    if not is_valid:
         raise HTTPException(status_code=403, detail="Invalid or expired confirmation_token")
     
     # Consume the token on use
-    if confirmation_token in _active_tokens:
-        _active_tokens.remove(confirmation_token)
+    with _tokens_lock:
+        if confirmation_token in _active_tokens:
+            _active_tokens.remove(confirmation_token)
 
     if not policy_profile:
         raise HTTPException(status_code=400, detail="policy_profile is required")

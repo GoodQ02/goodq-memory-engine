@@ -28,6 +28,7 @@ basement-era handoff logs.
 - `CURRENT_STATE.md`: current pause point, runtime posture, clean-start status, and known non-issues.
 - `current_state.json`: compact normalized state for agents and tools.
 - `workflows/`: durable operator runbooks that should stay smaller than the canonical architecture docs.
+- `skills/`: durable developer/operator capability files, prompt drafts, and codebase LLM audit workflows.
 - `.agents/index/`: project corrections directory containing `corrections.json` to timeline issue, solution, failed attempts, and variables changed.
 
 

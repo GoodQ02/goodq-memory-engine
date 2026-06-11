@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-06-05",
+  "last_verified": "2026-06-11",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -825,8 +825,21 @@
       "subsystem4_wsl_audio": "Resolved WSL overrides dynamically; normalized HuggingFace cache CRLF line endings offline; added mount existence pre-checks and fallback-first offline transformer loaders",
       "subsystem5_api_server": "Added port conflict collision fallback searches; case-insensitive log token redaction filters; extended progress track freshness to 7200 seconds; disabled drop redirects",
       "subsystem6_vector_db": "Implemented process-safe exclusive file FAISS HNSW locking (FaissLock) and serialized updates; added Qdrant auto-healing retries and dynamic registries dimensions lookup mapping",
-      "subsystem7_relational_memory": "Hardened SQLite busy_timeout to WAL concurrent queue; mapped read-only SQL URIs with timeouts for API and identity ledgers",
+      "subsystem7_relational_memory": "Aligned relational SQLite connections with PRAGMA busy_timeout=5000 WAL queuing to prevent concurrency collisions, and modified Web API and identity ledger lookups to use read-only SQLite URI format ?mode=ro",
       "subsystem8_healer_agent": "Hardened ControlAgent and ConfigHealer with dry_run constructors and LLM timeout connection failure try-except exception guards"
     }
+  },
+  "codebase_audit_and_hardening_2026_06_11": {
+    "last_verified": "2026-06-11",
+    "status": "completed",
+    "details": "completed automated codebase audit using Gemini 2.5 Pro and resolved path fallbacks, thread safety locks, bare exceptions, and ingest backdoor check",
+    "files_hardened": [
+      "agents/config_healer.py",
+      "agents/llm_agent.py",
+      "api/routes/ingest.py",
+      "cli/links.py",
+      "tests/unit/test_ingest_submit_route.py"
+    ],
+    "verification": "reports/llm_audit_report.md"
   }
 }

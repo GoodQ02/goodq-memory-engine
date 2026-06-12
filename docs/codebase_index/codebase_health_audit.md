@@ -10,18 +10,18 @@ As the codebase has transitioned toward a unified, WSL2-based GPU-accelerated au
 
 ## 2. Itemized Health Audit Checklist
 
-### [ ] Legacy Local Audio Steps (CPU/GPU-heavy Windows scripts)
+### [x] Legacy Local Audio Steps (CPU/GPU-heavy Windows scripts) (RESOLVED)
 *   **Path**: `steps/audio_diarize/step.py`
     *   **Description**: Contains local PyAnnote pipeline diarization logic requiring massive environment footprint (200+ Python packages).
-    *   **Status**: **Legacy / Outdated**. Offloaded to WSL2 runtime.
+    *   **Status**: **RESOLVED**. Archived to `archive/deprecated_audio_diarize_step.py`.
     *   **Recommendation**: Keep as fallback reference or deprecate/remove.
 *   **Path**: `steps/audio_transcribe/step.py`
     *   **Description**: Local Faster Whisper execution.
-    *   **Status**: **Legacy / Outdated**. Offloaded to WSL2 runtime.
+    *   **Status**: **RESOLVED**. Archived to `archive/deprecated_audio_transcribe_step.py`.
     *   **Recommendation**: Keep as fallback reference or deprecate/remove.
 *   **Path**: `steps/audio_emotion/step.py`
     *   **Description**: Local HuBERT/Wav2Vec2 speech emotion classification.
-    *   **Status**: **Legacy / Outdated**. Offloaded to WSL2 runtime.
+    *   **Status**: **RESOLVED**. Archived to `archive/deprecated_audio_emotion_step.py`.
     *   **Recommendation**: Keep as fallback reference or deprecate/remove.
 
 ### [ ] Transitional WSL2 Compatibility Facades

@@ -308,33 +308,6 @@ def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     assert "scipy==1.16.3" not in constraints
 
 
-def test_resolve_wsl_python_prefers_venv(monkeypatch):
-    from steps.audio_transcribe import step
-
-    def fake_run(cmd, **kwargs):
-        candidate = cmd[-1]
-        return subprocess.CompletedProcess(cmd, 0 if candidate.endswith("/venv/bin/python") else 1, "", "")
-
-    monkeypatch.setattr(step.subprocess, "run", fake_run)
-
-    resolved = step._resolve_wsl_python("Ubuntu-22.04", "/home/goodq/goodq_audio")
-
-    assert resolved == "/home/goodq/goodq_audio/venv/bin/python"
-
-
-def test_resolve_wsl_python_falls_back_to_legacy_env(monkeypatch):
-    from steps.audio_transcribe import step
-
-    def fake_run(cmd, **kwargs):
-        candidate = cmd[-1]
-        return subprocess.CompletedProcess(cmd, 0 if candidate.endswith("/env/bin/python") else 1, "", "")
-
-    monkeypatch.setattr(step.subprocess, "run", fake_run)
-
-    resolved = step._resolve_wsl_python("Ubuntu-22.04", "/home/goodq/goodq_audio")
-
-    assert resolved == "/home/goodq/goodq_audio/env/bin/python"
-
 
 def test_ensure_wsl_audio_ready_skips_service_install_when_sudo_password_required(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_install

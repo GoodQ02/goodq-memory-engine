@@ -6,7 +6,7 @@
 
 > Historical note only. This document describes a legacy inconsistency that is no
 > longer the active runtime truth. For current artifact/storage authority, use
-> [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md),
+> [SCENE_MANIFEST_SPECIFICATION.md](../architecture/SCENE_MANIFEST_SPECIFICATION.md),
 > [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md), and
 > [MEMORY_STORAGE.md](../architecture/MEMORY_STORAGE.md).
 
@@ -70,7 +70,7 @@ workspace: Path = typer.Option(Path('logs/scene_ingest'), ...),
 As of December 15, 2025, all documentation reflects **actual** locations:
 - `README.md`
 - `docs/architecture/SYSTEM_ARCHITECTURE.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
 - `docs/architecture/diagrams/PIPELINE_FLOW.md`
 
 ### ✅ No Breaking Changes Required
@@ -223,7 +223,7 @@ Get-ChildItem "logs\scene_ingest\*\video\scene_manifest.json" -Recurse
 
 ## Related Documentation
 
-- [`docs/SCENE_MANIFEST_SPECIFICATION.md`](../SCENE_MANIFEST_SPECIFICATION.md) - Canonical artifact format
+- [`docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`](../architecture/SCENE_MANIFEST_SPECIFICATION.md) - Canonical artifact format
 - [`docs/architecture/SYSTEM_ARCHITECTURE.md`](../architecture/SYSTEM_ARCHITECTURE.md) - System-wide artifact locations
 - [`cli/run_ingestion.py`](../../cli/run_ingestion.py) - Runtime artifact creation (lines 931-932, 1377-1382)
 - [`configs/config.yaml`](../../configs/config.yaml) - Configuration file with misleading path

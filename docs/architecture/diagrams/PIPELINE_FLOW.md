@@ -16,8 +16,8 @@ Primary contracts:
 - [INGEST_ORCHESTRATION_CONTRACT.md](../INGEST_ORCHESTRATION_CONTRACT.md)
 - [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md)
 - [MEMORY_STORAGE.md](../MEMORY_STORAGE.md)
-- [SCENE_MANIFEST_SPECIFICATION.md](../../SCENE_MANIFEST_SPECIFICATION.md)
-- [PHASE6_MULTIMODAL_FUSION.md](../../PHASE6_MULTIMODAL_FUSION.md)
+- [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md)
+- [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md)
 
 The canonical execution owner remains `cli/run_ingestion.py`. Control recurrence
 reporting is read-only observability and does not activate `ControlAgent` or

@@ -59,8 +59,8 @@ These are current doctrine surfaces. Update them only when the runtime contract
 changes:
 
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
 - `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
 - `docs/architecture/CONFIG_LOADING_CONTRACT.md`
@@ -127,14 +127,14 @@ These names sound important, but they are historical/reference-only unless a
 current canonical doc restates the claim:
 
 - `archive/docs/bootstrap/SCRIPT_REGISTRY.md`
-- `docs/RUNTIME_AUTHORITY_MEMO.md`
+- `docs/architecture/RUNTIME_AUTHORITY_MEMO.md`
 - `docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md`
 - `docs/architecture/AGENT_SYSTEM.md`
 - `docs/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md`
 - `docs/guides/llm/LLM_INTEGRATION_COMPLETE.md`
 - `docs/technical/SESSION_SUMMARY_2025-12-05.md`
-- `docs/WSL2_SCRIPTS_ADDED.md`
-- `docs/WSL2_CONSISTENCY_AUDIT_DEC15.md`
+- `docs/diagnostics/WSL2_SCRIPTS_ADDED.md`
+- `docs/diagnostics/WSL2_CONSISTENCY_AUDIT_DEC15.md`
 
 ## Cleanup Rules
 

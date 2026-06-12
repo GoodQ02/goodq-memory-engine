@@ -25,7 +25,7 @@ Machine memory should earn every claim it makes.
 - Current system baseline:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Current roadmap:
-  [`docs/ROADMAP.md`](ROADMAP.md)
+  [`docs/releases/ROADMAP.md`](releases/ROADMAP.md)
 - Reports and evidence map:
   [`reports/README.md`](../reports/README.md)
 - Diagnostics index:
@@ -84,7 +84,7 @@ Current operator-validated additions on the active line:
 - System snapshot:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Data privacy statement:
-  [`docs/PRIVACY.md`](PRIVACY.md)
+  [`docs/guides/general/PRIVACY.md`](guides/general/PRIVACY.md)
 - Architecture index:
   [`docs/architecture/README.md`](architecture/README.md)
 - System architecture:
@@ -94,7 +94,7 @@ Current operator-validated additions on the active line:
 - Watchdog system:
   [`docs/systems/WATCHDOG_SYSTEM.md`](systems/WATCHDOG_SYSTEM.md)
 - CLI reference:
-  [`docs/CLI-REFERENCE.md`](CLI-REFERENCE.md)
+  [`docs/reference/CLI-REFERENCE.md`](reference/CLI-REFERENCE.md)
 - Shipping profile:
   [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
 - Dependencies:

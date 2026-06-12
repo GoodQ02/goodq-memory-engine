@@ -19,7 +19,7 @@ GoodQ handles failures through visible runtime state, persisted artifacts, and b
 
 For current behavior, trust:
 
-- `docs/CONTROL_AGENT.md`
+- `docs/agent/CONTROL_AGENT.md`
 - `docs/systems/WATCHDOG_SYSTEM.md`
 - `cli/run_ingestion.py`
 - `cli/watchdog.py`
@@ -75,7 +75,7 @@ These are preserved as historical reference only.
 
 ## Related Docs
 
-- `docs/CONTROL_AGENT.md`
+- `docs/agent/CONTROL_AGENT.md`
 - `docs/systems/WATCHDOG_SYSTEM.md`
-- `docs/CLI-REFERENCE.md`
+- `docs/reference/CLI-REFERENCE.md`
 - `docs/archive/phases/PHASE3_SELF_HEALING.md`

@@ -23,11 +23,11 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 * **`ControlAgent`**:
   - *Description*: Conditionally active self-healing and system diagnostics manager.
   - *Location*: [`agents/control_agent.py`](../../../agents/control_agent.py)
-  - *Documentation*: [`docs/CONTROL_AGENT.md`](../../CONTROL_AGENT.md)
+  - *Documentation*: [`docs/agent/CONTROL_AGENT.md`](../../agent/CONTROL_AGENT.md)
 * **`ConfigHealer`**:
   - *Description*: Subsystem helper that safely fixes configuration errors with backups.
   - *Location*: [`agents/config_healer.py`](../../../agents/config_healer.py)
-  - *Documentation*: [`docs/CONTROL_AGENT.md`](../../CONTROL_AGENT.md)
+  - *Documentation*: [`docs/agent/CONTROL_AGENT.md`](../../agent/CONTROL_AGENT.md)
 
 ## Ingestion & Control Plane
 
@@ -38,7 +38,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 * **`run_ingestion`**:
   - *Description*: Canonical CLI entrypoint for manual and batch ingestion of media.
   - *Location*: [`cli/run_ingestion.py`](../../../cli/run_ingestion.py)
-  - *Documentation*: [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
+  - *Documentation*: [`docs/reference/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 * **`LAUNCH_GOODQ.exe` / `LAUNCH_GOODQ.ps1`**:
   - *Description*: Supervising Go launcher / PowerShell bootstrap wrapper that checks ports, environment variables, starts the local daemons (Qdrant, API), and boots the visual consoles.
   - *Location*: Root executable/script.
@@ -84,13 +84,13 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
   - *Documentation*: [`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md)
 * **`epochs`**:
   - *Description*: Dynamic directory structure storing logs, intermediate state, and vector indexes for a specific run campaign (e.g., `epoch_2026_06_02_family_clean_01`).
-  - *Documentation*: [`docs/SCENE_MANIFEST_SPECIFICATION.md`](../../SCENE_MANIFEST_SPECIFICATION.md)
+  - *Documentation*: [`docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`](../../architecture/SCENE_MANIFEST_SPECIFICATION.md)
 
 ## Pipeline Algorithms & AI Services
 
 * **`Phase 6b (Harmonization)`**:
   - *Description*: Ingestion pipeline stage that fuses transcript, visual descriptions, and audio signals into a unified temporal scene index.
-  - *Documentation*: [`docs/PHASE6_MULTIMODAL_FUSION.md`](../../PHASE6_MULTIMODAL_FUSION.md)
+  - *Documentation*: [`docs/architecture/PHASE6_MULTIMODAL_FUSION.md`](../../architecture/PHASE6_MULTIMODAL_FUSION.md)
 * **`vLLM`**:
   - *Description*: Local high-speed LLM server hosted on WSL serving Qwen. Capped via `--gpu-memory-utilization` to conserve VRAM.
   - *Documentation*: [`docs/agent/CURRENT_STATE.md`](../../agent/CURRENT_STATE.md)

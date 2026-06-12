@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: HISTORICAL -->
 <!-- DOC_STATUS: REFERENCE_ONLY -->
-<!-- DOC_CANONICAL_POINTER: docs/CONTROL_AGENT.md -->
+<!-- DOC_CANONICAL_POINTER: docs/agent/CONTROL_AGENT.md -->
 <!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # GoodQ4All Agent System
@@ -19,9 +19,9 @@
 - `agents/control_agent.py` is conditional and disabled by default unless an `llm_client` is explicitly injected.
 - `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are retired legacy surfaces.
 - The current truth anchors are:
-  - `docs/CONTROL_AGENT.md`
+  - `docs/agent/CONTROL_AGENT.md`
   - `docs/systems/WATCHDOG_SYSTEM.md`
-  - `docs/CLI-REFERENCE.md`
+  - `docs/reference/CLI-REFERENCE.md`
 
 ## Active Production Agent Stack (goodq_agent Integration)
 
@@ -70,12 +70,12 @@ Historical validation harnesses live under:
 
 - For current watchdog behavior, use `python -m cli.watchdog`.
 - For current ingestion behavior, use `python -m cli.run_ingestion`.
-- For current control-agent boundaries, use `docs/CONTROL_AGENT.md`.
+- For current control-agent boundaries, use `docs/agent/CONTROL_AGENT.md`.
 - Treat this document as architecture history and design context only.
 
 ## Related Docs
 
-- `docs/CONTROL_AGENT.md`
+- `docs/agent/CONTROL_AGENT.md`
 - `docs/systems/WATCHDOG_SYSTEM.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/archive/phases/PHASE3_SELF_HEALING.md`

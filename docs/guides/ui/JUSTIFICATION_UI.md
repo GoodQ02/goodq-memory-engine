@@ -74,4 +74,4 @@ Last checked: 2026-05-19.
   [`docs/guides/install/QUICKSTART.md`](../install/QUICKSTART.md)
 - Runtime authority:
   [`docs/HANDOFF_BASEMENT_PHASE.md`](../../HANDOFF_BASEMENT_PHASE.md),
-  [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
+  [`docs/reference/CLI-REFERENCE.md`](../../reference/CLI-REFERENCE.md)

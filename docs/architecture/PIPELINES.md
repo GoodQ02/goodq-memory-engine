@@ -70,7 +70,7 @@ Vision + Audio + Entity + KG Steps
 
 ## Related Documentation
 
-- [CLI Commands](../CLI-REFERENCE.md) - User-facing command reference
+- [CLI Commands](../reference/CLI-REFERENCE.md) - User-facing command reference
 - [Watchdog System](../systems/WATCHDOG_SYSTEM.md) - Automated ingestion trigger
 - [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md) - Canonical ingestion authority
 - [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) - Runtime authority and component layout

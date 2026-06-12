@@ -169,7 +169,7 @@ Phase 6 is wired and operational.
 - writes `temporal_index.json`
 - produces canonical rollups for retrieval and audits
 
-See [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md).
+See [PHASE6_MULTIMODAL_FUSION.md](PHASE6_MULTIMODAL_FUSION.md).
 
 ---
 
@@ -299,7 +299,7 @@ Use this architecture only if current witnesses confirm:
 - [IDENTITY_STITCHING_CONTRACT.md](IDENTITY_STITCHING_CONTRACT.md)
 - [ARCHITECTURE_REFERENCE.md](ARCHITECTURE_REFERENCE.md)
 - [MEMORY_STORAGE.md](MEMORY_STORAGE.md)
-- [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md)
+- [PHASE6_MULTIMODAL_FUSION.md](PHASE6_MULTIMODAL_FUSION.md)
 - [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 
 ---

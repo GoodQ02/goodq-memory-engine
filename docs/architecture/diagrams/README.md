@@ -29,4 +29,4 @@ active GoodQ4All architecture.
 - [Ingest Orchestration Contract](../INGEST_ORCHESTRATION_CONTRACT.md)
 - [Memory Storage](../MEMORY_STORAGE.md)
 - [Identity Stitching Contract](../IDENTITY_STITCHING_CONTRACT.md)
-- [Scene Manifest Specification](../../SCENE_MANIFEST_SPECIFICATION.md)
+- [Scene Manifest Specification](../SCENE_MANIFEST_SPECIFICATION.md)

@@ -21,7 +21,7 @@ It introduces no new behavior, refactors, or code changes.
 
 2. Relationship to the Sealed Basement
 Basement phase status: "Basement phase sealed + truth plumbing sealed (read-only)."
-Active epoch + stores: `docs/data_epochs.md` + `configs/config.yaml` (`paths.*`, `qdrant.collections.*`, `phase6.*`).
+Active epoch + stores: `docs/architecture/data_epochs.md` + `configs/config.yaml` (`paths.*`, `qdrant.collections.*`, `phase6.*`).
 This memo does not modify basement contracts; it only consolidates them.
 
 3. Canonical Configuration Authority
@@ -55,7 +55,7 @@ clip: `goodq_clip_epoch_2025_12_22`
 dino: `goodq_dino_epoch_2025_12_22`
 text: `goodq_text_epoch_2025_12_22`
 audio: `goodq_audio_epoch_2025_12_22`
-Legacy status examples in `docs/data_epochs.md` include: "Status: LEGACY (do not write; preserved for comparison)" and "Status: LEGACY (preserved; do not write)".
+Legacy status examples in `docs/architecture/data_epochs.md` include: "Status: LEGACY (do not write; preserved for comparison)" and "Status: LEGACY (preserved; do not write)".
 
 6. Qdrant Authority
 Qdrant Vector Database location: `<GOODQ_DATA_ROOT>\qdrant_storage`.
@@ -78,7 +78,7 @@ In the event of conflicting declarations, authority precedence is:
 This memo
 Sealed basement documents
 `configs/config.yaml`
-`docs/data_epochs.md`
+`docs/architecture/data_epochs.md`
 Architecture documentation
 Scripts and code comments
 

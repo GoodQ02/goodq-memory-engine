@@ -184,8 +184,8 @@ When making or reviewing a change:
 
 - `README.md`
 - `docs/README.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
 - `docs/releases/RELEASE_0.1.1.md`
 - `reports/README.md`

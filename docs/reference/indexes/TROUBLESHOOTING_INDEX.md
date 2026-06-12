@@ -10,7 +10,7 @@
 
 ## Canonical Troubleshooting Guides
 
-- `docs/TROUBLESHOOTING.md` – Primary, canonical troubleshooting guide for common issues and workflows.
+- `docs/guides/general/TROUBLESHOOTING.md` – Primary, canonical troubleshooting guide for common issues and workflows.
 - `docs/archive/audits/TROUBLESHOOTING_EMPTY_ANALYSIS.md` – Historical specialized guide for no-output / empty-analysis scenarios.
 - `docs/reference/WSL_AUDIO_RUNTIME.md` – Current WSL audio runtime truth surfaces, readiness states, and bridge error fields.
 
@@ -72,7 +72,7 @@ Agent-facing fix summaries:
 ## When To Use What
 
 - Start with:
-  - `docs/TROUBLESHOOTING.md` for general issues
+  - `docs/guides/general/TROUBLESHOOTING.md` for general issues
   - `docs/archive/audits/TROUBLESHOOTING_EMPTY_ANALYSIS.md` for historical no-output context
   - `docs/reference/WSL_AUDIO_RUNTIME.md` for WSL audio readiness and bridge failures
 - Then consult:

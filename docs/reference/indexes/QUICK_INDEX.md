@@ -32,8 +32,8 @@
 ## Operator Quick References
 
 - `docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` – Compact current operator quick reference.
-- `docs/CHEAT_SHEET.md` – Command-first cheat sheet for the supported runtime.
-- `docs/CLI-REFERENCE.md` – Full canonical CLI reference.
+- `docs/reference/quick-refs/CHEAT_SHEET.md` – Command-first cheat sheet for the supported runtime.
+- `docs/reference/CLI-REFERENCE.md` – Full canonical CLI reference.
 - `docs/reference/quick-refs/CLI_COMMANDS_REFERENCE.md` – Compatibility pointer to the current CLI surfaces.
 - `docs/reference/indexes/DOCS_FORENSICS_INDEX.md` – Agent/operator lookup index for documentation cleanup and historical intel.
 - `docs/reference/indexes/GLOSSARY.md` – Terminology and Concept Glossary mapping system nouns to docs/code.

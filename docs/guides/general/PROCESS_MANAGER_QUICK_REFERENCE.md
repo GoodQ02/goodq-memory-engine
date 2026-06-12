@@ -15,6 +15,6 @@
 
 ## Current References
 
-- [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
+- [`docs/reference/CLI-REFERENCE.md`](../../reference/CLI-REFERENCE.md)
 - [`docs/systems/WATCHDOG_SYSTEM.md`](../../systems/WATCHDOG_SYSTEM.md)
-- [`docs/CONTROL_AGENT.md`](../../CONTROL_AGENT.md)
+- [`docs/agent/CONTROL_AGENT.md`](../../agent/CONTROL_AGENT.md)

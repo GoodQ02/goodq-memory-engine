@@ -273,8 +273,8 @@ Get-CimInstance Win32_Process -Filter "name = 'python.exe'" | Where-Object { $_.
 
 - `README.md`
 - `docs/README.md`
-- `docs/TESTING_GUIDE.md`
+- `docs/testing/TESTING_GUIDE.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
 

@@ -69,7 +69,7 @@ For canonical status and current runtime truth, prefer:
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
 - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
 - `docs/goodq4all_agent_status.md`
 - `docs/SYSTEM_SNAPSHOT.md`
 - `docs/architecture/SYSTEM_ARCHITECTURE.md`
@@ -77,9 +77,9 @@ For canonical status and current runtime truth, prefer:
 - `docs/architecture/MEMORY_STORAGE.md`
 - `docs/architecture/components/VISION_PIPELINE.md`
 - `docs/systems/WATCHDOG_SYSTEM.md`
-- `docs/CONTROL_AGENT.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
-- `docs/CLI-REFERENCE.md`
+- `docs/agent/CONTROL_AGENT.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/reference/CLI-REFERENCE.md`
 - `docs/technical/LIB_COMPONENTS.md`
 - `docs/HANDOFF_BASEMENT_PHASE.md` only as sealed historical basement record
 - `CHANGELOG.md`
@@ -113,7 +113,7 @@ Release-level session summary:
   - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
   - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
   - `docs/reference/WSL_AUDIO_RUNTIME.md`
-  - `docs/SCENE_MANIFEST_SPECIFICATION.md`
+  - `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
   - `docs/goodq4all_agent_status.md`
   - `docs/SYSTEM_SNAPSHOT.md`
   - `docs/architecture/SYSTEM_ARCHITECTURE.md`
@@ -121,9 +121,9 @@ Release-level session summary:
   - `docs/architecture/MEMORY_STORAGE.md`
   - `docs/architecture/components/VISION_PIPELINE.md`
   - `docs/systems/WATCHDOG_SYSTEM.md`
-  - `docs/CONTROL_AGENT.md`
-  - `docs/PHASE6_MULTIMODAL_FUSION.md`
-  - `docs/CLI-REFERENCE.md`
+  - `docs/agent/CONTROL_AGENT.md`
+  - `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
+  - `docs/reference/CLI-REFERENCE.md`
   - `docs/technical/LIB_COMPONENTS.md`
   - `CHANGELOG.md`
   - the platform / WSL / troubleshooting indexes

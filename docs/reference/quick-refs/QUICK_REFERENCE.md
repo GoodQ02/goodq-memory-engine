@@ -13,7 +13,7 @@ Its previous contents contained older commands, legacy path layouts, and superse
 - Current operator quick reference:
   [`docs/reference/quick-refs/QUICK_REFERENCE_CARD.md`](QUICK_REFERENCE_CARD.md)
 - Canonical CLI reference:
-  [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
+  [`docs/reference/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 - Launch/control runbook:
   [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../guides/general/LAUNCH_INSTRUCTIONS.md)
 - Platform/profile contract:

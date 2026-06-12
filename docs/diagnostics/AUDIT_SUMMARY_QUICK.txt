@@ -54,7 +54,7 @@ Now: Repository matches runtime environment ✅
 ═══════════════════════════════════════════════════════════════
 
 📄 DOCUMENTATION:
-  docs/WSL2_CONSISTENCY_AUDIT_DEC15.md
+  docs/diagnostics/WSL2_CONSISTENCY_AUDIT_DEC15.md
 
 🔗 GitHub:
   https://github.com/JoesDomingo/Goodq4all/commit/3d46298

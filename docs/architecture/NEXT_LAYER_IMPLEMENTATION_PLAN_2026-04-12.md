@@ -46,8 +46,8 @@ Current scaffold already exists in:
 - [epistemic_formatter.py](../../steps/common/epistemic_formatter.py)
 - [non_action_contract.py](../../steps/common/non_action_contract.py)
 - [EPISTEMIC_READ_MODEL.md](EPISTEMIC_READ_MODEL.md)
-- [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md)
-- [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md)
+- [PHASE6_MULTIMODAL_FUSION.md](PHASE6_MULTIMODAL_FUSION.md)
+- [SCENE_MANIFEST_SPECIFICATION.md](SCENE_MANIFEST_SPECIFICATION.md)
 
 Relevant live surfaces already present:
 
@@ -125,7 +125,7 @@ Additive only. No canonical truth overwrite.
 
 - `_derive_scene_context_epistemic(...)` in [cross_modal_harmonizer.py](../../steps/video/cross_modal_harmonizer.py)
 - epistemic vocabulary in [epistemic_formatter.py](../../steps/common/epistemic_formatter.py)
-- scene manifest and temporal index rollups in [SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md)
+- scene manifest and temporal index rollups in [SCENE_MANIFEST_SPECIFICATION.md](SCENE_MANIFEST_SPECIFICATION.md)
 
 #### Acceptance Criteria
 

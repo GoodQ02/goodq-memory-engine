@@ -70,12 +70,12 @@ Every GoodQ ExecPlan must name the contracts it relies on. Common anchors are:
 - `AGENTS.md`
 - `docs/architecture/AGENT_DECISION_PROTOCOL.md`
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
 - `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
 - `docs/architecture/OUTPUT_SCHEMA_INVENTORY.md`
-- `docs/CONTROL_AGENT.md`
+- `docs/agent/CONTROL_AGENT.md`
 
 Do not repeat every contract in full. Do restate the exact rule that matters
 for the current work.

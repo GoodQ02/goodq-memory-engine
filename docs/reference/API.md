@@ -258,6 +258,6 @@ should not be treated as the supported release surface.
 - Quickstart:
   [`docs/guides/install/QUICKSTART.md`](../guides/install/QUICKSTART.md)
 - CLI reference:
-  [`docs/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
+  [`docs/reference/CLI-REFERENCE.md`](CLI-REFERENCE.md)
 - UI status:
   [`docs/guides/ui/JUSTIFICATION_UI.md`](../guides/ui/JUSTIFICATION_UI.md)

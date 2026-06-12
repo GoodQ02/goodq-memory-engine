@@ -5,6 +5,8 @@ param(
     [switch]$Verbose
 )
 
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+
 $script:TestsPassed = 0
 $script:TestsFailed = 0
 $script:TestsSkipped = 0
@@ -45,9 +47,9 @@ Write-Host "[TEST 1] File Existence Checks" -ForegroundColor Yellow
 Write-Host ""
 
 $files = @{
-    "Main Launcher (PS1)" = "L:\goodq4all\LAUNCH_GOODQ.ps1"
-    "Batch Wrapper" = "L:\goodq4all\LAUNCH_GOODQ.bat"
-    "Watchdog Script" = "L:\goodq4all\cli\watchdog.py"
+    "Main Launcher (PS1)" = "$RepoRoot\LAUNCH_GOODQ.ps1"
+    "Batch Wrapper" = "$RepoRoot\LAUNCH_GOODQ.bat"
+    "Watchdog Script" = "$RepoRoot\cli\watchdog.py"
 }
 
 foreach ($name in $files.Keys) {
@@ -62,7 +64,7 @@ Write-Host "[TEST 2] PowerShell Syntax Validation" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    $script = Get-Content "L:\goodq4all\LAUNCH_GOODQ.ps1" -Raw
+    $script = Get-Content "$RepoRoot\LAUNCH_GOODQ.ps1" -Raw
     $null = [System.Management.Automation.PSParser]::Tokenize($script, [ref]$null)
     Test-Result "PS1 Syntax Valid" $true "No parse errors"
 } catch {
@@ -75,7 +77,7 @@ Write-Host ""
 Write-Host "[TEST 3] Required Functions Defined" -ForegroundColor Yellow
 Write-Host ""
 
-$scriptContent = Get-Content "L:\goodq4all\LAUNCH_GOODQ.ps1" -Raw
+$scriptContent = Get-Content "$RepoRoot\LAUNCH_GOODQ.ps1" -Raw
 
 $requiredFunctions = @(
     "Write-Header",
@@ -108,8 +110,8 @@ $criticalPaths = @{
     "Data Root" = "L:\_DATA\GoodQ_Data"
     "Import Inbox" = "L:\_DATA\GoodQ_Data\import_inbox"
     "Processing" = "L:\_DATA\GoodQ_Data\processing"
-    "Logs" = "L:\goodq4all\logs"
-    "Qdrant Storage" = "L:\goodq4all\vendor\qdrant\storage"
+    "Logs" = "$RepoRoot\logs"
+    "Qdrant Storage" = "$RepoRoot\vendor\qdrant\storage"
 }
 
 foreach ($name in $criticalPaths.Keys) {
@@ -137,8 +139,8 @@ Write-Host "[TEST 5] Configuration Files" -ForegroundColor Yellow
 Write-Host ""
 
 $configFiles = @(
-    "L:\goodq4all\configs\config.yaml",
-    "L:\goodq4all\configs\models_config.yaml"
+    "$RepoRoot\configs\config.yaml",
+    "$RepoRoot\configs\models_config.yaml"
 )
 
 foreach ($file in $configFiles) {
@@ -251,7 +253,7 @@ Write-Host "[TEST 9] Dry Run Execution" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    $output = & "L:\goodq4all\LAUNCH_GOODQ.ps1" -DryRun -SkipHealthCheck 2>&1
+    $output = & "$RepoRoot\LAUNCH_GOODQ.ps1" -DryRun -SkipHealthCheck 2>&1
     $exitCode = $LASTEXITCODE
     
     # Check if script executed without errors
@@ -274,11 +276,11 @@ Write-Host "[TEST 10] File Organization" -ForegroundColor Yellow
 Write-Host ""
 
 $directories = @{
-    "scripts/qdrant" = "L:\goodq4all\scripts\qdrant"
-    "scripts/monitoring" = "L:\goodq4all\scripts\monitoring"
-    "tests" = "L:\goodq4all\tests"
-    "docs/reports" = "L:\goodq4all\docs\reports"
-    "archive/legacy_scripts" = "L:\goodq4all\archive\legacy_scripts_20251210"
+    "scripts/qdrant" = "$RepoRoot\scripts\qdrant"
+    "scripts/monitoring" = "$RepoRoot\scripts\monitoring"
+    "tests" = "$RepoRoot\tests"
+    "docs/reports" = "$RepoRoot\docs\reports"
+    "archive/legacy_scripts" = "$RepoRoot\archive\legacy_scripts_20251210"
 }
 
 foreach ($name in $directories.Keys) {
@@ -298,7 +300,7 @@ Write-Host ""
 Write-Host "[TEST 11] Monitoring Scripts" -ForegroundColor Yellow
 Write-Host ""
 
-$monitorScript = "L:\goodq4all\scripts\monitoring\live_monitor.ps1"
+$monitorScript = "$RepoRoot\scripts\monitoring\live_monitor.ps1"
 if (Test-Path $monitorScript) {
     try {
         $content = Get-Content $monitorScript -Raw
@@ -322,10 +324,10 @@ Write-Host "[TEST 12] Documentation" -ForegroundColor Yellow
 Write-Host ""
 
 $docs = @(
-    "L:\goodq4all\README.md",
-    "L:\goodq4all\docs\TESTING_GUIDE.md",
-    "L:\goodq4all\docs\QDRANT_QUICKREF.md",
-    "L:\goodq4all\docs\reports\FILE_ORGANIZATION_LAUNCHER_20251211.md"
+    "$RepoRoot\README.md",
+    "$RepoRoot\docs\testing\TESTING_GUIDE.md",
+    "$RepoRoot\docs\reference\quick-refs\QDRANT_QUICKREF.md",
+    "$RepoRoot\docs\reports\FILE_ORGANIZATION_LAUNCHER_20251211.md"
 )
 
 foreach ($doc in $docs) {

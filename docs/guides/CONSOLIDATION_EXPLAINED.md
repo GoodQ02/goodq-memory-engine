@@ -34,7 +34,7 @@ That phase was real and useful, but it was not the final steady-state model.
 - Environment index:
   [`docs/reference/indexes/ENVIRONMENT_INDEX.md`](../reference/indexes/ENVIRONMENT_INDEX.md)
 - Troubleshooting:
-  [`docs/TROUBLESHOOTING.md`](../TROUBLESHOOTING.md)
+  [`docs/guides/general/TROUBLESHOOTING.md`](general/TROUBLESHOOTING.md)
 
 ## Practical Guidance
 

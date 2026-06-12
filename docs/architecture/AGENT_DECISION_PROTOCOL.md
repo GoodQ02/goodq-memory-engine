@@ -132,8 +132,8 @@ When choosing the next action, prefer this order:
 This protocol works with, and does not replace:
 
 - `docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/architecture/IDENTITY_STITCHING_CONTRACT.md`
 
 If this protocol and a runtime contract appear to disagree, the runtime

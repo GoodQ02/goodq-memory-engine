@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: HISTORICAL -->
 <!-- DOC_STATUS: REFERENCE_ONLY -->
-<!-- DOC_CANONICAL_POINTER: docs/CLI-REFERENCE.md -->
+<!-- DOC_CANONICAL_POINTER: docs/reference/CLI-REFERENCE.md -->
 <!-- DOC_LAST_VERIFIED: 2026-05-07 -->
 
 # Truthful Ingest Facade Implementation Plan

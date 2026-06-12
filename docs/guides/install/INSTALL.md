@@ -47,7 +47,7 @@ For developers or advanced operators who want to run the project from source cod
 * Python 3.10 or newer
 * At least 25 GB free space (breakdown: ~4 GB conda environments, ~12 GB model cache prefetch, ~6 GB processing workspace, ~3 GB database storage).
 
-macOS (Apple Silicon) and Linux are fully supported as native first-run hosts for direct local execution; see the specific setup guides in [`docs/setup-macos.md`](../../setup-macos.md) and [`docs/setup-linux.md`](../../setup-linux.md), and the platform reference [`docs/reference/PLATFORM_SUPPORT.md`](../../reference/PLATFORM_SUPPORT.md).
+macOS (Apple Silicon) and Linux are fully supported as native first-run hosts for direct local execution; see the specific setup guides in [`docs/guides/install/setup-macos.md`](setup-macos.md) and [`docs/guides/install/setup-linux.md`](setup-linux.md), and the platform reference [`docs/reference/PLATFORM_SUPPORT.md`](../../reference/PLATFORM_SUPPORT.md).
 
 ### Bootstrap Steps
 ```powershell

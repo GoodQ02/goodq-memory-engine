@@ -167,7 +167,7 @@ GoodQ4All ships with two local operator console variants:
 *   Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
 *   Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
 *   Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
-*   Data Privacy: [`docs/PRIVACY.md`](docs/PRIVACY.md)
+*   Data Privacy: [`docs/guides/general/PRIVACY.md`](docs/guides/general/PRIVACY.md)
 
 ### Technical Details
 *   Architecture: [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)

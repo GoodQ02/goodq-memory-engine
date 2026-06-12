@@ -44,7 +44,7 @@ the same claim.
 | [EPISTEMIC_READ_MODEL.md](EPISTEMIC_READ_MODEL.md) | Evidence-aware scene read model. |
 | [NON_ACTION_CONTRACT.md](NON_ACTION_CONTRACT.md) | Non-action / absence semantics contract. |
 | [VISUAL_PROJECTION_CONTRACT_v1.md](VISUAL_PROJECTION_CONTRACT_v1.md) | Visual projection contract. |
-| [../SCENE_MANIFEST_SPECIFICATION.md](../SCENE_MANIFEST_SPECIFICATION.md) | Scene manifest truth surface specification. |
+| [../SCENE_MANIFEST_SPECIFICATION.md](SCENE_MANIFEST_SPECIFICATION.md) | Scene manifest truth surface specification. |
 
 ## Agent and Control Boundaries
 
@@ -53,8 +53,8 @@ the same claim.
 | [AGENT_DECISION_PROTOCOL.md](AGENT_DECISION_PROTOCOL.md) | Agent decision and coordination protocol. |
 | [LLM_CLIENT_INJECTION_CONTRACT.md](LLM_CLIENT_INJECTION_CONTRACT.md) | LLM client injection boundary. |
 | [AGENT_SYSTEM.md](AGENT_SYSTEM.md) | Historical mixed-state agent-system reference, not the active control-agent source of truth. |
-| [../CONTROL_AGENT.md](../CONTROL_AGENT.md) | Current control-agent documentation. |
-| [../CLI-REFERENCE.md](../CLI-REFERENCE.md) | Active read-only recurrence reporting commands. |
+| [../CONTROL_AGENT.md](../agent/CONTROL_AGENT.md) | Current control-agent documentation. |
+| [../CLI-REFERENCE.md](../reference/CLI-REFERENCE.md) | Active read-only recurrence reporting commands. |
 
 ## Sensitive Source Contracts
 

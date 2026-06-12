@@ -375,7 +375,7 @@ taskkill /PID <PID> /F
 
 - **Qdrant Documentation:** https://qdrant.tech/documentation/
 - **API Reference:** http://localhost:6333/docs (when running)
-- **CLI Reference:** `docs/CLI-REFERENCE.md`
+- **CLI Reference:** `docs/reference/CLI-REFERENCE.md`
 
 ---
 

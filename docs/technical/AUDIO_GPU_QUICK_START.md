@@ -7,7 +7,7 @@
 
 > Historical quick-start for the older Windows-discrete audio acceleration path.
 > The current canonical accelerated audio runtime is the WSL unified worker.
-> Start with `README.md`, `docs/TESTING_GUIDE.md`, and
+> Start with `README.md`, `docs/testing/TESTING_GUIDE.md`, and
 > `docs/reference/WSL_AUDIO_RUNTIME.md` before using this note.
 
 ## What This Does

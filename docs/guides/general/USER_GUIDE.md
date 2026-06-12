@@ -10,8 +10,8 @@ read the deeper architecture set first.
 If you want the shortest project overview, start with `README.md`. If you want
 the current testing or troubleshooting flow, use:
 
-- `docs/TESTING_GUIDE.md`
-- `docs/TROUBLESHOOTING.md`
+- `docs/testing/TESTING_GUIDE.md`
+- `docs/guides/general/TROUBLESHOOTING.md`
 
 ## What GoodQ4All Does
 
@@ -162,7 +162,7 @@ conda run -n goodq_core python scripts/utils/check_watchdog_status.py
 
 For the current CLI and operator surfaces, use:
 
-- `docs/CLI-REFERENCE.md`
+- `docs/reference/CLI-REFERENCE.md`
 - `README.md`
 
 The API path exists as an adjacent helper surface, but it is not the canonical
@@ -172,11 +172,11 @@ bootstrap/runtime entrypoint.
 
 Start here:
 
-- `docs/TROUBLESHOOTING.md`
+- `docs/guides/general/TROUBLESHOOTING.md`
 
 Use the testing ladder here:
 
-- `docs/TESTING_GUIDE.md`
+- `docs/testing/TESTING_GUIDE.md`
 
 And if the issue is specifically WSL audio or diarization:
 
@@ -186,8 +186,8 @@ And if the issue is specifically WSL audio or diarization:
 
 - `README.md`
 - `docs/README.md`
-- `docs/TESTING_GUIDE.md`
-- `docs/TROUBLESHOOTING.md`
+- `docs/testing/TESTING_GUIDE.md`
+- `docs/guides/general/TROUBLESHOOTING.md`
 - `docs/reference/WSL_AUDIO_RUNTIME.md`
-- `docs/SCENE_MANIFEST_SPECIFICATION.md`
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`

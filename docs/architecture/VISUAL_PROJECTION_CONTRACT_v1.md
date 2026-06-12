@@ -25,7 +25,7 @@ This contract therefore constrains projection to:
 - Epistemic states + `dont_know` semantics: `docs/architecture/EPISTEMIC_READ_MODEL.md`
 - Declarative restraint (non-action): `docs/architecture/NON_ACTION_CONTRACT.md`
 - Memory integrity + observability doctrine: `docs/architecture/MEMORY_STORAGE.md`
-- Epoch isolation rationale (legacy preservation + clean starts): `docs/data_epochs.md`
+- Epoch isolation rationale (legacy preservation + clean starts): `docs/architecture/data_epochs.md`
 
 ## Terms
 

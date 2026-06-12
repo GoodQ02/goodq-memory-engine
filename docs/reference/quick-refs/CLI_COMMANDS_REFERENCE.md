@@ -9,7 +9,7 @@ This older extended command sheet is kept only to preserve incoming links.
 ## Use Instead
 
 - Full canonical CLI surface:
-  [`docs/CLI-REFERENCE.md`](../../CLI-REFERENCE.md)
+  [`docs/reference/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 - Current Windows launch runbook:
   [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../guides/general/LAUNCH_INSTRUCTIONS.md)
 - Compact current operator quick ref:

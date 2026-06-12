@@ -10,7 +10,7 @@
 > runtime authority surface. For current ingest authority, use
 > [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md),
 > [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md), and
-> [PHASE6_MULTIMODAL_FUSION.md](../PHASE6_MULTIMODAL_FUSION.md).
+> [PHASE6_MULTIMODAL_FUSION.md](../architecture/PHASE6_MULTIMODAL_FUSION.md).
 
 **Date:** December 5, 2025  
 **Status:** ✅ SUCCESSFULLY ACTIVATED (LOCAL)  

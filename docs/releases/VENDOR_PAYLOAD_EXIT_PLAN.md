@@ -252,7 +252,7 @@ shape:
 
 ## Documentation Sprawl Recommendation
 
-The active docs tree still contains a stale `docs/ROADMAP.md` planning draft
+The active docs tree still contains a stale `docs/releases/ROADMAP.md` planning draft
 from October 2025 and several point-in-time status, audit, and snapshot docs at
 the docs root. Many historical reports already live under `docs/archive/`.
 

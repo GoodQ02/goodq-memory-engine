@@ -35,8 +35,8 @@ Current runtime truth:
 
 ## What To Trust
 
-- Current Control Agent contract: `docs/CONTROL_AGENT.md`
+- Current Control Agent contract: `docs/agent/CONTROL_AGENT.md`
 - Current Watchdog/runtime contract: `docs/systems/WATCHDOG_SYSTEM.md`
-- Current CLI behavior: `docs/CLI-REFERENCE.md`
+- Current CLI behavior: `docs/reference/CLI-REFERENCE.md`
 
 If these disagree with older agent/orchestration notes, trust the docs above and the current runtime code.

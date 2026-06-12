@@ -341,5 +341,5 @@ In plain terms:
 - `docs/architecture/CONFIG_LOADING_CONTRACT.md`
 - `docs/technical/SEGMENTATION_ARTIFACT_CONTRACT.md`
 - `docs/technical/PIPELINE_RESTORATION_BACKLOG.md` (historical backlog reference only)
-- `docs/PHASE6_MULTIMODAL_FUSION.md`
+- `docs/architecture/PHASE6_MULTIMODAL_FUSION.md`
 - `docs/architecture/SYSTEM_ARCHITECTURE.md`

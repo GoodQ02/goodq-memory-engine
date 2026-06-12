@@ -35,6 +35,21 @@ def test_f1_05_lessons_dir_exists():
     lessons_dir = os.path.join(WORKSPACE_ROOT, "lessons")
     assert os.path.isdir(lessons_dir), f"lessons/ directory not found"
 
+def test_f1_05a_templates_dir_exists():
+    """Verify templates/ directory exists."""
+    templates_dir = os.path.join(WORKSPACE_ROOT, "templates")
+    assert os.path.isdir(templates_dir), f"templates/ directory not found"
+
+def test_f1_05b_host_profiles_dir_exists():
+    """Verify host_profiles/ directory exists."""
+    profiles_dir = os.path.join(WORKSPACE_ROOT, "host_profiles")
+    assert os.path.isdir(profiles_dir), f"host_profiles/ directory not found"
+
+def test_f1_05c_quizzes_dir_exists():
+    """Verify quizzes/ directory exists."""
+    quizzes_dir = os.path.join(WORKSPACE_ROOT, "quizzes")
+    assert os.path.isdir(quizzes_dir), f"quizzes/ directory not found"
+
 def test_f1_06_protocols_dir_not_empty():
     """Verify protocols/ folder is not empty."""
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
@@ -59,10 +74,28 @@ def test_f1_09_lessons_dir_not_empty():
     files = os.listdir(lessons_dir)
     assert len(files) > 0, "lessons/ directory is empty"
 
+def test_f1_09a_templates_dir_not_empty():
+    """Verify templates/ folder is not empty."""
+    templates_dir = os.path.join(WORKSPACE_ROOT, "templates")
+    files = os.listdir(templates_dir)
+    assert len(files) > 0, "templates/ directory is empty"
+
+def test_f1_09b_host_profiles_dir_not_empty():
+    """Verify host_profiles/ folder is not empty."""
+    profiles_dir = os.path.join(WORKSPACE_ROOT, "host_profiles")
+    files = os.listdir(profiles_dir)
+    assert len(files) > 0, "host_profiles/ directory is empty"
+
+def test_f1_09c_quizzes_dir_not_empty():
+    """Verify quizzes/ folder is not empty."""
+    quizzes_dir = os.path.join(WORKSPACE_ROOT, "quizzes")
+    files = os.listdir(quizzes_dir)
+    assert len(files) > 0, "quizzes/ directory is empty"
+
 def test_f1_10_no_unknown_root_directories():
     """Verify no undocumented directories exist in the root workspace."""
-    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons"}
-    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md"}
+    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"}
+    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md", "index.md", "readme_for_agents.md", ".agent_workspace_policy.json"}
     actual_items = os.listdir(WORKSPACE_ROOT)
     for item in actual_items:
         if item == "__pycache__":
@@ -75,13 +108,13 @@ def test_f1_10_no_unknown_root_directories():
 
 def test_f1_11_workspace_permissions_readable():
     """Verify that the workspace directories are readable."""
-    for d in ["protocols", "models_and_vram", "workflows", "lessons"]:
+    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"]:
         full_path = os.path.join(WORKSPACE_ROOT, d)
         assert os.access(full_path, os.R_OK), f"Directory {d} is not readable"
 
 def test_f1_12_workspace_permissions_writeable():
     """Verify that the workspace directories are writeable."""
-    for d in ["protocols", "models_and_vram", "workflows", "lessons"]:
+    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"]:
         full_path = os.path.join(WORKSPACE_ROOT, d)
         assert os.access(full_path, os.W_OK), f"Directory {d} is not writeable"
 
@@ -105,10 +138,27 @@ def test_f2_02_gemini_distilled_rules_exist():
 
 def test_f2_03_workflows_distilled_procedures_exist():
     """Verify operational procedures are present under workflows/."""
-    expected_files = ["clean_memory_start.md", "evidence_first_runtime_repair.md", "laptop_setup_test_and_report.md", "pipeline_troubleshooting.md"]
+    expected_files = ["clean_memory_start.md", "evidence_first_runtime_repair.md", "laptop_setup_test_and_report.md", "pipeline_troubleshooting.md", "google_drive_sync_safety.md", "post_cleanup_manifest.md"]
     workflows_dir = os.path.join(WORKSPACE_ROOT, "workflows")
     for f in expected_files:
         assert os.path.isfile(os.path.join(workflows_dir, f)), f"Procedure file missing: {f}"
+
+def test_f2_03a_templates_exist():
+    """Verify that templates exist under templates/."""
+    templates_dir = os.path.join(WORKSPACE_ROOT, "templates")
+    for f in ["lesson_template.md", "incident_report_template.md", "agent_handoff_template.md"]:
+        assert os.path.isfile(os.path.join(templates_dir, f)), f"Template file missing: {f}"
+
+def test_f2_03b_host_profiles_exist():
+    """Verify that host profiles exist under host_profiles/."""
+    profiles_dir = os.path.join(WORKSPACE_ROOT, "host_profiles")
+    for f in ["good_cube.md", "good_speed_32.md", "good_recon_16.md"]:
+        assert os.path.isfile(os.path.join(profiles_dir, f)), f"Host profile file missing: {f}"
+
+def test_f2_03c_quizzes_exist():
+    """Verify that quizzes exist under quizzes/."""
+    quizzes_dir = os.path.join(WORKSPACE_ROOT, "quizzes")
+    assert os.path.isfile(os.path.join(quizzes_dir, "goodq4all_ingestion_readiness.md")), "Quiz file missing"
 
 def test_f2_04_protocols_content_non_empty():
     """Verify rule files under protocols/ are non-empty and substantive."""
@@ -207,8 +257,8 @@ def test_f2_11_relative_links_in_workflows():
                     assert link.startswith(".") or "/" in link or link.endswith(".md"), f"Link is not properly relative in {f}: {link}"
 
 def test_f2_12_no_drive_letters_in_distilled_markdowns():
-    """Verify no hardcoded drive letters exist in active markdown files inside protocols, models_and_vram, workflows."""
-    for sub in ["protocols", "models_and_vram", "workflows"]:
+    """Verify no hardcoded drive letters exist in active markdown files inside protocols, models_and_vram, workflows, templates, host_profiles, quizzes."""
+    for sub in ["protocols", "models_and_vram", "workflows", "templates", "host_profiles", "quizzes"]:
         sub_dir = os.path.join(WORKSPACE_ROOT, sub)
         for f in os.listdir(sub_dir):
             p = os.path.join(sub_dir, f)

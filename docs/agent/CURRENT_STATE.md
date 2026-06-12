@@ -665,7 +665,7 @@ Completed automated codebase audit and surgically resolved critical compliance, 
 Key improvements implemented:
 - **Hardcoded Path Removal**: Refactored `config_healer.py` and `llm_agent.py` to remove hardcoded Windows drive and API URL fallbacks, raising strict `ValueError` exceptions if configurations are missing.
 - **ASGI Ingestion Concurrency Lock**: Thread-synchronized all accesses to the global `_active_tokens` set in `api/routes/ingest.py` using `threading.Lock` to eliminate race conditions under ASGI concurrency.
-- **Backdoor Removal & Test Dynamization**: Removed the `"confirm-123"` backdoor token check from the API ingestion submit route and updated the corresponding test suite in `test_ingest_submit_route.py` to dynamically fetch generated tokens.
+- **Backdoor Removal & Test Dynamization**: Removed the `"confirm-123"` backdoor token check (historical/backdoor removed) from the API ingestion submit route and updated the corresponding test suite in `test_ingest_submit_route.py` to dynamically fetch generated tokens.
 - **Observable Error Handling**: Hardened exception blocks in `llm_agent.py` and `cli/links.py` to catch specific `json.JSONDecodeError` exceptions and log descriptive warnings, enforcing "fail visible, not loud" logging.
 - **Automated LLM Audit**: Built and executed `scripts/audit_llm.py` using Vertex AI's Gemini 2.5 Pro model to analyze repository files, publish findings to `reports/llm_audit_report.md`, and verify zero remaining security bypass warnings.
 

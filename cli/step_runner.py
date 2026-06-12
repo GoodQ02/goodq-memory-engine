@@ -181,9 +181,15 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         return video_scene_detect(item, cfg)
 
     if step_name == "audio_transcribe":
-        from steps.audio_transcribe.step_wsl2 import audio_transcribe
+        from steps.audio.audio_wsl2_bridge import audio_transcribe_wsl2
         assert item is not None
-        return audio_transcribe(item, cfg)
+        audio_path = item.get("audio_path") or item.get("path")
+        if not audio_path:
+            return {"transcript": "", "transcript_segments": []}
+        audio_cfg = cfg.get("audio", {})
+        transcribe_cfg = audio_cfg.get("transcribe", {})
+        timeout = transcribe_cfg.get("timeout", 3600)
+        return audio_transcribe_wsl2(str(audio_path), timeout=timeout)
     if step_name == "image_ocr":
         from steps.image_ocr.step import image_ocr
         assert item is not None
@@ -247,9 +253,22 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         from steps.system_metrics.step import system_metrics
         return system_metrics(cfg)
     if step_name == "audio_diarize":
-        from steps.audio_diarize.step_wsl2 import audio_diarize
+        from steps.audio.audio_wsl2_bridge import audio_diarize_wsl2
         assert item is not None
-        return audio_diarize(item, cfg)
+        audio_path = item.get("audio_path") or item.get("path")
+        if not audio_path:
+            return {"speakers": [], "speaker_segments": []}
+        audio_cfg = cfg.get("audio", {})
+        diarize_cfg = audio_cfg.get("diarize", {})
+        timeout = diarize_cfg.get("timeout", 3600)
+        return audio_diarize_wsl2(str(audio_path), timeout=timeout)
+    if step_name == "audio_unified_wsl2":
+        from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+        assert item is not None
+        audio_path = item.get("audio_path") or item.get("path")
+        if not audio_path:
+            return {"status": "error", "error": "No audio path provided"}
+        return audio_unified_wsl2(str(audio_path), scene_id=item.get("scene_id"), duration=item.get("duration"))
     if step_name == "audio_speaker_merge":
         from steps.audio_speaker_merge.step import audio_speaker_merge
         assert item is not None

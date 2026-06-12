@@ -21,6 +21,13 @@ on:
       - "wsl2_audio/**"
       - "setup.py"
       - "pytest.ini"
+      - "LAUNCH_GOODQ.bat"
+      - "LAUNCH_GOODQ.ps1"
+      - "dev_on.bat"
+      - "dev_on.sh"
+      - "dev_off.bat"
+      - "dev_off.sh"
+      - "start_goodq_dev.ps1"
 
 jobs:
   bootstrap-baseline:

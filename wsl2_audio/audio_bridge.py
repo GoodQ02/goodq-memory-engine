@@ -12,12 +12,6 @@ steps, but delegates all runtime work to the canonical unified WSL bridge in
 from __future__ import annotations
 
 import warnings
-warnings.warn(
-    "wsl2_audio/audio_bridge.py is deprecated.",
-    DeprecationWarning,
-    stacklevel=1,
-)
-
 
 from typing import Any, Dict, Optional
 
@@ -92,6 +86,14 @@ class WSL2AudioBridge(_CanonicalWSL2AudioBridge):
     .. deprecated:: transitional facade
        This class is deprecated.
     """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        warnings.warn(
+            "wsl2_audio/audio_bridge.py and WSL2AudioBridge are deprecated.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
     def _is_wsl_service_running(self) -> bool:
         # Compatibility alias for older callers and tests.

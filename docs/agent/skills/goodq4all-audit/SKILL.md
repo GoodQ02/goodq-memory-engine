@@ -40,4 +40,4 @@ When auditing the codebase, ensure that:
 2. **Explicit Config Gating:** Ensure config dependencies fail fast (`ValueError`) when required directories or environment variables are not supplied.
 3. **Concurrency Locks:** Wrap mutable global data structures accessed by ASGI web entry points (like `_active_tokens` in `api/routes/ingest.py`) with thread-safe synchronization locks (`threading.Lock`).
 4. **Observable Exception Handling:** Avoid silent suppression or bare `except:` clauses. Always catch specific exceptions (like `json.JSONDecodeError` or `ValueError`) and log descriptive warnings to preserve the "fail visible, not loud" protocol.
-5. **No Test Backdoors:** Verify that no hardcoded debug bypass tokens (like `"confirm-123"`) exist in the route handlers.
+5. **No Test Backdoors:** Verify that no hardcoded debug bypass tokens (like `"confirm-123"` - historical/backdoor removed) exist in the route handlers.

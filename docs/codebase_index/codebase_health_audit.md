@@ -71,8 +71,4 @@ During production runs, the orchestrator (`cli/run_ingestion.py`) bypasses all t
 *   `control_recurrence_report.py` is duplicated in name under both `cli/` and `lib/`. However, this is **not a bug** but a clean separation of concerns:
     *   `cli/control_recurrence_report.py` defines the command-line flags and entry point.
     *   `lib/control_recurrence_report.py` implements the comparative reporting and rendering logic.
-*   The `object_track` mapping in `cli/step_runner.py` is a genuine bug. The folder is named `steps/object_track_yolo`, but the runner lists:
-    ```python
-    "object_track": lambda cfg: import_module("steps.object_track.step").object_track
-    ```
-    This should be corrected or documented as a known defect.
+*   The `object_track` mapping in `cli/step_runner.py` has been resolved. The step runner now correctly maps `object_track` to `steps.object_track_yolo.step.object_track_yolo` as a fallback alias.

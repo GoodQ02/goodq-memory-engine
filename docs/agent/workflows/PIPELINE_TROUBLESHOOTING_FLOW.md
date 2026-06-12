@@ -8,6 +8,10 @@ Use this workflow to diagnose pipeline failures, tune confidence thresholds, or 
 
 ## Purpose
 
+> [!NOTE]
+> **Issue Diagnostics & Reporting Directive (Mandatory Coverage)**
+> Report every issue you find, including ones you are uncertain about or consider low-severity. Do not filter for importance or confidence at this stage - a separate verification step will do that. Your goal here is coverage: it is better to surface a finding that later gets filtered out than to silently drop a real bug. For each finding, include your confidence level and an estimated severity so a downstream filter can rank them.
+
 To isolate and resolve pipeline regressions, file-sharing delays, transcription errors, or memory-indexing bugs deterministically. By utilizing known external ground truth (e.g., IMDb, Wikipedia, script records) and executing targeted scene reruns rather than full episodes, we minimize compute, avoid regression drift, and prevent duplicate debugging efforts.
 
 ---

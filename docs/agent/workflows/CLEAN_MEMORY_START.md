@@ -7,6 +7,10 @@
 Use this runbook before running personal or home-movie media through GoodQ4All
 after a proving-ground/test-memory phase.
 
+> [!NOTE]
+> **Issue Diagnostics & Reporting Directive (Mandatory Coverage)**
+> Report every issue you find, including ones you are uncertain about or consider low-severity. Do not filter for importance or confidence at this stage - a separate verification step will do that. Your goal here is coverage: it is better to surface a finding that later gets filtered out than to silently drop a real bug. For each finding, include your confidence level and an estimated severity so a downstream filter can rank them.
+
 ## Safety Boundary
 
 This workflow may delete Qdrant collections whose names begin with `goodq_`.

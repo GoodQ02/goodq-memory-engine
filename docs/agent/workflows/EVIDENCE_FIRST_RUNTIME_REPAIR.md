@@ -10,6 +10,10 @@ sentiment, entities, operator-console visibility, or Retro Memory Explorer views
 
 ## Purpose
 
+> [!NOTE]
+> **Issue Diagnostics & Reporting Directive (Mandatory Coverage)**
+> Report every issue you find, including ones you are uncertain about or consider low-severity. Do not filter for importance or confidence at this stage - a separate verification step will do that. Your goal here is coverage: it is better to surface a finding that later gets filtered out than to silently drop a real bug. For each finding, include your confidence level and an estimated severity so a downstream filter can rank them.
+
 Close one concrete evidence seam without widening the blast radius.
 
 This workflow is for cases where the system probably has the right pieces, but

@@ -65,6 +65,8 @@ def test_f1_10_no_unknown_root_directories():
     allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md"}
     actual_items = os.listdir(WORKSPACE_ROOT)
     for item in actual_items:
+        if item == "__pycache__":
+            continue
         full_path = os.path.join(WORKSPACE_ROOT, item)
         if os.path.isdir(full_path):
             assert item in allowed_dirs, f"Undocumented directory found in workspace root: {item}"
@@ -405,11 +407,12 @@ def test_f4_06_linter_scans_trailing_slashes():
     bad_file = os.path.join(protocols_dir, "bad_trailing_slash.md")
     
     with open(bad_file, "w", encoding="utf-8") as f:
-        f.write("Target: C:\\Users\\jdben\\My Drive\\_AGENT/\n")
+        f.write("Target: %USERPROFILE%/My Drive/_AGENT/\n")
         
     try:
         res = subprocess.run(["python", linter_path], capture_output=True, text=True)
         assert res.returncode != 0, "Linter did not fail when markdown had path with trailing slash"
+        assert "Trailing slash found" in res.stdout or "Trailing slash found" in res.stderr
     finally:
         if os.path.exists(bad_file):
             os.remove(bad_file)

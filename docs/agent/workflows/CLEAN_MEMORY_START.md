@@ -258,6 +258,108 @@ Also verify configured FAISS targets in the fresh epoch are either absent or
 explicit-ID indexes. Legacy non-IDMap FAISS files must not be reused for a
 strict memory pass.
 
+## 4.5 Generate Post-Cleanup Manifest
+
+Verify the baseline cleanup and record host, database, FAISS indices, and empty Qdrant collection states to prove the baseline state is clean:
+
+```powershell
+python - <<'PY'
+import os, sys, socket, datetime, subprocess, json, urllib.request, urllib.parse
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path.cwd()))
+try:
+    from steps.common.config_loader import load_configs
+except ModuleNotFoundError:
+    from goodq4all.steps.common.config_loader import load_configs
+
+config = load_configs({})
+paths = config.get('paths', {})
+
+db_path = Path(paths.get('db_path')) if paths.get('db_path') else None
+kg_path = Path(paths.get('knowledge_graph_db')) if paths.get('knowledge_graph_db') else None
+faiss_dir = Path(paths.get('faiss_dir')) if paths.get('faiss_dir') else None
+
+# 1. Gather files status
+memory_db_status = "absent"
+if db_path and db_path.exists():
+    memory_db_status = "present (empty)" if db_path.stat().st_size == 0 else f"present ({db_path.stat().st_size} bytes)"
+
+kg_db_status = "absent"
+if kg_path and kg_path.exists():
+    kg_db_status = "present (empty)" if kg_path.stat().st_size == 0 else f"present ({kg_path.stat().st_size} bytes)"
+
+# 2. Gather FAISS status
+faiss_index_count = 0
+faiss_id_map_count = 0
+if faiss_dir and faiss_dir.exists():
+    for root, _, files in os.walk(faiss_dir):
+        for f in files:
+            if f.endswith('.index'):
+                faiss_index_count += 1
+            elif f.endswith('.sqlite') or f.endswith('.db'):
+                faiss_id_map_count += 1
+
+# 3. Gather Git & Host info
+try:
+    git_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=str(Path.cwd())).decode().strip()
+except Exception:
+    git_commit = "unknown"
+
+hostname = socket.gethostname()
+timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+
+# 4. Gather Qdrant info
+base = 'http://127.0.0.1:6333'
+collections_report = []
+try:
+    collections_data = json.load(urllib.request.urlopen(base + '/collections', timeout=5))
+    collections = collections_data['result']['collections']
+    for col in sorted(collections, key=lambda c: c['name']):
+        name = col['name']
+        if not name.startswith('goodq_'):
+            continue
+        info = json.load(urllib.request.urlopen(base + '/collections/' + urllib.parse.quote(name, safe=''), timeout=5))['result']
+        vector_config = info.get('config', {}).get('params', {}).get('vectors', {})
+        dim = vector_config.get('size') if isinstance(vector_config, dict) else None
+        
+        collections_report.append({
+            'name': name,
+            'vector_dimension': dim,
+            'points_count': info.get('points_count'),
+            'status': info.get('status')
+        })
+except Exception as e:
+    print(f"Error querying Qdrant: {e}")
+
+payload = {
+    'kind': 'qdrant_post_cleanup_manifest',
+    'timestamp': timestamp,
+    'machine_hostname': hostname,
+    'git_commit': git_commit,
+    'active_epoch': config.get('paths', {}).get('db_dir'),
+    'database_states': {
+        'memory_db': memory_db_status,
+        'knowledge_graph_db': kg_db_status
+    },
+    'faiss_states': {
+        'faiss_index_count': faiss_index_count,
+        'faiss_id_map_count': faiss_id_map_count
+    },
+    'qdrant_collections': collections_report
+}
+
+out_dir = Path('reports/local_housekeeping/2026-06-12-memory-clean-start')
+out_dir.mkdir(parents=True, exist_ok=True)
+out_file = out_dir / 'qdrant_post_cleanup_manifest.json'
+out_file.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+print(json.dumps(payload, indent=2))
+PY
+```
+
+Expected: Database files are listed as "absent" or "present (empty)", FAISS index/id-map counts are `0`, and all active Qdrant collections have a `points_count` of `0` and dimension matching current models (CLIP=768, DINO=1024, Text=384, Audio=512).
+
 ## 5. Rerun One Scene First
 
 Run one small scene or one small video before broad ingestion. Inspect:

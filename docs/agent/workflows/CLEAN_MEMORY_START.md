@@ -141,6 +141,71 @@ Validate with:
 conda run --no-capture-output -n goodq_core python -m cli.print_config
 ```
 
+## 2.5 Wipe Active Epoch & Legacy Database Files
+
+Run this Python script to delete the SQLite databases, FAISS indices, and legacy project graph databases for the active configured epoch:
+
+```powershell
+python - <<'PY'
+import os, sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path.cwd()))
+try:
+    from steps.common.config_loader import load_configs
+except ModuleNotFoundError:
+    try:
+        from goodq4all.steps.common.config_loader import load_configs
+    except ModuleNotFoundError:
+        print("[ERROR] Cannot load config_loader. Run from project root.")
+        sys.exit(1)
+
+config = load_configs({})
+paths = config.get('paths', {})
+
+db_path = paths.get('db_path')
+kg_path = paths.get('knowledge_graph_db')
+faiss_dir = paths.get('faiss_dir')
+legacy_kg = Path("data/knowledge_graph.db")
+
+print("=== Wiping active epoch relational memory ===")
+for p_str in [db_path, f"{db_path}-shm", f"{db_path}-wal", kg_path]:
+    if p_str:
+        p = Path(p_str)
+        if p.exists():
+            try:
+                p.unlink()
+                print(f"[SUCCESS] Deleted: {p}")
+            except Exception as e:
+                print(f"[ERROR] Failed to delete {p}: {e}")
+
+print("\n=== Wiping legacy database files ===")
+if legacy_kg.exists():
+    try:
+        legacy_kg.unlink()
+        print(f"[SUCCESS] Deleted: {legacy_kg}")
+    except Exception as e:
+        print(f"[ERROR] Failed to delete {legacy_kg}: {e}")
+
+print("\n=== Wiping FAISS index and sqlite map files ===")
+if faiss_dir:
+    faiss_p = Path(faiss_dir)
+    if faiss_p.exists():
+        for root, dirs, files in os.walk(faiss_p, topdown=False):
+            for file in files:
+                file_path = Path(root) / file
+                try:
+                    file_path.unlink()
+                    print(f"[SUCCESS] Deleted FAISS file: {file_path}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to delete FAISS file {file_path}: {e}")
+            for d in dirs:
+                d_path = Path(root) / d
+                os.makedirs(d_path, exist_ok=True)
+PY
+```
+
 ## 3. Delete Historical GoodQ Qdrant Collections
 
 Only delete collections whose names start with `goodq_`:

@@ -831,3 +831,8 @@ def test_f7_11_agents_md_last_verified_date_updated():
     """Verify that the verification date in AGENTS.md header is present."""
     content = open(AGENTS_MD_PATH, "r", encoding="utf-8", errors="ignore").read()
     assert "DOC_LAST_VERIFIED" in content, "AGENTS.md is missing DOC_LAST_VERIFIED tag"
+
+def test_f7_12_post_manifest_script_exists():
+    """Verify that scripts/generate_post_manifest.py exists in the repository."""
+    script_path = os.path.join(REPO_ROOT, "scripts", "generate_post_manifest.py")
+    assert os.path.isfile(script_path), f"generate_post_manifest.py missing at {script_path}"

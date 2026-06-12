@@ -45,9 +45,9 @@ As the codebase has transitioned toward a unified, WSL2-based GPU-accelerated au
     *   **Status**: **Resolved**. The step registry mapping has been updated to import and run `object_track_yolo` as a fallback/alias, ensuring safety.
 
 ### [ ] Redundant or Underutilized Steps
-*   **Path**: `steps/tts/step.py` (Voice Synthesis)
+*   **Path**: `steps/tts/step.py` (Voice Synthesis) (REMOVED)
     *   **Description**: Voice synthesis using Piper/ElevenLabs.
-    *   **Status**: **Underutilized**. Not mapped in `cli/step_runner.py` or part of the standard video/audio ingestion flow.
+    *   **Status**: **Resolved**. The entire `steps/tts/` folder has been deleted from the repository.
 *   **Path**: `steps/pdf_text/step.py` (PDF Text Extraction)
     *   **Description**: Extracted text from PDF files using `pdftotext`.
     *   **Status**: **Underutilized**. Mapped in `step_runner.py` but unused in the main video/audio processing pipeline.

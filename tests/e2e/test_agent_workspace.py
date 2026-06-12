@@ -540,6 +540,45 @@ def test_f4_12_linter_handles_empty_lessons_folder_gracefully():
         for src, dst in temp_files:
             os.rename(dst, src)
 
+def test_f4_13_linter_checks_index_registration():
+    """Verify that the linter flags unregistered files under workflows/."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    workflows_dir = os.path.join(WORKSPACE_ROOT, "workflows")
+    unregistered_file = os.path.join(workflows_dir, "test_temp_unregistered_file.md")
+    
+    with open(unregistered_file, "w", encoding="utf-8") as f:
+        f.write("# Temp Unregistered File\n")
+        
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail on unregistered workflows file"
+        assert "is not registered (linked) in INDEX.md" in res.stdout or "is not registered (linked) in INDEX.md" in res.stderr
+    finally:
+        if os.path.exists(unregistered_file):
+            os.remove(unregistered_file)
+
+def test_f4_14_linter_checks_inline_python_lines_limit():
+    """Verify that the linter flags inline Python blocks exceeding 40 lines."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    workflows_dir = os.path.join(WORKSPACE_ROOT, "workflows")
+    bad_file = os.path.join(workflows_dir, "test_temp_long_python.md")
+    
+    lines = ["# Long Python Script File\n", "```python\n"]
+    for i in range(45):
+        lines.append(f"print({i})\n")
+    lines.append("```\n")
+    
+    with open(bad_file, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+        
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail on long inline python block"
+        assert "Inline Python script block exceeds 40 lines" in res.stdout or "Inline Python script block exceeds 40 lines" in res.stderr
+    finally:
+        if os.path.exists(bad_file):
+            os.remove(bad_file)
+
 # ==============================================================================
 # FEATURE 5: Previous Sessions Reflection & Lessons Extraction (F5, R5)
 # ==============================================================================

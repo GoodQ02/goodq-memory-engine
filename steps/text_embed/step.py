@@ -7,7 +7,7 @@ import json
 import logging
 import re
 
-from steps.common.memory import upsert_embedding
+from steps.common.memory import upsert_embedding, to_faiss_id
 from steps.common.faiss_utils import create_hnsw_id_index
 from steps.common.memory_router import MemoryRouter
 from steps.common.memory_stores import build_text_stores
@@ -810,7 +810,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         embedding_reason = None
         try:
             scene_id = _coerce_scene_identity(item)
-            upsert_embedding(cfg, payload["id"], None, item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id, vector=payload["vector"])
+            upsert_embedding(cfg, payload["id"], to_faiss_id(payload["id"]), item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id, vector=payload["vector"])
             embedding_ok = True
         except Exception as e:
             embedding_reason = f"exception:{type(e).__name__}"

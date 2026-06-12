@@ -49,6 +49,10 @@ jobs:
         shell: pwsh
         run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
 
+      - name: Banned token lint
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/docs/banned_token_lint.py
+
       - name: Bootstrap verification
         shell: pwsh
         run: conda run -n goodq_core python scripts/bootstrap_verify.py --json --profile ci

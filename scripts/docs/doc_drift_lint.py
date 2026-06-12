@@ -40,6 +40,7 @@ ALLOWED_LEGACY_DOCS = [
     "docs/diagnostics/LAUNCHER_PORTABILITY_DISCOVERY.md",
     "docs/diagnostics/LAUNCHER_PORTABILITY_PATCH_NOTES.md",
     "docs/technical/PIPELINE_RESTORATION_BACKLOG.md",
+    "docs/codebase_index/README.md",
 ]
 
 CUDA_MANDATORY_PATTERNS = [

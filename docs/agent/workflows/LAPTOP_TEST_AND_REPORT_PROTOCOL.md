@@ -5,7 +5,7 @@ This document defines the operational protocol for the agent executing on the ta
 ---
 
 ## Mission
-Run a clean install of the v1.0.0 setup executable, verify that the offline model packages are successfully auto-detected and extracted, run an E2E video ingestion test with fallback CPU-based speech transcription, and write a verification report back to the OneDrive package folder.
+Run a clean install of the v2.4.0 setup executable, verify that the offline model packages are successfully auto-detected and extracted, run an E2E video ingestion test with fallback CPU-based speech transcription, and write a verification report back to the OneDrive package folder.
 
 ---
 
@@ -22,11 +22,11 @@ Before running the installer, ensure all old services and processes are terminat
 
 ### Step 2: Run the Installer (Offline Pack Mode)
 Locate the synced setup executable in the OneDrive directory:
-*   Path: `%USERPROFILE%\OneDrive\One_Domingo\test_v1.0.0_package\GoodQ4All_Setup_1.0.0.exe`
+*   Path: `%USERPROFILE%\OneDrive\One_Domingo\test_v2.4.0_package\GoodQ4All_Setup_2.4.0.exe`
 
 Execute the installer. To test a clean offline installation, you can run a silent install which defaults to wiping historic user databases:
 ```powershell
-Start-Process -FilePath "$env:USERPROFILE\OneDrive\One_Domingo\test_v1.0.0_package\GoodQ4All_Setup_1.0.0.exe" -ArgumentList "/S" -Wait
+Start-Process -FilePath "$env:USERPROFILE\OneDrive\One_Domingo\test_v2.4.0_package\GoodQ4All_Setup_2.4.0.exe" -ArgumentList "/S" -Wait
 ```
 *Note: Verify that the setup installer auto-detects and extracts the `.zip` packages or chunk files present in the OneDrive folder without showing warning boxes.*
 
@@ -48,7 +48,7 @@ Verify that the model hub directories exist under `%PROGRAMDATA%\GoodQ4All\model
    ```
 2. Verify that Qdrant (port 6333) and the API server (port 30000) bind cleanly.
 3. Copy the testing video to the import inbox:
-   *   Source: `%USERPROFILE%\OneDrive\One_Domingo\test_v1.0.0_package\GOODQ4ALL_DEMO_FINAL (1).mp4`
+   *   Source: `%USERPROFILE%\OneDrive\One_Domingo\test_v2.4.0_package\GOODQ4ALL_DEMO_FINAL (1).mp4`
    *   Destination: `%PROGRAMDATA%\GoodQ4All\GoodQ_Data\import_inbox\GOODQ4ALL_DEMO_FINAL (1).mp4`
 4. Monitor the watchdog log file `%PROGRAMDATA%\GoodQ4All\GoodQ_Data\epochs\epoch_2025_12_22\logs\watchdog.log` (or `watchdog_startup.log` copied to OneDrive) for completion.
 
@@ -62,7 +62,7 @@ Open the latest run log and search for the `[TRANSCRIBE]` and `[AUDIO]` segments
 ## Reporting Results
 After verifying ingestion, compile a verification summary report and save it to the OneDrive package folder:
 
-*   Output Path: `%USERPROFILE%\OneDrive\One_Domingo\test_v1.0.0_package\success_07.txt`
+*   Output Path: `%USERPROFILE%\OneDrive\One_Domingo\test_v2.4.0_package\success_07.txt`
 
 The report must contain:
 1. A **Status** heading confirming that the installer completed and transcription succeeded.

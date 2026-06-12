@@ -29,7 +29,7 @@ test runs, is disposable and should not seed the next run.
 - Conda environment: `goodq_core`
 - Current profile from runtime config: `BASELINE`
 - WSL distro from runtime config: `Ubuntu-22.04`
-- Standalone Setup Installer (`GoodQ4All_Setup_1.0.0.exe`): Active zero-dependency sandboxed package containing full PyPI dependency closure, preflight perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg` for auto-resolved FFmpeg binaries), and a supervising Go launcher (`LAUNCH_GOODQ.exe`) that manages Qdrant/API/Watchdog and launches the browser automatically on boot.
+- Standalone Setup Installer (`GoodQ4All_Setup_2.4.0.exe`): Active zero-dependency sandboxed package containing full PyPI dependency closure, preflight perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg` for auto-resolved FFmpeg binaries), and a supervising Go launcher (`LAUNCH_GOODQ.exe`) that manages Qdrant/API/Watchdog and launches the browser automatically on boot.
 - Sandboxed execution safety: The python execution path loader (`python_paths.py`) automatically bypasses Conda when running in the sandboxed target environment or when conda is missing. The GPU configuration manager (`gpu_config.py`) wraps PyTorch (`torch`) imports in try-except blocks, falling back to CPU mode dynamically instead of failing with ModuleNotFoundError.
 - Log permission redirection: The mission logger (`goodq_logger.py`) dynamically maps log directories to writeable ProgramData (`%PROGRAMDATA%\GoodQ4All\logs`) when no custom path is specified, and wraps file logger creation in a try-except block to gracefully fall back to console logging on write permission errors.
 - Offline API documentation: Mounts and serves `/docs` and `/redoc` locally from offline caches (`ui/docs_offline/`) when internet access is absent.
@@ -701,7 +701,7 @@ they are active again:
 
 ## Safe Next Actions
 
-1. Run the setup installer `GoodQ4All_Setup_1.0.0.exe` to deploy on a clean follower machine (laptop).
+1. Run the setup installer `GoodQ4All_Setup_2.4.0.exe` to deploy on a clean follower machine (laptop).
 2. Test watchdog folder drop events under progressive chunk parameters.
 3. Validate search blending results via `/api/search/temporal` using the local Retro UI.
 

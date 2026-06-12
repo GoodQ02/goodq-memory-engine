@@ -11,8 +11,8 @@ This is the canonical installation guide.
 GoodQ4All is packaged as a unified sandboxed Windows Installer. This is the simplest path and does not require pre-existing Git, Conda, or Python environments on the host.
 
 <p align="left">
-  <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe" style="display: inline-block; padding: 12px 24px; background-color: #ffb300; color: #110d1a; font-weight: bold; text-decoration: none; border-radius: 4px; box-shadow: 0 4px 10px rgba(255, 179, 0, 0.3); transition: all 0.2s ease; margin: 10px 0;">
-    🚀 Download GoodQ4All Setup v1.0.0.exe
+  <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.4.0/GoodQ4All_Setup_2.4.0.exe" style="display: inline-block; padding: 12px 24px; background-color: #ffb300; color: #110d1a; font-weight: bold; text-decoration: none; border-radius: 4px; box-shadow: 0 4px 10px rgba(255, 179, 0, 0.3); transition: all 0.2s ease; margin: 10px 0;">
+    🚀 Download GoodQ4All Setup v2.4.0.exe
   </a>
 </p>
 
@@ -27,7 +27,7 @@ GoodQ4All is packaged as a unified sandboxed Windows Installer. This is the simp
 * **Optional**: An NVIDIA GPU and WSL2 Ubuntu for accelerated lanes.
 
 ### Installation Steps
-1. Download and run the setup installer: `GoodQ4All_Setup_1.0.0.exe`.
+1. Download and run the setup installer: `GoodQ4All_Setup_2.4.0.exe`.
 2. Choose your installation path (defaults to `%PROGRAMFILES%\GoodQ4All`).
 3. Complete the setup. This installs the binary files, configures registry keys (for Add/Remove Programs and shortcuts), and provisions the isolated python runtime, branding resources, and database.
 4. Double-click the **GoodQ4All** Desktop or Start Menu shortcut to run the supervisor launcher (**LAUNCH_GOODQ.exe** located in `%PROGRAMFILES%\GoodQ4All\`).

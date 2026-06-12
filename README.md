@@ -64,8 +64,8 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
 
 *   **Using This All-in-One Installer (Unified Windows Installer):**
     <p align="center">
-      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
-        🚀 Download GoodQ4All Setup v1.0.0.exe
+      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.4.0/GoodQ4All_Setup_2.4.0.exe" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
+        🚀 Download GoodQ4All Setup v2.4.0.exe
       </a>
     </p>
     
@@ -75,12 +75,12 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     > *   **SmartScreen Workaround:** Since the setup installer is currently self-signed, Windows SmartScreen may show an "Unknown Publisher" dialog. Click **More info** and select **Run anyway** to proceed.
     > *   **Integrity Checksum:** Verify your download authenticity by running the following command in PowerShell:
     >     ```powershell
-    >     Get-FileHash GoodQ4All_Setup_1.0.0.exe
+    >     Get-FileHash GoodQ4All_Setup_2.4.0.exe
     >     ```
-    >     Expected SHA256 hash: `A7AEB97DD3D4060174C3DDA2EDDFF430E365731B93D066CA24160738C39C97BE`
+    >     Expected SHA256 hash: Refer to the GitHub Releases page for the latest signed executable checksum.
 
     <p align="center">
-      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0/GoodQ4All_Setup_1.0.0.exe">
+      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.4.0/GoodQ4All_Setup_2.4.0.exe">
         <img src="samples/assets/one_click_installer_mockup.png" alt="GoodQ4All One-Click Setup Installer" width="550" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" />
       </a>
     </p>
@@ -89,13 +89,19 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
 
 ## 🛡️ Core Capabilities & Architecture
 
-### 1. Proof-Backed Ingestion & Witness Audit Trail
+### 1. Proof-Backed Ingestion & Hardened API Facade
 Machine memory should earn every claim it makes. GoodQ4All generates step-by-step logs (`step_runs.jsonl`), scene manifests, and intermediate features for every ingested file.
-*   **Epistemic Verification:** Ingestion is tracked using verifiable manifests and SQLite-backed relational schemas.
-*   **No Silent Failures:** The Control Agent and Watchdog processes bubble errors directly to the operator consoles, providing absolute visibility into the execution stack.
-*   **Science & Witness Ratings:** Ingestion runs produce verifiable evidence checkpoints, letting you inspect and audit model perceptions.
+*   **Single-Use Confirmation Tokens**: Ingestion submission routes are protected by a server-generated token handshake with single-use nonce validation, preventing unauthenticated/out-of-bounds execution.
+*   **Epistemic Verification**: Ingestion is tracked using verifiable manifests and SQLite-backed relational schemas.
+*   **No Silent Failures**: The Control Agent and Watchdog processes bubble errors directly to the operator consoles, providing absolute visibility into the execution stack.
 
-### 2. TurboQuant Hybrid Vector Caching
+### 2. Local Model Governance & VRAM Budgeting
+To run large-parameter local models safely on consumer hardware (e.g. RTX 4070 Ti SUPER 16GB) without Out-of-Memory (OOM) crashes, GoodQ4All implements strict VRAM and execution controls:
+*   **Model Lifecycle Manager**: A specialized context manager (`lib/model_lifecycle.py`) that audits free VRAM using PyTorch and `nvidia-smi` before loading models, dynamically evicting idle networks from GPU memory.
+*   **Local Agent Stack (`MiniAgentClient`)**: Gated LLM reasoning and local tool execution through zero-dependency policy enforcement middleware, loading schemas, policies, and contracts dynamically from the version-controlled `agents/stack/` directory.
+*   **Endpoint Fallback Orchestration**: Automatically falls back from the primary local vLLM server (`prefer_speed`, running Qwen2.5) to a local Ollama service (`prefer_quality`, running Phi-4) or a CPU-safe model variant when VRAM thresholds are breached.
+
+### 3. TurboQuant Hybrid Vector Caching
 High-precision 32-bit floating point embeddings are persisted in Qdrant and FAISS. For rapid candidate filtering, GoodQ4All uses **TurboQuant**—an SQLite sidecar caching technology employing Lloyd-Max Polar Quantization and Johnson-Lindenstrauss residual projections.
 *   **Performance:** Achieves sub-millisecond candidate pre-filtering.
 *   **Accuracy:** 100% search accuracy is maintained by performing the final rank scoring on the uncompressed raw float32 vectors.
@@ -104,7 +110,7 @@ High-precision 32-bit floating point embeddings are persisted in Qdrant and FAIS
 > **Hybrid Precision Caching Model**:
 > GoodQ4All uses an additive **sidecar vector cache** architecture. High-precision 32-bit floating point (`float32`) embeddings remain the authoritative truth of the system, stored in Qdrant and FAISS. Performance-oriented query pre-filtering is handled via lightweight **TurboQuant** fields (Lloyd-Max Polar Quantization + Johnson–Lindenstrauss residual corrections) stored in SQLite. This ensures zero data loss, guarantees rollback capability, and cuts memory usage.
 
-### 3. Adaptive Hardware Profiles
+### 4. Adaptive Hardware Profiles
 The pipeline dynamically adjusts its computational needs to match your system specs:
 *   `BASELINE` (CPU-safe): Fully operational, offline-ready execution on standard CPU hardware. Bypasses GPU requirements gracefully.
 *   `GPU_ENHANCED`: Activates local NVIDIA GPU (CUDA 12.1) and WSL2 accelerated audio processing paths for fast, high-volume ingestion.

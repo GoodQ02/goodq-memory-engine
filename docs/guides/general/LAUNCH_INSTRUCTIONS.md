@@ -8,7 +8,7 @@ This is the current launch/control runbook for the Windows host.
 
 ## 1. Standalone Setup Installer Flow (Recommended)
 
-If you installed GoodQ4All via the packaged Setup Installer (`GoodQ4All_Setup_1.0.0.exe`):
+If you installed GoodQ4All via the packaged Setup Installer (`GoodQ4All_Setup_2.4.0.exe`):
 
 * **Launch**: Double-click the **GoodQ4All** Desktop or Start Menu shortcut.
 * **What happens**: This runs the native supervisor launcher (`LAUNCH_GOODQ.exe`). It verifies model signatures, starts the local Qdrant database, spins up the background API and Watchdog services, and automatically opens your browser to the **Retro Memory Explorer** UI (served at `http://127.0.0.1:30000/ui/retro_console_v1/`).

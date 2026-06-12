@@ -17,6 +17,9 @@
 - Resilient: optional enrichments may fail without halting ingestion.
 - Not a demo system and not a stateless pipeline.
 
+## Agent Knowledge Workspace
+The primary workspace for agent onboarding, shared protocols, models and VRAM budgets, workflows, and historical lessons is located at the environment-relative path: `%USERPROFILE%\My Drive\_AGENT`. Future agents must reference this workspace for all persistent runbooks, environment capability checks via the bootstrap script (`bootstrap_agent.ps1`), and workspace verification rules (`verify_agent_workspace.py`).
+
 ## Canonical Runtime Model
 - Primary host: Windows 11 desktop (source of truth).
 - Secondary host: laptop (follower; aligns from desktop).

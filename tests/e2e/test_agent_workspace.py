@@ -94,8 +94,8 @@ def test_f1_09c_quizzes_dir_not_empty():
 
 def test_f1_10_no_unknown_root_directories():
     """Verify no undocumented directories exist in the root workspace."""
-    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"}
-    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md", "index.md", "readme_for_agents.md", ".agent_workspace_policy.json"}
+    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes", "reports"}
+    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md", "index.md", "readme_for_agents.md", ".agent_workspace_policy.json", "changelog.md"}
     actual_items = os.listdir(WORKSPACE_ROOT)
     for item in actual_items:
         if item == "__pycache__":
@@ -108,13 +108,13 @@ def test_f1_10_no_unknown_root_directories():
 
 def test_f1_11_workspace_permissions_readable():
     """Verify that the workspace directories are readable."""
-    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"]:
+    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes", "reports"]:
         full_path = os.path.join(WORKSPACE_ROOT, d)
         assert os.access(full_path, os.R_OK), f"Directory {d} is not readable"
 
 def test_f1_12_workspace_permissions_writeable():
     """Verify that the workspace directories are writeable."""
-    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes"]:
+    for d in ["protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes", "reports"]:
         full_path = os.path.join(WORKSPACE_ROOT, d)
         assert os.access(full_path, os.W_OK), f"Directory {d} is not writeable"
 
@@ -487,7 +487,13 @@ def test_f4_08_linter_is_python3_compatible():
     """Verify the linter script compiles and runs under Python 3."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     res = subprocess.run(["python", "-m", "py_compile", linter_path], capture_output=True)
-    assert res.returncode == 0, "Linter script has syntax errors under python3"
+    try:
+        assert res.returncode == 0, "Linter script has syntax errors under python3"
+    finally:
+        import shutil
+        pycache_path = os.path.join(WORKSPACE_ROOT, "__pycache__")
+        if os.path.isdir(pycache_path):
+            shutil.rmtree(pycache_path, ignore_errors=True)
 
 def test_f4_09_linter_logs_errors_visible():
     """Verify that the linter outputs clear messages to stdout/stderr on failure."""
@@ -875,3 +881,149 @@ def test_f7_12_post_manifest_script_exists():
     """Verify that scripts/generate_post_manifest.py exists in the repository."""
     script_path = os.path.join(REPO_ROOT, "scripts", "generate_post_manifest.py")
     assert os.path.isfile(script_path), f"generate_post_manifest.py missing at {script_path}"
+
+# ==============================================================================
+# FEATURE 8: Hardened Workspace Auditing (F8, R8)
+# ==============================================================================
+
+def test_f8_01_reports_subdirs_exist():
+    """Verify that the reports folder and all subfolders exist and are not empty."""
+    reports_dir = os.path.join(WORKSPACE_ROOT, "reports")
+    assert os.path.isdir(reports_dir), "reports/ directory does not exist"
+    for subdir in ["bootstrap", "audits", "handoffs", "cleanup"]:
+        path = os.path.join(reports_dir, subdir)
+        assert os.path.isdir(path), f"reports/{subdir}/ directory does not exist"
+        assert len(os.listdir(path)) > 0, f"reports/{subdir}/ directory is empty"
+
+def test_f8_02_changelog_exists():
+    """Verify that CHANGELOG.md exists in the workspace root."""
+    changelog_path = os.path.join(WORKSPACE_ROOT, "CHANGELOG.md")
+    assert os.path.isfile(changelog_path), "CHANGELOG.md is missing from workspace root"
+
+def test_f8_03_policy_json_keys():
+    """Verify that .agent_workspace_policy.json contains the stricter required keys."""
+    policy_path = os.path.join(WORKSPACE_ROOT, ".agent_workspace_policy.json")
+    assert os.path.isfile(policy_path), ".agent_workspace_policy.json is missing"
+    import json
+    with open(policy_path, "r", encoding="utf-8") as f:
+        policy = json.load(f)
+    assert "agents_may_create" in policy, "policy missing 'agents_may_create'"
+    assert "agents_must_not_create_without_approval" in policy, "policy missing 'agents_must_not_create_without_approval'"
+    assert "allowed_source_formats" in policy, "policy missing 'allowed_source_formats'"
+    assert "forbidden_file_patterns" in policy, "policy missing 'forbidden_file_patterns'"
+    
+    # Assert specific additions
+    assert "reports/" in policy["agents_may_create"], "policy does not allow reports/ creation"
+    assert "protocols/" in policy["agents_must_not_create_without_approval"], "policy does not require approval for protocols/"
+
+def test_f8_04_host_profiles_standard_fields():
+    """Verify that each host profile markdown contains Network and Constraints keywords."""
+    profiles_dir = os.path.join(WORKSPACE_ROOT, "host_profiles")
+    assert os.path.isdir(profiles_dir), "host_profiles/ directory does not exist"
+    for f in os.listdir(profiles_dir):
+        if f.lower().endswith(".md"):
+            p = os.path.join(profiles_dir, f)
+            content = open(p, "r", encoding="utf-8", errors="ignore").read()
+            assert "network" in content.lower(), f"Host profile {f} is missing Network keyword"
+            assert "constraints" in content.lower(), f"Host profile {f} is missing Constraints keyword"
+
+def test_f8_05_quiz_exactly_8_questions_and_passing_threshold():
+    """Verify that the quiz has exactly 8 questions and does not contain the answers."""
+    quiz_file = os.path.join(WORKSPACE_ROOT, "quizzes", "goodq4all_ingestion_readiness.md")
+    assert os.path.isfile(quiz_file), "Quiz file is missing"
+    content = open(quiz_file, "r", encoding="utf-8", errors="ignore").read()
+    
+    questions = re.findall(r"##\s+Question\s+\d+", content, re.IGNORECASE)
+    assert len(questions) == 8, f"Quiz must contain exactly 8 questions (found {len(questions)})"
+    
+    # Check that it doesn't contain answers/answer keys
+    assert "answer key" not in content.lower(), "Quiz file should not contain answer key references"
+    # Ensure passing threshold is mentioned
+    assert "passing" in content.lower() or "threshold" in content.lower(), "Quiz file must state passing threshold"
+    
+    # Check that answer key exists in answer_keys folder
+    key_file = os.path.join(WORKSPACE_ROOT, "quizzes", "answer_keys", "goodq4all_ingestion_readiness_key.md")
+    assert os.path.isfile(key_file), "Quiz answer key file is missing"
+
+def test_f8_06_linter_bans_cache_files():
+    """Verify that the linter correctly flags and bans pycache, pyc, pyo, pytest_cache, mypy_cache, and ruff_cache."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    
+    # Let's create a temporary banned directory
+    banned_dir = os.path.join(WORKSPACE_ROOT, ".pytest_cache")
+    created_dir = False
+    if not os.path.exists(banned_dir):
+        os.makedirs(banned_dir)
+        created_dir = True
+    
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail when .pytest_cache was present"
+        assert "Banned directory found" in res.stdout or "Banned directory found" in res.stderr
+    finally:
+        if created_dir:
+            os.rmdir(banned_dir)
+
+def test_f8_07_linter_bans_file_links():
+    """Verify that the linter flags file:/// links in markdown documents."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
+    bad_file = os.path.join(protocols_dir, "test_temp_file_link.md")
+    
+    with open(bad_file, "w", encoding="utf-8") as f:
+        f.write("Here is a link: [plan](file:///something/else/plan.md)\n")
+        
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail when file:/// link was present"
+        assert "file:/// link found" in res.stdout or "file:/// link found" in res.stderr
+    finally:
+        if os.path.exists(bad_file):
+            os.remove(bad_file)
+
+def test_f8_08_linter_bans_conflicted_copies():
+    """Verify that the linter flags files containing 'conflicted copy' in the name."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
+    bad_file = os.path.join(protocols_dir, "rules (conflicted copy).md")
+    
+    with open(bad_file, "w", encoding="utf-8") as f:
+        f.write("# Rules\n")
+        
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail when conflicted copy was present"
+        assert "Banned conflicted copy file found" in res.stdout or "Banned conflicted copy file found" in res.stderr
+    finally:
+        if os.path.exists(bad_file):
+            os.remove(bad_file)
+
+def test_f8_09_linter_bans_google_native_shortcuts():
+    """Verify that the linter flags Google-native shortcuts and temporary files."""
+    linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
+    protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
+    bad_file = os.path.join(protocols_dir, "document.gdoc")
+    
+    with open(bad_file, "w", encoding="utf-8") as f:
+        f.write("Google doc link dummy\n")
+        
+    try:
+        res = subprocess.run(["python", linter_path], capture_output=True, text=True)
+        assert res.returncode != 0, "Linter did not fail when Google-native shortcut was present"
+        assert "Banned file format found" in res.stdout or "Banned file format found" in res.stderr
+    finally:
+        if os.path.exists(bad_file):
+            os.remove(bad_file)
+
+def test_f8_10_linter_validates_index_doctrine_and_readme_authority():
+    """Verify that the linter checks INDEX.md for the doctrine statement and README_FOR_AGENTS.md for Authority Order."""
+    index_path = os.path.join(WORKSPACE_ROOT, "INDEX.md")
+    readme_path = os.path.join(WORKSPACE_ROOT, "README_FOR_AGENTS.md")
+    assert os.path.isfile(index_path), "INDEX.md does not exist"
+    assert os.path.isfile(readme_path), "README_FOR_AGENTS.md does not exist"
+    
+    index_content = open(index_path, "r", encoding="utf-8", errors="ignore").read()
+    readme_content = open(readme_path, "r", encoding="utf-8", errors="ignore").read()
+    
+    assert "This folder is doctrine. The repository is implementation. If they conflict, stop and ask for evidence." in index_content
+    assert "Authority Order" in readme_content

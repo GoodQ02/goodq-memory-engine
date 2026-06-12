@@ -2,6 +2,10 @@
 Audio transcription compatibility step.
 
 This legacy step surface now delegates to the canonical unified WSL bridge.
+
+.. deprecated:: transitional facade
+   This module is a deprecated/transitional facade. Use the canonical unified
+   WSL bridge instead.
 """
 
 from __future__ import annotations
@@ -26,6 +30,9 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     
     This delegates transcription to the canonical unified WSL bridge.
     
+    .. deprecated:: transitional facade
+       This function is deprecated. Use the canonical unified WSL bridge instead.
+    
     Args:
         item: Item dict containing 'path' or 'audio_path'
         cfg: Configuration dict
@@ -33,6 +40,12 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     Returns:
         Dict with 'transcript' and 'transcript_segments'
     """
+    import warnings
+    warnings.warn(
+        "audio_transcribe is deprecated and will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     audio_path = item.get("audio_path") or item.get("path")
     if not audio_path:
         logger.warning("No audio_path found in item")
@@ -115,5 +128,16 @@ def audio_transcribe(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
 
 # For backward compatibility
 def run(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Legacy entry point"""
+    """Legacy entry point.
+    
+    .. deprecated:: transitional facade
+       This function is deprecated. Use audio_transcribe or the canonical unified WSL bridge instead.
+    """
+    import warnings
+    warnings.warn(
+        "run is deprecated and will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return audio_transcribe(item, cfg)
+

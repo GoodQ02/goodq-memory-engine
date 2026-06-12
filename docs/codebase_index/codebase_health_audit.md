@@ -24,15 +24,15 @@ As the codebase has transitioned toward a unified, WSL2-based GPU-accelerated au
     *   **Status**: **RESOLVED**. Archived to `archive/deprecated_audio_emotion_step.py`.
     *   **Recommendation**: Keep as fallback reference or deprecate/remove.
 
-### [ ] Transitional WSL2 Compatibility Facades
+### [x] Transitional WSL2 Compatibility Facades (RESOLVED)
 *   **Paths**: `steps/audio_diarize/step_wsl2.py` and `steps/audio_transcribe/step_wsl2.py`
     *   **Description**: Older single-purpose WSL2 wrappers that invoke `wsl2_audio/audio_bridge.py`.
-    *   **Status**: **Superceded**. The pipeline now runs `steps/audio/audio_wsl2_bridge.py` directly for unified processing.
-    *   **Recommendation**: Retain for test suite backward-compatibility but mark as deprecated.
+    *   **Status**: **RESOLVED**. Added explicit deprecation warnings to functions (`audio_diarize`, `audio_transcribe`, and `run`) and updated docstrings to mark them as deprecated/transitional facades.
+    *   **Recommendation**: Deprecated; use the canonical unified WSL bridge instead.
 *   **Paths**: `steps/audio_ingest_unified/step_wsl2.py` and `wsl2_audio/audio_bridge.py`
     *   **Description**: Transitional facade interfaces that delegate tasks to `scripts.wsl2_audio_bridge`.
-    *   **Status**: **Legacy Compatibility**.
-    *   **Recommendation**: Keep for backwards compatibility with older pipelines but avoid using in new runs.
+    *   **Status**: **RESOLVED**. Added module-level deprecation warnings and updated docstrings to document deprecation. Cleared dormant code from `wsl2_audio/audio_bridge.py` by removing `diarize_wsl2`, `_to_diarize_payload`, and the class method `diarize`.
+    *   **Recommendation**: Deprecated; avoid using in new runs.
 
 ### [x] Broken Step Mapping in `cli/step_runner.py` (RESOLVED)
 *   **Path**: `cli/step_runner.py` (Line 199 or surrounding)

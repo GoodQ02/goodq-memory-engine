@@ -18,6 +18,15 @@
 | 7 | Unit Tests Relocation | Relocate test files to `tests/legacy/` | None | DONE |
 | 8 | WSL Test Cleanup | Delete deprecated test functions in `tests/unit/test_bootstrap_install_wsl.py` | None | DONE |
 | 9 | Audit Report & Test Execution | Check off audit report box, run all 700+ pytest tests inside goodq_core | M6, M7, M8 | DONE |
+| 10 | Audit Facade Usage | Audit active codebase & tests to identify calls to transitional facades | None | DONE |
+| 11 | Deprecate & Document | Add deprecation warnings to the transitional files and update module docstrings | M10 | DONE |
+| 12 | Clean Up Dormant Code | Remove unused/dormant internal functions/imports from facade files | M10 | DONE |
+| 13 | Update Health Audit | Update Transitional WSL2 Compatibility Facades section in codebase_health_audit.md | M11, M12 | DONE |
+| 14 | Verification | Run all pytest unit tests and check compatibility | M11, M12 | DONE |
+| 15 | Forensic Integrity Audit | Execute auditor to confirm no cheating or violations | M13, M14 | DONE |
+| 16 | Package Import Bug Fix | Fix steps/audio_diarize/__init__.py and verify imports & tests pass | None | DONE |
+| 17 | Final Forensic Audit | Run final integrity audit on package import fix | M16 | DONE |
+
 
 ## Interface Contracts
 ### Programmatic Index DB Format

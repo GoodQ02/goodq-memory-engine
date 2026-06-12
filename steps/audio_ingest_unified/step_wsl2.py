@@ -3,7 +3,17 @@ Unified WSL2 audio compatibility step.
 
 This legacy step surface now delegates to the canonical unified WSL bridge
 instead of invoking ``process_audio.py`` directly.
+
+.. deprecated:: transitional facade
+   This module is deprecated and unused.
 """
+import warnings
+warnings.warn(
+    "steps/audio_ingest_unified/step_wsl2.py is deprecated and unused.",
+    DeprecationWarning,
+    stacklevel=1,
+)
+
 import json
 import logging
 import os

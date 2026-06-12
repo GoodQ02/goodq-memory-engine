@@ -2,6 +2,10 @@
 Audio diarization compatibility step.
 
 This legacy step surface now delegates to the canonical unified WSL bridge.
+
+.. deprecated:: transitional facade
+   This module is a deprecated/transitional facade. Use the canonical unified
+   WSL bridge instead.
 """
 
 from __future__ import annotations
@@ -26,6 +30,9 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     
     This delegates transcription and diarization to the canonical unified WSL bridge.
     
+    .. deprecated:: transitional facade
+       This function is deprecated. Use the canonical unified WSL bridge instead.
+    
     Args:
         item: Item dict containing 'path' or 'audio_path'
         cfg: Configuration dict
@@ -33,6 +40,12 @@ def audio_diarize(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict with diarization segments and speaker info
     """
+    import warnings
+    warnings.warn(
+        "audio_diarize is deprecated and will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     audio_path = item.get("audio_path") or item.get("path")
     if not audio_path:
         logger.warning("No audio_path found in item")
@@ -190,5 +203,16 @@ def _extract_speakers(diarization: List[Dict]) -> List[Dict]:
 
 # For backward compatibility
 def run(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Legacy entry point"""
+    """Legacy entry point.
+    
+    .. deprecated:: transitional facade
+       This function is deprecated. Use audio_diarize or the canonical unified WSL bridge instead.
+    """
+    import warnings
+    warnings.warn(
+        "run is deprecated and will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return audio_diarize(item, cfg)
+

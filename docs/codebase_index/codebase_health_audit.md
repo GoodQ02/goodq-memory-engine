@@ -44,19 +44,19 @@ As the codebase has transitioned toward a unified, WSL2-based GPU-accelerated au
         However, there was no directory `steps/object_track` in the codebase; only `steps/object_track_yolo` exists. Attempting to execute `object_track` via `step_runner.py` threw an immediate `ImportError`.
     *   **Status**: **Resolved**. The step registry mapping has been updated to import and run `object_track_yolo` as a fallback/alias, ensuring safety.
 
-### [ ] Redundant or Underutilized Steps
+### [x] Redundant or Underutilized Steps (RESOLVED)
 *   **Path**: `steps/tts/step.py` (Voice Synthesis) (REMOVED)
     *   **Description**: Voice synthesis using Piper/ElevenLabs.
-    *   **Status**: **Resolved**. The entire `steps/tts/` folder has been deleted from the repository.
+    *   **Status**: **RESOLVED**. The entire `steps/tts/` folder has been deleted from the repository.
 *   **Path**: `steps/pdf_text/step.py` (PDF Text Extraction)
     *   **Description**: Extracted text from PDF files using `pdftotext`.
-    *   **Status**: **Underutilized**. Mapped in `step_runner.py` but unused in the main video/audio processing pipeline.
+    *   **Status**: **RESOLVED (Retained)**. Confirmed as underutilized/experimental. Retained in repository as an optional step mapped in `step_runner.py` for future document ingestion pipelines.
 *   **Paths**: `steps/home_assistant_status/step.py` (Smart Home Context) and `steps/system_metrics/step.py` (System Resource Metrics)
     *   **Description**: Standalone auxiliary scripts for logging environmental and system context.
-    *   **Status**: **Underutilized**. Not part of core video ingestion.
+    *   **Status**: **RESOLVED (Retained)**. Retained as optional environmental telemetry plugins mapped in `step_runner.py` for advanced monitoring setups.
 *   **Path**: `steps/discover_sources/step.py` (Inbox Scanner)
     *   **Description**: Scans inbox folder for new media files.
-    *   **Status**: **Underutilized**. Only called by `cli/list_inbox.py` for displaying pending items; not used in processing.
+    *   **Status**: **RESOLVED (Retained)**. Confirmed active use by `cli/list_inbox.py` for listing pending items; not utilized during the core video ingestion pipeline.
 
 ---
 

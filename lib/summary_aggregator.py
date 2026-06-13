@@ -65,6 +65,7 @@ def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]
         "video_count": video_count,
         "scene_count": scene_count,
         "temporal_index_count": temporal_index_count,
+        "video_ids": video_ids,
         "generated_at_utc": _utc_now_iso(),
         "source_surfaces_used": ["sqlite_knowledge_graph", "temporal_index_json"]
     }

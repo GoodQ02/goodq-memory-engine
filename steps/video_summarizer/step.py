@@ -213,6 +213,31 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
     # Check if LLM video summarization is enabled
     use_llm = cfg.get('llm', {}).get('features', {}).get('video_summarization', True)
     
+    # Collect source artifact versions for provenance tracking
+    source_artifact_versions = []
+    try:
+        conn_prov = sqlite3.connect(db_path)
+        c_prov = conn_prov.cursor()
+        c_prov.execute("""
+            SELECT id, content, created_at FROM summaries 
+            WHERE category='scene_summary' 
+            ORDER BY id
+        """)
+        for rid, content_json, created_at in c_prov.fetchall():
+            try:
+                content = json.loads(content_json)
+                scene_id = content.get('scene_id', 'unknown')
+                source_artifact_versions.append({
+                    "summary_id": rid,
+                    "scene_id": scene_id,
+                    "created_at": created_at
+                })
+            except Exception:
+                continue
+        conn_prov.close()
+    except Exception as pe:
+        logger.warning(f"Failed to query scene summaries for provenance: {pe}")
+
     # Generate video summary
     video_summary = None
     if use_llm:
@@ -224,27 +249,45 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
             logger.warning("LLM video summarization failed, using template fallback")
         video_summary = generate_video_summary_template(cfg, video_hash, db_path)
     
-    # Store in database
+    # Store in database with full provenance
     try:
+        from datetime import datetime, timezone
         conn = sqlite3.connect(db_path)
+        
+        # Build provenance
+        llm_config = cfg.get('llm', {})
+        api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
+        model_name = llm_config.get('model', 'default_model')
+        
+        provenance = {
+            "model_backend": f"{model_name} ({api_url})",
+            "prompt_version": "v1.0.0",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_artifact_versions": source_artifact_versions
+        }
+        
+        payload = json.dumps({
+            'video_hash': video_hash,
+            'summary': video_summary,
+            'method': 'llm' if use_llm and video_summary else 'template',
+            'provenance': provenance
+        }, ensure_ascii=False)
+        
         conn.execute("""
             INSERT OR REPLACE INTO summaries (summary_type, category, content, created_at)
             VALUES ('video', 'video_summary', ?, datetime('now'))
-        """, (json.dumps({
-            'video_hash': video_hash,
-            'summary': video_summary,
-            'method': 'llm' if use_llm and video_summary else 'template'
-        }),))
+        """, (payload,))
         conn.commit()
         conn.close()
         
-        logger.info(f"Video summary stored for video {video_hash}")
+        logger.info(f"Video summary stored for video {video_hash} with provenance info")
         
         return {
             'success': True,
             'summary': video_summary,
             'video_hash': video_hash,
-            'method': 'llm' if use_llm else 'template'
+            'method': 'llm' if use_llm and video_summary else 'template',
+            'provenance': provenance
         }
     except Exception as e:
         logger.error(f"Failed to store video summary: {e}")

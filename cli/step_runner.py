@@ -330,6 +330,15 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         assert item is not None
         return run_cross_modal_harmonization(item, cfg)
     
+    if step_name == "video_summarizer":
+        from steps.video_summarizer.step import run_step as run_video_summarizer
+        if not item:
+            raise ValueError("Input item dictionary is required for video_summarizer step")
+        video_hash = item.get("video_hash")
+        if not isinstance(video_hash, str) or not video_hash.strip():
+            raise ValueError("A non-empty string 'video_hash' is required for video_summarizer step")
+        return run_video_summarizer(cfg, video_hash.strip())
+    
     raise SystemExit(f"Unknown step: {step_name}")
 
 

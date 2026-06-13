@@ -164,7 +164,7 @@ def get_device():
     try:
         import torch
         return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    except:
+    except Exception:
         return "cpu"
 
 def clear_cache():
@@ -174,7 +174,7 @@ def clear_cache():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-    except:
+    except Exception:
         pass
 
 def print_memory_stats():
@@ -196,7 +196,7 @@ def print_memory_stats():
                 "reserved_gb": reserved,
                 "peak_gb": max_allocated
             }
-    except:
+    except Exception:
         pass
     return None
 

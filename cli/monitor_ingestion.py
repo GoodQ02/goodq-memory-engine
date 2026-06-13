@@ -74,7 +74,8 @@ def get_processing_videos():
                         'path': str(video_dir),
                         'metadata': metadata
                     })
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to load metadata json for {video_dir.name}: {e}")
                 pass
     
     return videos
@@ -84,7 +85,8 @@ def tail_log(log_path, lines=20):
     try:
         with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
             return f.readlines()[-lines:]
-    except:
+    except Exception as e:
+        logger.warning(f"Failed to tail log file {log_path}: {e}")
         return []
 
 def monitor():

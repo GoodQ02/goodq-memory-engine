@@ -6,6 +6,9 @@ from __future__ import annotations
 from typing import Dict, List, Any, Optional
 import wave
 import struct
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import webrtcvad
@@ -91,6 +94,9 @@ def segment_with_webrtc_vad(
     
     print(f"[PHASE1] Processing {num_frames} frames...")
     
+    vad_failures = 0
+    first_vad_error = None
+    
     for i in range(num_frames):
         offset = i * frame_bytes
         frame = audio_data[offset:offset + frame_bytes]
@@ -101,7 +107,10 @@ def segment_with_webrtc_vad(
         # Check if frame contains speech
         try:
             frame_is_speech = vad.is_speech(frame, sample_rate)
-        except Exception:
+        except Exception as e:
+            if first_vad_error is None:
+                first_vad_error = str(e)
+            vad_failures += 1
             frame_is_speech = False
         
         timestamp = i * frame_duration_ms / 1000.0
@@ -142,6 +151,12 @@ def segment_with_webrtc_vad(
             'end': (num_frames * frame_duration_ms / 1000.0) + padding_duration,
             'vad_speech': True
         })
+    
+    if vad_failures > 0:
+        logger.warning(
+            f"VAD frame speech detection failed {vad_failures} times out of {num_frames} frames. "
+            f"First error: {first_vad_error}"
+        )
     
     print(f"[PHASE1] Detected {len(segments)} speech segments")
     
@@ -214,7 +229,8 @@ def _fallback_full_segment(audio_path: str) -> List[Dict[str, Any]]:
     try:
         with wave.open(audio_path, 'rb') as wf:
             duration = wf.getnframes() / wf.getframerate()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to query wave duration during fallback: {e}")
         duration = 0.0
     
     return [{

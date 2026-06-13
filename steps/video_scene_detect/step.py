@@ -213,7 +213,9 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
     try:
         from steps.common.progress_tracker import get_tracker
         tracker = get_tracker()
-    except:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to import progress tracker: {e}")
         tracker = None
     
     path = item.get('source_path')

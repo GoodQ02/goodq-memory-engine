@@ -6,8 +6,13 @@ const state = {
   activeEntity: null,
   activeCollection: null,
   collections: [],
-  currentPlaylistScenes: []
+  currentPlaylistScenes: [],
+  llmSummarizationEnabled: false,
+  currentVideoHash: null,
+  summarizationInProgress: false
 };
+
+let pollInterval = null;
 
 // Toast Notifications
 function showToast(message, type = 'success') {
@@ -49,6 +54,7 @@ function getFrameEndpoint(videoId, representativeFrame) {
 document.addEventListener('DOMContentLoaded', () => {
   setupTabListeners();
   setupModalListeners();
+  setupRegenListener();
   bootSummaryConsole();
 });
 
@@ -156,6 +162,10 @@ async function bootSummaryConsole() {
     renderLeaderboards(state.dashboard);
     loadCustomCollections();
     setupBuiltInHighlights();
+    
+    // Capability and video loading
+    await checkCapabilities();
+    loadVideos();
   } catch (err) {
     status.textContent = 'Status: OFFLINE';
     status.className = 'header-status offline';
@@ -283,6 +293,18 @@ async function loadEntityProfile(entityId) {
   const viewer = document.getElementById('profile-viewer-content');
   const standby = document.getElementById('no-profile-selected');
   const details = document.getElementById('profile-details-view');
+  
+  const coOccurBox = document.getElementById('co-occurrences-box');
+  const summaryBox = document.getElementById('narrative-summary-box');
+  if (coOccurBox) coOccurBox.hidden = false;
+  if (summaryBox) summaryBox.hidden = true;
+  
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+  state.summarizationInProgress = false;
+  state.currentVideoHash = null;
   
   try {
     const resp = await fetch(`/api/summary/entity/${encodeURIComponent(entityId)}`);
@@ -415,6 +437,18 @@ function loadBuiltInHighlight(name, list) {
   const standby = document.getElementById('no-profile-selected');
   const details = document.getElementById('profile-details-view');
   
+  const coOccurBox = document.getElementById('co-occurrences-box');
+  const summaryBox = document.getElementById('narrative-summary-box');
+  if (coOccurBox) coOccurBox.hidden = false;
+  if (summaryBox) summaryBox.hidden = true;
+  
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+  state.summarizationInProgress = false;
+  state.currentVideoHash = null;
+  
   state.activeEntity = null;
   state.activeCollection = null;
   state.currentPlaylistScenes = list;
@@ -493,6 +527,18 @@ function loadCustomCollection(col) {
   const standby = document.getElementById('no-profile-selected');
   const details = document.getElementById('profile-details-view');
   
+  const coOccurBox = document.getElementById('co-occurrences-box');
+  const summaryBox = document.getElementById('narrative-summary-box');
+  if (coOccurBox) coOccurBox.hidden = false;
+  if (summaryBox) summaryBox.hidden = true;
+  
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+  state.summarizationInProgress = false;
+  state.currentVideoHash = null;
+  
   state.activeEntity = null;
   state.activeCollection = col;
   state.currentPlaylistScenes = col.scene_refs;
@@ -542,4 +588,239 @@ async function handleDeleteCollection(collectionId) {
   } catch (err) {
     showToast(err.message, 'error');
   }
+}
+
+async function checkCapabilities() {
+  try {
+    const resp = await fetch('/api/summary/capabilities');
+    if (resp.ok) {
+      const caps = await resp.json();
+      state.llmSummarizationEnabled = !!caps.video_summarization_enabled;
+    }
+  } catch (e) {
+    console.error('Failed to load capabilities:', e);
+    state.llmSummarizationEnabled = false;
+  }
+}
+
+async function loadVideos() {
+  const container = document.getElementById('videos-list');
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state">Loading processed videos...</div>';
+  
+  try {
+    const resp = await fetch('/api/system/videos');
+    if (!resp.ok) throw new Error('Failed to load videos list.');
+    
+    const videos = await resp.json();
+    container.innerHTML = '';
+    
+    if (!videos || !videos.length) {
+      container.innerHTML = '<div class="empty-state">No processed videos found.</div>';
+      return;
+    }
+    
+    videos.forEach(v => {
+      const el = document.createElement('div');
+      el.className = 'entity-item';
+      el.setAttribute('data-id', v.video_id);
+      
+      const durationStr = v.duration ? `${formatTimecode(v.duration)}` : 'N/A';
+      const scenesStr = v.total_scenes ? `${v.total_scenes} scenes` : '0 scenes';
+      
+      el.innerHTML = `
+        <span class="entity-name">${v.title || v.video_id}</span>
+        <span class="entity-count">${durationStr} / ${scenesStr}</span>
+      `;
+      el.addEventListener('click', () => handleVideoSelect(v, el));
+      container.appendChild(el);
+    });
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state error">Failed: ${err.message}</div>`;
+    showToast(err.message, 'error');
+  }
+}
+
+function handleVideoSelect(video, element) {
+  document.querySelectorAll('.entity-item').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('selected'));
+  
+  element.classList.add('selected');
+  loadVideoProfile(video.video_id, video.title);
+}
+
+async function loadVideoProfile(videoId, videoTitle) {
+  const standby = document.getElementById('no-profile-selected');
+  const details = document.getElementById('profile-details-view');
+  const coOccurBox = document.getElementById('co-occurrences-box');
+  const summaryBox = document.getElementById('narrative-summary-box');
+  const summaryContent = document.getElementById('narrative-summary-content');
+  const provBox = document.getElementById('provenance-box');
+  const regenBtn = document.getElementById('regen-summary-btn');
+  
+  try {
+    state.activeEntity = null;
+    state.activeCollection = null;
+    state.currentVideoHash = videoId;
+    
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    state.summarizationInProgress = false;
+    
+    document.getElementById('profile-name').textContent = videoTitle || videoId;
+    
+    const typeBadge = document.getElementById('profile-type');
+    typeBadge.textContent = 'VIDEO';
+    typeBadge.className = 'meta-badge badge-video';
+    
+    summaryContent.textContent = 'Loading summary...';
+    provBox.innerHTML = '';
+    
+    const sumResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}`);
+    if (sumResp.ok) {
+      const sumData = await sumResp.json();
+      summaryContent.textContent = sumData.summary || 'No narrative summary generated yet.';
+      
+      if (sumData.provenance && sumData.provenance.model_backend) {
+        const prov = sumData.provenance;
+        const dateStr = prov.timestamp ? new Date(prov.timestamp).toLocaleString() : 'N/A';
+        const sourceCount = prov.source_artifact_versions ? prov.source_artifact_versions.length : 0;
+        
+        provBox.innerHTML = `
+          <div class="provenance-title">Summary Provenance Information</div>
+          <div><strong>Model/Backend:</strong> ${prov.model_backend}</div>
+          <div><strong>Prompt Version:</strong> ${prov.prompt_version || 'N/A'}</div>
+          <div><strong>Generated At:</strong> ${dateStr}</div>
+          <div><strong>Source Artifacts:</strong> ${sourceCount} scene summaries used</div>
+        `;
+      } else {
+        provBox.innerHTML = `<div class="provenance-title">Summary Provenance Information</div><div>No provenance metadata tracked for this summary.</div>`;
+      }
+    } else {
+      summaryContent.textContent = 'Failed to load video summary.';
+      provBox.innerHTML = '';
+    }
+    
+    if (state.llmSummarizationEnabled) {
+      summaryBox.hidden = false;
+      regenBtn.hidden = false;
+      
+      const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
+      if (statusResp.ok) {
+        const statusData = await statusResp.json();
+        if (statusData.status === 'running') {
+          regenBtn.disabled = true;
+          regenBtn.innerText = "GENERATING...";
+          startPollingStatus(videoId);
+        } else {
+          regenBtn.disabled = false;
+          regenBtn.innerText = "REWRITE SUMMARY 🤖";
+        }
+      }
+    } else {
+      summaryBox.hidden = false;
+      regenBtn.hidden = true;
+    }
+    
+    if (coOccurBox) coOccurBox.hidden = true;
+    
+    const timelineResp = await fetch(`/api/videos/${encodeURIComponent(videoId)}/timeline`);
+    if (!timelineResp.ok) throw new Error('Failed to load video timeline segments.');
+    
+    const timelineData = await timelineResp.json();
+    const duration = timelineData.duration || 0;
+    const sceneCount = timelineData.total_scenes || 0;
+    
+    document.getElementById('profile-occurrences').textContent = sceneCount;
+    
+    const spanLabel = document.getElementById('profile-span-label');
+    spanLabel.hidden = false;
+    document.getElementById('profile-span').textContent = `00:00 - ${formatTimecode(duration)}`;
+    
+    const segments = timelineData.segments || [];
+    const scenes = segments.map(seg => ({
+      video_id: videoId,
+      scene_id: seg.scene_id ? String(seg.scene_id) : String(seg.segment_id),
+      start: seg.start,
+      end: seg.end,
+      representative_frame: seg.representative_frame,
+      transcript: seg.transcript
+    }));
+    
+    state.currentPlaylistScenes = scenes;
+    renderPlaylistGrid(scenes);
+    
+    standby.hidden = true;
+    details.hidden = false;
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function startPollingStatus(videoHash) {
+  if (pollInterval) clearInterval(pollInterval);
+  
+  pollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/status`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.status === 'idle') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          showToast('Narrative summary generated successfully.');
+          
+          const regenBtn = document.getElementById("regen-summary-btn");
+          if (regenBtn) {
+            regenBtn.disabled = false;
+            regenBtn.innerText = "REWRITE SUMMARY 🤖";
+          }
+          state.summarizationInProgress = false;
+          
+          if (state.currentVideoHash === videoHash) {
+            loadVideoProfile(videoHash, document.getElementById('profile-name').textContent);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error polling status:', e);
+    }
+  }, 2000);
+}
+
+function setupRegenListener() {
+  const regenBtn = document.getElementById("regen-summary-btn");
+  if (!regenBtn) return;
+  
+  regenBtn.addEventListener("click", async () => {
+    const videoHash = state.currentVideoHash;
+    if (!videoHash) return;
+    
+    if (state.summarizationInProgress) return;
+    
+    state.summarizationInProgress = true;
+    regenBtn.disabled = true;
+    regenBtn.innerText = "GENERATING...";
+    
+    try {
+      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/generate`, { method: 'POST' });
+      if (resp.status === 200) {
+        showToast("Video summarization task successfully started.", "info");
+        startPollingStatus(videoHash);
+      } else {
+        const err = await resp.json();
+        showToast(`Failed to start summarization: ${err.detail || 'unknown error'}`, "error");
+        regenBtn.disabled = false;
+        regenBtn.innerText = "REWRITE SUMMARY 🤖";
+        state.summarizationInProgress = false;
+      }
+    } catch (e) {
+      showToast("Network error while triggering summarization.", "error");
+      regenBtn.disabled = false;
+      regenBtn.innerText = "REWRITE SUMMARY 🤖";
+      state.summarizationInProgress = false;
+    }
+  });
 }

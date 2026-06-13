@@ -40,9 +40,16 @@
             <button class="tab-btn" data-tab="places-list-container">PLACES</button>
             <button class="tab-btn" data-tab="occasions-list-container">OCCASIONS</button>
             <button class="tab-btn" data-tab="moods-list-container">MOODS</button>
+            <button class="tab-btn" data-tab="videos-list-container">VIDEOS</button>
           </div>
 
           <div class="panel-content overflow-y">
+            <!-- Videos Tab -->
+            <div class="tab-content" id="videos-list-container" hidden>
+              <div class="list-section-title">PROCESSED VIDEOS</div>
+              <div id="videos-list" class="entity-list-items"></div>
+            </div>
+
             <!-- People Tab -->
             <div class="tab-content" id="people-list-container">
               <div class="list-section-title">MAJOR PEOPLE ENTITIES</div>
@@ -105,7 +112,17 @@
                   <span class="meta-label" id="profile-span-label">Span: <strong id="profile-span">N/A</strong></span>
                 </div>
 
-                <div class="co-occurrences-box">
+                <!-- Narrative Summary Box for Video (Initially hidden) -->
+                <div class="narrative-summary-box" id="narrative-summary-box" hidden>
+                  <div class="box-header">NARRATIVE VIDEO SUMMARY 🤖</div>
+                  <div class="narrative-summary-content" id="narrative-summary-content">...</div>
+                  <div class="provenance-box" id="provenance-box">
+                    <!-- Provenance details go here -->
+                  </div>
+                  <button class="regen-summary-btn" id="regen-summary-btn">REWRITE SUMMARY 🤖</button>
+                </div>
+
+                <div class="co-occurrences-box" id="co-occurrences-box">
                   <div class="box-header">CO-OCCURRING ENTITIES (TAG CLOUD)</div>
                   <div class="tag-cloud" id="profile-tag-cloud">
                     <!-- Tags go here -->

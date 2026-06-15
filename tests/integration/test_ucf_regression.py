@@ -435,7 +435,14 @@ def test_vector_dim_mismatch_fails_offline(setup_env):
     assert report["vector_integrity"]["status"] == "failed"
 
 
-def test_backend_collection_not_in_registry_fails(setup_env):
+def test_vector_metadata_collection_not_in_registry_fails(setup_env):
+    """Offline validation checks UCF metadata (vector_collection column) against the VECTOR_REGISTRY
+    allowed_collections set. This is NOT a Qdrant payload inspection -- offline mode cannot reach
+    Qdrant. The failure is a registry metadata mismatch, not a backend payload mismatch.
+
+    For true backend payload mismatch (wrong modality/worker_name returned by Qdrant), see
+    the online mocked test: test_qdrant_clap_payload_uses_audio_modality.
+    """
     env = setup_env
     # Clear old frames
     conn = sqlite3.connect(str(env["db_path"]))

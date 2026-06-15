@@ -3,7 +3,8 @@ import json
 import time
 import random
 import hashlib
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional, Sequence
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 class UCFRecord(BaseModel):
@@ -161,9 +162,25 @@ class UCFLedgerClient:
             );
             """,
             "CREATE INDEX IF NOT EXISTS idx_cf_temporal ON context_frames(video_hash, t_start, t_end);",
-            "CREATE INDEX IF NOT EXISTS idx_cf_worker ON context_frames(video_hash, modality, worker_name);"
+            "CREATE INDEX IF NOT EXISTS idx_cf_worker ON context_frames(video_hash, modality, worker_name);",
+            """
+            CREATE TABLE IF NOT EXISTS ucf_status_transitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_ids TEXT,
+                video_hash TEXT,
+                epoch_id TEXT,
+                old_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                reason TEXT,
+                scope TEXT,
+                evidence TEXT,
+                transitioned_at TEXT NOT NULL
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_ust_scope ON ucf_status_transitions(video_hash, epoch_id);"
         ]
-        
+
         for q in queries:
             self.execute_with_retry(q)
 
@@ -363,10 +380,58 @@ class UCFLedgerClient:
             })
         return results
 
+    def log_status_transition(
+        self,
+        old_status: str,
+        new_status: str,
+        tool_name: str,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        scope: Optional[str] = None,
+        evidence: Optional[Dict[str, Any]] = None,
+        frame_ids: Optional[Sequence[int]] = None,
+    ) -> None:
+        """Records a lifecycle status transition in the ucf_status_transitions audit table.
+
+        Called by all HITL lifecycle tools after a status write completes.
+        Does not raise on failure — transition logging must not block the
+        primary write operation.
+
+        Args:
+            old_status: The promotion_status before the transition.
+            new_status: The promotion_status after the transition.
+            tool_name: The MiniAgentClient tool name that triggered the transition.
+            video_hash: Optional scope (video). Recorded as-is.
+            epoch_id: Optional scope (epoch). Recorded as-is.
+            reason: Human-readable justification (required for reject_ucf_frames).
+            scope: Optional free-form scope string (e.g. "video_hash=vh_001,epoch_id=ep_001").
+            evidence: Optional dict of supporting evidence (e.g. report path, commit hash).
+            frame_ids: Optional list of affected frame IDs. Stored as JSON array string.
+        """
+        try:
+            frame_ids_json = json.dumps(frame_ids) if frame_ids else None
+            evidence_json = json.dumps(evidence) if evidence else None
+            transitioned_at = datetime.now(timezone.utc).isoformat()
+            self.execute_with_retry(
+                """
+                INSERT INTO ucf_status_transitions
+                    (frame_ids, video_hash, epoch_id, old_status, new_status,
+                     tool_name, reason, scope, evidence, transitioned_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (frame_ids_json, video_hash, epoch_id, old_status, new_status,
+                 tool_name, reason, scope, evidence_json, transitioned_at),
+            )
+        except Exception:
+            # Audit logging must not interrupt the primary write path
+            pass
+
     def mark_frames_validated(
         self,
         video_hash: Optional[str] = None,
         epoch_id: Optional[str] = None,
+        log_audit: bool = True,
     ) -> int:
         """Transitions context frames from 'staged' to 'validated'.
 
@@ -375,14 +440,12 @@ class UCFLedgerClient:
         The operation is idempotent: calling it twice has no additional effect.
 
         Args:
-            video_hash: Optional scope limiter. When provided, only frames for
-                this video are updated.
-            epoch_id: Optional scope limiter. When provided, only frames for
-                this epoch are updated.
+            video_hash: Optional scope limiter.
+            epoch_id: Optional scope limiter.
+            log_audit: If True (default), writes a ucf_status_transitions entry.
 
         Returns:
-            The number of rows updated (may be 0 if all frames were already
-            validated or no frames match the scope).
+            The number of rows updated (0 if already validated or no match).
         """
         query = "UPDATE context_frames SET promotion_status = 'validated' WHERE promotion_status = 'staged'"
         params: list = []
@@ -393,7 +456,135 @@ class UCFLedgerClient:
             query += " AND epoch_id = ?"
             params.append(epoch_id)
         cursor = self.execute_with_retry(query, tuple(params))
-        return cursor.rowcount
+        count = cursor.rowcount
+        if log_audit and count > 0:
+            scope_parts = []
+            if video_hash:
+                scope_parts.append(f"video_hash={video_hash}")
+            if epoch_id:
+                scope_parts.append(f"epoch_id={epoch_id}")
+            self.log_status_transition(
+                old_status="staged",
+                new_status="validated",
+                tool_name="validate_ucf_frames",
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                scope=",".join(scope_parts) if scope_parts else None,
+            )
+        return count
+
+    def mark_frames_rejected(
+        self,
+        reason: str,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+        log_audit: bool = True,
+    ) -> int:
+        """Transitions context frames from 'staged' or 'validated' to 'rejected'.
+
+        'promoted' and 'superseded' frames cannot be rejected — they are already
+        terminal or canonical. The transition is idempotent for frames already
+        in 'rejected' status (rowcount returns 0 for those).
+
+        Requires a non-empty reason string. This is a terminal state: rejected
+        frames cannot be promoted.
+
+        Args:
+            reason: Human-readable justification for the rejection (required).
+            video_hash: Optional scope limiter.
+            epoch_id: Optional scope limiter.
+            log_audit: If True (default), writes a ucf_status_transitions entry.
+
+        Returns:
+            The number of rows transitioned to 'rejected'.
+
+        Raises:
+            ValueError: If reason is empty.
+        """
+        if not reason or not reason.strip():
+            raise ValueError("reason is required and must be a non-empty string for mark_frames_rejected")
+
+        query = (
+            "UPDATE context_frames SET promotion_status = 'rejected' "
+            "WHERE promotion_status IN ('staged', 'validated')"
+        )
+        params: list = []
+        if video_hash:
+            query += " AND video_hash = ?"
+            params.append(video_hash)
+        if epoch_id:
+            query += " AND epoch_id = ?"
+            params.append(epoch_id)
+        cursor = self.execute_with_retry(query, tuple(params))
+        count = cursor.rowcount
+        if log_audit and count > 0:
+            scope_parts = []
+            if video_hash:
+                scope_parts.append(f"video_hash={video_hash}")
+            if epoch_id:
+                scope_parts.append(f"epoch_id={epoch_id}")
+            self.log_status_transition(
+                old_status="staged_or_validated",
+                new_status="rejected",
+                tool_name="reject_ucf_frames",
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                reason=reason,
+                scope=",".join(scope_parts) if scope_parts else None,
+            )
+        return count
+
+    def mark_frames_superseded(
+        self,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+        log_audit: bool = True,
+    ) -> int:
+        """Transitions context frames from 'promoted' or 'validated' to 'superseded'.
+
+        Used when a previously promoted epoch is replaced by a new ingestion run.
+        'staged' and 'rejected' frames cannot be superseded — staged frames must
+        be explicitly validated or rejected first, and rejected frames are already
+        terminal. The transition is idempotent for already-superseded frames.
+
+        Superseded frames cannot be promoted.
+
+        Args:
+            video_hash: Optional scope limiter.
+            epoch_id: Optional scope limiter.
+            log_audit: If True (default), writes a ucf_status_transitions entry.
+
+        Returns:
+            The number of rows transitioned to 'superseded'.
+        """
+        query = (
+            "UPDATE context_frames SET promotion_status = 'superseded' "
+            "WHERE promotion_status IN ('promoted', 'validated')"
+        )
+        params: list = []
+        if video_hash:
+            query += " AND video_hash = ?"
+            params.append(video_hash)
+        if epoch_id:
+            query += " AND epoch_id = ?"
+            params.append(epoch_id)
+        cursor = self.execute_with_retry(query, tuple(params))
+        count = cursor.rowcount
+        if log_audit and count > 0:
+            scope_parts = []
+            if video_hash:
+                scope_parts.append(f"video_hash={video_hash}")
+            if epoch_id:
+                scope_parts.append(f"epoch_id={epoch_id}")
+            self.log_status_transition(
+                old_status="promoted_or_validated",
+                new_status="superseded",
+                tool_name="supersede_ucf_frames",
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                scope=",".join(scope_parts) if scope_parts else None,
+            )
+        return count
 
     def close(self):
         """Closes the connection."""

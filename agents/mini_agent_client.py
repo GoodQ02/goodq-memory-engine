@@ -116,6 +116,8 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "process_stop",
     "promote_ucf_to_memory",
     "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
 }
 
 def _load_ucf_ledger() -> Any:
@@ -451,7 +453,7 @@ class MiniAgentClient:
         tool_args = tool_args or {}
         
         # 1. Confirmation token validation if provided
-        NATIVELY_GATED_TOOLS = {"promote_ucf_to_memory", "validate_ucf_frames"}
+        NATIVELY_GATED_TOOLS = {"promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"}
         if confirmation_token:
             with self._lock_token_store():
                 tokens = self._load_tokens()
@@ -558,7 +560,7 @@ class MiniAgentClient:
                 return self.sanitize_envelope(envelope), 1
 
         # 4. Human-in-the-Loop Gating Validation
-        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames"):
+        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 with self._lock_token_store():
@@ -593,7 +595,7 @@ class MiniAgentClient:
                     return self.sanitize_envelope(envelope), 1
 
         # 5. Native tool validation bypass
-        if tool_name in ("run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "file_delete", "validate_ucf_epoch"):
+        if tool_name in ("run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames", "file_delete", "validate_ucf_epoch"):
             envelope = {
                 "request_id": request_id,
                 "profile": self.profile,
@@ -714,6 +716,10 @@ class MiniAgentClient:
                 tool_result = self._execute_promote_ucf_to_memory(tool_args)
             elif tool_name == "validate_ucf_frames":
                 tool_result = self._execute_validate_ucf_frames(tool_args)
+            elif tool_name == "reject_ucf_frames":
+                tool_result = self._execute_reject_ucf_frames(tool_args)
+            elif tool_name == "supersede_ucf_frames":
+                tool_result = self._execute_supersede_ucf_frames(tool_args)
             elif tool_name == "file_delete":
                 tool_result = self._execute_file_delete(tool_args)
             else:
@@ -743,7 +749,9 @@ class MiniAgentClient:
             "completed_at": completed_at,
             "duration_ms": duration_ms,
             "side_effect_report": {
-                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "file_delete"),
+                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion",
+                                          "promote_ucf_to_memory", "validate_ucf_frames",
+                                          "reject_ucf_frames", "supersede_ucf_frames", "file_delete"),
                 "targets": [tool_name]
             }
         }
@@ -1228,6 +1236,73 @@ class MiniAgentClient:
         conn.close()
         
         return {"promoted_count": promoted_count, "status": "promoted_complete"}
+
+    def _execute_reject_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Transitions in-scope context frames from 'staged' or 'validated' to 'rejected'.
+
+        Requires a non-empty 'reason' argument. This is a terminal state —
+        rejected frames cannot be promoted. The operation is idempotent:
+        frames already in 'rejected' status are not counted.
+
+        Cannot reject 'promoted' or 'superseded' frames — those are already
+        canonical or superseded and must be addressed through supersede_ucf_frames
+        or a new ingestion run.
+
+        Expected lifecycle: staged | validated -> [reject_ucf_frames] -> rejected
+        """
+        reason = args.get("reason", "").strip()
+        if not reason:
+            return {
+                "status": "error",
+                "reason": "missing_reason",
+                "message": "reject_ucf_frames requires a non-empty 'reason' argument.",
+            }
+        ucf_db_path = self._get_ucf_db_path()
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+        client = UCFLedgerClient(str(ucf_db_path))
+        client.init_schema()
+        video_hash = args.get("video_hash") or args.get("video_id")
+        epoch_id = args.get("epoch_id")
+        rejected_count = client.mark_frames_rejected(
+            reason=reason,
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+        )
+        client.close()
+        return {
+            "rejected_count": rejected_count,
+            "status": "rejected_complete",
+            "reason": reason,
+        }
+
+    def _execute_supersede_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Transitions in-scope context frames from 'promoted' or 'validated' to 'superseded'.
+
+        Used when a previously promoted epoch is replaced by a new ingestion run.
+        'staged' and 'rejected' frames cannot be superseded — staged frames must
+        first be explicitly validated or rejected, and rejected frames are terminal.
+
+        Superseded frames cannot be promoted.
+
+        Expected lifecycle: promoted | validated -> [supersede_ucf_frames] -> superseded
+        """
+        ucf_db_path = self._get_ucf_db_path()
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+        client = UCFLedgerClient(str(ucf_db_path))
+        client.init_schema()
+        video_hash = args.get("video_hash") or args.get("video_id")
+        epoch_id = args.get("epoch_id")
+        superseded_count = client.mark_frames_superseded(
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+        )
+        client.close()
+        return {
+            "superseded_count": superseded_count,
+            "status": "superseded_complete",
+        }
 
     def _execute_file_delete(self, args: Dict[str, Any]) -> Dict[str, Any]:
         target = args.get("path")

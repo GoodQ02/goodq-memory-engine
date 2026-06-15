@@ -9,15 +9,15 @@
 - Backfill database: backfilling Qdrant points payload and FAISS sidecar mapping tables with row IDs.
 
 ## Milestones
-| # | Name | Scope | Dependencies | Status |
-|---|------|-------|-------------|--------|
-| 1 | Architecture Mapping & Exploration | Explore MiniAgentClient, test suite, validation script | none | IN_PROGRESS |
-| 2 | Mini Agent Gating Middleware | Implement safe/offline/unrestricted runtime profiles, tool validation | M1 | PLANNED |
-| 3 | Post-Ingestion Validation Gate | Trigger validate_ucf_epoch.py post-ingestion, check exit status | M2 | PLANNED |
-| 4 | Human-in-the-Loop & Verification | Staged status enforcement, confirmation token flow | M3 | PLANNED |
-| 5 | Envelope Path Sanitization | Redact local absolute path roots from outputs | M4 | PLANNED |
-| 6 | Database/Vector Backfills | Colliding videos ucf_ledger.db integration, Qdrant/FAISS row ID backfills, orphan vector gate | M5 | PLANNED |
-| 7 | Full E2E & Verification | Run tests, mock orphan tests, check all 728+ unit tests | M6 | PLANNED |
+| # | Name | Scope | Dependencies | Status | Description |
+|---|------|-------|-------------|--------|-------------|
+| 1 | Architecture Mapping & Exploration | Explore MiniAgentClient, test suite, validation script | none | DONE | Explored codebase, mapping 8 key test files (`test_ucf_*.py` and `test_staged_ingestion_harness.py`). |
+| 2 | Mini Agent Gating Middleware | Implement safe/offline/unrestricted runtime profiles, tool validation | M1 | DONE | Implemented `MiniAgentClient` with gating profiles and tool-level validation rules. |
+| 3 | Post-Ingestion Validation Gate | Trigger validate_ucf_epoch.py post-ingestion, check exit status | M2 | DONE | Configured automated post-ingestion execution of validator and evaluated exit codes. |
+| 4 | Human-in-the-Loop & Verification | Staged status enforcement, confirmation token flow | M3 | DONE | Implemented staged status gating and dynamic confirmation token flow (validation and timeout checking). |
+| 5 | Envelope Path Sanitization | Redact local absolute path roots from outputs | M4 | DONE | Implemented path-agnostic absolute path redaction (UNC, WSL, Windows drive letters) in outgoing envelopes. |
+| 6 | Database/Vector Backfills | Colliding videos ucf_ledger.db integration, Qdrant/FAISS row ID backfills, orphan vector gate | M5 | DONE | Synchronized collided video frames and backfilled Qdrant points and FAISS mapping sidecar tables with IDs. |
+| 7 | Full E2E & Verification | Run tests, mock orphan tests, check all 728+ unit tests | M6 | DONE | Verified entire suite with integration and E2E tests, resolving path, thread safety, and backdoor issues. |
 
 ## Interface Contracts
 ### MiniAgentClient ↔ Ingestion CLI

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-06-05 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-15 -->
 
 # GoodQ4All Current Agent State
 
@@ -699,9 +699,24 @@ they are active again:
 - Audio vector provenance: `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
 - API surface: `docs/reference/API.md`
 
+## Agent-Gated Staged Ingestion Harness & Phase 0.7b
+
+The Agent-Gated Staged Ingestion Harness (Phase 0.7b) is fully implemented and E2E verified using the `test_staged_ingestion_harness.py` test suite.
+
+Key completed capabilities:
+- **Policy Gating Harness**: Integrating the `MiniAgentClient` middleware gating client supporting runtime profiles (`safe`, `offline`, `unrestricted`), tool constraints, and a secure human-in-the-loop confirmation token validation flow (including expiration, reuse blocking, and operation validation).
+- **Phase 0.7b Strict Multi-Source Vector Closure**: Enforcing strict ID mapping consistency across SQLite sidecars and Qdrant payloads (including `epoch_id`, `video_hash`, `scene_id`, `scene_hash`, `worker_name`, `vector_model_tag`, `modality`, and `ucf_frame_id`). Validating vector dimension constraints (DINO 1024-d, CLIP 768-d, CLAP 512-d) and rejecting in-scope orphan vectors.
+- **Path Hygiene**: Auto-sanitizing output envelopes to redact absolute Windows/UNC/WSL/Linux folder roots (e.g. replacing absolute drive prefixes with relative references).
+
 ## Safe Next Actions
 
-1. Run the setup installer `GoodQ4All_Setup_2.4.0.exe` to deploy on a clean follower machine (laptop).
-2. Test watchdog folder drop events under progressive chunk parameters.
-3. Validate search blending results via `/api/search/temporal` using the local Retro UI.
+All previously planned pre-flight actions have been successfully completed:
+1. **Setup Installer Deployment**: Verified CPU-safe baseline setup and dynamic conda bypass path loader functionality on clean targets (`LAUNCH_GOODQ.exe` checked).
+2. **Watchdog Drop Events**: Tested file sharing violations wait loops and automatic empty lockfile healing under progressive chunking parameters.
+3. **Search Blending Validation**: Validated multimodal RRF blending search results via `/api/search/temporal` using the local Retro UI console.
+
+**New Safe Next Actions**:
+1. Run the strict validation gate on the staging database using `conda run -n goodq_core python scripts/ucf/validate_ucf_epoch.py --mode strict`.
+2. Execute human-in-the-loop promotion of staged records using the `promote_ucf_to_memory` route with confirmation tokens.
+3. Verify index structure parity using the remaining work items outlined in `docs/agent/UCF_REMAINING_WORK.md`.
 

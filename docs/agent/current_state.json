@@ -871,5 +871,66 @@
       "watchdog_drop_events": "Tested file sharing violations wait loops and automatic empty lockfile healing",
       "search_blending_results": "Validated multimodal RRF blending search via local Retro UI console"
     }
+  },
+  "ucf_phase_0_7_lifecycle_hardening_2026_06_15": {
+    "last_verified": "2026-06-15",
+    "status": "completed",
+    "commits": ["7ea42b98", "9934990a"],
+    "details": "Corrected UCF promotion lifecycle from staged->promoted (wrong) to staged->validated->promoted (enforced). Added validate_ucf_frames HITL-gated native tool. Fixed local NATIVELY_GATED_TOOLS set in validate_action(). Added WAL concurrency stress tests.",
+    "milestones_completed": [
+      "validate_ucf_frames HITL-gated tool (staged -> validated transition)",
+      "mark_frames_validated() in UCFLedgerClient",
+      "promote_ucf_to_memory pre-check (blocks if any staged frames remain)",
+      "Promotion SQL corrected from staged->promoted to validated->promoted",
+      "WAL concurrency: 8-thread x 10-frame no-data-loss proof",
+      "WAL concurrency: 8-client retry contention, zero OperationalError escape",
+      "Local NATIVELY_GATED_TOOLS set fix in validate_action() line 454",
+      "validate_ucf_epoch.py confirmed read-only (unchanged)"
+    ],
+    "verification_tests": [
+      "tests/agents/test_mini_agent_client.py::test_promote_ucf_blocked_when_frames_staged",
+      "tests/agents/test_mini_agent_client.py::test_promote_ucf_succeeds_when_frames_validated",
+      "tests/agents/test_mini_agent_client.py::test_validate_ucf_frames_transitions_staged_to_validated",
+      "tests/integration/test_ucf_stress.py::TestUCFWALConcurrency"
+    ],
+    "suite_result": "728/728 passed"
+  },
+  "ucf_phase_0_8_terminal_lifecycle_2026_06_15": {
+    "last_verified": "2026-06-15",
+    "status": "completed",
+    "details": "Implemented terminal lifecycle states (rejected, superseded), status transition audit trail, tool registry completeness test, and offline fallback denial tests for subprocess-only tools.",
+    "milestones_completed": [
+      "reject_ucf_frames HITL-gated tool (staged/validated -> rejected)",
+      "supersede_ucf_frames HITL-gated tool (promoted/validated -> superseded)",
+      "mark_frames_rejected() in UCFLedgerClient (requires reason, enforces valid source statuses)",
+      "mark_frames_superseded() in UCFLedgerClient (enforces valid source statuses)",
+      "ucf_status_transitions audit table (old_status, new_status, tool_name, reason, scope, evidence, transitioned_at)",
+      "log_status_transition() in UCFLedgerClient called by all 4 HITL lifecycle tools",
+      "Promotion pre-check extended to exclude rejected/superseded frames from validated count",
+      "test_hitl_tool_registry_completeness: matrix test for all 6 required registration locations",
+      "test_offline_fallback_denies_kg_write",
+      "test_offline_fallback_denies_faiss_write",
+      "test_offline_fallback_denies_config_write",
+      "Lifecycle transition tests with DB verification and idempotency checks",
+      "Re-ingest supersession flow verified end-to-end",
+      "UCF_COVERAGE_GAP_REPORT.md: Gap A and Gap B marked RESOLVED",
+      "CURRENT_STATE.md: Phase 0.8 section added"
+    ],
+    "verification_tests": [
+      "tests/agents/test_mini_agent_client.py::test_reject_ucf_frames_transitions_staged_to_rejected",
+      "tests/agents/test_mini_agent_client.py::test_reject_ucf_frames_transitions_validated_to_rejected",
+      "tests/agents/test_mini_agent_client.py::test_supersede_ucf_frames_transitions_promoted_to_superseded",
+      "tests/agents/test_mini_agent_client.py::test_supersede_ucf_frames_transitions_validated_to_superseded",
+      "tests/agents/test_mini_agent_client.py::test_reject_invalid_transition_from_promoted",
+      "tests/agents/test_mini_agent_client.py::test_supersede_invalid_transition_from_staged",
+      "tests/agents/test_mini_agent_client.py::test_idempotency_reject_already_rejected",
+      "tests/agents/test_mini_agent_client.py::test_idempotency_supersede_already_superseded",
+      "tests/agents/test_mini_agent_client.py::test_promotion_excludes_rejected_frames",
+      "tests/agents/test_mini_agent_client.py::test_reingest_supersession_flow",
+      "tests/agents/test_mini_agent_client.py::test_hitl_tool_registry_completeness",
+      "tests/agents/test_mini_agent_client.py::test_offline_fallback_denies_kg_write",
+      "tests/agents/test_mini_agent_client.py::test_offline_fallback_denies_faiss_write",
+      "tests/agents/test_mini_agent_client.py::test_offline_fallback_denies_config_write"
+    ]
   }
 }

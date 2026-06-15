@@ -699,24 +699,81 @@ they are active again:
 - Audio vector provenance: `docs/architecture/AUDIO_VECTOR_PROVENANCE_CONTRACT.md`
 - API surface: `docs/reference/API.md`
 
-## Agent-Gated Staged Ingestion Harness & Phase 0.7b
+## Agent-Gated Staged Ingestion Harness, Phase 0.7b & Phase 0.8
 
-The Agent-Gated Staged Ingestion Harness (Phase 0.7b) is fully implemented and E2E verified using the `test_staged_ingestion_harness.py` test suite.
+The Agent-Gated Staged Ingestion Harness (Phase 0.7b) is fully implemented and E2E verified
+using the `test_staged_ingestion_harness.py` test suite. Phase 0.7 and Phase 0.8 hardening
+are complete as of 2026-06-15 (commits `7ea42b98`, `9934990a`, Phase 0.8 commit).
 
 Key completed capabilities:
-- **Policy Gating Harness**: Integrating the `MiniAgentClient` middleware gating client supporting runtime profiles (`safe`, `offline`, `unrestricted`), tool constraints, and a secure human-in-the-loop confirmation token validation flow (including expiration, reuse blocking, and operation validation).
-- **Phase 0.7b Strict Multi-Source Vector Closure**: Enforcing strict ID mapping consistency across SQLite sidecars and Qdrant payloads (including `epoch_id`, `video_hash`, `scene_id`, `scene_hash`, `worker_name`, `vector_model_tag`, `modality`, and `ucf_frame_id`). Validating vector dimension constraints (DINO 1024-d, CLIP 768-d, CLAP 512-d) and rejecting in-scope orphan vectors.
-- **Path Hygiene**: Auto-sanitizing output envelopes to redact absolute Windows/UNC/WSL/Linux folder roots (e.g. replacing absolute drive prefixes with relative references).
+
+- **Policy Gating Harness**: `MiniAgentClient` middleware gating client supporting runtime
+  profiles (`safe`, `offline`, `unrestricted`), tool constraints, and a secure
+  human-in-the-loop confirmation token validation flow (expiration, reuse blocking,
+  operation validation).
+
+- **Phase 0.7b Strict Multi-Source Vector Closure**: Enforcing strict ID mapping
+  consistency across SQLite sidecars and Qdrant payloads (`epoch_id`, `video_hash`,
+  `scene_id`, `scene_hash`, `worker_name`, `vector_model_tag`, `modality`,
+  `ucf_frame_id`). Validating vector dimension constraints (DINO 1024-d, CLIP 768-d,
+  CLAP 512-d) and rejecting in-scope orphan vectors.
+
+- **Path Hygiene**: Auto-sanitizing output envelopes to redact absolute Windows/UNC/WSL
+  folder roots.
+
+- **Phase 0.7 Lifecycle Gate** (`7ea42b98`): Corrected promotion lifecycle from
+  `staged → promoted` (incorrect) to `staged → validated → promoted` (enforced). Added
+  `validate_ucf_frames` HITL-gated native tool in `MiniAgentClient` that calls
+  `UCFLedgerClient.mark_frames_validated()`. Promotion pre-check blocks if any in-scope
+  frames remain `staged`. `validate_ucf_epoch.py` remains strictly read-only.
+
+- **Phase 0.7 WAL Concurrency** (`7ea42b98`): `TestUCFWALConcurrency` proves SQLite WAL
+  handles 8-thread × 10-frame concurrent writes with no data loss. `execute_with_retry()`
+  absorbs all contention without `OperationalError` leaks.
+
+- **Phase 0.7 Tool Registry Fix** (`9934990a`): `validate_ucf_frames` added to all six
+  required registration points in `MiniAgentClient`, including the local
+  `NATIVELY_GATED_TOOLS` set inside `validate_action()`.
+
+- **Phase 0.8 Terminal Lifecycle States**: `reject_ucf_frames` and `supersede_ucf_frames`
+  HITL-gated native tools added. Full terminal state write paths implemented in
+  `UCFLedgerClient`: `mark_frames_rejected()` (`staged/validated → rejected`) and
+  `mark_frames_superseded()` (`promoted/validated → superseded`). Rejected and superseded
+  frames cannot be promoted. Re-ingest supersession flow verified end-to-end.
+
+- **Phase 0.8 Status Audit Trail**: All HITL-gated lifecycle tools (`validate_ucf_frames`,
+  `promote_ucf_to_memory`, `reject_ucf_frames`, `supersede_ucf_frames`) write entries to
+  the `ucf_status_transitions` audit table: `old_status`, `new_status`, `tool_name`,
+  `reason`, `scope`, `evidence`, `transitioned_at`.
+
+- **Phase 0.8 Tool Registry Completeness Test**: `test_hitl_tool_registry_completeness`
+  asserts every HITL-gated native tool appears in all six required registration locations.
+  Any new tool omitted from a location will fail this test immediately.
+
+- **Phase 0.8 Offline Fallback Tests**: Denial tests confirm `kg_write`, `faiss_write`,
+  and `config_write` are blocked when `goodq_agent` subprocess is offline.
+
+**Confirmed full lifecycle as of Phase 0.8:**
+```
+ingestion    → staged
+              → [validate_ucf_frames, HITL]  → validated
+              → [promote_ucf_to_memory, HITL] → promoted
+
+re-ingestion → [supersede_ucf_frames, HITL]  → superseded (old epoch promoted frames)
+              → staged (new epoch) → validated → promoted
+
+rejection    → [reject_ucf_frames, HITL]     → rejected (from staged or validated)
+```
 
 ## Safe Next Actions
 
-All previously planned pre-flight actions have been successfully completed:
-1. **Setup Installer Deployment**: Verified CPU-safe baseline setup and dynamic conda bypass path loader functionality on clean targets (`LAUNCH_GOODQ.exe` checked).
-2. **Watchdog Drop Events**: Tested file sharing violations wait loops and automatic empty lockfile healing under progressive chunking parameters.
-3. **Search Blending Validation**: Validated multimodal RRF blending search results via `/api/search/temporal` using the local Retro UI console.
+All Phase 0.7 and 0.8 hardening items are verified. Current safe next actions:
 
-**New Safe Next Actions**:
-1. Run the strict validation gate on the staging database using `conda run -n goodq_core python scripts/ucf/validate_ucf_epoch.py --mode strict`.
-2. Execute human-in-the-loop promotion of staged records using the `promote_ucf_to_memory` route with confirmation tokens.
-3. Verify index structure parity using the remaining work items outlined in `docs/agent/UCF_REMAINING_WORK.md`.
+1. **Run strict UCF validation**: `conda run -n goodq_core python scripts/ucf/validate_ucf_epoch.py --mode strict`
+2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory`
+   with confirmation tokens for new ingestion epochs.
+3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover
+   audio_embed_clap, text_embed, face_embed worker types (Gap C in UCF_COVERAGE_GAP_REPORT.md).
+4. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on secondary host
+   and verify full suite passes.
 

@@ -115,6 +115,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "process_start",
     "process_stop",
     "promote_ucf_to_memory",
+    "validate_ucf_frames",
 }
 
 def _load_ucf_ledger() -> Any:
@@ -557,13 +558,13 @@ class MiniAgentClient:
                 return self.sanitize_envelope(envelope), 1
 
         # 4. Human-in-the-Loop Gating Validation
-        if tool_name == "promote_ucf_to_memory":
+        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames"):
             if not confirm:
-                token = f"token-promote-{uuid.uuid4().hex[:8]}"
+                token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 with self._lock_token_store():
                     tokens = self._load_tokens()
                     tokens[token] = {
-                        "operation": "promote_ucf_to_memory",
+                        "operation": tool_name,
                         "timestamp": datetime.utcnow().isoformat(),
                         "used": False,
                         "tool_args": tool_args or {}
@@ -575,7 +576,7 @@ class MiniAgentClient:
                     "status": "needs_confirmation",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "result": {"allowed": False, "confirmation_token": token},
-                    "errors": [{"code": "mutability_requires_confirmation", "message": "Promotion requires human confirmation."}],
+                    "errors": [{"code": "mutability_requires_confirmation", "message": f"{tool_name} requires human confirmation."}],
                 }
                 return self.sanitize_envelope(envelope), 3
             else:
@@ -592,7 +593,7 @@ class MiniAgentClient:
                     return self.sanitize_envelope(envelope), 1
 
         # 5. Native tool validation bypass
-        if tool_name in ("run_ingestion", "promote_ucf_to_memory", "file_delete", "validate_ucf_epoch"):
+        if tool_name in ("run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "file_delete", "validate_ucf_epoch"):
             envelope = {
                 "request_id": request_id,
                 "profile": self.profile,
@@ -711,6 +712,8 @@ class MiniAgentClient:
                 tool_result = self._execute_validate_ucf_epoch(tool_args)
             elif tool_name == "promote_ucf_to_memory":
                 tool_result = self._execute_promote_ucf_to_memory(tool_args)
+            elif tool_name == "validate_ucf_frames":
+                tool_result = self._execute_validate_ucf_frames(tool_args)
             elif tool_name == "file_delete":
                 tool_result = self._execute_file_delete(tool_args)
             else:
@@ -740,7 +743,7 @@ class MiniAgentClient:
             "completed_at": completed_at,
             "duration_ms": duration_ms,
             "side_effect_report": {
-                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion", "promote_ucf_to_memory", "file_delete"),
+                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "file_delete"),
                 "targets": [tool_name]
             }
         }
@@ -1101,7 +1104,40 @@ class MiniAgentClient:
             "errors": validation_errors,
         }
 
+    def _execute_validate_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Transitions in-scope context frames from 'staged' to 'validated'.
+
+        This is the required intermediate step between ingestion and promotion.
+        Only frames in 'staged' status are updated; already-validated or promoted
+        frames are untouched. The operation is idempotent.
+
+        Expected lifecycle: staged -> [validate_ucf_frames] -> validated
+                                   -> [promote_ucf_to_memory] -> promoted
+        """
+        ucf_db_path = self._get_ucf_db_path()
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+        client = UCFLedgerClient(str(ucf_db_path))
+        client.init_schema()
+        video_hash = args.get("video_hash") or args.get("video_id")
+        epoch_id = args.get("epoch_id")
+        validated_count = client.mark_frames_validated(
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+        )
+        client.close()
+        return {"validated_count": validated_count, "status": "validated_complete"}
+
     def _execute_promote_ucf_to_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Promotes context frames from 'validated' to 'promoted'.
+
+        Requires all in-scope frames to have already passed through 'validated'
+        status (via validate_ucf_frames). Any frames still in 'staged' status
+        will cause this call to return a blocked error — run validate_ucf_frames
+        first.
+
+        Expected lifecycle: staged -> validated -> [promote_ucf_to_memory] -> promoted
+        """
         import sqlite3
         ucf_db_path = self._get_ucf_db_path()
         
@@ -1114,25 +1150,50 @@ class MiniAgentClient:
         
         conn = sqlite3.connect(str(ucf_db_path))
         
-        # 1. Orphan vector check (scoped per epoch/video to prevent cross-video vector injections)
         attempted_vectors = args.get("vectors", [])
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
         
-        # Auto-resolve from staged records if not explicitly passed
+        # Auto-resolve scope from validated records (staged is now an error state here)
         if not video_hash:
-            cursor = conn.execute("SELECT DISTINCT video_hash FROM context_frames WHERE promotion_status = 'staged'")
+            cursor = conn.execute("SELECT DISTINCT video_hash FROM context_frames WHERE promotion_status = 'validated'")
             rows = cursor.fetchall()
             if len(rows) == 1:
                 video_hash = rows[0][0]
         if not epoch_id:
-            cursor = conn.execute("SELECT DISTINCT epoch_id FROM context_frames WHERE promotion_status = 'staged'")
+            cursor = conn.execute("SELECT DISTINCT epoch_id FROM context_frames WHERE promotion_status = 'validated'")
             rows = cursor.fetchall()
             if len(rows) == 1:
                 epoch_id = rows[0][0]
-                
-        query = "SELECT vector_key FROM context_frames WHERE promotion_status IN ('staged', 'promoted')"
-        query_args = []
+
+        # 0. Pre-check: block promotion if any in-scope frames are still staged (not validated).
+        #    Staged frames indicate validate_ucf_frames has not yet been run.
+        check_staged = "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
+        check_args: list = []
+        if video_hash:
+            check_staged += " AND video_hash = ?"
+            check_args.append(video_hash)
+        if epoch_id:
+            check_staged += " AND epoch_id = ?"
+            check_args.append(epoch_id)
+        staged_count = conn.execute(check_staged, tuple(check_args)).fetchone()[0]
+        if staged_count > 0:
+            conn.close()
+            return {
+                "status": "blocked",
+                "reason": "promotion_blocked_unvalidated_frames",
+                "staged_count": staged_count,
+                "message": (
+                    f"Cannot promote: {staged_count} context frame(s) are still in "
+                    "'staged' status. Run validate_ucf_frames (with confirmation) "
+                    "before calling promote_ucf_to_memory."
+                ),
+            }
+
+        # 1. Orphan vector check (scoped per epoch/video to prevent cross-video vector injections).
+        #    Only validated and already-promoted vectors are considered legitimate.
+        query = "SELECT vector_key FROM context_frames WHERE promotion_status IN ('validated', 'promoted')"
+        query_args: list = []
         if video_hash:
             query += " AND video_hash = ?"
             query_args.append(video_hash)
@@ -1147,22 +1208,22 @@ class MiniAgentClient:
             if v_key not in valid_vector_keys:
                 conn.close()
                 raise OrphanVectorError(v_key)
-                
-        # 2. Promote staged records (scoped per epoch/video if resolved)
-        select_staged = "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
-        update_staged = "UPDATE context_frames SET promotion_status = 'promoted' WHERE promotion_status = 'staged'"
-        staged_args = []
+
+        # 2. Promote validated records (validated -> promoted, scoped per epoch/video).
+        select_validated = "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
+        update_validated = "UPDATE context_frames SET promotion_status = 'promoted' WHERE promotion_status = 'validated'"
+        promote_args: list = []
         if video_hash:
-            select_staged += " AND video_hash = ?"
-            update_staged += " AND video_hash = ?"
-            staged_args.append(video_hash)
+            select_validated += " AND video_hash = ?"
+            update_validated += " AND video_hash = ?"
+            promote_args.append(video_hash)
         if epoch_id:
-            select_staged += " AND epoch_id = ?"
-            update_staged += " AND epoch_id = ?"
-            staged_args.append(epoch_id)
+            select_validated += " AND epoch_id = ?"
+            update_validated += " AND epoch_id = ?"
+            promote_args.append(epoch_id)
             
-        promoted_count = conn.execute(select_staged, tuple(staged_args)).fetchone()[0]
-        conn.execute(update_staged, tuple(staged_args))
+        promoted_count = conn.execute(select_validated, tuple(promote_args)).fetchone()[0]
+        conn.execute(update_validated, tuple(promote_args))
         conn.commit()
         conn.close()
         

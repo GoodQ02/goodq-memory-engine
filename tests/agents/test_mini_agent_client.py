@@ -253,3 +253,185 @@ def test_subprocess_execution_mode():
     assert envelope["status"] == "ok"
     assert envelope["result"]["stack"]["final"]["allowed"] is True
 
+
+# ---------------------------------------------------------------------------
+# H1 / S1 — staged → validated → promoted lifecycle gate tests
+# ---------------------------------------------------------------------------
+
+def _make_ucf_db_with_staged_frame(tmp_path):
+    """Helper: create a minimal UCF DB with one staged frame and return its path."""
+    import sys
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parents[2]
+    import importlib.util
+    ledger_path = repo_root / "scripts" / "ucf" / "ucf_ledger.py"
+    spec = importlib.util.spec_from_file_location("ucf_ledger_helper", str(ledger_path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    db_path = tmp_path / "ucf_ledger.db"
+    client = mod.UCFLedgerClient(str(db_path))
+    client.init_schema()
+    client.register_media(
+        video_hash="vh_test_001",
+        file_path="test.mp4",
+        duration=10.0,
+        fps=30.0,
+        width=1920,
+        height=1080,
+    )
+    client.log_frame(
+        video_hash="vh_test_001",
+        epoch_id="epoch_test",
+        run_id="run_test",
+        t_start=0.0,
+        t_end=1.0,
+        modality="video",
+        worker_name="image_embed_clip",
+        model_tag="openai/clip-vit-large-patch14",
+        payload={"label": "test_frame"},
+        promotion_status="staged",
+    )
+    client.close()
+    return db_path
+
+
+def test_promote_ucf_blocked_when_frames_staged(tmp_path, monkeypatch):
+    """H1: promote_ucf_to_memory must return 'blocked' when in-scope frames are still staged.
+
+    This verifies that the staged-state pre-check gate prevents promotion of
+    unvalidated frames. The only way to unblock is to run validate_ucf_frames first.
+    """
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+
+    # Obtain confirmation token (promotion is HITL-gated)
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    token = envelope["result"]["confirmation_token"]
+
+    # Confirm — but frames are still staged, so the pre-check must block
+    result, rc2 = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert rc2 == 0  # execution succeeded (no exception)
+    assert result["status"] == "success"
+    output = result["output"]
+    assert output["status"] == "blocked"
+    assert output["reason"] == "promotion_blocked_unvalidated_frames"
+    assert output["staged_count"] == 1
+
+
+def test_promote_ucf_succeeds_when_frames_validated(tmp_path, monkeypatch):
+    """H1: promote_ucf_to_memory must succeed when all in-scope frames are validated.
+
+    This verifies the corrected SQL path: only 'validated' rows are promoted
+    to 'promoted'. Staged rows are neither touched nor allowed through.
+    """
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+
+    # Manually advance the frame to 'validated' (simulating validate_ucf_frames)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+
+    # Request confirmation token
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    assert rc == 3
+    token = envelope["result"]["confirmation_token"]
+
+    # Confirm — all frames are validated, so promotion must succeed
+    result, rc2 = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert rc2 == 0
+    assert result["status"] == "success"
+    output = result["output"]
+    assert output["status"] == "promoted_complete"
+    assert output["promoted_count"] == 1
+
+    # Verify the DB row is now 'promoted'
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT promotion_status FROM context_frames LIMIT 1").fetchone()
+    conn.close()
+    assert row[0] == "promoted"
+
+
+def test_validate_ucf_frames_transitions_staged_to_validated(tmp_path, monkeypatch):
+    """S1: validate_ucf_frames must transition staged frames to validated status.
+
+    This is the write step in the lifecycle. After this call, frames are ready
+    for promote_ucf_to_memory.
+    """
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+
+    # Request confirmation token for validate_ucf_frames
+    envelope, rc = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    token = envelope["result"]["confirmation_token"]
+
+    # Confirm — staged frame must become validated
+    result, rc2 = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert rc2 == 0
+    assert result["status"] == "success"
+    output = result["output"]
+    assert output["status"] == "validated_complete"
+    assert output["validated_count"] == 1
+
+    # Verify the DB row is now 'validated'
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT promotion_status FROM context_frames LIMIT 1").fetchone()
+    conn.close()
+    assert row[0] == "validated"
+
+    # Idempotency: calling again must update 0 rows (frame is already validated)
+    envelope2, _ = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    token2 = envelope2["result"]["confirmation_token"]
+    result2, _ = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token2,
+    )
+    assert result2["output"]["validated_count"] == 0

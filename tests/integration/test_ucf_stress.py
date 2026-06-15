@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-Stress test for range overlap queries on the UCF ledger.
-Verifies boundary conditions, exact matches, containment, and edge cases.
+Stress tests for the UCF ledger.
+
+Covers two scenarios:
+  1. Range overlap query boundary conditions (exact matches, containment, edge cases).
+  2. WAL concurrency: multi-threaded simultaneous writes to a single UCFLedgerClient
+     database, verifying no data loss and no unhandled OperationalError.
 """
 
 import sys
 import os
 import sqlite3
+import threading
 import pytest
 from pathlib import Path
 from steps.common.config_loader import load_configs
@@ -194,3 +199,188 @@ def test_modality_filtering(temp_ucf_ledger):
     # Query without modality (both should return)
     res = client.query_overlap(video_hash, 12.0, 18.0)
     assert len(res) == 2
+
+
+# ---------------------------------------------------------------------------
+# H2 — WAL concurrency stress tests
+# ---------------------------------------------------------------------------
+
+class TestUCFWALConcurrency:
+    """
+    Stress-tests UCFLedgerClient WAL behavior under multi-threaded simultaneous writes.
+
+    Simulates real multi-agent concurrency by opening independent sqlite3 connections
+    per thread (mirroring how separate pipeline workers behave in production). Verifies:
+      - No data loss under contention (exact row count).
+      - No unhandled OperationalError from the retry layer.
+    """
+
+    N_THREADS = 8
+    FRAMES_PER_THREAD = 10
+    EXPECTED_TOTAL = N_THREADS * FRAMES_PER_THREAD  # 80
+
+    @staticmethod
+    def _ucf_ledger_module():
+        """Load ucf_ledger from the canonical scripts path (not the skill copy)."""
+        import importlib.util
+        ledger_path = REPO_ROOT / "scripts" / "ucf" / "ucf_ledger.py"
+        spec = importlib.util.spec_from_file_location("ucf_ledger_wal", str(ledger_path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    @staticmethod
+    def _init_db(db_path, mod):
+        """Initialise schema and register a shared media source."""
+        client = mod.UCFLedgerClient(str(db_path))
+        client.init_schema()
+        client.register_media(
+            video_hash="wal_test_video",
+            file_path="wal_test.mp4",
+            duration=300.0,
+            fps=30.0,
+            width=1920,
+            height=1080,
+        )
+        client.close()
+
+    def test_concurrent_writers_no_data_loss(self, tmp_path):
+        """
+        H2-a: 8 threads × 10 frames each must produce exactly 80 rows.
+
+        Each thread opens its own sqlite3 connection (WAL allows concurrent readers
+        and a single writer per checkpoint window). The UCFLedgerClient retry logic
+        must absorb any transient 'database is locked' errors transparently.
+        """
+        mod = self._ucf_ledger_module()
+        db_path = tmp_path / "wal_stress.db"
+        self._init_db(db_path, mod)
+
+        errors: list = []
+        write_lock = threading.Lock()  # Serialise per-thread error list appends only
+
+        def writer(thread_id: int):
+            try:
+                # Each thread gets its own connection — mirrors real multi-process agents
+                conn = sqlite3.connect(str(db_path), timeout=30.0)
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA busy_timeout=5000;")
+                for i in range(TestUCFWALConcurrency.FRAMES_PER_THREAD):
+                    t = float(thread_id * 100 + i)
+                    conn.execute(
+                        """
+                        INSERT INTO context_frames (
+                            video_hash, ucf_schema_version, epoch_id, run_id,
+                            t_start, t_end, modality, worker_name, model_tag,
+                            confidence, spatial_space, payload, payload_hash,
+                            promotion_status
+                        ) VALUES (
+                            'wal_test_video', 'ucf.v0.1', 'wal_epoch', 'wal_run',
+                            ?, ?, 'video', 'wal_worker', 'wal_model',
+                            1.0, 'normalized_yxyx_top_left', '{}', 'aabbcc',
+                            'staged'
+                        )
+                        """,
+                        (t, t + 1.0),
+                    )
+                    conn.commit()
+                conn.close()
+            except Exception as exc:
+                with write_lock:
+                    errors.append((thread_id, str(exc)))
+
+        threads = [
+            threading.Thread(target=writer, args=(tid,), name=f"wal-writer-{tid}")
+            for tid in range(self.N_THREADS)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30.0)
+
+        # No thread must have raised an unhandled exception
+        assert errors == [], f"WAL writer threads raised errors: {errors}"
+
+        # All threads joined within timeout
+        assert all(not t.is_alive() for t in threads), "Some writer threads are still running"
+
+        # Exactly EXPECTED_TOTAL rows must exist — no silent data loss
+        conn = sqlite3.connect(str(db_path))
+        row_count = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE video_hash = 'wal_test_video'"
+        ).fetchone()[0]
+        conn.close()
+        assert row_count == self.EXPECTED_TOTAL, (
+            f"Expected {self.EXPECTED_TOTAL} rows after concurrent writes, got {row_count}"
+        )
+
+    def test_retry_backoff_under_contention(self, tmp_path):
+        """
+        H2-b: UCFLedgerClient.execute_with_retry() must absorb contention without leaking OperationalError.
+
+        Each thread creates its own UCFLedgerClient instance (mirroring how separate
+        pipeline workers operate in production — sqlite3 connections cannot be shared
+        across threads). All 8 clients write to the same WAL database simultaneously.
+        The retry layer (5 attempts, random backoff) must ensure all writes complete.
+        Exactly N_THREADS rows must exist after all threads finish.
+        """
+        mod = self._ucf_ledger_module()
+        db_path = tmp_path / "wal_retry.db"
+        self._init_db(db_path, mod)
+
+        errors: list = []
+        write_lock = threading.Lock()
+
+        def retry_writer(thread_id: int):
+            # Each thread owns its connection — this is the correct production model.
+            # sqlite3 connections cannot be shared across threads.
+            client = mod.UCFLedgerClient(str(db_path))
+            try:
+                t = float(thread_id)
+                client.execute_with_retry(
+                    """
+                    INSERT INTO context_frames (
+                        video_hash, ucf_schema_version, epoch_id, run_id,
+                        t_start, t_end, modality, worker_name, model_tag,
+                        confidence, spatial_space, payload, payload_hash,
+                        promotion_status
+                    ) VALUES (
+                        'wal_test_video', 'ucf.v0.1', 'retry_epoch', 'retry_run',
+                        ?, ?, 'audio', 'retry_worker', 'retry_model',
+                        1.0, 'normalized_yxyx_top_left', '{}', 'ddeeff',
+                        'staged'
+                    )
+                    """,
+                    (t, t + 1.0),
+                )
+            except Exception as exc:
+                with write_lock:
+                    errors.append((thread_id, str(exc)))
+            finally:
+                client.close()
+
+        threads = [
+            threading.Thread(target=retry_writer, args=(tid,), name=f"retry-writer-{tid}")
+            for tid in range(self.N_THREADS)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30.0)
+
+        # No OperationalError must have escaped the retry layer
+        assert errors == [], f"execute_with_retry leaked errors under contention: {errors}"
+
+        # All threads joined within timeout
+        assert all(not t.is_alive() for t in threads), "Some retry writer threads are still running"
+
+        # Exactly N_THREADS rows written — no silent loss
+        conn = sqlite3.connect(str(db_path))
+        row_count = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE epoch_id = 'retry_epoch'"
+        ).fetchone()[0]
+        conn.close()
+        assert row_count == self.N_THREADS, (
+            f"Expected {self.N_THREADS} rows from retry writers, got {row_count}"
+        )
+

@@ -363,6 +363,38 @@ class UCFLedgerClient:
             })
         return results
 
+    def mark_frames_validated(
+        self,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+    ) -> int:
+        """Transitions context frames from 'staged' to 'validated'.
+
+        Only frames currently in 'staged' status are updated. Frames already
+        in 'validated', 'promoted', 'rejected', or 'superseded' are untouched.
+        The operation is idempotent: calling it twice has no additional effect.
+
+        Args:
+            video_hash: Optional scope limiter. When provided, only frames for
+                this video are updated.
+            epoch_id: Optional scope limiter. When provided, only frames for
+                this epoch are updated.
+
+        Returns:
+            The number of rows updated (may be 0 if all frames were already
+            validated or no frames match the scope).
+        """
+        query = "UPDATE context_frames SET promotion_status = 'validated' WHERE promotion_status = 'staged'"
+        params: list = []
+        if video_hash:
+            query += " AND video_hash = ?"
+            params.append(video_hash)
+        if epoch_id:
+            query += " AND epoch_id = ?"
+            params.append(epoch_id)
+        cursor = self.execute_with_retry(query, tuple(params))
+        return cursor.rowcount
+
     def close(self):
         """Closes the connection."""
         self.conn.close()

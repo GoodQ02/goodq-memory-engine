@@ -267,7 +267,7 @@ def run_validation(mode: str = "offline") -> int:
             # Clean path exists!
             # Also verify no dirty database exists to prevent split-brain issues
             dirty_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
-            if dirty_db_path.exists():
+            if dirty_db_path.exists() and dirty_db_path.resolve() != expected_db_path.resolve():
                 report["path_hygiene"]["status"] = "failed"
                 report["path_hygiene"]["errors"].append(
                     f"Path hygiene violation: Clean path database exists, but a duplicate dirty database also exists at '{dirty_db_path}'. "

@@ -1492,21 +1492,17 @@ def test_full_lifecycle_staged_validated_promoted():
     Doctrine:
         staged -> [validate_ucf_frames] -> validated -> [promote_ucf_to_memory] -> promoted
 
-    Both operations require a separate confirmation token (human-in-the-loop gate).
-    This is the companion test for the blocked-promotion tests (test_f3_05,
-    test_f4_tier4_01, test_f4_tier4_05), which verify the blocking guard.
-    This test verifies the happy path when the gate is used correctly.
+    Both lifecycle operations require a separate confirmation token (human-in-the-loop gate).
 
-    Assertions:
-        1. After ingestion: frames are 'staged'.
-        2. validate_ucf_frames with valid token: frames transition to 'validated'.
-           envelope['output']['status'] == 'validated_complete'
-           envelope['output']['validated_count'] >= 1
-        3. promote_ucf_to_memory with valid token (no staged frames present):
-           engine does NOT block.
-           envelope['output']['status'] == 'promoted_complete'
-           envelope['output']['promoted_count'] >= 1
-        4. After promotion: no frames remain in 'staged' or 'validated'; all are 'promoted'.
+    Assertions (5 points):
+        1. After ingestion: staged_count >= 2 in DB.
+        2. promote_ucf_to_memory before validate_ucf_frames: output.status == 'blocked',
+           reason == 'promotion_blocked_unvalidated_frames', DB staged_count unchanged.
+        3. validate_ucf_frames with confirmation token: output.status == 'validated_complete',
+           validated_count >= 1, DB staged == 0, validated >= 2.
+        4. promote_ucf_to_memory with confirmation token (no staged frames):
+           output.status == 'promoted_complete', promoted_count >= 1.
+        5. DB final state: staged == 0, validated == 0, promoted >= 2.
     """
     client = MiniAgentClient(profile="safe")
     register_media("lifecycle_vid", 60.0)
@@ -1557,6 +1553,40 @@ def test_full_lifecycle_staged_validated_promoted():
         conn.close()
         assert staged_after_ingest >= 2, (
             f"Expected >= 2 staged frames after ingestion, got {staged_after_ingest}"
+        )
+
+    # ---- Step 1b: Attempt promote without validate -> must be blocked ----
+    # Proves the gate fires before any validation has occurred.
+    early_prom_token_env, rc_early = client.validate_action(
+        prompt="Premature promotion attempt",
+        tool_name="promote_ucf_to_memory",
+        confirm=False,
+    )
+    assert rc_early == 3
+    early_prom_token = early_prom_token_env["result"]["confirmation_token"]
+
+    envelope_early_prom, rc_early_prom = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        confirm=True,
+        confirmation_token=early_prom_token,
+    )
+    assert rc_early_prom == 0  # call succeeded without exception
+    if not mock_harness_active():
+        assert envelope_early_prom["output"]["status"] == "blocked", (
+            f"Expected 'blocked' when promoting before validation, "
+            f"got: {envelope_early_prom['output']}"
+        )
+        assert envelope_early_prom["output"].get("reason") == "promotion_blocked_unvalidated_frames"
+        # Frames must still be staged — the blocked call left DB unchanged
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged_still = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
+        ).fetchone()[0]
+        conn.close()
+        assert staged_still >= 2, (
+            f"Expected staged frames to survive a blocked promotion, got {staged_still}"
         )
 
     # ---- Step 2: validate_ucf_frames (requires token) -> validated ----

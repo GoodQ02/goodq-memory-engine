@@ -1480,3 +1480,175 @@ def test_adv_premature_token_consumption():
     )
     assert rc_exec == 0
     assert env_exec["status"] == "success"
+
+
+# ==============================================================================
+# FULL LIFECYCLE TEST: staged -> validated -> promoted
+# ==============================================================================
+
+def test_full_lifecycle_staged_validated_promoted():
+    """Exercise the complete, doctrine-correct UCF promotion lifecycle.
+
+    Doctrine:
+        staged -> [validate_ucf_frames] -> validated -> [promote_ucf_to_memory] -> promoted
+
+    Both operations require a separate confirmation token (human-in-the-loop gate).
+    This is the companion test for the blocked-promotion tests (test_f3_05,
+    test_f4_tier4_01, test_f4_tier4_05), which verify the blocking guard.
+    This test verifies the happy path when the gate is used correctly.
+
+    Assertions:
+        1. After ingestion: frames are 'staged'.
+        2. validate_ucf_frames with valid token: frames transition to 'validated'.
+           envelope['output']['status'] == 'validated_complete'
+           envelope['output']['validated_count'] >= 1
+        3. promote_ucf_to_memory with valid token (no staged frames present):
+           engine does NOT block.
+           envelope['output']['status'] == 'promoted_complete'
+           envelope['output']['promoted_count'] >= 1
+        4. After promotion: no frames remain in 'staged' or 'validated'; all are 'promoted'.
+    """
+    client = MiniAgentClient(profile="safe")
+    register_media("lifecycle_vid", 60.0)
+
+    # ---- Step 1: Ingest -> staged ----
+    args_ingest = {
+        "ucf_records": [
+            {
+                "video_hash": "lifecycle_vid",
+                "ucf_schema_version": "ucf.v0.1",
+                "epoch_id": "lifecycle_ep1",
+                "run_id": "lifecycle_run1",
+                "t_start": 0.0,
+                "t_end": 10.0,
+                "modality": "video",
+                "worker_name": "worker1",
+                "model_tag": "tag1",
+                "payload": {},
+            },
+            {
+                "video_hash": "lifecycle_vid",
+                "ucf_schema_version": "ucf.v0.1",
+                "epoch_id": "lifecycle_ep1",
+                "run_id": "lifecycle_run1",
+                "t_start": 10.0,
+                "t_end": 20.0,
+                "modality": "video",
+                "worker_name": "worker1",
+                "model_tag": "tag1",
+                "payload": {},
+            },
+        ]
+    }
+    envelope_ingest, rc_ingest = client.execute_tool(
+        tool_name="run_ingestion", tool_args=args_ingest
+    )
+    assert rc_ingest == 0
+    assert envelope_ingest["status"] == "success"
+    assert envelope_ingest["output"]["status"] == "staged_complete"
+    assert envelope_ingest["output"]["ingested_count"] == 2
+
+    if not mock_harness_active():
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged_after_ingest = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
+        ).fetchone()[0]
+        conn.close()
+        assert staged_after_ingest >= 2, (
+            f"Expected >= 2 staged frames after ingestion, got {staged_after_ingest}"
+        )
+
+    # ---- Step 2: validate_ucf_frames (requires token) -> validated ----
+    envelope_val_token, rc_val_token = client.validate_action(
+        prompt="Validate lifecycle frames",
+        tool_name="validate_ucf_frames",
+        confirm=False,
+    )
+    assert rc_val_token == 3
+    assert "confirmation_token" in envelope_val_token["result"]
+    val_token = envelope_val_token["result"]["confirmation_token"]
+
+    envelope_validate, rc_validate = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        confirm=True,
+        confirmation_token=val_token,
+    )
+    assert rc_validate == 0
+    assert envelope_validate["status"] == "success"
+    assert envelope_validate["output"]["status"] == "validated_complete"
+
+    if mock_harness_active():
+        # Mock records should be in promoted state after mock validate
+        pass
+    else:
+        assert envelope_validate["output"]["validated_count"] >= 1
+
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged_after_validate = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
+        ).fetchone()[0]
+        validated_after_validate = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
+        ).fetchone()[0]
+        conn.close()
+        assert staged_after_validate == 0, (
+            f"Expected 0 staged frames after validate_ucf_frames, got {staged_after_validate}"
+        )
+        assert validated_after_validate >= 2, (
+            f"Expected >= 2 validated frames, got {validated_after_validate}"
+        )
+
+    # ---- Step 3: promote_ucf_to_memory (requires token, no staged frames) -> promoted ----
+    envelope_prom_token, rc_prom_token = client.validate_action(
+        prompt="Promote lifecycle frames",
+        tool_name="promote_ucf_to_memory",
+        confirm=False,
+    )
+    assert rc_prom_token == 3
+    assert "confirmation_token" in envelope_prom_token["result"]
+    prom_token = envelope_prom_token["result"]["confirmation_token"]
+
+    envelope_promote, rc_promote = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        confirm=True,
+        confirmation_token=prom_token,
+    )
+    assert rc_promote == 0
+    assert envelope_promote["status"] == "success"
+
+    if mock_harness_active():
+        pass  # Mock promotes without lifecycle enforcement
+    else:
+        # Engine must NOT block (all staged frames were validated in step 2)
+        assert envelope_promote["output"]["status"] == "promoted_complete", (
+            f"Expected 'promoted_complete', got: {envelope_promote['output']}"
+        )
+        assert envelope_promote["output"]["promoted_count"] >= 1
+
+        # ---- Step 4: DB state final check ----
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged_final = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
+        ).fetchone()[0]
+        validated_final = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
+        ).fetchone()[0]
+        promoted_final = conn.execute(
+            "SELECT count(*) FROM context_frames WHERE promotion_status = 'promoted'"
+        ).fetchone()[0]
+        conn.close()
+
+        assert staged_final == 0, (
+            f"Expected 0 staged frames after promotion, got {staged_final}"
+        )
+        assert validated_final == 0, (
+            f"Expected 0 validated frames after promotion, got {validated_final}"
+        )
+        assert promoted_final >= 2, (
+            f"Expected >= 2 promoted frames, got {promoted_final}"
+        )

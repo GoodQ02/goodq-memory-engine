@@ -154,6 +154,8 @@ Preferred escalation order:
 - Active documentation must not contain literal Windows drive roots (e.g., `L:/`, `C:/`). Use environment abstractions.
 - Agents must not modify files outside verified runtime entry points unless explicitly instructed.
 - No "cleanup passes" without audits.
+- Strict `AUTO_LEARN` constraints: No self-adaptive, self-learning, or autonomous run-time policy rewriting is permitted; all changes to policies, contracts, or code must go through explicit static definition and developer-led verification.
+- `AUTO_LEARN` Scope Restrictions: Any automated subagent or workflow running lesson-learning tasks has read-only access to repository code files (goodq4all and goodq_agent) and configuration folders. It is allowed write access only to the Agent Knowledge Workspace (_AGENT/) lessons, checklists, and templates. It must never commit or push source code changes.
 
 ## Do / Don't
 - Do: propose before acting; keep diffs small; trust audits over intuition; preserve working behavior.

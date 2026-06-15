@@ -36,6 +36,52 @@ def _probe_video_duration(path: str) -> Optional[float]:
     return None
 
 
+def _get_video_dimensions(path: str) -> Tuple[float, float, int, int]:
+    """Probes the video file using cv2 to extract duration, fps, width, height."""
+    duration = 0.0
+    fps = 23.976
+    width = 0
+    height = 0
+    if cv2 is None:
+        return duration, fps, width, height
+    try:
+        cap = cv2.VideoCapture(path)
+        if cap.isOpened():
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 23.976)
+            frame_count = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            if fps > 0 and frame_count > 0:
+                duration = frame_count / fps
+            cap.release()
+    except Exception as e:
+        print(f"[WARN] Failed to get video dimensions via cv2: {e}")
+    return duration, fps, width, height
+
+
+def _load_ucf_ledger() -> Any:
+    """Dynamically imports ucf_ledger from the skill scripts directory."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+    
+    current_file = Path(__file__).resolve()
+    repo_root = current_file.parents[2]  # steps/video_scene_detect/step.py -> parents[2] is repo_root
+    ucf_ledger_path = repo_root / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
+    
+    if not ucf_ledger_path.exists():
+        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
+    
+    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
+    
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["ucf_ledger"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     """
     Load scene detection parameters with robust fallback handling.
@@ -280,6 +326,95 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
     }
     if error_msg:
         meta['error'] = error_msg
+
+    # --- UCF Integration Hook ---
+    try:
+        video_hash = item.get('video_hash') or item.get('video_id')
+        if video_hash and path and os.path.isfile(path):
+            print(f"[UCF] Initializing UCF database registration for video_hash: {video_hash}")
+            # Resolve epoch_id
+            db_dir = cfg.get('paths', {}).get('db_dir')
+            epoch_id = os.path.basename(db_dir) if db_dir else "unknown_epoch"
+            
+            # Resolve run_id
+            run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
+            
+            # Dynamically import ucf_ledger.py
+            ucf_module = _load_ucf_ledger()
+            UCFLedgerClient = ucf_module.UCFLedgerClient
+            
+            # Determine database path
+            if db_dir:
+                from pathlib import Path
+                data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
+                if data_root:
+                    root_path = Path(data_root)
+                    if root_path.name == "GoodQ_Data":
+                        root_path = root_path.parent
+                    ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
+                else:
+                    ucf_db_dir = Path(db_dir) / 'ucf'
+                ucf_db_dir.mkdir(parents=True, exist_ok=True)
+                ucf_db_path = ucf_db_dir / 'ucf_ledger.db'
+                
+                client = UCFLedgerClient(str(ucf_db_path))
+                client.init_schema()
+                
+                # Probe video properties for media_sources registration
+                probe_dur, fps, width, height = _get_video_dimensions(path)
+                resolved_dur = probe_dur if probe_dur > 0 else (detection.get('duration') or 0.0)
+                
+                # Register media source
+                client.register_media(
+                    video_hash=video_hash,
+                    file_path=path,
+                    duration=resolved_dur,
+                    fps=fps,
+                    width=width,
+                    height=height
+                )
+                print(f"[UCF] Media source registered: {path} ({resolved_dur:.3f}s, {fps:.2f} fps, {width}x{height})")
+                
+                # Log context frames for each scene
+                logged_count = 0
+                for scene in scenes:
+                    start_val = scene.get('start', 0.0)
+                    end_val = scene.get('end', 0.0)
+                    idx_val = scene.get('index', 0)
+                    confidence_val = scene.get('confidence', 1.0)
+                    
+                    payload = {
+                        "scene_index": idx_val,
+                        "duration": scene.get('duration', 0.0),
+                        "engine": "scenedetect",
+                        "threshold": params['threshold']
+                    }
+                    
+                    client.log_frame(
+                        video_hash=video_hash,
+                        epoch_id=epoch_id,
+                        run_id=run_id,
+                        t_start=start_val,
+                        t_end=end_val,
+                        modality="video",
+                        worker_name="video_scene_detect",
+                        model_tag="scenedetect",
+                        confidence=confidence_val,
+                        source_artifact_id=f"scene_{idx_val:04d}",
+                        payload=payload
+                    )
+                    logged_count += 1
+                
+                print(f"[UCF] Logged {logged_count} scene context frames to UCF ledger.")
+                client.close()
+            else:
+                print("[WARN] [UCF] cfg['paths']['db_dir'] not found. Skipping UCF ledger write.")
+        else:
+            print("[WARN] [UCF] video_hash or source_path not available. Skipping UCF ledger write.")
+    except Exception as e:
+        print(f"[WARN] [UCF] UCF registration failed: {type(e).__name__}: {str(e)}")
+        # Do not crash the entire ingestion step if UCF logging fails
+
     return {
         'scenes': scenes,
         'scene_meta': meta,

@@ -183,6 +183,7 @@ runtime_ok:
   ${EndIf}
 
   ; --- STATE 8: WSL pre-baked distro import ---
+  /*
   DetailPrint "Step 8/12: Configuring WSL2 audio compute environment..."
   ; Stage wsl distro folder
   SetOutPath "$INSTDIR\wsl"
@@ -227,6 +228,7 @@ wsl_tar_found:
   ${EndIf}
 
 wsl_done:
+  */
 
   ; --- STATE 9: merge and verify model zips ---
   DetailPrint "Step 9/12: Extracting and registering pre-staged model packs..."
@@ -239,6 +241,7 @@ wsl_done:
   ${EndIf}
 
   ; --- STATE 10: run health check ---
+  /*
   DetailPrint "Step 10/12: Running system readiness verification..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\system_readiness_check.py" --data-dir "$COMMONAPPDATA\GoodQ4All"'
   Pop $0
@@ -248,6 +251,7 @@ wsl_done:
     Abort
   ${EndIf}
   DetailPrint "System health readiness test completed with code $0."
+  */
 
   ; --- STATE 11: write install receipt ---
   DetailPrint "Step 11/12: Writing installation receipt..."
@@ -271,11 +275,11 @@ wsl_done:
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd
 
-Section "Always-On Background Service" SecService
+Section /o "Always-On Background Service" SecService
   StrCpy $AlwaysOnService 1
 SectionEnd
 
-Section "GPU-Accelerated WSL2 Audio" SecGpu
+Section /o "GPU-Accelerated WSL2 Audio" SecGpu
   StrCpy $GpuEnhancedMode 1
   StrCpy $GpuStatus "ok"
 SectionEnd

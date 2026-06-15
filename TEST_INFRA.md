@@ -1,44 +1,54 @@
-# E2E Test Infrastructure
+# Testing Infrastructure for Agent-Gated Staged Ingestion Harness
 
-This document defines the E2E verification plan, tiers, and environment configurations for auditing the Agent Knowledge Workspace.
+This document outlines the architecture, requirements, and design patterns utilized for the E2E test suite of the Agent-Gated Staged Ingestion Harness in `goodq4all`.
 
-## 1. Overview
-The testing track is designed to verify the compliance, structure, formatting, and onboarding functionality of the Agent Knowledge Workspace located at the target directory. It utilizes `pytest` to execute opaque-box and structured validation tests.
+---
 
-- **Workspace Target**: `%USERPROFILE%\My Drive\_AGENT` (referred to as `%WORKSPACE_ROOT%`)
-- **Repository Integration Pointer**: `%GOODQ_ROOT%\AGENTS.md`
-- **Test Runner Location**: `%GOODQ_ROOT%\tests\e2e\test_agent_workspace.py`
+## 1. Subsystem under Test: Ingestion Gating Harness
+The Agent-Gated Staged Ingestion Harness is responsible for securing local system integrity during automated memory ingestion and synchronization. It handles:
+- Gated Command Routing: Allowing execution based on active profile (Safe, Unrestricted) or blocking it (Offline) and handling agent offline fallback policy.
+- Post-Ingestion UCF Validation: Ensuring ingested epoch entries conform to the Unified Context Frame (UCF) schema prior to staging, by running `validate_ucf_epoch.py` automatically.
+- Human-in-the-Loop Gating: Forcing ingested records to remain in a `staged` status until explicit confirmation (`confirm=True`) and a valid `confirmation_token` are supplied.
+- Path Sanitization: Stripping absolute drive letters (`C:\`, `L:\`, or `/mnt/l`) and UNC paths in all outputs, envelopes, and reports.
 
-## 2. Test Execution Tiers
-The E2E test suite is structured into 4 logical tiers of increasing complexity:
+---
 
-### Tier 1: Basic Smoke & Existence Checks
-Verifies that the core folder tree (`protocols/`, `models_and_vram/`, `workflows/`, `lessons/`) exists, directories are readable/writeable, and required scripts (bootstrapper, linter) are present.
+## 2. Stateful Mock Compliance Engine (`TEST_MOCK_HARNESS=1`)
+To verify the correctness of the test suite in an isolated environment, the suite defines a stateful mock layer when `TEST_MOCK_HARNESS=1` is present.
+- **State Store (`MockState`)**: Maintains global lists of registered media sources, staged records, active confirmation tokens, vector index maps, and deleted files.
+- **Client Replacement (`MockMiniAgentClient`)**: Implements:
+  - Policy checks: Rejects mutating calls in offline profile, allows read-only and blocks mutating operations under agent failure.
+  - Token generation: Generates isolated confirmation tokens with metadata (operation, timestamp).
+  - Validation: Simulates UCF schema, temporal range bounds checks, spatial regions normalization, and payload flatness validation.
+  - Sanitization: Runs regex-based path sanitization on all outcomes returned by client methods.
+  - Vector checks: Blocks vector promotion attempts when the vector UUID has no matching staged UCF record.
 
-### Tier 2: Structure & Schema Checks
-Asserts the content layout, checks that markdown files in rule folders are not empty, ensures relative path links are used for cross-references, and verifies that no literal Windows drive letters are hardcoded in the active documents.
+---
 
-### Tier 3: Execution & Integration Checks
-Executes the linter (`verify_agent_workspace.py`) and onboarding bootstrapper (`bootstrap_agent.ps1`) under real and simulated environments, confirming they output appropriate capability reports and exit with a `0` code.
+## 3. Test Cases Architecture (4-Tier Approach)
+The suite contains **50 distinct tests** divided into:
 
-### Tier 4: Adversarial, Bounds & Integrity Checks
-Performs negative and boundary testing. Verifies that the linter correctly flags missing directories, empty folders, non-conforming lesson headers, trailing slashes in path variables, and hardcoded drive roots. It also ensures the repository pointer in `AGENTS.md` maintains operating protocol integrity.
+### Tier 1: Feature Coverage (Tests F1.01-05 to F4.01-05)
+- **F1 (Gated Execution)**: Verifies command routing across profiles (safe, offline, unrestricted) and agent availability fallback behavior for custom ops.
+- **F2 (UCF Validation)**: Verifies post-ingestion checks trigger automatically and block staging/promotion under failures.
+- **F3 (Human-in-the-Loop)**: Verifies ingested records remain staged, automated promotion is blocked, and promotion requires valid token/confirm flags.
+- **F4 (Path Sanitization)**: Verifies absolute local path redaction in outcomes, artifacts, and errors while preserving relative ones.
 
-## 3. How to Run the Tests
-Ensure you are in the correct conda environment (`goodq_core`) and execute:
+### Tier 2: Boundary & Corner Cases (Tests F1.06-10 to F4.06-10)
+- **F1 Boundary**: Verifies profile case insensitivity, invalid profile fallback, unrecognized tool default blocking, and consistency.
+- **F2 Boundary**: Verifies validation failure rules for unregistered media, temporal out of range, non-flat payload, schema mismatch, and unnormalized coordinates.
+- **F3 Boundary**: Verifies expired tokens, token reuse prevention, token-operation mismatches, empty tokens, and confirmation without token.
+- **F4 Boundary**: Verifies nested json path sanitization, empty/None values handling, lowercase drive letters, and natural text prompt preservation.
 
-```powershell
-# Run the E2E test suite
-conda run -n goodq_core pytest tests/e2e/test_agent_workspace.py
-```
+### Tier 3: Cross-Feature Combinations
+- Collisions between offline profiles and agent failure.
+- Sync checks during Qdrant/FAISS backfilling to prevent orphan vector injection.
+- Sanitizing validation failure reports.
+- Full validation and promotion handshake loop.
 
-## 4. Feature Mapping and Inventory
-The suite consists of exactly 82 test cases mapping to the 7 required features:
-
-1. **Directory Tree Architecture (F1)**: Verification of folder existence, layout, and permissions (12 tests).
-2. **Context & Rule Distillation (F2)**: Rule conversion correctness, absence of contradictions, and relative markdown links (12 tests).
-3. **Lessons Learned Integration (F3)**: Enforcement of formatting rules including the `Summary: ` header line (12 tests).
-4. **Programmatic Verification Linter (F4)**: Verification of the linter script execution, return codes, and rule coverage (12 tests).
-5. **Previous Sessions Reflection & Lessons Extraction (F5)**: Ensuring lessons cover VRAM limits, installers, and pipeline debugging (11 tests).
-6. **Agent Workspace Onboarding Bootstrapper (F6)**: Power Shell preflight check, capabilities reporting, and environment tests (12 tests).
-7. **Repository Pointer Update (F7)**: Verifying `AGENTS.md` correctly points future agents to the workspace (11 tests).
+### Tier 4: Real-World Scenarios
+- End-to-end happy path (ingestion -> stage -> validate -> confirm promote -> promoted status).
+- Pipeline abort on schema failure.
+- Path audit on local media drives.
+- Concurrency isolation of tokens.
+- Agent failure and recovery scenario.

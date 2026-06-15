@@ -1,37 +1,42 @@
-# E2E Test Ready Report
+# Test Readiness Attestation
 
-The E2E testing track for the Agent Knowledge Workspace is established and ready.
-
-## E2E Test Runner Command
-To run the verification test suite, execute the following command:
-
+## Test Runner Command
+To run the staged ingestion harness E2E test suite with the mock compliance layer enabled:
 ```powershell
-conda run -n goodq_core pytest tests/e2e/test_agent_workspace.py
+$env:TEST_MOCK_HARNESS="1"; conda run -n goodq_core pytest tests/e2e/test_staged_ingestion_harness.py
+```
+To run the test suite against the actual client to observe expected failures due to unimplemented features:
+```powershell
+$env:TEST_MOCK_HARNESS="0"; conda run -n goodq_core pytest tests/e2e/test_staged_ingestion_harness.py
 ```
 
-## Coverage & Count Metrics
-The test suite contains **exactly 82 test cases** distributed across the 4 E2E testing tiers and 7 workspace features:
+## Coverage Summary
+The test suite consists of **50 tests** mapped across 4 tiers:
+- **Tier 1: Feature Coverage** (20 tests, F1.01-05, F2.01-05, F3.01-05, F4.01-05)
+- **Tier 2: Boundary & Corner Cases** (20 tests, F1.06-10, F2.06-10, F3.06-10, F4.06-10)
+- **Tier 3: Cross-Feature Combinations** (5 tests, collisions, vector backfilling, orphan vectors, validation/sanitization interaction, handshake loop)
+- **Tier 4: Real-World Scenarios** (5 tests, complete happy path loop, failure aborts, path audit, concurrency, recovery)
 
-| Testing Tier | Description | Target Test Cases |
-|--------------|-------------|-------------------|
-| **Tier 1** | Basic Smoke & Existence Checks | 12 tests |
-| **Tier 2** | Structure & Schema Checks | 12 tests |
-| **Tier 3** | Execution & Integration Checks | 24 tests |
-| **Tier 4** | Adversarial, Bounds & Integrity Checks | 34 tests |
-| **Total** | | **82 tests** |
+## Feature Checklist Matrix
 
-### Feature Inventory Checklist & Counts
-- [ ] **Feature 1: Directory Tree Architecture** (12 tests)
-  - Verify folders `%WORKSPACE_ROOT%\protocols`, `%WORKSPACE_ROOT%\models_and_vram`, `%WORKSPACE_ROOT%\workflows`, and `%WORKSPACE_ROOT%\lessons` exist, are not empty, and have correct read/write permissions.
-- [ ] **Feature 2: Context & Rule Distillation** (12 tests)
-  - Verify operational rules and specifications are correctly distilled without contradictions, all markdown cross-links are relative, and no hardcoded drive letters exist in active markdown documents.
-- [ ] **Feature 3: Lessons Learned Integration** (12 tests)
-  - Verify lessons learned markdown files conform strictly to the required `Summary: ` header line format and sections structure.
-- [ ] **Feature 4: Programmatic Verification Linter** (12 tests)
-  - Verify that the programmatic linter script (`%WORKSPACE_ROOT%\verify_agent_workspace.py`) compiles, executes, logs errors clearly, exits zero on success, and flags empty folders, formatting issues, trailing slashes, and hardcoded drive roots on failure.
-- [ ] **Feature 5: Previous Sessions Reflection & Lessons Extraction** (11 tests)
-  - Verify lessons cover prior themes including VRAM budgets, setup installers, and perception pipeline debugging.
-- [ ] **Feature 6: Agent Workspace Onboarding Bootstrapper** (12 tests)
-  - Verify that the onboarding PowerShell script (`%WORKSPACE_ROOT%\bootstrap_agent.ps1`) exists, executes, runs preflight checks on paths and permissions, reports capabilities, and leaves no temporary garbage files.
-- [ ] **Feature 7: Repository Pointer Update** (11 tests)
-  - Verify the repository `%GOODQ_ROOT%\AGENTS.md` is updated with a prominent pointer reference section, lacks broken links, and retains essential identity rules and metadata.
+| Feature | Feature Description | Tier 1 (F1-5) | Tier 2 (F6-10) | Verified (Mock)? |
+|---|---|---|---|---|
+| **1. Gated Execution** | Command routing in safe/offline/unrestricted profiles & agent failures | Pass | Pass | Yes (10/10) |
+| **2. UCF Validation** | Post-ingestion validator (`validate_ucf_epoch.py`) automatic checks | Pass | Pass | Yes (10/10) |
+| **3. Human-in-the-Loop** | Staged records lifecycle & confirm/confirmation_token gating | Pass | Pass | Yes (10/10) |
+| **4. Path Sanitization** | Redaction of absolute local file paths (C:\ or L:\) in output envelopes | Pass | Pass | Yes (10/10) |
+
+## Cross-Feature and Real-World Scenarios (Tiers 3 & 4)
+
+- **Tier 3 Cross-Feature Combinations**:
+  - `test_f3_tier3_01_profile_collision_offline_takes_precedence`: Verified (Pass)
+  - `test_f3_tier3_02_qdrant_faiss_backfilling_sync`: Verified (Pass)
+  - `test_f3_tier3_03_orphan_vector_injection_blocking`: Verified (Pass)
+  - `test_f3_tier3_04_sanitization_applied_to_validation_failure_report`: Verified (Pass)
+  - `test_f3_tier3_05_promotion_validation_handshake_loop`: Verified (Pass)
+- **Tier 4 Real-World Application Scenarios**:
+  - `test_f4_tier4_01_complete_happy_path_loop`: Verified (Pass)
+  - `test_f4_tier4_02_validation_failure_aborts_pipeline`: Verified (Pass)
+  - `test_f4_tier4_03_path_audit_scenario`: Verified (Pass)
+  - `test_f4_tier4_04_concurrency_isolation`: Verified (Pass)
+  - `test_f4_tier4_05_agent_failure_recovery_scenario`: Verified (Pass)

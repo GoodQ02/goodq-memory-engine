@@ -208,6 +208,13 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 index = create_hnsw_id_index(faiss, feats.shape[1])
             add_with_required_ids(index, feats.astype("float32"), uid)
             faiss.write_index(index, index_path)
+        # Resolve identity fields
+        video_hash = item.get("video_hash") or item.get("video_id") or "unknown_video"
+        epoch_id = os.path.basename((cfg.get("paths", {}) or {}).get("db_dir") or "") or "unknown_epoch"
+        scene_id = item.get("scene_id") or item.get("scene_index")
+        if scene_id is not None and not isinstance(scene_id, str):
+            scene_id = f"scene_{int(scene_id):04d}"
+
         # Optional Qdrant dual-write.
         qdrant_attempted = False
         qdrant_ok = False
@@ -224,11 +231,15 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     "id": h,
                     "vector": feats[0].tolist(),
                     "payload": {
+                        "epoch_id": epoch_id,
+                        "video_hash": video_hash,
+                        "scene_id": scene_id,
+                        "scene_hash": h,
+                        "worker_name": "image_embed_dino",
+                        "vector_model_tag": "facebook/dinov2-large",
+                        "modality": "video",
+                        "ucf_frame_id": None,
                         "source_path": path,
-                        "modality": "dino",
-                        "model": "dino",
-                        "scene_id": item.get("scene_id"),
-                        "video_id": item.get("video_id") or item.get("video_hash"),
                         "faiss_id": faiss_id,
                     }
                 }]))
@@ -257,12 +268,45 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 os.makedirs(os.path.dirname(map_db), exist_ok=True)
                 con = sqlite3.connect(map_db, check_same_thread=False)
                 with con:
+                    # Check schema and drop if outdated
+                    cursor = con.execute("PRAGMA table_info(dino_id_map)")
+                    info = cursor.fetchall()
+                    pk_cols = [row[1] for row in info if row[5] > 0]
+                    if info and set(pk_cols) != {"video_hash", "faiss_id"}:
+                        con.execute("DROP TABLE dino_id_map")
+
                     con.execute(
-                        "CREATE TABLE IF NOT EXISTS dino_id_map (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, created_at TEXT)"
+                        """
+                        CREATE TABLE IF NOT EXISTS dino_id_map (
+                            video_hash TEXT,
+                            faiss_id INTEGER,
+                            hash TEXT,
+                            source_path TEXT,
+                            created_at TEXT,
+                            epoch_id TEXT,
+                            scene_id TEXT,
+                            scene_hash TEXT,
+                            worker_name TEXT,
+                            vector_model_tag TEXT,
+                            modality TEXT,
+                            ucf_frame_id INTEGER,
+                            PRIMARY KEY (video_hash, faiss_id)
+                        )
+                        """
                     )
                     con.execute(
-                        "INSERT OR REPLACE INTO dino_id_map(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
-                        (faiss_id, h, path, datetime.utcnow().isoformat()),
+                        """
+                        INSERT OR REPLACE INTO dino_id_map(
+                            faiss_id, hash, source_path, created_at,
+                            epoch_id, video_hash, scene_id, scene_hash,
+                            worker_name, vector_model_tag, modality, ucf_frame_id
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)
+                        """,
+                        (
+                            faiss_id, h, path, datetime.utcnow().isoformat(),
+                            epoch_id, video_hash, scene_id, h,
+                            "image_embed_dino", "facebook/dinov2-large", "video"
+                        ),
                     )
                 map_ok = True
             except Exception as e:

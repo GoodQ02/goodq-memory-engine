@@ -340,7 +340,12 @@
         "read_only",
         "local_mutation",
         "external_mutation",
-        "hybrid_mutation"
+        "hybrid_mutation",
+        "validate_only",
+        "ingest_staged",
+        "mutate_canonical",
+        "external_side_effect",
+        "destructive"
       ]
     },
     "toolCategory": {

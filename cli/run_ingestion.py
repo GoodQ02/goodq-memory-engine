@@ -4766,6 +4766,559 @@ def _process_frame(
     }
 
 
+def _load_ucf_ledger() -> Any:
+    """Dynamically imports ucf_ledger from the skill scripts directory."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+    
+    repo_root = Path(__file__).resolve().parent.parent
+    ucf_ledger_path = repo_root / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
+    
+    if not ucf_ledger_path.exists():
+        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
+    
+    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
+    
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["ucf_ledger"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _log_audio_to_ucf_ledger(
+    cfg_json: Path,
+    video_hash: str,
+    scene_id: str,
+    scene: Dict[str, Any],
+    audio_artifact_dir: Path,
+    item: Dict[str, Any],
+) -> None:
+    """Logs audio transcript and diarization segments to ucf_ledger.db."""
+    try:
+        import json
+        import os
+        from pathlib import Path
+
+        if not cfg_json.exists():
+            logger.warning(f"[UCF] Config file does not exist: {cfg_json}. Skipping UCF logging.")
+            return
+
+        with open(cfg_json, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        db_dir = cfg.get('paths', {}).get('db_dir')
+        if not db_dir:
+            logger.warning("[UCF] paths.db_dir not found in config. Skipping UCF logging.")
+            return
+
+        epoch_id = os.path.basename(db_dir)
+        run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
+
+        # Resolve DB path
+        data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
+        if data_root:
+            root_path = Path(data_root)
+            if root_path.name == "GoodQ_Data":
+                root_path = root_path.parent
+            ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
+        else:
+            ucf_db_dir = Path(db_dir) / 'ucf'
+
+        ucf_db_dir.mkdir(parents=True, exist_ok=True)
+        ucf_db_path = ucf_db_dir / 'ucf_ledger.db'
+
+        # Import UCF client
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+
+        client = UCFLedgerClient(str(ucf_db_path))
+        client.init_schema()
+
+        scene_start = scene.get('start', 0.0)
+
+        # 1. Transcripts logging
+        if item.get('segments') or item.get('transcript'):
+            raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_transcript.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            for i, segment in enumerate(item.get('segments', [])):
+                start_time = segment.get('start', 0.0)
+                end_time = segment.get('end', 0.0)
+                if start_time < (scene_start - 0.01):
+                    t_start = start_time + scene_start
+                    t_end = end_time + scene_start
+                else:
+                    t_start = start_time
+                    t_end = end_time
+
+                word_count = len(segment.get('text', '').strip().split())
+                confidence_val = segment.get('logprob') if segment.get('logprob') is not None else 1.0
+
+                payload = {
+                    'text': segment.get('text', ''),
+                    'language': segment.get('language') or item.get('language') or 'en',
+                    'segment_index': i,
+                    'word_count': word_count,
+                    'confidence': confidence_val,
+                    'identity_status': 'unresolved'
+                }
+
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=t_start,
+                    t_end=t_end,
+                    modality='text',
+                    worker_name='audio_transcribe',
+                    model_tag='faster_whisper',
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=raw_ref_str,
+                    payload=payload,
+                    promotion_status='staged'
+                )
+
+        # 2. Speaker turns logging
+        if item.get('speaker_segments'):
+            raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_diarization.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            for i, segment in enumerate(item.get('speaker_segments', [])):
+                start_time = segment.get('start', 0.0)
+                end_time = segment.get('end', 0.0)
+                if start_time < (scene_start - 0.01):
+                    t_start = start_time + scene_start
+                    t_end = end_time + scene_start
+                else:
+                    t_start = start_time
+                    t_end = end_time
+
+                speaker_id = segment.get('speaker') or segment.get('speaker_id', 'unknown')
+
+                payload = {
+                    'speaker_id': speaker_id,
+                    'speaker_label': None,
+                    'speaker_confidence': 1.0,
+                    'turn_index': i,
+                    'source': 'pyannote',
+                    'identity_status': 'unresolved'
+                }
+
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=t_start,
+                    t_end=t_end,
+                    modality='audio',
+                    worker_name='speaker_merge',
+                    model_tag='pyannote',
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=raw_ref_str,
+                    payload=payload,
+                    promotion_status='staged'
+                )
+
+        client.close()
+    except Exception as e:
+        logger.warning(f"[UCF] UCF logging failed: {type(e).__name__}: {str(e)}")
+
+
+def _log_visual_to_ucf_ledger(
+    cfg_json: Path,
+    video_hash: str,
+    scene_id: str,
+    scene: Dict[str, Any],
+    frame_dir: Path,
+    item: Dict[str, Any],
+) -> None:
+    """Logs visual modality outputs (object detection, face embeddings, OCR, captions, embeddings) to ucf_ledger.db."""
+    try:
+        import json
+        import os
+        from pathlib import Path
+
+        if not cfg_json.exists():
+            logger.warning(f"[UCF] Config file does not exist: {cfg_json}. Skipping UCF logging.")
+            return
+
+        with open(cfg_json, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        db_dir = cfg.get('paths', {}).get('db_dir')
+        if not db_dir:
+            logger.warning("[UCF] paths.db_dir not found in config. Skipping UCF logging.")
+            return
+
+        epoch_id = os.path.basename(db_dir)
+        run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
+
+        # Resolve DB path
+        data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
+        if data_root:
+            root_path = Path(data_root)
+            if root_path.name == "GoodQ_Data":
+                root_path = root_path.parent
+            ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
+        else:
+            ucf_db_dir = Path(db_dir) / 'ucf'
+
+        ucf_db_dir.mkdir(parents=True, exist_ok=True)
+        ucf_db_path = ucf_db_dir / 'ucf_ledger.db'
+
+        # Import UCF client
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+
+        client = UCFLedgerClient(str(ucf_db_path))
+        client.init_schema()
+
+        # Query media_sources for width and height
+        cursor = client.execute_with_retry(
+            "SELECT width, height FROM media_sources WHERE video_hash = ?",
+            (video_hash,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            logger.warning(f"[UCF] media_sources not found for {video_hash}. Bounding boxes will not be normalized.")
+            width, height = None, None
+        else:
+            width, height = row[0], row[1]
+            if width <= 0 or height <= 0:
+                logger.warning(f"[UCF] Invalid dimensions ({width}x{height}) for {video_hash}. Bounding boxes will not be normalized.")
+                width, height = None, None
+
+        start = float(scene.get('start', 0.0) or 0.0)
+        duration = float(scene.get('duration', 0.0) or 0.0)
+        frame_timestamp = start + (duration / 2.0) if duration > 0 else start
+
+        # 1. OCR text
+        if item.get('ocr_text'):
+            ocr_text = item['ocr_text']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_ocr.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            ocr_meta = item.get('ocr_meta', {})
+            atomic_write_json(raw_ref_path, ocr_meta)
+            
+            engine = ocr_meta.get('engine', 'tesseract')
+            strategy = ocr_meta.get('strategy', 'default')
+            
+            payload = {
+                'text': ocr_text,
+                'engine': engine,
+                'strategy': strategy,
+            }
+            
+            client.log_frame(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                run_id=run_id,
+                t_start=frame_timestamp,
+                t_end=frame_timestamp,
+                modality='text',
+                worker_name='image_ocr',
+                model_tag=engine,
+                confidence=1.0,
+                spatial_region=None,
+                spatial_space='normalized_yxyx_top_left',
+                source_artifact_id=scene_id,
+                raw_ref=raw_ref_str,
+                payload=payload,
+                promotion_status='staged'
+            )
+
+        # 2. Caption text
+        if item.get('caption'):
+            caption = item['caption']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_caption.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            caption_meta = item.get('caption_meta', {})
+            atomic_write_json(raw_ref_path, caption_meta)
+            
+            engine = caption_meta.get('engine', 'blip')
+            
+            payload = {
+                'text': caption,
+                'engine': engine,
+            }
+            
+            client.log_frame(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                run_id=run_id,
+                t_start=frame_timestamp,
+                t_end=frame_timestamp,
+                modality='multimodal',
+                worker_name='image_caption',
+                model_tag=engine,
+                confidence=1.0,
+                spatial_region=None,
+                spatial_space='normalized_yxyx_top_left',
+                source_artifact_id=scene_id,
+                raw_ref=raw_ref_str,
+                payload=payload,
+                promotion_status='staged'
+            )
+
+        # 3. Object Detections
+        if item.get('objects'):
+            objects = item['objects']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_objects.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            atomic_write_json(raw_ref_path, objects)
+            
+            for idx, obj in enumerate(objects):
+                bbox = obj.get('bbox')
+                score = obj.get('score') if obj.get('score') is not None else 1.0
+                label = obj.get('label') or 'unknown'
+                
+                spatial_region = None
+                if bbox and len(bbox) == 4 and width and height:
+                    ymin = max(0.0, min(1.0, float(bbox[1]) / height))
+                    xmin = max(0.0, min(1.0, float(bbox[0]) / width))
+                    ymax = max(0.0, min(1.0, float(bbox[3]) / height))
+                    xmax = max(0.0, min(1.0, float(bbox[2]) / width))
+                    spatial_region = [ymin, xmin, ymax, xmax]
+                
+                payload = {
+                    'label': label,
+                    'score': score,
+                    'object_index': idx,
+                    'x1': bbox[0] if bbox else 0.0,
+                    'y1': bbox[1] if bbox else 0.0,
+                    'x2': bbox[2] if bbox else 0.0,
+                    'y2': bbox[3] if bbox else 0.0,
+                }
+                
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=frame_timestamp,
+                    t_end=frame_timestamp,
+                    modality='video',
+                    worker_name='object_detect',
+                    model_tag='yolov8n',
+                    confidence=score,
+                    spatial_region=spatial_region,
+                    spatial_space='normalized_yxyx_top_left',
+                    source_artifact_id=scene_id,
+                    raw_ref=raw_ref_str,
+                    payload=payload,
+                    promotion_status='staged'
+                )
+
+        # 4. Face Embeddings / Detections
+        if item.get('faces'):
+            faces = item['faces']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_faces.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            atomic_write_json(raw_ref_path, faces)
+            
+            face_engine = item.get('faces_meta', {}).get('engine', 'facenet-pytorch')
+            
+            for idx, face in enumerate(faces):
+                bbox = face.get('bbox')
+                
+                spatial_region = None
+                if bbox and len(bbox) == 4 and width and height:
+                    ymin = max(0.0, min(1.0, float(bbox[1]) / height))
+                    xmin = max(0.0, min(1.0, float(bbox[0]) / width))
+                    ymax = max(0.0, min(1.0, float(bbox[3]) / height))
+                    xmax = max(0.0, min(1.0, float(bbox[2]) / width))
+                    spatial_region = [ymin, xmin, ymax, xmax]
+                
+                payload = {
+                    'face_index': idx,
+                    'engine': face_engine,
+                    'x1': bbox[0] if bbox else 0.0,
+                    'y1': bbox[1] if bbox else 0.0,
+                    'x2': bbox[2] if bbox else 0.0,
+                    'y2': bbox[3] if bbox else 0.0,
+                }
+                
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=frame_timestamp,
+                    t_end=frame_timestamp,
+                    modality='video',
+                    worker_name='face_embed',
+                    model_tag=face_engine,
+                    confidence=1.0,
+                    spatial_region=spatial_region,
+                    spatial_space='normalized_yxyx_top_left',
+                    source_artifact_id=scene_id,
+                    raw_ref=raw_ref_str,
+                    payload=payload,
+                    promotion_status='staged'
+                )
+
+        # 5. DINOv2 Visual Embeddings
+        if item.get('dino_meta') and item.get('dino_meta', {}).get('status') == 'ok':
+            dino_meta = item['dino_meta']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_dino.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            atomic_write_json(raw_ref_path, dino_meta)
+            
+            h = dino_meta.get('embedding_id')
+            vector_backend = 'qdrant' if dino_meta.get('qdrant_committed') else 'faiss'
+            vector_collection = dino_meta.get('qdrant_collection') or cfg.get('qdrant', {}).get('collections', {}).get('dino', 'dino')
+            vector_dim = cfg.get('qdrant', {}).get('embedding_dims', {}).get('dino', 1024)
+            
+            payload = {
+                'embedding_id': h,
+                'faiss_id': dino_meta.get('faiss_id'),
+                'vector_backend': vector_backend,
+                'vector_collection': vector_collection,
+            }
+            
+            frame_id = client.log_frame(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                run_id=run_id,
+                t_start=frame_timestamp,
+                t_end=frame_timestamp,
+                modality='video',
+                worker_name='image_embed_dino',
+                model_tag=dino_meta.get('model', 'facebook/dinov2-large'),
+                confidence=1.0,
+                spatial_region=None,
+                spatial_space='normalized_yxyx_top_left',
+                vector_key=h,
+                vector_backend=vector_backend,
+                vector_collection=vector_collection,
+                vector_dim=vector_dim,
+                vector_model_tag=dino_meta.get('model', 'facebook/dinov2-large'),
+                source_artifact_id=scene_id,
+                raw_ref=raw_ref_str,
+                payload=payload,
+                promotion_status='staged'
+            )
+            
+            # Backfill ucf_frame_id to Qdrant if enabled
+            if vector_backend == 'qdrant' and cfg.get('qdrant', {}).get('enabled', False):
+                try:
+                    from steps.common.qdrant_client import build_qdrant_client
+                    q_client = build_qdrant_client(cfg, dim=vector_dim, key='dino')
+                    if q_client:
+                        normalized_key = q_client._normalize_point_id(h)
+                        q_client.session.post(
+                            f"{q_client.cfg.host}/collections/{q_client.cfg.collection}/points/payload?wait=true",
+                            json={
+                                "payload": {"ucf_frame_id": frame_id},
+                                "points": [normalized_key]
+                            },
+                            timeout=5
+                        )
+                except Exception as e:
+                    logger.warning(f"[UCF] Failed to update Qdrant payload with ucf_frame_id for DINO: {e}")
+
+            # Backfill ucf_frame_id to FAISS sidecar DB
+            map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
+            if map_db and os.path.isfile(map_db):
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(map_db, check_same_thread=False)
+                    with con:
+                        con.execute(
+                            "UPDATE dino_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
+                            (frame_id, video_hash, dino_meta.get('faiss_id'))
+                        )
+                    con.close()
+                except Exception as e:
+                    logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for DINO: {e}")
+
+        # 6. CLIP Visual Embeddings
+        if item.get('clip_meta') and item.get('clip_meta', {}).get('status') == 'ok':
+            clip_meta = item['clip_meta']
+            raw_ref_path = frame_dir / f"{scene_id}_raw_clip.json"
+            raw_ref_str = str(raw_ref_path.resolve())
+            
+            atomic_write_json(raw_ref_path, clip_meta)
+            
+            h = clip_meta.get('embedding_id')
+            vector_backend = 'qdrant' if clip_meta.get('qdrant_committed') else 'faiss'
+            vector_collection = clip_meta.get('qdrant_collection') or cfg.get('qdrant', {}).get('collections', {}).get('clip', 'clip')
+            vector_dim = cfg.get('qdrant', {}).get('embedding_dims', {}).get('clip', 768)
+            
+            payload = {
+                'embedding_id': h,
+                'faiss_id': clip_meta.get('faiss_id'),
+                'vector_backend': vector_backend,
+                'vector_collection': vector_collection,
+            }
+            
+            frame_id = client.log_frame(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                run_id=run_id,
+                t_start=frame_timestamp,
+                t_end=frame_timestamp,
+                modality='video',
+                worker_name='image_embed_clip',
+                model_tag=clip_meta.get('model', 'openai/clip-vit-large-patch14'),
+                confidence=1.0,
+                spatial_region=None,
+                spatial_space='normalized_yxyx_top_left',
+                vector_key=h,
+                vector_backend=vector_backend,
+                vector_collection=vector_collection,
+                vector_dim=vector_dim,
+                vector_model_tag=clip_meta.get('model', 'openai/clip-vit-large-patch14'),
+                source_artifact_id=scene_id,
+                raw_ref=raw_ref_str,
+                payload=payload,
+                promotion_status='staged'
+            )
+            
+            # Backfill ucf_frame_id to Qdrant if enabled
+            if vector_backend == 'qdrant' and cfg.get('qdrant', {}).get('enabled', False):
+                try:
+                    from steps.common.qdrant_client import build_qdrant_client
+                    q_client = build_qdrant_client(cfg, dim=vector_dim, key='clip')
+                    if q_client:
+                        normalized_key = q_client._normalize_point_id(h)
+                        q_client.session.post(
+                            f"{q_client.cfg.host}/collections/{q_client.cfg.collection}/points/payload?wait=true",
+                            json={
+                                "payload": {"ucf_frame_id": frame_id},
+                                "points": [normalized_key]
+                            },
+                            timeout=5
+                        )
+                except Exception as e:
+                    logger.warning(f"[UCF] Failed to update Qdrant payload with ucf_frame_id for CLIP: {e}")
+
+            # Backfill ucf_frame_id to FAISS sidecar DB
+            map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
+            if map_db and os.path.isfile(map_db):
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(map_db, check_same_thread=False)
+                    with con:
+                        con.execute(
+                            "UPDATE clip_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
+                            (frame_id, video_hash, clip_meta.get('faiss_id'))
+                        )
+                    con.close()
+                except Exception as e:
+                    logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLIP: {e}")
+
+        client.close()
+    except Exception as e:
+        logger.warning(f"[UCF] Visual UCF logging failed: {type(e).__name__}: {str(e)}")
+
+
 def _process_audio(
     cfg_json: Path,
     ffmpeg: str,
@@ -5163,6 +5716,9 @@ def _process_audio(
         merge('goodq_audio_transcribe', 'audio_music_events')
         merge('goodq_audio_transcribe', 'audio_time_hints')
 
+        if item.get('speaker_transcript'):
+            item['segments'] = item['speaker_transcript']
+
         # Write compatibility JSON files for harmonizer
         # The harmonizer expects separate transcript.json and diarization.json files
         audio_artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -5176,6 +5732,8 @@ def _process_audio(
             }
             atomic_write_json(audio_artifact_dir / 'transcript.json', transcript_json)
             logger.info(f"[AUDIO] Wrote transcript.json with {len(item.get('segments', []))} segments")
+            # Save raw un-flattened transcript
+            atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_transcript.json", item.get('segments', []))
 
         # Write diarization.json
         if item.get('speaker_segments'):
@@ -5184,6 +5742,18 @@ def _process_audio(
                 'segments': item.get('speaker_segments', [])
             }
             atomic_write_json(audio_artifact_dir / 'diarization.json', diarization_json)
+            # Save raw un-flattened diarization
+            atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
+
+        # Call UCF Audio logging hook
+        _log_audio_to_ucf_ledger(
+            cfg_json=cfg_json,
+            video_hash=video_hash,
+            scene_id=scene_id,
+            scene=scene,
+            audio_artifact_dir=audio_artifact_dir,
+            item=item,
+        )
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
@@ -5341,6 +5911,20 @@ async def _process_frame_async(
             scene_id=scene_id,
             video_id=video_hash,
         )
+
+    # Call UCF Visual logging hook
+    try:
+        await asyncio.to_thread(
+            _log_visual_to_ucf_ledger,
+            cfg_json,
+            video_hash,
+            scene_id,
+            scene,
+            frame_dir,
+            item,
+        )
+    except Exception as ucf_err:
+        logger.warning(f"[UCF] Visual logging hook failed: {ucf_err}")
 
     frame_text_parts: List[str] = []
     if isinstance(item.get('ocr_text'), str):
@@ -5812,6 +6396,9 @@ async def _process_audio_async(
         speaker_merge_res = await run_audio_step('goodq_audio_transcribe', 'audio_speaker_merge')
         if isinstance(speaker_merge_res, dict) and speaker_merge_res.get("status") == "ok":
             item.update(speaker_merge_res.get("outputs", {}))
+
+        if item.get('speaker_transcript'):
+            item['segments'] = item['speaker_transcript']
             
         step_calls = [
             run_audio_step('goodq_audio_transcribe', 'audio_music_events'),
@@ -5834,6 +6421,8 @@ async def _process_audio_async(
                 'language': item.get('language', 'en')
             }
             await asyncio.to_thread(atomic_write_json, audio_artifact_dir / 'transcript.json', transcript_json)
+            # Save raw un-flattened transcript
+            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_transcript.json", item.get('segments', []))
 
         if item.get('speaker_segments'):
             diarization_json = {
@@ -5841,6 +6430,19 @@ async def _process_audio_async(
                 'segments': item.get('speaker_segments', [])
             }
             await asyncio.to_thread(atomic_write_json, audio_artifact_dir / 'diarization.json', diarization_json)
+            # Save raw un-flattened diarization
+            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
+
+        # Call UCF Audio logging hook
+        await asyncio.to_thread(
+            _log_audio_to_ucf_ledger,
+            cfg_json,
+            video_hash,
+            scene_id,
+            scene,
+            audio_artifact_dir,
+            item,
+        )
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 

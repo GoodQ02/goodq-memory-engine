@@ -124,7 +124,7 @@
         "execute",
         "verify"
       ],
-      "mutability_class": "external_mutation"
+      "mutability_class": "mutate_canonical"
     },
     {
       "name": "faiss_search",
@@ -348,7 +348,7 @@
       "allowed_in_modes": [
         "execute"
       ],
-      "mutability_class": "external_mutation"
+      "mutability_class": "external_side_effect"
     },
     {
       "name": "process_video_scene",
@@ -405,7 +405,7 @@
         "execute",
         "verify"
       ],
-      "mutability_class": "local_mutation"
+      "mutability_class": "ingest_staged"
     },
     {
       "name": "transcribe_audio",
@@ -461,7 +461,218 @@
         "execute",
         "verify"
       ],
-      "mutability_class": "local_mutation"
+      "mutability_class": "ingest_staged"
+    },
+    {
+      "name": "validate_ucf_epoch",
+      "description": "Run validation on the current UCF epoch's database and staging directory.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "epoch"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "report_path": {
+            "type": "string"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "valid"
+        ]
+      },
+      "side_effects": [
+        "reads_files"
+      ],
+      "risk_tier": "low",
+      "idempotency": "idempotent",
+      "requires_confirmation": false,
+      "timeout_ms": 60000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "execute",
+        "verify"
+      ],
+      "mutability_class": "validate_only"
+    },
+    {
+      "name": "run_ingestion",
+      "description": "Process ingestion folder through the pipeline, staged in UCF epoch.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "input_dir": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "string"
+          },
+          "max_scenes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "force": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "input_dir",
+          "epoch"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "string"
+          },
+          "scene_count": {
+            "type": "integer"
+          },
+          "validation_report": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "epoch"
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "executes_commands"
+      ],
+      "risk_tier": "high",
+      "idempotency": "non_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 3600000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "ingest_staged"
+    },
+    {
+      "name": "promote_ucf_to_memory",
+      "description": "Promote staging UCF database records to canonical relational/vector memory.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "epoch"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "promoted": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "promoted"
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "network_access",
+        "external_mutation"
+      ],
+      "risk_tier": "high",
+      "idempotency": "non_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 120000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "mutate_canonical"
+    },
+    {
+      "name": "file_delete",
+      "description": "Delete a file from the local filesystem.",
+      "category": "filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
+      "side_effects": [
+        "writes_files"
+      ],
+      "risk_tier": "high",
+      "idempotency": "idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 60000,
+      "retry_policy": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "destructive"
     }
   ],
   "policies": {

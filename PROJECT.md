@@ -1,31 +1,41 @@
-# Project: Agent Knowledge Workspace Setup
+# Project: Agent-Gated Staged Ingestion Harness
 
 ## Architecture
-- Target Directory: `C:\Users\jdben\My Drive\_AGENT`
-- Folder structure:
-  - `protocols/`: Agent identity, roles, constraints, system boundaries.
-  - `models_and_vram/`: VRAM budgets, hardware configurations, display zones, fallback chains.
-  - `workflows/`: Repeatable operational procedures (memory clean starts, evidence-first repairs).
-  - `lessons/`: Log of developer findings, system design corrections, engineering lessons.
-- Onboarding script: `bootstrap_agent.ps1` at the root of `_AGENT`.
-- Programmatic linter: `verify_agent_workspace.py` inside `_AGENT`.
-- Repository Integration: Pointer section in `l:\GOODCUBE\projects\goodq4all\AGENTS.md`.
+- Subsystem: Ingestion middleware layer gating and validation flow.
+- Core component: `agents/mini_agent_client.py` wrapping execution of commands using `goodq_mini_agent.cli` runner.
+- Gate validation component: `scripts/ucf/validate_ucf_epoch.py` executed after ingestion.
+- Promotion component: `promote_ucf_to_memory` gating via confirmation flags and confirmation tokens.
+- Sanitization component: path-agnostic redaction (redacting `L:\GOODCUBE\...`, `C:\Users\...`) of returned envelopes.
+- Backfill database: backfilling Qdrant points payload and FAISS sidecar mapping tables with row IDs.
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | E2E Test Suite Creation | Design and build the E2E verification test cases & runner | None | PLANNED |
-| 2 | Workspace Structure & Bootstrapper | Establish directories and bootstrap_agent.ps1 | M1 | PLANNED |
-| 3 | Context & Rule Distillation | Distill AGENTS.md, GEMINI.md, and docs/agent/ | M1 | PLANNED |
-| 4 | Prior Lessons Extraction | Parse brain history transcripts and format lessons | M1 | PLANNED |
-| 5 | Linter and Integration | Build verify_agent_workspace.py, update AGENTS.md, run all tests | M2, M3, M4 | PLANNED |
-| 6 | Adversarial & Auditing | Run challenger and forensic auditor on the workspace | M5 | PLANNED |
+| 1 | Architecture Mapping & Exploration | Explore MiniAgentClient, test suite, validation script | none | IN_PROGRESS |
+| 2 | Mini Agent Gating Middleware | Implement safe/offline/unrestricted runtime profiles, tool validation | M1 | PLANNED |
+| 3 | Post-Ingestion Validation Gate | Trigger validate_ucf_epoch.py post-ingestion, check exit status | M2 | PLANNED |
+| 4 | Human-in-the-Loop & Verification | Staged status enforcement, confirmation token flow | M3 | PLANNED |
+| 5 | Envelope Path Sanitization | Redact local absolute path roots from outputs | M4 | PLANNED |
+| 6 | Database/Vector Backfills | Colliding videos ucf_ledger.db integration, Qdrant/FAISS row ID backfills, orphan vector gate | M5 | PLANNED |
+| 7 | Full E2E & Verification | Run tests, mock orphan tests, check all 728+ unit tests | M6 | PLANNED |
 
 ## Interface Contracts
-- Onboarding Script: `bootstrap_agent.ps1` (outputs capabilities report, exits 0)
-- Programmatic Linter: `verify_agent_workspace.py` (checks folders, lessons formatting, path slashes, exits 0)
-- Lessons Formatting: First line must be `Summary: <one-line-summary>`
+### MiniAgentClient ↔ Ingestion CLI
+- Execution routed via `goodq_mini_agent.cli` runner.
+- Profiles: `safe`, `offline`, `unrestricted`.
+- Block/allow tool contracts for: `run_ingestion` (`ingest_staged`), `validate_ucf_epoch` (`validate_only`), `promote_ucf_to_memory` (`mutate_canonical`), and `file_delete` (`destructive`).
+
+### Human-in-the-Loop Promotion
+- `promote_ucf_to_memory` accepts `confirm_flag: bool` and `confirmation_token: str`.
+- Output: `needs_confirmation` and token when unconfirmed, proceeds only when valid token and flag are provided.
+
+### Envelope Sanitization
+- Input: JSON dict/string with absolute paths (e.g. `L:\GOODCUBE\...`, `C:\Users\...`).
+- Output: Redacted relative path format.
 
 ## Code Layout
-- Target: `C:\Users\jdben\My Drive\_AGENT/`
-- Sources: `L:\GOODCUBE\projects\goodq4all/AGENTS.md`, `L:\GOODCUBE\projects\goodq4all/GEMINI.md`, `L:\GOODCUBE\projects\goodq4all/docs/agent/`, `C:\Users\jdben\.gemini\antigravity\brain/`, `L:\GOODCUBE\scratch\agent-skills\skills/`
+- `agents/mini_agent_client.py` - Middleware gating client
+- `scripts/ucf/validate_ucf_epoch.py` - Ingestion validation script
+- `cli/run_ingestion.py` - Ingestion execution loop
+- `cli/step_runner.py` - Ingestion step execution
+- `tests/` - Unit and integration tests

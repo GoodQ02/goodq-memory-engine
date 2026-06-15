@@ -451,7 +451,7 @@ class MiniAgentClient:
         tool_args = tool_args or {}
         
         # 1. Confirmation token validation if provided
-        NATIVELY_GATED_TOOLS = {"promote_ucf_to_memory"}
+        NATIVELY_GATED_TOOLS = {"promote_ucf_to_memory", "validate_ucf_frames"}
         if confirmation_token:
             with self._lock_token_store():
                 tokens = self._load_tokens()

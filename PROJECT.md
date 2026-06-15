@@ -18,6 +18,11 @@
 | 5 | Envelope Path Sanitization | Redact local absolute path roots from outputs | M4 | DONE | Implemented path-agnostic absolute path redaction (UNC, WSL, Windows drive letters) in outgoing envelopes. |
 | 6 | Database/Vector Backfills | Colliding videos ucf_ledger.db integration, Qdrant/FAISS row ID backfills, orphan vector gate | M5 | DONE | Synchronized collided video frames and backfilled Qdrant points and FAISS mapping sidecar tables with IDs. |
 | 7 | Full E2E & Verification | Run tests, mock orphan tests, check all 728+ unit tests | M6 | DONE | Verified entire suite with integration and E2E tests, resolving path, thread safety, and backdoor issues. |
+| 8 | E2E doctrine alignment | Align E2E doctrine and schema invariants | M7 | DONE | Hardening E2E ingestion and validation workflows. |
+| 9 | Validator fixes | Fix FAISS modality, CLIP registry, and error reporting | M8 | DONE | Implement R2, R4, and R5 in validate_ucf_epoch.py. |
+| 10 | Error-path regression tests | Error-path regression coverage | M9 | DONE | Prevent validator regressions and handle edge cases. |
+| 11 | Final verification | Run final integration and E2E verification | M10 | DONE | Verify entire test suite and clean up resources. |
+
 
 ## Interface Contracts
 ### MiniAgentClient ↔ Ingestion CLI

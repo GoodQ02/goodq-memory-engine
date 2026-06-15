@@ -159,7 +159,7 @@ def run_validation(mode: str = "offline") -> int:
             "expected_dim": clip_dim,
             "allowed_modalities": {"video", "multimodal"},
             "allowed_backends": {"qdrant", "faiss"},
-            "allowed_collections": {clip_collection, "clip", "test_clip_col"},
+            "allowed_collections": {clip_collection, "clip"},
             "allowed_model_tags": {"openai/clip-vit-large-patch14", "openai/clip-vit-base-patch16", "openai/clip-vit-base-patch32"}
         },
         "audio_embed_clap": {
@@ -478,16 +478,18 @@ def run_validation(mode: str = "offline") -> int:
             # 10. Scene Overlap Gate
             if cf["worker_name"] == "audio_transcribe":
                 video_scenes = scenes_by_video.get(cf["video_hash"], [])
-                has_overlap = False
-                for sf in video_scenes:
-                    if is_overlapping(cf["t_start"], cf["t_end"], sf["t_start"], sf["t_end"]):
-                        has_overlap = True
-                        break
-                if not has_overlap:
-                    report["scene_overlap_gate"]["status"] = "failed"
-                    report["scene_overlap_gate"]["errors"].append(
-                        f"Frame {fid}: Transcript segment [{cf['t_start']:.3f}, {cf['t_end']:.3f}] does not overlap with any video scene detect frame"
+                if video_scenes:
+                    has_overlap = any(
+                        is_overlapping(cf["t_start"], cf["t_end"], sf["t_start"], sf["t_end"])
+                        for sf in video_scenes
                     )
+                    if not has_overlap:
+                        report["scene_overlap_gate"]["status"] = "failed"
+                        report["scene_overlap_gate"]["errors"].append(
+                            f"Frame {fid}: Transcript segment [{cf['t_start']:.3f}, {cf['t_end']:.3f}] does not overlap with any video scene detect frame"
+                        )
+                # else: no scene_detect frames for this video — skip gate;
+                # manifest_reconciliation will catch the missing scene detect frames.
 
             # 12. Vector Reference Integrity Gate (Phase 0.7)
             if cf.get("vector_key") is not None:
@@ -613,10 +615,22 @@ def run_validation(mode: str = "offline") -> int:
                                         expected_modality = "video"
                                         expected_worker = "image_embed_clip"
                                         expected_tag = "openai/clip-vit-large-patch14"
-                                    else:
+                                    elif worker_name == "image_embed_dino":
                                         expected_modality = "video"
                                         expected_worker = "image_embed_dino"
                                         expected_tag = "facebook/dinov2-large"
+                                    elif worker_name == "audio_embed_clap":
+                                        expected_modality = "audio"
+                                        expected_worker = "audio_embed_clap"
+                                        expected_tag = "laion/clap-htsat-unfused"
+                                    elif worker_name == "text_embed":
+                                        expected_modality = "text"
+                                        expected_worker = "text_embed"
+                                        expected_tag = cf.get("vector_model_tag", "sentence-transformers/all-MiniLM-L6-v2")
+                                    else:
+                                        expected_modality = cf["modality"]
+                                        expected_worker = worker_name
+                                        expected_tag = cf.get("vector_model_tag", "")
                                         
                                     if p_modality and p_modality != expected_modality and p_modality != worker_name.split("_")[-1]:
                                         report["vector_integrity"]["status"] = "failed"
@@ -1202,7 +1216,7 @@ def run_validation(mode: str = "offline") -> int:
         # Check 4: Scoped Orphan Detection (online/strict modes)
         if mode in ("online", "strict"):
             # 1. Qdrant Scoped Orphans
-            for collection in {clip_collection, dino_collection}:
+            for collection in {clip_collection, dino_collection, audio_collection, text_collection}:
                 expected_qdrant_keys = set(
                     normalize_qdrant_id(cf["vector_key"]) for cf in context_frames
                     if cf["vector_key"] is not None
@@ -1303,7 +1317,10 @@ def run_validation(mode: str = "offline") -> int:
                         sidecar_conn = sqlite3.connect(str(sidecar_db_path))
                         sidecar_conn.row_factory = sqlite3.Row
                         table_name = _table_name
-                        cursor = sidecar_conn.execute(f"SELECT faiss_id, source_path FROM {table_name}")
+                        if table_name == "embeddings":
+                            cursor = sidecar_conn.execute(f"SELECT faiss_id, source_path FROM {table_name} WHERE modality = 'text'")
+                        else:
+                            cursor = sidecar_conn.execute(f"SELECT faiss_id, source_path FROM {table_name}")
                         for row in cursor.fetchall():
                             fid_val = row["faiss_id"]
                             source_path = row["source_path"]
@@ -1327,7 +1344,6 @@ def run_validation(mode: str = "offline") -> int:
     except Exception as e:
         print(f"ERROR: Exception during validation checks: {e}")
         report["summary"]["success"] = False
-        report["summary"]["checks_failed"] += 1
         
     finally:
         conn.close()

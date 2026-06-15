@@ -653,3 +653,281 @@ def test_strict_multi_source_vector_closure(setup_validator_env, monkeypatch):
     # Strict mode validation must now FAIL due to the in-scope orphan!
     code = run_validation(mode="strict")
     assert code == 1
+
+
+# ---------------------------------------------------------------------------
+# Gap C — Modality Validation Hardening (audio_embed_clap + text_embed)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def setup_gapc_env(tmp_path, monkeypatch):
+    """Sets up a mock UCF ledger and config environment with audio + text modality support."""
+    db_dir = tmp_path / "db"
+    db_dir.mkdir()
+
+    cfg_data = {
+        "paths": {
+            "db_dir": str(db_dir),
+            "data_root": str(tmp_path),
+            "faiss_clip_path": str(tmp_path / "faiss_clip.index"),
+            "faiss_dino_path": str(tmp_path / "faiss_dino.index"),
+            "faiss_audio_path": str(tmp_path / "faiss_audio.index"),
+            "faiss_index_path": str(tmp_path / "faiss_text.index"),
+            "clip_id_map_db": str(tmp_path / "clip_id_map.sqlite"),
+            "dino_id_map_db": str(tmp_path / "dino_id_map.sqlite"),
+            "clap_id_map_db": str(tmp_path / "clap_id_map.sqlite"),
+            "db_path": str(tmp_path / "memory.db"),
+            "processing": str(tmp_path / "processing"),
+        },
+        "qdrant": {
+            "collections": {
+                "clip": "test_clip_col",
+                "dino": "test_dino_col",
+                "audio": "test_audio_col",
+                "text": "test_text_col",
+            },
+            "embedding_dims": {
+                "clip": 768,
+                "dino": 1024,
+                "audio": 512,
+                "text": 384,
+            },
+            "host": "http://mock_qdrant:6333",
+        },
+    }
+
+    import scripts.ucf.validate_ucf_epoch
+    monkeypatch.setattr(scripts.ucf.validate_ucf_epoch, "load_configs", lambda x: cfg_data)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+
+    expected_db_dir = tmp_path / "epochs" / "db" / "ucf"
+    expected_db_dir.mkdir(parents=True)
+    ucf_db_path = expected_db_dir / "ucf_ledger.db"
+
+    ucf_module = _load_ucf_ledger()
+    client = ucf_module.UCFLedgerClient(str(ucf_db_path))
+    client.init_schema()
+
+    video_hash = "mock_video_gapc"
+    client.register_media(
+        video_hash=video_hash,
+        file_path="mock_video_gapc.mp4",
+        duration=60.0,
+        fps=30.0,
+        width=1920,
+        height=1080,
+    )
+    client.close()
+
+    raw_ref_file = tmp_path / "mock_ref_gapc.json"
+    raw_ref_file.write_text(json.dumps({"status": "ok"}), encoding="utf-8")
+
+    return {
+        "tmp_path": tmp_path,
+        "ucf_db_path": ucf_db_path,
+        "video_hash": video_hash,
+        "cfg_data": cfg_data,
+        "raw_ref_str": str(raw_ref_file.resolve()),
+    }
+
+
+def _insert_ucf_row(
+    ucf_db_path,
+    video_hash,
+    raw_ref_str,
+    *,
+    modality,
+    worker_name,
+    vector_key,
+    vector_backend,
+    vector_collection,
+    vector_dim,
+    vector_model_tag,
+    payload_dict=None,
+    promotion_status="staged",
+):
+    """Helper: insert a single context_frames row for testing."""
+    if payload_dict is None:
+        payload_dict = {}
+    payload_str = json.dumps(payload_dict)
+    canonical_str = json.dumps(payload_dict, sort_keys=True)
+    payload_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+    conn = sqlite3.connect(str(ucf_db_path))
+    conn.execute("DELETE FROM context_frames")
+    conn.execute(
+        """
+        INSERT INTO context_frames (
+            video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
+            modality, worker_name, model_tag, confidence, spatial_region, spatial_space,
+            vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
+            source_artifact_id, raw_ref, payload, payload_hash, promotion_status
+        ) VALUES (?, 'ucf.v0.1', 'db', 'run_gapc', 0.0, 5.0, ?, ?, ?, 1.0, NULL,
+                  'normalized_yxyx_top_left', ?, ?, ?, ?, ?, 'scene_0001', ?, ?, ?, ?)
+        """,
+        (
+            video_hash, modality, worker_name, vector_model_tag,
+            vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
+            raw_ref_str, payload_str, payload_hash, promotion_status,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_audio_embed_clap_valid_registry_entry(setup_gapc_env):
+    """Valid CLAP frame with correct dim, modality=audio, model tag passes offline validation."""
+    env = setup_gapc_env
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="audio",
+        worker_name="audio_embed_clap",
+        vector_key="a" * 64,
+        vector_backend="qdrant",
+        vector_collection="test_audio_col",
+        vector_dim=512,
+        vector_model_tag="laion/clap-htsat-unfused",
+    )
+    code = run_validation(mode="offline")
+    assert code == 0, "Valid CLAP frame must pass offline validation"
+
+
+def test_audio_embed_clap_dim_mismatch(setup_gapc_env):
+    """CLAP frame with wrong dimension (e.g. 768 instead of 512) fails offline validation."""
+    env = setup_gapc_env
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="audio",
+        worker_name="audio_embed_clap",
+        vector_key="b" * 64,
+        vector_backend="qdrant",
+        vector_collection="test_audio_col",
+        vector_dim=768,  # Wrong — should be 512
+        vector_model_tag="laion/clap-htsat-unfused",
+    )
+    code = run_validation(mode="offline")
+    assert code == 1, "CLAP frame with wrong dim must fail offline validation"
+
+
+def test_text_embed_audio_valid_registry_entry(setup_gapc_env):
+    """Valid text_embed frame from audio transcript (modality=text, 384-dim) passes offline validation."""
+    env = setup_gapc_env
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="text",
+        worker_name="text_embed",
+        vector_key="c" * 64,
+        vector_backend="qdrant",
+        vector_collection="test_text_col",
+        vector_dim=384,
+        vector_model_tag="sentence-transformers/all-MiniLM-L6-v2",
+        payload_dict={"embedding_source": "audio_transcript", "origin_modality": "audio"},
+    )
+    code = run_validation(mode="offline")
+    assert code == 0, "Valid text_embed from audio transcript must pass offline validation"
+
+
+def test_text_embed_frame_valid_registry_entry(setup_gapc_env):
+    """Valid text_embed frame from frame text (modality=text, 384-dim, FAISS backend) passes offline validation."""
+    env = setup_gapc_env
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="text",
+        worker_name="text_embed",
+        vector_key="d" * 64,
+        vector_backend="faiss",
+        vector_collection="text",
+        vector_dim=384,
+        vector_model_tag="sentence-transformers/all-MiniLM-L6-v2",
+        # FAISS backend requires faiss_id in payload for sidecar validation
+        payload_dict={"embedding_source": "frame_text", "origin_modality": "frame_text", "faiss_id": 42},
+    )
+    code = run_validation(mode="offline")
+    assert code == 0, "Valid text_embed from frame text must pass offline validation"
+
+
+def test_text_embed_malformed_key(setup_gapc_env):
+    """text_embed frame with malformed vector_key (not UUID or 64-hex) fails offline validation."""
+    env = setup_gapc_env
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="text",
+        worker_name="text_embed",
+        vector_key="not_a_valid_hash",  # Malformed
+        vector_backend="qdrant",
+        vector_collection="test_text_col",
+        vector_dim=384,
+        vector_model_tag="sentence-transformers/all-MiniLM-L6-v2",
+    )
+    code = run_validation(mode="offline")
+    assert code == 1, "text_embed with malformed vector_key must fail offline validation"
+
+
+def test_text_embed_does_not_disrupt_transcript_worker(setup_gapc_env):
+    """Transcript frames (worker_name=audio_transcribe) are unaffected by the text_embed registry addition.
+
+    Transcript frames have no vector_key — they carry modality='text' but are NOT vector frames.
+    The validator must not reject them as unregistered vector workers since audio_transcribe
+    does not appear as a vector_key producer. This test verifies the validator skips the
+    vector registry check when vector_key is NULL.
+
+    A video_scene_detect frame is also inserted to satisfy the scene_overlap_gate, which
+    checks that each audio_transcribe segment overlaps with a detected scene.
+    """
+    env = setup_gapc_env
+    payload_dict = {
+        "text": "Hello world",
+        "language": "en",
+        "segment_index": 0,
+        "word_count": 2,
+        "confidence": 0.95,
+        "identity_status": "unresolved",
+    }
+    payload_str = json.dumps(payload_dict)
+    canonical_str = json.dumps(payload_dict, sort_keys=True)
+    payload_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+
+    # Also insert a video_scene_detect frame so scene_overlap_gate has a scene to match
+    scene_payload = {"scene_index": 0}
+    scene_payload_str = json.dumps(scene_payload)
+    scene_payload_hash = hashlib.sha256(json.dumps(scene_payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    conn = sqlite3.connect(str(env["ucf_db_path"]))
+    conn.execute("DELETE FROM context_frames")
+    # video_scene_detect frame covering [0, 5]
+    conn.execute(
+        """
+        INSERT INTO context_frames (
+            video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
+            modality, worker_name, model_tag, confidence, spatial_region, spatial_space,
+            vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
+            source_artifact_id, raw_ref, payload, payload_hash, promotion_status
+        ) VALUES (?, 'ucf.v0.1', 'db', 'run_gapc', 0.0, 5.0, 'video', 'video_scene_detect',
+                  'scene_detect', 1.0, NULL, 'normalized_yxyx_top_left',
+                  NULL, NULL, NULL, NULL, NULL,
+                  'scene_0001', ?, ?, ?, 'staged')
+        """,
+        (env["video_hash"], env["raw_ref_str"], scene_payload_str, scene_payload_hash),
+    )
+    # audio_transcribe frame with no vector_key — must not trigger vector registry check
+    conn.execute(
+        """
+        INSERT INTO context_frames (
+            video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
+            modality, worker_name, model_tag, confidence, spatial_region, spatial_space,
+            vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
+            source_artifact_id, raw_ref, payload, payload_hash, promotion_status
+        ) VALUES (?, 'ucf.v0.1', 'db', 'run_gapc', 0.0, 3.0, 'text', 'audio_transcribe',
+                  'faster_whisper', 0.95, NULL, 'normalized_yxyx_top_left',
+                  NULL, NULL, NULL, NULL, NULL,
+                  'scene_0001', ?, ?, ?, 'staged')
+        """,
+        (env["video_hash"], env["raw_ref_str"], payload_str, payload_hash),
+    )
+    conn.commit()
+    conn.close()
+
+    code = run_validation(mode="offline")
+    assert code == 0, (
+        "Transcript frames with worker_name=audio_transcribe and no vector_key must pass offline "
+        "validation — vector registry check is gated on vector_key not being NULL"
+    )

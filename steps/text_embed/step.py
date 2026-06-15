@@ -901,7 +901,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 e,
             )
 
-        return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2"}}
+        return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2", "embedding_id": embedding_id}}
     except Exception as e:
         logger.warning(
             "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",

@@ -130,11 +130,20 @@ def run_validation(mode: str = "offline") -> int:
     clip_dim = dims_cfg.get("clip", 768)
     dino_dim = dims_cfg.get("dino", 1024)
 
+    audio_collection = collections_cfg.get("audio", "audio")
+    text_collection = collections_cfg.get("text", "text")
+    audio_dim = dims_cfg.get("audio", 512)
+    text_dim = dims_cfg.get("text", 384)
+
     paths_cfg = cfg.get("paths", {})
     clip_index_path = paths_cfg.get("faiss_clip_path")
     dino_index_path = paths_cfg.get("faiss_dino_path")
     clip_map_db = paths_cfg.get("clip_id_map_db")
     dino_map_db = paths_cfg.get("dino_id_map_db")
+    audio_index_path = paths_cfg.get("faiss_audio_path")
+    clap_map_db = paths_cfg.get("clap_id_map_db")
+    text_index_path = paths_cfg.get("faiss_index_path")
+    memory_db_path = paths_cfg.get("db_path")
 
     qdrant_host = qdrant_cfg.get("host", "http://127.0.0.1:6333")
 
@@ -152,6 +161,20 @@ def run_validation(mode: str = "offline") -> int:
             "allowed_backends": {"qdrant", "faiss"},
             "allowed_collections": {clip_collection, "clip", "test_clip_col"},
             "allowed_model_tags": {"openai/clip-vit-large-patch14", "openai/clip-vit-base-patch16", "openai/clip-vit-base-patch32"}
+        },
+        "audio_embed_clap": {
+            "expected_dim": audio_dim,
+            "allowed_modalities": {"audio"},
+            "allowed_backends": {"qdrant", "faiss"},
+            "allowed_collections": {audio_collection, "audio", "goodq_audio"},
+            "allowed_model_tags": {"laion/clap-htsat-unfused"}
+        },
+        "text_embed": {
+            "expected_dim": text_dim,
+            "allowed_modalities": {"text"},
+            "allowed_backends": {"qdrant", "faiss"},
+            "allowed_collections": {text_collection, "text", "goodq_scene_summaries_384"},
+            "allowed_model_tags": {"sentence-transformers/all-MiniLM-L6-v2", "all-MiniLM-L6-v2"}
         }
     }
     
@@ -656,8 +679,21 @@ def run_validation(mode: str = "offline") -> int:
                                 report["vector_integrity"]["warnings"].append(msg)
                                 
                     elif backend == "faiss":
-                        faiss_index_path_str = clip_index_path if worker_name == "image_embed_clip" else dino_index_path
-                        sidecar_db_path_str = clip_map_db if worker_name == "image_embed_clip" else dino_map_db
+                        if worker_name == "image_embed_clip":
+                            faiss_index_path_str = clip_index_path
+                            sidecar_db_path_str = clip_map_db
+                        elif worker_name == "image_embed_dino":
+                            faiss_index_path_str = dino_index_path
+                            sidecar_db_path_str = dino_map_db
+                        elif worker_name == "audio_embed_clap":
+                            faiss_index_path_str = audio_index_path
+                            sidecar_db_path_str = clap_map_db
+                        elif worker_name == "text_embed":
+                            faiss_index_path_str = text_index_path
+                            sidecar_db_path_str = memory_db_path
+                        else:
+                            faiss_index_path_str = None
+                            sidecar_db_path_str = None
                         faiss_index_path = resolve_path(faiss_index_path_str)
                         sidecar_db_path = resolve_path(sidecar_db_path_str)
                         
@@ -680,22 +716,37 @@ def run_validation(mode: str = "offline") -> int:
                                 if faiss_id is not None:
                                     sidecar_conn = sqlite3.connect(str(sidecar_db_path))
                                     sidecar_conn.row_factory = sqlite3.Row
-                                    table_name = "clip_id_map" if worker_name == "image_embed_clip" else "dino_id_map"
-                                    # Check if video_hash column exists to query with composite key if available
-                                    cursor_cols = sidecar_conn.execute(f"PRAGMA table_info({table_name})")
-                                    columns = [r[1] for r in cursor_cols.fetchall()]
-                                    
-                                    if "video_hash" in columns:
-                                        cursor = sidecar_conn.execute(
-                                            f"SELECT * FROM {table_name} WHERE video_hash = ? AND faiss_id = ?",
-                                            (cf["video_hash"], faiss_id)
-                                        )
+                                    if worker_name == "image_embed_clip":
+                                        table_name = "clip_id_map"
+                                    elif worker_name == "image_embed_dino":
+                                        table_name = "dino_id_map"
+                                    elif worker_name == "audio_embed_clap":
+                                        table_name = "clap_id_map"
+                                    elif worker_name == "text_embed":
+                                        table_name = "embeddings"
                                     else:
-                                        cursor = sidecar_conn.execute(
-                                            f"SELECT * FROM {table_name} WHERE faiss_id = ?",
-                                            (faiss_id,)
-                                        )
-                                    row = cursor.fetchone()
+                                        sidecar_conn.close()
+                                        table_name = None
+                                    
+                                    if table_name:
+                                        # Check if video_hash column exists to query with composite key if available
+                                        cursor_cols = sidecar_conn.execute(f"PRAGMA table_info({table_name})")
+                                        columns = [r[1] for r in cursor_cols.fetchall()]
+                                        
+                                        if "video_hash" in columns:
+                                            cursor = sidecar_conn.execute(
+                                                f"SELECT * FROM {table_name} WHERE video_hash = ? AND faiss_id = ?",
+                                                (cf["video_hash"], faiss_id)
+                                            )
+                                        else:
+                                            cursor = sidecar_conn.execute(
+                                                f"SELECT * FROM {table_name} WHERE faiss_id = ?",
+                                                (faiss_id,)
+                                            )
+                                        row = cursor.fetchone()
+                                    else:
+                                        row = None
+
                                     if not row:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
@@ -1215,9 +1266,11 @@ def run_validation(mode: str = "offline") -> int:
 
             # 2. FAISS Scoped Orphans
             checked_stems = {Path(media["file_path"]).stem for media in media_sources.values()}
-            for worker_name, col_name, idx_path_cfg, map_db_cfg in [
-                ("image_embed_clip", "clip", clip_index_path, clip_map_db),
-                ("image_embed_dino", "dino", dino_index_path, dino_map_db)
+            for worker_name, col_name, idx_path_cfg, map_db_cfg, _table_name in [
+                ("image_embed_clip", "clip", clip_index_path, clip_map_db, "clip_id_map"),
+                ("image_embed_dino", "dino", dino_index_path, dino_map_db, "dino_id_map"),
+                ("audio_embed_clap", "audio", audio_index_path, clap_map_db, "clap_id_map"),
+                ("text_embed", "text", text_index_path, memory_db_path, "embeddings"),
             ]:
                 faiss_index_path = resolve_path(idx_path_cfg)
                 sidecar_db_path = resolve_path(map_db_cfg)
@@ -1249,7 +1302,7 @@ def run_validation(mode: str = "offline") -> int:
                     try:
                         sidecar_conn = sqlite3.connect(str(sidecar_db_path))
                         sidecar_conn.row_factory = sqlite3.Row
-                        table_name = f"{col_name}_id_map"
+                        table_name = _table_name
                         cursor = sidecar_conn.execute(f"SELECT faiss_id, source_path FROM {table_name}")
                         for row in cursor.fetchall():
                             fid_val = row["faiss_id"]

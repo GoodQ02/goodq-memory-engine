@@ -4922,6 +4922,92 @@ def _log_audio_to_ucf_ledger(
                     promotion_status='staged'
                 )
 
+        # 3. CLAP audio embedding logging (optional — only if audio_embed_clap ran successfully)
+        clap_meta = item.get('clap_meta') or {}
+        if isinstance(clap_meta, dict) and clap_meta.get('status') == 'ok':
+            clap_embedding_id = clap_meta.get('embedding_id')
+            clap_faiss_id = clap_meta.get('faiss_id')
+            if clap_embedding_id and clap_faiss_id is not None:
+                # Collision-safe raw ref filename uses scene-level identifiers
+                scene_start_val = float(scene.get('start', 0.0) or 0.0)
+                scene_end_val = float(scene.get('end', scene_start_val) or scene_start_val)
+                scene_hash_str = hashlib.sha256(
+                    f"{video_hash}|{scene_start_val:.6f}|{scene_end_val:.6f}".encode('utf-8')
+                ).hexdigest()[:16]
+                clap_raw_ref_path = audio_artifact_dir / f"{scene_hash_str}_raw_clap.json"
+                clap_raw_ref_str = str(clap_raw_ref_path.resolve())
+                clap_payload = {
+                    'embedding_id': clap_embedding_id,
+                    'faiss_id': clap_faiss_id,
+                    'model': clap_meta.get('model', 'laion/clap-htsat-unfused'),
+                    'qdrant_collection': clap_meta.get('qdrant_collection'),
+                    'faiss_committed': clap_meta.get('faiss_committed', False),
+                    'qdrant_committed': clap_meta.get('qdrant_committed', False),
+                }
+                scene_start_f = float(scene.get('start', 0.0) or 0.0)
+                scene_end_f = float(scene.get('end', scene_start_f) or scene_start_f)
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=scene_start_f,
+                    t_end=scene_end_f,
+                    modality='audio',
+                    worker_name='audio_embed_clap',
+                    model_tag='laion/clap-htsat-unfused',
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=clap_raw_ref_str,
+                    payload=clap_payload,
+                    promotion_status='staged',
+                    vector_key=clap_embedding_id,
+                    vector_backend=clap_meta.get('qdrant_committed') and 'qdrant' or 'faiss',
+                    vector_dim=512,
+                    vector_model_tag='laion/clap-htsat-unfused',
+                    vector_collection=clap_meta.get('qdrant_collection') or 'audio',
+                )
+
+        # 4. Text embedding logging for audio transcript (optional — only if text_embed ran successfully)
+        audio_text_embed_meta = item.get('audio_text_embed_meta') or {}
+        if isinstance(audio_text_embed_meta, dict) and audio_text_embed_meta.get('status') == 'ok':
+            text_embedding_id = audio_text_embed_meta.get('embedding_id')
+            if text_embedding_id:
+                scene_start_val = float(scene.get('start', 0.0) or 0.0)
+                scene_end_val = float(scene.get('end', scene_start_val) or scene_start_val)
+                scene_hash_str = hashlib.sha256(
+                    f"{video_hash}|{scene_start_val:.6f}|{scene_end_val:.6f}".encode('utf-8')
+                ).hexdigest()[:16]
+                text_embed_raw_ref_path = audio_artifact_dir / f"{scene_hash_str}_raw_text_embed_audio.json"
+                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
+                text_embed_payload = {
+                    'embedding_id': text_embedding_id,
+                    'embedding_source': 'audio_transcript',
+                    'origin_modality': 'audio',
+                    'engine': audio_text_embed_meta.get('engine', 'all-MiniLM-L6-v2'),
+                }
+                scene_start_f = float(scene.get('start', 0.0) or 0.0)
+                scene_end_f = float(scene.get('end', scene_start_f) or scene_start_f)
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=scene_start_f,
+                    t_end=scene_end_f,
+                    modality='text',
+                    worker_name='text_embed',
+                    model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=text_embed_raw_ref_str,
+                    payload=text_embed_payload,
+                    promotion_status='staged',
+                    vector_key=text_embedding_id,
+                    vector_backend='faiss',
+                    vector_dim=384,
+                    vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                    vector_collection='text',
+                )
+
         client.close()
     except Exception as e:
         logger.warning(f"[UCF] UCF logging failed: {type(e).__name__}: {str(e)}")
@@ -5313,6 +5399,43 @@ def _log_visual_to_ucf_ledger(
                     con.close()
                 except Exception as e:
                     logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLIP: {e}")
+
+        # 7. Frame text embedding logging (optional — only if text_embed ran successfully)
+        frame_text_embed_meta = item.get('frame_text_embed_meta') or {}
+        if isinstance(frame_text_embed_meta, dict) and frame_text_embed_meta.get('status') == 'ok':
+            text_embedding_id = frame_text_embed_meta.get('embedding_id')
+            if text_embedding_id:
+                scene_hash_str = hashlib.sha256(
+                    f"{video_hash}|{start:.6f}|{start + duration:.6f}".encode('utf-8')
+                ).hexdigest()[:16]
+                text_embed_raw_ref_path = frame_dir / f"{scene_hash_str}_raw_text_embed_frame.json"
+                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
+                text_embed_payload = {
+                    'embedding_id': text_embedding_id,
+                    'embedding_source': 'frame_text',
+                    'origin_modality': 'frame_text',
+                    'engine': frame_text_embed_meta.get('engine', 'all-MiniLM-L6-v2'),
+                }
+                client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=frame_timestamp,
+                    t_end=frame_timestamp,
+                    modality='text',
+                    worker_name='text_embed',
+                    model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=text_embed_raw_ref_str,
+                    payload=text_embed_payload,
+                    promotion_status='staged',
+                    vector_key=text_embedding_id,
+                    vector_backend='faiss',
+                    vector_dim=384,
+                    vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                    vector_collection='text',
+                )
 
         client.close()
     except Exception as e:
@@ -5745,15 +5868,6 @@ def _process_audio(
             # Save raw un-flattened diarization
             atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
 
-        # Call UCF Audio logging hook
-        _log_audio_to_ucf_ledger(
-            cfg_json=cfg_json,
-            video_hash=video_hash,
-            scene_id=scene_id,
-            scene=scene,
-            audio_artifact_dir=audio_artifact_dir,
-            item=item,
-        )
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
@@ -5789,6 +5903,16 @@ def _process_audio(
             audio_text_embed_meta = text_embed_result.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
+
+    # Call UCF Audio logging hook AFTER optional enrichment steps so embedding IDs are available
+    _log_audio_to_ucf_ledger(
+        cfg_json=cfg_json,
+        video_hash=video_hash,
+        scene_id=scene_id,
+        scene=scene,
+        audio_artifact_dir=audio_artifact_dir,
+        item=item,
+    )
 
     return {
         'path': str(audio_path),
@@ -5912,19 +6036,6 @@ async def _process_frame_async(
             video_id=video_hash,
         )
 
-    # Call UCF Visual logging hook
-    try:
-        await asyncio.to_thread(
-            _log_visual_to_ucf_ledger,
-            cfg_json,
-            video_hash,
-            scene_id,
-            scene,
-            frame_dir,
-            item,
-        )
-    except Exception as ucf_err:
-        logger.warning(f"[UCF] Visual logging hook failed: {ucf_err}")
 
     frame_text_parts: List[str] = []
     if isinstance(item.get('ocr_text'), str):
@@ -5966,6 +6077,20 @@ async def _process_frame_async(
                 step_errors.append(text_embed_res.get("errors") or "text_embed error")
                 
         item['frame_text'] = frame_text
+
+    # Call UCF Visual logging hook AFTER text_embed so frame_text_embed_meta is available
+    try:
+        await asyncio.to_thread(
+            _log_visual_to_ucf_ledger,
+            cfg_json,
+            video_hash,
+            scene_id,
+            scene,
+            frame_dir,
+            item,
+        )
+    except Exception as ucf_err:
+        logger.warning(f"[UCF] Visual logging hook failed: {ucf_err}")
 
     return {
         'path': str(frame_path),

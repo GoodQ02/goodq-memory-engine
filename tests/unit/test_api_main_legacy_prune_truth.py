@@ -19,6 +19,7 @@ _STUBBED_MODULES = [
     "api.routes.runtime",
     "api.routes.scenes",
     "api.routes.search",
+    "api.routes.summary",
     "api.routes.system",
     "api.routes.timeline",
     "lib.llm_client",
@@ -109,9 +110,11 @@ def _load_api_main():
     meta_module = _load_meta_route_module(repo_root)
 
     routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "control_recurrence"]:
+    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "control_recurrence", "summary"]:
         mod = types.ModuleType(f"api.routes.{name}")
         mod.router = APIRouter()
+        if name == "search":
+            mod.configure_search_from_cfg = lambda cfg: None
         setattr(routes_pkg, name, mod)
         sys.modules[f"api.routes.{name}"] = mod
     setattr(routes_pkg, "meta", meta_module)
@@ -131,7 +134,7 @@ def _load_api_main():
 def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     api_main = _load_api_main()
 
-    paths = {route.path for route in api_main.app.routes}
+    paths = {route.path for route in api_main.app.routes if hasattr(route, "path")}
 
     retired_paths = {
         "/search",

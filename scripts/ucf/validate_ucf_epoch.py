@@ -260,56 +260,42 @@ def run_validation(mode: str = "offline") -> int:
         report["timestamp"] = "unknown"
     
     # 1. Path Hygiene Check
-    if not data_root:
+    if not db_dir:
         report["path_hygiene"]["status"] = "failed"
-        report["path_hygiene"]["errors"].append("GOODQ_DATA_ROOT env var or paths.data_root config not set.")
+        report["path_hygiene"]["errors"].append("paths.db_dir config not set.")
     else:
-        root_path = Path(data_root)
-        if root_path.name == "GoodQ_Data":
-            root_path = root_path.parent
-        
-        expected_db_path = root_path / 'epochs' / epoch_id / 'ucf' / 'ucf_ledger.db'
+        expected_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
         report["path_hygiene"]["db_path"] = str(expected_db_path)
         
-        # Check if DB actually exists at expected clean path
+        # Check if DB actually exists at expected canonical path (db_dir/ucf/)
         if not expected_db_path.exists():
-            # Check if it was placed in the dirty path
-            dirty_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
-            if dirty_db_path.exists():
-                report["path_hygiene"]["status"] = "failed"
-                report["path_hygiene"]["errors"].append(
-                    f"Path hygiene violation: UCF database exists at dirty path: '{dirty_db_path}' "
-                    f"instead of clean path: '{expected_db_path}'."
-                )
-            else:
-                report["path_hygiene"]["status"] = "failed"
-                report["path_hygiene"]["errors"].append(
-                    f"UCF database not found at clean path: '{expected_db_path}' or dirty path: '{dirty_db_path}'."
-                )
+            report["path_hygiene"]["status"] = "failed"
+            report["path_hygiene"]["errors"].append(
+                f"UCF database not found at canonical path: '{expected_db_path}'."
+            )
         else:
-            # Clean path exists!
-            # Also verify no dirty database exists to prevent split-brain issues
-            dirty_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
-            if dirty_db_path.exists() and dirty_db_path.resolve() != expected_db_path.resolve():
-                report["path_hygiene"]["status"] = "failed"
-                report["path_hygiene"]["errors"].append(
-                    f"Path hygiene violation: Clean path database exists, but a duplicate dirty database also exists at '{dirty_db_path}'. "
-                    f"Please delete the dirty database file to prevent split-brain issues."
-                )
+            # Canonical path exists!
+            # Also verify no legacy database exists at the old reconstructed path
+            if data_root:
+                root_path = Path(data_root)
+                if root_path.name == "GoodQ_Data":
+                    root_path = root_path.parent
+                legacy_db_path = root_path / 'epochs' / epoch_id / 'ucf' / 'ucf_ledger.db'
+                if legacy_db_path.exists() and legacy_db_path.resolve() != expected_db_path.resolve():
+                    report["path_hygiene"]["status"] = "failed"
+                    report["path_hygiene"]["errors"].append(
+                        f"Path hygiene violation: Canonical database exists, but a duplicate legacy database also exists at '{legacy_db_path}'. "
+                        f"Please delete the legacy database file to prevent split-brain issues."
+                    )
     
     # Determine which database path we should open for remaining checks
     target_db_path = report["path_hygiene"]["db_path"]
     if not target_db_path or not os.path.exists(target_db_path):
-        # Fallback to dirty path if it exists, to proceed with other checks
-        dirty_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
-        if dirty_db_path.exists():
-            target_db_path = str(dirty_db_path)
-        else:
-            print("ERROR: Cannot perform validation checks because ucf_ledger.db was not found.")
-            report["summary"]["success"] = False
-            report["summary"]["checks_failed"] += 1
-            write_reports(report)
-            return 1
+        print("ERROR: Cannot perform validation checks because ucf_ledger.db was not found.")
+        report["summary"]["success"] = False
+        report["summary"]["checks_failed"] += 1
+        write_reports(report)
+        return 1
             
     # Connect to database
     try:

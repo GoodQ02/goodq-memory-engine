@@ -42,13 +42,7 @@ def test_ucf_ingestion_ledger():
     epoch = os.path.basename(db_dir)
     
     data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
-    if data_root:
-        root_path = Path(data_root)
-        if root_path.name == "GoodQ_Data":
-            root_path = root_path.parent
-        ucf_db_path = root_path / 'epochs' / epoch / 'ucf' / 'ucf_ledger.db'
-    else:
-        ucf_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
+    ucf_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
     
     # Assert database file exists
     assert ucf_db_path.exists(), f"UCF ledger database not found at {ucf_db_path}"

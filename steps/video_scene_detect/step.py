@@ -346,14 +346,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
             # Determine database path
             if db_dir:
                 from pathlib import Path
-                data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
-                if data_root:
-                    root_path = Path(data_root)
-                    if root_path.name == "GoodQ_Data":
-                        root_path = root_path.parent
-                    ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
-                else:
-                    ucf_db_dir = Path(db_dir) / 'ucf'
+                ucf_db_dir = Path(db_dir) / 'ucf'
                 ucf_db_dir.mkdir(parents=True, exist_ok=True)
                 ucf_db_path = ucf_db_dir / 'ucf_ledger.db'
                 

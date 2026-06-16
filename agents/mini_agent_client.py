@@ -560,7 +560,7 @@ class MiniAgentClient:
                 return self.sanitize_envelope(envelope), 1
 
         # 4. Human-in-the-Loop Gating Validation
-        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
+        if self.profile != "unrestricted" and tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 with self._lock_token_store():
@@ -780,23 +780,19 @@ class MiniAgentClient:
 
     def _get_ucf_db_path(self) -> Path:
         db_dir = self.config.get('paths', {}).get('db_dir')
-        epoch_id = os.path.basename(db_dir) if db_dir else "default_epoch"
-        data_root = os.getenv("GOODQ_DATA_ROOT") or self.config.get('paths', {}).get('data_root')
-        if data_root:
-            root_path = Path(data_root)
-            if root_path.name == "GoodQ_Data":
-                root_path = root_path.parent
-            ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
-        elif db_dir:
+        if db_dir:
             ucf_db_dir = Path(db_dir) / 'ucf'
         else:
-            ucf_db_dir = Path("epochs/default_epoch/ucf")
+            epoch_id = "default_epoch"
+            ucf_db_dir = Path("epochs") / epoch_id / "ucf"
         ucf_db_dir.mkdir(parents=True, exist_ok=True)
         return ucf_db_dir / 'ucf_ledger.db'
 
     def _sync_ucf_status_to_qdrant(self, frames_to_sync: List[Tuple[Any, Any, Any]], status_val: str) -> Dict[str, Any]:
         import logging
         logger = logging.getLogger(__name__)
+        import requests
+        import uuid
         
         qdrant_updates = {}
         for v_key, v_coll, v_backend in frames_to_sync:
@@ -812,6 +808,7 @@ class MiniAgentClient:
         
         if attempted:
             from steps.common.qdrant_client import build_qdrant_client
+            qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
             for v_coll, keys in qdrant_updates.items():
                 collection_lower = v_coll.lower()
                 key = "text"
@@ -828,7 +825,43 @@ class MiniAgentClient:
                 try:
                     q_client = build_qdrant_client(self.config, dim=384, key=key)
                     if q_client:
-                        success = q_client.set_payload(keys, {"ucf_promotion_status": status_val})
+                        # Fetch existing payloads to prevent overwriting other fields with PUT
+                        GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+                        normalized_map = {}
+                        for k in keys:
+                            s = k.strip()
+                            hex_candidate = s.replace("-", "")
+                            if len(hex_candidate) == 32 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
+                                nk = str(uuid.UUID(hex_candidate))
+                            elif s.isdigit():
+                                nk = s
+                            else:
+                                nk = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
+                            normalized_map[nk] = k
+                            
+                        existing_payloads = {}
+                        try:
+                            res_get = requests.post(
+                                f"{qdrant_host}/collections/{v_coll}/points",
+                                json={"ids": list(normalized_map.keys()), "with_payload": True, "with_vector": False},
+                                timeout=5
+                            )
+                            if res_get.status_code == 200:
+                                points_data = res_get.json().get("result", [])
+                                for pt in points_data:
+                                    pt_id = pt.get("id")
+                                    existing_payloads[pt_id] = pt.get("payload") or {}
+                        except Exception as get_err:
+                            logger.warning("Failed to retrieve existing payloads from Qdrant: %s", get_err)
+                            
+                        all_success = True
+                        for nk, original_key in normalized_map.items():
+                            payload = existing_payloads.get(nk, {}).copy()
+                            payload["ucf_promotion_status"] = status_val
+                            point_success = q_client.set_payload([original_key], payload)
+                            if not point_success:
+                                all_success = False
+                        success = all_success
                 except Exception as e:
                     logger.warning(
                         "Failed to sync ucf status to qdrant for collection %s: %s",

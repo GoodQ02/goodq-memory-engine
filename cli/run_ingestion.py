@@ -4817,15 +4817,9 @@ def _log_audio_to_ucf_ledger(
         epoch_id = os.path.basename(db_dir)
         run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
 
-        # Resolve DB path
-        data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
-        if data_root:
-            root_path = Path(data_root)
-            if root_path.name == "GoodQ_Data":
-                root_path = root_path.parent
-            ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
-        else:
-            ucf_db_dir = Path(db_dir) / 'ucf'
+        # Resolve DB path — use db_dir from config directly (it already
+        # contains the correct resolved path including GoodQ_Data nesting).
+        ucf_db_dir = Path(db_dir) / 'ucf'
 
         ucf_db_dir.mkdir(parents=True, exist_ok=True)
         ucf_db_path = ucf_db_dir / 'ucf_ledger.db'
@@ -5042,15 +5036,9 @@ def _log_visual_to_ucf_ledger(
         epoch_id = os.path.basename(db_dir)
         run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
 
-        # Resolve DB path
-        data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
-        if data_root:
-            root_path = Path(data_root)
-            if root_path.name == "GoodQ_Data":
-                root_path = root_path.parent
-            ucf_db_dir = root_path / 'epochs' / epoch_id / 'ucf'
-        else:
-            ucf_db_dir = Path(db_dir) / 'ucf'
+        # Resolve DB path — use db_dir from config directly (it already
+        # contains the correct resolved path including GoodQ_Data nesting).
+        ucf_db_dir = Path(db_dir) / 'ucf'
 
         ucf_db_dir.mkdir(parents=True, exist_ok=True)
         ucf_db_path = ucf_db_dir / 'ucf_ledger.db'

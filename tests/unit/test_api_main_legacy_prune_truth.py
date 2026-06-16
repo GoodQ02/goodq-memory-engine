@@ -131,62 +131,10 @@ def _load_api_main():
     return module
 
 
-def _collect_paths(routes):
-    """Recursively collect all endpoint paths from routes.
-
-    Handles both flat (FastAPI <0.137) and tree-structured (FastAPI >=0.137)
-    route lists where _IncludedRouter objects wrap sub-routes.
-    """
-    from fastapi.routing import APIRoute
-    from starlette.routing import Mount, Route
-
-    paths = set()
-    for route in routes:
-        if isinstance(route, (APIRoute, Route)):
-            paths.add(route.path)
-        elif isinstance(route, Mount):
-            paths.add(route.path)
-            if hasattr(route, "routes"):
-                paths.update(_collect_paths(route.routes))
-        elif hasattr(route, "routes"):
-            # _IncludedRouter or similar container without .path
-            paths.update(_collect_paths(route.routes))
-        elif hasattr(route, "path"):
-            paths.add(route.path)
-    return paths
-
-
 def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     api_main = _load_api_main()
 
-    # Collect from both app.routes and app.router.routes for compat
-    paths = _collect_paths(api_main.app.routes)
-    if hasattr(api_main.app, "router"):
-        paths.update(_collect_paths(api_main.app.router.routes))
-
-    # Diagnostic: dump route structure for CI debugging
-    def _dump_routes(routes, indent=0):
-        for route in routes:
-            t = type(route).__name__
-            p = getattr(route, "path", "NO_PATH")
-            has_sub = hasattr(route, "routes")
-            sub_count = len(route.routes) if has_sub else 0
-            print(f"{'  ' * indent}{t}: path={p!r} has_routes={has_sub} sub={sub_count}")
-            if t == "_IncludedRouter":
-                attrs = {a: type(getattr(route, a)).__name__ for a in dir(route) if not a.startswith("_")}
-                print(f"{'  ' * (indent+1)}attrs: {attrs}")
-                # Check for router attribute
-                if hasattr(route, "router"):
-                    r = route.router
-                    print(f"{'  ' * (indent+1)}router type: {type(r).__name__}, has routes: {hasattr(r, 'routes')}")
-                    if hasattr(r, "routes"):
-                        print(f"{'  ' * (indent+1)}router.routes count: {len(r.routes)}")
-                        _dump_routes(r.routes, indent + 2)
-            if has_sub:
-                _dump_routes(route.routes, indent + 1)
-    print(f"\n=== app.routes ({len(list(api_main.app.routes))}) ===")
-    _dump_routes(api_main.app.routes)
-    print(f"\nCollected paths ({len(paths)}): {sorted(paths)}")
+    paths = {route.path for route in api_main.app.routes if hasattr(route, "path")}
 
 
     retired_paths = {

@@ -22,10 +22,12 @@ Under the default search doctrine:
 - However, because legacy pre-bridge points entirely lack the `ucf_promotion_status` field, they are not excluded by the `must_not` check and will still appear in query results.
 This is expected behavior during the transition phase, ensuring that historical, un-managed data is not silently hidden or lost until a formal backfill has occurred.
 
-## 4. Recommended Backfill Approach
-To close the historical gap, we recommend introducing a dedicated, human-in-the-loop (HITL) gated tool named `backfill_ucf_qdrant_payloads`.
+## 4. Recommended Backfill Approach (DEFERRED)
+To close the historical gap, we previously considered introducing a dedicated, human-in-the-loop (HITL) gated tool named `backfill_ucf_qdrant_payloads`. This tool concept is now marked as **DEFERRED**.
 
-The tool will execute the following procedure:
+Historical Qdrant/FAISS backfill is deferred. Current dev/sample vector stores are disposable and will be rebuilt from source media.
+
+The deferred tool's proposed execution procedure was:
 1. **Ledger Alignment**: Scan the `context_frames` table in `ucf_ledger.db` for all records with `vector_backend = 'qdrant'` and a non-NULL `vector_key`.
 2. **Batch Ingestion**: Query Qdrant for each unique collection/point to fetch current payloads, or construct payload updates directly if the ledger status is assumed authoritative.
 3. **Chunked Updates**: Perform chunked PUT requests to Qdrant's `/collections/{collection}/points/payload` endpoint, updating the `ucf_promotion_status` field of legacy points to match their current database promotion status (`staged`, `validated`, `promoted`, `rejected`, or `superseded`).

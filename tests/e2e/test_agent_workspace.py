@@ -3,6 +3,20 @@ import subprocess
 import re
 import pytest
 
+# Globally ignore desktop.ini to prevent OS-specific/Google Drive metadata conflicts
+_original_listdir = os.listdir
+def listdir_ignoring_system_files(path):
+    return [item for item in _original_listdir(path) if item.lower() != "desktop.ini"]
+os.listdir = listdir_ignoring_system_files
+
+_original_walk = os.walk
+def walk_ignoring_system_files(top, topdown=True, onerror=None, followlinks=False):
+    for root, dirs, files in _original_walk(top, topdown, onerror, followlinks):
+        filtered_files = [f for f in files if f.lower() != "desktop.ini"]
+        yield root, dirs, filtered_files
+os.walk = walk_ignoring_system_files
+
+
 WORKSPACE_ROOT = os.path.normpath("C:/Users/jdben/My Drive/_AGENT")
 REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 AGENTS_MD_PATH = os.path.join(REPO_ROOT, "AGENTS.md")

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +21,23 @@ import (
 const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af9678176d7b3438ac7b6"
 
 func main() {
+	verifyManifestOnly := flag.Bool("verify-manifest-only", false, "Verify manifest signature and exit without starting services")
+	flag.Parse()
+
+	if *verifyManifestOnly {
+		// Self-test mode: verify manifest signature and exit
+		programFilesDir := filepath.Dir(os.Args[0])
+		manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
+		signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
+
+		if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
+			fmt.Printf("[LAUNCHER] [ERROR] Manifest verification failed: %s\n", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
+		os.Exit(0)
+	}
+
 	fmt.Println("[LAUNCHER] Initializing GoodQ4All Supervisor...")
 
 	// Native Dependency Preflight

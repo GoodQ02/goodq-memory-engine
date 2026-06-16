@@ -39,6 +39,21 @@ if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
 )
+:: 3a. Sign manifest in release mode (verifies key matches launcher, signs, round-trip verifies)
+echo Signing model download manifest with release key...
+go_compiler\go\bin\go.exe run sign_manifest.go --mode release
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Manifest signing failed. Key mismatch or signing error.
+    exit /b 10
+)
+
+:: 3b. Independent verify-only gate (reads back the written signature and verifies)
+echo Verifying manifest signature independently...
+go_compiler\go\bin\go.exe run sign_manifest.go --verify-only
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Independent signature verification failed. Do not package.
+    exit /b 11
+)
 
 :: 4. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor offline...

@@ -164,7 +164,22 @@ def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     if hasattr(api_main.app, "router"):
         paths.update(_collect_paths(api_main.app.router.routes))
 
-
+    # Diagnostic: dump route structure for CI debugging
+    def _dump_routes(routes, indent=0):
+        for route in routes:
+            t = type(route).__name__
+            p = getattr(route, "path", "NO_PATH")
+            has_sub = hasattr(route, "routes")
+            sub_count = len(route.routes) if has_sub else 0
+            print(f"{'  ' * indent}{t}: path={p!r} has_routes={has_sub} sub={sub_count}")
+            if has_sub:
+                _dump_routes(route.routes, indent + 1)
+    print(f"\n=== app.routes ({len(list(api_main.app.routes))}) ===")
+    _dump_routes(api_main.app.routes)
+    if hasattr(api_main.app, "router"):
+        print(f"\n=== app.router.routes ({len(list(api_main.app.router.routes))}) ===")
+        _dump_routes(api_main.app.router.routes)
+    print(f"\nCollected paths ({len(paths)}): {sorted(paths)}")
 
     retired_paths = {
         "/search",

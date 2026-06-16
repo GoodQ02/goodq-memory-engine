@@ -769,6 +769,8 @@ class MiniAgentClient:
                 
         if status == "success":
             result_envelope["output"] = tool_result
+            if isinstance(tool_result, dict) and "warnings" in tool_result:
+                result_envelope["warnings"] = tool_result["warnings"]
         else:
             result_envelope["errors"] = errors_list
             # Also set deprecated 'error' field for backward compatibility
@@ -791,6 +793,63 @@ class MiniAgentClient:
             ucf_db_dir = Path("epochs/default_epoch/ucf")
         ucf_db_dir.mkdir(parents=True, exist_ok=True)
         return ucf_db_dir / 'ucf_ledger.db'
+
+    def _sync_ucf_status_to_qdrant(self, frames_to_sync: List[Tuple[Any, Any, Any]], status_val: str) -> Dict[str, Any]:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        qdrant_updates = {}
+        for v_key, v_coll, v_backend in frames_to_sync:
+            if not v_key or not v_coll or not v_backend:
+                continue
+            if str(v_backend).strip().lower() == "qdrant":
+                qdrant_updates.setdefault(v_coll, []).append(v_key)
+                
+        attempted = len(qdrant_updates) > 0
+        collections_attempted = list(qdrant_updates.keys())
+        points_attempted = sum(len(v) for v in qdrant_updates.values())
+        failed_collections = []
+        
+        if attempted:
+            from steps.common.qdrant_client import build_qdrant_client
+            for v_coll, keys in qdrant_updates.items():
+                collection_lower = v_coll.lower()
+                key = "text"
+                if "audio" in collection_lower:
+                    key = "audio"
+                elif "clip" in collection_lower:
+                    key = "clip"
+                elif "dino" in collection_lower:
+                    key = "dino"
+                else:
+                    key = v_coll
+                
+                success = False
+                try:
+                    q_client = build_qdrant_client(self.config, dim=384, key=key)
+                    if q_client:
+                        success = q_client.set_payload(keys, {"ucf_promotion_status": status_val})
+                except Exception as e:
+                    logger.warning(
+                        "Failed to sync ucf status to qdrant for collection %s: %s",
+                        v_coll,
+                        e
+                    )
+                
+                if not success:
+                    failed_collections.append(v_coll)
+            
+            status = "warning" if failed_collections else "ok"
+        else:
+            status = "skipped"
+            
+        return {
+            "attempted": attempted,
+            "status": status,
+            "collections_attempted": collections_attempted,
+            "points_attempted": points_attempted,
+            "failed_collections": failed_collections,
+        }
 
     def _cleanup_backfilled_vectors(self, records: List[Dict[str, Any]], inserted_ids: List[int]) -> None:
         import requests
@@ -1231,11 +1290,29 @@ class MiniAgentClient:
             promote_args.append(epoch_id)
             
         promoted_count = conn.execute(select_validated, tuple(promote_args)).fetchone()[0]
+        
+        # Query vector_key, vector_collection, vector_backend for frames to be promoted before updating
+        select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"
+        if video_hash:
+            select_sync += " AND video_hash = ?"
+        if epoch_id:
+            select_sync += " AND epoch_id = ?"
+        cursor = conn.execute(select_sync, tuple(promote_args))
+        frames_to_sync = cursor.fetchall()
+
         conn.execute(update_validated, tuple(promote_args))
         conn.commit()
         conn.close()
         
-        return {"promoted_count": promoted_count, "status": "promoted_complete"}
+        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "promoted")
+        res = {
+            "promoted_count": promoted_count,
+            "status": "promoted_complete",
+            "qdrant_sync": qdrant_sync,
+        }
+        if qdrant_sync["status"] == "warning":
+            res["warnings"] = ["qdrant_payload_sync_failed"]
+        return res
 
     def _execute_reject_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Transitions in-scope context frames from 'staged' or 'validated' to 'rejected'.
@@ -1258,23 +1335,45 @@ class MiniAgentClient:
                 "message": "reject_ucf_frames requires a non-empty 'reason' argument.",
             }
         ucf_db_path = self._get_ucf_db_path()
+        video_hash = args.get("video_hash") or args.get("video_id")
+        epoch_id = args.get("epoch_id")
+        
+        # Query vector_key, vector_collection, vector_backend for frames to be rejected before updating
+        import sqlite3
+        conn = sqlite3.connect(str(ucf_db_path))
+        query_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status IN ('staged', 'validated')"
+        params_sync = []
+        if video_hash:
+            query_sync += " AND video_hash = ?"
+            params_sync.append(video_hash)
+        if epoch_id:
+            query_sync += " AND epoch_id = ?"
+            params_sync.append(epoch_id)
+        cursor = conn.execute(query_sync, tuple(params_sync))
+        frames_to_sync = cursor.fetchall()
+        conn.close()
+
         ucf_module = _load_ucf_ledger()
         UCFLedgerClient = ucf_module.UCFLedgerClient
         client = UCFLedgerClient(str(ucf_db_path))
         client.init_schema()
-        video_hash = args.get("video_hash") or args.get("video_id")
-        epoch_id = args.get("epoch_id")
         rejected_count = client.mark_frames_rejected(
             reason=reason,
             video_hash=video_hash,
             epoch_id=epoch_id,
         )
         client.close()
-        return {
+        
+        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "rejected")
+        res = {
             "rejected_count": rejected_count,
             "status": "rejected_complete",
             "reason": reason,
+            "qdrant_sync": qdrant_sync,
         }
+        if qdrant_sync["status"] == "warning":
+            res["warnings"] = ["qdrant_payload_sync_failed"]
+        return res
 
     def _execute_supersede_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Transitions in-scope context frames from 'promoted' or 'validated' to 'superseded'.
@@ -1288,21 +1387,43 @@ class MiniAgentClient:
         Expected lifecycle: promoted | validated -> [supersede_ucf_frames] -> superseded
         """
         ucf_db_path = self._get_ucf_db_path()
+        video_hash = args.get("video_hash") or args.get("video_id")
+        epoch_id = args.get("epoch_id")
+        
+        # Query vector_key, vector_collection, vector_backend for frames to be superseded before updating
+        import sqlite3
+        conn = sqlite3.connect(str(ucf_db_path))
+        query_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status IN ('promoted', 'validated')"
+        params_sync = []
+        if video_hash:
+            query_sync += " AND video_hash = ?"
+            params_sync.append(video_hash)
+        if epoch_id:
+            query_sync += " AND epoch_id = ?"
+            params_sync.append(epoch_id)
+        cursor = conn.execute(query_sync, tuple(params_sync))
+        frames_to_sync = cursor.fetchall()
+        conn.close()
+
         ucf_module = _load_ucf_ledger()
         UCFLedgerClient = ucf_module.UCFLedgerClient
         client = UCFLedgerClient(str(ucf_db_path))
         client.init_schema()
-        video_hash = args.get("video_hash") or args.get("video_id")
-        epoch_id = args.get("epoch_id")
         superseded_count = client.mark_frames_superseded(
             video_hash=video_hash,
             epoch_id=epoch_id,
         )
         client.close()
-        return {
+        
+        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "superseded")
+        res = {
             "superseded_count": superseded_count,
             "status": "superseded_complete",
+            "qdrant_sync": qdrant_sync,
         }
+        if qdrant_sync["status"] == "warning":
+            res["warnings"] = ["qdrant_payload_sync_failed"]
+        return res
 
     def _execute_file_delete(self, args: Dict[str, Any]) -> Dict[str, Any]:
         target = args.get("path")
@@ -1337,12 +1458,41 @@ class MiniAgentClient:
             
         vector = args["query_vector"]
         top_k = args.get("top_k", 5)
+
+        ucf_status_filter = args.get("ucf_status_filter")  # "promoted"|"rejected"|"superseded"|None
+        ucf_include_terminal = args.get("ucf_include_terminal", False)
+
+        VALID_UCF_FILTERS = {"promoted", "rejected", "superseded"}
+
+        if ucf_status_filter is not None and ucf_status_filter not in VALID_UCF_FILTERS:
+            return {
+                "status": "error",
+                "reason": "invalid_ucf_status_filter",
+                "message": f"ucf_status_filter must be one of {sorted(VALID_UCF_FILTERS)}, got '{ucf_status_filter}'",
+            }
+
+        payload_filter = args.get("payload_filter") or {}
+        # Ensure payload_filter is a copy to avoid mutating source args
+        import copy
+        payload_filter = copy.deepcopy(payload_filter)
+
+        if ucf_status_filter:
+            # Explicit exact-match; suppress default exclusion
+            payload_filter.setdefault("must", []).append(
+                {"key": "ucf_promotion_status", "match": {"value": ucf_status_filter}}
+            )
+        elif not ucf_include_terminal:
+            # Default: exclude explicitly rejected or superseded frames
+            payload_filter.setdefault("must_not", []).extend([
+                {"key": "ucf_promotion_status", "match": {"value": "rejected"}},
+                {"key": "ucf_promotion_status", "match": {"value": "superseded"}},
+            ])
         
         q_client = build_qdrant_client(self.config, dim=len(vector), key=key)
         if not q_client:
             raise RuntimeError("Qdrant client could not be built from config")
             
-        hits = q_client.query(vector, top_k=top_k)
+        hits = q_client.query(vector, top_k=top_k, payload_filter=payload_filter)
         return {"matches": hits}
 
     def _execute_qdrant_upsert(self, args: Dict[str, Any]) -> Dict[str, Any]:

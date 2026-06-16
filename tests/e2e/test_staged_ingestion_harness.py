@@ -203,11 +203,11 @@ class MockMiniAgentClient:
                 return sanitize_envelope(envelope), 1
 
         # 3. Human-in-the-Loop Gating Validation
-        if tool_name == "promote_ucf_to_memory":
+        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
             if not confirm:
-                token = f"token-promote-{uuid.uuid4().hex[:8]}"
+                token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 MockState.tokens[token] = {
-                    "operation": "promote_ucf_to_memory",
+                    "operation": tool_name,
                     "timestamp": datetime.utcnow(),
                     "used": False,
                     "tool_args": tool_args
@@ -218,7 +218,7 @@ class MockMiniAgentClient:
                     "status": "needs_confirmation",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "result": {"allowed": False, "confirmation_token": token},
-                    "errors": [{"code": "mutability_requires_confirmation", "message": "Promotion requires human confirmation."}],
+                    "errors": [{"code": "mutability_requires_confirmation", "message": f"{tool_name} requires human confirmation."}],
                 }
                 return sanitize_envelope(envelope), 3
             else:
@@ -431,10 +431,48 @@ class MockMiniAgentClient:
                     }
                     return sanitize_envelope(envelope), 1
 
-            # Promoted
+            video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
+            epoch_id = tool_args.get("epoch_id")
+
+            # Check if any in-scope staged records exist
+            staged_count = 0
             for rec_id, rec in MockState.staged_records.items():
+                r = rec["ucf_data"]
+                if video_hash and r.get("video_hash") != video_hash:
+                    continue
+                if epoch_id and r.get("epoch_id") != epoch_id:
+                    continue
                 if rec["status"] == "staged":
+                    staged_count += 1
+
+            if staged_count > 0:
+                envelope = {
+                    "request_id": val_envelope.get("request_id"),
+                    "tool_name": tool_name,
+                    "status": "success",
+                    "started_at": started_at,
+                    "completed_at": datetime.utcnow().isoformat() + "Z",
+                    "output": {
+                        "status": "blocked",
+                        "reason": "promotion_blocked_unvalidated_frames",
+                        "staged_count": staged_count,
+                        "message": f"Cannot promote: {staged_count} context frame(s) are still in 'staged' status."
+                    },
+                    "artifacts": tool_args.get("absolute_path_artifacts", [])
+                }
+                return sanitize_envelope(envelope), 0
+
+            # Promoted: transition only validated -> promoted
+            promoted_count = 0
+            for rec_id, rec in MockState.staged_records.items():
+                r = rec["ucf_data"]
+                if video_hash and r.get("video_hash") != video_hash:
+                    continue
+                if epoch_id and r.get("epoch_id") != epoch_id:
+                    continue
+                if rec["status"] == "validated":
                     rec["status"] = "promoted"
+                    promoted_count += 1
             
             envelope = {
                 "request_id": val_envelope.get("request_id"),
@@ -442,7 +480,110 @@ class MockMiniAgentClient:
                 "status": "success",
                 "started_at": started_at,
                 "completed_at": datetime.utcnow().isoformat() + "Z",
-                "output": {"promoted_count": len(MockState.staged_records), "status": "promoted_complete"},
+                "output": {"promoted_count": promoted_count, "status": "promoted_complete"},
+                "artifacts": tool_args.get("absolute_path_artifacts", [])
+            }
+            return sanitize_envelope(envelope), 0
+
+        elif tool_name == "validate_ucf_frames":
+            MockState.tokens[confirmation_token]["used"] = True
+            video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
+            epoch_id = tool_args.get("epoch_id")
+            
+            validated_count = 0
+            for rec_id, rec in MockState.staged_records.items():
+                r = rec["ucf_data"]
+                if video_hash and r.get("video_hash") != video_hash:
+                    continue
+                if epoch_id and r.get("epoch_id") != epoch_id:
+                    continue
+                
+                if rec["status"] == "staged":
+                    rec["status"] = "validated"
+                    validated_count += 1
+            
+            envelope = {
+                "request_id": val_envelope.get("request_id"),
+                "tool_name": tool_name,
+                "status": "success",
+                "started_at": started_at,
+                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "output": {"validated_count": validated_count, "status": "validated_complete"},
+                "artifacts": tool_args.get("absolute_path_artifacts", [])
+            }
+            return sanitize_envelope(envelope), 0
+
+        elif tool_name == "reject_ucf_frames":
+            MockState.tokens[confirmation_token]["used"] = True
+            reason = tool_args.get("reason", "").strip()
+            if not reason:
+                envelope = {
+                    "request_id": val_envelope.get("request_id"),
+                    "tool_name": tool_name,
+                    "status": "error",
+                    "started_at": started_at,
+                    "completed_at": datetime.utcnow().isoformat() + "Z",
+                    "errors": [{"code": "missing_reason", "message": "reject_ucf_frames requires a non-empty 'reason' argument."}],
+                }
+                return sanitize_envelope(envelope), 1
+            
+            video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
+            epoch_id = tool_args.get("epoch_id")
+            
+            rejected_count = 0
+            for rec_id, rec in MockState.staged_records.items():
+                r = rec["ucf_data"]
+                if video_hash and r.get("video_hash") != video_hash:
+                    continue
+                if epoch_id and r.get("epoch_id") != epoch_id:
+                    continue
+                
+                if rec["status"] in ("staged", "validated"):
+                    rec["status"] = "rejected"
+                    rejected_count += 1
+                    
+            envelope = {
+                "request_id": val_envelope.get("request_id"),
+                "tool_name": tool_name,
+                "status": "success",
+                "started_at": started_at,
+                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "output": {
+                    "rejected_count": rejected_count,
+                    "status": "rejected_complete",
+                    "reason": reason,
+                },
+                "artifacts": tool_args.get("absolute_path_artifacts", [])
+            }
+            return sanitize_envelope(envelope), 0
+
+        elif tool_name == "supersede_ucf_frames":
+            MockState.tokens[confirmation_token]["used"] = True
+            video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
+            epoch_id = tool_args.get("epoch_id")
+            
+            superseded_count = 0
+            for rec_id, rec in MockState.staged_records.items():
+                r = rec["ucf_data"]
+                if video_hash and r.get("video_hash") != video_hash:
+                    continue
+                if epoch_id and r.get("epoch_id") != epoch_id:
+                    continue
+                
+                if rec["status"] in ("promoted", "validated"):
+                    rec["status"] = "superseded"
+                    superseded_count += 1
+                    
+            envelope = {
+                "request_id": val_envelope.get("request_id"),
+                "tool_name": tool_name,
+                "status": "success",
+                "started_at": started_at,
+                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "output": {
+                    "superseded_count": superseded_count,
+                    "status": "superseded_complete",
+                },
                 "artifacts": tool_args.get("absolute_path_artifacts", [])
             }
             return sanitize_envelope(envelope), 0
@@ -1682,3 +1823,495 @@ def test_full_lifecycle_staged_validated_promoted():
         assert promoted_final >= 2, (
             f"Expected >= 2 promoted frames, got {promoted_final}"
         )
+
+
+# ==============================================================================
+# NEW UCF PIPELINE STAGING, REJECTION AND SUPERSESSION TESTS (9 Tests)
+# ==============================================================================
+
+def helper_ingest_two_records(client, video_hash, epoch_id, run_id):
+    args_ingest = {
+        "ucf_records": [
+            {
+                "video_hash": video_hash,
+                "ucf_schema_version": "ucf.v0.1",
+                "epoch_id": epoch_id,
+                "run_id": run_id,
+                "t_start": 0.0,
+                "t_end": 10.0,
+                "modality": "video",
+                "worker_name": "worker1",
+                "model_tag": "tag1",
+                "payload": {},
+            },
+            {
+                "video_hash": video_hash,
+                "ucf_schema_version": "ucf.v0.1",
+                "epoch_id": epoch_id,
+                "run_id": run_id,
+                "t_start": 10.0,
+                "t_end": 20.0,
+                "modality": "video",
+                "worker_name": "worker1",
+                "model_tag": "tag1",
+                "payload": {},
+            },
+        ]
+    }
+    envelope_ingest, rc_ingest = client.execute_tool(
+        tool_name="run_ingestion", tool_args=args_ingest
+    )
+    assert rc_ingest == 0
+    return envelope_ingest
+
+def test_reject_staged_frames():
+    """Test 1: reject_ucf_frames on staged frames (staged -> reject)."""
+    client = MiniAgentClient(profile="safe")
+    register_media("reject_staged_vid", 60.0)
+    helper_ingest_two_records(client, "reject_staged_vid", "ep1", "run1")
+
+    # Get confirmation token for rejection
+    env_token, rc_token = client.validate_action(
+        prompt="Reject staged frames",
+        tool_name="reject_ucf_frames",
+        confirm=False,
+    )
+    assert rc_token == 3
+    token = env_token["result"]["confirmation_token"]
+
+    # Reject
+    env_reject, rc_reject = client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "reject_staged_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert rc_reject == 0
+    assert env_reject["status"] == "success"
+    assert env_reject["output"]["status"] == "rejected_complete"
+    assert env_reject["output"]["rejected_count"] == 2
+
+    if mock_harness_active():
+        staged_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "staged")
+        rejected_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "rejected")
+        assert staged_count == 0
+        assert rejected_count == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'").fetchone()[0]
+        rejected = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'rejected'").fetchone()[0]
+        conn.close()
+        assert staged == 0
+        assert rejected == 2
+
+
+def test_reject_validated_frames():
+    """Test 2: reject_ucf_frames on validated frames (staged -> validate -> reject)."""
+    client = MiniAgentClient(profile="safe")
+    register_media("reject_validated_vid", 60.0)
+    helper_ingest_two_records(client, "reject_validated_vid", "ep1", "run1")
+
+    # Validate
+    env_token_val, rc_token_val = client.validate_action(
+        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+    )
+    assert rc_token_val == 3
+    token_val = env_token_val["result"]["confirmation_token"]
+
+    env_val, rc_val = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "reject_validated_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_val,
+    )
+    assert rc_val == 0
+
+    # Reject
+    env_token_rej, rc_token_rej = client.validate_action(
+        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+    )
+    assert rc_token_rej == 3
+    token_rej = env_token_rej["result"]["confirmation_token"]
+
+    env_rej, rc_rej = client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "reject_validated_vid", "epoch_id": "ep1", "reason": "No longer needed"},
+        confirm=True,
+        confirmation_token=token_rej,
+    )
+    assert rc_rej == 0
+    assert env_rej["output"]["rejected_count"] == 2
+
+    if mock_harness_active():
+        validated_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "validated")
+        rejected_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "rejected")
+        assert validated_count == 0
+        assert rejected_count == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        validated = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'").fetchone()[0]
+        rejected = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'rejected'").fetchone()[0]
+        conn.close()
+        assert validated == 0
+        assert rejected == 2
+
+
+def test_promote_rejected_frames_blocked():
+    """Test 3: Attempting to promote rejected frames is blocked/noop."""
+    client = MiniAgentClient(profile="safe")
+    register_media("promote_rejected_vid", 60.0)
+    helper_ingest_two_records(client, "promote_rejected_vid", "ep1", "run1")
+
+    # Reject
+    env_token_rej, rc_token_rej = client.validate_action(
+        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+    )
+    assert rc_token_rej == 3
+    token_rej = env_token_rej["result"]["confirmation_token"]
+
+    client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "promote_rejected_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        confirm=True,
+        confirmation_token=token_rej,
+    )
+
+    # Attempt promote
+    env_token_prom, rc_token_prom = client.validate_action(
+        prompt="Promote", tool_name="promote_ucf_to_memory", confirm=False
+    )
+    assert rc_token_prom == 3
+    token_prom = env_token_prom["result"]["confirmation_token"]
+
+    env_prom, rc_prom = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "promote_rejected_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_prom,
+    )
+    assert rc_prom == 0
+    assert env_prom["output"].get("promoted_count", 0) == 0
+
+    if mock_harness_active():
+        rejected_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "rejected")
+        promoted_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "promoted")
+        assert rejected_count == 2
+        assert promoted_count == 0
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        rejected = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'rejected'").fetchone()[0]
+        promoted = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'promoted'").fetchone()[0]
+        conn.close()
+        assert rejected == 2
+        assert promoted == 0
+
+
+def test_supersede_validated_frames():
+    """Test 4: supersede_ucf_frames on validated frames (staged -> validate -> supersede)."""
+    client = MiniAgentClient(profile="safe")
+    register_media("supersede_val_vid", 60.0)
+    helper_ingest_two_records(client, "supersede_val_vid", "ep1", "run1")
+
+    # Validate
+    env_token_val, rc_token_val = client.validate_action(
+        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+    )
+    token_val = env_token_val["result"]["confirmation_token"]
+    client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "supersede_val_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_val,
+    )
+
+    # Supersede
+    env_token_sup, rc_token_sup = client.validate_action(
+        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+    )
+    assert rc_token_sup == 3
+    token_sup = env_token_sup["result"]["confirmation_token"]
+
+    env_sup, rc_sup = client.execute_tool(
+        tool_name="supersede_ucf_frames",
+        tool_args={"video_hash": "supersede_val_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_sup,
+    )
+    assert rc_sup == 0
+    assert env_sup["output"]["superseded_count"] == 2
+
+    if mock_harness_active():
+        superseded_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "superseded")
+        assert superseded_count == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        superseded = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'superseded'").fetchone()[0]
+        conn.close()
+        assert superseded == 2
+
+
+def test_supersede_promoted_frames():
+    """Test 5: supersede_ucf_frames on promoted frames (staged -> validate -> promote -> supersede)."""
+    client = MiniAgentClient(profile="safe")
+    register_media("supersede_prom_vid", 60.0)
+    helper_ingest_two_records(client, "supersede_prom_vid", "ep1", "run1")
+
+    # Validate
+    env_token_val, rc_token_val = client.validate_action(
+        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+    )
+    token_val = env_token_val["result"]["confirmation_token"]
+    client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_val,
+    )
+
+    # Promote
+    env_token_prom, rc_token_prom = client.validate_action(
+        prompt="Promote", tool_name="promote_ucf_to_memory", confirm=False
+    )
+    token_prom = env_token_prom["result"]["confirmation_token"]
+    client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_prom,
+    )
+
+    # Supersede
+    env_token_sup, rc_token_sup = client.validate_action(
+        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+    )
+    assert rc_token_sup == 3
+    token_sup = env_token_sup["result"]["confirmation_token"]
+
+    env_sup, rc_sup = client.execute_tool(
+        tool_name="supersede_ucf_frames",
+        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_sup,
+    )
+    assert rc_sup == 0
+    assert env_sup["output"]["superseded_count"] == 2
+
+    if mock_harness_active():
+        promoted_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "promoted")
+        superseded_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "superseded")
+        assert promoted_count == 0
+        assert superseded_count == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        promoted = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'promoted'").fetchone()[0]
+        superseded = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'superseded'").fetchone()[0]
+        conn.close()
+        assert promoted == 0
+        assert superseded == 2
+
+
+def test_supersede_staged_blocked():
+    """Test 6: Attempting to supersede staged frames is a noop."""
+    client = MiniAgentClient(profile="safe")
+    register_media("supersede_staged_vid", 60.0)
+    helper_ingest_two_records(client, "supersede_staged_vid", "ep1", "run1")
+
+    # Attempt supersede
+    env_token_sup, rc_token_sup = client.validate_action(
+        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+    )
+    token_sup = env_token_sup["result"]["confirmation_token"]
+
+    env_sup, rc_sup = client.execute_tool(
+        tool_name="supersede_ucf_frames",
+        tool_args={"video_hash": "supersede_staged_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_sup,
+    )
+    assert rc_sup == 0
+    assert env_sup["output"].get("superseded_count", 0) == 0
+
+    if mock_harness_active():
+        staged_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "staged")
+        superseded_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "superseded")
+        assert staged_count == 2
+        assert superseded_count == 0
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        staged = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'").fetchone()[0]
+        superseded = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'superseded'").fetchone()[0]
+        conn.close()
+        assert staged == 2
+        assert superseded == 0
+
+
+def test_revalidate_rejected_or_superseded_noop():
+    """Test 7: Attempting validate_ucf_frames on rejected or superseded frames is a noop."""
+    client = MiniAgentClient(profile="safe")
+    register_media("revalidate_vid", 60.0)
+    helper_ingest_two_records(client, "revalidate_vid", "ep1", "run1")
+
+    # Reject
+    env_token_rej, rc_token_rej = client.validate_action(
+        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+    )
+    token_rej = env_token_rej["result"]["confirmation_token"]
+    client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "revalidate_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        confirm=True,
+        confirmation_token=token_rej,
+    )
+
+    # Attempt Validate
+    env_token_val, rc_token_val = client.validate_action(
+        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+    )
+    token_val = env_token_val["result"]["confirmation_token"]
+    env_val, rc_val = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "revalidate_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_val,
+    )
+    assert rc_val == 0
+    assert env_val["output"].get("validated_count", 0) == 0
+
+    if mock_harness_active():
+        validated_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "validated")
+        rejected_count = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "rejected")
+        assert validated_count == 0
+        assert rejected_count == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        validated = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'").fetchone()[0]
+        rejected = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'rejected'").fetchone()[0]
+        conn.close()
+        assert validated == 0
+        assert rejected == 2
+
+
+def test_full_ingestion_supersede_lifecycle():
+    """Test 8: Full pipeline run: Run 1 promoted -> Run 2 staged -> validate Run 2 -> supersede Run 1 -> promote Run 2."""
+    client = MiniAgentClient(profile="safe")
+    register_media("lifecycle_supersede_vid", 60.0)
+
+    # Run 1 (ep1)
+    helper_ingest_two_records(client, "lifecycle_supersede_vid", "ep1", "run1")
+    env_t_v1, _ = client.validate_action(prompt="Validate ep1", tool_name="validate_ucf_frames", confirm=False)
+    client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=env_t_v1["result"]["confirmation_token"],
+    )
+    env_t_p1, _ = client.validate_action(prompt="Promote ep1", tool_name="promote_ucf_to_memory", confirm=False)
+    client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=env_t_p1["result"]["confirmation_token"],
+    )
+
+    # Run 2 (ep2)
+    helper_ingest_two_records(client, "lifecycle_supersede_vid", "ep2", "run2")
+    env_t_v2, _ = client.validate_action(prompt="Validate ep2", tool_name="validate_ucf_frames", confirm=False)
+    client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep2"},
+        confirm=True,
+        confirmation_token=env_t_v2["result"]["confirmation_token"],
+    )
+
+    # Supersede Run 1 (ep1)
+    env_t_s1, _ = client.validate_action(prompt="Supersede ep1", tool_name="supersede_ucf_frames", confirm=False)
+    client.execute_tool(
+        tool_name="supersede_ucf_frames",
+        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=env_t_s1["result"]["confirmation_token"],
+    )
+
+    # Promote Run 2 (ep2)
+    env_t_p2, _ = client.validate_action(prompt="Promote ep2", tool_name="promote_ucf_to_memory", confirm=False)
+    client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep2"},
+        confirm=True,
+        confirmation_token=env_t_p2["result"]["confirmation_token"],
+    )
+
+    if mock_harness_active():
+        # Check overall state in mock
+        promoted = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "promoted")
+        superseded = sum(1 for rec in MockState.staged_records.values() if rec["status"] == "superseded")
+        assert promoted == 2
+        assert superseded == 2
+    else:
+        import sqlite3
+        conn = sqlite3.connect(str(client._get_ucf_db_path()))
+        promoted = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'promoted'").fetchone()[0]
+        superseded = conn.execute("SELECT count(*) FROM context_frames WHERE promotion_status = 'superseded'").fetchone()[0]
+        conn.close()
+        assert promoted == 2
+        assert superseded == 2
+
+
+def test_reject_supersede_token_validation():
+    """Test 9: Token validation, operation mismatch, and invalid/expired token handling on reject/supersede."""
+    client = MiniAgentClient(profile="safe")
+    register_media("token_val_vid", 60.0)
+    helper_ingest_two_records(client, "token_val_vid", "ep1", "run1")
+
+    # Request reject token
+    env_token_rej, rc_token_rej = client.validate_action(
+        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+    )
+    token_rej = env_token_rej["result"]["confirmation_token"]
+
+    # 1. Try to use reject token on supersede_ucf_frames -> should fail with token_operation_mismatch
+    env_fail1, rc_fail1 = client.execute_tool(
+        tool_name="supersede_ucf_frames",
+        tool_args={"video_hash": "token_val_vid", "epoch_id": "ep1"},
+        confirm=True,
+        confirmation_token=token_rej,
+    )
+    assert rc_fail1 == 1
+    assert "token_operation_mismatch" in env_fail1["errors"][0]["code"]
+
+    # 2. Try to reject with fake token -> should fail with invalid_confirmation_token
+    env_fail2, rc_fail2 = client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "token_val_vid", "epoch_id": "ep1", "reason": "test"},
+        confirm=True,
+        confirmation_token="fake-token-123",
+    )
+    assert rc_fail2 == 1
+    assert "invalid_confirmation_token" in env_fail2["errors"][0]["code"]
+
+    # 3. Try to reject with simulated expired token
+    env_token_exp, rc_token_exp = client.validate_action(
+        prompt="Reject Expired",
+        tool_name="reject_ucf_frames",
+        confirm=False,
+        tool_args={"simulate_expired_token": True}
+    )
+    assert rc_token_exp == 3
+    token_exp = env_token_exp["result"]["confirmation_token"]
+
+    env_fail3, rc_fail3 = client.execute_tool(
+        tool_name="reject_ucf_frames",
+        tool_args={"video_hash": "token_val_vid", "epoch_id": "ep1", "reason": "test", "simulate_expired_token": True},
+        confirm=True,
+        confirmation_token=token_exp,
+    )
+    assert rc_fail3 == 1
+    assert "token_expired" in env_fail3["errors"][0]["code"]
+

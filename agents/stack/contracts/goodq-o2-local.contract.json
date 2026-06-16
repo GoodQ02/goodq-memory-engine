@@ -33,6 +33,15 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "ucf_status_filter": {
+            "type": "string"
+          },
+          "ucf_include_terminal": {
+            "type": "boolean"
+          },
+          "payload_filter": {
+            "type": "object"
           }
         },
         "required": [

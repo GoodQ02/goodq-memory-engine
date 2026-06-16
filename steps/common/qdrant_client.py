@@ -237,6 +237,79 @@ class QdrantClient:
             )
             return False
 
+    def set_payload(
+        self,
+        points: List[str],
+        payload: Dict[str, Any],
+        timeout: int = 10,
+    ) -> bool:
+        """
+        Update payload fields for existing Qdrant points without touching vectors.
+        Idempotent: safe to call multiple times with the same value.
+        Returns True on success, False on any failure. Never raises.
+        """
+        if not self.cfg.enabled:
+            return False
+        if not points:
+            return True
+            
+        try:
+            normalized_points = []
+            for p in points:
+                np = self._normalize_point_id(p)
+                if np is not None:
+                    normalized_points.append(np)
+            if not normalized_points:
+                return False
+
+            body = {"payload": payload, "points": normalized_points}
+            
+            # Use PUT instead of POST as per ORIGINAL_REQUEST.md
+            for attempt in range(2):
+                try:
+                    r = self.session.put(
+                        f"{self.cfg.host}/collections/{self.cfg.collection}/points/payload?wait=true",
+                        json=body,
+                        timeout=timeout,
+                    )
+                    if r.status_code in (200, 202):
+                        return True
+                    else:
+                        body_text = _truncate_http_body(getattr(r, "text", None))
+                        logger.warning(
+                            "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                            "set_payload",
+                            self.cfg.collection,
+                            getattr(r, "status_code", None),
+                            body_text,
+                            attempt + 1,
+                        )
+                        self._collection_ready = False
+                except Exception as e:
+                    logger.warning(
+                        "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                        "set_payload",
+                        self.cfg.collection,
+                        type(e).__name__,
+                        e,
+                        attempt + 1,
+                    )
+                    self._collection_ready = False
+                if attempt == 0:
+                    time.sleep(0.5)
+                    if not self.ensure_collection():
+                        return False
+            return False
+        except Exception as e:
+            logger.warning(
+                "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
+                "set_payload",
+                self.cfg.collection,
+                type(e).__name__,
+                e,
+            )
+            return False
+
     def query(self, vector: List[float], top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         if not self.cfg.enabled:
             return []

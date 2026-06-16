@@ -9,6 +9,12 @@ and related canonical docs.
 
 ## [Unreleased]
 
+### Fixed
+- Closed the Qdrant payload coverage gap: all 7 Qdrant write paths now include
+  `ucf_promotion_status: "staged"` at point creation time, achieving 100%
+  lifecycle coverage. No Qdrant point is created without lifecycle identity.
+  (Phase 0.9, commits `99943a19`, `c9a7b50d`, `430efa08`)
+
 ### Added
 - Closed the 2026-05-17 first-time user audit gaps for prerequisite/host
   framing, local env template guidance, root scratch inbox hygiene, sample

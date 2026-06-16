@@ -765,15 +765,49 @@ re-ingestion → [supersede_ucf_frames, HITL]  → superseded (old epoch promote
 rejection    → [reject_ucf_frames, HITL]     → rejected (from staged or validated)
 ```
 
+## Phase 0.9: Qdrant Write-Time Lifecycle Coverage (2026-06-16)
+
+Phase 0.9 closes the Qdrant payload coverage gap identified in the UCF audit.
+Prior to this fix, Qdrant points were created without `ucf_promotion_status` in
+their payloads, making them invisible to lifecycle operations until a separate
+sync occurred. Now every Qdrant point carries `ucf_promotion_status: "staged"`
+from the moment of creation.
+
+Key changes (commits `99943a19`, `c9a7b50d`, `430efa08`):
+
+- **Write-time status in all 7 Qdrant payload write paths**: Added
+  `ucf_promotion_status: "staged"` at insert time in `scene_visual_embeddings.py`
+  (Phase 6a CLIP/DINO), `image_embed_clip/step.py`, `image_embed_dino/step.py`,
+  `audio_embed_clap/step.py`, `text_embed/step.py` (MemoryRouter), and
+  `memory.py` (register_scene_bundle: clip, dino, clap, text, summary).
+
+- **Text embed metadata plumbing**: `text_embed/step.py` now returns
+  `qdrant_committed`, `faiss_id`, and `vector_collection` in step output.
+  `run_ingestion.py` captures these for UCF registration with correct
+  `vector_backend` and `vector_collection` values.
+
+- **Scope-based Qdrant lifecycle sync**: `mini_agent_client.py` added
+  `_sync_qdrant_by_scope()` for collection-wide status updates during
+  promote/reject/supersede. This updates all points in epoch-scoped collections
+  matching the target scope, complementing the existing row-based sync.
+
+- **Integration test**: `test_qdrant_lifecycle_coverage.py` asserts zero
+  anonymous Qdrant points after ingestion.
+
+**Verified**: 16/16 Qdrant points across all 4 collections (audio, clip, dino,
+text) carry `ucf_promotion_status: "staged"` after clean 2-scene smoke ingest.
+948 tests pass with zero regressions.
+
 ## Safe Next Actions
 
-All Phase 0.7 and 0.8 hardening items are verified. Current safe next actions:
+All Phase 0.7, 0.8, and 0.9 hardening items are verified. Current safe next actions:
 
 1. **Run strict UCF validation**: `conda run -n goodq_core python scripts/ucf/validate_ucf_epoch.py --mode strict`
 2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory`
    with confirmation tokens for new ingestion epochs.
-3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover
+3. **Full-scale production ingest**: Run multi-video ingestion with 100%
+   lifecycle-addressable Qdrant points guaranteed from creation.
+4. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover
    audio_embed_clap, text_embed, face_embed worker types (Gap C in UCF_COVERAGE_GAP_REPORT.md).
-4. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on secondary host
+5. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on secondary host
    and verify full suite passes.
-

@@ -1,34 +1,40 @@
 # UCF Qdrant Status Backfill Plan
 
-This document details the operational scope, identified data gaps, and backfill plan for the UCF Retrieval Bridge.
+<!-- DOC_STATUS: RESOLVED -->
+<!-- DOC_LAST_VERIFIED: 2026-06-16 -->
 
-## 1. Scope of the UCF Retrieval Bridge (Forward-Sync Only)
-The UCF Retrieval Bridge implements real-time, event-driven forward synchronization of Unified Context Frame (UCF) promotion statuses to the Qdrant vector database.
-When a user or system agent performs a lifecycle status transition (`promote`, `reject`, or `supersede`) via the `MiniAgentClient` tools, the bridge queries the ledger SQLite database for the target frames, filters those matching `vector_backend = 'qdrant'`, and performs a PUT payload update to Qdrant to record the new `ucf_promotion_status` payload field on those points.
+> [!NOTE]
+> **RESOLVED (2026-06-16)**: This backfill plan is no longer needed. All Qdrant
+> write paths now include `ucf_promotion_status: "staged"` at point creation
+> time, achieving 100% lifecycle coverage. The scope-based sync in
+> `mini_agent_client.py` handles promote/reject/supersede updates across all
+> points in epoch-scoped collections.
 
-This ensures that all newly processed and lifecycle-managed context frames are instantly synchronized with the vector search index.
+## Historical Context
 
-## 2. Excluded Operations (No Backfill of Pre-Bridge Rows)
-The UCF Retrieval Bridge does NOT retroactively scan, compute, or update Qdrant point payloads for context frames that were processed or promoted prior to the deployment of this bridge.
-The following operations are outside the scope of the real-time bridge:
-- Querying Qdrant to find points missing the `ucf_promotion_status` field.
-- Matching legacy Qdrant points back to `context_frames` records.
-- In-place bulk payload corrections on existing Qdrant collections.
+This document originally described a plan to retroactively patch Qdrant points
+that lacked the `ucf_promotion_status` payload field. The gap arose because the
+UCF Retrieval Bridge was forward-sync only — it updated status during lifecycle
+transitions but did not set it at write time.
 
-## 3. The Sync Gap (Pre-Bridge Frames)
-Because the bridge is forward-sync only, legacy points created before this implementation do not have a `ucf_promotion_status` key in their payloads.
-Under the default search doctrine:
-- A query with `ucf_include_terminal = False` and no `ucf_status_filter` will exclude points where `ucf_promotion_status` is explicitly `"rejected"` or `"superseded"` using a `must_not` clause.
-- However, because legacy pre-bridge points entirely lack the `ucf_promotion_status` field, they are not excluded by the `must_not` check and will still appear in query results.
-This is expected behavior during the transition phase, ensuring that historical, un-managed data is not silently hidden or lost until a formal backfill has occurred.
+## Resolution
 
-## 4. Recommended Backfill Approach (DEFERRED)
-To close the historical gap, we previously considered introducing a dedicated, human-in-the-loop (HITL) gated tool named `backfill_ucf_qdrant_payloads`. This tool concept is now marked as **DEFERRED**.
+Commits `99943a19`, `c9a7b50d`, `430efa08` (2026-06-16) closed this gap by
+adding `ucf_promotion_status: "staged"` at write time in all 7 Qdrant payload
+write paths:
 
-Historical Qdrant/FAISS backfill is deferred. Current dev/sample vector stores are disposable and will be rebuilt from source media.
+| Write Path | File |
+|---|---|
+| Phase 6a visual embeddings | `steps/video/scene_visual_embeddings.py` |
+| Per-scene CLIP | `steps/image_embed_clip/step.py` |
+| Per-scene DINO | `steps/image_embed_dino/step.py` |
+| CLAP audio | `steps/audio_embed_clap/step.py` |
+| Text embed (MemoryRouter) | `steps/text_embed/step.py` |
+| Scene bundle memory | `steps/common/memory.py` |
+| Lifecycle sync (scope-based) | `agents/mini_agent_client.py` |
 
-The deferred tool's proposed execution procedure was:
-1. **Ledger Alignment**: Scan the `context_frames` table in `ucf_ledger.db` for all records with `vector_backend = 'qdrant'` and a non-NULL `vector_key`.
-2. **Batch Ingestion**: Query Qdrant for each unique collection/point to fetch current payloads, or construct payload updates directly if the ledger status is assumed authoritative.
-3. **Chunked Updates**: Perform chunked PUT requests to Qdrant's `/collections/{collection}/points/payload` endpoint, updating the `ucf_promotion_status` field of legacy points to match their current database promotion status (`staged`, `validated`, `promoted`, `rejected`, or `superseded`).
-4. **Audit and Verification**: Emit an execution report outlining the number of points backfilled, collections affected, and any failed points.
+Verification: 16/16 Qdrant points carry `ucf_promotion_status` after clean
+2-scene smoke ingest. 948 tests pass with zero regressions.
+
+No backfill tool is needed. Future ingestion epochs will produce 100%
+lifecycle-addressable Qdrant points from the start.

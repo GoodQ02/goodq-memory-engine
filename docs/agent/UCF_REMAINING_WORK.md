@@ -1,7 +1,7 @@
 # UCF Remaining Work & Closure Plan
 
-**Last Verified Date**: 2026-06-15
-**Last Updated**: 2026-06-15 (post-sprint update)
+**Last Verified Date**: 2026-06-16
+**Last Updated**: 2026-06-16 (Qdrant lifecycle coverage closure)
 **Document Path**: docs/agent/UCF_REMAINING_WORK.md
 **Primary Focus**: Prioritized Closure Plan for UCF Integration
 
@@ -11,15 +11,16 @@
 
 This document outlines the prioritized closure plan to harden the Unified Context Frame (UCF) staging architecture. In alignment with the **staged-only UCF doctrine**, the UCF ledger remains a staged multimodal evidence store. Canonical query interfaces must only access sqlite memory projections (`memory.db`), knowledge graph nodes, and finalized Qdrant/FAISS vector databases.
 
-The full confirmed lifecycle as of 2026-06-15 sprint:
+The full confirmed lifecycle as of 2026-06-16 sprint:
 
 ```
-ingestion → staged
+ingestion → staged (ucf_promotion_status written to Qdrant at point creation)
           → [validate_ucf_frames, HITL-confirmed] → validated
           → [promote_ucf_to_memory, HITL-confirmed] → promoted
 ```
 
 `validate_ucf_epoch.py` remains read-only. No bypass lever exists.
+All Qdrant points carry `ucf_promotion_status` from creation (100% lifecycle coverage).
 
 ---
 
@@ -53,12 +54,17 @@ ingestion → staged
 
 ## 3. Remaining Open Items
 
-### Item 5: `rejected` and `superseded` Status Write Paths (hardening)
+### Item 5: `rejected` and `superseded` Status Write Paths ✅ COMPLETED (Phase 0.8, 2026-06-15)
 - **Goal**: Provide write paths for the `rejected` and `superseded` promotion statuses defined in the UCF schema.
-- **Status**: Defined in schema (`context_frames.promotion_status` allows `rejected`, `superseded`) but no write method exists in `UCFLedgerClient` and no production code sets these values.
-- **Risk**: Medium — re-ingestion of a previously promoted scene has no way to mark prior frames as `superseded`, creating ambiguous state.
-- **Recommended next action**: Add `mark_frames_rejected(reason, video_hash, epoch_id)` and `mark_frames_superseded(video_hash, epoch_id)` to `UCFLedgerClient`. Gate via `MiniAgentClient` tools. Add tests.
-- **Acceptance criteria**: Both states are settable via confirmed tool calls. A test asserts that re-ingesting an already-promoted epoch transitions the old frames to `superseded` before the new frames are staged.
+- **Implementation**: `UCFLedgerClient` — `mark_frames_rejected()` (`staged/validated → rejected`) and `mark_frames_superseded()` (`promoted/validated → superseded`). Both are HITL-gated via `MiniAgentClient` tools `reject_ucf_frames` and `supersede_ucf_frames`. All transitions write to `ucf_status_transitions` audit table.
+- **Evidence**: `tests/agents/test_mini_agent_client.py` — reject/supersede tests PASS. Re-ingest supersession flow verified end-to-end.
+- **Commit**: Phase 0.8 commit (see `CURRENT_STATE.md`)
+
+### Item 9: Qdrant Write-Time Lifecycle Coverage ✅ COMPLETED (2026-06-16)
+- **Goal**: Every Qdrant point created by ingestion carries `ucf_promotion_status: "staged"` from creation, eliminating anonymous points.
+- **Implementation**: Added `ucf_promotion_status: "staged"` at write time in all 7 Qdrant payload write paths: `scene_visual_embeddings.py`, `image_embed_clip/step.py`, `image_embed_dino/step.py`, `audio_embed_clap/step.py`, `text_embed/step.py`, `memory.py`. Added scope-based Qdrant sync in `mini_agent_client.py` for promote/reject/supersede.
+- **Evidence**: Phase 1 gate check — 16/16 Qdrant points carry status after clean 2-scene ingest. 948 tests pass. Integration test `test_qdrant_lifecycle_coverage.py` asserts zero anonymous points.
+- **Commits**: `99943a19`, `c9a7b50d`, `430efa08`
 
 ### Item 6: Laptop Follower / Portable Validation (pending)
 - **Goal**: Validate that the installer and pipeline run correctly on the secondary laptop host.

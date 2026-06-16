@@ -172,14 +172,22 @@ def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
             has_sub = hasattr(route, "routes")
             sub_count = len(route.routes) if has_sub else 0
             print(f"{'  ' * indent}{t}: path={p!r} has_routes={has_sub} sub={sub_count}")
+            if t == "_IncludedRouter":
+                attrs = {a: type(getattr(route, a)).__name__ for a in dir(route) if not a.startswith("_")}
+                print(f"{'  ' * (indent+1)}attrs: {attrs}")
+                # Check for router attribute
+                if hasattr(route, "router"):
+                    r = route.router
+                    print(f"{'  ' * (indent+1)}router type: {type(r).__name__}, has routes: {hasattr(r, 'routes')}")
+                    if hasattr(r, "routes"):
+                        print(f"{'  ' * (indent+1)}router.routes count: {len(r.routes)}")
+                        _dump_routes(r.routes, indent + 2)
             if has_sub:
                 _dump_routes(route.routes, indent + 1)
     print(f"\n=== app.routes ({len(list(api_main.app.routes))}) ===")
     _dump_routes(api_main.app.routes)
-    if hasattr(api_main.app, "router"):
-        print(f"\n=== app.router.routes ({len(list(api_main.app.router.routes))}) ===")
-        _dump_routes(api_main.app.router.routes)
     print(f"\nCollected paths ({len(paths)}): {sorted(paths)}")
+
 
     retired_paths = {
         "/search",

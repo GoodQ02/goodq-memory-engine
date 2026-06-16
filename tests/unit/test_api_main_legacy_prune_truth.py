@@ -131,10 +131,22 @@ def _load_api_main():
     return module
 
 
+def _collect_paths(routes):
+    """Recursively collect all .path values from routes, including sub-routers."""
+    paths = set()
+    for route in routes:
+        if hasattr(route, "path"):
+            paths.add(route.path)
+        if hasattr(route, "routes"):
+            paths.update(_collect_paths(route.routes))
+    return paths
+
+
 def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     api_main = _load_api_main()
 
-    paths = {route.path for route in api_main.app.routes if hasattr(route, "path")}
+    paths = _collect_paths(api_main.app.routes)
+
 
     retired_paths = {
         "/search",

@@ -171,12 +171,12 @@ if %ERRORLEVEL% neq 0 (
     exit /b 5
 )
 
-:: 7. Write Release Manifest dist/GoodQ4All_Setup_2.4.0.release_manifest.json
+:: 7. Write Release Manifest dist/GoodQ4All_Setup_2.4.1.release_manifest.json
 echo Generating Release Manifest...
 powershell -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1
 
 echo ==============================================
 echo [OK] Installer compilation successfully complete.
-echo Output binary staged at: GoodQ4All_Setup_2.4.0.exe
+echo Output binary staged at: GoodQ4All_Setup_2.4.1.exe
 echo ==============================================
 echo Done.

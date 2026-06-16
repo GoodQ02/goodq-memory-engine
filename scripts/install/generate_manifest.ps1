@@ -2,7 +2,7 @@
 # -------------------------------------------
 $ErrorActionPreference = "Stop"
 
-$exePath = '..\..\GoodQ4All_Setup_2.4.0.exe'
+$exePath = '..\..\GoodQ4All_Setup_2.4.1.exe'
 if (-not (Test-Path $exePath)) {
     Write-Error "Installer executable not found at $exePath!"
     exit 1
@@ -63,7 +63,7 @@ if (Test-Path $versionPyPath) {
 
 $manifest = @{
     'manifest_version'          = '1.0.0'
-    'installer_filename'        = 'GoodQ4All_Setup_2.4.0.exe'
+    'installer_filename'        = 'GoodQ4All_Setup_2.4.1.exe'
     'sha256'                    = $exeHash
     'launcher_sha256'           = $launcherHash
     'model_manifest_sha256'     = $modelManifestHash
@@ -76,7 +76,7 @@ $manifest = @{
     'status'                    = 'verified_offline'
 }
 
-$destManifest = '..\..\dist\GoodQ4All_Setup_2.4.0.release_manifest.json'
+$destManifest = '..\..\dist\GoodQ4All_Setup_2.4.1.release_manifest.json'
 $destManifestDir = Split-Path -Parent $destManifest
 if (-not (Test-Path $destManifestDir)) {
     New-Item -ItemType Directory -Path $destManifestDir -Force | Out-Null

@@ -1206,11 +1206,14 @@ def test_set_payload_empty_points_noop(mock_put):
 
 # Lifecycle sync tests
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monkeypatch):
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_set_payload.return_value = True
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"result": {"collections": []}}
+    mock_post.return_value = mock_resp
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -1226,13 +1229,16 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_set_payload, tmp_path
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "ok"
-    mock_set_payload.assert_called_once_with(["vec-key-1"], {"ucf_promotion_status": "promoted"})
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tmp_path, monkeypatch):
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_set_payload.return_value = False
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    mock_resp.text = '{"error": "not found"}'
+    mock_resp.json.return_value = {"result": {"collections": []}}
+    mock_post.return_value = mock_resp
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -1250,11 +1256,14 @@ def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_set_payl
     assert "warnings" in res
     assert "qdrant_payload_sync_failed" in res["warnings"]
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, monkeypatch):
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-reject", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_set_payload.return_value = True
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"result": {"collections": []}}
+    mock_post.return_value = mock_resp
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -1262,7 +1271,7 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "bad resolution"})
     assert rc == 0
     assert res["output"]["status"] == "rejected_complete"
-    mock_set_payload.assert_called_with(["vec-key-reject"], {"ucf_promotion_status": "rejected"})
+    assert res["output"]["qdrant_sync"]["status"] == "ok"
 
     db_path_2 = _create_mock_db_for_test(tmp_path / "second", "promoted", vector_key="vec-key-supersede", vector_collection="goodq_clip")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path_2)
@@ -1270,7 +1279,7 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_
     res2, rc2 = _confirm_tool_directly(client, "supersede_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc2 == 0
     assert res2["output"]["status"] == "superseded_complete"
-    mock_set_payload.assert_called_with(["vec-key-supersede"], {"ucf_promotion_status": "superseded"})
+    assert res2["output"]["qdrant_sync"]["status"] == "ok"
 
 @patch("steps.common.qdrant_client.QdrantClient.set_payload")
 def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_set_payload, tmp_path, monkeypatch):

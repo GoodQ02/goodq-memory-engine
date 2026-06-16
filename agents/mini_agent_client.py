@@ -807,61 +807,44 @@ class MiniAgentClient:
         failed_collections = []
         
         if attempted:
-            from steps.common.qdrant_client import build_qdrant_client
             qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
+            GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+
             for v_coll, keys in qdrant_updates.items():
-                collection_lower = v_coll.lower()
-                key = "text"
-                if "audio" in collection_lower:
-                    key = "audio"
-                elif "clip" in collection_lower:
-                    key = "clip"
-                elif "dino" in collection_lower:
-                    key = "dino"
-                else:
-                    key = v_coll
-                
                 success = False
                 try:
-                    q_client = build_qdrant_client(self.config, dim=384, key=key)
-                    if q_client:
-                        # Fetch existing payloads to prevent overwriting other fields with PUT
-                        GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
-                        normalized_map = {}
-                        for k in keys:
-                            s = k.strip()
-                            hex_candidate = s.replace("-", "")
-                            if len(hex_candidate) == 32 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
-                                nk = str(uuid.UUID(hex_candidate))
-                            elif s.isdigit():
-                                nk = s
-                            else:
-                                nk = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
-                            normalized_map[nk] = k
-                            
-                        existing_payloads = {}
-                        try:
-                            res_get = requests.post(
-                                f"{qdrant_host}/collections/{v_coll}/points",
-                                json={"ids": list(normalized_map.keys()), "with_payload": True, "with_vector": False},
-                                timeout=5
-                            )
-                            if res_get.status_code == 200:
-                                points_data = res_get.json().get("result", [])
-                                for pt in points_data:
-                                    pt_id = pt.get("id")
-                                    existing_payloads[pt_id] = pt.get("payload") or {}
-                        except Exception as get_err:
-                            logger.warning("Failed to retrieve existing payloads from Qdrant: %s", get_err)
-                            
-                        all_success = True
-                        for nk, original_key in normalized_map.items():
-                            payload = existing_payloads.get(nk, {}).copy()
-                            payload["ucf_promotion_status"] = status_val
-                            point_success = q_client.set_payload([original_key], payload)
-                            if not point_success:
-                                all_success = False
-                        success = all_success
+                    # Normalize point IDs
+                    normalized_ids = []
+                    for k in keys:
+                        s = k.strip()
+                        hex_candidate = s.replace("-", "")
+                        if len(hex_candidate) == 32 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
+                            normalized_ids.append(str(uuid.UUID(hex_candidate)))
+                        elif s.isdigit():
+                            normalized_ids.append(s)
+                        else:
+                            normalized_ids.append(str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s)))
+
+                    if not normalized_ids:
+                        continue
+
+                    # Use direct REST with the exact collection name from UCF ledger
+                    # (avoids double-prefix bug from build_qdrant_client)
+                    resp = requests.post(
+                        f"{qdrant_host}/collections/{v_coll}/points/payload",
+                        json={
+                            "payload": {"ucf_promotion_status": status_val},
+                            "points": normalized_ids,
+                        },
+                        timeout=10,
+                    )
+                    if resp.status_code in (200, 202):
+                        success = True
+                    else:
+                        logger.warning(
+                            "Row sync payload update failed for %s: %s %s",
+                            v_coll, resp.status_code, resp.text[:200] if resp.text else "",
+                        )
                 except Exception as e:
                     logger.warning(
                         "Failed to sync ucf status to qdrant for collection %s: %s",

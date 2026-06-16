@@ -4972,13 +4972,15 @@ def _log_audio_to_ucf_ledger(
                     f"{video_hash}|{scene_start_val:.6f}|{scene_end_val:.6f}".encode('utf-8')
                 ).hexdigest()[:16]
                 text_embed_raw_ref_path = audio_artifact_dir / f"{scene_hash_str}_raw_text_embed_audio.json"
-                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
                 text_embed_payload = {
                     'embedding_id': text_embedding_id,
                     'embedding_source': 'audio_transcript',
                     'origin_modality': 'audio',
                     'engine': audio_text_embed_meta.get('engine', 'all-MiniLM-L6-v2'),
+                    'faiss_id': audio_text_embed_meta.get('faiss_id'),
                 }
+                atomic_write_json(text_embed_raw_ref_path, text_embed_payload)
+                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
                 scene_start_f = float(scene.get('start', 0.0) or 0.0)
                 scene_end_f = float(scene.get('end', scene_start_f) or scene_start_f)
                 client.log_frame(
@@ -4996,10 +4998,10 @@ def _log_audio_to_ucf_ledger(
                     payload=text_embed_payload,
                     promotion_status='staged',
                     vector_key=text_embedding_id,
-                    vector_backend='faiss',
+                    vector_backend='qdrant' if audio_text_embed_meta.get('qdrant_committed') else 'faiss',
                     vector_dim=384,
                     vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
-                    vector_collection='text',
+                    vector_collection=audio_text_embed_meta.get('vector_collection', 'text'),
                 )
 
         client.close()
@@ -5397,13 +5399,15 @@ def _log_visual_to_ucf_ledger(
                     f"{video_hash}|{start:.6f}|{start + duration:.6f}".encode('utf-8')
                 ).hexdigest()[:16]
                 text_embed_raw_ref_path = frame_dir / f"{scene_hash_str}_raw_text_embed_frame.json"
-                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
                 text_embed_payload = {
                     'embedding_id': text_embedding_id,
                     'embedding_source': 'frame_text',
                     'origin_modality': 'frame_text',
                     'engine': frame_text_embed_meta.get('engine', 'all-MiniLM-L6-v2'),
+                    'faiss_id': frame_text_embed_meta.get('faiss_id'),
                 }
+                atomic_write_json(text_embed_raw_ref_path, text_embed_payload)
+                text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
                 client.log_frame(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
@@ -5419,10 +5423,10 @@ def _log_visual_to_ucf_ledger(
                     payload=text_embed_payload,
                     promotion_status='staged',
                     vector_key=text_embedding_id,
-                    vector_backend='faiss',
+                    vector_backend='qdrant' if frame_text_embed_meta.get('qdrant_committed') else 'faiss',
                     vector_dim=384,
                     vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
-                    vector_collection='text',
+                    vector_collection=frame_text_embed_meta.get('vector_collection', 'text'),
                 )
 
         client.close()

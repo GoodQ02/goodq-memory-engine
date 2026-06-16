@@ -884,6 +884,100 @@ class MiniAgentClient:
             "failed_collections": failed_collections,
         }
 
+    def _sync_qdrant_by_scope(self, epoch_id: str, status_val: str,
+                               video_hash: Optional[str] = None) -> Dict[str, Any]:
+        """Scope-based Qdrant sync for points not tracked by UCF (e.g. Phase 6a).
+
+        Scrolls all epoch-scoped Qdrant collections and updates any points
+        missing ucf_promotion_status or having a stale value.
+        """
+        import logging
+        import requests
+        logger = logging.getLogger(__name__)
+
+        qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
+        collections_swept = []
+        points_updated = 0
+        failed = []
+
+        # Discover epoch-scoped collections
+        try:
+            resp = requests.get(f"{qdrant_host}/collections", timeout=5)
+            if resp.status_code != 200:
+                return {"status": "error", "error": f"collections list failed: {resp.status_code}"}
+            all_colls = resp.json().get("result", {}).get("collections", [])
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+        epoch_colls = [c["name"] for c in all_colls if epoch_id in c.get("name", "")]
+        if not epoch_colls:
+            return {"status": "skipped", "reason": "no_epoch_collections",
+                    "collections_swept": [], "points_updated": 0}
+
+        for coll_name in epoch_colls:
+            try:
+                offset = None
+                coll_updated = 0
+                while True:
+                    scroll_body = {"limit": 100, "with_payload": True}
+                    if offset is not None:
+                        scroll_body["offset"] = offset
+
+                    scroll_resp = requests.post(
+                        f"{qdrant_host}/collections/{coll_name}/points/scroll",
+                        json=scroll_body, timeout=10
+                    )
+                    if scroll_resp.status_code != 200:
+                        failed.append(coll_name)
+                        break
+
+                    result = scroll_resp.json().get("result", {})
+                    points = result.get("points", [])
+                    next_offset = result.get("next_page_offset")
+
+                    # Find points needing update
+                    points_to_update = []
+                    for pt in points:
+                        payload = pt.get("payload", {})
+                        current_status = payload.get("ucf_promotion_status")
+                        if current_status != status_val:
+                            points_to_update.append(pt["id"])
+
+                    # Batch update
+                    if points_to_update:
+                        update_resp = requests.post(
+                            f"{qdrant_host}/collections/{coll_name}/points/payload",
+                            json={
+                                "payload": {"ucf_promotion_status": status_val},
+                                "points": points_to_update,
+                            },
+                            timeout=10,
+                        )
+                        if update_resp.status_code == 200:
+                            coll_updated += len(points_to_update)
+                        else:
+                            logger.warning(
+                                "Scope sync payload update failed for %s: %s",
+                                coll_name, update_resp.status_code
+                            )
+
+                    if not next_offset or not points:
+                        break
+                    offset = next_offset
+
+                collections_swept.append(coll_name)
+                points_updated += coll_updated
+            except Exception as e:
+                logger.warning("Scope sync failed for collection %s: %s", coll_name, e)
+                failed.append(coll_name)
+
+        return {
+            "status": "warning" if failed else "ok",
+            "collections_swept": collections_swept,
+            "points_updated": points_updated,
+            "failed_collections": failed,
+        }
+
     def _cleanup_backfilled_vectors(self, records: List[Dict[str, Any]], inserted_ids: List[int]) -> None:
         import requests
         import sqlite3
@@ -1338,10 +1432,12 @@ class MiniAgentClient:
         conn.close()
         
         qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "promoted")
+        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="promoted", video_hash=video_hash)
         res = {
             "promoted_count": promoted_count,
             "status": "promoted_complete",
             "qdrant_sync": qdrant_sync,
+            "scope_sync": scope_sync,
         }
         if qdrant_sync["status"] == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]
@@ -1398,11 +1494,13 @@ class MiniAgentClient:
         client.close()
         
         qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "rejected")
+        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="rejected", video_hash=video_hash)
         res = {
             "rejected_count": rejected_count,
             "status": "rejected_complete",
             "reason": reason,
             "qdrant_sync": qdrant_sync,
+            "scope_sync": scope_sync,
         }
         if qdrant_sync["status"] == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]
@@ -1449,10 +1547,12 @@ class MiniAgentClient:
         client.close()
         
         qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "superseded")
+        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="superseded", video_hash=video_hash)
         res = {
             "superseded_count": superseded_count,
             "status": "superseded_complete",
             "qdrant_sync": qdrant_sync,
+            "scope_sync": scope_sync,
         }
         if qdrant_sync["status"] == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]

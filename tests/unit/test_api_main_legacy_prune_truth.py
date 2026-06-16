@@ -132,20 +132,38 @@ def _load_api_main():
 
 
 def _collect_paths(routes):
-    """Recursively collect all .path values from routes, including sub-routers."""
+    """Recursively collect all endpoint paths from routes.
+
+    Handles both flat (FastAPI <0.137) and tree-structured (FastAPI >=0.137)
+    route lists where _IncludedRouter objects wrap sub-routes.
+    """
+    from fastapi.routing import APIRoute
+    from starlette.routing import Mount, Route
+
     paths = set()
     for route in routes:
-        if hasattr(route, "path"):
+        if isinstance(route, (APIRoute, Route)):
             paths.add(route.path)
-        if hasattr(route, "routes"):
+        elif isinstance(route, Mount):
+            paths.add(route.path)
+            if hasattr(route, "routes"):
+                paths.update(_collect_paths(route.routes))
+        elif hasattr(route, "routes"):
+            # _IncludedRouter or similar container without .path
             paths.update(_collect_paths(route.routes))
+        elif hasattr(route, "path"):
+            paths.add(route.path)
     return paths
 
 
 def test_main_api_prunes_legacy_compatibility_endpoints() -> None:
     api_main = _load_api_main()
 
+    # Collect from both app.routes and app.router.routes for compat
     paths = _collect_paths(api_main.app.routes)
+    if hasattr(api_main.app, "router"):
+        paths.update(_collect_paths(api_main.app.router.routes))
+
 
 
     retired_paths = {

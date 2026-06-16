@@ -803,7 +803,16 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "vector": vector_list,
             "payload": payload_meta,
         }
+        payload_meta["ucf_promotion_status"] = "staged"
         router_results = router.insert([payload])
+        _qdrant_committed = bool((router_results or {}).get("qdrant"))
+        _faiss_id = to_faiss_id(embedding_id)
+        _qdrant_collection = None
+        try:
+            _q_store = stores.get("qdrant")
+            _qdrant_collection = getattr(getattr(getattr(_q_store, "client", None), "cfg", None), "collection", None)
+        except Exception:
+            pass
 
         # Persist mapping for recall/linking (FAISS id if available is not tracked here)
         embedding_ok = False
@@ -901,7 +910,14 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 e,
             )
 
-        return {"embedding_meta": {"status": "ok", "engine": "all-MiniLM-L6-v2", "embedding_id": embedding_id}}
+        return {"embedding_meta": {
+            "status": "ok",
+            "engine": "all-MiniLM-L6-v2",
+            "embedding_id": embedding_id,
+            "qdrant_committed": _qdrant_committed,
+            "faiss_id": _faiss_id,
+            "vector_collection": _qdrant_collection,
+        }}
     except Exception as e:
         logger.warning(
             "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",

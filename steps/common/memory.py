@@ -814,6 +814,7 @@ def register_scene_bundle(
                         'start': scene_start,
                         'end': scene_end,
                         'timestamp': frame_timestamp,
+                        'ucf_promotion_status': 'staged',
                     }
                 })
             
@@ -829,6 +830,7 @@ def register_scene_bundle(
                         'start': scene_start,
                         'end': scene_end,
                         'timestamp': frame_timestamp,
+                        'ucf_promotion_status': 'staged',
                     }
                 })
         
@@ -848,6 +850,7 @@ def register_scene_bundle(
                         'start': audio_start,
                         'end': audio_end,
                         'transcript': audio_data.get('transcript', ''),
+                        'ucf_promotion_status': 'staged',
                     }
                 })
         
@@ -867,6 +870,7 @@ def register_scene_bundle(
                         'start': scene_start,
                         'end': scene_end,
                         'text': frame_data.get('ocr_text', '') or frame_data.get('caption', ''),
+                        'ucf_promotion_status': 'staged',
                     }
                 })
 
@@ -937,6 +941,7 @@ def register_scene_bundle(
                             'start': scene_start,
                             'end': scene_end,
                             'text': summary_text,
+                            'ucf_promotion_status': 'staged',
                         }
                     }
                     

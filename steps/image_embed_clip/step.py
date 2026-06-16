@@ -172,6 +172,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "ucf_frame_id": None,
                         "source_path": path,
                         "faiss_id": faiss_id,
+                        "ucf_promotion_status": "staged",
                     }
                 }]))
                 if not qdrant_ok:

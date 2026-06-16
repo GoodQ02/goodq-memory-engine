@@ -77,6 +77,7 @@ def _build_qdrant_audio_payload(
         "model": _CLAP_MODEL_ID,
         "created_at": created_at,
         "commit_ts_utc": created_at,
+        "ucf_promotion_status": "staged",
     }
 
     run_id = _resolve_run_id(item, cfg)

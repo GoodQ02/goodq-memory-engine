@@ -307,6 +307,8 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     if not video_storage_key:
         video_storage_key = video_id
 
+    epoch_id = os.path.basename((cfg.get("paths", {}) or {}).get("db_dir") or "") or "unknown_epoch"
+
     # Determine processing directory (prefer explicit path passed from ingestion orchestrator).
     processing_dir_raw = item.get('processing_dir')
     if isinstance(processing_dir_raw, str) and processing_dir_raw.strip():
@@ -651,9 +653,13 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                     "vector": embedding.tolist(),
                     "payload": {
                         "video_id": video_id,
+                        "video_hash": item.get("video_hash") or video_id,
                         "scene_id": scene_id,
+                        "epoch_id": epoch_id,
                         "type": "scene",
                         "model": "clip",
+                        "worker_name": "scene_visual_embeddings_clip",
+                        "ucf_promotion_status": "staged",
                         "video_path": video_path,
                         "representative_frame": representative_frame,
                     }
@@ -726,9 +732,13 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                     "vector": embedding.tolist(),
                     "payload": {
                         "video_id": video_id,
+                        "video_hash": item.get("video_hash") or video_id,
                         "scene_id": scene_id,
+                        "epoch_id": epoch_id,
                         "type": "scene",
                         "model": "dino",
+                        "worker_name": "scene_visual_embeddings_dino",
+                        "ucf_promotion_status": "staged",
                         "video_path": video_path,
                         "representative_frame": representative_frame,
                     }

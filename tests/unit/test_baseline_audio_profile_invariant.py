@@ -471,6 +471,7 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
         "model": "laion/clap-htsat-unfused",
         "created_at": "2026-04-30T12:05:43+00:00",
         "commit_ts_utc": "2026-04-30T12:05:43+00:00",
+        "ucf_promotion_status": "staged",
         "run_id": "run-alpha",
         "scene_id": "scene-alpha",
         "video_id": "video-alpha",

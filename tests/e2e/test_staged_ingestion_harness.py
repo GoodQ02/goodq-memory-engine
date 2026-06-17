@@ -950,12 +950,12 @@ def test_f4_04_preserves_path_agnostic_relative_references():
     register_media("v1", 20.0)
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
-        "absolute_path_artifacts": ["epochs/epoch_1/ucf_ledger.db"] # already relative
+        "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
     }
     envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
     assert rc == 0
     # Relative path should remain unchanged
-    assert "epochs/epoch_1/ucf_ledger.db" in envelope["artifacts"]
+    assert "db/ucf/ucf_ledger.db" in envelope["artifacts"]
 
 def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
     pass
@@ -1439,7 +1439,7 @@ def test_f4_tier4_03_path_audit_scenario():
     # Video source has absolute path, but outcome envelope is audited to be relative
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
-        "absolute_path_artifacts": ["L:\\_DATA\\GoodQ_Data\\epochs\\epoch1\\ucf_ledger.db"]
+        "absolute_path_artifacts": ["L:\\_DATA\\GoodQ_Data\\db\\ucf\\ucf_ledger.db"]
     }
     envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
     assert rc == 0

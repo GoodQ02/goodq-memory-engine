@@ -61,8 +61,8 @@ def setup_validator_env(tmp_path, monkeypatch):
     monkeypatch.setattr(scripts.ucf.validate_ucf_epoch, "load_configs", lambda x: cfg_data)
     
     # Initialize UCF DB path
-    expected_db_dir = tmp_path / "epochs" / "db" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     ucf_db_path = expected_db_dir / "ucf_ledger.db"
     
     ucf_module = _load_ucf_ledger()
@@ -700,8 +700,8 @@ def setup_gapc_env(tmp_path, monkeypatch):
     monkeypatch.setattr(scripts.ucf.validate_ucf_epoch, "load_configs", lambda x: cfg_data)
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    expected_db_dir = tmp_path / "epochs" / "db" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     ucf_db_path = expected_db_dir / "ucf_ledger.db"
 
     ucf_module = _load_ucf_ledger()

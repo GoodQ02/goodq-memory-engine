@@ -4979,6 +4979,7 @@ def _log_audio_to_ucf_ledger(
                     # Backfill ucf_frame_id to FAISS sidecar DB
                     map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
                     if map_db and os.path.isfile(map_db):
+                        con = None
                         try:
                             import sqlite3
                             con = sqlite3.connect(map_db, check_same_thread=False)
@@ -4987,9 +4988,11 @@ def _log_audio_to_ucf_ledger(
                                     "UPDATE clap_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
                                     (ucf_frame_id, video_hash, clap_faiss_id)
                                 )
-                            con.close()
                         except Exception as e:
                             logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLAP: {e}")
+                        finally:
+                            if con is not None:
+                                con.close()
 
         # 4. Text embedding logging for audio transcript (optional — only if text_embed ran successfully)
         audio_text_embed_meta = item.get('audio_text_embed_meta') or {}
@@ -5351,6 +5354,7 @@ def _log_visual_to_ucf_ledger(
             # Backfill ucf_frame_id to FAISS sidecar DB
             map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
             if map_db and os.path.isfile(map_db):
+                con = None
                 try:
                     import sqlite3
                     con = sqlite3.connect(map_db, check_same_thread=False)
@@ -5359,9 +5363,11 @@ def _log_visual_to_ucf_ledger(
                             "UPDATE dino_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
                             (frame_id, video_hash, dino_meta.get('faiss_id'))
                         )
-                    con.close()
                 except Exception as e:
                     logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for DINO: {e}")
+                finally:
+                    if con is not None:
+                        con.close()
 
         # 6. CLIP Visual Embeddings
         if item.get('clip_meta') and item.get('clip_meta', {}).get('status') == 'ok':
@@ -5427,6 +5433,7 @@ def _log_visual_to_ucf_ledger(
             # Backfill ucf_frame_id to FAISS sidecar DB
             map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
             if map_db and os.path.isfile(map_db):
+                con = None
                 try:
                     import sqlite3
                     con = sqlite3.connect(map_db, check_same_thread=False)
@@ -5435,9 +5442,11 @@ def _log_visual_to_ucf_ledger(
                             "UPDATE clip_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
                             (frame_id, video_hash, clip_meta.get('faiss_id'))
                         )
-                    con.close()
                 except Exception as e:
                     logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLIP: {e}")
+                finally:
+                    if con is not None:
+                        con.close()
 
         # 7. Frame text embedding logging (optional — only if text_embed ran successfully)
         frame_text_embed_meta = item.get('frame_text_embed_meta') or {}
@@ -5612,16 +5621,20 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     clip_faiss_id = to_faiss_id(clip_id)
                     map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
                     if map_db and os.path.isfile(map_db):
+                        con = None
                         try:
+                            import sqlite3
                             con = sqlite3.connect(map_db, check_same_thread=False)
                             with con:
                                 con.execute(
                                     "UPDATE clip_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
                                     (ucf_frame_id, video_hash, clip_faiss_id)
                                 )
-                            con.close()
                         except Exception as e:
                             logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLIP: {e}")
+                        finally:
+                            if con is not None:
+                                con.close()
 
             # DINO Embedding
             dino_id = scene.get("dino_id")
@@ -5680,16 +5693,20 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     dino_faiss_id = to_faiss_id(dino_id)
                     map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
                     if map_db and os.path.isfile(map_db):
+                        con = None
                         try:
+                            import sqlite3
                             con = sqlite3.connect(map_db, check_same_thread=False)
                             with con:
                                 con.execute(
                                     "UPDATE dino_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
                                     (ucf_frame_id, video_hash, dino_faiss_id)
                                 )
-                            con.close()
                         except Exception as e:
                             logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for DINO: {e}")
+                        finally:
+                            if con is not None:
+                                con.close()
 
     except Exception as exc:
         logger.warning(f"[UCF] _log_scene_visual_embeddings_to_ucf_ledger failed: {exc}")

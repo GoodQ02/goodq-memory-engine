@@ -641,7 +641,12 @@ def run_validation(mode: str = "offline") -> int:
                                         expected_worker = worker_name
                                         expected_tag = cf.get("vector_model_tag", "")
                                         
-                                    if p_modality and p_modality != expected_modality and p_modality != worker_name.split("_")[-1]:
+                                    is_modality_match = (p_modality == expected_modality) or (
+                                        p_modality == worker_name.split("_")[-1]
+                                    ) or (
+                                        expected_modality == "text" and p_modality == "audio_transcript"
+                                    )
+                                    if p_modality and not is_modality_match:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
                                             f"Frame {fid}: Qdrant point modality mismatch. Expected '{expected_modality}', got '{p_modality}'"

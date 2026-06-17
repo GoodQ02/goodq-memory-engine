@@ -90,7 +90,7 @@ def test_ucf_audio_logging_mock(tmp_path, monkeypatch):
     )
     
     # Resolve expected DB path
-    expected_db_path = tmp_path / "epochs" / "db" / "ucf" / "ucf_ledger.db"
+    expected_db_path = db_dir / "ucf" / "ucf_ledger.db"
     assert expected_db_path.exists(), f"UCF database was not created at {expected_db_path}"
     
     # Query database to assert correctness

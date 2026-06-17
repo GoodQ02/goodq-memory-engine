@@ -119,8 +119,8 @@ def test_ucf_visual_logging_mock(tmp_path, monkeypatch):
     monkeypatch.setenv("GOODQ_RUN_ID", "test_run_visual")
     
     # Resolve expected DB path
-    expected_db_dir = tmp_path / "epochs" / "db" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     ucf_db_path = expected_db_dir / "ucf_ledger.db"
     
     # Register the media in the database so the dimensions 1920x1080 are resolved

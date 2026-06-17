@@ -57,8 +57,8 @@ def test_ucf_validation_logic(tmp_path, monkeypatch):
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     
     # Path where validator expects DB: clean path
-    expected_db_dir = tmp_path / "epochs" / "epoch_123" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
     
     # Import ucf_ledger dynamically from skill scripts
@@ -218,8 +218,8 @@ def test_ucf_validation_failure_modes(tmp_path, monkeypatch):
     monkeypatch.setattr("scripts.ucf.validate_ucf_epoch.REPO_ROOT", tmp_path)
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     
-    expected_db_dir = tmp_path / "epochs" / "epoch_456" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
     
     ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'

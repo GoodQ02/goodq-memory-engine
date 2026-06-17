@@ -413,13 +413,75 @@ def test_f4_01_linter_script_exists():
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     assert os.path.isfile(linter_path), f"verify_agent_workspace.py missing at {linter_path}"
 
-def test_f4_02_linter_exits_zero_on_success():
+@pytest.fixture
+def mock_linter_workspace(tmp_path, monkeypatch):
+    import shutil
+    import sys
+    mock_ws = tmp_path / "_AGENT"
+    mock_ws.mkdir(parents=True, exist_ok=True)
+    
+    # 1. Create all required subdirectories
+    required_dirs = [
+        "protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes",
+        "reports", "reports/bootstrap", "reports/audits", "reports/handoffs", "reports/cleanup"
+    ]
+    for rdir in required_dirs:
+        (mock_ws / rdir).mkdir(parents=True, exist_ok=True)
+        # Populate each subdirectory with a compliant markdown file to satisfy "not empty" check
+        if rdir not in ["lessons", "host_profiles", "quizzes"]:
+            (mock_ws / rdir / "dummy.md").write_text("Summary: Placeholder description\n", encoding="utf-8")
+
+    # 2. Populate specific subdirectories with required files/structures
+    # lessons must have files ending in .md, first line "Summary: <140 chars", then blank line
+    (mock_ws / "lessons" / "dummy_lesson.md").write_text("Summary: Lesson summary here.\n\nMore details of the lesson.\n", encoding="utf-8")
+    
+    # host_profiles md files must contain required headings
+    (mock_ws / "host_profiles" / "dummy_profile.md").write_text(
+        "# Profile\nHostname: mock-host\nRole: worker\nGPU: RTX 4070\nRAM: 32GB\nStorage: NVMe\nNetwork: LAN\nConstraints: None\n",
+        encoding="utf-8"
+    )
+    
+    # quizzes must have quizzes/goodq4all_ingestion_readiness.md with at least 8 Question headings
+    quiz_content = "\n".join([f"## Question {i}\nSome question text here.\n" for i in range(1, 9)])
+    (mock_ws / "quizzes" / "goodq4all_ingestion_readiness.md").write_text(quiz_content, encoding="utf-8")
+    
+    # 3. Create required root files
+    # INDEX.md must contain the doctrine sentence and register all md files in protocols, models_and_vram, workflows
+    index_content = (
+        "This folder is doctrine. The repository is implementation. If they conflict, stop and ask for evidence.\n\n"
+        "- [Dummy Protocol](protocols/dummy.md)\n"
+        "- [Dummy Model](models_and_vram/dummy.md)\n"
+        "- [Dummy Workflow](workflows/dummy.md)\n"
+    )
+    (mock_ws / "INDEX.md").write_text(index_content, encoding="utf-8")
+    (mock_ws / "bootstrap_agent.ps1").write_text("# powershell bootstrap script\n", encoding="utf-8")
+    (mock_ws / "README_FOR_AGENTS.md").write_text("README for agents. Authority Order: stability first.\n", encoding="utf-8")
+    (mock_ws / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    (mock_ws / ".agent_workspace_policy.json").write_text(
+        '{\n  "agents_may_create": ["reports/"],\n  "agents_must_not_create_without_approval": [],\n  "agents_may_edit": [],\n  "agents_must_not_edit_without_approval": []\n}\n',
+        encoding="utf-8"
+    )
+    
+    # 4. Copy verify_agent_workspace.py from original WORKSPACE_ROOT
+    orig_linter = os.path.join("C:/Users/jdben/My Drive/_AGENT", "verify_agent_workspace.py")
+    mock_linter = mock_ws / "verify_agent_workspace.py"
+    shutil.copy2(orig_linter, mock_linter)
+    
+    # 5. Monkeypatch WORKSPACE_ROOT globally in the test module
+    for mod_name, mod in list(sys.modules.items()):
+        if mod_name.endswith("test_agent_workspace") and mod:
+            monkeypatch.setattr(mod, "WORKSPACE_ROOT", str(mock_ws.resolve()))
+            
+    return mock_ws
+
+
+def test_f4_02_linter_exits_zero_on_success(mock_linter_workspace):
     """Verify the linter runs successfully and exits 0 on compliant workspace."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     res = subprocess.run(["python", linter_path], capture_output=True, text=True)
     assert res.returncode == 0, f"Linter exited with code {res.returncode}. Stderr: {res.stderr}"
 
-def test_f4_03_linter_validates_folders_exist():
+def test_f4_03_linter_validates_folders_exist(mock_linter_workspace):
     """Verify that the linter fails if one of the core workspace directories is missing."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     # Simulate missing folder by temporarily renaming it
@@ -433,7 +495,7 @@ def test_f4_03_linter_validates_folders_exist():
         finally:
             os.rename(temp_dir, lessons_dir)
 
-def test_f4_04_linter_validates_folders_not_empty():
+def test_f4_04_linter_validates_folders_not_empty(mock_linter_workspace):
     """Verify that the linter fails if a core workspace directory is empty."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     # Simulate empty folder
@@ -448,7 +510,7 @@ def test_f4_04_linter_validates_folders_not_empty():
         os.rmdir(lessons_dir)
         os.rename(temp_dir, lessons_dir)
 
-def test_f4_05_linter_validates_lessons_first_line():
+def test_f4_05_linter_validates_lessons_first_line(mock_linter_workspace):
     """Verify that the linter fails if a lesson file does not start with 'Summary: '."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     lessons_dir = os.path.join(WORKSPACE_ROOT, "lessons")
@@ -464,7 +526,7 @@ def test_f4_05_linter_validates_lessons_first_line():
         if os.path.exists(bad_lesson):
             os.remove(bad_lesson)
 
-def test_f4_06_linter_scans_trailing_slashes():
+def test_f4_06_linter_scans_trailing_slashes(mock_linter_workspace):
     """Verify that the linter flags variables or path definitions with trailing slashes."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
@@ -481,7 +543,7 @@ def test_f4_06_linter_scans_trailing_slashes():
         if os.path.exists(bad_file):
             os.remove(bad_file)
 
-def test_f4_07_linter_scans_drive_roots():
+def test_f4_07_linter_scans_drive_roots(mock_linter_workspace):
     """Verify that the linter flags hardcoded Windows drive roots in active md files."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
@@ -497,7 +559,7 @@ def test_f4_07_linter_scans_drive_roots():
         if os.path.exists(bad_file):
             os.remove(bad_file)
 
-def test_f4_08_linter_is_python3_compatible():
+def test_f4_08_linter_is_python3_compatible(mock_linter_workspace):
     """Verify the linter script compiles and runs under Python 3."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     res = subprocess.run(["python", "-m", "py_compile", linter_path], capture_output=True)
@@ -509,7 +571,7 @@ def test_f4_08_linter_is_python3_compatible():
         if os.path.isdir(pycache_path):
             shutil.rmtree(pycache_path, ignore_errors=True)
 
-def test_f4_09_linter_logs_errors_visible():
+def test_f4_09_linter_logs_errors_visible(mock_linter_workspace):
     """Verify that the linter outputs clear messages to stdout/stderr on failure."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     lessons_dir = os.path.join(WORKSPACE_ROOT, "lessons")

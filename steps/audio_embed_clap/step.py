@@ -551,6 +551,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         map_ok = False
         map_reason = None
         if map_db:
+            con = None
             try:
                 _ensure_clap_map(map_db)
                 con = sqlite3.connect(map_db, check_same_thread=False)
@@ -585,16 +586,17 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     e,
                 )
             finally:
-                try:
-                    con.close()  # type: ignore
-                except Exception as e:
-                    logger.warning(
-                        "audio_embed_clap operation failed operation=%s map_db=%s exc_type=%s exc=%s",
-                        "sqlite_map.close",
-                        map_db,
-                        type(e).__name__,
-                        e,
-                    )
+                if con is not None:
+                    try:
+                        con.close()  # type: ignore
+                    except Exception as e:
+                        logger.warning(
+                            "audio_embed_clap operation failed operation=%s map_db=%s exc_type=%s exc=%s",
+                            "sqlite_map.close",
+                            map_db,
+                            type(e).__name__,
+                            e,
+                        )
         # Upsert generic embedding metadata for recall
         embedding_ok = False
         embedding_reason = None

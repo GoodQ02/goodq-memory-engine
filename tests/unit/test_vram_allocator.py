@@ -8,16 +8,32 @@ from unittest.mock import MagicMock, patch
 from common.vram_allocator import VRAMAllocator, FileLock, STEP_VRAM_FRACTIONS, REGISTRY_PATH, LOCK_PATH
 
 @pytest.fixture(autouse=True)
-def clean_registry():
+def clean_registry(tmp_path, monkeypatch):
+    mock_dir = tmp_path / "vram_registry"
+    mock_dir.mkdir(parents=True, exist_ok=True)
+    mock_reg = mock_dir / "vram_registry.json"
+    mock_lock = mock_dir / "vram_registry.lock"
+    
+    import common.vram_allocator
+    monkeypatch.setattr(common.vram_allocator, "REGISTRY_DIR", mock_dir)
+    monkeypatch.setattr(common.vram_allocator, "REGISTRY_PATH", mock_reg)
+    monkeypatch.setattr(common.vram_allocator, "LOCK_PATH", mock_lock)
+    
+    import sys
+    for mod_name, mod in list(sys.modules.items()):
+        if mod_name.endswith("test_vram_allocator") and mod:
+            monkeypatch.setattr(mod, "REGISTRY_PATH", mock_reg)
+            monkeypatch.setattr(mod, "LOCK_PATH", mock_lock)
+
     # Remove registry and lock files if they exist before/after test
-    for path in [REGISTRY_PATH, LOCK_PATH]:
+    for path in [mock_reg, mock_lock]:
         if path.exists():
             try:
                 path.unlink()
             except OSError:
                 pass
     yield
-    for path in [REGISTRY_PATH, LOCK_PATH]:
+    for path in [mock_reg, mock_lock]:
         if path.exists():
             try:
                 path.unlink()

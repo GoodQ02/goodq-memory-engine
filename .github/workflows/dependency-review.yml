@@ -5,7 +5,12 @@ on:
     paths:
       - "environment.yml"
       - "environment.gpu.yml"
+      - "environment-baseline-lock.yml"
       - "setup.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "api/requirements.txt"
+      - "envs/**/requirements.txt"
       - "wsl2_audio/requirements*.txt"
 
 permissions:

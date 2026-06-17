@@ -18,6 +18,8 @@ on:
       - "tests/**"
       - "environment.yml"
       - "environment.gpu.yml"
+      - "environment-baseline-lock.yml"
+      - "requirements-baseline-lock.txt"
       - "wsl2_audio/**"
       - "setup.py"
       - "pytest.ini"
@@ -55,6 +57,10 @@ jobs:
       - name: Documentation drift lint
         shell: pwsh
         run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
+
+      - name: Dependency drift lint
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/docs/dependency_drift_lint.py
 
       - name: Banned token lint
         shell: pwsh

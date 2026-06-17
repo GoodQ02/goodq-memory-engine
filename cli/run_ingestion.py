@@ -4923,14 +4923,7 @@ def _log_audio_to_ucf_ledger(
             clap_embedding_id = clap_meta.get('embedding_id')
             clap_faiss_id = clap_meta.get('faiss_id')
             if clap_embedding_id and clap_faiss_id is not None:
-                # Collision-safe raw ref filename uses scene-level identifiers
-                scene_start_val = float(scene.get('start', 0.0) or 0.0)
-                scene_end_val = float(scene.get('end', scene_start_val) or scene_start_val)
-                scene_hash_str = hashlib.sha256(
-                    f"{video_hash}|{scene_start_val:.6f}|{scene_end_val:.6f}".encode('utf-8')
-                ).hexdigest()[:16]
-                clap_raw_ref_path = audio_artifact_dir / f"{scene_hash_str}_raw_clap.json"
-                clap_raw_ref_str = str(clap_raw_ref_path.resolve())
+                clap_raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_clap.json"
                 clap_payload = {
                     'embedding_id': clap_embedding_id,
                     'faiss_id': clap_faiss_id,
@@ -4939,9 +4932,11 @@ def _log_audio_to_ucf_ledger(
                     'faiss_committed': clap_meta.get('faiss_committed', False),
                     'qdrant_committed': clap_meta.get('qdrant_committed', False),
                 }
+                atomic_write_json(clap_raw_ref_path, clap_payload)
+                clap_raw_ref_str = str(clap_raw_ref_path.resolve())
                 scene_start_f = float(scene.get('start', 0.0) or 0.0)
                 scene_end_f = float(scene.get('end', scene_start_f) or scene_start_f)
-                client.log_frame(
+                ucf_frame_id = client.log_frame(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
                     run_id=run_id,
@@ -4962,17 +4957,46 @@ def _log_audio_to_ucf_ledger(
                     vector_collection=clap_meta.get('qdrant_collection') or 'audio',
                 )
 
+                if ucf_frame_id:
+                    # If Qdrant is enabled, backfill ucf_frame_id to Qdrant payload
+                    if clap_meta.get('qdrant_committed') and cfg.get('qdrant', {}).get('enabled', False):
+                        try:
+                            from steps.common.qdrant_client import build_qdrant_client
+                            q_client = build_qdrant_client(cfg, dim=512, key='audio')
+                            if q_client:
+                                normalized_key = q_client._normalize_point_id(clap_embedding_id)
+                                q_client.session.post(
+                                    f"{q_client.cfg.host}/collections/{q_client.cfg.collection}/points/payload?wait=true",
+                                    json={
+                                        "payload": {"ucf_frame_id": ucf_frame_id},
+                                        "points": [normalized_key]
+                                    },
+                                    timeout=5
+                                )
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update Qdrant payload with ucf_frame_id for CLAP: {e}")
+
+                    # Backfill ucf_frame_id to FAISS sidecar DB
+                    map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
+                    if map_db and os.path.isfile(map_db):
+                        try:
+                            import sqlite3
+                            con = sqlite3.connect(map_db, check_same_thread=False)
+                            with con:
+                                con.execute(
+                                    "UPDATE clap_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
+                                    (ucf_frame_id, video_hash, clap_faiss_id)
+                                )
+                            con.close()
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLAP: {e}")
+
         # 4. Text embedding logging for audio transcript (optional — only if text_embed ran successfully)
         audio_text_embed_meta = item.get('audio_text_embed_meta') or {}
         if isinstance(audio_text_embed_meta, dict) and audio_text_embed_meta.get('status') == 'ok':
             text_embedding_id = audio_text_embed_meta.get('embedding_id')
             if text_embedding_id:
-                scene_start_val = float(scene.get('start', 0.0) or 0.0)
-                scene_end_val = float(scene.get('end', scene_start_val) or scene_start_val)
-                scene_hash_str = hashlib.sha256(
-                    f"{video_hash}|{scene_start_val:.6f}|{scene_end_val:.6f}".encode('utf-8')
-                ).hexdigest()[:16]
-                text_embed_raw_ref_path = audio_artifact_dir / f"{scene_hash_str}_raw_text_embed_audio.json"
+                text_embed_raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_text_embed_audio.json"
                 text_embed_payload = {
                     'embedding_id': text_embedding_id,
                     'embedding_source': 'audio_transcript',
@@ -5481,6 +5505,194 @@ def _log_visual_to_ucf_ledger(
         client.close()
     except Exception as e:
         logger.warning(f"[UCF] Visual UCF logging failed: {type(e).__name__}: {str(e)}")
+
+
+def _log_scene_visual_embeddings_to_ucf_ledger(
+    cfg: Dict[str, Any],
+    video_hash: str,
+    epoch_id: str,
+    run_id: str,
+    processing_dir: Path,
+    scene_outputs: List[Dict[str, Any]],
+    ucf_client: Any,
+) -> None:
+    """Logs Phase 6a scene CLIP and DINO visual embeddings to ucf_ledger.db and updates Qdrant/FAISS mapping."""
+    try:
+        import json
+        import os
+        from pathlib import Path
+        import sqlite3
+        from steps.common.memory import to_faiss_id
+
+        processing_dir = Path(processing_dir)
+        scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+        if not scene_manifest_path.exists():
+            logger.warning(f"[UCF] scene_manifest.json not found at {scene_manifest_path}. Skipping visual scene UCF logging.")
+            return
+
+        with open(scene_manifest_path, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+
+        scenes = manifest_data.get("scenes", []) if isinstance(manifest_data, dict) else []
+        if not scenes:
+            logger.warning("[UCF] No scenes found in scene_manifest.json.")
+            return
+
+        ucf_raw_refs_dir = processing_dir / "video" / "ucf_raw_refs"
+        ucf_raw_refs_dir.mkdir(parents=True, exist_ok=True)
+
+        qdrant_enabled = cfg.get("qdrant", {}).get("enabled", False)
+        clip_collection = cfg.get("qdrant", {}).get("collections", {}).get("clip", "goodq_clip_scenes")
+        dino_collection = cfg.get("qdrant", {}).get("collections", {}).get("dino", "goodq_dino_scenes")
+
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                continue
+            scene_id = scene.get("id") or scene.get("scene_id")
+            if not scene_id:
+                continue
+
+            t_start = float(scene.get("start", 0.0) or 0.0)
+            t_end = float(scene.get("end", t_start) or t_start)
+
+            # CLIP Embedding
+            clip_id = scene.get("clip_id")
+            if clip_id:
+                clip_raw_ref_path = ucf_raw_refs_dir / f"{scene_id}_raw_clip.json"
+                clip_payload = {
+                    "embedding_id": clip_id,
+                    "embedding_source": "scene_visual_embeddings_clip",
+                    "engine": "openai/clip-vit-large-patch14",
+                    "qdrant_collection": clip_collection,
+                }
+                atomic_write_json(clip_raw_ref_path, clip_payload)
+                clip_raw_ref_str = str(clip_raw_ref_path.resolve())
+
+                ucf_frame_id = ucf_client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=t_start,
+                    t_end=t_end,
+                    modality="video",
+                    worker_name="scene_visual_embeddings_clip",
+                    model_tag="openai/clip-vit-large-patch14",
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=clip_raw_ref_str,
+                    payload=clip_payload,
+                    promotion_status="staged",
+                    vector_key=clip_id,
+                    vector_backend=qdrant_enabled and "qdrant" or "faiss",
+                    vector_dim=768,
+                    vector_model_tag="openai/clip-vit-large-patch14",
+                    vector_collection=clip_collection,
+                )
+
+                if ucf_frame_id:
+                    # Qdrant backfill
+                    if qdrant_enabled:
+                        try:
+                            from steps.common.qdrant_client import build_qdrant_client
+                            q_client = build_qdrant_client(cfg, dim=768, key="clip")
+                            if q_client:
+                                normalized_key = q_client._normalize_point_id(clip_id)
+                                q_client.session.post(
+                                    f"{q_client.cfg.host}/collections/{q_client.cfg.collection}/points/payload?wait=true",
+                                    json={
+                                        "payload": {"ucf_frame_id": ucf_frame_id},
+                                        "points": [normalized_key]
+                                    },
+                                    timeout=5
+                                )
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update CLIP Qdrant payload with ucf_frame_id: {e}")
+
+                    # FAISS sidecar DB backfill
+                    clip_faiss_id = to_faiss_id(clip_id)
+                    map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
+                    if map_db and os.path.isfile(map_db):
+                        try:
+                            con = sqlite3.connect(map_db, check_same_thread=False)
+                            with con:
+                                con.execute(
+                                    "UPDATE clip_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
+                                    (ucf_frame_id, video_hash, clip_faiss_id)
+                                )
+                            con.close()
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for CLIP: {e}")
+
+            # DINO Embedding
+            dino_id = scene.get("dino_id")
+            if dino_id:
+                dino_raw_ref_path = ucf_raw_refs_dir / f"{scene_id}_raw_dino.json"
+                dino_payload = {
+                    "embedding_id": dino_id,
+                    "embedding_source": "scene_visual_embeddings_dino",
+                    "engine": "facebook/dinov2-large",
+                    "qdrant_collection": dino_collection,
+                }
+                atomic_write_json(dino_raw_ref_path, dino_payload)
+                dino_raw_ref_str = str(dino_raw_ref_path.resolve())
+
+                ucf_frame_id = ucf_client.log_frame(
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    run_id=run_id,
+                    t_start=t_start,
+                    t_end=t_end,
+                    modality="video",
+                    worker_name="scene_visual_embeddings_dino",
+                    model_tag="facebook/dinov2-large",
+                    confidence=1.0,
+                    source_artifact_id=scene_id,
+                    raw_ref=dino_raw_ref_str,
+                    payload=dino_payload,
+                    promotion_status="staged",
+                    vector_key=dino_id,
+                    vector_backend=qdrant_enabled and "qdrant" or "faiss",
+                    vector_dim=1024,
+                    vector_model_tag="facebook/dinov2-large",
+                    vector_collection=dino_collection,
+                )
+
+                if ucf_frame_id:
+                    # Qdrant backfill
+                    if qdrant_enabled:
+                        try:
+                            from steps.common.qdrant_client import build_qdrant_client
+                            q_client = build_qdrant_client(cfg, dim=1024, key="dino")
+                            if q_client:
+                                normalized_key = q_client._normalize_point_id(dino_id)
+                                q_client.session.post(
+                                    f"{q_client.cfg.host}/collections/{q_client.cfg.collection}/points/payload?wait=true",
+                                    json={
+                                        "payload": {"ucf_frame_id": ucf_frame_id},
+                                        "points": [normalized_key]
+                                    },
+                                    timeout=5
+                                )
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update DINO Qdrant payload with ucf_frame_id: {e}")
+
+                    # FAISS sidecar DB backfill
+                    dino_faiss_id = to_faiss_id(dino_id)
+                    map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
+                    if map_db and os.path.isfile(map_db):
+                        try:
+                            con = sqlite3.connect(map_db, check_same_thread=False)
+                            with con:
+                                con.execute(
+                                    "UPDATE dino_id_map SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?",
+                                    (ucf_frame_id, video_hash, dino_faiss_id)
+                                )
+                            con.close()
+                        except Exception as e:
+                            logger.warning(f"[UCF] Failed to update FAISS sidecar DB with ucf_frame_id for DINO: {e}")
+
+    except Exception as exc:
+        logger.warning(f"[UCF] _log_scene_visual_embeddings_to_ucf_ledger failed: {exc}")
 
 
 def _process_audio(
@@ -6465,7 +6677,9 @@ async def _process_audio_async(
     if isinstance(metadata_res, dict) and metadata_res.get("status") == "ok":
         item.update(metadata_res.get("outputs", {}))
 
+    has_audio_file = False
     if audio_path and audio_path.exists():
+        has_audio_file = True
         if contract_selected in {'wsl', 'windows', 'none'}:
             use_wsl_unified_audio = contract_selected == 'wsl'
         else:
@@ -6600,16 +6814,6 @@ async def _process_audio_async(
             # Save raw un-flattened diarization
             await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
 
-        # Call UCF Audio logging hook
-        await asyncio.to_thread(
-            _log_audio_to_ucf_ledger,
-            cfg_json,
-            video_hash,
-            scene_id,
-            scene,
-            audio_artifact_dir,
-            item,
-        )
     else:
         logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
 
@@ -6655,6 +6859,18 @@ async def _process_audio_async(
             audio_text_embed_meta = embed_outputs.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
+
+    if has_audio_file:
+        # Call UCF Audio logging hook after optional enrichment steps so embedding IDs are available
+        await asyncio.to_thread(
+            _log_audio_to_ucf_ledger,
+            cfg_json,
+            video_hash,
+            scene_id,
+            scene,
+            audio_artifact_dir,
+            item,
+        )
 
     return {
         'path': str(audio_path),
@@ -7951,6 +8167,32 @@ def run(
                             manifest_updated = True
                             if embeddings_result.get('scenes'):
                                 _rehydrate_video_result_scenes_from_manifest({'scenes': scene_outputs}, str(scene_manifest_path))
+                            # Log visual scene embeddings to UCF ledger
+                            try:
+                                _db_dir = (cfg.get('paths', {}) or {}).get('db_dir')
+                                if _db_dir:
+                                    _ucf_db_dir = Path(_db_dir) / 'ucf'
+                                    _ucf_db_dir.mkdir(parents=True, exist_ok=True)
+                                    _ucf_db_path = _ucf_db_dir / 'ucf_ledger.db'
+                                    ucf_module = _load_ucf_ledger()
+                                    UCFLedgerClient = ucf_module.UCFLedgerClient
+                                    _ucf_client = UCFLedgerClient(str(_ucf_db_path))
+                                    _ucf_client.init_schema()
+                                    
+                                    _epoch_id = os.path.basename(_db_dir)
+                                    _run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
+                                    
+                                    _log_scene_visual_embeddings_to_ucf_ledger(
+                                        cfg,
+                                        video_hash,
+                                        _epoch_id,
+                                        _run_id,
+                                        processing_dir,
+                                        scene_outputs,
+                                        _ucf_client
+                                    )
+                            except Exception as ucf_err:
+                                logger.warning(f"[UCF] Phase 6a scene visual logging failed: {ucf_err}")
                     except Exception as p6a_err:
                         logger.warning(f"[WINDOW {w_idx}] Phase 6a incremental run failed: {p6a_err}")
 

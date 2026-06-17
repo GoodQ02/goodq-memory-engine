@@ -19,6 +19,8 @@ os.environ.setdefault("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agen
 
 # Codebase configuration and client imports
 from steps.common.config_loader import load_configs
+from steps.common.memory import ensure_id_map_table_schema
+
 from steps.common.llm_model_factory import build_llm_models
 from lib.llm_client import LLMClient
 
@@ -1143,33 +1145,15 @@ class MiniAgentClient:
                         if sidecar_db_path:
                             try:
                                 Path(sidecar_db_path).parent.mkdir(parents=True, exist_ok=True)
+                                ensure_id_map_table_schema(sidecar_db_path, table_name)
                                 s_conn = sqlite3.connect(sidecar_db_path)
-                                # Check schema and drop if outdated
-                                cursor = s_conn.execute(f"PRAGMA table_info({table_name})")
-                                info = cursor.fetchall()
-                                pk_cols = [row[1] for row in info if row[5] > 0]
-                                if info and set(pk_cols) != {"video_hash", "faiss_id"}:
-                                    s_conn.execute(f"DROP TABLE {table_name}")
-
-                                s_conn.execute(f"""
-                                    CREATE TABLE IF NOT EXISTS {table_name} (
-                                        video_hash TEXT,
-                                        faiss_id INTEGER,
-                                        hash TEXT,
-                                        source_path TEXT,
-                                        epoch_id TEXT,
-                                        scene_id TEXT,
-                                        worker_name TEXT,
-                                        vector_model_tag TEXT,
-                                        modality TEXT,
-                                        ucf_frame_id INTEGER,
-                                        PRIMARY KEY (video_hash, faiss_id)
-                                    )
-                                """)
                                 p_payload = r.get("payload", {})
                                 faiss_id = p_payload.get("faiss_id")
                                 if faiss_id is not None:
-                                    cursor = s_conn.execute(f"UPDATE {table_name} SET ucf_frame_id = ? WHERE video_hash = ? AND faiss_id = ?", (fid, r.get("video_hash"), int(faiss_id)))
+                                    cursor = s_conn.execute(
+                                        f"UPDATE {table_name} SET ucf_frame_id = ?, video_hash = ? WHERE (video_hash = ? OR video_hash = '' OR video_hash IS NULL) AND faiss_id = ?",
+                                        (fid, r.get("video_hash"), r.get("video_hash"), int(faiss_id))
+                                    )
                                     if cursor.rowcount == 0:
                                         s_conn.execute(f"""
                                             INSERT INTO {table_name} (video_hash, faiss_id, hash, source_path, epoch_id, scene_id, worker_name, vector_model_tag, modality, ucf_frame_id)

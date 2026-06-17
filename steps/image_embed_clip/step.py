@@ -26,6 +26,8 @@ except ImportError as exc:
 
 from steps.text_embed.step import _content_fingerprint
 from steps.common.qdrant_client import build_qdrant_client
+from steps.common.memory import ensure_id_map_table_schema
+
 
 
 _CLIP = {"model": None, "proc": None, "device": "cpu"}
@@ -197,35 +199,9 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if map_db:
             con = None
             try:
-                os.makedirs(os.path.dirname(map_db), exist_ok=True)
+                ensure_id_map_table_schema(map_db, "clip_id_map")
                 con = sqlite3.connect(map_db, check_same_thread=False)
                 with con:
-                    # Check schema and drop if outdated
-                    cursor = con.execute("PRAGMA table_info(clip_id_map)")
-                    info = cursor.fetchall()
-                    pk_cols = [row[1] for row in info if row[5] > 0]
-                    if info and set(pk_cols) != {"video_hash", "faiss_id"}:
-                        con.execute("DROP TABLE clip_id_map")
-
-                    con.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS clip_id_map (
-                            video_hash TEXT,
-                            faiss_id INTEGER,
-                            hash TEXT,
-                            source_path TEXT,
-                            created_at TEXT,
-                            epoch_id TEXT,
-                            scene_id TEXT,
-                            scene_hash TEXT,
-                            worker_name TEXT,
-                            vector_model_tag TEXT,
-                            modality TEXT,
-                            ucf_frame_id INTEGER,
-                            PRIMARY KEY (video_hash, faiss_id)
-                        )
-                        """
-                    )
                     con.execute(
                         """
                         INSERT OR REPLACE INTO clip_id_map(

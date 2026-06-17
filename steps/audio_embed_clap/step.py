@@ -3,6 +3,8 @@ from __future__ import annotations
 from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
+from steps.common.memory import ensure_id_map_table_schema
+
 
 
 from typing import Any, Dict, Optional
@@ -301,40 +303,8 @@ def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
 
 
 def _ensure_clap_map(db_path: str) -> None:
-    try:
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        con = sqlite3.connect(db_path, check_same_thread=False)
-        with con:
-            # Check schema and drop if outdated
-            cursor = con.execute("PRAGMA table_info(clap_id_map)")
-            info = cursor.fetchall()
-            pk_cols = [row[1] for row in info if row[5] > 0]
-            if info and set(pk_cols) != {"video_hash", "faiss_id"}:
-                con.execute("DROP TABLE clap_id_map")
+    ensure_id_map_table_schema(db_path, "clap_id_map")
 
-            con.execute(
-                """
-                CREATE TABLE IF NOT EXISTS clap_id_map (
-                    video_hash TEXT,
-                    faiss_id INTEGER,
-                    hash TEXT,
-                    source_path TEXT,
-                    created_at TEXT,
-                    PRIMARY KEY (video_hash, faiss_id)
-                )
-                """
-            )
-    finally:
-        try:
-            con.close()  # type: ignore
-        except Exception as e:
-            logger.warning(
-                "audio_embed_clap operation failed operation=%s db_path=%s exc_type=%s exc=%s",
-                "ensure_clap_map.close",
-                db_path,
-                type(e).__name__,
-                e,
-            )
 
 
 def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -586,9 +556,23 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 con = sqlite3.connect(map_db, check_same_thread=False)
                 with con:
                     video_hash = item.get("video_hash") or item.get("video_id") or "unknown_video"
+                    epoch_id = item.get("epoch_id") or os.path.basename((cfg.get("paths", {}) or {}).get("db_dir") or "") or "unknown_epoch"
+                    scene_id = item.get("scene_id") or item.get("scene_index")
+                    if scene_id is not None and not isinstance(scene_id, str):
+                        scene_id = f"scene_{int(scene_id):04d}"
                     con.execute(
-                        "INSERT OR REPLACE INTO clap_id_map(video_hash, faiss_id, hash, source_path, created_at) VALUES (?,?,?,?,?)",
-                        (video_hash, faiss_id, h, path, datetime.utcnow().isoformat()),
+                        """
+                        INSERT OR REPLACE INTO clap_id_map(
+                            video_hash, faiss_id, hash, source_path, created_at,
+                            epoch_id, scene_id, scene_hash, worker_name, vector_model_tag,
+                            modality, ucf_frame_id
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)
+                        """,
+                        (
+                            video_hash, faiss_id, h, path, datetime.utcnow().isoformat(),
+                            epoch_id, scene_id, h, "audio_embed_clap", "laion/clap-htsat-unfused",
+                            "audio"
+                        ),
                     )
                 map_ok = True
             except Exception as e:

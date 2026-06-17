@@ -154,22 +154,25 @@ def seed_missing_assets() -> None:
     def _ensure_id_map(db_path: str | None, table: str, sample_path: str) -> None:
         if not db_path:
             return
+        from steps.common.memory import ensure_id_map_table_schema
+        ensure_id_map_table_schema(db_path, table)
         p = Path(str(db_path))
-        p.parent.mkdir(parents=True, exist_ok=True)
         con = sqlite3.connect(str(p), check_same_thread=False)
         try:
             with con:
-                con.execute(
-                    f"CREATE TABLE IF NOT EXISTS {table} (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, created_at TEXT)"
-                )
                 cur = con.execute(f"SELECT COUNT(*) FROM {table}")
                 count = int(cur.fetchone()[0])
                 if count == 0:
                     from datetime import datetime
                     now = datetime.utcnow().isoformat()
                     con.execute(
-                        f"INSERT OR REPLACE INTO {table}(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
-                        (1, "seed_sentinel", sample_path, now),
+                        f"""
+                        INSERT OR REPLACE INTO {table}(
+                            video_hash, faiss_id, hash, source_path, created_at,
+                            epoch_id, scene_id, scene_hash, worker_name, vector_model_tag, modality, ucf_frame_id
+                        ) VALUES (?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,NULL,NULL)
+                        """,
+                        ("sentinel_video_hash", 1, "seed_sentinel", sample_path, now),
                     )
                     changes["created"].append({table: str(p)})
         finally:
@@ -195,6 +198,7 @@ def _populate_id_map_from_embeddings(paths: Dict[str, Any]) -> Dict[str, Any]:
     import sqlite3
     from datetime import datetime
     from pathlib import Path
+    from steps.common.memory import ensure_id_map_table_schema
 
     db_path = paths.get("db_path")
     if not db_path:
@@ -203,25 +207,77 @@ def _populate_id_map_from_embeddings(paths: Dict[str, Any]) -> Dict[str, Any]:
     con.row_factory = sqlite3.Row
     try:
         cur = con.cursor()
-        cur.execute("SELECT hash, faiss_id, source_path, modality FROM embeddings WHERE faiss_id IS NOT NULL")
+        cur.execute(
+            """
+            SELECT 
+                e.hash, 
+                e.faiss_id, 
+                e.source_path, 
+                e.modality, 
+                e.scene_id, 
+                e.created_at,
+                s.video_hash 
+            FROM embeddings e
+            LEFT JOIN scenes s ON e.scene_id = s.id
+            WHERE e.faiss_id IS NOT NULL
+            """
+        )
         rows = cur.fetchall()
         now = datetime.utcnow().isoformat()
+        
         def upsert(dbfile: str | None, table: str, filt_mod: str) -> int:
             if not dbfile:
                 return 0
+            ensure_id_map_table_schema(dbfile, table)
+            
+            # Resolve metadata based on filt_mod
+            if filt_mod == "audio":
+                model_tag = "laion/clap-htsat-fused"
+                worker_name = "audio_embed_clap"
+                modality = "audio"
+            elif filt_mod == "clip":
+                model_tag = "openai/clip-vit-large-patch14"
+                worker_name = "image_embed_clip"
+                modality = "video"
+            elif filt_mod == "dino":
+                model_tag = "facebook/dinov2-large"
+                worker_name = "image_embed_dino"
+                modality = "video"
+            else:
+                model_tag = None
+                worker_name = None
+                modality = None
+                
             p = Path(str(dbfile))
-            p.parent.mkdir(parents=True, exist_ok=True)
             c = sqlite3.connect(str(p), check_same_thread=False)
             try:
                 with c:
-                    c.execute(f"CREATE TABLE IF NOT EXISTS {table} (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, created_at TEXT)")
                     count = 0
                     for r in rows:
                         if (r["modality"] or "").lower() != filt_mod:
                             continue
                         c.execute(
-                            f"INSERT OR REPLACE INTO {table}(faiss_id, hash, source_path, created_at) VALUES (?,?,?,?)",
-                            (int(r["faiss_id"]), str(r["hash"]), str(r["source_path"] or ""), now),
+                            f"""
+                            INSERT OR REPLACE INTO {table} (
+                                video_hash, faiss_id, hash, source_path, created_at,
+                                epoch_id, scene_id, scene_hash, worker_name, vector_model_tag,
+                                modality, ucf_frame_id
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                r["video_hash"] or "",
+                                int(r["faiss_id"]),
+                                r["hash"],
+                                r["source_path"] or "",
+                                r["created_at"] or now,
+                                None,
+                                r["scene_id"],
+                                r["hash"],
+                                worker_name,
+                                model_tag,
+                                modality,
+                                None
+                            ),
                         )
                         count += 1
                     return count
@@ -230,10 +286,11 @@ def _populate_id_map_from_embeddings(paths: Dict[str, Any]) -> Dict[str, Any]:
                     c.close()
                 except Exception:
                     pass
+
         wrote = {
             "clap_id_map": upsert(paths.get("clap_id_map_db"), "clap_id_map", "audio"),
-            "clip_id_map": upsert(paths.get("clip_id_map_db"), "clip_id_map", "image"),
-            "dino_id_map": upsert(paths.get("dino_id_map_db"), "dino_id_map", "image"),
+            "clip_id_map": upsert(paths.get("clip_id_map_db"), "clip_id_map", "clip"),
+            "dino_id_map": upsert(paths.get("dino_id_map_db"), "dino_id_map", "dino"),
         }
         return {"status": "ok", "wrote": wrote, "rows_seen": len(rows)}
     finally:

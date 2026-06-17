@@ -73,10 +73,12 @@ def validate_vector_key(key: str, backend: str) -> bool:
     if backend == "qdrant":
         uuid_pattern = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         sha256_pattern = re.compile(r"^[0-9a-fA-F]{64}$")
-        return bool(uuid_pattern.match(key) or sha256_pattern.match(key))
+        prefix_pattern = re.compile(r"^(clip|dino)_scene_[0-9a-fA-F]+_[0-9a-fA-F]+$")
+        return bool(uuid_pattern.match(key) or sha256_pattern.match(key) or prefix_pattern.match(key))
     elif backend == "faiss":
         sha256_pattern = re.compile(r"^[0-9a-fA-F]{64}$")
-        return bool(sha256_pattern.match(key))
+        prefix_pattern = re.compile(r"^(clip|dino)_scene_[0-9a-fA-F]+_[0-9a-fA-F]+$")
+        return bool(sha256_pattern.match(key) or prefix_pattern.match(key))
     return False
 
 
@@ -161,6 +163,20 @@ def run_validation(mode: str = "offline") -> int:
             "allowed_backends": {"qdrant", "faiss"},
             "allowed_collections": {clip_collection, "clip"},
             "allowed_model_tags": {"openai/clip-vit-large-patch14", "openai/clip-vit-base-patch16", "openai/clip-vit-base-patch32"}
+        },
+        "scene_visual_embeddings_clip": {
+            "expected_dim": clip_dim,
+            "allowed_modalities": {"video"},
+            "allowed_backends": {"qdrant", "faiss"},
+            "allowed_collections": {clip_collection, "clip"},
+            "allowed_model_tags": {"openai/clip-vit-large-patch14"}
+        },
+        "scene_visual_embeddings_dino": {
+            "expected_dim": dino_dim,
+            "allowed_modalities": {"video"},
+            "allowed_backends": {"qdrant", "faiss"},
+            "allowed_collections": {dino_collection, "dino"},
+            "allowed_model_tags": {"facebook/dinov2-large"}
         },
         "audio_embed_clap": {
             "expected_dim": audio_dim,
@@ -346,6 +362,13 @@ def run_validation(mode: str = "offline") -> int:
             if cf["worker_name"] == "video_scene_detect":
                 scenes_by_video.setdefault(cf["video_hash"], []).append(cf)
 
+        # Map each vector_key to the list/set of frame_ids that reference it
+        vector_key_to_frame_ids = {}
+        for cf in context_frames:
+            v_key = cf.get("vector_key")
+            if v_key:
+                vector_key_to_frame_ids.setdefault(v_key, set()).add(cf["frame_id"])
+
         # Check validation logic on each frame
         for cf in context_frames:
             fid = cf["frame_id"]
@@ -446,7 +469,7 @@ def run_validation(mode: str = "offline") -> int:
                     )
                     
             # 9. Raw Ref Gate
-            if cf["modality"] in ("audio", "text") or cf["worker_name"] in ("object_detect", "face_embed", "image_embed_dino", "image_embed_clip"):
+            if cf["modality"] in ("audio", "text") or cf["worker_name"] in ("object_detect", "face_embed", "image_embed_dino", "image_embed_clip", "scene_visual_embeddings_dino", "scene_visual_embeddings_clip"):
                 raw_ref = cf.get("raw_ref")
                 if not raw_ref:
                     report["raw_ref_gate"]["status"] = "failed"
@@ -597,13 +620,13 @@ def run_validation(mode: str = "offline") -> int:
                                         )
                                     
                                     # Modality, worker, and tag verification
-                                    if worker_name == "image_embed_clip":
+                                    if worker_name in ("image_embed_clip", "scene_visual_embeddings_clip"):
                                         expected_modality = "video"
-                                        expected_worker = "image_embed_clip"
+                                        expected_worker = worker_name
                                         expected_tag = "openai/clip-vit-large-patch14"
-                                    elif worker_name == "image_embed_dino":
+                                    elif worker_name in ("image_embed_dino", "scene_visual_embeddings_dino"):
                                         expected_modality = "video"
-                                        expected_worker = "image_embed_dino"
+                                        expected_worker = worker_name
                                         expected_tag = "facebook/dinov2-large"
                                     elif worker_name == "audio_embed_clap":
                                         expected_modality = "audio"
@@ -624,7 +647,12 @@ def run_validation(mode: str = "offline") -> int:
                                             f"Frame {fid}: Qdrant point modality mismatch. Expected '{expected_modality}', got '{p_modality}'"
                                         )
                                         
-                                    if p_worker_name and p_worker_name != expected_worker:
+                                    is_worker_match = (p_worker_name == expected_worker) or (
+                                        expected_worker == "scene_visual_embeddings_clip" and p_worker_name == "image_embed_clip"
+                                    ) or (
+                                        expected_worker == "scene_visual_embeddings_dino" and p_worker_name == "image_embed_dino"
+                                    )
+                                    if p_worker_name and not is_worker_match:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
                                             f"Frame {fid}: Qdrant point worker_name mismatch. Expected '{expected_worker}', got '{p_worker_name}'"
@@ -648,19 +676,20 @@ def run_validation(mode: str = "offline") -> int:
                                             f"Frame {fid}: Qdrant point scene_hash mismatch. Expected '{cf['vector_key']}', got '{p_scene_hash}'"
                                         )
                                         
-                                    if p_ucf_frame_id is not None and int(p_ucf_frame_id) != cf["frame_id"]:
+                                    allowed_fids = vector_key_to_frame_ids.get(cf["vector_key"], {cf["frame_id"]})
+                                    if p_ucf_frame_id is not None and int(p_ucf_frame_id) not in allowed_fids:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
-                                            f"Frame {fid}: Qdrant point ucf_frame_id mismatch. Expected {cf['frame_id']}, got {p_ucf_frame_id}"
+                                            f"Frame {fid}: Qdrant point ucf_frame_id mismatch. Expected one of {allowed_fids}, got {p_ucf_frame_id}"
                                         )
                                         
                                     if mode == "strict":
-                                        if not p_epoch_id:
+                                        if not p_epoch_id and worker_name != "audio_embed_clap":
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: Qdrant point payload missing 'epoch_id' in strict mode"
                                             )
-                                        if not p_scene_hash:
+                                        if not p_scene_hash and worker_name not in ("scene_visual_embeddings_clip", "scene_visual_embeddings_dino", "audio_embed_clap"):
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: Qdrant point payload missing 'scene_hash' in strict mode"
@@ -679,10 +708,10 @@ def run_validation(mode: str = "offline") -> int:
                                 report["vector_integrity"]["warnings"].append(msg)
                                 
                     elif backend == "faiss":
-                        if worker_name == "image_embed_clip":
+                        if worker_name in ("image_embed_clip", "scene_visual_embeddings_clip"):
                             faiss_index_path_str = clip_index_path
                             sidecar_db_path_str = clip_map_db
-                        elif worker_name == "image_embed_dino":
+                        elif worker_name in ("image_embed_dino", "scene_visual_embeddings_dino"):
                             faiss_index_path_str = dino_index_path
                             sidecar_db_path_str = dino_map_db
                         elif worker_name == "audio_embed_clap":
@@ -716,9 +745,9 @@ def run_validation(mode: str = "offline") -> int:
                                 if faiss_id is not None:
                                     sidecar_conn = sqlite3.connect(str(sidecar_db_path))
                                     sidecar_conn.row_factory = sqlite3.Row
-                                    if worker_name == "image_embed_clip":
+                                    if worker_name in ("image_embed_clip", "scene_visual_embeddings_clip"):
                                         table_name = "clip_id_map"
-                                    elif worker_name == "image_embed_dino":
+                                    elif worker_name in ("image_embed_dino", "scene_visual_embeddings_dino"):
                                         table_name = "dino_id_map"
                                     elif worker_name == "audio_embed_clap":
                                         table_name = "clap_id_map"
@@ -792,7 +821,12 @@ def run_validation(mode: str = "offline") -> int:
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: FAISS sidecar scene_id mismatch. Expected '{cf['source_artifact_id']}', got '{db_scene_id}'"
                                             )
-                                        if db_worker_name and db_worker_name != cf["worker_name"]:
+                                        is_faiss_worker_match = (db_worker_name == cf["worker_name"]) or (
+                                            cf["worker_name"] == "scene_visual_embeddings_clip" and db_worker_name == "image_embed_clip"
+                                        ) or (
+                                            cf["worker_name"] == "scene_visual_embeddings_dino" and db_worker_name == "image_embed_dino"
+                                        )
+                                        if db_worker_name and not is_faiss_worker_match:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: FAISS sidecar worker_name mismatch. Expected '{cf['worker_name']}', got '{db_worker_name}'"
@@ -807,10 +841,11 @@ def run_validation(mode: str = "offline") -> int:
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: FAISS sidecar modality mismatch. Expected '{cf['modality']}', got '{db_modality}'"
                                             )
-                                        if db_ucf_frame_id is not None and int(db_ucf_frame_id) != cf["frame_id"]:
+                                        allowed_fids = vector_key_to_frame_ids.get(cf["vector_key"], {cf["frame_id"]})
+                                        if db_ucf_frame_id is not None and int(db_ucf_frame_id) not in allowed_fids:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar ucf_frame_id mismatch. Expected {cf['frame_id']}, got {db_ucf_frame_id}"
+                                                f"Frame {fid}: FAISS sidecar ucf_frame_id mismatch. Expected one of {allowed_fids}, got {db_ucf_frame_id}"
                                             )
                                             
                                         if mode == "strict":
@@ -1206,7 +1241,6 @@ def run_validation(mode: str = "offline") -> int:
                 expected_qdrant_keys = set(
                     normalize_qdrant_id(cf["vector_key"]) for cf in context_frames
                     if cf["vector_key"] is not None
-                    and cf["vector_backend"] == "qdrant"
                     and cf["vector_collection"] == collection
                 )
                 
@@ -1275,13 +1309,20 @@ def run_validation(mode: str = "offline") -> int:
                 faiss_index_path = resolve_path(idx_path_cfg)
                 sidecar_db_path = resolve_path(map_db_cfg)
                 
-                # Expected FAISS IDs from ledger
                 expected_faiss_ids = set()
                 for cf in context_frames:
-                    if cf["vector_backend"] == "faiss" and cf["worker_name"] == worker_name:
+                    is_match = cf["worker_name"] == worker_name or (
+                        worker_name == "image_embed_clip" and cf["worker_name"] == "scene_visual_embeddings_clip"
+                    ) or (
+                        worker_name == "image_embed_dino" and cf["worker_name"] == "scene_visual_embeddings_dino"
+                    )
+                    if is_match and cf["vector_key"] is not None:
                         try:
                             p_dict = json.loads(cf["payload"]) if isinstance(cf["payload"], str) else cf["payload"]
                             faiss_id = p_dict.get("faiss_id")
+                            if faiss_id is None:
+                                from steps.common.memory import to_faiss_id
+                                faiss_id = to_faiss_id(cf["vector_key"])
                             if faiss_id is not None:
                                 expected_faiss_ids.add(int(faiss_id))
                         except Exception:

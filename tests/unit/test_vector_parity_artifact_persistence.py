@@ -9,6 +9,9 @@ def test_register_scene_bundle_persists_vector_parity(monkeypatch, tmp_path: Pat
     cfg = {"paths": {"db_path": str(tmp_path / "memory.db")}}
 
     class _StubRouter:
+        def __init__(self):
+            self.stores = {}
+
         def insert(self, points):
             return {"qdrant": True, "faiss": False}
 

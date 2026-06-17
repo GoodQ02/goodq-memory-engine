@@ -1421,3 +1421,123 @@ def list_scenes_for_video(cfg: Dict[str, Any], video_hash: str) -> Dict[str, Any
         scene_entry['duration'] = duration
         scenes.append(scene_entry)
     return {"scenes": scenes, "detection_meta": detection_meta}
+
+
+def ensure_id_map_table_schema(db_path: str, table_name: str) -> None:
+    """Idempotently ensure the sidecar SQLite table has the canonical schema:
+    video_hash TEXT, faiss_id INTEGER, hash TEXT, source_path TEXT, created_at TEXT,
+    epoch_id TEXT, scene_id TEXT, scene_hash TEXT, worker_name TEXT, vector_model_tag TEXT,
+    modality TEXT, ucf_frame_id INTEGER
+    with composite primary key PRIMARY KEY (video_hash, faiss_id).
+    
+    If the table does not exist, create it.
+    If it exists but does not match, migrate it safely.
+    """
+    if not table_name.isidentifier():
+        raise ValueError(f"Invalid table name: {table_name}")
+
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.execute("PRAGMA busy_timeout=5000;")
+    
+    canonical_cols_list = [
+        "video_hash", "faiss_id", "hash", "source_path", "created_at",
+        "epoch_id", "scene_id", "scene_hash", "worker_name", "vector_model_tag",
+        "modality", "ucf_frame_id"
+    ]
+
+    try:
+        cursor = conn.execute(f"PRAGMA table_info({table_name})")
+        info = cursor.fetchall()
+        
+        if not info:
+            # Table does not exist, create it
+            conn.execute(f"""
+                CREATE TABLE {table_name} (
+                    video_hash TEXT,
+                    faiss_id INTEGER,
+                    hash TEXT,
+                    source_path TEXT,
+                    created_at TEXT,
+                    epoch_id TEXT,
+                    scene_id TEXT,
+                    scene_hash TEXT,
+                    worker_name TEXT,
+                    vector_model_tag TEXT,
+                    modality TEXT,
+                    ucf_frame_id INTEGER,
+                    PRIMARY KEY (video_hash, faiss_id)
+                )
+            """)
+            conn.commit()
+            logger.info(f"Created table {table_name} with canonical schema in {db_path}")
+            return
+
+        existing_cols = {row[1] for row in info}
+        pk_cols = {row[1] for row in info if row[5] > 0}
+        
+        # Check if table matches canonical schema (column names and composite PK structure)
+        mismatch = (existing_cols != set(canonical_cols_list)) or (pk_cols != {"video_hash", "faiss_id"})
+        
+        if mismatch:
+            logger.info(f"Schema mismatch detected for table {table_name} in {db_path}. Migrating...")
+            # Generate a unique temp table name
+            temp_table_name = f"{table_name}_old_{uuid.uuid4().hex[:8]}"
+            
+            with conn:
+                # Rename the old table
+                conn.execute(f"ALTER TABLE {table_name} RENAME TO {temp_table_name}")
+                
+                # Create the new canonical table
+                conn.execute(f"""
+                    CREATE TABLE {table_name} (
+                        video_hash TEXT,
+                        faiss_id INTEGER,
+                        hash TEXT,
+                        source_path TEXT,
+                        created_at TEXT,
+                        epoch_id TEXT,
+                        scene_id TEXT,
+                        scene_hash TEXT,
+                        worker_name TEXT,
+                        vector_model_tag TEXT,
+                        modality TEXT,
+                        ucf_frame_id INTEGER,
+                        PRIMARY KEY (video_hash, faiss_id)
+                    )
+                """)
+                
+                # Build the insert query with COALESCE for missing/null fields
+                select_exprs = []
+                for col in canonical_cols_list:
+                    if col in existing_cols:
+                        if col == "video_hash":
+                            select_exprs.append("COALESCE(video_hash, '') AS video_hash")
+                        elif col == "faiss_id":
+                            select_exprs.append("COALESCE(faiss_id, 0) AS faiss_id")
+                        else:
+                            select_exprs.append(f"COALESCE({col}, NULL) AS {col}")
+                    else:
+                        if col == "video_hash":
+                            select_exprs.append("'' AS video_hash")
+                        elif col == "faiss_id":
+                            select_exprs.append("0 AS faiss_id")
+                        else:
+                            select_exprs.append(f"NULL AS {col}")
+                
+                select_clause = ", ".join(select_exprs)
+                insert_query = f"""
+                    INSERT OR REPLACE INTO {table_name} ({', '.join(canonical_cols_list)})
+                    SELECT {select_clause} FROM {temp_table_name}
+                """
+                conn.execute(insert_query)
+                
+                # Drop the temp table
+                conn.execute(f"DROP TABLE {temp_table_name}")
+            logger.info(f"Successfully migrated table {table_name} in {db_path}")
+    except Exception as e:
+        logger.error(f"Failed to ensure schema for table {table_name} in {db_path}: {e}")
+        raise
+    finally:
+        conn.close()
+

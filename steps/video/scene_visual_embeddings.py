@@ -134,6 +134,8 @@ def _write_scene_faiss_points(
                         "source_path": str(source_path or ""),
                         "scene_id": str(payload.get("scene_id")) if payload.get("scene_id") is not None else None,
                         "vector": vector,
+                        "video_hash": payload.get("video_hash") or payload.get("video_id") or "unknown_video",
+                        "epoch_id": payload.get("epoch_id") or "unknown_epoch",
                     }
                 )
 
@@ -170,20 +172,51 @@ def _write_scene_faiss_points(
             faiss.write_index(index, index_path)
 
         if isinstance(id_map_db, str) and id_map_db.strip():
-            os.makedirs(os.path.dirname(id_map_db), exist_ok=True)
-            conn = sqlite3.connect(id_map_db)
+            from datetime import datetime
+            from steps.common.memory import ensure_id_map_table_schema
+            conn = None
             try:
+                ensure_id_map_table_schema(id_map_db, map_table)
+                conn = sqlite3.connect(id_map_db)
                 with conn:
-                    conn.execute(
-                        f"CREATE TABLE IF NOT EXISTS {map_table} (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, created_at TEXT)"
-                    )
                     for row in provenance_rows:
+                        if modality == "clip" or "clip" in map_table:
+                            worker_name = "image_embed_clip"
+                            vector_model_tag = "openai/clip-vit-large-patch14"
+                        elif modality == "dino" or "dino" in map_table:
+                            worker_name = "image_embed_dino"
+                            vector_model_tag = "facebook/dinov2-large"
+                        else:
+                            worker_name = f"image_embed_{modality}"
+                            vector_model_tag = "unknown"
+                        
                         conn.execute(
-                            f"INSERT OR REPLACE INTO {map_table}(faiss_id, hash, source_path, created_at) VALUES (?,?,?,datetime('now'))",
-                            (row["faiss_id"], row["hash"], row["source_path"]),
+                            f"""
+                            INSERT OR REPLACE INTO {map_table}(
+                                video_hash, faiss_id, hash, source_path, created_at,
+                                epoch_id, scene_id, scene_hash, worker_name, vector_model_tag,
+                                modality, ucf_frame_id
+                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)
+                            """,
+                            (
+                                row["video_hash"], row["faiss_id"], row["hash"], row["source_path"],
+                                datetime.utcnow().isoformat(), row["epoch_id"], row["scene_id"],
+                                row["hash"], worker_name, vector_model_tag, "video"
+                            )
                         )
+            except Exception as e:
+                logger.warning(
+                    "[PHASE6] sqlite_map.upsert failed map_db=%s exc_type=%s exc=%s",
+                    id_map_db,
+                    type(e).__name__,
+                    e,
+                )
             finally:
-                conn.close()
+                try:
+                    if conn is not None:
+                        conn.close()
+                except Exception:
+                    pass
 
         for row in provenance_rows:
             try:

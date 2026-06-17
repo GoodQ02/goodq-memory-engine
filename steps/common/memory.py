@@ -865,12 +865,23 @@ def register_scene_bundle(
                             faiss_dim
                         )
                         
+                    # Compute the normalized point ID that Qdrant will use.
+                    # The validator checks scene_hash == UCF vector_key, and
+                    # both must be the UUID5-normalized form.
+                    try:
+                        from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+                        import uuid as _uuid
+                        _summary_raw_id = f"{scene_id}_summary"
+                        _normalized_scene_hash = str(_uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, _summary_raw_id))
+                    except ImportError:
+                        _normalized_scene_hash = scene_id
+
                     summary_point = {
                         'id': f"{scene_id}_summary",
                         'vector': summary_vector,
                         'payload': {
                             'scene_id': scene_id,
-                            'scene_hash': scene_id,
+                            'scene_hash': _normalized_scene_hash,
                             'video_id': canonical_video_id,
                             'video_hash': video_hash,
                             'modality': 'text',

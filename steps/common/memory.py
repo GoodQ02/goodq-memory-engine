@@ -870,6 +870,7 @@ def register_scene_bundle(
                         'vector': summary_vector,
                         'payload': {
                             'scene_id': scene_id,
+                            'scene_hash': scene_id,
                             'video_id': canonical_video_id,
                             'video_hash': video_hash,
                             'modality': 'text',

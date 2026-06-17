@@ -7605,6 +7605,12 @@ def run(
                                         pass
                                     _raw_ref_str = str(_raw_ref_path.resolve())
 
+                                    # Pre-normalize the summary point ID to UUID5 format
+                                    # (validator requires UUID or SHA256 as vector_key)
+                                    from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+                                    import uuid as _uuid_mod
+                                    _normalized_vector_key = str(_uuid_mod.uuid5(GOODQ_POINT_ID_NAMESPACE, summary_point_id))
+
                                     # Log UCF context frame
                                     _frame_id = _ucf_client.log_frame(
                                         video_hash=video_hash,
@@ -7624,7 +7630,7 @@ def run(
                                             'origin_modality': 'scene_summary',
                                         },
                                         promotion_status='staged',
-                                        vector_key=summary_point_id,
+                                        vector_key=_normalized_vector_key,
                                         vector_backend='qdrant',
                                         vector_dim=384,
                                         vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
@@ -7634,23 +7640,19 @@ def run(
                                     # Update Qdrant payload with ucf_frame_id
                                     if _frame_id and _summary_collection:
                                         try:
-                                            from steps.common.qdrant_client import build_qdrant_client, GOODQ_POINT_ID_NAMESPACE
-                                            import uuid as _uuid_mod
-                                            _q_client = build_qdrant_client(cfg, dim=384, key='text')
-                                            if _q_client:
-                                                _normalized_id = _q_client.normalize_point_id(summary_point_id)
-                                                if _normalized_id is not None:
-                                                    import requests as _requests
-                                                    _qdrant_host = _q_client.cfg.host
-                                                    _qdrant_col = _q_client.cfg.collection
-                                                    _requests.post(
-                                                        f"{_qdrant_host}/collections/{_qdrant_col}/points/payload",
-                                                        json={
-                                                            "payload": {"ucf_frame_id": _frame_id},
-                                                            "points": [_normalized_id],
-                                                        },
-                                                        timeout=5,
-                                                    )
+                                            import requests as _requests
+                                            _qdrant_cfg = (cfg.get('qdrant') or {})
+                                            _qdrant_host = _qdrant_cfg.get('host', 'http://localhost:6333')
+                                            _qdrant_col_map = _qdrant_cfg.get('collections', {}) or {}
+                                            _qdrant_col = _qdrant_col_map.get('text', 'goodq_text')
+                                            _requests.post(
+                                                f"{_qdrant_host}/collections/{_qdrant_col}/points/payload",
+                                                json={
+                                                    "payload": {"ucf_frame_id": _frame_id},
+                                                    "points": [_normalized_vector_key],
+                                                },
+                                                timeout=5,
+                                            )
                                         except Exception as _qe:
                                             logger.warning(f"[UCF] Failed to update Qdrant summary payload with ucf_frame_id: {_qe}")
 

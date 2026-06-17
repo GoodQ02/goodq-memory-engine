@@ -801,13 +801,8 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             import os
             payload_meta["epoch_id"] = os.path.basename(_db_dir)
 
-        # Add scene_hash (UUID5-normalized embedding_id, matching UCF vector_key)
-        try:
-            from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
-            import uuid as _uuid
-            payload_meta["scene_hash"] = str(_uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, embedding_id))
-        except ImportError:
-            pass
+        # Add scene_hash (must equal UCF vector_key, which is the raw embedding_id)
+        payload_meta["scene_hash"] = embedding_id
 
         # Route writes via MemoryRouter (faiss + qdrant as configured)
         stores = build_text_stores(cfg)

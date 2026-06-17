@@ -4984,7 +4984,7 @@ def _log_audio_to_ucf_ledger(
                 text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
                 scene_start_f = float(scene.get('start', 0.0) or 0.0)
                 scene_end_f = float(scene.get('end', scene_start_f) or scene_start_f)
-                client.log_frame(
+                _audio_text_frame_id = client.log_frame(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
                     run_id=run_id,
@@ -5004,6 +5004,30 @@ def _log_audio_to_ucf_ledger(
                     vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
                     vector_collection=audio_text_embed_meta.get('vector_collection', 'text'),
                 )
+
+                # Post-log Qdrant payload update with ucf_frame_id
+                if _audio_text_frame_id and audio_text_embed_meta.get('qdrant_committed'):
+                    try:
+                        from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+                        import uuid as _uuid_mod
+                        _norm_id = str(_uuid_mod.uuid5(GOODQ_POINT_ID_NAMESPACE, text_embedding_id))
+                        import requests as _requests
+                        _cfg = json.load(open(str(cfg_json), 'r', encoding='utf-8')) if isinstance(cfg_json, Path) else {}
+                        _qcfg = (_cfg.get('qdrant') or {})
+                        _qhost = _qcfg.get('host', 'http://localhost:6333')
+                        _qcol_map = _qcfg.get('collections', {}) or {}
+                        _qcol = _qcol_map.get('text', 'goodq_text')
+                        _requests.post(
+                            f"{_qhost}/collections/{_qcol}/points/payload",
+                            json={
+                                "payload": {"ucf_frame_id": _audio_text_frame_id},
+                                "points": [_norm_id],
+                            },
+                            timeout=5,
+                        )
+                    except Exception as _qe:
+                        logger.warning(f"[UCF] Failed to update audio text_embed Qdrant payload with ucf_frame_id: {_qe}")
+
 
         client.close()
     except Exception as e:
@@ -5409,7 +5433,7 @@ def _log_visual_to_ucf_ledger(
                 }
                 atomic_write_json(text_embed_raw_ref_path, text_embed_payload)
                 text_embed_raw_ref_str = str(text_embed_raw_ref_path.resolve())
-                client.log_frame(
+                _text_frame_id = client.log_frame(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
                     run_id=run_id,
@@ -5429,6 +5453,30 @@ def _log_visual_to_ucf_ledger(
                     vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
                     vector_collection=frame_text_embed_meta.get('vector_collection', 'text'),
                 )
+
+                # Post-log Qdrant payload update with ucf_frame_id
+                if _text_frame_id and frame_text_embed_meta.get('qdrant_committed'):
+                    try:
+                        from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+                        import uuid as _uuid_mod
+                        _norm_id = str(_uuid_mod.uuid5(GOODQ_POINT_ID_NAMESPACE, text_embedding_id))
+                        import requests as _requests
+                        _cfg = json.load(open(str(cfg_json), 'r', encoding='utf-8')) if isinstance(cfg_json, Path) else {}
+                        _qcfg = (_cfg.get('qdrant') or {})
+                        _qhost = _qcfg.get('host', 'http://localhost:6333')
+                        _qcol_map = _qcfg.get('collections', {}) or {}
+                        _qcol = _qcol_map.get('text', 'goodq_text')
+                        _requests.post(
+                            f"{_qhost}/collections/{_qcol}/points/payload",
+                            json={
+                                "payload": {"ucf_frame_id": _text_frame_id},
+                                "points": [_norm_id],
+                            },
+                            timeout=5,
+                        )
+                    except Exception as _qe:
+                        logger.warning(f"[UCF] Failed to update text_embed Qdrant payload with ucf_frame_id: {_qe}")
+
 
         client.close()
     except Exception as e:

@@ -795,6 +795,20 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         payload_meta["content_fingerprint"] = content_hash
         payload_meta["embedding_identity_scope"] = identity_scope
 
+        # Add epoch_id for strict validation (derived from cfg paths.db_dir)
+        _db_dir = (cfg.get("paths", {}) or {}).get("db_dir")
+        if _db_dir:
+            import os
+            payload_meta["epoch_id"] = os.path.basename(_db_dir)
+
+        # Add scene_hash (UUID5-normalized embedding_id, matching UCF vector_key)
+        try:
+            from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+            import uuid as _uuid
+            payload_meta["scene_hash"] = str(_uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, embedding_id))
+        except ImportError:
+            pass
+
         # Route writes via MemoryRouter (faiss + qdrant as configured)
         stores = build_text_stores(cfg)
         router = MemoryRouter(stores)

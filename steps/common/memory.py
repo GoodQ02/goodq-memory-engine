@@ -524,6 +524,7 @@ def register_scene_bundle(
     video_hash: str,
     scene: Dict[str, Any],
     scene_id: str,
+    epoch_id: Optional[str] = None,
     detection_meta: Optional[Dict[str, Any]] = None,
     frame: Optional[Dict[str, Any]] = None,
     audio: Optional[Dict[str, Any]] = None,
@@ -796,83 +797,17 @@ def register_scene_bundle(
         router = build_memory_router(cfg)
         canonical_video_id = str(video_hash)
         
+        # NOTE: CLIP, DINO, CLAP, and per-frame text embeddings are written
+        # by their dedicated steps (image_embed_clip, image_embed_dino,
+        # audio_embed_clap, text_embed) which route to the correct per-modality
+        # Qdrant collections. The MemoryRouter used here routes ALL points
+        # through build_text_stores() (384-dim text collection), so non-text
+        # modality writes (768-dim CLIP, 1024-dim DINO, 512-dim CLAP) fail
+        # silently due to dimension mismatch. Only summary text embedding
+        # (384-dim) succeeds through this path.
+        # Dead code removed: CLIP, DINO, CLAP, text embedding blocks.
+
         points = []
-        
-        # Extract image embeddings (CLIP, DINO)
-        if isinstance(frame, dict) and isinstance(frame.get('data'), dict):
-            frame_data = frame['data']
-            
-            if 'clip_embedding' in frame_data and isinstance(frame_data['clip_embedding'], list):
-                points.append({
-                    'id': f"{scene_id}_clip",
-                    'vector': frame_data['clip_embedding'],
-                    'payload': {
-                        'scene_id': scene_id,
-                        'video_id': canonical_video_id,
-                        'video_hash': video_hash,
-                        'modality': 'clip',
-                        'start': scene_start,
-                        'end': scene_end,
-                        'timestamp': frame_timestamp,
-                        'ucf_promotion_status': 'staged',
-                    }
-                })
-            
-            if 'dino_embedding' in frame_data and isinstance(frame_data['dino_embedding'], list):
-                points.append({
-                    'id': f"{scene_id}_dino",
-                    'vector': frame_data['dino_embedding'],
-                    'payload': {
-                        'scene_id': scene_id,
-                        'video_id': canonical_video_id,
-                        'video_hash': video_hash,
-                        'modality': 'dino',
-                        'start': scene_start,
-                        'end': scene_end,
-                        'timestamp': frame_timestamp,
-                        'ucf_promotion_status': 'staged',
-                    }
-                })
-        
-        # Extract audio embeddings (CLAP)
-        if isinstance(audio, dict) and isinstance(audio.get('data'), dict):
-            audio_data = audio['data']
-            
-            if 'clap_embedding' in audio_data and isinstance(audio_data['clap_embedding'], list):
-                points.append({
-                    'id': f"{scene_id}_clap",
-                    'vector': audio_data['clap_embedding'],
-                    'payload': {
-                        'scene_id': scene_id,
-                        'video_id': canonical_video_id,
-                        'video_hash': video_hash,
-                        'modality': 'clap',
-                        'start': audio_start,
-                        'end': audio_end,
-                        'transcript': audio_data.get('transcript', ''),
-                        'ucf_promotion_status': 'staged',
-                    }
-                })
-        
-        # Extract text embeddings
-        if isinstance(frame, dict) and isinstance(frame.get('data'), dict):
-            frame_data = frame['data']
-            
-            if 'text_embedding' in frame_data and isinstance(frame_data['text_embedding'], list):
-                points.append({
-                    'id': f"{scene_id}_text",
-                    'vector': frame_data['text_embedding'],
-                    'payload': {
-                        'scene_id': scene_id,
-                        'video_id': canonical_video_id,
-                        'video_hash': video_hash,
-                        'modality': 'text',
-                        'start': scene_start,
-                        'end': scene_end,
-                        'text': frame_data.get('ocr_text', '') or frame_data.get('caption', ''),
-                        'ucf_promotion_status': 'staged',
-                    }
-                })
 
         # Extract summary text embedding (Phase 2)
         summary_mismatch = False
@@ -938,12 +873,17 @@ def register_scene_bundle(
                             'video_id': canonical_video_id,
                             'video_hash': video_hash,
                             'modality': 'text',
+                            'embedding_source': 'scene_summary',
+                            'worker_name': 'text_embed',
+                            'vector_model_tag': 'sentence-transformers/all-MiniLM-L6-v2',
                             'start': scene_start,
                             'end': scene_end,
                             'text': summary_text,
                             'ucf_promotion_status': 'staged',
                         }
                     }
+                    if epoch_id:
+                        summary_point['payload']['epoch_id'] = epoch_id
                     
                     if not summary_mismatch:
                         # Append as a standard text modality point in goodq_text
@@ -1078,6 +1018,18 @@ def register_scene_bundle(
             e,
         )
     
+    # Resolve Qdrant collection for summary point metadata
+    summary_qdrant_collection = None
+    summary_point_id = None
+    if summary_text and 'summary_point' in locals():
+        summary_point_id = summary_point.get('id')
+        try:
+            q_store = router.stores.get('qdrant') if 'router' in locals() else None
+            q_client = getattr(q_store, 'client', None) if q_store else None
+            summary_qdrant_collection = getattr(getattr(q_client, 'cfg', None), 'collection', None)
+        except Exception:
+            pass
+
     return {
         'scene_id': scene_id,
         'video_id': str(video_hash),
@@ -1088,6 +1040,9 @@ def register_scene_bundle(
         'vector_store_results': vector_store_results,
         'qdrant_ok': qdrant_ok,
         'faiss_ok': faiss_ok,
+        'summary_point_id': summary_point_id,
+        'summary_qdrant_collection': summary_qdrant_collection,
+        'summary_qdrant_committed': bool(vector_store_results.get('qdrant', False)) if summary_text else False,
     }
 def store_short_term_summary(cfg: Dict[str, Any], summary: Dict[str, Any], *, category: str = "default") -> None:
     db_path = (cfg.get("paths", {}) or {}).get("db_path")

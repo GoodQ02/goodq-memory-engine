@@ -4738,7 +4738,8 @@ def _process_frame(
     frame_text = ' '.join(part.strip() for part in frame_text_parts if part).strip()
     if frame_text:
         text_payload = {
-            'modality': 'frame_text',
+            'modality': 'text',
+            'embedding_source': 'frame_text',
             'source_path': str(frame_path),
             'frame_text': frame_text,
             'scene_id': scene_id,
@@ -6038,7 +6039,8 @@ async def _process_frame_async(
     
     if frame_text:
         text_payload = {
-            'modality': 'frame_text',
+            'modality': 'text',
+            'embedding_source': 'frame_text',
             'source_path': str(frame_path),
             'frame_text': frame_text,
             'scene_id': scene_id,
@@ -7556,12 +7558,106 @@ def run(
                             video_hash=video_hash,
                             scene=scene_res['scene'],
                             scene_id=scene_res['scene_id'],
+                            epoch_id=os.path.basename((cfg.get('paths', {}) or {}).get('db_dir', '') or ''),
                             detection_meta=detection_meta,
                             frame=scene_res['frame_info'],
                             audio=scene_res['audio_info'],
                             errors=scene_res['error_payload'] or None,
                         )
                         scene_res['persistence'] = persist_res
+
+                        # UCF-row registration for scene-bundle summary points
+                        summary_point_id = persist_res.get('summary_point_id') if isinstance(persist_res, dict) else None
+                        summary_committed = persist_res.get('summary_qdrant_committed', False) if isinstance(persist_res, dict) else False
+                        if summary_point_id and summary_committed:
+                            try:
+                                _db_dir = (cfg.get('paths', {}) or {}).get('db_dir')
+                                if _db_dir:
+                                    _epoch_id = os.path.basename(_db_dir)
+                                    _run_id = os.getenv("GOODQ_RUN_ID") or cfg.get('run', {}).get('id') or "unknown_run"
+                                    _ucf_db_dir = Path(_db_dir) / 'ucf'
+                                    _ucf_db_dir.mkdir(parents=True, exist_ok=True)
+                                    _ucf_db_path = _ucf_db_dir / 'ucf_ledger.db'
+
+                                    ucf_module = _load_ucf_ledger()
+                                    UCFLedgerClient = ucf_module.UCFLedgerClient
+                                    _ucf_client = UCFLedgerClient(str(_ucf_db_path))
+                                    _ucf_client.init_schema()
+
+                                    _scene_start = float(scene_res['scene'].get('start', 0.0) or 0.0)
+                                    _scene_end = float(scene_res['scene'].get('end', _scene_start) or _scene_start)
+                                    _summary_collection = persist_res.get('summary_qdrant_collection') or 'text'
+
+                                    # Write raw_ref artifact
+                                    _raw_ref_dir = processing_dir / 'video' / 'ucf_raw_refs'
+                                    _raw_ref_dir.mkdir(parents=True, exist_ok=True)
+                                    _raw_ref_path = _raw_ref_dir / f"{scene_res['scene_id']}_raw_summary.json"
+                                    _raw_ref_payload = {
+                                        'embedding_id': summary_point_id,
+                                        'embedding_source': 'scene_summary',
+                                        'engine': 'all-MiniLM-L6-v2',
+                                        'qdrant_collection': _summary_collection,
+                                    }
+                                    try:
+                                        import json as _json_mod
+                                        _raw_ref_path.write_text(_json_mod.dumps(_raw_ref_payload, indent=2), encoding='utf-8')
+                                    except Exception:
+                                        pass
+                                    _raw_ref_str = str(_raw_ref_path.resolve())
+
+                                    # Log UCF context frame
+                                    _frame_id = _ucf_client.log_frame(
+                                        video_hash=video_hash,
+                                        epoch_id=_epoch_id,
+                                        run_id=_run_id,
+                                        t_start=_scene_start,
+                                        t_end=_scene_end,
+                                        modality='text',
+                                        worker_name='text_embed',
+                                        model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                                        confidence=1.0,
+                                        source_artifact_id=scene_res['scene_id'],
+                                        raw_ref=_raw_ref_str,
+                                        payload={
+                                            'embedding_id': summary_point_id,
+                                            'embedding_source': 'scene_summary',
+                                            'origin_modality': 'scene_summary',
+                                        },
+                                        promotion_status='staged',
+                                        vector_key=summary_point_id,
+                                        vector_backend='qdrant',
+                                        vector_dim=384,
+                                        vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
+                                        vector_collection=_summary_collection,
+                                    )
+
+                                    # Update Qdrant payload with ucf_frame_id
+                                    if _frame_id and _summary_collection:
+                                        try:
+                                            from steps.common.qdrant_client import build_qdrant_client, GOODQ_POINT_ID_NAMESPACE
+                                            import uuid as _uuid_mod
+                                            _q_client = build_qdrant_client(cfg, dim=384, key='text')
+                                            if _q_client:
+                                                _normalized_id = _q_client.normalize_point_id(summary_point_id)
+                                                if _normalized_id is not None:
+                                                    import requests as _requests
+                                                    _qdrant_host = _q_client.cfg.host
+                                                    _qdrant_col = _q_client.cfg.collection
+                                                    _requests.post(
+                                                        f"{_qdrant_host}/collections/{_qdrant_col}/points/payload",
+                                                        json={
+                                                            "payload": {"ucf_frame_id": _frame_id},
+                                                            "points": [_normalized_id],
+                                                        },
+                                                        timeout=5,
+                                                    )
+                                        except Exception as _qe:
+                                            logger.warning(f"[UCF] Failed to update Qdrant summary payload with ucf_frame_id: {_qe}")
+
+                                    _ucf_client.close()
+                            except Exception as _ucf_err:
+                                logger.warning(f"[UCF] Failed to register summary point in UCF: {_ucf_err}")
+
                 else:
                     for scene_res in window_results:
                         scene_res['persistence'] = {'vector_points_attempted': 0, 'status': 'skipped_no_db'}

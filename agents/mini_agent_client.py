@@ -1341,6 +1341,7 @@ class MiniAgentClient:
             except Exception:
                 pass
 
+        scene_ids = []
         seg_ids = []
         # 1. Dematerialize memory.db
         db_path = self.config.get("paths", {}).get("db_path")
@@ -1434,7 +1435,16 @@ class MiniAgentClient:
             try:
                 with KnowledgeGraph(str(graph_db_path)) as kg:
                     # Resolve media_ids for this video
-                    cursor = kg.conn.execute("SELECT id, scene_id FROM media_nodes WHERE media_path = ? OR scene_id LIKE ?", (video_hash, "scene_%"))
+                    query_kg = "SELECT id, scene_id FROM media_nodes WHERE media_path = ?"
+                    params_kg: list = [video_hash]
+                    if file_path:
+                        query_kg += " OR media_path = ?"
+                        params_kg.append(file_path)
+                    if scene_ids:
+                        placeholders = ",".join("?" for _ in scene_ids)
+                        query_kg += f" OR scene_id IN ({placeholders})"
+                        params_kg.extend(scene_ids)
+                    cursor = kg.conn.execute(query_kg, tuple(params_kg))
                     media_rows = cursor.fetchall()
                     
                     media_ids = []

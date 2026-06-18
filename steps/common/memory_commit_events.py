@@ -230,49 +230,50 @@ def emit_memory_commit_events(cfg: Dict[str, Any], events: Sequence[Union[Memory
                 pass
 
     # SQLite persistence (authoritative)
-    try:
-        conn = sqlite3.connect(db_path, timeout=0.2, check_same_thread=False)
+    if not (isinstance(cfg, dict) and cfg.get("ingestion_isolation", False)):
         try:
-            _configure_conn(conn, busy_timeout_ms=200)
-            _ensure_schema(conn, db_path)
-            rows = [ev.to_row() for ev in normalized]
-            with conn:
+            conn = sqlite3.connect(db_path, timeout=0.2, check_same_thread=False)
+            try:
+                _configure_conn(conn, busy_timeout_ms=200)
+                _ensure_schema(conn, db_path)
+                rows = [ev.to_row() for ev in normalized]
+                with conn:
+                    try:
+                        conn.executemany(
+                            """
+                            INSERT INTO memory_commit_events(
+                              ts_utc, scene_id, video_id, modality, model, embedding_id, component,
+                              attempted, committed, reason, targets_json, confidence_json, details_json
+                            )
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            """,
+                            rows,
+                        )
+                    except Exception:
+                        # Backward-compatible insert for older schemas without confidence_json.
+                        legacy_rows = [r[:11] + (r[12],) for r in rows if isinstance(r, tuple) and len(r) >= 13]
+                        conn.executemany(
+                            """
+                            INSERT INTO memory_commit_events(
+                              ts_utc, scene_id, video_id, modality, model, embedding_id, component,
+                              attempted, committed, reason, targets_json, details_json
+                            )
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                            """,
+                            legacy_rows,
+                        )
+            finally:
                 try:
-                    conn.executemany(
-                        """
-                        INSERT INTO memory_commit_events(
-                          ts_utc, scene_id, video_id, modality, model, embedding_id, component,
-                          attempted, committed, reason, targets_json, confidence_json, details_json
-                        )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                        """,
-                        rows,
-                    )
+                    conn.close()
                 except Exception:
-                    # Backward-compatible insert for older schemas without confidence_json.
-                    legacy_rows = [r[:11] + (r[12],) for r in rows if isinstance(r, tuple) and len(r) >= 13]
-                    conn.executemany(
-                        """
-                        INSERT INTO memory_commit_events(
-                          ts_utc, scene_id, video_id, modality, model, embedding_id, component,
-                          attempted, committed, reason, targets_json, details_json
-                        )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-                        """,
-                        legacy_rows,
-                    )
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    except Exception as exc:
-        # Never block ingestion on observability writes.
-        if debug:
-            try:
-                print(f"[VECTOR_DEBUG] commit_events.sqlite_failed err={exc}")
-            except Exception:
-                pass
+                    pass
+        except Exception as exc:
+            # Never block ingestion on observability writes.
+            if debug:
+                try:
+                    print(f"[VECTOR_DEBUG] commit_events.sqlite_failed err={exc}")
+                except Exception:
+                    pass
 
     # Optional JSONL mirror (debuggable, append-only)
     if not _truthy_env("GOODQ_COMMIT_EVENTS_JSONL", default=True):

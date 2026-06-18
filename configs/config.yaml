@@ -2,6 +2,9 @@
 # Unified configuration for all phases of the multimodal ingestion pipeline
 # Last updated: 2025-12-06
 
+ingestion_isolation: true
+
+
 # ============================================================================
 # USER & MODEL IDENTITY
 # ============================================================================

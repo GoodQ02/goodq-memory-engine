@@ -48,7 +48,7 @@ def test_search_audio_uses_audio_collection_and_clap_text_encoder(
     observed: dict[str, object] = {}
 
     class _FakeClient:
-        def query(self, vector: list[float], top_k: int = 5):
+        def query(self, vector: list[float], top_k: int = 5, **kwargs):
             observed["vector"] = vector
             observed["top_k"] = top_k
             return [

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from pathlib import Path
 import requests
 import copy
+import json
 
 from steps.common.qdrant_client import QdrantClient, QdrantConfig
 from agents.mini_agent_client import MiniAgentClient
@@ -172,13 +173,13 @@ def test_set_payload_empty_points_noop(mock_put):
 # Lifecycle sync tests (4)
 # ---------------------------------------------------------------------------
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_set_payload, tmp_path, monkeypatch):
-    """R2: test_promote_syncs_ucf_promotion_status_to_qdrant — UCF DB with 1 validated frame; assert set_payload called; qdrant_sync.status == 'ok'"""
+@patch("requests.post")
+def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monkeypatch):
+    """R2: test_promote_syncs_ucf_promotion_status_to_qdrant — UCF DB with 1 validated frame; assert requests.post called; qdrant_sync.status == 'ok'"""
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    mock_set_payload.return_value = True
+    mock_post.return_value = MagicMock(status_code=200, text="{}")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -198,15 +199,22 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_set_payload, tmp_path
     assert q_sync["points_attempted"] == 1
     assert not q_sync["failed_collections"]
     
-    mock_set_payload.assert_called_once_with(["vec-key-1"], {"ucf_promotion_status": "promoted"})
+    assert mock_post.call_count >= 1
+    payload_calls = [
+        call for call in mock_post.call_args_list
+        if "collections/goodq_clip/points/payload" in call[0][0]
+    ]
+    assert len(payload_calls) == 1
+    args, kwargs = payload_calls[0]
+    assert kwargs["json"]["payload"] == {"ucf_promotion_status": "promoted"}
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_set_payload, tmp_path, monkeypatch):
-    """R2: test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning — set_payload returns False; assert warning in envelope"""
+@patch("requests.post")
+def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tmp_path, monkeypatch):
+    """R2: test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning — requests.post returns 500; assert warning in envelope"""
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    mock_set_payload.return_value = False
+    mock_post.return_value = MagicMock(status_code=500, text="Internal Server Error")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -226,13 +234,13 @@ def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_set_payl
     assert "warnings" in res
     assert "qdrant_payload_sync_failed" in res["warnings"]
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, monkeypatch):
     """R2: test_reject_and_supersede_sync_their_status_to_qdrant — reject -> 'rejected', supersede -> 'superseded'"""
     # 1. Reject
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-reject", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_set_payload.return_value = True
+    mock_post.return_value = MagicMock(status_code=200, text="{}")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
@@ -240,7 +248,11 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "bad resolution"})
     assert rc == 0
     assert res["output"]["status"] == "rejected_complete"
-    mock_set_payload.assert_called_with(["vec-key-reject"], {"ucf_promotion_status": "rejected"})
+    
+    assert mock_post.call_count == 1
+    args, kwargs = mock_post.call_args
+    assert "collections/goodq_clip/points/payload" in args[0]
+    assert kwargs["json"]["payload"] == {"ucf_promotion_status": "rejected"}
 
     # 2. Supersede
     db_path_2 = _create_mock_db_for_test(tmp_path / "second", "promoted", vector_key="vec-key-supersede", vector_collection="goodq_clip")
@@ -249,11 +261,15 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_set_payload, tmp_
     res2, rc2 = _confirm_tool_directly(client, "supersede_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc2 == 0
     assert res2["output"]["status"] == "superseded_complete"
-    mock_set_payload.assert_called_with(["vec-key-supersede"], {"ucf_promotion_status": "superseded"})
+    
+    assert mock_post.call_count == 2
+    args, kwargs = mock_post.call_args_list[1]
+    assert "collections/goodq_clip/points/payload" in args[0]
+    assert kwargs["json"]["payload"] == {"ucf_promotion_status": "superseded"}
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_set_payload, tmp_path, monkeypatch):
-    """R2: test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped — NULL vector_keys; assert set_payload NOT called; qdrant_sync status='skipped'"""
+@patch("requests.post")
+def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_post, tmp_path, monkeypatch):
+    """R2: test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped — NULL vector_keys; assert requests.post NOT called; qdrant_sync status='skipped'"""
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key=None, vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
@@ -266,7 +282,7 @@ def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_set_payl
     q_sync = res["output"]["qdrant_sync"]
     assert q_sync["attempted"] is False
     assert q_sync["status"] == "skipped"
-    mock_set_payload.assert_not_called()
+    mock_post.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -482,3 +498,155 @@ def test_qdrant_query_no_double_must_not_on_repeated_calls(mock_build):
     _, kwargs2 = mock_client.query.call_args
     p_filter2 = kwargs2["payload_filter"]
     assert len(p_filter2["must_not"]) == 2
+
+
+@patch("requests.post")
+@patch("scripts.ucf.validate_ucf_epoch.run_validation")
+def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_path, monkeypatch):
+    """Verify materialization bridge lifecycle: ingest (0) -> validate -> promote (N) -> reject/supersede (0)."""
+    # 1. Setup mock UCF ledger db with one staged frame
+    db_path = _create_mock_db_for_test(tmp_path, "staged", vector_key="vec-key-1", vector_collection="goodq_clip")
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    mock_run_validation.return_value = 0
+    mock_post.return_value = MagicMock(status_code=200, text="{}")
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+
+    # Setup paths under tmp_path
+    db_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    client.config["paths"]["db_dir"] = str(db_dir)
+    client.config["paths"]["db_path"] = str(db_dir / "memory.db")
+    client.config["paths"]["knowledge_graph_db"] = str(db_dir / "knowledge_graph.db")
+    client.config["paths"]["processing"] = str(db_dir / "processing")
+
+    # Recreate target directories
+    video_processing_dir = db_dir / "processing" / "test"
+    video_processing_dir.mkdir(parents=True, exist_ok=True)
+    (video_processing_dir / "video").mkdir(parents=True, exist_ok=True)
+
+    # 2. Write mock scene_manifest.json and temporal_index.json
+    scene_manifest = {
+        "scenes": [
+            {
+                "id": "scene_001",
+                "start": 0.0,
+                "end": 1.0,
+                "confidence": 1.0,
+                "keyframe": {
+                    "hash": "kframe-hash-1",
+                    "path": "frames/frame_0.png",
+                    "ocr_text": "Sample OCR text"
+                },
+                "audio": {
+                    "hash": "audio-hash-1",
+                    "path": "audio/chunk_0.wav",
+                    "transcript": "Sample speaker transcript",
+                    "speaker_transcript": [
+                        {
+                            "start": 0.0,
+                            "end": 1.0,
+                            "speaker": "speaker_0",
+                            "text": "Sample speaker transcript"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    with open(video_processing_dir / "video" / "scene_manifest.json", "w", encoding="utf-8") as f:
+        json.dump(scene_manifest, f)
+
+    temporal_index = {
+        "segments": [
+            {
+                "scene_id": "scene_001",
+                "start": 0.0,
+                "end": 1.0,
+                "speaker": "speaker_0",
+                "text": "Sample speaker transcript"
+            }
+        ]
+    }
+    with open(video_processing_dir / "temporal_index.json", "w", encoding="utf-8") as f:
+        json.dump(temporal_index, f)
+
+    # Mock _fetch_vector_from_qdrant to return a dummy vector
+    monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda col, key: [0.1] * 384)
+
+    # Check active database is empty/0 records initially
+    assert not Path(client.config["paths"]["db_path"]).exists()
+    assert not Path(client.config["paths"]["knowledge_graph_db"]).exists()
+
+    # 3. Validate
+    res, rc = _confirm_tool_directly(client, "validate_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
+    assert rc == 0
+    assert res["output"]["validated_count"] == 1
+
+    # 4. Promote (trigger materialization)
+    res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
+    assert rc == 0
+    assert res["output"]["promoted_count"] == 1
+    
+    # Assert active database tables have records materialized
+    conn_mem = sqlite3.connect(client.config["paths"]["db_path"])
+    scenes = conn_mem.execute("SELECT id, video_hash, start, end FROM scenes").fetchall()
+    assert len(scenes) == 1
+    assert scenes[0][0] == "scene_001"
+    
+    segments = conn_mem.execute("SELECT id, speaker FROM segments").fetchall()
+    assert len(segments) == 1
+    assert segments[0][1] == "speaker_0"
+
+    embeddings = conn_mem.execute("SELECT hash, modality, scene_id FROM embeddings").fetchall()
+    assert len(embeddings) == 1
+    assert embeddings[0][0] == "vec-key-1"
+
+    fts = conn_mem.execute("SELECT scene_id, text FROM scene_text_fts").fetchall()
+    assert len(fts) == 2  # OCR + transcript
+    
+    links = conn_mem.execute("SELECT parent_hash, child_hash, relation FROM links").fetchall()
+    assert len(links) > 0
+
+    conn_mem.close()
+
+    # Assert Knowledge Graph nodes and edges materialized
+    from lib.knowledge_graph import KnowledgeGraph
+    with KnowledgeGraph(client.config["paths"]["knowledge_graph_db"]) as kg:
+        stats = kg.get_statistics()
+        assert stats["total_nodes"] > 0
+        assert stats["total_edges"] > 0
+        # Check specific node types exist
+        node_types = [r[0] for r in kg.conn.execute("SELECT DISTINCT node_type FROM nodes").fetchall()]
+        assert "video" in node_types
+        assert "scene" in node_types
+        assert "segment" in node_types
+        assert "speaker" in node_types
+
+    # 5. Reject (trigger dematerialization)
+    # We must reset frame state to validated first to allow reject
+    conn_ucf = sqlite3.connect(str(db_path))
+    conn_ucf.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn_ucf.commit()
+    conn_ucf.close()
+
+    res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "test reject"})
+    assert rc == 0
+    assert res["output"]["rejected_count"] == 1
+
+    # Verify that memory.db active records are dematerialized/deleted
+    conn_mem = sqlite3.connect(client.config["paths"]["db_path"])
+    assert len(conn_mem.execute("SELECT * FROM scenes").fetchall()) == 0
+    assert len(conn_mem.execute("SELECT * FROM segments").fetchall()) == 0
+    assert len(conn_mem.execute("SELECT * FROM embeddings").fetchall()) == 0
+    assert len(conn_mem.execute("SELECT * FROM scene_text_fts").fetchall()) == 0
+    assert len(conn_mem.execute("SELECT * FROM links").fetchall()) == 0
+    conn_mem.close()
+
+    # Verify Knowledge Graph is pruned (0 nodes/edges left, or support-aware clean)
+    with KnowledgeGraph(client.config["paths"]["knowledge_graph_db"]) as kg:
+        stats = kg.get_statistics()
+        assert stats["total_nodes"] == 0
+        assert stats["total_edges"] == 0
+

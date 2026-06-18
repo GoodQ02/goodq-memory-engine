@@ -1437,13 +1437,24 @@ class MultimodalSearchEngine:
             
         return fused_results
 
-    def search_text(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def _build_ucf_filter(self, payload_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        import copy
+        p_filter = copy.deepcopy(payload_filter) if payload_filter else {}
+        p_filter.setdefault("must_not", []).extend([
+            {"key": "ucf_promotion_status", "match": {"value": "rejected"}},
+            {"key": "ucf_promotion_status", "match": {"value": "superseded"}},
+            {"key": "ucf_promotion_status", "match": {"value": "staged"}}
+        ])
+        return p_filter
+
+    def search_text(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Search text embeddings (transcripts, captions, etc.) with FTS5 hybrid fusion.
         
         Args:
             query: Search query
             top_k: Number of results to return
+            payload_filter: Optional payload filter dict
             
         Returns:
             List of fused search results with normalized RRF scores
@@ -1458,7 +1469,11 @@ class MultimodalSearchEngine:
         if np.any(query_embedding):
             try:
                 client = self._get_qdrant_client(self.text_collection)
-                results_semantic = client.query(query_embedding.tolist(), top_k=candidate_k)
+                results_semantic = client.query(
+                    query_embedding.tolist(),
+                    top_k=candidate_k,
+                    payload_filter=self._build_ucf_filter(payload_filter)
+                )
                 for r in results_semantic:
                     r['modality'] = 'text'
             except Exception as e:
@@ -1482,13 +1497,14 @@ class MultimodalSearchEngine:
         
         return []
     
-    def search_visual(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_visual(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Search visual scene embeddings using text query.
         
         Args:
             query: Text description of visual content
             top_k: Number of results to return
+            payload_filter: Optional payload filter dict
             
         Returns:
             List of search results with scores
@@ -1501,17 +1517,22 @@ class MultimodalSearchEngine:
             return []
         
         client = self._get_qdrant_client(self.visual_collection)
-        results = client.query(query_embedding.tolist(), top_k=top_k)
+        results = client.query(
+            query_embedding.tolist(),
+            top_k=top_k,
+            payload_filter=self._build_ucf_filter(payload_filter)
+        )
         
         return results
 
-    def search_audio(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_audio(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Search CLAP audio embeddings using a text query.
 
         Args:
             query: Text description of audio content
             top_k: Number of results to return
+            payload_filter: Optional payload filter dict
 
         Returns:
             List of search results with scores
@@ -1530,7 +1551,11 @@ class MultimodalSearchEngine:
             return []
 
         client = self._get_qdrant_client(self.audio_collection)
-        results = client.query(query_embedding.tolist(), top_k=top_k)
+        results = client.query(
+            query_embedding.tolist(),
+            top_k=top_k,
+            payload_filter=self._build_ucf_filter(payload_filter)
+        )
         if results:
             self._set_search_diagnostic(
                 "audio",

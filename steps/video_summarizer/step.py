@@ -250,49 +250,49 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
         video_summary = generate_video_summary_template(cfg, video_hash, db_path)
     
     # Store in database with full provenance
-    try:
-        from datetime import datetime, timezone
-        conn = sqlite3.connect(db_path)
-        
-        # Build provenance
-        llm_config = cfg.get('llm', {})
-        api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
-        model_name = llm_config.get('model', 'default_model')
-        
-        provenance = {
-            "model_backend": f"{model_name} ({api_url})",
-            "prompt_version": "v1.0.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source_artifact_versions": source_artifact_versions
-        }
-        
-        payload = json.dumps({
-            'video_hash': video_hash,
-            'summary': video_summary,
-            'method': 'llm' if use_llm and video_summary else 'template',
-            'provenance': provenance
-        }, ensure_ascii=False)
-        
-        conn.execute("""
-            INSERT OR REPLACE INTO summaries (summary_type, category, content, created_at)
-            VALUES ('video', 'video_summary', ?, datetime('now'))
-        """, (payload,))
-        conn.commit()
-        conn.close()
-        
-        logger.info(f"Video summary stored for video {video_hash} with provenance info")
-        
-        return {
-            'success': True,
-            'summary': video_summary,
-            'video_hash': video_hash,
-            'method': 'llm' if use_llm and video_summary else 'template',
-            'provenance': provenance
-        }
-    except Exception as e:
-        logger.error(f"Failed to store video summary: {e}")
-        return {
-            'success': False,
-            'error': str(e),
-            'video_hash': video_hash
-        }
+    from datetime import datetime, timezone
+    llm_config = cfg.get('llm', {})
+    api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
+    model_name = llm_config.get('model', 'default_model')
+    
+    provenance = {
+        "model_backend": f"{model_name} ({api_url})",
+        "prompt_version": "v1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_artifact_versions": source_artifact_versions
+    }
+    
+    if not cfg.get("ingestion_isolation", False):
+        try:
+            conn = sqlite3.connect(db_path)
+            
+            payload = json.dumps({
+                'video_hash': video_hash,
+                'summary': video_summary,
+                'method': 'llm' if use_llm and video_summary else 'template',
+                'provenance': provenance
+            }, ensure_ascii=False)
+            
+            conn.execute("""
+                INSERT OR REPLACE INTO summaries (summary_type, category, content, created_at)
+                VALUES ('video', 'video_summary', ?, datetime('now'))
+            """, (payload,))
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"Video summary stored for video {video_hash} with provenance info")
+        except Exception as e:
+            logger.error(f"Failed to store video summary: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'video_hash': video_hash
+            }
+
+    return {
+        'success': True,
+        'summary': video_summary,
+        'video_hash': video_hash,
+        'method': 'llm' if use_llm and video_summary else 'template',
+        'provenance': provenance
+    }

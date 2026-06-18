@@ -108,8 +108,8 @@ def _insert_ucf_row_helper(
 
 @pytest.fixture
 def setup_env(tmp_path, monkeypatch):
-    db_dir = tmp_path / "db"
-    db_dir.mkdir()
+    db_dir = tmp_path / "epochs" / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
     
     cfg_json = tmp_path / "cfg.json"
     cfg_data = {

@@ -1289,17 +1289,243 @@ class MiniAgentClient:
         client.close()
         return {"validated_count": validated_count, "status": "validated_complete"}
 
-    def _execute_promote_ucf_to_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Promotes context frames from 'validated' to 'promoted'.
+    def _fetch_vector_from_qdrant(self, collection: str, vector_key: str) -> Optional[List[float]]:
+        import requests
+        import uuid
+        qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
+        GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+        
+        s = vector_key.strip()
+        hex_candidate = s.replace("-", "")
+        if len(hex_candidate) == 32 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
+            normalized_key = str(uuid.UUID(hex_candidate))
+        elif s.isdigit():
+            normalized_key = s
+        else:
+            normalized_key = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
+            
+        try:
+            resp = requests.post(
+                f"{qdrant_host}/collections/{collection}/points",
+                json={"ids": [normalized_key], "with_vector": True, "with_payload": False},
+                timeout=5
+            )
+            if resp.status_code == 200:
+                result = resp.json().get("result", [])
+                if result and isinstance(result, list):
+                    vector = result[0].get("vector")
+                    if isinstance(vector, list):
+                        return vector
+        except Exception as e:
+            logger.warning(f"Failed to fetch vector from Qdrant for key {normalized_key}: {e}")
+        return None
 
-        Requires all in-scope frames to have already passed through 'validated'
-        status (via validate_ucf_frames). Any frames still in 'staged' status
-        will cause this call to return a blocked error — run validate_ucf_frames
-        first.
-
-        Expected lifecycle: staged -> validated -> [promote_ucf_to_memory] -> promoted
-        """
+    def _dematerialize_active_views(self, video_hash: str) -> None:
         import sqlite3
+        import json
+        from pathlib import Path
+        from lib.kg_realtime_integration import _resolve_graph_db_path
+        from lib.knowledge_graph import KnowledgeGraph
+
+        # Fetch file_path from media_sources in ucf_ledger.db
+        file_path = None
+        ucf_db_path = self._get_ucf_db_path()
+        if ucf_db_path and Path(ucf_db_path).exists():
+            try:
+                conn_ucf = sqlite3.connect(str(ucf_db_path))
+                cursor = conn_ucf.execute("SELECT file_path FROM media_sources WHERE video_hash = ?", (video_hash,))
+                row = cursor.fetchone()
+                if row:
+                    file_path = row[0]
+                conn_ucf.close()
+            except Exception:
+                pass
+
+        seg_ids = []
+        # 1. Dematerialize memory.db
+        db_path = self.config.get("paths", {}).get("db_path")
+        if db_path and Path(db_path).exists():
+            try:
+                conn = sqlite3.connect(str(db_path))
+                with conn:
+                    # Fetch scenes in this video to clean up links and embeddings
+                    cursor = conn.execute("SELECT id FROM scenes WHERE video_hash = ?", (video_hash,))
+                    scene_ids = [r[0] for r in cursor.fetchall()]
+                    
+                    # Fetch segments in this video
+                    cursor = conn.execute("SELECT id FROM segments WHERE video_hash = ?", (video_hash,))
+                    seg_ids = [r[0] for r in cursor.fetchall()]
+                    
+                    # Collect frame_hash and audio_hash from scene metadata if possible
+                    frame_hashes = set()
+                    audio_hashes = set()
+                    for sid in scene_ids:
+                        cursor = conn.execute("SELECT meta FROM scenes WHERE id = ?", (sid,))
+                        row = cursor.fetchone()
+                        if row and row[0]:
+                            try:
+                                meta = json.loads(row[0])
+                                k_hash = meta.get("keyframe", {}).get("hash")
+                                if k_hash:
+                                    frame_hashes.add(k_hash)
+                                a_hash = meta.get("audio", {}).get("hash")
+                                if a_hash:
+                                    audio_hashes.add(a_hash)
+                            except Exception:
+                                pass
+                                
+                    # Delete from scenes, scene_text_fts, segments, embeddings
+                    conn.execute("DELETE FROM scenes WHERE video_hash = ?", (video_hash,))
+                    conn.execute("DELETE FROM scene_text_fts WHERE video_hash = ?", (video_hash,))
+                    conn.execute("DELETE FROM segments WHERE video_hash = ?", (video_hash,))
+                    
+                    if scene_ids:
+                        placeholders = ",".join("?" for _ in scene_ids)
+                        conn.execute(f"DELETE FROM embeddings WHERE scene_id IN ({placeholders})", tuple(scene_ids))
+                        
+                    # Delete from links
+                    conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (video_hash, video_hash))
+                    
+                    for sid in scene_ids:
+                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sid, sid))
+                    for sgid in seg_ids:
+                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sgid, sgid))
+                    for fh in frame_hashes:
+                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (fh, fh))
+                    for ah in audio_hashes:
+                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (ah, ah))
+                        
+                conn.close()
+                logger.info(f"Dematerialized memory.db records for video_hash: {video_hash}")
+            except Exception as e:
+                logger.warning(f"Failed to dematerialize memory.db for video_hash {video_hash}: {e}")
+                
+        # 2. Dematerialize knowledge_graph.db
+        graph_db_path = _resolve_graph_db_path(self.config)
+        if graph_db_path and Path(graph_db_path).exists():
+            try:
+                with KnowledgeGraph(str(graph_db_path)) as kg:
+                    # Resolve media_ids for this video
+                    cursor = kg.conn.execute("SELECT id, scene_id FROM media_nodes WHERE media_path = ? OR scene_id LIKE ?", (video_hash, "scene_%"))
+                    media_rows = cursor.fetchall()
+                    
+                    media_ids = []
+                    scene_ids_kg = []
+                    for row in media_rows:
+                        m_id = row[0]
+                        sc_id = row[1]
+                        
+                        prop_cursor = kg.conn.execute("SELECT properties, media_path FROM media_nodes WHERE id = ?", (m_id,))
+                        prop_row = prop_cursor.fetchone()
+                        is_ours = False
+                        if prop_row:
+                            m_path = prop_row[1] or ""
+                            if video_hash in m_path or (file_path and Path(file_path).name in m_path):
+                                is_ours = True
+                            else:
+                                try:
+                                    props = json.loads(prop_row[0]) if prop_row[0] else {}
+                                    if props.get("video_path") and (video_hash in props["video_path"]):
+                                        is_ours = True
+                                except Exception:
+                                    pass
+                        if is_ours:
+                            media_ids.append(m_id)
+                            if sc_id:
+                                scene_ids_kg.append(sc_id)
+                                
+                    if media_ids:
+                        placeholders = ",".join("?" for _ in media_ids)
+                        cursor = kg.conn.execute(f"SELECT DISTINCT node_id FROM node_media WHERE media_id IN ({placeholders})", tuple(media_ids))
+                        candidate_node_ids = [r[0] for r in cursor.fetchall()]
+                        
+                        kg.conn.execute(f"DELETE FROM node_media WHERE media_id IN ({placeholders})", tuple(media_ids))
+                        kg.conn.execute(f"DELETE FROM media_nodes WHERE id IN ({placeholders})", tuple(media_ids))
+                        
+                        # Node IDs to prune
+                        nodes_to_delete_ids = []
+                        
+                        for name in scene_ids_kg:
+                            cursor = kg.conn.execute("SELECT id FROM nodes WHERE node_type = 'scene' AND name = ?", (name,))
+                            for r in cursor.fetchall():
+                                nodes_to_delete_ids.append(r[0])
+                        
+                        video_names = [video_hash]
+                        if file_path:
+                            video_names.append(Path(file_path).stem)
+                            video_names.append(Path(file_path).name)
+                        for name in video_names:
+                            cursor = kg.conn.execute("SELECT id FROM nodes WHERE node_type = 'video' AND name = ?", (name,))
+                            for r in cursor.fetchall():
+                                nodes_to_delete_ids.append(r[0])
+                                
+                        # Add segments matching memory.db segment IDs
+                        if seg_ids:
+                            for name in seg_ids:
+                                cursor = kg.conn.execute("SELECT id FROM nodes WHERE node_type = 'segment' AND name = ?", (name,))
+                                for r in cursor.fetchall():
+                                    nodes_to_delete_ids.append(r[0])
+
+                        # Add segments connected to scene nodes via has_segment edges
+                        scene_node_ids_list = []
+                        for name in scene_ids_kg:
+                            cursor = kg.conn.execute("SELECT id FROM nodes WHERE node_type = 'scene' AND name = ?", (name,))
+                            scene_node_ids_list.extend([r[0] for r in cursor.fetchall()])
+                        if scene_node_ids_list:
+                            placeholders_sc = ",".join("?" for _ in scene_node_ids_list)
+                            cursor = kg.conn.execute(
+                                f"SELECT target_id FROM edges WHERE source_id IN ({placeholders_sc}) AND edge_type = 'has_segment'",
+                                tuple(scene_node_ids_list)
+                            )
+                            for r in cursor.fetchall():
+                                nodes_to_delete_ids.append(r[0])
+
+                        # Fallback matching
+                        cursor = kg.conn.execute("SELECT id, name, properties FROM nodes WHERE node_type = 'segment'")
+                        for r in cursor.fetchall():
+                            n_id = r[0]
+                            n_name = r[1]
+                            if video_hash in n_name:
+                                nodes_to_delete_ids.append(n_id)
+                            else:
+                                try:
+                                    props = json.loads(r[2]) if r[2] else {}
+                                    if video_hash in str(props):
+                                        nodes_to_delete_ids.append(n_id)
+                                except Exception:
+                                    pass
+
+                        if nodes_to_delete_ids:
+                            nodes_to_delete_ids = list(set(nodes_to_delete_ids))
+                            nodes_placeholders = ",".join("?" for _ in nodes_to_delete_ids)
+                            kg.conn.execute(f"DELETE FROM edges WHERE source_id IN ({nodes_placeholders}) OR target_id IN ({nodes_placeholders})", tuple(nodes_to_delete_ids) * 2)
+                            kg.conn.execute(f"DELETE FROM nodes WHERE id IN ({nodes_placeholders})", tuple(nodes_to_delete_ids))
+                            
+                        # Support-aware entity pruning
+                        for nid in candidate_node_ids:
+                            if nid in nodes_to_delete_ids:
+                                continue
+                            link_count = kg.conn.execute("SELECT count(*) FROM node_media WHERE node_id = ?", (nid,)).fetchone()[0]
+                            edge_count = kg.conn.execute("SELECT count(*) FROM edges WHERE source_id = ? OR target_id = ?", (nid, nid)).fetchone()[0]
+                            if link_count == 0 and edge_count == 0:
+                                kg.conn.execute("DELETE FROM nodes WHERE id = ?", (nid,))
+                                
+                        kg.conn.commit()
+                        logger.info(f"Dematerialized knowledge_graph.db records for video_hash: {video_hash}")
+            except Exception as e:
+                logger.warning(f"Failed to dematerialize knowledge_graph.db for video_hash {video_hash}: {e}")
+
+    def _execute_promote_ucf_to_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Promotes context frames from 'validated' to 'promoted' and materializes active views."""
+        import sqlite3
+        import json
+        import requests
+        import numpy as np
+        from pathlib import Path
+        from steps.common.memory import to_faiss_id, _make_id, _connect
+        from lib.kg_realtime_integration import _resolve_graph_db_path
+        from lib.knowledge_graph import KnowledgeGraph
+
         ucf_db_path = self._get_ucf_db_path()
         
         # Ensure schema is initialized
@@ -1315,7 +1541,7 @@ class MiniAgentClient:
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
         
-        # Auto-resolve scope from validated records (staged is now an error state here)
+        # Auto-resolve scope from validated records
         if not video_hash:
             cursor = conn.execute("SELECT DISTINCT video_hash FROM context_frames WHERE promotion_status = 'validated'")
             rows = cursor.fetchall()
@@ -1327,8 +1553,7 @@ class MiniAgentClient:
             if len(rows) == 1:
                 epoch_id = rows[0][0]
 
-        # 0. Pre-check: block promotion if any in-scope frames are still staged (not validated).
-        #    Staged frames indicate validate_ucf_frames has not yet been run.
+        # 0. Pre-check: block promotion if any staged frames exist
         check_staged = "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
         check_args: list = []
         if video_hash:
@@ -1351,8 +1576,7 @@ class MiniAgentClient:
                 ),
             }
 
-        # 1. Orphan vector check (scoped per epoch/video to prevent cross-video vector injections).
-        #    Only validated and already-promoted vectors are considered legitimate.
+        # 1. Orphan vector check
         query = "SELECT vector_key FROM context_frames WHERE promotion_status IN ('validated', 'promoted')"
         query_args: list = []
         if video_hash:
@@ -1370,34 +1594,404 @@ class MiniAgentClient:
                 conn.close()
                 raise OrphanVectorError(v_key)
 
-        # 2. Promote validated records (validated -> promoted, scoped per epoch/video).
+        # Query vector_key, vector_collection, vector_backend for frames to be promoted
+        select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"
+        sync_args = []
+        if video_hash:
+            select_sync += " AND video_hash = ?"
+            sync_args.append(video_hash)
+        if epoch_id:
+            select_sync += " AND epoch_id = ?"
+            sync_args.append(epoch_id)
+        cursor = conn.execute(select_sync, tuple(sync_args))
+        frames_to_sync = cursor.fetchall()
+
+        # Update ucf ledger status inside transaction
         select_validated = "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
         update_validated = "UPDATE context_frames SET promotion_status = 'promoted' WHERE promotion_status = 'validated'"
-        promote_args: list = []
         if video_hash:
             select_validated += " AND video_hash = ?"
             update_validated += " AND video_hash = ?"
-            promote_args.append(video_hash)
         if epoch_id:
             select_validated += " AND epoch_id = ?"
             update_validated += " AND epoch_id = ?"
-            promote_args.append(epoch_id)
-            
+        promote_args = list(sync_args)
         promoted_count = conn.execute(select_validated, tuple(promote_args)).fetchone()[0]
         
-        # Query vector_key, vector_collection, vector_backend for frames to be promoted before updating
-        select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"
-        if video_hash:
-            select_sync += " AND video_hash = ?"
-        if epoch_id:
-            select_sync += " AND epoch_id = ?"
-        cursor = conn.execute(select_sync, tuple(promote_args))
-        frames_to_sync = cursor.fetchall()
-
+        conn.execute("BEGIN TRANSACTION")
         conn.execute(update_validated, tuple(promote_args))
-        conn.commit()
-        conn.close()
-        
+
+        scenes_count = 0
+        segments_count = 0
+        embeddings_count = 0
+        kg_nodes_count = 0
+        kg_edges_count = 0
+
+        db_path = self.config.get("paths", {}).get("db_path")
+        graph_db_path = _resolve_graph_db_path(self.config)
+        scene_manifest_path = Path()
+        temporal_index_path = Path()
+
+        try:
+            cursor_ms = conn.execute("SELECT file_path FROM media_sources WHERE video_hash = ?", (video_hash,))
+            row_ms = cursor_ms.fetchone()
+            file_path = row_ms[0] if row_ms else None
+            video_stem = Path(file_path).stem if file_path else video_hash
+
+            processing_root = Path(self.config.get("paths", {}).get("processing", "processing"))
+            video_processing_dir = processing_root / video_stem
+            
+            scene_manifest_path = video_processing_dir / "video" / "scene_manifest.json"
+            if not scene_manifest_path.exists():
+                scene_manifest_path = video_processing_dir / "scene_manifest.json"
+                
+            temporal_index_path = video_processing_dir / "temporal_index.json"
+            if not temporal_index_path.exists():
+                temporal_index_path = video_processing_dir / "video" / "temporal_index.json"
+
+            scene_manifest = {}
+            if scene_manifest_path.exists():
+                with open(scene_manifest_path, "r", encoding="utf-8") as f:
+                    scene_manifest = json.load(f)
+            
+            temporal_index = {}
+            if temporal_index_path.exists():
+                with open(temporal_index_path, "r", encoding="utf-8") as f:
+                    temporal_index = json.load(f)
+
+            cursor_f = conn.execute(
+                "SELECT frame_id, source_artifact_id, worker_name, vector_key, vector_collection, payload, t_start, t_end, modality "
+                "FROM context_frames WHERE video_hash = ? AND promotion_status = 'promoted'",
+                (video_hash,)
+            )
+            promoted_frames = cursor_f.fetchall()
+            promoted_frame_ids = [row[0] for row in promoted_frames]
+
+            frames_by_scene = {}
+            for r_f in promoted_frames:
+                fid, scene_id, worker_name, vector_key, vector_collection, payload_str, t_start, t_end, modality = r_f
+                if scene_id:
+                    frames_by_scene.setdefault(scene_id, []).append({
+                        "frame_id": fid,
+                        "worker_name": worker_name,
+                        "vector_key": vector_key,
+                        "vector_collection": vector_collection,
+                        "payload": json.loads(payload_str) if payload_str else {},
+                        "t_start": t_start,
+                        "t_end": t_end,
+                        "modality": modality
+                    })
+
+            if not db_path:
+                raise RuntimeError("db_path is not defined in config paths")
+            
+            conn_mem = _connect(str(db_path))
+            conn_mem.execute("PRAGMA foreign_keys = ON;")
+            
+            for table in ("scenes", "segments"):
+                try:
+                    cur_info = conn_mem.execute(f"PRAGMA table_info('{table}')")
+                    cols = {r[1] for r in cur_info.fetchall()}
+                    if "ucf_provenance" not in cols:
+                        conn_mem.execute(f"ALTER TABLE {table} ADD COLUMN ucf_provenance TEXT")
+                except Exception as ex_alter:
+                    logger.warning(f"Could not check/alter table {table} schema: {ex_alter}")
+
+            try:
+                cur_info = conn_mem.execute("PRAGMA table_info('embeddings')")
+                cols = {r[1] for r in cur_info.fetchall()}
+                if "ucf_provenance" not in cols:
+                    conn_mem.execute("ALTER TABLE embeddings ADD COLUMN ucf_provenance TEXT")
+            except Exception as ex_alter:
+                logger.warning(f"Could not check/alter embeddings table schema: {ex_alter}")
+
+            manifest_scenes = {s.get("id") or s.get("scene_id"): s for s in scene_manifest.get("scenes", []) if isinstance(s, dict)}
+
+            with conn_mem:
+                now_str = datetime.utcnow().isoformat()
+                for scene_id, s_frames in frames_by_scene.items():
+                    scene_fids = [f["frame_id"] for f in s_frames]
+
+                    manifest_scene = manifest_scenes.get(scene_id)
+                    if manifest_scene:
+                        start = float(manifest_scene.get("start") or 0.0)
+                        end = float(manifest_scene.get("end") or start)
+                        scene_meta = manifest_scene.get("meta", {}) or manifest_scene
+                    else:
+                        start = min(f["t_start"] for f in s_frames)
+                        end = max(f["t_end"] for f in s_frames)
+                        scene_meta = {}
+
+                    merged_meta = dict(scene_meta)
+                    merged_meta["ucf_provenance"] = scene_fids
+                    merged_meta_json = json.dumps(merged_meta, ensure_ascii=False)
+
+                    conn_mem.execute(
+                        "INSERT OR REPLACE INTO scenes(id, video_hash, start, end, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                        (scene_id, video_hash, start, end, merged_meta_json, now_str)
+                    )
+                    scenes_count += 1
+
+                    ocr_text = None
+                    transcript_text = None
+                    if manifest_scene:
+                        ocr_text = manifest_scene.get("keyframe", {}).get("ocr_text")
+                        transcript_text = manifest_scene.get("audio", {}).get("transcript")
+                    
+                    for f in s_frames:
+                        if not ocr_text and f["worker_name"] == "image_ocr":
+                            ocr_text = f["payload"].get("ocr_text")
+                        if not transcript_text and f["worker_name"] == "audio_transcribe":
+                            transcript_text = f["payload"].get("transcript") or f["payload"].get("text")
+
+                    conn_mem.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (scene_id,))
+                    if ocr_text:
+                        conn_mem.execute(
+                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?, ?, 'ocr', ?)",
+                            (scene_id, video_hash, str(ocr_text))
+                        )
+                    if transcript_text:
+                        conn_mem.execute(
+                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?, ?, 'transcript', ?)",
+                            (scene_id, video_hash, str(transcript_text))
+                        )
+
+                    conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, scene_id, 'scene_of'))
+                    conn_mem.execute(
+                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'scene_of', ?, ?, ?)",
+                        (video_hash, scene_id, start, json.dumps({'duration': end - start}, ensure_ascii=False), now_str)
+                    )
+
+                    frame_hash = None
+                    if manifest_scene and manifest_scene.get("keyframe"):
+                        kframe = manifest_scene["keyframe"]
+                        frame_hash = kframe.get("hash")
+                        frame_path = kframe.get("path")
+                        if frame_hash:
+                            conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, frame_hash, 'keyframe_of'))
+                            conn_mem.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'keyframe_of', NULL, ?, ?)",
+                                (scene_id, frame_hash, json.dumps({'path': frame_path}, ensure_ascii=False), now_str)
+                            )
+                            conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, frame_hash, 'frame_of'))
+                            conn_mem.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'frame_of', ?, ?, ?)",
+                                (video_hash, frame_hash, start + (end - start)/2.0, json.dumps({'scene_id': scene_id}, ensure_ascii=False), now_str)
+                            )
+
+                    audio_hash = None
+                    if manifest_scene and manifest_scene.get("audio"):
+                        aud = manifest_scene["audio"]
+                        audio_hash = aud.get("hash")
+                        audio_path = aud.get("path")
+                        if audio_hash:
+                            conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, audio_hash, 'audio_of_scene'))
+                            conn_mem.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'audio_of_scene', NULL, ?, ?)",
+                                (scene_id, audio_hash, json.dumps({'path': audio_path}, ensure_ascii=False), now_str)
+                            )
+                            conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, audio_hash, 'audio_of'))
+                            conn_mem.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'audio_of', ?, ?, ?)",
+                                (video_hash, audio_hash, start, json.dumps({'scene_id': scene_id}, ensure_ascii=False), now_str)
+                            )
+
+                    segments_list = []
+                    if manifest_scene and manifest_scene.get("audio") and isinstance(manifest_scene["audio"].get("speaker_transcript"), list):
+                        segments_list = manifest_scene["audio"]["speaker_transcript"]
+                    elif isinstance(temporal_index.get("segments"), list):
+                        segments_list = [seg for seg in temporal_index["segments"] if str(seg.get("scene_id")) == str(scene_id)]
+                    
+                    if not segments_list:
+                        for f in s_frames:
+                            if f["worker_name"] == "audio_transcribe" and f["payload"]:
+                                p = f["payload"]
+                                segments_list.append({
+                                    "start": f["t_start"],
+                                    "end": f["t_end"],
+                                    "speaker": p.get("speaker") or p.get("speaker_id") or "unknown",
+                                    "text": p.get("transcript") or p.get("text")
+                                })
+
+                    for seg in segments_list:
+                        if not isinstance(seg, dict):
+                            continue
+                        seg_start = float(seg.get("start", start))
+                        seg_end = float(seg.get("end", end))
+                        speaker = seg.get("speaker") or "unknown"
+                        seg_id = _make_id("segment", [video_hash, f"{seg_start:.3f}", f"{seg_end:.3f}", speaker])
+                        
+                        seg_fids = []
+                        for f in s_frames:
+                            if f["t_start"] < seg_end and f["t_end"] > seg_start:
+                                seg_fids.append(f["frame_id"])
+                        if not seg_fids:
+                            seg_fids = scene_fids
+
+                        seg_meta = {k: v for k, v in seg.items() if k not in ("start", "end")}
+                        seg_meta["ucf_provenance"] = seg_fids
+                        seg_meta_json = json.dumps(seg_meta, ensure_ascii=False)
+
+                        conn_mem.execute(
+                            "INSERT OR REPLACE INTO segments(id, video_hash, start, end, speaker, meta, created_at) VALUES (?,?,?,?,?,?,?)",
+                            (seg_id, video_hash, seg_start, seg_end, speaker, seg_meta_json, now_str)
+                        )
+                        segments_count += 1
+
+                        conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, seg_id, 'segment_of'))
+                        conn_mem.execute(
+                            "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'segment_of', ?, ?, ?)",
+                            (video_hash, seg_id, seg_start, json.dumps({'scene_id': scene_id}, ensure_ascii=False), now_str)
+                        )
+
+                        overlap_dur = max(0.0, min(end, seg_end) - max(start, seg_start))
+                        conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, seg_id, 'overlaps'))
+                        conn_mem.execute(
+                            "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'overlaps', NULL, ?, ?)",
+                            (scene_id, seg_id, json.dumps({'overlap': overlap_dur, 'speaker': speaker}, ensure_ascii=False), now_str)
+                        )
+
+                    for f in s_frames:
+                        v_key = f["vector_key"]
+                        v_collection = f["vector_collection"]
+                        if v_key and v_collection:
+                            vector = self._fetch_vector_from_qdrant(v_collection, v_key)
+                            if vector:
+                                vector_bytes = np.array(vector, dtype=np.float32).tobytes()
+                                faiss_id = to_faiss_id(v_key)
+                                
+                                conn_mem.execute(
+                                    "INSERT OR REPLACE INTO embeddings (hash, faiss_id, source_path, modality, scene_id, created_at, vector, ucf_provenance) "
+                                    "VALUES (?, ?, '', ?, ?, ?, ?, ?)",
+                                    (v_key, faiss_id, f["modality"], scene_id, now_str, vector_bytes, json.dumps([f["frame_id"]]))
+                                )
+                                embeddings_count += 1
+            conn_mem.close()
+
+            if not graph_db_path:
+                raise RuntimeError("knowledge_graph_db path is not defined")
+            
+            with KnowledgeGraph(str(graph_db_path)) as kg:
+                v_node_id = kg.add_node("video", video_stem, {"ucf_provenance": promoted_frame_ids})
+                kg_nodes_count += 1
+                
+                conn_mem_read = sqlite3.connect(str(db_path))
+                cursor_sc = conn_mem_read.execute("SELECT id, start, end, meta FROM scenes WHERE video_hash = ?", (video_hash,))
+                scenes_rows = cursor_sc.fetchall()
+                
+                cursor_seg = conn_mem_read.execute("SELECT id, start, end, speaker, meta FROM segments WHERE video_hash = ?", (video_hash,))
+                segments_rows = cursor_seg.fetchall()
+                conn_mem_read.close()
+
+                scene_node_ids = {}
+                for sid, s_start, s_end, s_meta_str in scenes_rows:
+                    s_meta = json.loads(s_meta_str) if s_meta_str else {}
+                    prov = s_meta.get("ucf_provenance", promoted_frame_ids)
+                    
+                    media_id = kg.add_media_node(
+                        media_type="video_scene",
+                        media_path=file_path or "unknown.mp4",
+                        scene_id=sid,
+                        timestamp_start=s_start,
+                        timestamp_end=s_end,
+                        properties={"duration": s_end - s_start, "ucf_provenance": prov}
+                    )
+                    
+                    sc_node_id = kg.add_node("scene", sid, {"ucf_provenance": prov})
+                    scene_node_ids[sid] = sc_node_id
+                    kg_nodes_count += 1
+                    
+                    kg.link_node_to_media(sc_node_id, media_id, confidence=1.0)
+                    kg.add_edge(v_node_id, sc_node_id, "has_scene", weight=1.0, properties={"ucf_provenance": prov})
+                    kg_edges_count += 1
+
+                for seg_id, seg_start, seg_end, speaker, seg_meta_str in segments_rows:
+                    seg_meta = json.loads(seg_meta_str) if seg_meta_str else {}
+                    prov = seg_meta.get("ucf_provenance", promoted_frame_ids)
+                    
+                    conn_mem_read = sqlite3.connect(str(db_path))
+                    cursor_link = conn_mem_read.execute(
+                        "SELECT parent_hash FROM links WHERE child_hash = ? AND relation = 'overlaps' LIMIT 1",
+                        (seg_id,)
+                    )
+                    link_row = cursor_link.fetchone()
+                    conn_mem_read.close()
+                    sc_id = link_row[0] if link_row else None
+                    
+                    seg_node_id = kg.add_node("segment", seg_id, {"start": seg_start, "end": seg_end, "ucf_provenance": prov})
+                    kg_nodes_count += 1
+                    
+                    media_id = None
+                    if sc_id:
+                        cur_media = kg.conn.execute("SELECT id FROM media_nodes WHERE scene_id = ? AND media_path = ?", (sc_id, file_path or "unknown.mp4"))
+                        media_row = cur_media.fetchone()
+                        if media_row:
+                            media_id = media_row[0]
+                    
+                    if media_id:
+                        kg.link_node_to_media(seg_node_id, media_id, confidence=1.0)
+                        
+                    if sc_id and sc_id in scene_node_ids:
+                        sc_node_id = scene_node_ids[sc_id]
+                        kg.add_edge(sc_node_id, seg_node_id, "has_segment", weight=1.0, properties={"ucf_provenance": prov})
+                        kg_edges_count += 1
+                        
+                    if speaker:
+                        spk_node_id = kg.add_node("speaker", speaker, {"ucf_provenance": prov})
+                        kg_nodes_count += 1
+                        if media_id:
+                            kg.link_node_to_media(spk_node_id, media_id, confidence=1.0)
+                        kg.add_edge(seg_node_id, spk_node_id, "speaker_of", weight=1.0, properties={"ucf_provenance": prov})
+                        kg_edges_count += 1
+
+            conn.commit()
+            conn.close()
+
+        except Exception as materialization_err:
+            logger.error(f"Materialization failed for video_hash {video_hash}: {materialization_err}", exc_info=True)
+            try:
+                conn.execute("ROLLBACK")
+                conn.close()
+            except Exception:
+                pass
+            self._dematerialize_active_views(video_hash=video_hash)
+            raise materialization_err
+
+        val_errors = []
+        try:
+            val_res = self._execute_validate_ucf_epoch({})
+            if not val_res.get("success", False):
+                val_errors = val_res.get("errors", ["Validation failed."])
+        except Exception as ve:
+            val_errors = [str(ve)]
+
+        # Construct report
+        report = {
+            "status": "success" if not val_errors else "warning",
+            "counts": {
+                "scenes_materialized": scenes_count,
+                "segments_materialized": segments_count,
+                "embeddings_materialized": embeddings_count,
+                "kg_nodes_materialized": kg_nodes_count,
+                "kg_edges_materialized": kg_edges_count
+            },
+            "scope": {
+                "video_hash": video_hash,
+                "epoch_id": epoch_id,
+                "promoted_frame_ids": promoted_frame_ids
+            },
+            "inputs": {
+                "scene_manifest_path": str(scene_manifest_path.resolve()) if scene_manifest_path.exists() else None,
+                "temporal_index_path": str(temporal_index_path.resolve()) if temporal_index_path.exists() else None
+            },
+            "outputs": {
+                "db_path": str(db_path),
+                "knowledge_graph_db": str(graph_db_path)
+            },
+            "errors": val_errors,
+            "validation_reference": "validate_ucf_epoch --mode strict"
+        }
+
         qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "promoted")
         scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="promoted", video_hash=video_hash)
         res = {
@@ -1405,6 +1999,7 @@ class MiniAgentClient:
             "status": "promoted_complete",
             "qdrant_sync": qdrant_sync,
             "scope_sync": scope_sync,
+            "materialization_report": report
         }
         if qdrant_sync["status"] == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]
@@ -1434,10 +2029,10 @@ class MiniAgentClient:
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
         
-        # Query vector_key, vector_collection, vector_backend for frames to be rejected before updating
+        # Query vector_key, vector_collection, vector_backend, video_hash for frames to be rejected before updating
         import sqlite3
         conn = sqlite3.connect(str(ucf_db_path))
-        query_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status IN ('staged', 'validated')"
+        query_sync = "SELECT vector_key, vector_collection, vector_backend, video_hash FROM context_frames WHERE promotion_status IN ('staged', 'validated')"
         params_sync = []
         if video_hash:
             query_sync += " AND video_hash = ?"
@@ -1460,8 +2055,21 @@ class MiniAgentClient:
         )
         client.close()
         
-        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "rejected")
+        frames_for_sync = [(f[0], f[1], f[2]) for f in frames_to_sync]
+        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_for_sync, "rejected")
         scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="rejected", video_hash=video_hash)
+        
+        # Dematerialize active views
+        affected_video_hashes = set()
+        if video_hash:
+            affected_video_hashes.add(video_hash)
+        else:
+            for f in frames_to_sync:
+                if len(f) > 3 and f[3]:
+                    affected_video_hashes.add(f[3])
+        for vh in affected_video_hashes:
+            self._dematerialize_active_views(video_hash=vh)
+
         res = {
             "rejected_count": rejected_count,
             "status": "rejected_complete",
@@ -1488,10 +2096,10 @@ class MiniAgentClient:
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
         
-        # Query vector_key, vector_collection, vector_backend for frames to be superseded before updating
+        # Query vector_key, vector_collection, vector_backend, video_hash for frames to be superseded before updating
         import sqlite3
         conn = sqlite3.connect(str(ucf_db_path))
-        query_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status IN ('promoted', 'validated')"
+        query_sync = "SELECT vector_key, vector_collection, vector_backend, video_hash FROM context_frames WHERE promotion_status IN ('promoted', 'validated')"
         params_sync = []
         if video_hash:
             query_sync += " AND video_hash = ?"
@@ -1513,8 +2121,21 @@ class MiniAgentClient:
         )
         client.close()
         
-        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "superseded")
+        frames_for_sync = [(f[0], f[1], f[2]) for f in frames_to_sync]
+        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_for_sync, "superseded")
         scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="superseded", video_hash=video_hash)
+        
+        # Dematerialize active views
+        affected_video_hashes = set()
+        if video_hash:
+            affected_video_hashes.add(video_hash)
+        else:
+            for f in frames_to_sync:
+                if len(f) > 3 and f[3]:
+                    affected_video_hashes.add(f[3])
+        for vh in affected_video_hashes:
+            self._dematerialize_active_views(video_hash=vh)
+
         res = {
             "superseded_count": superseded_count,
             "status": "superseded_complete",

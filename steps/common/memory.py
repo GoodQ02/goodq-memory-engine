@@ -249,6 +249,8 @@ def _legacy_collision_hash(conn: sqlite3.Connection, hash_hex: str, modality: st
 
 
 def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int], source_path: str, modality: str, scene_id: Optional[str] = None, vector: Optional[List[float]] = None) -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
 
@@ -390,6 +392,8 @@ def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int]
 
 
 def update_fields(cfg: Dict[str, Any], hash_hex: str, *, emotions_json: Optional[str] = None, sentiment_label: Optional[str] = None, sentiment_score: Optional[float] = None) -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
     if not db_path:
         return
@@ -408,6 +412,8 @@ def update_fields(cfg: Dict[str, Any], hash_hex: str, *, emotions_json: Optional
 
 
 def insert_link(cfg: Dict[str, Any], parent_hash: str, child_hash: str, relation: str, timestamp: float | None = None, meta: str | None = None) -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
     if not db_path:
         return
@@ -460,6 +466,8 @@ def ensure_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float,
 
 
 def upsert_link(cfg: Dict[str, Any], parent_hash: Optional[str], child_hash: Optional[str], relation: str, *, timestamp: Optional[float] = None, meta: Optional[Any] = None) -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
 
     if not parent_hash or not child_hash or not relation:
 
@@ -604,158 +612,172 @@ def register_scene_bundle(
             diarization = audio_data.get('speaker_transcript') or audio_data.get('diarization') or []
 
     segments_created: List[str] = []
-    db_path = (cfg.get('paths', {}) or {}).get('db_path')
-    if db_path:
-        local_conn = False
-        if conn is None:
-            conn = _connect(db_path)
-            local_conn = True
-        try:
-            import contextlib
-            ctx = conn if local_conn else contextlib.nullcontext()
-            with ctx:
-                now = datetime.utcnow().isoformat()
-                persisted_scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
-                merged_scene_meta: Dict[str, Any] = {}
-                try:
-                    cur = conn.execute("SELECT meta FROM scenes WHERE id=?", (persisted_scene_id,))
-                    row = cur.fetchone()
-                    if row and row[0]:
-                        existing = json.loads(row[0]) if row[0] else {}
-                        if isinstance(existing, dict):
-                            merged_scene_meta.update(existing)
-                except Exception as e:
-                    logger.warning(
-                        "memory operation failed operation=%s scene_id=%s exc_type=%s exc=%s",
-                        "register_scene_bundle.scene_meta_merge",
-                        scene_id,
-                        type(e).__name__,
-                        e,
-                    )
-                if isinstance(scene_meta, dict):
-                    merged_scene_meta.update(scene_meta)
-                merged_scene_meta_json = json.dumps(merged_scene_meta, ensure_ascii=False)
-                conn.execute(
-                    "INSERT OR REPLACE INTO scenes(id, video_hash, start, end, meta, created_at) VALUES (?,?,?,?,?,?)",
-                    (persisted_scene_id, video_hash, float(scene_start), float(scene_end), merged_scene_meta_json, now),
-                )
-
-                # Update FTS text index inside the transaction
-                try:
-                    conn.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (persisted_scene_id,))
-                    if ocr_text:
-                        conn.execute(
-                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
-                            (persisted_scene_id, video_hash, 'ocr', str(ocr_text)),
+    if cfg.get('ingestion_isolation', False):
+        persisted_scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
+        if isinstance(diarization, list):
+            for seg in diarization:
+                if not isinstance(seg, dict):
+                    continue
+                seg_start = _coerce_time(seg.get('start'), audio_start)
+                seg_end = _coerce_time(seg.get('end'), audio_end)
+                if not (0 <= seg_start < seg_end):
+                    print(f'[WARN] Invalid segment times: start={seg_start}, end={seg_end}. Skipping.')
+                    continue
+                seg_id = _make_id("segment", [video_hash, f"{seg_start:.3f}", f"{seg_end:.3f}", seg.get('speaker') or ""])
+                segments_created.append(seg_id)
+    else:
+        db_path = (cfg.get('paths', {}) or {}).get('db_path')
+        if db_path:
+            local_conn = False
+            if conn is None:
+                conn = _connect(db_path)
+                local_conn = True
+            try:
+                import contextlib
+                ctx = conn if local_conn else contextlib.nullcontext()
+                with ctx:
+                    now = datetime.utcnow().isoformat()
+                    persisted_scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
+                    merged_scene_meta: Dict[str, Any] = {}
+                    try:
+                        cur = conn.execute("SELECT meta FROM scenes WHERE id=?", (persisted_scene_id,))
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            existing = json.loads(row[0]) if row[0] else {}
+                            if isinstance(existing, dict):
+                                merged_scene_meta.update(existing)
+                    except Exception as e:
+                        logger.warning(
+                            "memory operation failed operation=%s scene_id=%s exc_type=%s exc=%s",
+                            "register_scene_bundle.scene_meta_merge",
+                            scene_id,
+                            type(e).__name__,
+                            e,
                         )
-                    if transcript_text:
-                        conn.execute(
-                            "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
-                            (persisted_scene_id, video_hash, 'transcript', str(transcript_text)),
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "FTS index update failed for scene_id=%s exc=%s",
-                        persisted_scene_id,
-                        e
+                    if isinstance(scene_meta, dict):
+                        merged_scene_meta.update(scene_meta)
+                    merged_scene_meta_json = json.dumps(merged_scene_meta, ensure_ascii=False)
+                    conn.execute(
+                        "INSERT OR REPLACE INTO scenes(id, video_hash, start, end, meta, created_at) VALUES (?,?,?,?,?,?)",
+                        (persisted_scene_id, video_hash, float(scene_start), float(scene_end), merged_scene_meta_json, now),
                     )
 
-                scene_of_meta = {'duration': scene_duration, 'index': scene_index}
-                scene_of_meta_payload = json.dumps(scene_of_meta, ensure_ascii=False)
-                conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, scene_id, 'scene_of'))
-                conn.execute(
-                    "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                    (video_hash, scene_id, 'scene_of', scene_start, scene_of_meta_payload, now),
-                )
-
-                if frame_hash:
-                    frame_meta = {'path': frame.get('path') if isinstance(frame, dict) else None}
-                    frame_meta_payload = json.dumps(frame_meta, ensure_ascii=False)
-                    conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, frame_hash, 'keyframe_of'))
-                    conn.execute(
-                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                        (scene_id, frame_hash, 'keyframe_of', None, frame_meta_payload, now),
-                    )
-                    frame_of_meta = {'scene_id': scene_id, 'scene_index': scene_index}
-                    frame_of_meta_payload = json.dumps(frame_of_meta, ensure_ascii=False)
-                    conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, frame_hash, 'frame_of'))
-                    conn.execute(
-                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                        (video_hash, frame_hash, 'frame_of', frame_timestamp, frame_of_meta_payload, now),
-                    )
-
-                if audio_hash:
-                    audio_scene_meta = {'path': audio.get('path') if isinstance(audio, dict) else None}
-                    audio_scene_meta_payload = json.dumps(audio_scene_meta, ensure_ascii=False)
-                    conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, audio_hash, 'audio_of_scene'))
-                    conn.execute(
-                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                        (scene_id, audio_hash, 'audio_of_scene', None, audio_scene_meta_payload, now),
-                    )
-                    audio_of_meta = {'scene_id': scene_id, 'scene_index': scene_index}
-                    audio_of_meta_payload = json.dumps(audio_of_meta, ensure_ascii=False)
-                    conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, audio_hash, 'audio_of'))
-                    conn.execute(
-                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                        (video_hash, audio_hash, 'audio_of', audio_start, audio_of_meta_payload, now),
-                    )
-
-                if isinstance(diarization, list):
-                    for seg in diarization:
-                        if not isinstance(seg, dict):
-                            continue
-                        seg_start = _coerce_time(seg.get('start'), audio_start)
-                        seg_end = _coerce_time(seg.get('end'), audio_end)
-                        if not (0 <= seg_start < seg_end):
-                            print(f'[WARN] Invalid segment times: start={seg_start}, end={seg_end}. Skipping.')
-                            continue
-                        seg_meta = {k: v for k, v in seg.items() if k not in ('start', 'end')}
-                        seg_id = _make_id("segment", [video_hash, f"{seg_start:.3f}", f"{seg_end:.3f}", seg.get('speaker') or ""])
-                        merged_seg_meta: Dict[str, Any] = {}
-                        try:
-                            seg_cur = conn.execute("SELECT meta FROM segments WHERE id=?", (seg_id,))
-                            seg_row = seg_cur.fetchone()
-                            if seg_row and seg_row[0]:
-                                seg_existing = json.loads(seg_row[0]) if seg_row[0] else {}
-                                if isinstance(seg_existing, dict):
-                                    merged_seg_meta.update(seg_existing)
-                        except Exception as e:
-                            logger.warning(
-                                "memory operation failed operation=%s scene_id=%s segment_id=%s exc_type=%s exc=%s",
-                                "register_scene_bundle.segment_meta_merge",
-                                scene_id,
-                                seg_id,
-                                type(e).__name__,
-                                e,
+                    # Update FTS text index inside the transaction
+                    try:
+                        conn.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (persisted_scene_id,))
+                        if ocr_text:
+                            conn.execute(
+                                "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                                (persisted_scene_id, video_hash, 'ocr', str(ocr_text)),
                             )
-                        if isinstance(seg_meta, dict):
-                            merged_seg_meta.update(seg_meta)
-                        seg_meta_json = json.dumps(merged_seg_meta, ensure_ascii=False)
-                        conn.execute(
-                            "INSERT OR REPLACE INTO segments(id, video_hash, start, end, speaker, meta, created_at) VALUES (?,?,?,?,?,?,?)",
-                            (seg_id, video_hash, float(seg_start), float(seg_end), seg.get('speaker') or "", seg_meta_json, now),
+                        if transcript_text:
+                            conn.execute(
+                                "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                                (persisted_scene_id, video_hash, 'transcript', str(transcript_text)),
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "FTS index update failed for scene_id=%s exc=%s",
+                            persisted_scene_id,
+                            e
                         )
-                        segments_created.append(seg_id)
-                        segment_of_meta = {'scene_id': scene_id}
-                        segment_of_meta_payload = json.dumps(segment_of_meta, ensure_ascii=False)
-                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, seg_id, 'segment_of'))
+
+                    scene_of_meta = {'duration': scene_duration, 'index': scene_index}
+                    scene_of_meta_payload = json.dumps(scene_of_meta, ensure_ascii=False)
+                    conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, scene_id, 'scene_of'))
+                    conn.execute(
+                        "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
+                        (video_hash, scene_id, 'scene_of', scene_start, scene_of_meta_payload, now),
+                    )
+
+                    if frame_hash:
+                        frame_meta = {'path': frame.get('path') if isinstance(frame, dict) else None}
+                        frame_meta_payload = json.dumps(frame_meta, ensure_ascii=False)
+                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, frame_hash, 'keyframe_of'))
                         conn.execute(
                             "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                            (video_hash, seg_id, 'segment_of', seg_start, segment_of_meta_payload, now),
+                            (scene_id, frame_hash, 'keyframe_of', None, frame_meta_payload, now),
                         )
-                        overlap = max(0.0, min(scene_end, seg_end) - max(scene_start, seg_start))
-                        overlap_meta = {'overlap': overlap}
-                        if seg.get('speaker') is not None:
-                            overlap_meta['speaker'] = seg.get('speaker')
-                        overlap_meta_payload = json.dumps(overlap_meta, ensure_ascii=False)
-                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, seg_id, 'overlaps'))
+                        frame_of_meta = {'scene_id': scene_id, 'scene_index': scene_index}
+                        frame_of_meta_payload = json.dumps(frame_of_meta, ensure_ascii=False)
+                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, frame_hash, 'frame_of'))
                         conn.execute(
                             "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
-                            (scene_id, seg_id, 'overlaps', None, overlap_meta_payload, now),
+                            (video_hash, frame_hash, 'frame_of', frame_timestamp, frame_of_meta_payload, now),
                         )
-        finally:
-            if local_conn:
-                conn.close()
+
+                    if audio_hash:
+                        audio_scene_meta = {'path': audio.get('path') if isinstance(audio, dict) else None}
+                        audio_scene_meta_payload = json.dumps(audio_scene_meta, ensure_ascii=False)
+                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, audio_hash, 'audio_of_scene'))
+                        conn.execute(
+                            "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
+                            (scene_id, audio_hash, 'audio_of_scene', None, audio_scene_meta_payload, now),
+                        )
+                        audio_of_meta = {'scene_id': scene_id, 'scene_index': scene_index}
+                        audio_of_meta_payload = json.dumps(audio_of_meta, ensure_ascii=False)
+                        conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, audio_hash, 'audio_of'))
+                        conn.execute(
+                            "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
+                            (video_hash, audio_hash, 'audio_of', audio_start, audio_of_meta_payload, now),
+                        )
+
+                    if isinstance(diarization, list):
+                        for seg in diarization:
+                            if not isinstance(seg, dict):
+                                continue
+                            seg_start = _coerce_time(seg.get('start'), audio_start)
+                            seg_end = _coerce_time(seg.get('end'), audio_end)
+                            if not (0 <= seg_start < seg_end):
+                                print(f'[WARN] Invalid segment times: start={seg_start}, end={seg_end}. Skipping.')
+                                continue
+                            seg_meta = {k: v for k, v in seg.items() if k not in ('start', 'end')}
+                            seg_id = _make_id("segment", [video_hash, f"{seg_start:.3f}", f"{seg_end:.3f}", seg.get('speaker') or ""])
+                            merged_seg_meta: Dict[str, Any] = {}
+                            try:
+                                seg_cur = conn.execute("SELECT meta FROM segments WHERE id=?", (seg_id,))
+                                seg_row = seg_cur.fetchone()
+                                if seg_row and seg_row[0]:
+                                    seg_existing = json.loads(seg_row[0]) if seg_row[0] else {}
+                                    if isinstance(seg_existing, dict):
+                                        merged_seg_meta.update(seg_existing)
+                            except Exception as e:
+                                logger.warning(
+                                    "memory operation failed operation=%s scene_id=%s segment_id=%s exc_type=%s exc=%s",
+                                    "register_scene_bundle.segment_meta_merge",
+                                    scene_id,
+                                    seg_id,
+                                    type(e).__name__,
+                                    e,
+                                )
+                            if isinstance(seg_meta, dict):
+                                merged_seg_meta.update(seg_meta)
+                            seg_meta_json = json.dumps(merged_seg_meta, ensure_ascii=False)
+                            conn.execute(
+                                "INSERT OR REPLACE INTO segments(id, video_hash, start, end, speaker, meta, created_at) VALUES (?,?,?,?,?,?,?)",
+                                (seg_id, video_hash, float(seg_start), float(seg_end), seg.get('speaker') or "", seg_meta_json, now),
+                            )
+                            segments_created.append(seg_id)
+                            segment_of_meta = {'scene_id': scene_id}
+                            segment_of_meta_payload = json.dumps(segment_of_meta, ensure_ascii=False)
+                            conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, seg_id, 'segment_of'))
+                            conn.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
+                                (video_hash, seg_id, 'segment_of', seg_start, segment_of_meta_payload, now),
+                            )
+                            overlap = max(0.0, min(scene_end, seg_end) - max(scene_start, seg_start))
+                            overlap_meta = {'overlap': overlap}
+                            if seg.get('speaker') is not None:
+                                overlap_meta['speaker'] = seg.get('speaker')
+                            overlap_meta_payload = json.dumps(overlap_meta, ensure_ascii=False)
+                            conn.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (scene_id, seg_id, 'overlaps'))
+                            conn.execute(
+                                "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?,?,?,?,?,?)",
+                                (scene_id, seg_id, 'overlaps', None, overlap_meta_payload, now),
+                            )
+            finally:
+                if local_conn:
+                    conn.close()
 
     # Generate and save scene summary
     try:
@@ -917,19 +939,20 @@ def register_scene_bundle(
                             logger.warning("Failed to write to fallback Qdrant collection: %s", fallback_err)
                             
                     # Register summary embedding in SQLite
-                    try:
-                        f_id = to_faiss_id(summary_point["id"])
-                        upsert_embedding(
-                            cfg,
-                            summary_point["id"],
-                            f_id,
-                            source_path="",
-                            modality="text",
-                            scene_id=scene_id,
-                            vector=summary_point["vector"]
-                        )
-                    except Exception as sql_err:
-                        logger.warning("Failed to register summary embedding in SQLite: %s", sql_err)
+                    if not cfg.get("ingestion_isolation", False):
+                        try:
+                            f_id = to_faiss_id(summary_point["id"])
+                            upsert_embedding(
+                                cfg,
+                                summary_point["id"],
+                                f_id,
+                                source_path="",
+                                modality="text",
+                                scene_id=scene_id,
+                                vector=summary_point["vector"]
+                            )
+                        except Exception as sql_err:
+                            logger.warning("Failed to register summary embedding in SQLite: %s", sql_err)
             except Exception as embed_err:
                 logger.warning("Failed to generate and index summary embedding for scene_id=%s: %s", scene_id, embed_err)
         
@@ -1057,6 +1080,8 @@ def register_scene_bundle(
         'summary_qdrant_committed': bool(vector_store_results.get('qdrant', False)) if summary_text else False,
     }
 def store_short_term_summary(cfg: Dict[str, Any], summary: Dict[str, Any], *, category: str = "default") -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
     if not db_path:
         return
@@ -1102,6 +1127,8 @@ def append_long_term_summary(
     fields: Optional[list[str]] = None,
     max_entries: int = 20,
 ) -> None:
+    if cfg.get("ingestion_isolation", False):
+        return
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
     if not db_path:
         return
@@ -1174,6 +1201,9 @@ def _make_id(prefix: str, parts: list[str]) -> str:
 
 
 def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float, meta: Optional[Dict[str, Any]] = None, conn: Optional[sqlite3.Connection] = None) -> str:
+    sid = _make_id("scene", [video_hash, f"{start:.3f}", f"{end:.3f}"])
+    if cfg.get("ingestion_isolation", False):
+        return sid
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
 
@@ -1245,6 +1275,14 @@ def upsert_scene(cfg: Dict[str, Any], video_hash: str, start: float, end: float,
 
 
 def upsert_segment(cfg: Dict[str, Any], video_hash: str, start: float, end: float, speaker: Optional[str] = None, meta: Optional[Dict[str, Any]] = None) -> str:
+    # Validate segment times
+    if not (0 <= start < end):
+        print(f'[WARN] Invalid segment times: start={start}, end={end}. Skipping.')
+        return ""
+
+    sid = _make_id("segment", [video_hash, f"{start:.3f}", f"{end:.3f}", speaker or ""])
+    if cfg.get("ingestion_isolation", False):
+        return sid
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")
 
@@ -1252,13 +1290,6 @@ def upsert_segment(cfg: Dict[str, Any], video_hash: str, start: float, end: floa
 
         return ""
     
-    # Validate segment times
-    if not (0 <= start < end):
-        print(f'[WARN] Invalid segment times: start={start}, end={end}. Skipping.')
-        return ""
-
-    sid = _make_id("segment", [video_hash, f"{start:.3f}", f"{end:.3f}", speaker or ""])
-
     conn = _connect(db_path)
 
     try:

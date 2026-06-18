@@ -184,7 +184,7 @@ def test_search_text_hybrid_blend(monkeypatch: pytest.MonkeyPatch, temp_db_path:
 
     # Mock Qdrant client query to return semantic matches
     class FakeQdrantClient:
-        def query(self, vector, top_k):
+        def query(self, vector, top_k, **kwargs):
             return [
                 {"id": "scene_01", "score": 0.85, "payload": {"scene_id": "scene_01", "text": "Tony at the dinner table"}}
             ]

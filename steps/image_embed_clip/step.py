@@ -129,6 +129,15 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     out = _CLIP["model"].get_image_features(**ipt)
             else:
                 out = _CLIP["model"].get_image_features(**ipt)
+        # Normalize output: handle tensor, tuple, and model-output object forms
+        if hasattr(out, "pooler_output") and out.pooler_output is not None:
+            out = out.pooler_output
+        elif hasattr(out, "last_hidden_state"):
+            out = out.last_hidden_state[:, 0, :]
+        elif isinstance(out, tuple):
+            out = out[0]
+        if not torch.is_tensor(out):
+            raise TypeError(f"Unexpected CLIP output type: {type(out).__name__}")
         feats = out.detach().cpu().numpy().astype("float32")
         h = _content_fingerprint(item)
         import numpy as np  # type: ignore

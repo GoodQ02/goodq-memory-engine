@@ -171,7 +171,7 @@ def _write_scene_faiss_points(
 
             faiss.write_index(index, index_path)
 
-        if isinstance(id_map_db, str) and id_map_db.strip():
+        if isinstance(id_map_db, str) and id_map_db.strip() and not cfg.get("ingestion_isolation", False):
             from datetime import datetime
             from steps.common.memory import ensure_id_map_table_schema
             conn = None

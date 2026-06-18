@@ -22,8 +22,8 @@ def test_ucf_multi_source_happy_path(tmp_path, monkeypatch):
     media sources, raw reference checks, reconciliations, and report tables across
     multiple videos in the same epoch, even when scene IDs collide (like scene_0000).
     """
-    db_dir = tmp_path / "epoch_multi"
-    db_dir.mkdir()
+    db_dir = tmp_path / "epochs" / "epoch_multi"
+    db_dir.mkdir(parents=True, exist_ok=True)
     
     # Mock configs
     test_cfg = {
@@ -37,8 +37,8 @@ def test_ucf_multi_source_happy_path(tmp_path, monkeypatch):
     monkeypatch.setattr("scripts.ucf.validate_ucf_epoch.REPO_ROOT", tmp_path)
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     
-    expected_db_dir = tmp_path / "epochs" / "epoch_multi" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
     
     # Import ucf_ledger dynamically from skill scripts
@@ -170,8 +170,8 @@ def test_ucf_multi_source_unregistered_video_hash_poison_pill(tmp_path, monkeypa
     """
     Verifies that a context frame referencing an unregistered video hash fails media_sources_gate.
     """
-    db_dir = tmp_path / "epoch_poison"
-    db_dir.mkdir()
+    db_dir = tmp_path / "epochs" / "epoch_poison"
+    db_dir.mkdir(parents=True, exist_ok=True)
     
     test_cfg = {
         "paths": {
@@ -184,8 +184,8 @@ def test_ucf_multi_source_unregistered_video_hash_poison_pill(tmp_path, monkeypa
     monkeypatch.setattr("scripts.ucf.validate_ucf_epoch.REPO_ROOT", tmp_path)
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     
-    expected_db_dir = tmp_path / "epochs" / "epoch_poison" / "ucf"
-    expected_db_dir.mkdir(parents=True)
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
     
     ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
@@ -270,4 +270,4 @@ def test_ucf_multi_source_dirty_duplicate_db_fail(tmp_path, monkeypatch):
         
     assert report["summary"]["success"] is False
     assert report["path_hygiene"]["status"] == "failed"
-    assert "duplicate dirty database also exists" in report["path_hygiene"]["errors"][0]
+    assert "duplicate legacy database also exists" in report["path_hygiene"]["errors"][0]

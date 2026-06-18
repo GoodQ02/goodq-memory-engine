@@ -567,8 +567,9 @@ def test_reject_invalid_transition_from_promoted(tmp_path, monkeypatch):
         {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "trying to reject promoted"},
     )
     assert rc == 0
-    # Promoted frames are not in IN('staged','validated'), so 0 rows updated
-    assert result["output"]["rejected_count"] == 0
+    assert result["output"]["status"] == "blocked"
+    assert result["output"]["reason"] == "cannot_reject_promoted_frames"
+    assert "Cannot reject" in result["output"]["message"]
 
     # DB row must still be 'promoted'
     conn = sqlite3.connect(str(db_path))

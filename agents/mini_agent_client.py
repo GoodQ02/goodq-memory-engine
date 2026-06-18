@@ -1374,6 +1374,23 @@ class MiniAgentClient:
                             except Exception:
                                 pass
                                 
+                    # Ensure ucf_provenance_mapping table exists
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS ucf_provenance_mapping (
+                            record_type TEXT,
+                            record_id TEXT,
+                            ucf_frame_id INTEGER,
+                            PRIMARY KEY (record_type, record_id, ucf_frame_id)
+                        )
+                    """)
+
+                    # Fetch embedding hashes before deleting them
+                    emb_hashes = []
+                    if scene_ids:
+                        placeholders = ",".join("?" for _ in scene_ids)
+                        cursor = conn.execute(f"SELECT hash FROM embeddings WHERE scene_id IN ({placeholders})", tuple(scene_ids))
+                        emb_hashes = [r[0] for r in cursor.fetchall()]
+
                     # Delete from scenes, scene_text_fts, segments, embeddings
                     conn.execute("DELETE FROM scenes WHERE video_hash = ?", (video_hash,))
                     conn.execute("DELETE FROM scene_text_fts WHERE video_hash = ?", (video_hash,))
@@ -1382,6 +1399,17 @@ class MiniAgentClient:
                     if scene_ids:
                         placeholders = ",".join("?" for _ in scene_ids)
                         conn.execute(f"DELETE FROM embeddings WHERE scene_id IN ({placeholders})", tuple(scene_ids))
+
+                    # Clean up ucf_provenance_mapping
+                    if scene_ids:
+                        placeholders = ",".join("?" for _ in scene_ids)
+                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'scene' AND record_id IN ({placeholders})", tuple(scene_ids))
+                    if seg_ids:
+                        placeholders = ",".join("?" for _ in seg_ids)
+                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'segment' AND record_id IN ({placeholders})", tuple(seg_ids))
+                    if emb_hashes:
+                        placeholders = ",".join("?" for _ in emb_hashes)
+                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'embedding' AND record_id IN ({placeholders})", tuple(emb_hashes))
                         
                     # Delete from links
                     conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (video_hash, video_hash))
@@ -1474,7 +1502,7 @@ class MiniAgentClient:
                         if scene_node_ids_list:
                             placeholders_sc = ",".join("?" for _ in scene_node_ids_list)
                             cursor = kg.conn.execute(
-                                f"SELECT target_id FROM edges WHERE source_id IN ({placeholders_sc}) AND edge_type = 'has_segment'",
+                                f"SELECT target_id FROM edges WHERE source_id IN ({placeholders_sc}) AND edge_type IN ('has_segment', 'scene_has_segment')",
                                 tuple(scene_node_ids_list)
                             )
                             for r in cursor.fetchall():
@@ -1494,6 +1522,40 @@ class MiniAgentClient:
                                         nodes_to_delete_ids.append(n_id)
                                 except Exception:
                                     pass
+
+                        # Query evidence nodes corresponding to the video's frames from the ledger
+                        video_frame_ids = []
+                        if ucf_db_path and Path(ucf_db_path).exists():
+                            try:
+                                conn_ucf = sqlite3.connect(str(ucf_db_path))
+                                cursor = conn_ucf.execute("SELECT frame_id FROM context_frames WHERE video_hash = ?", (video_hash,))
+                                video_frame_ids = [r[0] for r in cursor.fetchall()]
+                                conn_ucf.close()
+                            except Exception:
+                                pass
+
+                        evidence_node_ids = []
+                        if video_frame_ids:
+                            for fid in video_frame_ids:
+                                cursor = kg.conn.execute("SELECT id FROM nodes WHERE node_type = 'evidence' AND name = ?", (f"ucf_frame_{fid}",))
+                                for r in cursor.fetchall():
+                                    evidence_node_ids.append(r[0])
+
+                        # Support-aware evidence node pruning
+                        for ev_id in evidence_node_ids:
+                            if nodes_to_delete_ids:
+                                placeholders_del = ",".join("?" for _ in nodes_to_delete_ids)
+                                cursor = kg.conn.execute(
+                                    f"SELECT count(*) FROM edges WHERE (source_id = ? OR target_id = ?) AND (source_id NOT IN ({placeholders_del}) AND target_id NOT IN ({placeholders_del}))",
+                                    (ev_id, ev_id) + tuple(nodes_to_delete_ids) * 2
+                                )
+                                other_edge_count = cursor.fetchone()[0]
+                            else:
+                                cursor = kg.conn.execute("SELECT count(*) FROM edges WHERE source_id = ? OR target_id = ?", (ev_id, ev_id))
+                                other_edge_count = cursor.fetchone()[0]
+
+                            if other_edge_count == 0:
+                                nodes_to_delete_ids.append(ev_id)
 
                         if nodes_to_delete_ids:
                             nodes_to_delete_ids = list(set(nodes_to_delete_ids))
@@ -1705,6 +1767,18 @@ class MiniAgentClient:
             except Exception as ex_alter:
                 logger.warning(f"Could not check/alter embeddings table schema: {ex_alter}")
 
+            try:
+                conn_mem.execute("""
+                    CREATE TABLE IF NOT EXISTS ucf_provenance_mapping (
+                        record_type TEXT,
+                        record_id TEXT,
+                        ucf_frame_id INTEGER,
+                        PRIMARY KEY (record_type, record_id, ucf_frame_id)
+                    )
+                """)
+            except Exception as ex_create:
+                logger.warning(f"Could not create ucf_provenance_mapping table: {ex_create}")
+
             manifest_scenes = {s.get("id") or s.get("scene_id"): s for s in scene_manifest.get("scenes", []) if isinstance(s, dict)}
 
             with conn_mem:
@@ -1731,6 +1805,12 @@ class MiniAgentClient:
                         (scene_id, video_hash, start, end, merged_meta_json, now_str)
                     )
                     scenes_count += 1
+
+                    for fid in scene_fids:
+                        conn_mem.execute(
+                            "INSERT OR REPLACE INTO ucf_provenance_mapping(record_type, record_id, ucf_frame_id) VALUES ('scene', ?, ?)",
+                            (scene_id, fid)
+                        )
 
                     ocr_text = None
                     transcript_text = None
@@ -1838,6 +1918,12 @@ class MiniAgentClient:
                         )
                         segments_count += 1
 
+                        for fid in seg_fids:
+                            conn_mem.execute(
+                                "INSERT OR REPLACE INTO ucf_provenance_mapping(record_type, record_id, ucf_frame_id) VALUES ('segment', ?, ?)",
+                                (seg_id, fid)
+                            )
+
                         conn_mem.execute("DELETE FROM links WHERE parent_hash=? AND child_hash=? AND relation=?", (video_hash, seg_id, 'segment_of'))
                         conn_mem.execute(
                             "INSERT INTO links(parent_hash, child_hash, relation, timestamp, meta, created_at) VALUES (?, ?, 'segment_of', ?, ?, ?)",
@@ -1866,6 +1952,11 @@ class MiniAgentClient:
                                     (v_key, faiss_id, f["modality"], scene_id, now_str, vector_bytes, json.dumps([f["frame_id"]]))
                                 )
                                 embeddings_count += 1
+
+                                conn_mem.execute(
+                                    "INSERT OR REPLACE INTO ucf_provenance_mapping(record_type, record_id, ucf_frame_id) VALUES ('embedding', ?, ?)",
+                                    (v_key, f["frame_id"])
+                                )
             conn_mem.close()
 
             if not graph_db_path:
@@ -1902,8 +1993,14 @@ class MiniAgentClient:
                     kg_nodes_count += 1
                     
                     kg.link_node_to_media(sc_node_id, media_id, confidence=1.0)
-                    kg.add_edge(v_node_id, sc_node_id, "has_scene", weight=1.0, properties={"ucf_provenance": prov})
+                    kg.add_edge(v_node_id, sc_node_id, "video_contains_scene", weight=1.0, properties={"ucf_provenance": prov})
                     kg_edges_count += 1
+
+                    for fid in prov:
+                        ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
+                        kg_nodes_count += 1
+                        kg.add_edge(sc_node_id, ev_node_id, "scene_supported_by_ucf_frame", weight=1.0, properties={"ucf_provenance": [fid]})
+                        kg_edges_count += 1
 
                 for seg_id, seg_start, seg_end, speaker, seg_meta_str in segments_rows:
                     seg_meta = json.loads(seg_meta_str) if seg_meta_str else {}
@@ -1933,15 +2030,13 @@ class MiniAgentClient:
                         
                     if sc_id and sc_id in scene_node_ids:
                         sc_node_id = scene_node_ids[sc_id]
-                        kg.add_edge(sc_node_id, seg_node_id, "has_segment", weight=1.0, properties={"ucf_provenance": prov})
+                        kg.add_edge(sc_node_id, seg_node_id, "scene_has_segment", weight=1.0, properties={"ucf_provenance": prov})
                         kg_edges_count += 1
-                        
-                    if speaker:
-                        spk_node_id = kg.add_node("speaker", speaker, {"ucf_provenance": prov})
+
+                    for fid in prov:
+                        ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
                         kg_nodes_count += 1
-                        if media_id:
-                            kg.link_node_to_media(spk_node_id, media_id, confidence=1.0)
-                        kg.add_edge(seg_node_id, spk_node_id, "speaker_of", weight=1.0, properties={"ucf_provenance": prov})
+                        kg.add_edge(seg_node_id, ev_node_id, "segment_supported_by_ucf_frame", weight=1.0, properties={"ucf_provenance": [fid]})
                         kg_edges_count += 1
 
             conn.commit()
@@ -2032,6 +2127,26 @@ class MiniAgentClient:
         # Query vector_key, vector_collection, vector_backend, video_hash for frames to be rejected before updating
         import sqlite3
         conn = sqlite3.connect(str(ucf_db_path))
+
+        # Check for already-promoted or superseded frames in target scope
+        check_query = "SELECT count(*) FROM context_frames WHERE promotion_status IN ('promoted', 'superseded')"
+        check_params = []
+        if video_hash:
+            check_query += " AND video_hash = ?"
+            check_params.append(video_hash)
+        if epoch_id:
+            check_query += " AND epoch_id = ?"
+            check_params.append(epoch_id)
+        
+        promoted_or_superseded_count = conn.execute(check_query, tuple(check_params)).fetchone()[0]
+        if promoted_or_superseded_count > 0:
+            conn.close()
+            return {
+                "status": "blocked",
+                "reason": "cannot_reject_promoted_frames",
+                "message": "Cannot reject: frames in the scope are already promoted or superseded. Use supersede_ucf_frames instead."
+            }
+
         query_sync = "SELECT vector_key, vector_collection, vector_backend, video_hash FROM context_frames WHERE promotion_status IN ('staged', 'validated')"
         params_sync = []
         if video_hash:

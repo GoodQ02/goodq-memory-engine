@@ -622,7 +622,18 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
         assert "video" in node_types
         assert "scene" in node_types
         assert "segment" in node_types
-        assert "speaker" in node_types
+        assert "evidence" in node_types
+        assert "speaker" not in node_types
+
+    # Assert ucf_provenance_mapping exists and is populated in memory.db
+    conn_mem = sqlite3.connect(client.config["paths"]["db_path"])
+    mapping = conn_mem.execute("SELECT record_type, record_id, ucf_frame_id FROM ucf_provenance_mapping").fetchall()
+    assert len(mapping) > 0
+    mapping_types = {row[0] for row in mapping}
+    assert "scene" in mapping_types
+    assert "segment" in mapping_types
+    assert "embedding" in mapping_types
+    conn_mem.close()
 
     # 5. Reject (trigger dematerialization)
     # We must reset frame state to validated first to allow reject
@@ -642,6 +653,7 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     assert len(conn_mem.execute("SELECT * FROM embeddings").fetchall()) == 0
     assert len(conn_mem.execute("SELECT * FROM scene_text_fts").fetchall()) == 0
     assert len(conn_mem.execute("SELECT * FROM links").fetchall()) == 0
+    assert len(conn_mem.execute("SELECT * FROM ucf_provenance_mapping").fetchall()) == 0
     conn_mem.close()
 
     # Verify Knowledge Graph is pruned (0 nodes/edges left, or support-aware clean)
@@ -649,4 +661,97 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
         stats = kg.get_statistics()
         assert stats["total_nodes"] == 0
         assert stats["total_edges"] == 0
+
+
+def test_search_visibility_lifecycle():
+    """Verify search visibility lifecycle:
+    a. After ingestion: staged evidence is not searchable.
+    b. After validation: validated evidence is still not searchable.
+    c. After promotion: promoted evidence is searchable.
+    d. After supersession: superseded evidence is no longer searchable by default.
+    e. Debug/audit search may see non-active evidence only when explicitly requested.
+    """
+    import numpy as np
+    from retrieval.multimodal_search import MultimodalSearchEngine
+
+    # Create engine with dummy config
+    engine = MultimodalSearchEngine({"paths": {"db_path": ":memory:"}})
+
+    # Mock text encode/query functions so they return dummy data
+    engine.encode_text_query = MagicMock(return_value=np.ones(384))
+    engine.encode_text_for_visual_search = MagicMock(return_value=np.ones(384))
+    engine.encode_text_for_audio_search = MagicMock(return_value=np.ones(384))
+    engine.search_fts = MagicMock(return_value=[])
+
+    mock_client = MagicMock()
+    mock_client.query.return_value = []
+    engine._get_qdrant_client = MagicMock(return_value=mock_client)
+
+    # Scenario A & B & C & D: Default search visibility (only promoted evidence)
+    # search_text
+    engine.search_text("test query", top_k=5)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    assert "must" in p_filter
+    must_keys = [item["key"] for item in p_filter["must"]]
+    must_vals = [item["match"]["value"] for item in p_filter["must"]]
+    assert "ucf_promotion_status" in must_keys
+    assert "promoted" in must_vals
+
+    # search_visual
+    mock_client.reset_mock()
+    engine.search_visual("test query", top_k=5)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    assert "must" in p_filter
+    must_keys = [item["key"] for item in p_filter["must"]]
+    must_vals = [item["match"]["value"] for item in p_filter["must"]]
+    assert "ucf_promotion_status" in must_keys
+    assert "promoted" in must_vals
+
+    # search_audio
+    mock_client.reset_mock()
+    engine.search_audio("test query", top_k=5)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    assert "must" in p_filter
+    must_keys = [item["key"] for item in p_filter["must"]]
+    must_vals = [item["match"]["value"] for item in p_filter["must"]]
+    assert "ucf_promotion_status" in must_keys
+    assert "promoted" in must_vals
+
+    # Scenario E: Debug/audit search explicitly requested (ucf_include_terminal=True)
+    # search_text
+    mock_client.reset_mock()
+    engine.search_text("test query", top_k=5, ucf_include_terminal=True)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    # Should bypass filter completely, i.e., ucf_promotion_status is not in must/must_not
+    if "must" in p_filter:
+        must_keys = [item["key"] for item in p_filter["must"]]
+        assert "ucf_promotion_status" not in must_keys
+
+    # search_visual
+    mock_client.reset_mock()
+    engine.search_visual("test query", top_k=5, ucf_include_terminal=True)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    if "must" in p_filter:
+        must_keys = [item["key"] for item in p_filter["must"]]
+        assert "ucf_promotion_status" not in must_keys
+
+    # search_audio
+    mock_client.reset_mock()
+    engine.search_audio("test query", top_k=5, ucf_include_terminal=True)
+    mock_client.query.assert_called_once()
+    _, kwargs = mock_client.query.call_args
+    p_filter = kwargs["payload_filter"]
+    if "must" in p_filter:
+        must_keys = [item["key"] for item in p_filter["must"]]
+        assert "ucf_promotion_status" not in must_keys
 

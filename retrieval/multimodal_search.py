@@ -1437,17 +1437,33 @@ class MultimodalSearchEngine:
             
         return fused_results
 
-    def _build_ucf_filter(self, payload_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _build_ucf_filter(
+        self,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        ucf_include_terminal: bool = False
+    ) -> Dict[str, Any]:
         import copy
         p_filter = copy.deepcopy(payload_filter) if payload_filter else {}
-        p_filter.setdefault("must_not", []).extend([
-            {"key": "ucf_promotion_status", "match": {"value": "rejected"}},
-            {"key": "ucf_promotion_status", "match": {"value": "superseded"}},
-            {"key": "ucf_promotion_status", "match": {"value": "staged"}}
-        ])
+        if ucf_include_terminal:
+            return p_filter
+
+        must_list = p_filter.setdefault("must", [])
+        has_status_filter = False
+        for item in must_list:
+            if isinstance(item, dict) and item.get("key") == "ucf_promotion_status":
+                has_status_filter = True
+                break
+        if not has_status_filter:
+            must_list.append({"key": "ucf_promotion_status", "match": {"value": "promoted"}})
         return p_filter
 
-    def search_text(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def search_text(
+        self,
+        query: str,
+        top_k: int = 5,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        ucf_include_terminal: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Search text embeddings (transcripts, captions, etc.) with FTS5 hybrid fusion.
         
@@ -1455,6 +1471,7 @@ class MultimodalSearchEngine:
             query: Search query
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
+            ucf_include_terminal: Bypass promotion filter if True
             
         Returns:
             List of fused search results with normalized RRF scores
@@ -1472,7 +1489,7 @@ class MultimodalSearchEngine:
                 results_semantic = client.query(
                     query_embedding.tolist(),
                     top_k=candidate_k,
-                    payload_filter=self._build_ucf_filter(payload_filter)
+                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
                 )
                 for r in results_semantic:
                     r['modality'] = 'text'
@@ -1497,7 +1514,13 @@ class MultimodalSearchEngine:
         
         return []
     
-    def search_visual(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def search_visual(
+        self,
+        query: str,
+        top_k: int = 5,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        ucf_include_terminal: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Search visual scene embeddings using text query.
         
@@ -1505,6 +1528,7 @@ class MultimodalSearchEngine:
             query: Text description of visual content
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
+            ucf_include_terminal: Bypass promotion filter if True
             
         Returns:
             List of search results with scores
@@ -1520,12 +1544,18 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
         )
         
         return results
 
-    def search_audio(self, query: str, top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def search_audio(
+        self,
+        query: str,
+        top_k: int = 5,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        ucf_include_terminal: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Search CLAP audio embeddings using a text query.
 
@@ -1533,6 +1563,7 @@ class MultimodalSearchEngine:
             query: Text description of audio content
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
+            ucf_include_terminal: Bypass promotion filter if True
 
         Returns:
             List of search results with scores
@@ -1554,7 +1585,7 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
         )
         if results:
             self._set_search_diagnostic(

@@ -147,6 +147,9 @@ class _Response:
 def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None:
     runtime_route = _load_runtime_route()
 
+    # Pin the dynamic Qdrant URL so _fake_get matches after de-hardcoding.
+    monkeypatch.setattr(runtime_route, "_qdrant_base_url", lambda: "http://localhost:6333")
+
     def _fake_get(url: str, timeout: int = 2):
         if url == "http://localhost:6333/collections":
             return _Response(200, {"result": {"collections": [{"name": "goodq_text"}]}})

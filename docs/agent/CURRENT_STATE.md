@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-06-15 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-18 -->
 
 # GoodQ4All Current Agent State
 
@@ -9,9 +9,10 @@ surface, not a replacement for the canonical runtime contracts.
 
 ## Current Mission
 
-Prepare the local-first GoodQ4All runtime for a clean home-movie memory test.
-Prior proving-ground memory, including Seinfeld/sample/test and prior home-movie
-test runs, is disposable and should not seed the next run.
+The governed materialization pipeline (v2.5.1) is verified end-to-end and ready
+for production family film ingestion. Prior proving-ground memory, including
+Seinfeld/sample/test and prior home-movie test runs, is disposable and should
+not seed the next run.
 
 ## Active Agent Workflows
 
@@ -798,16 +799,62 @@ Key changes (commits `99943a19`, `c9a7b50d`, `430efa08`):
 text) carry `ucf_promotion_status: "staged"` after clean 2-scene smoke ingest.
 948 tests pass with zero regressions.
 
+## v2.5.0: Governed Materialization Bridge (2026-06-18, commit `46f07c3e`)
+
+The first governed materialization bridge is implemented and E2E verified via a
+rigorous 9-phase smoke test using real video data (Seinfeld S01E01 clip, 2 min).
+
+Key capabilities:
+
+- **Ingestion Isolation**: `ingestion_isolation: true` in config ensures
+  ingestion writes only to `ucf_ledger.db` (staged), Qdrant (staged), and
+  durable artifacts. `memory.db` and `knowledge_graph.db` receive zero records
+  during ingestion.
+- **Materialization Bridge**: `promote_ucf_to_memory` materializes active views
+  in `memory.db` (scenes, segments, embeddings, links, FTS, provenance) and
+  `knowledge_graph.db` (video/scene/segment/evidence/entity nodes and edges)
+  from promoted UCF evidence. Returns a materialization run manifest.
+- **Provenance Mapping**: Every active materialized record traces back to UCF
+  evidence via `ucf_provenance_mapping` table.
+- **Search Visibility**: Active search returns only promoted evidence. Staged,
+  validated, rejected, and superseded evidence is excluded.
+- **Support-Aware Dematerialization**: `supersede_ucf_frames` deactivates
+  materialized memory/KG records without deleting UCF evidence.
+
+Smoke test results (commit `46f07c3e`, tag `v2.5.0`):
+
+- 4 scenes detected, 115 UCF frames staged, 32 Qdrant points
+- All ~20 pipeline steps audited (OCR, caption, objects, faces, CLIP 768-d,
+  DINO 1024-d, CLAP 512-d, text 384-d, transcription, sentiment, emotion, etc.)
+- UCF strict validation: 14/14 categories passed
+- Lifecycle: staged(115) → validated(115) → promoted(115) → superseded(115)
+- Post-promotion: 8 scenes, 52 segments, 478 provenance, 176 KG nodes, 506 KG edges
+- Post-supersession: 0 active records in all stores, UCF evidence preserved
+- Idempotency: re-supersession clean
+- Search queries ("Laura", "George", "Michigan", "Jerry"): correct results
+  post-promotion, zero results post-supersession
+
+## v2.5.1: KG Dematerialization Fix (2026-06-18, commit `a28d5348`)
+
+Fixed `_dematerialize_active_views` in `agents/mini_agent_client.py` where
+`scene_id LIKE 'scene_%'` in the KG media node query:
+1. Could match scenes from other videos with `scene_`-prefixed IDs
+2. Failed entirely for hash-based scene IDs (the current format)
+
+Replaced with parameterized query using `video_hash`, `file_path`, and
+`scene_ids` IN-list. All three discriminators were already present in the
+function. 46 unit + 19 integration tests passing. Both repos tagged `v2.5.1`.
+
 ## Safe Next Actions
 
-All Phase 0.7, 0.8, and 0.9 hardening items are verified. Current safe next actions:
+All Phase 0.7–0.9 hardening plus v2.5.0/v2.5.1 materialization bridge are
+verified. Current safe next actions:
 
-1. **Run strict UCF validation**: `conda run -n goodq_core python scripts/ucf/validate_ucf_epoch.py --mode strict`
-2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory`
-   with confirmation tokens for new ingestion epochs.
-3. **Full-scale production ingest**: Run multi-video ingestion with 100%
-   lifecycle-addressable Qdrant points guaranteed from creation.
-4. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover
-   audio_embed_clap, text_embed, face_embed worker types (Gap C in UCF_COVERAGE_GAP_REPORT.md).
-5. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on secondary host
-   and verify full suite passes.
+1. **Production family film ingestion**: Run full family film collection
+   through the governed pipeline with `ingestion_isolation: true`.
+2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then
+   `promote_ucf_to_memory` with confirmation tokens for each epoch.
+3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY
+   to cover audio_embed_clap, text_embed, face_embed worker types.
+4. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on
+   secondary host and verify full suite passes.

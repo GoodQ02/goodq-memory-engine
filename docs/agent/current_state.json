@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-06-15",
+  "last_verified": "2026-06-18",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -932,5 +932,41 @@
       "tests/agents/test_mini_agent_client.py::test_offline_fallback_denies_faiss_write",
       "tests/agents/test_mini_agent_client.py::test_offline_fallback_denies_config_write"
     ]
+  },
+  "governed_materialization_v2_5_0_2026_06_18": {
+    "last_verified": "2026-06-18",
+    "status": "completed",
+    "commits": ["46f07c3e", "a28d5348"],
+    "tags": ["v2.5.0", "v2.5.1"],
+    "details": "First governed materialization bridge implemented and E2E verified via 9-phase smoke test on real video data (Seinfeld S01E01 clip). Ingestion isolation, provenance mapping, search visibility, and support-aware dematerialization all verified.",
+    "smoke_test_results": {
+      "test_clip": "seinfeld_s01e01_clip.mp4 (2 min, 38 MB)",
+      "scenes_detected": 4,
+      "ucf_frames_staged": 115,
+      "qdrant_points": 32,
+      "qdrant_collections": ["goodq_text (12)", "goodq_clip (8)", "goodq_dino (8)", "goodq_audio (4)"],
+      "ucf_validation_categories_passed": "14/14",
+      "pipeline_steps_audited": 22,
+      "lifecycle_transitions": "staged(115) -> validated(115) -> promoted(115) -> superseded(115)",
+      "post_promotion": {
+        "memory_scenes": 8,
+        "memory_segments": 52,
+        "memory_provenance": 478,
+        "kg_nodes": 176,
+        "kg_edges": 506
+      },
+      "post_supersession_active_records": 0,
+      "idempotency": "clean",
+      "search_queries_verified": ["Laura", "George", "Michigan", "Jerry", "woman wearing a blue dress", "reunion"],
+      "verdict": "PASS"
+    },
+    "v2_5_1_fix": {
+      "commit": "a28d5348",
+      "file": "agents/mini_agent_client.py",
+      "function": "_dematerialize_active_views",
+      "bug": "scene_id LIKE 'scene_%' matched wrong videos and failed for hash-based scene IDs",
+      "fix": "Replaced with parameterized video_hash + file_path + scene_ids IN-list query",
+      "tests_passing": "46 unit + 19 integration"
+    }
   }
 }

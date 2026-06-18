@@ -9,11 +9,42 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-06-18
+
 ### Fixed
-- Closed the Qdrant payload coverage gap: all 7 Qdrant write paths now include
+- **KG Dematerialization**: Replaced unsafe `scene_id LIKE 'scene_%'` wildcard
+  in `_dematerialize_active_views` with parameterized `video_hash` + `file_path`
+  + `scene_ids` IN-list query. The LIKE clause could match scenes from other
+  videos and failed entirely for hash-based scene IDs. (commit `a28d5348`)
+
+## [2.5.0] - 2026-06-18
+
+### Added
+- **Governed Materialization Bridge**: First full materialization bridge from
+  promoted UCF evidence into active relational and graph views. Ingestion writes
+  only to `ucf_ledger.db` (staged) and Qdrant (staged); `memory.db` and
+  `knowledge_graph.db` are populated only on promotion via `MiniAgentClient`
+  tool path. (commit `46f07c3e`)
+- **Ingestion Isolation**: `ingestion_isolation: true` config flag ensures zero
+  active memory/KG writes during ingestion.
+- **Provenance Mapping**: `ucf_provenance_mapping` table traces every active
+  materialized record back to UCF evidence.
+- **Search Visibility Lifecycle**: Active search returns only promoted evidence;
+  staged, validated, rejected, and superseded are excluded.
+- **Support-Aware Dematerialization**: `supersede_ucf_frames` deactivates
+  materialized records while preserving UCF evidence with `superseded` status.
+- **Materialization Run Manifest**: Promotion produces a persistent manifest
+  with frame counts, record counts, KG statistics, and error/warning lists.
+
+### Verified
+- 9-phase smoke test on Seinfeld S01E01 clip (2 min): 4 scenes, 115 UCF frames,
+  32 Qdrant points, 22 pipeline steps audited, 14/14 UCF validation categories,
+  full lifecycle (staged → validated → promoted → superseded), idempotency clean.
+
+### Fixed
+- **Qdrant Lifecycle Coverage** (Phase 0.9): All 7 Qdrant write paths now include
   `ucf_promotion_status: "staged"` at point creation time, achieving 100%
-  lifecycle coverage. No Qdrant point is created without lifecycle identity.
-  (Phase 0.9, commits `99943a19`, `c9a7b50d`, `430efa08`)
+  lifecycle coverage. (commits `99943a19`, `c9a7b50d`, `430efa08`)
 
 ### Added
 - Closed the 2026-05-17 first-time user audit gaps for prerequisite/host

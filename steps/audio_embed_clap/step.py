@@ -148,7 +148,8 @@ def _resolve_local_model_dir(models_root: Path) -> Optional[str]:
     repo_cache = models_root / "hub" / f"models--{_CLAP_MODEL_ID.replace('/', '--')}"
     snapshots_dir = repo_cache / "snapshots"
     refs_main = repo_cache / "refs" / "main"
-    required = ("config.json", "preprocessor_config.json", "pytorch_model.bin")
+    required_config = ("config.json", "preprocessor_config.json")
+    weight_files = ("pytorch_model.bin", "model.safetensors")
     candidates = []
 
     if refs_main.is_file():
@@ -164,7 +165,8 @@ def _resolve_local_model_dir(models_root: Path) -> Optional[str]:
         if candidate in seen or not candidate.is_dir():
             continue
         seen.add(candidate)
-        if all((candidate / name).is_file() for name in required):
+        if (all((candidate / name).is_file() for name in required_config)
+                and any((candidate / w).is_file() for w in weight_files)):
             return str(candidate)
     return None
 

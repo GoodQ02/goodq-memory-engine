@@ -1536,10 +1536,17 @@ def _resolve_audio_backend_attribution(
 def _normalize_vector_store_status(value: Any) -> Any:
     if isinstance(value, bool):
         return value
-    if isinstance(value, str) and value.strip().lower() == 'not_attempted':
-        return 'not_attempted'
     if value is None:
         return None
+    if isinstance(value, str):
+        lower = value.strip().lower()
+        if lower in ('not_attempted',):
+            return 'not_attempted'
+        if lower in ('complete', 'completed', 'ok', 'success', 'passed', 'ready', 'true'):
+            return True
+        if lower in ('failed', 'error', 'false', 'unavailable'):
+            return False
+        return 'not_attempted'  # unknown strings → not_attempted, not blindly True
     return bool(value)
 
 
@@ -4978,7 +4985,7 @@ def _log_audio_to_ucf_ledger(
 
                     # Backfill ucf_frame_id to FAISS sidecar DB
                     map_db = (cfg.get("paths", {}) or {}).get("clap_id_map_db")
-                    if map_db and os.path.isfile(map_db):
+                    if map_db and os.path.isfile(map_db) and not cfg.get("ingestion_isolation", False):
                         con = None
                         try:
                             import sqlite3
@@ -5353,7 +5360,7 @@ def _log_visual_to_ucf_ledger(
 
             # Backfill ucf_frame_id to FAISS sidecar DB
             map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
-            if map_db and os.path.isfile(map_db):
+            if map_db and os.path.isfile(map_db) and not cfg.get("ingestion_isolation", False):
                 con = None
                 try:
                     import sqlite3
@@ -5432,7 +5439,7 @@ def _log_visual_to_ucf_ledger(
 
             # Backfill ucf_frame_id to FAISS sidecar DB
             map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
-            if map_db and os.path.isfile(map_db):
+            if map_db and os.path.isfile(map_db) and not cfg.get("ingestion_isolation", False):
                 con = None
                 try:
                     import sqlite3
@@ -5620,7 +5627,7 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     # FAISS sidecar DB backfill
                     clip_faiss_id = to_faiss_id(clip_id)
                     map_db = (cfg.get("paths", {}) or {}).get("clip_id_map_db")
-                    if map_db and os.path.isfile(map_db):
+                    if map_db and os.path.isfile(map_db) and not cfg.get("ingestion_isolation", False):
                         con = None
                         try:
                             import sqlite3
@@ -5692,7 +5699,7 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     # FAISS sidecar DB backfill
                     dino_faiss_id = to_faiss_id(dino_id)
                     map_db = (cfg.get("paths", {}) or {}).get("dino_id_map_db")
-                    if map_db and os.path.isfile(map_db):
+                    if map_db and os.path.isfile(map_db) and not cfg.get("ingestion_isolation", False):
                         con = None
                         try:
                             import sqlite3
@@ -7825,15 +7832,16 @@ def run(
                 
                 sqlite_start = time.perf_counter()
                 db_path = (cfg.get("paths", {}) or {}).get("db_path")
-                if db_path:
+                if db_path or cfg.get('ingestion_isolation', False):
                     for scene_res in window_results:
-                        ensure_scene(
-                            cfg,
-                            video_hash,
-                            scene_res['start'],
-                            scene_res['end'],
-                            scene_res['meta_payload'],
-                        )
+                        if not cfg.get('ingestion_isolation', False):
+                            ensure_scene(
+                                cfg,
+                                video_hash,
+                                scene_res['start'],
+                                scene_res['end'],
+                                scene_res['meta_payload'],
+                            )
                         persist_res = register_scene_bundle(
                             cfg,
                             video_hash=video_hash,
@@ -7947,7 +7955,7 @@ def run(
                 sqlite_duration = time.perf_counter() - sqlite_start
 
                 kg_start = time.perf_counter()
-                if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True):
+                if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True) and not cfg.get('ingestion_isolation', False):
                     graph_db_path = _resolve_graph_db_path(cfg).resolve()
                     graph_db_path.parent.mkdir(parents=True, exist_ok=True)
                     kg_instance = KnowledgeGraph(str(graph_db_path))
@@ -8330,8 +8338,8 @@ def run(
             'knowledge_graph_status': knowledge_graph_status,
             'orchestration': orchestration_contract,
             'phase6_audio_artifact_dir': str(phase6_audio_artifact_dir),
-            'phase6_qdrant_ok': phase6_qdrant_status,
-            'phase6_faiss_ok': phase6_faiss_status,
+            'phase6_qdrant_ok': all(s.get('qdrant_ok') is True for s in scene_outputs) if scene_outputs else False,
+            'phase6_faiss_ok': all(s.get('faiss_ok') is True for s in scene_outputs) if scene_outputs else False,
             'phase6_complete': all(s.get('qdrant_ok') is True for s in scene_outputs) if scene_outputs else False,
         }
         if profile_override:

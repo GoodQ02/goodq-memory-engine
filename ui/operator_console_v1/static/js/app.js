@@ -366,7 +366,7 @@
 
   function statusKind(value) {
     const text = String(value || "").toLowerCase();
-    if (["ok", "active", "available", "healthy", "success", "running", "passed", "ready", "true"].includes(text)) {
+    if (["ok", "active", "available", "healthy", "success", "running", "passed", "ready", "true", "complete", "completed"].includes(text)) {
       return "ok";
     }
     if (["idle", "historical only"].includes(text)) {
@@ -745,6 +745,14 @@
 
   function hasOkStatus(value) {
     return statusKind(value) === "ok";
+  }
+
+  function isTruthyStatus(v) {
+    if (v === true) return true;
+    if (typeof v === "string") {
+      return ["ok","complete","completed","success","passed","ready","true","available","healthy"].includes(v.trim().toLowerCase());
+    }
+    return false;
   }
 
   function proofState(observed, observedLabel, missingLabel, note, missingKind) {
@@ -1543,8 +1551,8 @@
     const entitySegments = numberValue(entityEvidence.segments_with_any_entity_evidence);
     const cognitiveTotal = numberValue(sentiment.segments_total ?? temporal.total_scenes ?? runScenes);
     const audioRankings = numberValue(sentiment.segments_with_audio_emotion_ranking ?? sentiment.segments_with_audio_emotion_scores);
-    const qdrantReady = graph.qdrant_ok === true || graph.phase6_qdrant_ok === true || memory.qdrant?.available === true;
-    const faissReady = graph.faiss_ok === true || graph.phase6_faiss_ok === true || memory.faiss?.available === true || numberValue(memory.faiss?.audio_vectors) !== null;
+    const qdrantReady = isTruthyStatus(graph.qdrant_ok) || isTruthyStatus(graph.phase6_qdrant_ok) || memory.qdrant?.available === true;
+    const faissReady = isTruthyStatus(graph.faiss_ok) || isTruthyStatus(graph.phase6_faiss_ok) || memory.faiss?.available === true || numberValue(memory.faiss?.audio_vectors) !== null;
     const sqliteReady = status.database?.exists === true;
     const kgReady = hasOkStatus(graph.status) || numberValue(graph.total_entities) !== null || numberValue(graph.scene_count) !== null;
     const corePersistenceReady = qdrantReady && faissReady && sqliteReady && kgReady;
@@ -2014,12 +2022,12 @@
       },
       {
         label: "Qdrant scene proof",
-        state: proofState(graph.qdrant_ok === true || graph.phase6_qdrant_ok === true || latestEpisode.qdrant_ok === true, "Observed", "Not observed", "latest run scene payload", "warn"),
+        state: proofState(isTruthyStatus(graph.qdrant_ok) || isTruthyStatus(graph.phase6_qdrant_ok) || isTruthyStatus(latestEpisode.qdrant_ok), "Observed", "Not observed", "latest run scene payload", "warn"),
         missingNote: "Qdrant scene proof not reported for latest evidence",
       },
       {
         label: "Phase 6 complete",
-        state: proofState(graph.phase6_complete === true || temporal.phase6_complete === true || latestEpisode.phase6_complete === true, "Observed", "Not observed", "fusion status", "warn"),
+        state: proofState(isTruthyStatus(graph.phase6_complete) || isTruthyStatus(temporal.phase6_complete) || isTruthyStatus(latestEpisode.phase6_complete), "Observed", "Not observed", "fusion status", "warn"),
         missingNote: "Phase 6 completion not proven",
       },
     ];
@@ -2202,8 +2210,8 @@
       ["Run scenes", runScenes !== null ? runScenes : "Not observed"],
       ["Temporal scenes", temporalScenes !== null ? temporalScenes : "Not observed"],
       ["Step rows", stepRows !== null ? stepRows : "Not observed"],
-      ["Phase 6", graph.phase6_complete === true || temporal.phase6_complete === true ? "Complete" : "Not observed"],
-      ["Qdrant", graph.qdrant_ok === true || graph.phase6_qdrant_ok === true ? "Observed" : "Not observed"],
+      ["Phase 6", isTruthyStatus(graph.phase6_complete) || isTruthyStatus(temporal.phase6_complete) ? "Complete" : "Not observed"],
+      ["Qdrant", isTruthyStatus(graph.qdrant_ok) || isTruthyStatus(graph.phase6_qdrant_ok) ? "Observed" : "Not observed"],
       ["Latest structured run audio", audioProofLabel],
       ["Audio inventory run", latestAudioInventoryRun.run_id ? compactIdentifier(latestAudioInventoryRun.run_id, { key: "run_id", max: 22 }) : "Not observed"],
       ["Inventory proof points", latestInventoryPoints !== null ? `${latestInventoryPoints} provenance-capable` : "Not observed"],

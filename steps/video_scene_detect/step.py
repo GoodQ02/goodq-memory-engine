@@ -134,6 +134,11 @@ def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
         'threshold': float(threshold_val),
         'min_scene_len_sec': float(min_scene_val),
         'max_scenes': int(safe_get(overrides.get('max_scenes'), scene_cfg.get('max_scenes'), 0)),
+        'max_scene_len_sec': float(safe_get(
+            overrides.get('max_scene_len_sec'),
+            scene_cfg.get('max_scene_len_sec'),
+            600.0
+        )),
     }
     
     # Final safety checks
@@ -143,10 +148,13 @@ def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
         params['threshold'] = 30.0
     if params['max_scenes'] < 0:
         params['max_scenes'] = 0
+    if params['max_scene_len_sec'] <= 0:
+        params['max_scene_len_sec'] = 600.0
     return params
 
 
-def _fallback_single_scene(duration: Optional[float], path: Optional[str] = None) -> List[Dict[str, Any]]:
+def _fallback_single_scene(duration: Optional[float], path: Optional[str] = None,
+                           max_scene_len_sec: float = 600.0) -> List[Dict[str, Any]]:
     resolved_duration: Optional[float] = None
     if duration and duration > 0:
         resolved_duration = float(duration)
@@ -155,6 +163,27 @@ def _fallback_single_scene(duration: Optional[float], path: Optional[str] = None
         if resolved_duration and resolved_duration > 0:
             print(f"[SCENE] Fallback duration probe succeeded: {resolved_duration:.3f}s")
     end = float(resolved_duration) if resolved_duration and resolved_duration > 0 else 0.0
+
+    # Split into sub-scenes if the video exceeds max_scene_len_sec
+    if end > max_scene_len_sec > 0:
+        scenes = []
+        offset = 0.0
+        idx = 0
+        while offset < end:
+            chunk_end = min(offset + max_scene_len_sec, end)
+            scenes.append({
+                'index': idx,
+                'start': round(offset, 3),
+                'end': round(chunk_end, 3),
+                'duration': round(chunk_end - offset, 3),
+                'confidence': 1.0,
+                'strategy': 'fallback_split',
+            })
+            offset = chunk_end
+            idx += 1
+        print(f"[SCENE] Fallback split overlong video ({end:.1f}s) into {len(scenes)} sub-scenes of ≤{max_scene_len_sec}s")
+        return scenes
+
     return [
         {
             'index': 0,
@@ -290,7 +319,8 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
         detection = _detect_with_scenedetect(path, params['threshold'], params['min_scene_len_sec'])
         scenes = detection.get('scenes', [])
         if not scenes:
-            scenes = _fallback_single_scene(detection.get('duration'), path)
+            scenes = _fallback_single_scene(detection.get('duration'), path,
+                                            max_scene_len_sec=params['max_scene_len_sec'])
             status = 'fallback_single_scene'
             print(f"[SCENE] No scenes detected, using fallback single scene")
         else:
@@ -299,7 +329,8 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
         error_msg = None
     except Exception as exc:
         print(f"[ERROR] Scene detection failed: {exc}")
-        scenes = _fallback_single_scene(None, path)
+        scenes = _fallback_single_scene(None, path,
+                                        max_scene_len_sec=params['max_scene_len_sec'])
         status = 'error'
         error_msg = str(exc)
         if tracker:

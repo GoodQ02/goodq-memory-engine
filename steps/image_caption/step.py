@@ -99,6 +99,37 @@ def _resolve_models_root() -> str:
     return str(Path(runtime_paths["models_cache"]).resolve())
 
 
+def _resolve_blip_local_dir(models_root: str) -> Optional[str]:
+    """Resolve a local HF Hub snapshot for the BLIP model."""
+    repo_cache = Path(models_root) / "hub" / "models--Salesforce--blip-image-captioning-base"
+    snapshots_dir = repo_cache / "snapshots"
+    refs_main = repo_cache / "refs" / "main"
+    required_config = ("config.json", "preprocessor_config.json")
+    weight_files = ("pytorch_model.bin", "model.safetensors")
+    candidates = []
+
+    if refs_main.is_file():
+        try:
+            revision = refs_main.read_text(encoding="utf-8").strip()
+            if revision:
+                candidates.append(snapshots_dir / revision)
+        except OSError:
+            pass
+
+    if snapshots_dir.is_dir():
+        candidates.extend(sorted(snapshots_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True))
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen or not candidate.is_dir():
+            continue
+        seen.add(candidate)
+        if (all((candidate / name).is_file() for name in required_config)
+                and any((candidate / w).is_file() for w in weight_files)):
+            return str(candidate)
+    return None
+
+
 def _load_blip() -> bool:
     if _BLIP["model"] is not None:
         return False
@@ -117,8 +148,15 @@ def _load_blip() -> bool:
         os.environ["TORCH_HOME"] = models_root
         os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
         
-        proc = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-        model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device).eval()
+        # Prefer local snapshot if available for offline/air-gapped operation
+        local_dir = _resolve_blip_local_dir(models_root)
+        model_id = local_dir or "Salesforce/blip-image-captioning-base"
+        local_only = local_dir is not None
+        if local_only:
+            logger.info(f"[OK] BLIP using local snapshot: {local_dir}")
+        
+        proc = BlipProcessor.from_pretrained(model_id, local_files_only=local_only)
+        model = BlipForConditionalGeneration.from_pretrained(model_id, local_files_only=local_only).to(device).eval()
         _BLIP.update({"model": model, "proc": proc, "device": device})
         logger.info(f"[OK] BLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
         return True

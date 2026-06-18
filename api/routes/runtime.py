@@ -228,16 +228,16 @@ def _collect_engine_details() -> Dict[str, Any]:
     }
 
     try:
-        resp = requests.get("http://localhost:6333/collections", timeout=2)
+        resp = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
         if resp.status_code == 200:
             collections = resp.json().get("result", {}).get("collections", [])
             engines["qdrant"] = {
                 "name": "Qdrant",
                 "category": "Vector DB",
-                "description": f"{len(collections)} collections @ 6333",
+                "description": f"{len(collections)} collections @ {_qdrant_base_url()}",
                 "status": "ready",
                 "gpu": False,
-                "port": 6333,
+                "port": _qdrant_base_url(),
             }
         else:
             raise Exception("unhealthy")
@@ -246,10 +246,10 @@ def _collect_engine_details() -> Dict[str, Any]:
         engines["qdrant"] = {
             "name": "Qdrant",
             "category": "Vector DB",
-            "description": "Not reachable on 6333",
+            "description": f"Not reachable on {_qdrant_base_url()}",
             "status": "unavailable",
             "gpu": False,
-            "port": 6333,
+            "port": _qdrant_base_url(),
         }
 
     ffmpeg_path = shutil.which("ffmpeg")
@@ -1071,10 +1071,10 @@ def _latest_run_preview(limit: int = 12) -> Dict[str, Any]:
 
     latest = runs[0]
     summary = _load_runtime_visible_run_summary(latest)
-    header = summary.get("run_header") if isinstance(summary, dict) else {}
-    overview = summary.get("file_job_overview") if isinstance(summary, dict) else {}
-    outcome = summary.get("outcome_classification") if isinstance(summary, dict) else {}
-    latest_episode = _latest_episode_preview(summary.get("latest_episode"))
+    header = (summary.get("run_header") if isinstance(summary, dict) else None) or {}
+    overview = (summary.get("file_job_overview") if isinstance(summary, dict) else None) or {}
+    outcome = (summary.get("outcome_classification") if isinstance(summary, dict) else None) or {}
+    latest_episode = _latest_episode_preview(summary.get("latest_episode") if isinstance(summary, dict) else None)
 
     return {
         "available": True,
@@ -1183,6 +1183,33 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     }
 
 
+def _scan_direct_ingest_logs(log_dir: Path) -> List[Dict[str, Any]]:
+    """Fallback: synthesize run entries from direct_ingest_*.json log files."""
+    if not log_dir.is_dir():
+        return []
+    candidates = sorted(
+        log_dir.glob("direct_ingest_*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    runs = []
+    for path in candidates[:5]:  # cap at 5 newest
+        payload = _load_json_any(path)
+        if payload is None:
+            continue
+        stat = path.stat()
+        runs.append({
+            "run_id": f"direct_ingest:{path.stem}",
+            "scope": "direct_ingest_fallback",
+            "scene_results_path": str(path),
+            "run_root": str(path.parent),
+            "mtime": stat.st_mtime,
+            "size_bytes": stat.st_size,
+            "label": f"Direct ingest ({path.stem})",
+        })
+    return runs
+
+
 def _runtime_visible_runs(limit: int | None = None) -> List[Dict[str, Any]]:
     """Return report-index runs plus the current configured CLI output, newest first."""
 
@@ -1197,6 +1224,10 @@ def _runtime_visible_runs(limit: int | None = None) -> List[Dict[str, Any]]:
         ]
         runs.append(configured)
 
+    # Direct-ingest fallback: if no indexed or configured runs, check log dir
+    if not runs:
+        runs.extend(_scan_direct_ingest_logs(_LOG_DIR))
+
     runs.sort(key=lambda run: (_run_entry_mtime(run), str(run.get("run_id") or "")), reverse=True)
     if isinstance(limit, int) and limit >= 0:
         return runs[:limit]
@@ -1206,7 +1237,26 @@ def _runtime_visible_runs(limit: int | None = None) -> List[Dict[str, Any]]:
 def _load_runtime_visible_run_summary(run: Dict[str, Any]) -> Dict[str, Any]:
     if run.get("scope") == "configured_output_scene_results":
         return _configured_scene_results_summary(run)
+    if run.get("scope") == "direct_ingest_fallback":
+        return _direct_ingest_fallback_summary(run)
     return run_summary.load_run_summary(run_root=run.get("run_root") or run["run_id"])
+
+
+def _direct_ingest_fallback_summary(run: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a minimal summary from a direct-ingest log JSON."""
+    path = Path(run.get("scene_results_path") or "")
+    payload = _load_json_any(path) if path.is_file() else None
+    if payload is None:
+        return {"status": "unavailable", "run_id": run.get("run_id"), "scope": "direct_ingest_fallback"}
+    scene_records = _scene_records_from_results(payload)
+    return {
+        "status": "ok",
+        "run_id": run.get("run_id"),
+        "scope": "direct_ingest_fallback",
+        "scene_count": len(scene_records),
+        "source_path": str(path),
+        "scenes": scene_records[:10],  # cap preview
+    }
 
 
 def _configured_scene_results_run() -> Dict[str, Any] | None:
@@ -3292,7 +3342,7 @@ def get_memory_stats() -> Dict[str, Any]:
 
     qdrant_info = {"available": False, "collections": 0}
     try:
-        r = requests.get("http://localhost:6333/collections", timeout=2)
+        r = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
         if r.status_code == 200:
             colls = r.json().get("result", {}).get("collections", []) or []
             qdrant_info["available"] = True

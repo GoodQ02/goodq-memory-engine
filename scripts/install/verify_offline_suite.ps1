@@ -1,0 +1,116 @@
+<#
+.SYNOPSIS
+    Post-install integrity validation for GoodQ4All offline installer.
+.DESCRIPTION
+    Three-gate validation:
+    Gate 1: File Integrity — verify critical files exist
+    Gate 2: Launcher Manifest — run LAUNCH_GOODQ.exe --verify-manifest-only
+    Gate 3: Version Consistency — compare goodq_version.py vs install_receipt.json
+.PARAMETER InstallDir
+    Root directory of the GoodQ4All installation.
+    Defaults to $env:ProgramFiles\GoodQ4All
+#>
+param(
+    [string]$InstallDir = "$env:ProgramFiles\GoodQ4All"
+)
+
+$ErrorActionPreference = "Stop"
+$results = @{ gates = @(); pass = $true; install_dir = $InstallDir }
+
+# --- Gate 1: File Integrity ---
+$gate1 = @{ name = "file_integrity"; pass = $true; errors = @() }
+$criticalFiles = @(
+    "runtime\python.exe",
+    "LAUNCH_GOODQ.exe",
+    "goodq_version.py",
+    "qdrant\qdrant.exe",
+    "configs\config.yaml",
+    "configs\model_download_manifest.json",
+    "configs\model_download_manifest.json.sig"
+)
+foreach ($f in $criticalFiles) {
+    $fullPath = Join-Path $InstallDir $f
+    if (-not (Test-Path $fullPath)) {
+        $gate1.pass = $false
+        $gate1.errors += "Missing: $f"
+        Write-Host "  [FAIL] Missing: $f" -ForegroundColor Red
+    } else {
+        Write-Host "  [OK]   $f" -ForegroundColor Green
+    }
+}
+if (-not $gate1.pass) { $results.pass = $false }
+$results.gates += $gate1
+
+# --- Gate 2: Launcher Manifest Verification ---
+$gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }
+$launcherPath = Join-Path $InstallDir "LAUNCH_GOODQ.exe"
+if (Test-Path $launcherPath) {
+    try {
+        $proc = Start-Process -FilePath $launcherPath -ArgumentList "--verify-manifest-only" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
+        if ($proc.ExitCode -ne 0) {
+            $gate2.pass = $false
+            $gate2.errors += "Launcher manifest verification returned exit code $($proc.ExitCode)"
+            Write-Host "  [FAIL] Launcher manifest verification failed (exit $($proc.ExitCode))" -ForegroundColor Red
+        } else {
+            Write-Host "  [OK]   Launcher manifest verification passed" -ForegroundColor Green
+        }
+    } catch {
+        $gate2.pass = $false
+        $gate2.errors += "Could not run launcher: $_"
+        Write-Host "  [FAIL] Could not execute launcher: $_" -ForegroundColor Red
+    }
+} else {
+    $gate2.pass = $false
+    $gate2.errors += "Launcher binary not found"
+    Write-Host "  [SKIP] Launcher binary not found — skipping manifest gate" -ForegroundColor Yellow
+}
+if (-not $gate2.pass) { $results.pass = $false }
+$results.gates += $gate2
+
+# --- Gate 3: Version Consistency ---
+$gate3 = @{ name = "version_consistency"; pass = $true; errors = @() }
+$versionPyPath = Join-Path $InstallDir "goodq_version.py"
+$receiptPath = Join-Path $InstallDir "data\install_receipt.json"
+try {
+    $versionLine = Get-Content $versionPyPath | Where-Object { $_ -match 'GOODQ_VERSION\s*=\s*"([^"]+)"' }
+    $sourceVersion = $Matches[1]
+} catch {
+    $sourceVersion = $null
+    $gate3.errors += "Could not parse goodq_version.py"
+}
+if (Test-Path $receiptPath) {
+    try {
+        $receipt = Get-Content $receiptPath -Raw | ConvertFrom-Json
+        $receiptVersion = $receipt.version
+    } catch {
+        $receiptVersion = $null
+        $gate3.errors += "Could not parse install_receipt.json"
+    }
+} else {
+    $receiptVersion = $null
+    $gate3.errors += "install_receipt.json not found"
+}
+if ($sourceVersion -and $receiptVersion) {
+    if ($sourceVersion -ne $receiptVersion) {
+        $gate3.pass = $false
+        $gate3.errors += "Version mismatch: goodq_version.py=$sourceVersion, receipt=$receiptVersion"
+        Write-Host "  [FAIL] Version mismatch: source=$sourceVersion receipt=$receiptVersion" -ForegroundColor Red
+    } else {
+        Write-Host "  [OK]   Version consistent: $sourceVersion" -ForegroundColor Green
+    }
+} else {
+    $gate3.pass = $false
+    Write-Host "  [WARN] Could not compare versions" -ForegroundColor Yellow
+}
+if (-not $gate3.pass) { $results.pass = $false }
+$results.gates += $gate3
+
+# --- Summary ---
+$results | ConvertTo-Json -Depth 4
+if ($results.pass) {
+    Write-Host "`n[PASS] All verification gates passed." -ForegroundColor Green
+    exit 0
+} else {
+    Write-Host "`n[FAIL] One or more verification gates failed." -ForegroundColor Red
+    exit 1
+}

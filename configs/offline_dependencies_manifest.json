@@ -297,6 +297,141 @@
         "gpu_lane": "any",
         "required": true,
         "name": "faiss-cpu"
+      },
+      {
+        "artifact_id": "numpy_win_cp310",
+        "name": "numpy",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "pandas_win_cp310",
+        "name": "pandas",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "pyyaml_win_cp310",
+        "name": "pyyaml",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "python_dotenv_win_cp310",
+        "name": "python-dotenv",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "requests_win_cp310",
+        "name": "requests",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "fastapi_win_cp310",
+        "name": "fastapi",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "uvicorn_win_cp310",
+        "name": "uvicorn",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "typer_win_cp310",
+        "name": "typer",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "pytest_win_cp310",
+        "name": "pytest",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "imageio_ffmpeg_win_cp310",
+        "name": "imageio-ffmpeg",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "sentence_transformers_win_cp310",
+        "name": "sentence-transformers",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "qdrant_client_win_cp310",
+        "name": "qdrant-client",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "psutil_win_cp310",
+        "name": "psutil",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "huggingface_hub_win_cp310",
+        "name": "huggingface-hub",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
+      },
+      {
+        "artifact_id": "torchvision_win_cp310",
+        "name": "torchvision",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true
       }
     ]
   }

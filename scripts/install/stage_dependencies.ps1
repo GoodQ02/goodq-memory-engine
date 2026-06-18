@@ -174,6 +174,35 @@ if ($Mode -eq "Acquire") {
         $count = @(Get-ChildItem $wheelsDir -Filter *.whl).Count
         Write-Host "  [OK] Wheelhouse contains $count offline wheel files." -ForegroundColor Green
     }
+
+    # Cross-reference wheelhouse against lockfile
+    $lockfilePath = Join-Path (Split-Path $CacheDir -Parent) "requirements-baseline-lock.txt"
+    if (-not (Test-Path $lockfilePath)) {
+        # Try repo root relative to script
+        $lockfilePath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "requirements-baseline-lock.txt"
+    }
+    if (Test-Path $lockfilePath) {
+        Write-Host "Cross-referencing wheelhouse against lockfile..." -ForegroundColor Cyan
+        $lockPackages = Get-Content $lockfilePath | Where-Object { $_ -and -not $_.StartsWith("#") -and -not $_.StartsWith("--") } | ForEach-Object {
+            ($_ -split "[=<>!~]")[0].Trim().ToLower() -replace "-", "_"
+        }
+        $wheelNames = @()
+        if (Test-Path $wheelsDir) {
+            $wheelNames = Get-ChildItem $wheelsDir -Filter *.whl | ForEach-Object {
+                ($_.BaseName -split "-")[0].ToLower() -replace "-", "_"
+            }
+        }
+        $missingFromWheelhouse = $lockPackages | Where-Object { $_ -notin $wheelNames }
+        if ($missingFromWheelhouse) {
+            Write-Host "  [WARN] Lockfile packages missing from wheelhouse:" -ForegroundColor Yellow
+            foreach ($pkg in $missingFromWheelhouse) {
+                Write-Host "    - $pkg" -ForegroundColor Yellow
+            }
+            # Warning only — pip download resolves transitive deps which may use different names
+        } else {
+            Write-Host "  [OK] All lockfile packages have matching wheels." -ForegroundColor Green
+        }
+    }
     
     if ($VerificationFailed) {
         Write-Error "Staged dependency verification failed. Build cannot proceed."

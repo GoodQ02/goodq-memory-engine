@@ -225,9 +225,18 @@ def main() -> None:
         receipt_path = data_root / "install_receipt.json"
         install_dir_clean = args.install_dir.replace("\\", "/")
         data_dir_clean = str(data_root).replace("\\", "/")
+        # Read canonical version from goodq_version.py
+        _install_version = "unknown"
+        try:
+            _ver_path = Path(args.install_dir) / "goodq_version.py" if args.install_dir else Path(__file__).resolve().parents[2] / "goodq_version.py"
+            _ns = {}
+            exec(_ver_path.read_text(encoding="utf-8"), _ns)
+            _install_version = _ns.get("GOODQ_VERSION", "unknown")
+        except Exception as _ve:
+            print(f"[WARN] Could not read goodq_version.py: {_ve}")
         receipt_data = {
             "status": "installed",
-            "version": "1.0.0",
+            "version": _install_version,
             "install_dir": install_dir_clean,
             "data_dir": data_dir_clean,
             "service_mode": args.service_mode,

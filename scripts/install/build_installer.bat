@@ -55,11 +55,11 @@ if %ERRORLEVEL% neq 0 (
     exit /b 11
 )
 
-:: 4a. Sync versioninfo.json from canonical goodq_version.py
-echo Updating versioninfo.json from goodq_version.py...
-python -c "import json, re; v=re.search(r'GOODQ_VERSION\s*=\s*\"([^\"]+)\"', open('../../goodq_version.py').read()).group(1); p=v.split('.'); vi=json.load(open('versioninfo.json','r')); vi['FixedFileInfo']['FileVersion'].update({'Major':int(p[0]),'Minor':int(p[1]),'Patch':int(p[2]) if len(p)>2 else 0,'Build':0}); vi['FixedFileInfo']['ProductVersion'].update({'Major':int(p[0]),'Minor':int(p[1]),'Patch':int(p[2]) if len(p)>2 else 0,'Build':0}); vi['StringFileInfo']['FileVersion']=v+'.0'; vi['StringFileInfo']['ProductVersion']=v+'.0'; json.dump(vi,open('versioninfo.json','w'),indent=2); print(f'[OK] versioninfo.json updated to {v}')"
+:: 4a. Sync versioninfo.json and goodq4all_installer.nsi from canonical goodq_version.py
+echo Syncing installer version and metadata...
+python sync_nsi_version.py
 if %ERRORLEVEL% neq 0 (
-    echo [WARN] Could not update versioninfo.json — continuing with existing values.
+    echo [WARN] Could not sync version metadata — continuing with existing values.
 )
 
 :: 4b. Compile Supervising Launcher LAUNCH_GOODQ.go

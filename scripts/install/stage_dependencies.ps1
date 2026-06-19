@@ -176,10 +176,11 @@ if ($Mode -eq "Acquire") {
     }
 
     # Cross-reference wheelhouse against lockfile
-    $lockfilePath = Join-Path (Split-Path $CacheDir -Parent) "requirements-baseline-lock.txt"
+    $AbsoluteCacheDir = [System.IO.Path]::GetFullPath($CacheDir)
+    $lockfilePath = Join-Path (Split-Path $AbsoluteCacheDir -Parent) "requirements-baseline-lock.txt"
     if (-not (Test-Path $lockfilePath)) {
         # Try repo root relative to script
-        $lockfilePath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "requirements-baseline-lock.txt"
+        $lockfilePath = Join-Path (Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent) "requirements-baseline-lock.txt"
     }
     if (Test-Path $lockfilePath) {
         Write-Host "Cross-referencing wheelhouse against lockfile..." -ForegroundColor Cyan

@@ -2,7 +2,17 @@
 # -------------------------------------------
 $ErrorActionPreference = "Stop"
 
-$exePath = '..\..\GoodQ4All_Setup_2.4.1.exe'
+# Read product version from goodq_version.py first
+$productVersion = "2.4.1" # default fallback
+$versionPyPath = '..\..\goodq_version.py'
+if (Test-Path $versionPyPath) {
+    $versionLine = Get-Content $versionPyPath | Where-Object { $_ -match 'GOODQ_VERSION\s*=' }
+    if ($versionLine -match '"([^"]+)"') {
+        $productVersion = $Matches[1]
+    }
+}
+
+$exePath = "..\..\GoodQ4All_Setup_$productVersion.exe"
 if (-not (Test-Path $exePath)) {
     Write-Error "Installer executable not found at $exePath!"
     exit 1
@@ -51,19 +61,9 @@ if (Test-Path $modelManifestSigPath) {
     $modelManifestSigHash = (Get-FileHash -Path $modelManifestSigPath -Algorithm SHA256).Hash.ToLower()
 }
 
-# Read product version from goodq_version.py
-$productVersion = "unknown"
-$versionPyPath = '..\..\goodq_version.py'
-if (Test-Path $versionPyPath) {
-    $versionLine = Get-Content $versionPyPath | Where-Object { $_ -match 'GOODQ_VERSION\s*=' }
-    if ($versionLine -match '"([^"]+)"') {
-        $productVersion = $Matches[1]
-    }
-}
-
 $manifest = @{
     'manifest_version'          = '1.0.0'
-    'installer_filename'        = 'GoodQ4All_Setup_2.4.1.exe'
+    'installer_filename'        = "GoodQ4All_Setup_$productVersion.exe"
     'sha256'                    = $exeHash
     'launcher_sha256'           = $launcherHash
     'model_manifest_sha256'     = $modelManifestHash
@@ -76,7 +76,7 @@ $manifest = @{
     'status'                    = 'verified_offline'
 }
 
-$destManifest = '..\..\dist\GoodQ4All_Setup_2.4.1.release_manifest.json'
+$destManifest = "..\..\dist\GoodQ4All_Setup_$productVersion.release_manifest.json"
 $destManifestDir = Split-Path -Parent $destManifest
 if (-not (Test-Path $destManifestDir)) {
     New-Item -ItemType Directory -Path $destManifestDir -Force | Out-Null

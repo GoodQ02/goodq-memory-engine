@@ -404,6 +404,7 @@ class GoodQConfig(BaseModel):
     output: OutputConfig
     logging: LoggingConfig
     memory: Optional[MemoryConfigSection] = None
+    ingestion_isolation: Optional[bool] = None
 
     class Config:
         extra = "forbid"  # Reject unknown keys

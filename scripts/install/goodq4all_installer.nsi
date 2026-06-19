@@ -8,7 +8,7 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.2.exe"
+OutFile "..\..\GoodQ4All_Setup_2.5.3.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -16,7 +16,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.2 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.3 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -230,14 +230,15 @@ wsl_tar_found:
 wsl_done:
   */
 
-  ; --- STATE 9: merge and verify model zips ---
+  ; --- STATE 9: merge and verify model zips (non-fatal) ---
   DetailPrint "Step 9/12: Extracting and registering pre-staged model packs..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Model pack extraction or registration failed. Code $0"
-    Abort
+    DetailPrint "Model pack setup returned code $0. Models will be downloaded on first launch."
+    IfSilent model_pack_skip
+    MessageBox MB_OK|MB_ICONINFORMATION "Model packs were not found alongside the installer.$\r$\n$\r$\nThe application will download required models (~830 MB) on first launch via LAUNCH_GOODQ.exe.$\r$\n$\r$\nYou can also place model pack files next to the installer and re-run to install offline."
+    model_pack_skip:
   ${EndIf}
 
   ; --- STATE 10: run health check ---
@@ -270,7 +271,7 @@ wsl_done:
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.2"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.3"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd

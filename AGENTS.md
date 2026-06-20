@@ -30,6 +30,12 @@ The primary workspace for agent onboarding, shared protocols, models and VRAM bu
 - Control plane: Watchdog + Control Agent + Config Healer.
 - Assume long-running jobs and partial restarts are normal.
 
+## Git Repository and Branch Governance (Anti-Drift)
+- **Dev Repository**: `JoesDomingo/goodq4all` (`origin`) with the single canonical development branch `dev`.
+- **Public Repository**: `GoodQ02/goodq4all` (`public`) with the single canonical release branch `main`.
+- **No Stale Branches**: There are no other branches (such as `public/dev` or custom copilot/dependabot branches). Stale branches must be deleted immediately to prevent version drift.
+- **Push Policy**: Local changes on `dev` are pushed to `origin dev`. When releasing/syncing to public, push local `dev` to `public main` (`git push public dev:main`) and push tags (e.g., `git push public v2.5.3`). Agents must never create or push to a `dev` branch on `public`.
+
 ## Agent Roles
 - Pipeline Operator: ingestion, audits, backfills, validation.
 - System Hardener: observability, error surfacing, stability.

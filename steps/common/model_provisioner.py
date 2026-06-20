@@ -48,6 +48,8 @@ _FALLBACK_REGISTRY = {
     "snakers4/silero-vad": {"gated": False, "required": True, "key": "silero_vad"},
     "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest": {"gated": False, "required": True, "key": "emotion_classify_model"},
     "distilbert-base-uncased-finetuned-sst-2-english": {"gated": False, "required": True, "key": "sentiment_model"},
+    "yolo_v8n": {"gated": False, "required": True, "key": "yolo_v8n", "is_external": True, "local_path": "yolo/yolov8n.pt", "source_url": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"},
+    "facenet_vggface2": {"gated": False, "required": True, "key": "facenet_vggface2", "is_external": True, "local_path": "checkpoints/20180402-114759-vggface2.pt", "source_url": "https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt"},
 }
 
 def redact_sensitive_info(text: str, repo_id: Optional[str] = None) -> str:
@@ -167,9 +169,9 @@ def load_registry() -> Dict[str, Any]:
 def lookup_model(repo_id_or_key: str) -> Tuple[Optional[str], Dict[str, Any]]:
     """Look up repo_id and access metadata from the model registry or fallbacks."""
     registry = load_registry()
-    hf_models = registry.get("huggingface_models", {})
     
-    # 1. Check registry by key
+    # 1. Check HF models
+    hf_models = registry.get("huggingface_models", {})
     if repo_id_or_key in hf_models:
         info = hf_models[repo_id_or_key]
         return info.get("repo_id"), {
@@ -178,7 +180,6 @@ def lookup_model(repo_id_or_key: str) -> Tuple[Optional[str], Dict[str, Any]]:
             "revision": info.get("revision")
         }
         
-    # 2. Check registry by repo_id
     for key, info in hf_models.items():
         if info.get("repo_id") == repo_id_or_key:
             return repo_id_or_key, {
@@ -186,23 +187,41 @@ def lookup_model(repo_id_or_key: str) -> Tuple[Optional[str], Dict[str, Any]]:
                 "required": info.get("required", True),
                 "revision": info.get("revision")
             }
-            
+
+    # 2. Check external models
+    external_models = registry.get("external_models", {})
+    if repo_id_or_key in external_models:
+        info = external_models[repo_id_or_key]
+        return repo_id_or_key, {
+            "gated": False,
+            "required": info.get("required", True),
+            "revision": info.get("version"),
+            "is_external": True,
+            "source_url": info.get("source_url"),
+            "local_path": info.get("local_path")
+        }
+
     # 3. Check fallbacks
     if repo_id_or_key in _FALLBACK_REGISTRY:
         fb = _FALLBACK_REGISTRY[repo_id_or_key]
-        return repo_id_or_key, {
-            "gated": fb["gated"],
-            "required": fb["required"],
-            "revision": None
+        return fb.get("key") or repo_id_or_key, {
+            "gated": fb.get("gated", False),
+            "required": fb.get("required", True),
+            "revision": fb.get("revision"),
+            "is_external": fb.get("is_external", False),
+            "source_url": fb.get("source_url"),
+            "local_path": fb.get("local_path")
         }
         
-    # Check fallbacks by key
     for r_id, fb in _FALLBACK_REGISTRY.items():
-        if fb.get("key") == repo_id_or_key:
+        if fb.get("key") == repo_id_or_key or r_id == repo_id_or_key:
             return r_id, {
-                "gated": fb["gated"],
-                "required": fb["required"],
-                "revision": None
+                "gated": fb.get("gated", False),
+                "required": fb.get("required", True),
+                "revision": fb.get("revision"),
+                "is_external": fb.get("is_external", False),
+                "source_url": fb.get("source_url"),
+                "local_path": fb.get("local_path")
             }
             
     return None, {}
@@ -286,6 +305,149 @@ def ensure_model_cached(
     is_offline = offline or env_offline
     
     models_root = resolve_models_root()
+    
+    is_external = metadata.get("is_external", False)
+    if is_external:
+        local_rel_path = metadata.get("local_path")
+        if not local_rel_path:
+            local_rel_path = f"external/{repo_id}"
+        target_path = models_root / local_rel_path
+        
+        # Check if cached
+        if target_path.is_file() and target_path.stat().st_size > 1024:
+            elapsed = time.time() - start_time
+            res = ModelProvisionResult(
+                status="cached",
+                repo_id=repo_id,
+                revision=resolved_revision,
+                local_path=str(target_path.absolute()),
+                gated=is_gated,
+                required=is_required,
+                elapsed_seconds=elapsed,
+                files_checked=[target_path.name],
+                attempts_made=attempts_made
+            )
+            msg = f"External model {repo_id} retrieved from cache (status={res.status})"
+            logger.info(msg)
+            log_download_event(msg, repo_id)
+            return res
+            
+        # If offline and missing, fail/degrade cleanly
+        if is_offline:
+            elapsed = time.time() - start_time
+            status = "offline_missing"
+            if is_required:
+                err_msg = redact_sensitive_info(f"Offline mode: required external model '{repo_id}' is missing from local cache. To download, connect to the internet and run: python scripts/bootstrap_models.py", repo_id)
+                logger.error(err_msg)
+            else:
+                err_msg = redact_sensitive_info(f"Offline mode: optional external model '{repo_id}' is missing from local cache. Skipping optional step.", repo_id)
+                logger.warning(err_msg)
+                
+            log_download_event(err_msg, repo_id)
+            return ModelProvisionResult(
+                status=status,
+                repo_id=repo_id,
+                revision=resolved_revision,
+                local_path=None,
+                gated=is_gated,
+                required=is_required,
+                elapsed_seconds=elapsed,
+                error=err_msg,
+                attempts_made=attempts_made
+            )
+            
+        # Online download under lock
+        lock_file = models_root / f"{repo_id.replace('/', '--')}.lock"
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Acquiring lock for external model {repo_id} download...")
+        lock = FileLock(str(lock_file), timeout=300)
+        
+        try:
+            with lock:
+                # Recheck cache inside lock
+                if target_path.is_file() and target_path.stat().st_size > 1024:
+                    elapsed = time.time() - start_time
+                    res = ModelProvisionResult(
+                        status="cached",
+                        repo_id=repo_id,
+                        revision=resolved_revision,
+                        local_path=str(target_path.absolute()),
+                        gated=is_gated,
+                        required=is_required,
+                        elapsed_seconds=elapsed,
+                        files_checked=[target_path.name],
+                        attempts_made=attempts_made
+                    )
+                    return res
+                
+                # Perform download
+                import urllib.request
+                source_url = metadata.get("source_url")
+                if not source_url:
+                    raise ValueError(f"No source_url specified for external model '{repo_id}'")
+                    
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                temp_target = target_path.with_suffix(".tmp")
+                
+                attempts = 4
+                for attempt in range(1, attempts + 1):
+                    attempts_made = attempt
+                    try:
+                        logger.info(f"Downloading external model '{repo_id}' from '{source_url}' (attempt {attempt}/{attempts})...")
+                        req = urllib.request.Request(source_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=120) as response, open(temp_target, "wb") as handle:
+                            while True:
+                                chunk = response.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                handle.write(chunk)
+                        os.replace(temp_target, target_path)
+                        break
+                    except Exception as e:
+                        try:
+                            temp_target.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        if attempt < attempts:
+                            logger.warning(f"Transient download error for external model '{repo_id}': {e}. Retrying...")
+                            time.sleep(3 * attempt)
+                            continue
+                        raise
+                        
+                elapsed = time.time() - start_time
+                res = ModelProvisionResult(
+                    status="downloaded",
+                    repo_id=repo_id,
+                    revision=resolved_revision,
+                    local_path=str(target_path.absolute()),
+                    gated=is_gated,
+                    required=is_required,
+                    elapsed_seconds=elapsed,
+                    files_checked=[target_path.name],
+                    attempts_made=attempts_made
+                )
+                msg = f"External model {repo_id} downloaded successfully"
+                logger.info(msg)
+                log_download_event(msg, repo_id)
+                return res
+        except Exception as e:
+            elapsed = time.time() - start_time
+            err_msg = f"Failed to download external model '{repo_id}': {e}"
+            logger.error(err_msg)
+            log_download_event(err_msg, repo_id)
+            return ModelProvisionResult(
+                status="failed",
+                repo_id=repo_id,
+                revision=resolved_revision,
+                local_path=None,
+                gated=is_gated,
+                required=is_required,
+                elapsed_seconds=elapsed,
+                error=err_msg,
+                attempts_made=attempts_made
+            )
+            
     repo_cache_name = repo_id.replace("/", "--")
     repo_cache_dir = models_root / "hub" / f"models--{repo_cache_name}"
     snapshots_dir = repo_cache_dir / "snapshots"

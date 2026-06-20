@@ -887,6 +887,15 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
 
+    # Mock os.path.exists to report model.safetensors is present,
+    # validating the dynamic safetensors detection path.
+    import os
+    _real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path, "exists",
+        lambda p: True if p.endswith("model.safetensors") else _real_exists(p)
+    )
+
     emotion_step._load_emotion()
 
     assert model_kwargs["use_safetensors"] is True

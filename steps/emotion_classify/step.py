@@ -55,8 +55,9 @@ def _load_emotion():
             raise OSError(f"Failed to provision emotion model: {provision_result.error or 'reason unknown'}")
 
         model_id = provision_result.local_path
+        has_safetensors = os.path.exists(os.path.join(model_id, "model.safetensors"))
         tok = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        model = AutoModelForSequenceClassification.from_pretrained(model_id, use_safetensors=True, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id, use_safetensors=has_safetensors, local_files_only=True)
         
         model = model.to(device).eval()
         labels = [

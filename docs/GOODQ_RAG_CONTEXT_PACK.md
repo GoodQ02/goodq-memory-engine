@@ -106,7 +106,7 @@ RAG agents must use read-only queries to access databases safely without risking
 import sqlite3
 import json
 
-db_path = "L:/_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/memory.db"
+db_path = "data/epochs/epoch_2026_06_16_r0_smoke/memory.db"
 
 # Open read-only connection
 conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -149,6 +149,6 @@ for point in results:
 
 1.  **Zero Telemetry Boundary**: All database entries and Qdrant collections reside strictly on local NVMe disk storage. No diagnostic metrics, payloads, or search queries leave the system host context.
 2.  **Derived Conduits Sanitization**: When sharing context or data with external models, dashboards, or user interfaces:
-    *   Redact raw absolute system file paths (e.g. `L:\_DATA\...` or `C:\Users\jdben\...`). Use relative abstract tokens.
+    *   Redact raw absolute system file paths (e.g. drive-root or user folders). Use relative abstract tokens.
     *   Never transmit raw float32 vectors over external channels.
     *   Groom transcripts and nodes to ensure that sensitive personal credentials or variables are masked or pruned.

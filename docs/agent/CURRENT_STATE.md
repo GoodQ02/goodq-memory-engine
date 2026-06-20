@@ -851,7 +851,18 @@ We completed a comprehensive model registry enforcement and offline WSL cache br
 - **Model Registry & Allowlist**: Centralized allowed models in `configs/model_registry.yaml` and `steps/common/model_provisioner.py`. Arbitrary model loads are blocked, and downloads are gated by secure, retry-capable cache locks to prevent concurrent race conditions.
 - **Windows System Encoding Protection**: Patched `pipelines/direct_ingestion.py` and `cli/watchdog.py` to open JSON documents with explicit `encoding='utf-8'` (mitigating CP1252 decoder crashes on Windows).
 - **WSL Offline Silero VAD Caching**: Integrated `wsl2_audio/model_cache.py` helper inside `wsl2_audio/audio_service.py` to load Silero VAD from resolved local cache routes (`/mnt/l/_DATA/models/hub/snakers4_silero-vad_master`), raising clear offline errors if missing instead of attempting internet connection.
-- **Redacted Logging & Staging**: Active WSL environment logging redacted Hugging Face and PyAnnote tokens, and `model_cache.py` was registered as a staged asset to synchronize correctly. All tests, including the preflight checks and offline WSL service loaded successfully.
+- **Redacted Env Logging**: Active WSL environment logging redacted Hugging Face and PyAnnote tokens, and `model_cache.py` was registered as a staged asset to synchronize correctly. All tests, including preflight checks and offline WSL services, loaded successfully.
+
+## Phase 9: Full Pipeline Feature Closure / No Lost Intel (2026-06-20)
+
+v2.5.3 sprint executed across 10 phases with 8 agents. Fixed all code regressions and verified release gates:
+- **Emotion Classifier Fix**: Resolved `emotion_classify_model_load_failed` (25 scenes) — dynamic `model.safetensors` detection replaces unconditional `use_safetensors=True`.
+- **Governed Step Migrations**: `face_embed`, `object_detect`, `tagger`, `tagger_llm_enhanced` migrated to `ensure_model_cached()`. External model support added for YOLO v8n and FaceNet VGGFace2.
+- **Break-glass Security Gate**: `file_delete` in `safe`/`offline` profiles requires `GOODQ_BREAK_GLASS=1`.
+- **Governance Validators**: 7 regression guards in `test_governance_validators.py` (step coverage, model loader, UCF parity, materialization, search lifecycle, hygiene, security).
+- **Release Gate Results**: 1015 passed, 3 pre-existing baseline failures (agent workspace policy drift), 3 xfailed. Migrated loaders 4/4, governance validators 7/7, model provisioner 16/16. Banned token lint PASS.
+- **Deferred (Sprint B2)**: PyAnnote, Wav2Vec2, torchaudio Windows guards, torch mock completeness.
+- **Family-Film Pilot**: System certified READY for user-supervised ingestion under `ingestion_isolation: true`.
 
 ## Safe Next Actions
 

@@ -9,6 +9,33 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.3] - 2026-06-20 — Full Pipeline Feature Closure / No Lost Intel
+
+### Fixed
+- **Emotion Classifier Runtime Fix**: Resolved `emotion_classify_model_load_failed` on 25 scenes by dynamically detecting `model.safetensors` availability instead of unconditionally requesting safetensors format.
+- **Break-glass Test Compatibility**: Updated 6 path-sanitization e2e tests to set `GOODQ_BREAK_GLASS=1` for compatibility with the new destructive-operation security gate.
+- **Mock Contract Alignment**: Fixed `test_face_embed_fallback` and `test_emotion_classify_safetensors` to match governed model provisioner interface (`load_state_dict`, `torch.load`, `os.path.exists` mocks).
+
+### Added
+- **External Model Provisioner Support**: Extended `model_provisioner.py` to govern non-HF models (YOLO v8n, FaceNet VGGFace2) via `is_external` flag with `source_url` and `local_path` resolution.
+- **Governed Step Migrations**: Migrated `face_embed`, `object_detect`, `tagger`, and `tagger_llm_enhanced` to `ensure_model_cached()`.
+- **Governance Validators**: Added `tests/integration/test_governance_validators.py` (7 tests: step coverage, model loader, UCF vector parity, materialization, search lifecycle, hygiene, security profiles).
+- **Migrated Loader Tests**: Added `tests/unit/test_migrated_loaders.py` (4 tests validating governed loader contracts).
+- **Break-glass Security Gate**: `file_delete` in `safe`/`offline` profiles now requires `GOODQ_BREAK_GLASS=1` environment override.
+- **Agent Security Tests**: Added 77 lines of mini_agent_client security and gating tests.
+- **Path Hygiene**: Sanitized absolute drive roots in `GOODQ_RAG_CONTEXT_PACK.md`.
+
+### Deferred (Sprint B2)
+- PyAnnote diarization model migration (gated, HF token required).
+- Wav2Vec2 emotion/classification model migration (WSL-only, gated).
+- wav2vec2-base-960h audio embedder migration (WSL-only, gated).
+- `torchaudio` Windows test skip guards (environment-only).
+- `torch` mock completeness for test isolation (environment-only).
+
+### Family-Film Pilot
+- System certified READY for user-supervised pilot family-film ingestion under `ingestion_isolation: true`.
+
+
 ## [2.5.2] - 2026-06-20
 
 ### Added

@@ -103,6 +103,9 @@ def test_face_embed_falls_back_to_facenet_when_dlib_stack_missing(monkeypatch, t
         def to(self, _device):
             return self
 
+        def load_state_dict(self, _state_dict):
+            pass
+
         def __call__(self, _tensor):
             return _FakeEmbedding()
 
@@ -110,13 +113,32 @@ def test_face_embed_falls_back_to_facenet_when_dlib_stack_missing(monkeypatch, t
     fake_facenet.MTCNN = _FakeMTCNN
     fake_facenet.InceptionResnetV1 = lambda *args, **kwargs: _FakeResnet()
 
+    # Mock torch.load to return a fake state dict for governed weight loading
+    fake_torch.load = lambda *args, **kwargs: {}
+
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "PIL", fake_pil)
     monkeypatch.setitem(sys.modules, "torchvision", fake_torchvision)
     monkeypatch.setitem(sys.modules, "facenet_pytorch", fake_facenet)
+
+    # Mock the model provisioner to return a valid governed path
+    from steps.common.model_provisioner import ModelProvisionResult
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *args, **kwargs: ModelProvisionResult(
+            status="cached",
+            repo_id="facenet_vggface2",
+            revision=None,
+            local_path="/fake/checkpoints/facenet.pt",
+            gated=False,
+            required=True,
+            elapsed_seconds=0.01
+        )
+    )
 
     result = face_step.face_embed({"source_path": str(image_path)}, {})
 
     assert result["faces_meta"]["status"] == "ok"
     assert result["faces_meta"]["engine"] == "facenet-pytorch"
     assert len(result["faces"]) == 1
+

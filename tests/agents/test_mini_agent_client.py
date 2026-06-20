@@ -1476,3 +1476,80 @@ def test_qdrant_query_no_double_must_not_on_repeated_calls(mock_build):
     client._execute_qdrant_query(args)
     _, kwargs2 = mock_client.query.call_args
     assert len(kwargs2["payload_filter"]["must_not"]) == 2
+
+
+def test_sanitize_envelope_diverse_inputs():
+    """Verify that sanitize_envelope correctly sanitizes Windows, UNC, WSL, and Linux standard paths."""
+    client = MiniAgentClient(profile="safe")
+    
+    # Windows path
+    assert client.sanitize_envelope("C:\\path\\to\\a.json") == "relative/a.json"
+    assert client.sanitize_envelope("D:/another/path/file.txt") == "relative/file.txt"
+    
+    # UNC path
+    assert client.sanitize_envelope("\\\\server\\share\\b.json") == "relative/b.json"
+    
+    # WSL path
+    assert client.sanitize_envelope("/mnt/c/c.json") == "relative/c.json"
+    
+    # Linux path
+    assert client.sanitize_envelope("/home/d.json") == "relative/d.json"
+    assert client.sanitize_envelope("/tmp/e.log") == "relative/e.log"
+
+
+def test_break_glass_gate_for_file_delete(monkeypatch):
+    """Verify that file_delete is blocked in safe/offline profiles unless GOODQ_BREAK_GLASS=1 is set."""
+    # 1. Under safe profile without break-glass
+    monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
+    client_safe = MiniAgentClient(profile="safe")
+    envelope, rc = client_safe.validate_action(
+        prompt="Delete file",
+        mode="ops",
+        tool_name="file_delete",
+        tool_args={"path": "some_file.json"}
+    )
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "break_glass_required"
+    
+    # 2. Under safe profile with break-glass override
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    envelope, rc = client_safe.validate_action(
+        prompt="Delete file",
+        mode="ops",
+        tool_name="file_delete",
+        tool_args={"path": "some_file.json"}
+    )
+    assert rc == 0
+    assert envelope["status"] == "ok"
+
+    # 3. Under offline profile without break-glass
+    monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
+    client_offline = MiniAgentClient(profile="offline")
+    envelope, rc = client_offline.validate_action(
+        prompt="Delete file",
+        mode="ops",
+        tool_name="file_delete",
+        tool_args={"path": "some_file.json"}
+    )
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] in ("offline_blocked", "break_glass_required")
+
+
+def test_offline_profile_denies_mutating_operations():
+    """Verify that offline profile denies mutating operations in MUTATING_DENY_ON_AGENT_FAILURE."""
+    from agents.mini_agent_client import MUTATING_DENY_ON_AGENT_FAILURE
+    client = MiniAgentClient(profile="offline")
+    
+    for tool in MUTATING_DENY_ON_AGENT_FAILURE:
+        envelope, rc = client.validate_action(
+            prompt=f"Run mutating tool {tool}",
+            mode="ops",
+            tool_name=tool,
+            tool_args={"path": "dummy"}
+        )
+        assert rc == 1, f"Mutating tool {tool} was not blocked under offline profile!"
+        assert envelope["status"] == "error"
+        assert envelope["errors"][0]["code"] == "offline_blocked"
+

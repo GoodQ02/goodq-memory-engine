@@ -81,11 +81,26 @@ def _get_ner_pipeline(model_id: str) -> Any:
     pipeline_obj = _NER_PIPELINES.get(model_id)
     if pipeline_obj is not None:
         return pipeline_obj
+    from steps.common.model_provisioner import ensure_model_cached
+    from steps.common.config_loader import load_configs
+    
+    try:
+        offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+    except Exception:
+        offline_mode = False
+        
+    provision_result = ensure_model_cached(model_id, offline=offline_mode)
+    if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+        raise OSError(f"Failed to provision NER model: {provision_result.error or 'reason unknown'}")
+        
+    local_path = provision_result.local_path
+    
     from transformers import pipeline, logging as hf_logging  # type: ignore
     hf_logging.set_verbosity_error()
     pipe = pipeline(
         "token-classification",
-        model=model_id,
+        model=local_path,
+        local_files_only=True,
         aggregation_strategy="simple",
     )
     _NER_PIPELINES[model_id] = pipe

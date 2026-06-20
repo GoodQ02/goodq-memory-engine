@@ -91,25 +91,19 @@ def _load_yolo(cfg: Dict[str, Any]) -> bool:
     try:
         from ultralytics import YOLO  # type: ignore
         
-        # Try multiple config paths
-        model_path = (
-            cfg.get("models", {}).get("external_models", {}).get("yolo_v8n", {}).get("local_path")
-            or cfg.get("models", {}).get("yolo_model_path")
-            or cfg.get("config", {}).get("models", {}).get("yolo_model_path")
-            or "yolov8n.pt"
-        )
-        # If local_path is relative, resolve under configured model cache root
-        if model_path and not os.path.isabs(model_path):
-            model_base = _resolve_models_root()
-            primary_path = os.path.join(model_base, model_path)
-            if not os.path.exists(primary_path):
-                hub_path = os.path.join(model_base, "hub", model_path)
-                if os.path.exists(hub_path):
-                    model_path = hub_path
-                else:
-                    model_path = primary_path
-            else:
-                model_path = primary_path
+        from steps.common.model_provisioner import ensure_model_cached
+        
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("yolo_v8n", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision YOLO model: {provision_result.error or 'reason unknown'}")
+            
+        model_path = provision_result.local_path
         
         _YOLO = YOLO(model_path)
         logger.info(f"[OK] YOLO model loaded on {_YOLO_DEVICE} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")

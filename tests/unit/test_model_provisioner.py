@@ -381,3 +381,75 @@ def test_new_models_provisioning(tmp_path, monkeypatch):
     assert res_sent.status == "cached"
     assert "pytorch_model.bin" in res_sent.files_checked
 
+
+def test_external_models_caching(tmp_path, monkeypatch):
+    """Verify caching check for external models: yolo_v8n and facenet_vggface2."""
+    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
+
+    # 1. yolo_v8n
+    yolo_file = tmp_path / "yolo" / "yolov8n.pt"
+    yolo_file.parent.mkdir(parents=True, exist_ok=True)
+    yolo_file.write_bytes(b"\x00" * 2000)
+    res_yolo = ensure_model_cached("yolo_v8n", offline=True)
+    assert res_yolo.status == "cached"
+    assert "yolov8n.pt" in res_yolo.files_checked
+    assert Path(res_yolo.local_path) == yolo_file.absolute()
+
+    # 2. facenet_vggface2
+    facenet_file = tmp_path / "checkpoints" / "20180402-114759-vggface2.pt"
+    facenet_file.parent.mkdir(parents=True, exist_ok=True)
+    facenet_file.write_bytes(b"\x00" * 2000)
+    res_face = ensure_model_cached("facenet_vggface2", offline=True)
+    assert res_face.status == "cached"
+    assert "20180402-114759-vggface2.pt" in res_face.files_checked
+    assert Path(res_face.local_path) == facenet_file.absolute()
+
+
+def test_external_models_offline_missing(tmp_path, monkeypatch):
+    """Verify offline missing behavior for external models."""
+    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
+
+    res = ensure_model_cached("yolo_v8n", offline=True)
+    assert res.status == "offline_missing"
+    assert "yolo_v8n" in res.error
+
+
+def test_external_models_online_download(tmp_path, monkeypatch):
+    """Verify online download behavior for external models."""
+    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
+
+    download_calls = []
+
+    class MockResponse:
+        def __init__(self):
+            self.data = b"\x00" * 2000
+        def read(self, amt=None):
+            if amt is None:
+                d = self.data
+                self.data = b""
+                return d
+            else:
+                d = self.data[:amt]
+                self.data = self.data[amt:]
+                return d
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def mock_urlopen(req, timeout=None):
+        url = req.full_url if hasattr(req, "full_url") else req
+        download_calls.append(url)
+        return MockResponse()
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    res = ensure_model_cached("yolo_v8n", offline=False)
+    assert res.status == "downloaded"
+    assert "yolov8n.pt" in res.files_checked
+    assert len(download_calls) == 1
+    assert "yolov8n.pt" in download_calls[0]
+

@@ -596,7 +596,18 @@ class MiniAgentClient:
                     }
                     return self.sanitize_envelope(envelope), 1
 
-        # 5. Native tool validation bypass
+        # 5. Native tool validation bypass & Destructive break-glass check
+        if tool_name == "file_delete" and self.profile in ("safe", "offline") and os.environ.get("GOODQ_BREAK_GLASS") != "1":
+            envelope = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [{"code": "break_glass_required", "message": f"Destructive operation '{tool_name}' requires break-glass override."}],
+            }
+            return self.sanitize_envelope(envelope), 1
+
         if tool_name in ("run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames", "file_delete", "validate_ucf_epoch"):
             envelope = {
                 "request_id": request_id,

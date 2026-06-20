@@ -904,19 +904,28 @@ def test_f3_05_promotion_succeeds_with_confirm_and_token():
 
 def test_f4_01_redacts_absolute_paths_in_output():
     pass
-    client = MiniAgentClient(profile="safe")
-    # File delete returns target path in output
-    if not mock_harness_active():
-        Path(r"L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt").parent.mkdir(parents=True, exist_ok=True)
-        Path(r"L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt").touch()
-    args = {
-        "path": "L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt",
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    # Absolute path should be redacted/sanitized
-    assert "L:\\GOODCUBE" not in str(envelope)
-    assert "relative/file_to_delete.txt" in envelope["output"]["deleted"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        # File delete returns target path in output
+        if not mock_harness_active():
+            Path(r"L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt").parent.mkdir(parents=True, exist_ok=True)
+            Path(r"L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt").touch()
+        args = {
+            "path": "L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt",
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        # Absolute path should be redacted/sanitized
+        assert "L:\\GOODCUBE" not in str(envelope)
+        assert "relative/file_to_delete.txt" in envelope["output"]["deleted"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_02_redacts_absolute_paths_in_artifacts():
     pass
@@ -954,22 +963,48 @@ def test_f4_04_preserves_path_agnostic_relative_references():
     }
     envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
     assert rc == 0
-    # Relative path should remain unchanged
-    assert "db/ucf/ucf_ledger.db" in envelope["artifacts"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        register_media("v1", 20.0)
+        args = {
+            "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
+            "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
+        }
+        envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+        assert rc == 0
+        # Relative path should remain unchanged
+        assert "db/ucf/ucf_ledger.db" in envelope["artifacts"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
     pass
-    client = MiniAgentClient(profile="safe")
-    if not mock_harness_active():
-        Path(r"\\\\server\\share\\subfolder\\file.txt").parent.mkdir(parents=True, exist_ok=True)
-        Path(r"\\\\server\\share\\subfolder\\file.txt").touch()
-    args = {
-        "path": "\\\\server\\share\\subfolder\\file.txt",
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    assert "\\\\server" not in str(envelope)
-    assert "relative/file.txt" in envelope["output"]["deleted"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        if not mock_harness_active():
+            Path(r"\\\\server\\share\\subfolder\\file.txt").parent.mkdir(parents=True, exist_ok=True)
+            Path(r"\\\\server\\share\\subfolder\\file.txt").touch()
+        args = {
+            "path": "\\\\server\\share\\subfolder\\file.txt",
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        assert "\\\\server" not in str(envelope)
+        assert "relative/file.txt" in envelope["output"]["deleted"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 # ------------------------------------------------------------------------------
 # TIER 2: BOUNDARY & CORNER CASES (Tests 21 to 40)
@@ -1146,53 +1181,89 @@ def test_f3_10_confirm_true_without_token_blocked():
 
 def test_f4_06_nested_json_path_sanitization():
     pass
-    client = MiniAgentClient(profile="safe")
-    args = {
-        "path": "C:\\some\\path\\file.txt",
-        "absolute_path_artifacts": [{"nested_list": ["L:\\subfolder\\another_file.json", "relative.txt"]}]
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    assert "C:\\some" not in str(envelope)
-    assert "L:\\subfolder" not in str(envelope)
-    assert "relative/another_file.json" in envelope["artifacts"][0]["nested_list"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        args = {
+            "path": "C:\\some\\path\\file.txt",
+            "absolute_path_artifacts": [{"nested_list": ["L:\\subfolder\\another_file.json", "relative.txt"]}]
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        assert "C:\\some" not in str(envelope)
+        assert "L:\\subfolder" not in str(envelope)
+        assert "relative/another_file.json" in envelope["artifacts"][0]["nested_list"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_07_empty_paths_and_none_handled_gracefully():
     pass
-    client = MiniAgentClient(profile="safe")
-    args = {
-        "path": "",
-        "absolute_path_artifacts": [None, ""]
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    assert envelope["artifacts"] == [None, ""]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        args = {
+            "path": "",
+            "absolute_path_artifacts": [None, ""]
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        assert envelope["artifacts"] == [None, ""]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_08_already_relative_paths_untouched():
     pass
-    client = MiniAgentClient(profile="safe")
-    args = {
-        "path": "subfolder/file.txt",
-        "absolute_path_artifacts": ["another_sub/data.json"]
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    assert envelope["output"]["deleted"] == "subfolder/file.txt"
-    assert envelope["artifacts"] == ["another_sub/data.json"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        args = {
+            "path": "subfolder/file.txt",
+            "absolute_path_artifacts": ["another_sub/data.json"]
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        assert envelope["output"]["deleted"] == "subfolder/file.txt"
+        assert envelope["artifacts"] == ["another_sub/data.json"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_09_lowercase_drive_letters_sanitized():
     pass
-    client = MiniAgentClient(profile="safe")
-    if not mock_harness_active():
-        Path(r"c:\\lowercase\\drive\\file.mp4").parent.mkdir(parents=True, exist_ok=True)
-        Path(r"c:\\lowercase\\drive\\file.mp4").touch()
-    args = {
-        "path": "c:\\lowercase\\drive\\file.mp4",
-    }
-    envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
-    assert rc == 0
-    assert "c:\\lowercase" not in str(envelope)
-    assert "relative/file.mp4" in envelope["output"]["deleted"]
+    # Break-glass required: testing path sanitization, not security gate
+    _prev = os.environ.get("GOODQ_BREAK_GLASS")
+    os.environ["GOODQ_BREAK_GLASS"] = "1"
+    try:
+        client = MiniAgentClient(profile="safe")
+        if not mock_harness_active():
+            Path(r"c:\\lowercase\\drive\\file.mp4").parent.mkdir(parents=True, exist_ok=True)
+            Path(r"c:\\lowercase\\drive\\file.mp4").touch()
+        args = {
+            "path": "c:\\lowercase\\drive\\file.mp4",
+        }
+        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        assert rc == 0
+        assert "c:\\lowercase" not in str(envelope)
+        assert "relative/file.mp4" in envelope["output"]["deleted"]
+    finally:
+        if _prev is None:
+            os.environ.pop("GOODQ_BREAK_GLASS", None)
+        else:
+            os.environ["GOODQ_BREAK_GLASS"] = _prev
 
 def test_f4_10_path_like_strings_in_text_prompts_not_redacted():
     pass

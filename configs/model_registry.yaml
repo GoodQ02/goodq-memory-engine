@@ -475,6 +475,15 @@ external_models:
     file_size_bytes: 6549796
     required: true
     model_type: object-detection
+  facenet_vggface2:
+    name: FaceNet InceptionResnetV1 VGGFace2
+    source_url: https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt
+    version: v2.2.9
+    sha256: 8234f0ae076a4ca361a940d55e863457070567ea872ea7914fcc48f6963156f6
+    local_path: checkpoints/20180402-114759-vggface2.pt
+    file_size_bytes: 53116694
+    required: true
+    model_type: face-embedding
   whisper_ggml_large_v3:
     name: Whisper GGML Large v3
     source_url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin

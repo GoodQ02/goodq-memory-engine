@@ -71,13 +71,28 @@ def face_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         from PIL import Image  # type: ignore
         from torchvision import transforms  # type: ignore
         from facenet_pytorch import MTCNN, InceptionResnetV1  # type: ignore
+        from steps.common.model_provisioner import ensure_model_cached
+
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
 
         # Configure GPU using centralized manager (Phase 3)
         gpu_config = setup_step_gpu("face_embed")
         device = gpu_config["device"]
 
+        # Govern weight loading through model provisioner
+        provision_result = ensure_model_cached("facenet_vggface2", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision FaceNet model: {provision_result.error or 'reason unknown'}")
+            
+        local_path = provision_result.local_path
+
         mtcnn = MTCNN(keep_all=True, device=device)
-        resnet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
+        resnet = InceptionResnetV1(pretrained=None, device=device).eval()
+        resnet.load_state_dict(torch.load(local_path, map_location=device))
 
         logger.info(f"[OK] FaceNet loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
 

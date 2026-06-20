@@ -405,6 +405,21 @@ def test_audio_embed_clap_skips_invalid_audio_before_model_load(monkeypatch, tmp
 
 
 def test_audio_embed_clap_reports_missing_model_cache(monkeypatch, tmp_path: Path):
+    from steps.common.model_provisioner import ModelProvisionResult
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *args, **kwargs: ModelProvisionResult(
+            status="offline_missing",
+            repo_id="laion/clap-htsat-unfused",
+            revision="8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+            local_path=None,
+            gated=False,
+            required=True,
+            elapsed_seconds=0.1,
+            error="Offline mode: required model is missing"
+        )
+    )
+
     monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
     monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
     from steps.audio_embed_clap import step as clap_step
@@ -816,6 +831,20 @@ def test_emotion_classify_surfaces_model_unavailable_reason(monkeypatch):
 
 
 def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
+    from steps.common.model_provisioner import ModelProvisionResult
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *args, **kwargs: ModelProvisionResult(
+            status="cached",
+            repo_id="cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+            revision="30a56d88e47e493f08f93c786d49c526550b55b9",
+            local_path="cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+            gated=False,
+            required=True,
+            elapsed_seconds=0.1
+        )
+    )
+
     import sys
     import types
 
@@ -838,7 +867,7 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
 
     class FakeTokenizer:
         @classmethod
-        def from_pretrained(cls, name):
+        def from_pretrained(cls, name, **kwargs):
             return cls()
 
     class FakeModel:

@@ -263,9 +263,18 @@ def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
             )
             _CLAP.update({"model": None, "proc": None, "device": "cpu", "model_dir": None})
     try:
+        from steps.common.model_provisioner import ensure_model_cached, resolve_models_root
+        
         models_root = _configure_model_env()
-        model_source = _resolve_local_model_dir(models_root)
-        if not model_source:
+        
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("clap_audio", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "failed"):
             logger.warning(
                 "audio_embed_clap model cache missing model_id=%s models_root=%s install_hint=\"%s\"",
                 _CLAP_MODEL_ID,
@@ -273,6 +282,8 @@ def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
                 _CLAP_INSTALL_HINT,
             )
             return False, f"model_not_cached:{models_root}"
+            
+        model_source = provision_result.local_path
 
         import torch  # type: ignore
         from transformers import AutoFeatureExtractor, ClapModel  # type: ignore

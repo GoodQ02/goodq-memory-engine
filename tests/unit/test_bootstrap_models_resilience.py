@@ -133,6 +133,7 @@ def test_model_registry_revisions_do_not_use_placeholder_hashes():
 
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
 
     attempts = {"count": 0}
     recorded_kwargs = {}
@@ -145,6 +146,7 @@ def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
         snapshot_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused" / "snapshots" / "abc123"
         snapshot_dir.mkdir(parents=True)
         (snapshot_dir / "config.json").write_text("{}", encoding="utf-8")
+        (snapshot_dir / "model.safetensors").write_bytes(b"\x00")
         return str(snapshot_dir)
 
     monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
@@ -166,6 +168,8 @@ def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
 
 def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
+    monkeypatch.setenv("HF_TOKEN", "mock_token")
 
     attempts = {"count": 0}
 
@@ -177,7 +181,7 @@ def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(bootstrap_models, "_retry_pause", lambda attempt: None)
 
     result = bootstrap_models.snapshot(
-        "pyannote/speaker-diarization",
+        "pyannote/speaker-diarization-3.1",
         models_root=tmp_path,
         retries=4,
         progress_label="1/1",
@@ -190,6 +194,7 @@ def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
 
 def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
 
     def fake_snapshot_download(**kwargs):
         flat_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused"
@@ -212,6 +217,8 @@ def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monk
 
 def test_snapshot_writes_main_ref_for_pinned_revision(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
+    monkeypatch.setenv("HF_TOKEN", "mock_token")
 
     pinned_revision = "84fd25912480287da0247647c3d2b4853cb3ee5d"
 
@@ -376,3 +383,45 @@ def test_main_persists_partial_report_on_keyboard_interrupt(monkeypatch, tmp_pat
     assert progress["completed_count"] == 1
     assert progress["current_model"] == "org/model-two"
     assert progress["last_event"] == "keyboard_interrupt"
+
+
+def test_resolve_auth_tokens_dual_paths(monkeypatch, tmp_path):
+    from scripts import bootstrap_models
+
+    # Create dummy repo root and models dir
+    repo_root = tmp_path / "repo"
+    models_root = tmp_path / "models_dir"
+    repo_root.mkdir()
+    models_root.mkdir()
+
+    # Create .env.local in repo root
+    repo_env = repo_root / ".env.local"
+    repo_env.write_text("HF_TOKEN=hf_repo_token_value\nPYANNOTE_TOKEN=pyannote_repo_token_value", encoding="utf-8")
+
+    # Create .env.local in models_root's parent folder
+    models_env = tmp_path / ".env.local"
+    models_env.write_text("HF_TOKEN=hf_models_token_value\nOTHER_VAR=some_val", encoding="utf-8")
+
+    monkeypatch.setattr(bootstrap_models, "_REPO_ROOT", repo_root)
+    monkeypatch.setattr(bootstrap_models, "resolve_models_root", lambda: models_root)
+
+    # Calling resolve_auth_tokens with None should read and merge both files.
+    auth = bootstrap_models.resolve_auth_tokens()
+
+    assert auth["hf_present"] is True
+    assert auth["hf_token"] == "hf_models_token_value"
+    assert auth["pyannote_present"] is True
+    assert auth["pyannote_token"] == "pyannote_repo_token_value"
+
+
+def test_redact_sensitive_info_bootstrap_models(monkeypatch):
+    from scripts import bootstrap_models
+
+    monkeypatch.setenv("HF_TOKEN", "my_secret_token_12345")
+    redacted = bootstrap_models.redact_sensitive_info("error with token my_secret_token_12345 in line")
+    assert "my_secret_token_12345" not in redacted
+    assert "my_se" in redacted
+    
+    redacted_pat = bootstrap_models.redact_sensitive_info("hf_abc123xyz789")
+    assert "hf_abc123xyz789" not in redacted_pat
+    assert "hf_" in redacted_pat

@@ -5,6 +5,20 @@ import types
 
 
 def test_clip_loader_falls_back_when_safetensors_weights_are_unavailable(monkeypatch):
+    from steps.common.model_provisioner import ModelProvisionResult
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *args, **kwargs: ModelProvisionResult(
+            status="cached",
+            repo_id="openai/clip-vit-large-patch14",
+            revision="32bd64288804d66eefd0ccbe215aa642df71cc41",
+            local_path="openai/clip-vit-large-patch14",
+            gated=False,
+            required=True,
+            elapsed_seconds=0.1
+        )
+    )
+
     import steps.video.scene_embedder as scene_embedder
 
     scene_embedder._MODELS["clip"] = {"model": None, "processor": None, "device": "cpu"}
@@ -44,7 +58,7 @@ def test_clip_loader_falls_back_when_safetensors_weights_are_unavailable(monkeyp
     try:
         scene_embedder._load_clip_model()
 
-        cleaned_calls = [{k: v for k, v in c.items() if k != "revision"} for c in calls]
+        cleaned_calls = [{k: v for k, v in c.items() if k not in ("revision", "local_files_only")} for c in calls]
         assert cleaned_calls == [{"use_safetensors": True}, {}]
         assert scene_embedder._MODELS["clip"]["model"] is not None
         assert scene_embedder._MODELS["clip"]["device"] == "cpu"

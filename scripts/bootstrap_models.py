@@ -38,8 +38,25 @@ _PLACEHOLDER_TOKENS = {
 }
 
 
+def redact_sensitive_info(text: str) -> str:
+    if not text:
+        return text
+    for key in ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACE_TOKEN", "PYANNOTE_TOKEN"):
+        val = os.environ.get(key)
+        if val and len(val) > 5 and val in text:
+            redacted = f"{val[:5]}...{val[-5:]}" if len(val) > 10 else "hf_***"
+            text = text.replace(val, redacted)
+    import re
+    hf_pat = re.compile(r"hf_[a-zA-Z0-9]+")
+    def repl(match):
+        tok = match.group(0)
+        return f"{tok[:5]}...{tok[-5:]}" if len(tok) > 10 else "hf_***"
+    text = hf_pat.sub(repl, text)
+    return text
+
+
 def _log(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
+    print(redact_sensitive_info(msg), file=sys.stderr, flush=True)
 
 
 def _write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
@@ -98,7 +115,20 @@ def _resolve_preferred_token(
 
 
 def resolve_auth_tokens(env_file_values: Dict[str, str] | None = None) -> Dict[str, str | bool | None]:
-    env_values = env_file_values if env_file_values is not None else _load_env_file_values(_REPO_ROOT / ".env.local")
+    if env_file_values is not None:
+        env_values = env_file_values
+    else:
+        repo_env = _load_env_file_values(_REPO_ROOT / ".env.local")
+        models_env = {}
+        try:
+            models_root = resolve_models_root()
+            if models_root:
+                models_env = _load_env_file_values(models_root.parent / ".env.local")
+        except Exception:
+            pass
+        env_values = {}
+        env_values.update(repo_env)
+        env_values.update(models_env)
 
     hf_token, hf_source = _resolve_preferred_token(env_values, *_HF_TOKEN_CANDIDATES)
     pyannote_token, pyannote_source = _resolve_preferred_token(env_values, "PYANNOTE_TOKEN")
@@ -255,78 +285,51 @@ def snapshot(
     progress_cb: Callable[..., None] | None = None,
 ) -> Dict[str, str]:
     """
-    Download a model snapshot from HuggingFace Hub.
-    
-    Args:
-        model_id: Model ID (may include @revision)
-        auth_token: HuggingFace auth token
-        revision: Explicit revision (commit SHA, tag, or branch). Overrides @revision in model_id.
-        models_root: Canonical GoodQ models root for local placement.
+    Download a model snapshot from HuggingFace Hub via ensure_model_cached.
     """
     repo_id = model_id
     if '@' in model_id and revision is None:
         repo_id, revision = model_id.split('@', 1)
-    try:
-        from huggingface_hub import snapshot_download  # type: ignore
-    except Exception as exc:  # pragma: no cover
-        return {"model": model_id, "status": "error", "error": f"huggingface_hub not available: {exc}"}
-    target_models_root = models_root or Path(os.environ.get("HF_HOME") or ".")
-    cache_dir = target_models_root / "hub"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    repo_cache_dir = _repo_cache_dir(target_models_root, repo_id)
-    attempts = max(int(retries), 1)
-    label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
 
-    for attempt in range(1, attempts + 1):
-        started = time.time()
-        if repo_cache_dir.exists() and any(repo_cache_dir.iterdir()) and not _cache_snapshot_present(target_models_root, repo_id):
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="normalizing_existing_cache")
-            _log(f"{label}existing cache detected for {repo_id}; normalizing to canonical snapshots layout")
+    if auth_token:
+        os.environ["HF_TOKEN"] = auth_token
+
+    label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
+    _log(f"{label}syncing {repo_id} via ensure_model_cached")
+    
+    started = time.time()
+    if progress_cb:
+        progress_cb(current_attempt=1, last_event="snapshot_download_started")
+        
+    from steps.common.model_provisioner import ensure_model_cached
+    
+    # We run ensure_model_cached with offline=False to trigger download if missing
+    res = ensure_model_cached(repo_id, revision=revision, offline=False)
+    
+    elapsed_sec = round(time.time() - started, 1)
+    
+    if res.status in ("cached", "downloaded"):
         if progress_cb:
-            progress_cb(current_attempt=attempt, last_event="snapshot_download_started")
-        _log(f"{label}syncing {repo_id} (attempt {attempt}/{attempts})")
-        try:
-            resolved_dir = snapshot_download(
-                repo_id=repo_id,
-                cache_dir=str(cache_dir),
-                revision=revision,
-                token=auth_token,
-            )
-            if not _cache_snapshot_present(target_models_root, repo_id):
-                if progress_cb:
-                    progress_cb(current_attempt=attempt, last_event="cache_layout_incomplete")
-                return {
-                    "model": model_id,
-                    "status": "error",
-                    "error": f"cache layout incomplete for {repo_id} under {cache_dir}",
-                    "attempts": str(attempt),
-                }
-            _normalize_main_ref_for_pinned_snapshot(target_models_root, repo_id, revision, resolved_dir)
-            elapsed_sec = round(time.time() - started, 1)
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="snapshot_ready")
-            _log(f"{label}ready {repo_id} ({elapsed_sec:.1f}s)")
-            return {
-                "model": model_id,
-                "status": "ok",
-                "path": resolved_dir,
-                "revision": revision or "default",
-                "attempts": str(attempt),
-                "cache_verified": "true",
-                "elapsed_sec": elapsed_sec,
-            }
-        except Exception as exc:  # pragma: no cover
-            detail = str(exc)
-            if attempt < attempts and _is_transient_download_error(detail):
-                if progress_cb:
-                    progress_cb(current_attempt=attempt, last_event="transient_retry", last_error=detail)
-                _log(f"{label}transient failure for {repo_id}: {detail}. Retrying...")
-                _retry_pause(attempt)
-                continue
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="snapshot_error", last_error=detail)
-            return {"model": model_id, "status": "error", "error": detail, "attempts": str(attempt)}
+            progress_cb(current_attempt=getattr(res, "attempts_made", 1), last_event="snapshot_ready")
+        _log(f"{label}ready {repo_id} ({elapsed_sec:.1f}s)")
+        return {
+            "model": model_id,
+            "status": "ok",
+            "path": res.local_path,
+            "revision": res.revision or "default",
+            "attempts": str(getattr(res, "attempts_made", 1)),
+            "cache_verified": "true",
+            "elapsed_sec": elapsed_sec,
+        }
+    else:
+        if progress_cb:
+            progress_cb(current_attempt=getattr(res, "attempts_made", 1), last_event="snapshot_error", last_error=res.error)
+        return {
+            "model": model_id,
+            "status": "error",
+            "error": res.error or "provisioning failed",
+            "attempts": str(getattr(res, "attempts_made", 1))
+        }
 
 
 def download_yolo_n(
@@ -432,6 +435,9 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
         "superb/hubert-large-superb-er",
         "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
         "facebook/wav2vec2-base-960h",
+        "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+        "distilbert-base-uncased-finetuned-sst-2-english",
+        "snakers4/silero-vad",
     ]
 
 
@@ -459,6 +465,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report-path", help="Write machine-readable JSON report to this path")
     parser.add_argument("--progress-path", help="Write machine-readable progress JSON to this path")
     parser.add_argument("--retries", type=int, default=_default_retry_count(), help="Retries for transient download failures")
+    parser.add_argument("--first-launch", "--open-only", dest="first_launch", action="store_true", help="Only filter and download required non-gated models")
     return parser.parse_args()
 
 
@@ -473,6 +480,10 @@ def main() -> None:
             load_dotenv(env_file)
     models_root = resolve_models_root()
     ensure_env(models_root)
+
+    from steps.common.model_provisioner import log_download_event, lookup_model, _FALLBACK_REGISTRY
+    
+    log_download_event(f"Bootstrap models started. First launch mode: {getattr(args, 'first_launch', False)}")
 
     auth = resolve_auth_tokens()
     hf_token = auth["hf_token"] if isinstance(auth["hf_token"], str) else None
@@ -501,6 +512,35 @@ def main() -> None:
         print("[bootstrap] WARNING: model_registry.yaml not found, using latest versions")
 
     wanted = build_wanted_models(registry)
+
+    # Filter wanted models if first launch is active
+    if getattr(args, "first_launch", False):
+        filtered_wanted = []
+        for mid in wanted:
+            repo_id = mid.split('@')[0] if '@' in mid else mid
+            resolved_repo_id, metadata = lookup_model(repo_id)
+            if resolved_repo_id:
+                is_gated = metadata.get("gated", False)
+                is_required = metadata.get("required", True)
+                if is_required and not is_gated:
+                    filtered_wanted.append(mid)
+            else:
+                fb = _FALLBACK_REGISTRY.get(repo_id)
+                if fb:
+                    is_gated = fb.get("gated", False)
+                    is_required = fb.get("required", True)
+                    if is_required and not is_gated:
+                        filtered_wanted.append(mid)
+        wanted = filtered_wanted
+
+    # Print a list of models and their metadata first
+    _log("[bootstrap] --- PRE-DOWNLOAD MODEL LIST ---")
+    for mid in wanted:
+        repo_id = mid.split('@')[0] if '@' in mid else mid
+        _, metadata = lookup_model(repo_id)
+        _log(f"Model: {repo_id} | Revision: {metadata.get('revision') or 'default'} | Gated: {metadata.get('gated', False)} | Required: {metadata.get('required', True)}")
+    _log("Model: yolov8n.pt | Source: GitHub | Gated: False | Required: True")
+    _log("[bootstrap] --------------------------------")
 
     report_path = Path(args.report_path) if args.report_path else repo_root / "logs" / "bootstrap_models_report.json"
     progress_path = Path(args.progress_path) if args.progress_path else repo_root / "logs" / "bootstrap_models_progress.json"
@@ -609,6 +649,7 @@ def main() -> None:
             last_event="bootstrap_complete",
             completed_count=len(results),
         )
+        log_download_event("Bootstrap models completed successfully.")
     except KeyboardInterrupt:
         emit_progress(
             status="interrupted",
@@ -616,15 +657,18 @@ def main() -> None:
             completed_count=len(results),
         )
         write_report("interrupted", current_model=str(progress_state.get("current_model") or ""), fatal_error="KeyboardInterrupt")
+        log_download_event("Bootstrap models interrupted by user.")
         raise
     except Exception as exc:
+        exc_str = redact_sensitive_info(str(exc))
         emit_progress(
             status="failed",
             last_event="fatal_error",
-            last_error=str(exc),
+            last_error=exc_str,
             completed_count=len(results),
         )
-        write_report("failed", current_model=str(progress_state.get("current_model") or ""), fatal_error=str(exc))
+        write_report("failed", current_model=str(progress_state.get("current_model") or ""), fatal_error=exc_str)
+        log_download_event(f"Bootstrap models failed: {exc_str}")
         raise
 
     final_report = json.loads(report_path.read_text(encoding="utf-8"))

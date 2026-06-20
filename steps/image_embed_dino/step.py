@@ -106,30 +106,24 @@ def _load() -> bool:
     try:
         import torch  # type: ignore
         from transformers import AutoModel, AutoProcessor  # type: ignore
-        from pathlib import Path
-        import yaml
+        from steps.common.model_provisioner import ensure_model_cached
         
-        # Resolve repo_id and revision from registry
-        repo_root = Path(__file__).resolve().parents[2]
-        registry_path = repo_root / "configs" / "model_registry.yaml"
-        repo_id = "facebook/dinov2-large"  # Default fallback
-        revision = None
-        if registry_path.exists():
-            try:
-                with open(registry_path, "r", encoding="utf-8") as f:
-                    registry = yaml.safe_load(f) or {}
-                repo_id = registry.get("huggingface_models", {}).get("dinov2", {}).get("repo_id") or repo_id
-                revision = registry.get("huggingface_models", {}).get("dinov2", {}).get("revision") or revision
-            except Exception:
-                pass
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("dinov2", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision DINO model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
         
-        kwargs = {}
-        if revision is not None:
-            kwargs["revision"] = revision
-        proc = AutoProcessor.from_pretrained(repo_id, **kwargs)
-        model = AutoModel.from_pretrained(repo_id, **kwargs).to(device).eval()
+        proc = AutoProcessor.from_pretrained(model_id, local_files_only=True)
+        model = AutoModel.from_pretrained(model_id, local_files_only=True).to(device).eval()
         _DINO.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device} (revision: {revision})")
+        logger.info(f"[OK] DINO model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
         return True
     except Exception as e:
         logger.error(f"[FAIL] Failed to load DINO model: {str(e)}")

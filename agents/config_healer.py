@@ -276,7 +276,7 @@ CONFIDENCE: high/medium/low
     
     def _load_config(self) -> Dict[str, Any]:
         """Load current config"""
-        with open(self.config_path) as f:
+        with open(self.config_path, encoding='utf-8') as f:
             return yaml.safe_load(f)
     
     def _save_config(self, config: Dict[str, Any]) -> None:
@@ -284,7 +284,7 @@ CONFIDENCE: high/medium/low
         if self.dry_run:
             print(f"[CONFIG HEALER] [DRY RUN] Bypassing config write to {self.config_path}")
             return
-        with open(self.config_path, 'w') as f:
+        with open(self.config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
     @staticmethod

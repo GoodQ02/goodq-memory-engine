@@ -770,8 +770,21 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                     break
             registry_key = found_key or registry_key
 
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+
+        from steps.common.model_provisioner import ensure_model_cached
+        provision_result = ensure_model_cached(registry_key, offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision Whisper model: {provision_result.error or 'reason unknown'}")
+        
+        local_model_path = provision_result.local_path
+
         def load_fn():
-            return _load_fw_model(model_id, device, compute_type, duration_minutes)
+            return _load_fw_model(local_model_path, device, compute_type, duration_minutes)
 
         def unload_fn():
             _FW_CACHE.clear()

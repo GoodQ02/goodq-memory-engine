@@ -845,16 +845,19 @@ Replaced with parameterized query using `video_hash`, `file_path`, and
 `scene_ids` IN-list. All three discriminators were already present in the
 function. 46 unit + 19 integration tests passing. Both repos tagged `v2.5.1`.
 
+## v2.5.2: Model Registry & WSL Silero VAD Offline Bridge (2026-06-20)
+
+We completed a comprehensive model registry enforcement and offline WSL cache bridge:
+- **Model Registry & Allowlist**: Centralized allowed models in `configs/model_registry.yaml` and `steps/common/model_provisioner.py`. Arbitrary model loads are blocked, and downloads are gated by secure, retry-capable cache locks to prevent concurrent race conditions.
+- **Windows System Encoding Protection**: Patched `pipelines/direct_ingestion.py` and `cli/watchdog.py` to open JSON documents with explicit `encoding='utf-8'` (mitigating CP1252 decoder crashes on Windows).
+- **WSL Offline Silero VAD Caching**: Integrated `wsl2_audio/model_cache.py` helper inside `wsl2_audio/audio_service.py` to load Silero VAD from resolved local cache routes (`/mnt/l/_DATA/models/hub/snakers4_silero-vad_master`), raising clear offline errors if missing instead of attempting internet connection.
+- **Redacted Logging & Staging**: Active WSL environment logging redacted Hugging Face and PyAnnote tokens, and `model_cache.py` was registered as a staged asset to synchronize correctly. All tests, including the preflight checks and offline WSL service loaded successfully.
+
 ## Safe Next Actions
 
-All Phase 0.7–0.9 hardening plus v2.5.0/v2.5.1 materialization bridge are
-verified. Current safe next actions:
+All Phase 0.7–0.9 hardening plus v2.5.0–v2.5.2 registry/offline-bridge changes are verified. Current safe next actions:
 
-1. **Production family film ingestion**: Run full family film collection
-   through the governed pipeline with `ingestion_isolation: true`.
-2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then
-   `promote_ucf_to_memory` with confirmation tokens for each epoch.
-3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY
-   to cover audio_embed_clap, text_embed, face_embed worker types.
-4. **Laptop follower validation**: Run `scripts/install_pipeline_wsl.py` on
-   secondary host and verify full suite passes.
+1. **Production family film ingestion**: Run full family film collection through the governed pipeline with `ingestion_isolation: true`.
+2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory` with confirmation tokens for each epoch.
+3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover audio_embed_clap, text_embed, face_embed worker types.
+4. **Sprint B2 execution**: Progress to PyAnnote/Wav2Vec gated model local caching and offline resolution within the WSL environment.

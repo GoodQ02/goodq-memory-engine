@@ -115,6 +115,37 @@ func main() {
 	}
 	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
 
+	// Resolve Python Runtime Early
+	var pythonExe string
+	if runtime.GOOS == "windows" {
+		pythonExe = filepath.Join(programFilesDir, "runtime", "python.exe")
+		if _, err := os.Stat(pythonExe); err != nil {
+			fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
+		}
+	} else {
+		pythonExe = "python3"
+		if path, err := exec.LookPath("python3"); err == nil {
+			pythonExe = path
+		} else if path, err := exec.LookPath("python"); err == nil {
+			pythonExe = path
+		}
+	}
+
+	fmt.Println("[LAUNCHER] Bootstrapping model cache (First-Launch required models only)...")
+	bootstrapScript := filepath.Join(programFilesDir, "scripts", "bootstrap_models.py")
+	bootstrapCmd := exec.Command(pythonExe, bootstrapScript, "--first-launch")
+	prepareCmd(bootstrapCmd)
+	
+	bootstrapOutput, err := bootstrapCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("[LAUNCHER] [WARN] Model bootstrap warning: %s\n", err.Error())
+		if len(bootstrapOutput) > 0 {
+			fmt.Printf("[LAUNCHER] [DEBUG] Bootstrap output: %s\n", string(bootstrapOutput))
+		}
+	} else {
+		fmt.Println("[LAUNCHER] [OK] Model bootstrap completed successfully.")
+	}
+
 	// 3. Port Conflict Detection & Fallback Persistence
 	qdrantPort := 6333
 	if !isPortAvailable(qdrantPort) {
@@ -207,20 +238,7 @@ func main() {
 	}
 
 	// 6. Launch Python Control Agent
-	var pythonExe string
-	if runtime.GOOS == "windows" {
-		pythonExe = filepath.Join(programFilesDir, "runtime", "python.exe")
-		if _, err := os.Stat(pythonExe); err != nil {
-			fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
-		}
-	} else {
-		pythonExe = "python3"
-		if path, err := exec.LookPath("python3"); err == nil {
-			pythonExe = path
-		} else if path, err := exec.LookPath("python"); err == nil {
-			pythonExe = path
-		}
-	}
+	// pythonExe is already resolved early
 
 	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
 
@@ -311,10 +329,6 @@ func verifyManifestSignature(manifestPath, signaturePath string) error {
 	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
 	if err != nil {
 		return fmt.Errorf("invalid embedded verification key: %w", err)
-	}
-
-	if string(pubKeyBytes) == "APPROVED_KEY_PLACEHOLDER_SIGNATU" {
-		return nil
 	}
 
 	manifestBytes, err := os.ReadFile(manifestPath)

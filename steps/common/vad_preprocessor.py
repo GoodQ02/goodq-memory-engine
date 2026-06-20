@@ -21,9 +21,24 @@ def get_vad_model():
     global _VAD_MODEL
     if _VAD_MODEL is None:
         try:
+            from steps.common.model_provisioner import ensure_model_cached
+            
+            try:
+                from steps.common.config_loader import load_configs
+                offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+            except Exception:
+                offline_mode = False
+
+            provision_result = ensure_model_cached("silero_vad", offline=offline_mode)
+            if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+                raise OSError(f"Failed to provision Silero VAD model: {provision_result.error or 'reason unknown'}")
+                
+            local_model_path = provision_result.local_path
+
             model, utils = torch.hub.load(
-                repo_or_dir='snakers4/silero-vad',
+                repo_or_dir=local_model_path,
                 model='silero_vad',
+                source='local',
                 force_reload=False,
                 onnx=False
             )

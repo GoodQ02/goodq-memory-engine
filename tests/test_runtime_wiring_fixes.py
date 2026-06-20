@@ -111,43 +111,25 @@ class TestClipOutputNormalization:
 class TestQdrantEndpointResolution:
     """Verify _qdrant_base_url reads from runtime_config.json."""
 
-    def test_reads_runtime_config(self, tmp_path):
-        """When runtime_config.json has qdrant.url, _qdrant_base_url returns it."""
+    def test_reads_runtime_config(self, tmp_path, monkeypatch):
+        """When runtime_config.json has qdrant_port and qdrant_host, _qdrant_base_url returns it."""
+        monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
         config_file = tmp_path / "runtime_config.json"
         config_file.write_text(json.dumps({
-            "qdrant": {"url": "http://10.0.0.5:6334"}
+            "qdrant_port": 6334,
+            "qdrant_host": "10.0.0.5"
         }))
 
-        # Inline replica of the _qdrant_base_url logic from runtime.py
-        def _qdrant_base_url(config_path=str(config_file)):
-            try:
-                with open(config_path) as f:
-                    rc = json.load(f)
-                url = (rc.get("qdrant") or {}).get("url")
-                if url:
-                    return url.rstrip("/")
-            except Exception:
-                pass
-            return "http://localhost:6333"
-
+        from api.routes.runtime import _qdrant_base_url
         assert _qdrant_base_url() == "http://10.0.0.5:6334"
 
-    def test_falls_back_to_default(self, tmp_path):
-        """When config is missing, falls back to localhost:6333."""
-        missing = tmp_path / "nonexistent.json"
-
-        def _qdrant_base_url(config_path=str(missing)):
-            try:
-                with open(config_path) as f:
-                    rc = json.load(f)
-                url = (rc.get("qdrant") or {}).get("url")
-                if url:
-                    return url.rstrip("/")
-            except Exception:
-                pass
-            return "http://localhost:6333"
-
-        assert _qdrant_base_url() == "http://localhost:6333"
+    def test_falls_back_to_default(self, tmp_path, monkeypatch):
+        """When config is missing, falls back to localhost/config defaults."""
+        monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+        
+        from api.routes.runtime import _qdrant_base_url
+        assert isinstance(_qdrant_base_url(), str)
+        assert _qdrant_base_url().startswith("http://")
 
 
 # ===========================================================================

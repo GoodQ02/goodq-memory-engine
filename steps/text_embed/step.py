@@ -127,13 +127,26 @@ def _load_st() -> Any:
     
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
+        from steps.common.model_provisioner import ensure_model_cached
         
-        _ST = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("sentence_transformer", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision SentenceTransformer model: {provision_result.error or 'reason unknown'}")
+            
+        model_path = provision_result.local_path
+        _ST = SentenceTransformer(model_path, device=device)
+        
         mem_fraction = gpu_config.get("memory_fraction")
         if isinstance(mem_fraction, (int, float)):
-            logger.info(f"[OK] SentenceTransformer loaded on {device} (GPU config: {mem_fraction:.1%} memory)")
+            logger.info(f"[OK] SentenceTransformer loaded on {device} from {model_path} (GPU config: {mem_fraction:.1%} memory)")
         else:
-            logger.info(f"[OK] SentenceTransformer loaded on {device}")
+            logger.info(f"[OK] SentenceTransformer loaded on {device} from {model_path}")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load SentenceTransformer: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")

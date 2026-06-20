@@ -2699,6 +2699,20 @@ def _audio_qdrant_collection_candidates(epoch: Any, *, header: Dict[str, Any] | 
 
 
 def _qdrant_base_url() -> str:
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        runtime_cfg = os.path.join(data_root, "runtime_config.json")
+        if os.path.isfile(runtime_cfg):
+            try:
+                with open(runtime_cfg, "r", encoding="utf-8") as f:
+                    rc = json.load(f)
+                port = rc.get("qdrant_port")
+                host = rc.get("qdrant_host") or "127.0.0.1"
+                if port:
+                    return f"http://{host}:{port}"
+            except Exception:
+                pass
+
     qcfg = (_CFG.get("qdrant") or {}) if isinstance(_CFG, dict) else {}
     host = str(qcfg.get("host") or "http://127.0.0.1:6333").strip()
     port = qcfg.get("port")

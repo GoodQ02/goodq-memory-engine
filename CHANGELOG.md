@@ -9,6 +9,17 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-06-20
+
+### Added
+- **Central Model Registry**: Centralized all permitted model/repo IDs inside `configs/model_registry.yaml` and `steps/common/model_provisioner.py`. Prevents loading arbitrary un-registered models and secures concurrent loader threads using a 5-minute timeout file locking mechanism.
+- **WSL2 Offline Caching Helper**: Added `wsl2_audio/model_cache.py` shared caching helper to scan environmental cache routes (`GOODQ_MODEL_CACHE_ROOT`, `TORCH_HOME`, `HF_HOME`, `HUGGINGFACE_HUB_CACHE` / `HF_HUB_CACHE`, and user home `~/.cache`) inside WSL2, resolving and loading Silero VAD locally.
+- **Redacted Env Logging**: Masked active environment tokens (e.g. `HF_TOKEN` / `PYANNOTE_TOKEN`) on WSL2 service startup.
+
+### Fixed
+- **System Encoding crash protection**: Forced watchdog and direct ingestion JSON file readers to use explicit `encoding='utf-8'` (preventing CP1252/Charmap decoder crashes on Windows).
+- **WSL Staging Sync**: Registered `model_cache.py` as a staged asset in `bootstrap_install.py` to prevent import failures inside the WSL environment.
+
 ## [2.5.1] - 2026-06-18
 
 ### Fixed

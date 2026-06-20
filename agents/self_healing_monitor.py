@@ -342,7 +342,7 @@ class SelfHealingMonitor:
             # Log for human review
             self.log_dir.mkdir(parents=True, exist_ok=True)
             log_file = self.log_dir / f"llm_error_analysis_{int(time.time())}.json"
-            with open(log_file, 'w') as f:
+            with open(log_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     "issue": issue,
                     "llm_analysis": result

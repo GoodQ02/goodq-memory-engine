@@ -278,7 +278,7 @@ class ProcessedRegistry:
         """Load processed file registry"""
         if self.state_file.exists():
             try:
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file, 'r', encoding='utf-8') as f:
                     self.processed = json.load(f)
                 logger.info(f"Loaded {len(self.processed)} processed file records")
             except Exception as e:
@@ -553,8 +553,24 @@ class WatchdogProcessor:
                         
                         if already_processed:
                             logger.info(f"File already processed (hash: {file_hash[:8]}...), skipping: {file_path.name}")
-                            # Optionally mark the file to avoid repeated checks
-                            self.mark_file_processed(file_path)
+                            # Update progress tracker so the UI reflects success
+                            try:
+                                from steps.common.progress_tracker import start_processing, update_step, finish_processing
+                                start_processing(file_path.name, total_steps=1, run_id='pre-existing-on-disk')
+                                update_step("completed", 1)
+                                finish_processing("completed")
+                            except Exception as pe:
+                                logger.error(f"Failed to update progress tracker for pre-processed file: {pe}")
+                            
+                            # Move the file to the processed directory
+                            processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
+                            try:
+                                actual_processed_path = safe_move_file(file_path, processed_path)
+                                logger.info(f"Moved pre-processed file to processed directory: {actual_processed_path.name}")
+                            except Exception as me:
+                                logger.error(f"Failed to move pre-processed file to processed directory: {me}")
+                                # Fallback to renaming in inbox
+                                self.mark_file_processed(file_path)
                         else:
                             # Add to processing queue
                             self.queue.put((file_path, file_hash))

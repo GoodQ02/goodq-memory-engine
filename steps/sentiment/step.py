@@ -90,11 +90,25 @@ def _load(preferred_device: Optional[str] = None) -> bool:
     try:
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
+        from steps.common.model_provisioner import ensure_model_cached
 
         _configure_model_env()
         device = target_device if target_device == "cpu" or torch.cuda.is_available() else "cpu"
-        tok = AutoTokenizer.from_pretrained(_SENTIMENT_MODEL, local_files_only=True)
-        model = AutoModelForSequenceClassification.from_pretrained(_SENTIMENT_MODEL, local_files_only=True)
+        
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("sentiment_model", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision sentiment model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
+        
+        tok = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id, local_files_only=True)
         _SENT.update({"tok": tok, "model": model.to(device).eval(), "device": device})
         _SENT["load_attempted"] = True
         _SENT["load_error"] = None

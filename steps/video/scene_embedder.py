@@ -76,29 +76,23 @@ def _load_clip_model():
     try:
         import torch
         from transformers import CLIPModel, CLIPProcessor
-        from pathlib import Path
-        import yaml
+        from steps.common.model_provisioner import ensure_model_cached
         
-        # Resolve repo_id and revision from registry
-        repo_root = Path(__file__).resolve().parents[2]
-        registry_path = repo_root / "configs" / "model_registry.yaml"
-        repo_id = "openai/clip-vit-large-patch14"  # Default fallback
-        revision = None
-        if registry_path.exists():
-            try:
-                with open(registry_path, "r", encoding="utf-8") as f:
-                    registry = yaml.safe_load(f) or {}
-                repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
-                revision = registry.get("huggingface_models", {}).get("clip_vit", {}).get("revision") or revision
-            except Exception:
-                pass
-        
-        kwargs = {}
-        if revision is not None:
-            kwargs["revision"] = revision
-        processor = CLIPProcessor.from_pretrained(repo_id, **kwargs)
         try:
-            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True, **kwargs)
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("clip_vit", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision CLIP model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
+        
+        processor = CLIPProcessor.from_pretrained(model_id, local_files_only=True)
+        try:
+            model = CLIPModel.from_pretrained(model_id, use_safetensors=True, local_files_only=True)
         except Exception as safetensors_exc:
             logger.warning(
                 "[PHASE6] CLIP safetensors load unavailable; falling back to cached default weights "
@@ -106,7 +100,7 @@ def _load_clip_model():
                 type(safetensors_exc).__name__,
                 safetensors_exc,
             )
-            model = CLIPModel.from_pretrained(repo_id, **kwargs)
+            model = CLIPModel.from_pretrained(model_id, local_files_only=True)
         model = model.to(device).eval()
         
         _MODELS["clip"].update({
@@ -115,7 +109,7 @@ def _load_clip_model():
             "device": device
         })
         
-        logger.info(f"[OK] CLIP model ({repo_id}) loaded on {device} (revision: {revision})")
+        logger.info(f"[OK] CLIP model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {e}")
         _MODELS["clip"].update({"model": None, "processor": None, "device": "cpu"})
@@ -131,28 +125,22 @@ def _load_dino_model():
     try:
         import torch
         from transformers import AutoImageProcessor, AutoModel
-        from pathlib import Path
-        import yaml
+        from steps.common.model_provisioner import ensure_model_cached
         
-        # Resolve repo_id and revision from registry
-        repo_root = Path(__file__).resolve().parents[2]
-        registry_path = repo_root / "configs" / "model_registry.yaml"
-        repo_id = "facebook/dinov2-large"  # Default fallback
-        revision = None
-        if registry_path.exists():
-            try:
-                with open(registry_path, "r", encoding="utf-8") as f:
-                    registry = yaml.safe_load(f) or {}
-                repo_id = registry.get("huggingface_models", {}).get("dinov2", {}).get("repo_id") or repo_id
-                revision = registry.get("huggingface_models", {}).get("dinov2", {}).get("revision") or revision
-            except Exception:
-                pass
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("dinov2", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision DINO model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
         
-        kwargs_dino = {}
-        if revision is not None:
-            kwargs_dino["revision"] = revision
-        processor = AutoImageProcessor.from_pretrained(repo_id, **kwargs_dino)
-        model = AutoModel.from_pretrained(repo_id, **kwargs_dino).to(device).eval()
+        processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
+        model = AutoModel.from_pretrained(model_id, local_files_only=True).to(device).eval()
         
         _MODELS["dino"].update({
             "model": model,
@@ -160,7 +148,7 @@ def _load_dino_model():
             "device": device
         })
         
-        logger.info(f"[OK] DINO model ({repo_id}) loaded on {device} (revision: {revision})")
+        logger.info(f"[OK] DINO model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load DINO model: {e}")
         _MODELS["dino"].update({"model": None, "processor": None, "device": "cpu"})

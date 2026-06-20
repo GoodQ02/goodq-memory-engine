@@ -143,7 +143,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         
         if output_json.exists():
             import json
-            with open(output_json, 'r') as f:
+            with open(output_json, 'r', encoding='utf-8') as f:
                 ingestion_results = json.load(f)
                 # Handle both list and dict formats
                 if isinstance(ingestion_results, list) and len(ingestion_results) > 0:
@@ -185,7 +185,7 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
         if temporal_index_path.exists():
             try:
                 import json
-                with open(temporal_index_path, 'r') as f:
+                with open(temporal_index_path, 'r', encoding='utf-8') as f:
                     result["temporal_index"] = json.load(f)
             except Exception as e:
                 print(f"[INGEST] Warning: Could not load temporal_index.json: {e}")

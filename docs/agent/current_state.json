@@ -968,5 +968,27 @@
       "fix": "Replaced with parameterized video_hash + file_path + scene_ids IN-list query",
       "tests_passing": "46 unit + 19 integration"
     }
+  },
+  "model_registry_and_wsl_bridge_v2_5_2_2026_06_20": {
+    "last_verified": "2026-06-20",
+    "status": "completed",
+    "tags": ["v2.5.2"],
+    "details": "Centralized Model Allowlist & Registry, cross-process concurrent download locking, Windows utf-8 system encoding protections, and WSL2 offline Silero VAD cache bridge implemented and verified.",
+    "milestones_completed": [
+      "Model registry allowlist enforcement configs/model_registry.yaml",
+      "Cross-process cache lock system in model_provisioner.py",
+      "Windows UTF-8 encoding support for watchdog and direct_ingestion.py",
+      "WSL2 offline model resolver and loading helper model_cache.py",
+      "WSL2 audio service Silero VAD loading refactored to model_cache",
+      "Redacted active WSL environment logs (masked HF and PyAnnote tokens)",
+      "Registered model_cache.py staged asset sync in bootstrap_install.py"
+    ],
+    "verification_tests": [
+      "tests/unit/test_model_provisioner.py",
+      "tests/unit/test_wsl_process_audio_diarization.py",
+      "tests/unit/test_wsl_audio_preflight.py",
+      "tests/unit/test_wsl_audio_unified_bridge.py"
+    ],
+    "suite_result": "PASS"
   }
 }

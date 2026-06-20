@@ -141,22 +141,29 @@ def _load_blip() -> bool:
     try:
         import torch  # type: ignore
         from transformers import BlipProcessor, BlipForConditionalGeneration  # type: ignore
-
+        from steps.common.model_provisioner import ensure_model_cached, resolve_models_root
+        
         # Ensure HF_HOME is set for model caching
-        models_root = _resolve_models_root()
+        models_root = str(resolve_models_root())
         os.environ["HF_HOME"] = models_root
         os.environ["TORCH_HOME"] = models_root
         os.environ.setdefault("TRANSFORMERS_CACHE", str(Path(models_root) / "transformers"))
         
-        # Prefer local snapshot if available for offline/air-gapped operation
-        local_dir = _resolve_blip_local_dir(models_root)
-        model_id = local_dir or "Salesforce/blip-image-captioning-base"
-        local_only = local_dir is not None
-        if local_only:
-            logger.info(f"[OK] BLIP using local snapshot: {local_dir}")
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("blip_caption", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision BLIP model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
+        logger.info(f"[OK] BLIP using local snapshot: {model_id}")
         
-        proc = BlipProcessor.from_pretrained(model_id, local_files_only=local_only)
-        model = BlipForConditionalGeneration.from_pretrained(model_id, local_files_only=local_only).to(device).eval()
+        proc = BlipProcessor.from_pretrained(model_id, local_files_only=True)
+        model = BlipForConditionalGeneration.from_pretrained(model_id, local_files_only=True).to(device).eval()
         _BLIP.update({"model": model, "proc": proc, "device": device})
         logger.info(f"[OK] BLIP model loaded on {device} (GPU config: {gpu_config['memory_fraction']:.1%} memory)")
         return True
@@ -179,10 +186,22 @@ def _load_fallback() -> None:
     try:
         import torch  # type: ignore
         from transformers import pipeline  # type: ignore
+        from steps.common.model_provisioner import ensure_model_cached
         
-        pipe = pipeline("image-to-text", model="nlpconnect/vit-gpt2-image-captioning", device=0 if device=="cuda" else -1)
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("vit_gpt2_caption", required=False, offline=offline_mode)
+        if provision_result.status in ("offline_missing", "failed"):
+            raise OSError(f"Failed to provision fallback CAPTION model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
+        pipe = pipeline("image-to-text", model=model_id, device=0 if device=="cuda" else -1)
         _FALLBACK.update({"pipe": pipe, "device": device})
-        logger.info(f"[OK] Fallback caption model loaded on {device}")
+        logger.info(f"[OK] Fallback caption model loaded on {device} from {model_id}")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load fallback model: {str(e)}")
         _FALLBACK.update({"pipe": None})

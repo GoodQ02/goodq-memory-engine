@@ -127,6 +127,14 @@ class AudioService:
         for d in [self.queue_dir, self.output_dir, self.logs_dir]:
             d.mkdir(parents=True, exist_ok=True)
         
+        # Log environment variables
+        sys.path.insert(0, str(self.base_dir))
+        try:
+            import model_cache
+        except ImportError:
+            from wsl2_audio import model_cache
+        model_cache.log_env_summary(logger)
+
         self.running = True
         self.processing_lock = threading.Lock()
 
@@ -259,12 +267,12 @@ class AudioService:
         # Load Silero VAD
         try:
             logger.info("Loading Silero VAD...")
-            self.vad_model, vad_utils = torch.hub.load(
-                repo_or_dir='snakers4/silero-vad',
-                model='silero_vad',
-                force_reload=False,
-                onnx=False
-            )
+            sys.path.insert(0, str(self.base_dir))
+            try:
+                import model_cache
+            except ImportError:
+                from wsl2_audio import model_cache
+            self.vad_model, vad_utils = model_cache.load_silero_vad()
             self.vad_get_speech_timestamps = vad_utils[0]
             self.vad_collect_chunks = vad_utils[4]
             logger.info("[SYMBOL] Silero VAD loaded")

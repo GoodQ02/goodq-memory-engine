@@ -42,10 +42,21 @@ def _load_emotion():
     try:
         import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
+        from steps.common.model_provisioner import ensure_model_cached
 
-        name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
-        tok = AutoTokenizer.from_pretrained(name)
-        model = AutoModelForSequenceClassification.from_pretrained(name, use_safetensors=True)
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+
+        provision_result = ensure_model_cached("emotion_classify_model", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision emotion model: {provision_result.error or 'reason unknown'}")
+
+        model_id = provision_result.local_path
+        tok = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id, use_safetensors=True, local_files_only=True)
         
         model = model.to(device).eval()
         labels = [

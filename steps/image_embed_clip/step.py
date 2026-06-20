@@ -69,30 +69,24 @@ def _load() -> None:
     try:
         import torch  # type: ignore
         from transformers import CLIPModel, CLIPProcessor  # type: ignore
-        from pathlib import Path
-        import yaml
+        from steps.common.model_provisioner import ensure_model_cached
         
-        # Resolve repo_id and revision from registry
-        repo_root = Path(__file__).resolve().parents[2]
-        registry_path = repo_root / "configs" / "model_registry.yaml"
-        repo_id = "openai/clip-vit-large-patch14"  # Default fallback
-        revision = None
-        if registry_path.exists():
-            try:
-                with open(registry_path, "r", encoding="utf-8") as f:
-                    registry = yaml.safe_load(f) or {}
-                repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
-                revision = registry.get("huggingface_models", {}).get("clip_vit", {}).get("revision") or revision
-            except Exception:
-                pass
+        try:
+            from steps.common.config_loader import load_configs
+            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception:
+            offline_mode = False
+            
+        provision_result = ensure_model_cached("clip_vit", offline=offline_mode)
+        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
+            raise OSError(f"Failed to provision CLIP model: {provision_result.error or 'reason unknown'}")
+            
+        model_id = provision_result.local_path
         
-        kwargs = {}
-        if revision is not None:
-            kwargs["revision"] = revision
-        proc = CLIPProcessor.from_pretrained(repo_id, **kwargs)
-        model = CLIPModel.from_pretrained(repo_id, **kwargs).to(device).eval()
+        proc = CLIPProcessor.from_pretrained(model_id, local_files_only=True)
+        model = CLIPModel.from_pretrained(model_id, local_files_only=True).to(device).eval()
         _CLIP.update({"model": model, "proc": proc, "device": device})
-        logger.info(f"[OK] CLIP model ({repo_id}) loaded on {device} (revision: {revision})")
+        logger.info(f"[OK] CLIP model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {str(e)}")
         logger.info("[WARN]  Falling back to CPU mode")

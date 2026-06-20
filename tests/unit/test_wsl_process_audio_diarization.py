@@ -199,7 +199,13 @@ def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):
 
     monkeypatch.setattr(mod, "WhisperModel", _FakeWhisperModel)
     monkeypatch.setattr(mod.torch.cuda, "is_available", lambda: False)
-    monkeypatch.setattr(mod.torch.hub, "load", lambda **_kwargs: ("vad", [None, None, None, None, "collect"]))
+    
+    try:
+        from wsl2_audio import model_cache
+    except ImportError:
+        import model_cache
+    monkeypatch.setattr(model_cache, "load_silero_vad", lambda *args, **kwargs: ("vad", [None, None, None, None, "collect"]))
+    
     monkeypatch.setenv("PYANNOTE_TOKEN", "test-token")
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
 

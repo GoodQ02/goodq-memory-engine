@@ -318,6 +318,25 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     raw_cfg = _ensure_runtime_path_defaults(raw_cfg)
     
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        runtime_cfg_path = os.path.join(data_root, "runtime_config.json")
+        if os.path.isfile(runtime_cfg_path):
+            try:
+                with open(runtime_cfg_path, "r", encoding="utf-8") as f:
+                    rc = json.load(f)
+                port = rc.get("qdrant_port")
+                host = rc.get("qdrant_host")
+                if port or host:
+                    if "qdrant" not in raw_cfg or not isinstance(raw_cfg["qdrant"], dict):
+                        raw_cfg["qdrant"] = {}
+                    if port:
+                        raw_cfg["qdrant"]["port"] = port
+                    if host:
+                        raw_cfg["qdrant"]["host"] = host
+            except Exception as e:
+                print(f"[WARN] Failed to load runtime_config.json: {e}")
+    
     # Validate against Pydantic schema (optional - graceful degradation)
     try:
         from config_schema import GoodQConfig

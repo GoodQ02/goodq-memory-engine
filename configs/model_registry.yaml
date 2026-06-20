@@ -298,6 +298,57 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+  emotion_classify_model:
+    repo_id: cardiffnlp/twitter-roberta-base-emotion-multilabel-latest
+    revision: 30a56d88e47e493f08f93c786d49c526550b55b9
+    model_type: text-classification
+    required: true
+    trust_level: stable
+    modalities: [text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.5
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  sentiment_model:
+    repo_id: distilbert-base-uncased-finetuned-sst-2-english
+    revision: 714eb0fa89d2f80546fda750413ed43d93601a13
+    model_type: text-classification
+    required: true
+    trust_level: stable
+    modalities: [text]
+    engines:
+      Transformers: yes
+    quantization: [FP16]
+    vram_estimate_gb: 0.3
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+  silero_vad:
+    repo_id: snakers4/silero-vad
+    revision: 290cda07f59d57a91176b6d601b04da12ee105fa
+    model_type: audio-vad
+    required: true
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      PyTorch: yes
+    quantization: [FP32]
+    vram_estimate_gb: 0.1
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
 
   # Candidates and Experimental SOTA Models
   whisper_large_v3_turbo:

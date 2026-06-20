@@ -221,5 +221,19 @@ def test_build_llm_models_profile_injection(monkeypatch):
     assert models[0].priority == 200
 
 
+def test_load_configs_runtime_config_merge(monkeypatch, tmp_path):
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    runtime_config_file = tmp_path / "runtime_config.json"
+    import json
+    runtime_config_file.write_text(json.dumps({
+        "qdrant_port": 6399,
+        "qdrant_host": "192.168.1.100"
+    }), encoding="utf-8")
+
+    result = load_configs({})
+    assert result.get("qdrant", {}).get("port") == 6399
+    assert result.get("qdrant", {}).get("host") == "192.168.1.100"
+
+
 if __name__ == "__main__":
     test_config_values()

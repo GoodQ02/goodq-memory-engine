@@ -142,7 +142,7 @@ class Phase4AudioProcessor:
         # Save enhanced manifest
         manifest_path = output_dir / "metadata" / "segmentation_enhanced.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(manifest_path, 'w') as f:
+        with open(manifest_path, 'w', encoding='utf-8') as f:
             json.dump(enhanced_manifest, f, indent=2)
         
         logger.info(f"[PHASE 4] Complete: {len(processed_segments)} segments processed")
@@ -313,7 +313,7 @@ def process_segmented_audio(
     logger.info("[PHASE 4] Starting heavy audio processing")
     
     # Load segmentation manifest
-    with open(segmentation_manifest_path, 'r') as f:
+    with open(segmentation_manifest_path, 'r', encoding='utf-8') as f:
         manifest = json.load(f)
     
     # Initialize processor
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     
     # Load config
     import yaml
-    with open(args.config, 'r') as f:
+    with open(args.config, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
     # Run Phase 4

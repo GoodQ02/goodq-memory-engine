@@ -180,6 +180,7 @@ GoodQ4All ships with two local operator console variants:
 *   Memory Storage: [`docs/architecture/MEMORY_STORAGE.md`](docs/architecture/MEMORY_STORAGE.md)
 *   Hybrid Caching: [`docs/architecture/TURBOQUANT_HYBRID_CACHING.md`](docs/architecture/TURBOQUANT_HYBRID_CACHING.md)
 *   Current Agent State: [`docs/agent/CURRENT_STATE.md`](docs/agent/CURRENT_STATE.md)
+*   RAG Context Pack: [`docs/GOODQ_RAG_CONTEXT_PACK.md`](docs/GOODQ_RAG_CONTEXT_PACK.md)
 
 ---
 

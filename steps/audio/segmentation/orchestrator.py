@@ -194,7 +194,7 @@ class PhasedSegmentationEngine:
             
             metadata = extract_metadata(video_path)
             metadata_path = os.path.join(dirs['metadata'], 'source_metadata.json')
-            with open(metadata_path, 'w') as f:
+            with open(metadata_path, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2)
             
             self.phase_results['phase0'] = {
@@ -219,7 +219,7 @@ class PhasedSegmentationEngine:
             )
             
             vad_path = os.path.join(dirs['metadata'], 'vad_segments.json')
-            with open(vad_path, 'w') as f:
+            with open(vad_path, 'w', encoding='utf-8') as f:
                 json.dump({'segments': vad_segments}, f, indent=2)
             
             self.phase_results['phase1'] = {
@@ -253,7 +253,7 @@ class PhasedSegmentationEngine:
             )
             
             pyannote_path = os.path.join(dirs['metadata'], 'pyannote_segments.json')
-            with open(pyannote_path, 'w') as f:
+            with open(pyannote_path, 'w', encoding='utf-8') as f:
                 json.dump({'segments': enhanced_segments}, f, indent=2)
             
             self.phase_results['phase2'] = {

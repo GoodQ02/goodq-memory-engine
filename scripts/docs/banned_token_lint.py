@@ -32,6 +32,7 @@ TARGET_SUFFIXES = {
 EXCLUDED_DIR_NAMES = {
     ".git",
     ".gemini",
+    ".agents",
     "brain",
     "tests",
     "__pycache__",

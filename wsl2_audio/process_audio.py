@@ -191,13 +191,14 @@ def _resolve_hf_cache_dir() -> Optional[str]:
     return cache_dir
 
 
-def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir: Optional[str] = None):
-    """Load pyannote across the 3.x/4.x auth kwarg boundary, trying local_files_only=True first."""
+def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir: Optional[str] = None, is_offline: bool = False):
+    """Load pyannote across the 3.x/4.x auth kwarg boundary, trying local_files_only=True first, blocking online if offline."""
     base_kwargs = {}
     if cache_dir:
         base_kwargs["cache_dir"] = cache_dir
 
-    for local_only in (True, False):
+    local_attempts = (True,) if is_offline else (True, False)
+    for local_only in local_attempts:
         kwargs = dict(base_kwargs)
         if local_only:
             kwargs["local_files_only"] = True
@@ -215,8 +216,10 @@ def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir
                 kwargs.pop("use_auth_token", None)
                 kwargs["token"] = token
                 return pipeline_cls.from_pretrained(model_name, **kwargs)
-        except Exception:
+        except Exception as e:
             if local_only:
+                if is_offline:
+                    raise OSError(f"Offline mode: PyAnnote diarization pipeline failed to load locally: {e}") from e
                 continue
             raise
 
@@ -448,6 +451,12 @@ def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
     runtime_cfg = _load_runtime_config()
+    
+    try:
+        import model_cache
+    except ImportError:
+        from wsl2_audio import model_cache
+    is_offline = model_cache.is_offline_mode()
 
     result = {
         "status": "processing",
@@ -544,7 +553,16 @@ def process_audio(audio_file, output_dir):
             beam_size = int(processing_cfg.get("beam_size", 5) or 5)
             whisper_device = "cpu" if device == "mps" else device
             whisper_compute = "int8" if whisper_device == "cpu" and compute_type not in {"float32", "float64"} else compute_type
-            whisper_model = WhisperModel(result["whisper_model"], device=whisper_device, compute_type=whisper_compute)
+            
+            if is_offline and not model_cache.check_whisper_cache(result["whisper_model"]):
+                raise OSError(
+                    f"Offline mode: Faster-Whisper model '{result['whisper_model']}' is missing from local cache.\n"
+                    "Status: Non-gated.\n"
+                    "Requirements: No Hugging Face token or license terms required.\n"
+                    "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-whisper"
+                )
+                
+            whisper_model = WhisperModel(result["whisper_model"], device=whisper_device, compute_type=whisper_compute, local_files_only=is_offline)
             segments, info = whisper_model.transcribe(
                 audio_file,
                 language=transcription_language,
@@ -577,13 +595,15 @@ def process_audio(audio_file, output_dir):
             
         except Exception as e:
             result["transcription_status"] = "error"
-            result["transcription_error"] = str(e)
+            result["transcription_error"] = model_cache.redact_sensitive_info(str(e))
             # Ensure cleanup even on error
             try:
                 del whisper_model
             except:
                 pass
             clear_gpu_memory()
+            if is_offline:
+                raise
         
         # === STEP 2: SPEAKER DIARIZATION (Pyannote - optional) ===
         print("Processing: Diarization...", file=sys.stderr)
@@ -600,14 +620,23 @@ def process_audio(audio_file, output_dir):
                         runtime_cfg.get("huggingface_token_env"),
                     )
                 )
-                if hf_token:
-                    os.environ.setdefault("HUGGINGFACE_TOKEN", hf_token)
-                    os.environ.setdefault("HF_TOKEN", hf_token)
+                if is_offline and not model_cache.check_pyannote_cache(result["diarization_model"]):
+                    raise OSError(
+                        f"Offline mode: PyAnnote diarization model '{result['diarization_model']}' is missing from local cache.\n"
+                        "Status: Gated.\n"
+                        "Requirements: Requires Hugging Face account licensing approval and access token (HF_TOKEN or PYANNOTE_TOKEN).\n"
+                        "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-pyannote"
+                    )
+                    
+                if hf_token or is_offline:
+                    os.environ.setdefault("HUGGINGFACE_TOKEN", hf_token or "")
+                    os.environ.setdefault("HF_TOKEN", hf_token or "")
                     diarization_pipeline = _load_pyannote_pipeline(
                         DiarizationPipeline,
                         result["diarization_model"],
-                        hf_token,
+                        hf_token or "",
                         cache_dir=_resolve_hf_cache_dir(),
+                        is_offline=is_offline,
                     )
                     diarization_device = "cpu" if (device == "mps" and os.getenv("GOODQ_MPS_DIARIZATION") == "0") else device
                     diarization_pipeline.to(torch.device(diarization_device))
@@ -652,13 +681,15 @@ def process_audio(audio_file, output_dir):
                     result["diarization_note"] = "HUGGINGFACE_TOKEN not set"
             except Exception as e:
                 result["diarization_status"] = "error"
-                result["diarization_error"] = str(e)
+                result["diarization_error"] = model_cache.redact_sensitive_info(str(e))
                 # Ensure cleanup even on error
                 try:
                     del diarization_pipeline
                 except:
                     pass
                 clear_gpu_memory()
+                if is_offline:
+                    raise
         elif not bool(result["diarization_enabled"]):
             result["diarization_status"] = "skipped"
             result["diarization_note"] = "disabled by runtime config"
@@ -677,13 +708,23 @@ def process_audio(audio_file, output_dir):
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
                 model_repo = "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+                if is_offline and not model_cache.check_hf_model_cache(model_repo):
+                    raise OSError(
+                        f"Offline mode: Wav2Vec2 Emotion model '{model_repo}' is missing from local cache.\n"
+                        "Status: Non-gated.\n"
+                        "Requirements: No Hugging Face token or license terms required.\n"
+                        "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-emotion"
+                    )
+                
                 try:
                     emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
                         model_repo,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
-                except Exception:
+                except Exception as exc:
+                    if is_offline:
+                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Emotion model '{model_repo}' from cache: {exc}") from exc
                     emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
                         model_repo,
                         cache_dir=wav2vec_cache_dir,
@@ -695,7 +736,9 @@ def process_audio(audio_file, output_dir):
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
-                except Exception:
+                except Exception as exc:
+                    if is_offline:
+                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Emotion feature extractor '{model_repo}' from cache: {exc}") from exc
                     emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         model_repo,
                         cache_dir=wav2vec_cache_dir,
@@ -739,7 +782,7 @@ def process_audio(audio_file, output_dir):
                 
             except Exception as e:
                 result["emotion_status"] = "error"
-                result["emotion_error"] = str(e)
+                result["emotion_error"] = model_cache.redact_sensitive_info(str(e))
                 # Ensure cleanup even on error
                 try:
                     del emotion_model
@@ -747,6 +790,8 @@ def process_audio(audio_file, output_dir):
                 except:
                     pass
                 clear_gpu_memory()
+                if is_offline:
+                    raise
         else:
             result["emotion_status"] = "unavailable"
             result["emotion_note"] = "transformers not installed"
@@ -775,13 +820,23 @@ def process_audio(audio_file, output_dir):
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
                 embed_repo = "facebook/wav2vec2-base-960h"
+                if is_offline and not model_cache.check_hf_model_cache(embed_repo):
+                    raise OSError(
+                        f"Offline mode: Wav2Vec2 Base model '{embed_repo}' is missing from local cache.\n"
+                        "Status: Non-gated.\n"
+                        "Requirements: No Hugging Face token or license terms required.\n"
+                        "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-wav2vec2"
+                    )
+                
                 try:
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
-                except Exception:
+                except Exception as exc:
+                    if is_offline:
+                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base model '{embed_repo}' from cache: {exc}") from exc
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
                         cache_dir=wav2vec_cache_dir,
@@ -800,7 +855,9 @@ def process_audio(audio_file, output_dir):
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
-                except Exception:
+                except Exception as exc:
+                    if is_offline:
+                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base feature extractor '{embed_repo}' from cache: {exc}") from exc
                     embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         embed_repo,
                         cache_dir=wav2vec_cache_dir,
@@ -857,12 +914,12 @@ def process_audio(audio_file, output_dir):
                 
             except Exception as e:
                 result["embeddings_status"] = "error"
-                result["embeddings_error"] = str(e)
+                result["embeddings_error"] = model_cache.redact_sensitive_info(str(e))
                 result["speaker_voice_signatures"] = []
                 result["speaker_voice_signature_meta"] = {
                     "status": "error",
                     "reason": "embedding_step_failed",
-                    "error": str(e),
+                    "error": model_cache.redact_sensitive_info(str(e)),
                 }
                 # Ensure cleanup even on error
                 try:
@@ -871,6 +928,8 @@ def process_audio(audio_file, output_dir):
                 except:
                     pass
                 clear_gpu_memory()
+                if is_offline:
+                    raise
         else:
             result["embeddings_status"] = "unavailable"
             result["embeddings_note"] = "transformers not installed"
@@ -891,8 +950,19 @@ def process_audio(audio_file, output_dir):
         
     except Exception as e:
         result["status"] = "error"
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
+        result["error"] = model_cache.redact_sensitive_info(str(e))
+        result["traceback"] = model_cache.redact_sensitive_info(traceback.format_exc())
+        if output_dir:
+            try:
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+                output_file = output_path / "result.json"
+                with open(output_file, 'w') as f:
+                    json.dump(result, f, indent=2)
+            except Exception:
+                pass
+        if is_offline:
+            raise
     
     # Write output file
     if output_dir:

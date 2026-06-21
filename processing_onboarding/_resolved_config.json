@@ -1,4 +1,5 @@
 {
+  "ingestion_isolation": true,
   "user": {
     "name": "Joseph Domingo Benvenuti",
     "nickname": "GoodSex, Joes, Agent, 00-Joes, Joe",
@@ -30,7 +31,7 @@
     "workplace": "The GoodPlace, Chicago, Illinois"
   },
   "host": {
-    "profile": "GPU_ENHANCED",
+    "profile": "BASELINE",
     "data_root": "L:\\_DATA",
     "wsl_distro": "Ubuntu-22.04",
     "wsl_user": "jdben",
@@ -38,20 +39,20 @@
     "conda_env": "goodq_core"
   },
   "paths": {
-    "log_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs",
-    "output_directory": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/output",
-    "db_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01",
-    "db_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/memory.db",
-    "knowledge_graph_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/knowledge_graph.db",
-    "faiss_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss",
-    "faiss_audio_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/goodq_audio_epoch_2026_06_02_family_clean_01.index",
+    "log_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/logs",
+    "output_directory": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/output",
+    "db_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke",
+    "db_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/memory.db",
+    "knowledge_graph_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/knowledge_graph.db",
+    "faiss_dir": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss",
+    "faiss_audio_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/goodq_audio_epoch_2026_06_16_r0_smoke.index",
     "qdrant_storage": "L:\\_DATA/qdrant_storage",
-    "watchdog_state_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/watchdog_state.json",
-    "watchdog_lock_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/watchdog.lock",
+    "watchdog_state_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/logs/watchdog_state.json",
+    "watchdog_lock_file": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/logs/watchdog.lock",
     "config_dir": "configs",
     "data_root": "L:\\_DATA/GoodQ_Data",
     "import_inbox": "L:\\_DATA/GoodQ_Data/import_inbox",
-    "processing": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/processing",
+    "processing": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/processing",
     "processed": "L:\\_DATA/GoodQ_Data/processed",
     "failed": "L:\\_DATA/GoodQ_Data/failed",
     "models_cache": "L:\\_DATA/models",
@@ -59,19 +60,19 @@
     "audio_subdir": "audio",
     "video_subdir": "video",
     "metadata_subdir": "metadata",
-    "csv_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/logs/system_metrics.csv",
+    "csv_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/logs/system_metrics.csv",
     "nas_path": "L:\\_DATA/GoodQ_Data/archive",
-    "faiss_index_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/text/faiss_text.index",
-    "faiss_clip_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/clip/faiss_clip.index",
-    "faiss_dino_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/dino/faiss_dino.index",
-    "clip_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/clip/clip_id_map.sqlite",
-    "dino_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/dino/dino_id_map.sqlite",
-    "clap_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_02_family_clean_01/faiss/audio/clap_id_map.sqlite",
+    "faiss_index_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/text/faiss_text.index",
+    "faiss_clip_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/clip/faiss_clip.index",
+    "faiss_dino_path": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/dino/faiss_dino.index",
+    "clip_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/clip/clip_id_map.sqlite",
+    "dino_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/dino/dino_id_map.sqlite",
+    "clap_id_map_db": "L:\\_DATA/GoodQ_Data/epochs/epoch_2026_06_16_r0_smoke/faiss/audio/clap_id_map.sqlite",
     "ingest_requests": "L:\\_DATA/GoodQ_Data/ingest_requests"
   },
   "config": {
     "tools": {
-      "ffmpeg_exe": "L:/_DATA/_TOOLS/ffmpeg/bin/ffmpeg.exe",
+      "ffmpeg_exe": "C:/Users/jdben/miniconda3/envs/goodq_core/Library/bin/ffmpeg.EXE",
       "tesseract_exe": "C:/Program Files/Tesseract-OCR/tesseract.exe",
       "poppler_bin": "C:\\Tools\\poppler\\poppler-25.12.0\\Library\\bin"
     }
@@ -126,10 +127,10 @@
     "enabled": true,
     "host": "http://127.0.0.1:6333",
     "collections": {
-      "clip": "goodq_clip_epoch_2026_06_02_family_clean_01",
-      "dino": "goodq_dino_epoch_2026_06_02_family_clean_01",
-      "text": "goodq_text_epoch_2026_06_02_family_clean_01",
-      "audio": "goodq_audio_epoch_2026_06_02_family_clean_01"
+      "clip": "goodq_clip_epoch_2026_06_16_r0_smoke",
+      "dino": "goodq_dino_epoch_2026_06_16_r0_smoke",
+      "text": "goodq_text_epoch_2026_06_16_r0_smoke",
+      "audio": "goodq_audio_epoch_2026_06_16_r0_smoke"
     },
     "embedding_dims": {
       "clip": 768,
@@ -215,8 +216,8 @@
     "frame_sampling_strategy": "uniform",
     "frames_per_scene": 3,
     "max_gpu_batch_size": 8,
-    "clip_collection": "goodq_clip_epoch_2026_06_02_family_clean_01",
-    "dino_collection": "goodq_dino_epoch_2026_06_02_family_clean_01",
+    "clip_collection": "goodq_clip_epoch_2026_06_16_r0_smoke",
+    "dino_collection": "goodq_dino_epoch_2026_06_16_r0_smoke",
     "retrieval": {
       "enable": true,
       "fusion_weights": {
@@ -268,21 +269,21 @@
   "progressive_chunk_size": 300.0,
   "progressive_chunk_overlap": 10.0,
   "run": {
-    "id": "320effa8-2c9d-4499-939f-2c78693c4092",
+    "id": "5c8cef42-1c84-4c75-a054-484a013952de",
     "pipeline": "scene_ingest_cli",
-    "started_at": "2026-06-02T10:06:07.134681+00:00",
+    "started_at": "2026-06-21T05:05:22.702706+00:00",
     "timer_unit": "ms",
     "healer_retry_count": 0,
     "healer_retry_by_step": {},
     "native_retry_count": 0,
     "native_retry_by_step": {},
     "audio_backend_events": [],
-    "control_agent_status": "disabled_no_llm_client",
-    "control_agent_reason": "ControlAgent requires injected llm_client",
+    "control_agent_status": "disabled",
+    "control_agent_reason": "Control Agent is disabled by default (not activated)",
     "knowledge_graph_status": "active",
-    "profile_override": null,
-    "profile_override_reason": null,
-    "git_sha": "9ff5f0faec5d221323720c6a9a2078d43b81e0aa",
+    "profile_override": "wsl_audio_forced_in_baseline",
+    "profile_override_reason": "GOODQ_REQUIRE_WSL_AUDIO=1 while GOODQ_HOST_PROFILE=BASELINE",
+    "git_sha": "9bb4849ebdd29808ea90d0ceedb53e0c63052e3f",
     "audio_runtime_contract": {
       "mode": "auto",
       "requested_wsl": true,

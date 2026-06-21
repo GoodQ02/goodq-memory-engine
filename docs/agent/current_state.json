@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-06-18",
+  "last_verified": "2026-06-21",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -1036,6 +1036,31 @@
       "zero_telemetry": "compliant",
       "materialization_pipeline": "certified",
       "verdict": "READY"
+    }
+  },
+  "sprint_b2_wsl_audio_gated_models_migration_2026_06_21": {
+    "last_verified": "2026-06-21",
+    "status": "completed",
+    "details": "Sprint B2: WSL2 Gated Models Migration. Migrated PyAnnote diarization, Wav2Vec2 emotion, and Wav2Vec2 audio embedder to run fully offline using local registry caches and secure token/path propagation. Resolved test mock mismatches in test_wsl_process_audio_diarization.py.",
+    "verification_tests": [
+      "tests/unit/test_wsl_process_audio_diarization.py",
+      "tests/unit/test_offline_mode_challenger.py",
+      "tests/unit/test_offline_mode_robustness_challenger.py",
+      "tests/unit/test_offline_mode_stress.py",
+      "scripts/wsl_audio_preflight.py"
+    ],
+    "verification_results": {
+      "diarization_tests": {
+        "passed": 20
+      },
+      "offline_challenger_tests": {
+        "passed": 12
+      },
+      "robustness_challenger_tests": {
+        "passed": 10
+      },
+      "preflight": "PASS (Workspace, Transcription, Diarization, and Wav2Vec enrichment ready)",
+      "banned_token_lint": "PASS"
     }
   }
 }

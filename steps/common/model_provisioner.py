@@ -65,15 +65,11 @@ def redact_sensitive_info(text: str, repo_id: Optional[str] = None) -> str:
         
     for tok in tokens_to_redact:
         if tok in text:
-            redacted = f"{tok[:5]}...{tok[-5:]}" if len(tok) > 10 else "hf_***"
-            text = text.replace(tok, redacted)
+            text = text.replace(tok, "<REDACTED>")
             
     import re
     hf_pat = re.compile(r"hf_[a-zA-Z0-9]+")
-    def repl(match):
-        tok = match.group(0)
-        return f"{tok[:5]}...{tok[-5:]}" if len(tok) > 10 else "hf_***"
-    text = hf_pat.sub(repl, text)
+    text = hf_pat.sub("hf_***", text)
     return text
 
 def log_download_event(message: str, repo_id: Optional[str] = None):

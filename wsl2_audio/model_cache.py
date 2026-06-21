@@ -1,10 +1,37 @@
 import os
 import logging
 import time
+import re
 from pathlib import Path
 from typing import Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
+
+def redact_sensitive_info(text: str) -> str:
+    """Mask sensitive environment token values and hf_* patterns in text."""
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # 1. Mask environment token values with <REDACTED>
+    for key, val in os.environ.items():
+        key_upper = key.upper()
+        if any(keyword in key_upper for keyword in ["TOKEN", "SECRET", "PASSWORD", "KEY", "API"]):
+            val_stripped = val.strip()
+            if val_stripped and len(val_stripped) > 4:
+                text = text.replace(val_stripped, "<REDACTED>")
+                
+    token_keys = ["HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_HUB_TOKEN", "PYANNOTE_TOKEN"]
+    for key in token_keys:
+        val = os.environ.get(key)
+        if val:
+            val_stripped = val.strip()
+            if val_stripped:
+                text = text.replace(val_stripped, "<REDACTED>")
+
+    # 2. Mask regex matches of hf_[a-zA-Z0-9]+ with hf_***
+    text = re.sub(r'hf_[a-zA-Z0-9]+', 'hf_***', text)
+    
+    return text
 
 def is_offline_mode() -> bool:
     """Check if offline mode is requested or configured."""
@@ -63,6 +90,78 @@ def resolve_silero_local_path() -> Optional[str]:
     logger.warning("[model_cache] Could not find local Silero VAD cache directory containing hubconf.py")
     return None
 
+def check_hf_model_cache(repo_id: str) -> bool:
+    """Check if a Hugging Face repository has a cached snapshot locally."""
+    folder_name = "models--" + repo_id.replace("/", "--")
+    candidates = []
+    
+    # 1. Check GOODQ_MODEL_CACHE_ROOT
+    cache_root = os.environ.get("GOODQ_MODEL_CACHE_ROOT")
+    if cache_root:
+        candidates.extend([
+            Path(cache_root) / "hub" / folder_name,
+            Path(cache_root) / folder_name,
+        ])
+        
+    # 2. Check HF_HOME or HUGGINGFACE_HUB_CACHE
+    hf_home = os.environ.get("HF_HOME")
+    if hf_home:
+        candidates.append(Path(hf_home) / "hub" / folder_name)
+        
+    hf_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.environ.get("HF_HUB_CACHE")
+    if hf_cache:
+        candidates.extend([
+            Path(hf_cache) / folder_name,
+            Path(hf_cache) / "hub" / folder_name,
+        ])
+        
+    # 3. Check user home folder (standard location)
+    candidates.append(Path.home() / ".cache" / "huggingface" / "hub" / folder_name)
+    
+    for cand in candidates:
+        if cand.is_dir():
+            snapshots_dir = cand / "snapshots"
+            if snapshots_dir.is_dir():
+                for snap in snapshots_dir.iterdir():
+                    if snap.is_dir():
+                        if "faster-whisper" in repo_id:
+                            model_bin = snap / "model.bin"
+                            if model_bin.exists():
+                                resolved = model_bin.resolve()
+                                if resolved.is_file() and resolved.stat().st_size > 0:
+                                    return True
+                        else:
+                            for file_path in snap.rglob('*'):
+                                if file_path.is_file():
+                                    try:
+                                        resolved = file_path.resolve()
+                                        if resolved.is_file() and resolved.stat().st_size > 0:
+                                            ext = resolved.suffix.lower()
+                                            name = resolved.name.lower()
+                                            if ext in ('.bin', '.safetensors', '.json', '.pt', '.pth', '.onnx', '.h5', '.ckpt') or name in ('config.json', 'model.bin'):
+                                                return True
+                                    except Exception:
+                                        pass
+    return False
+
+def check_whisper_cache(model_name: str) -> bool:
+    """Check if Whisper model exists in local Hugging Face cache or local path."""
+    if Path(model_name).exists():
+        return True
+    repo_name = model_name
+    if "/" not in repo_name:
+        repo_name = f"Systran/faster-whisper-{model_name}"
+    return check_hf_model_cache(repo_name)
+
+def check_pyannote_cache(model_name: str) -> bool:
+    """Check if PyAnnote diarization pipeline and its sub-models are cached."""
+    repos = [
+        model_name,
+        "pyannote/segmentation-3.0",
+        "pyannote/wespeaker-voxceleb-resnet34-LM"
+    ]
+    return all(check_hf_model_cache(repo) for repo in repos)
+
 def load_silero_vad(offline: bool = False) -> Tuple[Any, Any]:
     """
     Loads Silero VAD model and returns (model, utils).
@@ -86,8 +185,10 @@ def load_silero_vad(offline: bool = False) -> Tuple[Any, Any]:
         
     if is_offline:
         raise OSError(
-            "Offline mode: Silero VAD is missing from local cache (hubconf.py not found in any search path). "
-            "Please connect to the internet and run the model bootstrap script on the host."
+            "Offline mode: Silero VAD model 'snakers4/silero-vad' (revision '290cda0' pinned) is missing from local cache (hubconf.py not found in any search path).\n"
+            "Status: Non-gated.\n"
+            "Requirements: No Hugging Face token or license terms required.\n"
+            "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-silero"
         )
         
     logger.info("[model_cache] Local cache miss. Loading Silero VAD from GitHub (online mode)...")
@@ -128,7 +229,8 @@ def log_env_summary(logger_instance: logging.Logger):
     for tok_key in ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_TOKEN", "HUGGINGFACE_HUB_TOKEN", "PYANNOTE_TOKEN"):
         val = os.environ.get(tok_key)
         if val:
-            redacted = f"{val[:5]}...{val[-5:]}" if len(val) > 10 else "present"
-            summary.append(f"{tok_key}={redacted}")
+            summary.append(f"{tok_key} present: Yes")
+        else:
+            summary.append(f"{tok_key} present: No")
             
     logger_instance.info("[env_summary] Active WSL environment: " + ", ".join(summary))

@@ -69,20 +69,47 @@ def _load_pyannote_pipeline(
     model_name: str,
     token: str,
     cache_dir: Optional[str] = None,
+    is_offline: bool = False,
 ):
-    """Load pyannote across the 3.x/4.x auth kwarg boundary."""
-    kwargs = {"use_auth_token": token}
+    """Load pyannote pipeline from local cache first, and strictly prevent online access if offline."""
+    base_kwargs = {}
     if cache_dir:
-        kwargs["cache_dir"] = cache_dir
+        base_kwargs["cache_dir"] = cache_dir
+
+    # Try local only first
+    kwargs = dict(base_kwargs)
+    kwargs["local_files_only"] = True
     try:
-        return pipeline_cls.from_pretrained(model_name, **kwargs)
-    except TypeError as exc:
-        message = str(exc)
-        if "use_auth_token" not in message or "unexpected keyword" not in message:
-            raise
-        kwargs.pop("use_auth_token", None)
-        kwargs["token"] = token
-        return pipeline_cls.from_pretrained(model_name, **kwargs)
+        try:
+            return pipeline_cls.from_pretrained(model_name, **kwargs)
+        except TypeError as exc:
+            message = str(exc)
+            if "use_auth_token" not in message or "unexpected keyword" not in message:
+                raise
+            kwargs.pop("use_auth_token", None)
+            kwargs["token"] = token
+            return pipeline_cls.from_pretrained(model_name, **kwargs)
+    except Exception as e:
+        if is_offline:
+            raise OSError(
+                f"Offline mode: PyAnnote diarization pipeline failed to load locally from cache: {e}"
+            ) from e
+
+    # Try online with auth token if online
+    kwargs = dict(base_kwargs)
+    kwargs["use_auth_token"] = token
+    try:
+        try:
+            return pipeline_cls.from_pretrained(model_name, **kwargs)
+        except TypeError as exc:
+            message = str(exc)
+            if "use_auth_token" not in message or "unexpected keyword" not in message:
+                raise
+            kwargs.pop("use_auth_token", None)
+            kwargs["token"] = token
+            return pipeline_cls.from_pretrained(model_name, **kwargs)
+    except Exception as e:
+        raise OSError(f"Failed to load PyAnnote pipeline from Hugging Face: {e}") from e
 
 
 @dataclass
@@ -244,6 +271,15 @@ class AudioService:
         models_config = self.config.get('models', {})
         gpu_config = self.config.get('gpu', {})
         
+        if hasattr(self, 'base_dir') and self.base_dir:
+            sys.path.insert(0, str(self.base_dir))
+        try:
+            import model_cache
+        except ImportError:
+            from wsl2_audio import model_cache
+            
+        is_offline = model_cache.is_offline_mode()
+        
         # Load Whisper
         try:
             whisper_model = models_config.get('whisper', 'large-v3')
@@ -253,32 +289,42 @@ class AudioService:
                 if require_gpu():
                     raise RuntimeError("GOODQ_REQUIRE_GPU=1 but CUDA is unavailable for Whisper load")
             
+            if is_offline and not model_cache.check_whisper_cache(whisper_model):
+                raise OSError(
+                    f"Offline mode: Faster-Whisper model '{whisper_model}' is missing from local cache.\n"
+                    "Status: Non-gated.\n"
+                    "Requirements: No Hugging Face token or license terms required.\n"
+                    "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-whisper"
+                )
+                
             logger.info(f"Loading Whisper model: {whisper_model}")
             self.whisper_model = WhisperModel(
                 whisper_model,
                 device=device,
                 compute_type=compute_type,
-                num_workers=4
+                num_workers=4,
+                local_files_only=is_offline
             )
             logger.info("[SYMBOL] Whisper model loaded")
         except Exception as e:
-            logger.error(f"Failed to load Whisper: {e}")
-        
+            redacted_error = model_cache.redact_sensitive_info(str(e))
+            logger.error(f"Failed to load Whisper: {redacted_error}")
+            if is_offline:
+                raise
+
         # Load Silero VAD
         try:
             logger.info("Loading Silero VAD...")
-            sys.path.insert(0, str(self.base_dir))
-            try:
-                import model_cache
-            except ImportError:
-                from wsl2_audio import model_cache
-            self.vad_model, vad_utils = model_cache.load_silero_vad()
+            self.vad_model, vad_utils = model_cache.load_silero_vad(offline=is_offline)
             self.vad_get_speech_timestamps = vad_utils[0]
             self.vad_collect_chunks = vad_utils[4]
             logger.info("[SYMBOL] Silero VAD loaded")
         except Exception as e:
-            logger.error(f"Failed to load VAD: {e}")
-        
+            redacted_error = model_cache.redact_sensitive_info(str(e))
+            logger.error(f"Failed to load VAD: {redacted_error}")
+            if is_offline:
+                raise
+
         # Load PyAnnote diarization
         try:
             from pyannote.audio import Pipeline
@@ -289,21 +335,33 @@ class AudioService:
                 self.config.get('huggingface_token_env', 'PYANNOTE_TOKEN'),
             )
             
-            if hf_token:
+            if is_offline and not model_cache.check_pyannote_cache(diarization_model):
+                raise OSError(
+                    f"Offline mode: PyAnnote diarization model '{diarization_model}' is missing from local cache.\n"
+                    "Status: Gated.\n"
+                    "Requirements: Requires Hugging Face account licensing approval and access token (HF_TOKEN or PYANNOTE_TOKEN).\n"
+                    "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-pyannote"
+                )
+                
+            if hf_token or is_offline:
                 logger.info(f"Loading diarization model: {diarization_model}")
                 self.diarization_pipeline = _load_pyannote_pipeline(
                     Pipeline,
                     diarization_model,
-                    hf_token,
+                    hf_token or "",
                     cache_dir=_resolve_hf_cache_dir(),
+                    is_offline=is_offline,
                 )
-                if str(gpu_config.get("device", "cuda")).lower() == "cuda" and torch.cuda.is_available():
+                if self.diarization_pipeline and str(gpu_config.get("device", "cuda")).lower() == "cuda" and torch.cuda.is_available():
                     self.diarization_pipeline.to(torch.device("cuda"))
                 logger.info("[SYMBOL] Diarization pipeline loaded")
             else:
                 logger.warning("No HuggingFace token provided, diarization unavailable")
         except Exception as e:
-            logger.error(f"Failed to load diarization: {e}")
+            redacted_error = model_cache.redact_sensitive_info(str(e))
+            logger.error(f"Failed to load diarization: {redacted_error}")
+            if is_offline:
+                raise
     
     def apply_vad(self, audio_path: str) -> Optional[str]:
         """Apply VAD to extract speech segments"""
@@ -362,7 +420,8 @@ class AudioService:
             return vad_output
             
         except Exception as e:
-            logger.error(f"VAD failed: {e}")
+            redacted_error = model_cache.redact_sensitive_info(str(e))
+            logger.error(f"VAD failed: {redacted_error}")
             traceback.print_exc()
             return audio_path
     
@@ -514,14 +573,15 @@ class AudioService:
             return result
             
         except Exception as e:
-            logger.error(f"Job {job.job_id} failed: {e}")
+            redacted_error = model_cache.redact_sensitive_info(str(e))
+            logger.error(f"Job {job.job_id} failed: {redacted_error}")
             traceback.print_exc()
             
             error_result = {
                 "job_id": job.job_id,
                 "run_id": job.run_id,
                 "status": "error",
-                "error": str(e)
+                "error": redacted_error
             }
             
             # Save error
@@ -582,14 +642,16 @@ class AudioService:
                         processing_file.rename(final_file)
                         
                     except Exception as e:
-                        logger.error(f"Failed to process job file {job_file}: {e}")
+                        redacted_error = model_cache.redact_sensitive_info(str(e))
+                        logger.error(f"Failed to process job file {job_file}: {redacted_error}")
                         traceback.print_exc()
                 
                 # Sleep before next check
                 time.sleep(2)
                 
             except Exception as e:
-                logger.error(f"Queue watcher error: {e}")
+                redacted_error = model_cache.redact_sensitive_info(str(e))
+                logger.error(f"Queue watcher error: {redacted_error}")
                 traceback.print_exc()
                 time.sleep(5)
         

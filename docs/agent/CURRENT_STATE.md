@@ -864,11 +864,18 @@ v2.5.3 sprint executed across 10 phases with 8 agents. Fixed all code regression
 - **Deferred (Sprint B2)**: PyAnnote, Wav2Vec2, torchaudio Windows guards, torch mock completeness.
 - **Family-Film Pilot**: System certified READY for user-supervised ingestion under `ingestion_isolation: true`.
 
+## v2.5.4: WSL2 Audio Gated Models Offline Migration (Sprint B2) (2026-06-21)
+
+Completed the offline isolation and governance of the WSL2 audio processing lane:
+- **Offline WSL2 Audio Models**: Fully migrated PyAnnote diarization, Wav2Vec2 emotion, and Wav2Vec2 base audio embedder to run offline using local registry caches and secure token propagation.
+- **Secure Token Propagation & Redaction**: Gated HF tokens are dynamically resolved and redacted in logs. All tokens are masked.
+- **Unit Test Resolution**: Corrected mock logic in `test_wsl_process_audio_diarization.py` to support local-first check behaviors in offline simulation tests.
+- **Verification Gates**: 20 unit tests, 12 challenger offline tests, 10 robustness tests, and `scripts/wsl_audio_preflight.py` all passing. Banned-token scans confirmed PASS.
+
 ## Safe Next Actions
 
-All Phase 0.7–0.9 hardening plus v2.5.0–v2.5.2 registry/offline-bridge changes are verified. Current safe next actions:
+All Phase 0.7–0.9 hardening, registry/offline-bridge changes, and WSL2 audio gated models offline migrations are verified. Current safe next actions:
 
 1. **Production family film ingestion**: Run full family film collection through the governed pipeline with `ingestion_isolation: true`.
 2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory` with confirmation tokens for each epoch.
 3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover audio_embed_clap, text_embed, face_embed worker types.
-4. **Sprint B2 execution**: Progress to PyAnnote/Wav2Vec gated model local caching and offline resolution within the WSL environment.

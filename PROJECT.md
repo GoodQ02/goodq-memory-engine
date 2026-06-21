@@ -1,23 +1,17 @@
-# Project: UCF Phase 0.9: Terminal State Closure
+# Project: WSL2 Gated Models Migration (Sprint B2)
 
 ## Architecture
-This project focuses on locking in the terminal state closure behavior for the Unified Context Frame (UCF) lifecycle system in GoodQ4All. The lifecycle transition from staged/validated to terminal states (rejected, superseded) is implemented in `agents/mini_agent_client.py`. 
-
-The architecture consists of:
-1. **Lifecycle E2E Tests**: Integration tests in `tests/e2e/test_staged_ingestion_harness.py` validating that the `reject_ucf_frames` and `supersede_ucf_frames` tools transition frames to `rejected` and `superseded` states and assert exact DB counts under the `if not mock_harness_active():` guard.
-2. **Tool Registration Matrix Test**: An integration test verifying that the four HITL-gated lifecycle tools (`validate_ucf_frames`, `promote_ucf_to_memory`, `reject_ucf_frames`, `supersede_ucf_frames`) are fully registered across all 6 key registration sections in `agents/mini_agent_client.py`.
-3. **Search Loop Visibility Plan**: A plan document answering visibility, search blending, and validation requirements.
+WSL2 Audio Processing Lane connects to the Windows UCF ingestion pipeline. Gated models (PyAnnote diarization, Wav2Vec2 emotion, Wav2Vec2 audio embedder) must run in offline mode (local-first cache loading), governed by local configuration with zero network reachability during normal execution. Tokens (HF_TOKEN) are securely propagated and redacted in all logs.
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | R1: Terminal State E2E Tests | Implement 9 E2E lifecycle tests in `tests/e2e/test_staged_ingestion_harness.py` | None | DONE |
-| 2 | R2: Tool Registration Matrix Test | Implement registration matrix test in `tests/agents/test_mini_agent_client.py` | None | DONE |
-| 3 | R3: Search Loop Visibility Plan | Write plan document in `docs/agent/UCF_SEARCH_LOOP_PLAN.md` | None | DONE |
-| 4 | Final QA and Verification | Execute full test suite and path-leak check | M1, M2, M3 | DONE |
+| 1 | WSL2 Audio Model Audit & Inventory | Audit files and create `wsl2_audio_model_inventory.md` | None | DONE (Conv ID: 79c0ec7b-d4ef-409b-be9f-f71e50e0ef7b) |
+| 2 | Offline Isolation & Loader Refactoring | Local-first loading, token propagation & redaction, cache mapping | M1 | DONE (Conv ID: c2b328b3-4daf-4c05-81cf-0f04d6e304d9) |
+| 3 | Verification & Windows UCF Integration | No-network tests, controlled pipeline run, UCF evidence check | M2 | DONE (Conv ID: 2a740f59-77d3-40ea-affc-d48ed1c2abd6) |
 
-## Code Layout
-- `agents/mini_agent_client.py` — Client implementation containing tools registration and verification logic.
-- `tests/e2e/test_staged_ingestion_harness.py` — Target for the 9 E2E lifecycle tests.
-- `tests/agents/test_mini_agent_client.py` — Target for the tool registration matrix test.
-- `docs/agent/UCF_SEARCH_LOOP_PLAN.md` — Target for the visibility plan document.
+## Interface Contracts
+### Windows Ingestion ↔ WSL2 Audio Service
+- Communication via HTTP bridge / process invocation
+- Output artifacts (diarization segments, speaker labels, voice signatures, emotion outputs) must be consumed by Windows UCF pipeline and written to DB.
+- Tokens (HF_TOKEN) must be resolved from `.env.local` / config on Windows and propagated securely without being printed in command line or logs.

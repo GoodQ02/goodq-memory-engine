@@ -40,10 +40,12 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
 
     class _FakePipelineFactory:
         @staticmethod
-        def from_pretrained(model_name, use_auth_token=None, cache_dir=None):
+        def from_pretrained(model_name, **kwargs):
+            if kwargs.get("local_files_only"):
+                raise OSError("Mock cache miss for online fallback test")
             captured["model_name"] = model_name
-            captured["token"] = use_auth_token
-            captured["cache_dir"] = cache_dir
+            captured["token"] = kwargs.get("use_auth_token") or kwargs.get("token")
+            captured["cache_dir"] = kwargs.get("cache_dir")
             return _FakePipeline()
 
     monkeypatch.setattr(mod, "_load_runtime_config", lambda: {
@@ -64,6 +66,14 @@ def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path:
     monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
     monkeypatch.setenv("HF_TOKEN", "test-token")
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+    
+    try:
+        from wsl2_audio import model_cache
+    except ImportError:
+        import model_cache
+    monkeypatch.setattr(model_cache, "check_whisper_cache", lambda _: True)
+    monkeypatch.setattr(model_cache, "check_pyannote_cache", lambda _: True)
+    monkeypatch.setattr(model_cache, "is_offline_mode", lambda: False)
 
     result = mod.process_audio(str(audio_file), str(output_dir))
 
@@ -140,8 +150,10 @@ def test_audio_service_diarization_loader_prefers_use_auth_token(monkeypatch):
     class _FakePipelineFactory:
         @staticmethod
         def from_pretrained(model_name, **kwargs):
+            if kwargs.get("local_files_only"):
+                raise OSError("Mock cache miss")
             captured["model_name"] = model_name
-            captured["use_auth_token"] = kwargs.get("use_auth_token")
+            captured["use_auth_token"] = kwargs.get("use_auth_token") or kwargs.get("token")
             captured["cache_dir"] = kwargs.get("cache_dir")
             return _FakePipeline()
 
@@ -187,6 +199,8 @@ def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):
     class _FakePipelineFactory:
         @staticmethod
         def from_pretrained(model_name, **kwargs):
+            if kwargs.get("local_files_only"):
+                raise OSError("Mock cache miss")
             captured["diarization_model"] = model_name
             captured["diarization_kwargs"] = kwargs
             return _FakePipeline()
@@ -205,6 +219,9 @@ def test_audio_service_load_models_uses_canonical_hf_cache(monkeypatch):
     except ImportError:
         import model_cache
     monkeypatch.setattr(model_cache, "load_silero_vad", lambda *args, **kwargs: ("vad", [None, None, None, None, "collect"]))
+    monkeypatch.setattr(model_cache, "check_whisper_cache", lambda _: True)
+    monkeypatch.setattr(model_cache, "check_pyannote_cache", lambda _: True)
+    monkeypatch.setattr(model_cache, "is_offline_mode", lambda: False)
     
     monkeypatch.setenv("PYANNOTE_TOKEN", "test-token")
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
@@ -357,6 +374,13 @@ def test_process_audio_wav2vec_loads_use_canonical_hf_cache(monkeypatch, tmp_pat
     monkeypatch.setattr(mod, "Wav2Vec2Model", _FakeEmbeddingModel, raising=False)
     monkeypatch.setattr(mod, "clear_gpu_memory", lambda: None)
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/mnt/c/models/hub")
+    
+    try:
+        from wsl2_audio import model_cache
+    except ImportError:
+        import model_cache
+    monkeypatch.setattr(model_cache, "check_whisper_cache", lambda _: True)
+    monkeypatch.setattr(model_cache, "check_hf_model_cache", lambda _: True)
 
     result = mod.process_audio(str(audio_file), str(output_dir))
 

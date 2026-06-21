@@ -44,14 +44,10 @@ def redact_sensitive_info(text: str) -> str:
     for key in ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACE_TOKEN", "PYANNOTE_TOKEN"):
         val = os.environ.get(key)
         if val and len(val) > 5 and val in text:
-            redacted = f"{val[:5]}...{val[-5:]}" if len(val) > 10 else "hf_***"
-            text = text.replace(val, redacted)
+            text = text.replace(val, "<REDACTED>")
     import re
     hf_pat = re.compile(r"hf_[a-zA-Z0-9]+")
-    def repl(match):
-        tok = match.group(0)
-        return f"{tok[:5]}...{tok[-5:]}" if len(tok) > 10 else "hf_***"
-    text = hf_pat.sub(repl, text)
+    text = hf_pat.sub("hf_***", text)
     return text
 
 

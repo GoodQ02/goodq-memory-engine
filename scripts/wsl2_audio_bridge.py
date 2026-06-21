@@ -112,17 +112,23 @@ class WindowsWSL2AudioRunner(AudioRunner):
         if config_user == "auto":
             config_user = None
         self.wsl_user = os.environ.get("GOODQ_WSL_USER") or config_user or self._resolve_wsl_user()
+        if self.wsl_user:
+            self.wsl_user = self.wsl_user.replace("\r", "").strip()
         
         config_workspace = host_cfg.get('wsl_workspace')
         if config_workspace == "auto":
             config_workspace = None
         self.workspace = os.environ.get("GOODQ_WSL_WORKSPACE") or config_workspace or self._resolve_wsl_workspace()
+        if self.workspace:
+            self.workspace = self.workspace.replace("\r", "").strip()
         self.audio_workspace = self.workspace.rstrip("/")
         
         config_distro = host_cfg.get('wsl_distro')
         if config_distro == "auto":
             config_distro = None
         self.wsl_distro = os.environ.get("GOODQ_WSL_DISTRO") or config_distro or "Ubuntu"
+        if self.wsl_distro:
+            self.wsl_distro = self.wsl_distro.replace("\r", "").strip()
         
         self._workspace_checked = False
         self._workspace_warned = False
@@ -494,12 +500,13 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 ).strip()
                 if diarization_warning and diarization_warning not in env_warnings:
                     env_warnings.append(diarization_warning)
-            bridge_script = """
-set -euo pipefail
-source "$1"
-export GOODQ_BRIDGE_REQUEST_UUID="$2"
-exec python3 "$3" "$4" "$5"
-"""
+            import shlex
+            bridge_script = (
+                f'set -euo pipefail; '
+                f'source {shlex.quote(setup_script)}; '
+                f'export GOODQ_BRIDGE_REQUEST_UUID={shlex.quote(request_uuid)}; '
+                f'exec python3 {shlex.quote(processor)} {shlex.quote(wsl_input)} {shlex.quote(wsl_output)}'
+            )
             result = subprocess.run(
                 [
                     "wsl",
@@ -509,12 +516,6 @@ exec python3 "$3" "$4" "$5"
                     "bash",
                     "-lc",
                     bridge_script,
-                    "goodq-wsl-bridge",
-                    setup_script,
-                    request_uuid,
-                    processor,
-                    wsl_input,
-                    wsl_output,
                 ],
                 capture_output=True,
                 text=True,

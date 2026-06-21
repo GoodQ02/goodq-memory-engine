@@ -9,6 +9,17 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.4] - 2026-06-21 — WSL2 Audio Gated Models & Model Provisioning Sprint
+
+### Added
+- **WSL2 Audio Gated Models Offline Migration (Sprint B2)**: Fully migrated PyAnnote speaker diarization, Wav2Vec2 emotion classification, and Wav2Vec2 audio embedder models to run offline inside WSL2 using local registry caches and secure token/path propagation. Added mock-socket network-blocking tests to verify complete offline isolation.
+- **On-Demand Model Provisioning**: Centralized allowlist model checking in `configs/model_registry.yaml` and `steps/common/model_provisioner.py`, rejecting unregistered models. Implemented structured provisioner results, dynamic offline skips, tqdm progress bars, and `filelock` concurrency locks.
+- **Gated Model Authentication CLI**: Added `cli/auth_models.py` (`python -m cli.auth_models --enable-gated`) for hidden entry and secure merging of Hugging Face/PyAnnote credentials into `.env.local`.
+
+### Fixed
+- **Token Masking Assertions**: Updated model provisioner tests to expect the hardened `"hf_***"` token redaction format, resolving a regression between the B2 logging changes and the model provisioning test suite.
+- **Path Sanitization**: Verified and ensured that the untracked `proof_workspace/` directory has been cleaned up and is absent.
+
 ## [2.5.3] - 2026-06-20 — Full Pipeline Feature Closure / No Lost Intel
 
 ### Fixed

@@ -1061,6 +1061,28 @@
       },
       "preflight": "PASS (Workspace, Transcription, Diarization, and Wav2Vec enrichment ready)",
       "banned_token_lint": "PASS"
-    }
+    },
+    "ucf_ledger_census_epoch_2026_06_16_r0_smoke": {
+      "audio_embed_clap": {"staged": 38, "superseded": 1},
+      "audio_transcribe": {"staged": 476, "superseded": 2},
+      "face_embed": {"staged": 10},
+      "image_caption": {"staged": 40, "superseded": 1},
+      "image_embed_clip": {"staged": 40, "superseded": 1},
+      "image_embed_dino": {"staged": 40, "superseded": 1},
+      "image_ocr": {"staged": 40, "superseded": 1},
+      "object_detect": {"staged": 71},
+      "scene_visual_embeddings_clip": {"staged": 96, "superseded": 1},
+      "scene_visual_embeddings_dino": {"staged": 96, "superseded": 1},
+      "speaker_merge": {"staged": 608},
+      "text_embed": {"staged": 112, "superseded": 3},
+      "video_scene_detect": {"staged": 134, "superseded": 1},
+      "total": 1633
+    },
+    "audio_vector_destinations": [
+      "FAISS Index: paths.faiss_audio_path (HNSW explicit np.int64 fingerprint-derived IDMap)",
+      "Qdrant: goodq_audio_<epoch_id> collection",
+      "SQLite Sidecar: paths.clap_id_map_db (clap_id_map mapping faiss_id -> content fingerprint hash)",
+      "UCF Ledger raw_ref: L:\\_DATA\\GoodQ_Data\\epochs\\<epoch>\\processing\\...\\audio\\<hash>_raw_clap.json metadata reference (floats excluded)"
+    ]
   }
 }

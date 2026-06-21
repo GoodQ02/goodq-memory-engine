@@ -868,9 +868,49 @@ v2.5.3 sprint executed across 10 phases with 8 agents. Fixed all code regression
 
 Completed the offline isolation and governance of the WSL2 audio processing lane:
 - **Offline WSL2 Audio Models**: Fully migrated PyAnnote diarization, Wav2Vec2 emotion, and Wav2Vec2 base audio embedder to run offline using local registry caches and secure token propagation.
-- **Secure Token Propagation & Redaction**: Gated HF tokens are dynamically resolved and redacted in logs. All tokens are masked.
-- **Unit Test Resolution**: Corrected mock logic in `test_wsl_process_audio_diarization.py` to support local-first check behaviors in offline simulation tests.
+- **Secure Token Propagation & Redaction**: Gated HF tokens are dynamically resolved and redacted in logs. All tokens are masked to `hf_***`.
+- **Unit Test Resolution**: Corrected mock logic in `test_wsl_process_audio_diarization.py` to support local-first check behaviors in offline simulation tests. Fixed the `test_model_provisioner.py` test suite regression by updating token assertions to expect the new `hf_***` mask format.
 - **Verification Gates**: 20 unit tests, 12 challenger offline tests, 10 robustness tests, and `scripts/wsl_audio_preflight.py` all passing. Banned-token scans confirmed PASS.
+- **Sanitized Workspaces**: Audited local workspace environments and verified that untracked `proof_workspace/` files have been cleaned up and are absent.
+
+### UCF Ledger Census (epoch_2026_06_16_r0_smoke)
+
+A census of the UCF ledger (`ucf_ledger.db` `context_frames` table) verifies the following staged and superseded counts:
+
+| Worker Name | Promotion Status | Count |
+| :--- | :--- | :--- |
+| `audio_embed_clap` | `staged` | 38 |
+| `audio_embed_clap` | `superseded` | 1 |
+| `audio_transcribe` | `staged` | 476 |
+| `audio_transcribe` | `superseded` | 2 |
+| `face_embed` | `staged` | 10 |
+| `image_caption` | `staged` | 40 |
+| `image_caption` | `superseded` | 1 |
+| `image_embed_clip` | `staged` | 40 |
+| `image_embed_clip` | `superseded` | 1 |
+| `image_embed_dino` | `staged` | 40 |
+| `image_embed_dino` | `superseded` | 1 |
+| `image_ocr` | `staged` | 40 |
+| `image_ocr` | `superseded` | 1 |
+| `object_detect` | `staged` | 71 |
+| `scene_visual_embeddings_clip` | `staged` | 96 |
+| `scene_visual_embeddings_clip` | `superseded` | 1 |
+| `scene_visual_embeddings_dino` | `staged` | 96 |
+| `scene_visual_embeddings_dino` | `superseded` | 1 |
+| `speaker_merge` | `staged` | 608 |
+| `text_embed` | `staged` | 112 |
+| `text_embed` | `superseded` | 3 |
+| `video_scene_detect` | `staged` | 134 |
+| `video_scene_detect` | `superseded` | 1 |
+| **Total Frames** | - | **1633** |
+
+### Audio Vector Destination Clarification
+
+Audio vectors (`laion/clap-htsat-unfused` via `audio_embed_clap`) are stored via a multi-write topology:
+1. **FAISS Index (`paths.faiss_audio_path`)**: Raw 512-dimension vectors are appended using explicit 64-bit fingerprint-derived IDs inside an `IndexIDMap2` wrapping HNSW index.
+2. **Qdrant Collection (`goodq_audio_<epoch_id>`)**: Point payloads containing raw vector floats and segment metadata are committed to Qdrant.
+3. **SQLite Sidecar Map (`paths.clap_id_map_db`)**: Table `clap_id_map` links the 64-bit `faiss_id` to the fingerprint hash, source path, and metadata for fast local mapping.
+4. **UCF Ledger (`ucf_ledger.db`)**: Table `context_frames` registers a row with `modality='audio'` and `worker_name='audio_embed_clap'`. The row references a JSON metadata file on disk via the `raw_ref` column. The raw embedding floats are *not* stored in SQLite or in the raw-ref file, preventing database bloat.
 
 ## Safe Next Actions
 
@@ -879,3 +919,4 @@ All Phase 0.7–0.9 hardening, registry/offline-bridge changes, and WSL2 audio g
 1. **Production family film ingestion**: Run full family film collection through the governed pipeline with `ingestion_isolation: true`.
 2. **Human-in-the-loop promotion**: Use `validate_ucf_frames` then `promote_ucf_to_memory` with confirmation tokens for each epoch.
 3. **VECTOR_REGISTRY expansion**: Extend `validate_ucf_epoch.py` VECTOR_REGISTRY to cover audio_embed_clap, text_embed, face_embed worker types.
+

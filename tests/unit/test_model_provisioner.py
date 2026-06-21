@@ -302,7 +302,7 @@ def test_model_provision_result_token_redaction():
         error="Invalid token hf_1234567890abcdef1234567890abcdef12 detected."
     )
     assert "hf_1234567890abcdef1234567890abcdef12" not in res.error
-    assert "hf_12...def12" in res.error
+    assert "hf_***" in res.error
 
 
 def test_global_offline_environment_flags(tmp_path, monkeypatch):
@@ -344,7 +344,7 @@ def test_download_logging_redaction(tmp_path, monkeypatch):
     
     content = log_file.read_text(encoding="utf-8")
     assert "hf_1234567890abcdef1234567890abcdef12" not in content
-    assert "hf_12...def12" in content
+    assert "hf_***" in content
 
 
 def test_new_models_provisioning(tmp_path, monkeypatch):

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-06-18 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-21 -->
 
 # GoodQ4All Current Agent State
 
@@ -100,7 +100,7 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_06_02_family_clean_01` epoch.
+  `epoch_2026_06_21_family_clean_01` epoch.
 
 ### 🛡️ Onboarding Cleanup Audit Seal (2026-06-06)
 
@@ -112,14 +112,39 @@ The onboarding fixture (`da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821
 
 Latest full home-memory validation epoch:
 
-- `epoch_2026_06_02_family_clean_01`
+- `epoch_2026_06_21_family_clean_01`
 
 The active validation epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_06_02_family_clean_01`
-- `goodq_dino_epoch_2026_06_02_family_clean_01`
-- `goodq_text_epoch_2026_06_02_family_clean_01`
-- `goodq_audio_epoch_2026_06_02_family_clean_01`
+- `goodq_clip_epoch_2026_06_21_family_clean_01`
+- `goodq_dino_epoch_2026_06_21_family_clean_01`
+- `goodq_text_epoch_2026_06_21_family_clean_01`
+- `goodq_audio_epoch_2026_06_21_family_clean_01`
+
+## Pilot Ingestion & Promotion Run (epoch_2026_06_21_family_clean_01)
+
+A clean memory start was completed successfully on this epoch. The pilot fixture (`samples/onboarding_fixture.mp4`, video hash: `da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62`) was ingested and promoted.
+
+### Observed UCF Ledger Census (epoch_2026_06_21_family_clean_01)
+
+- **Total context frames**: 20, all promoted.
+- **Workers**: `clip`, `dino`, `clap`, `text-router/scene_text_embedder`.
+
+### Database, Vector, and API Counts
+
+- **SQLite `memory.db`**: 1 scene, 18 segments, 1 scene summary, 20 embedding rows.
+- **SQLite `knowledge_graph.db`**: 25 nodes, 49 edges.
+- **Qdrant**: clip (1 point), dino (1 point), text (17 points), audio (1 point). `ucf_promotion_status = promoted`.
+- **FAISS**: index counts match vector counts.
+- **`/api/status`**: active epoch is `epoch_2026_06_21_family_clean_01`, `database.scenes = 1`.
+
+### Active Search Verification Results
+
+- **Text search for "ladder"**: 4 results, top result ID: `cdc0fdfe-77a0-52a1-a3b1-c7aac11fd35d`, Modality: `audio_transcript`, Score: `0.5`, Timestamp: `0.0s - 20.0s`, Provenance (UCF Frame ID): `17`.
+- **Visual search for "large object"**: 2 results, top result ID: `7413f506-0c30-52dd-8407-140123bade9b`, Score: `0.17291014`, Provenance (UCF Frame ID): `19`.
+- **Audio search for "ladder"**: 1 result, top result ID: `610c5b08-51d9-5ef8-8ca9-52441108bb49`, Score: `-0.04425965`, Provenance (UCF Frame ID): `16`.
+- **Search lifecycle rules**: confirmed that normal active search returns only promoted results by default.
+
 
 This epoch now contains runtime fallback, WSL audio, sentiment, entity, Qdrant,
 FAISS, Operator Console freshness validation, and runtime problem-scope

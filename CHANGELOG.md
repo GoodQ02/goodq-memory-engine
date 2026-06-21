@@ -20,6 +20,23 @@ and related canonical docs.
 - **Token Masking Assertions**: Updated model provisioner tests to expect the hardened `"hf_***"` token redaction format, resolving a regression between the B2 logging changes and the model provisioning test suite.
 - **Path Sanitization**: Verified and ensured that the untracked `proof_workspace/` directory has been cleaned up and is absent.
 
+### Pilot Fixture Ingestion & Promotion
+- **Active Epoch**: `epoch_2026_06_21_family_clean_01` (successful clean memory start).
+- **Pilot Ingestion**: Ingested and promoted `samples/onboarding_fixture.mp4` (video hash: `da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62`).
+- **Observed UCF Ledger Census**:
+  - Total context frames: 20, all promoted.
+  - Active workers: clip, dino, clap, text-router/scene_text_embedder.
+- **Database & Vector Counts**:
+  - SQLite `memory.db`: 1 scene, 18 segments, 1 scene summary, 20 embedding rows.
+  - SQLite `knowledge_graph.db`: 25 nodes, 49 edges.
+  - Qdrant points: clip (1 point), dino (1 point), text (17 points), audio (1 point).
+  - FAISS index counts match vector counts.
+- **Active Search Verification**:
+  - Confirmed search returns only promoted results by default.
+  - Text search for "ladder": 4 results, top result ID: `cdc0fdfe-77a0-52a1-a3b1-c7aac11fd35d`, Modality: `audio_transcript`, Score: `0.5`, Timestamp: `0.0s - 20.0s`, Provenance (UCF Frame ID): `17`.
+  - Visual search for "large object": 2 results, top result ID: `7413f506-0c30-52dd-8407-140123bade9b`, Score: `0.17291014`, Provenance (UCF Frame ID): `19`.
+  - Audio search for "ladder": 1 result, top result ID: `610c5b08-51d9-5ef8-8ca9-52441108bb49`, Score: `-0.04425965`, Provenance (UCF Frame ID): `16`.
+
 ## [2.5.3] - 2026-06-20 — Full Pipeline Feature Closure / No Lost Intel
 
 ### Fixed

@@ -119,8 +119,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_06_02_family_clean_01",
-    "fresh_epoch_note": "wiped all legacy memory stores, initialized fresh collections, and applied a strict audit seal after purging the 1-scene onboarding fixture probe run",
+    "fresh_epoch": "epoch_2026_06_21_family_clean_01",
+    "fresh_epoch_note": "Clean memory start completed successfully on this epoch. Pilot fixture ingested and promoted: samples/onboarding_fixture.mp4 (video hash: da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62).",
     "onboarding_cleanup_audit_seal": {
       "certified_date": "2026-06-06",
       "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",
@@ -163,14 +163,86 @@
       "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
       "reclaimed_mb": 5244.99,
       "fresh_database_exists": true,
-      "fresh_database_scenes": 141,
-      "fresh_database_note": "port 30000 is bound to the family_full_01 validation epoch and currently reports the completed 141-scene FAMILY full run; use a new fresh epoch or deliberate reset before the next broad personal-memory run"
+      "fresh_database_scenes": 1,
+      "fresh_database_note": "port 30000 is bound to the epoch_2026_06_21_family_clean_01 active validation epoch and currently reports 1 scene; clean memory start completed successfully on this epoch."
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_06_02_family_clean_01",
-      "dino": "goodq_dino_epoch_2026_06_02_family_clean_01",
-      "text": "goodq_text_epoch_2026_06_02_family_clean_01",
-      "audio": "goodq_audio_epoch_2026_06_02_family_clean_01"
+      "clip": "goodq_clip_epoch_2026_06_21_family_clean_01",
+      "dino": "goodq_dino_epoch_2026_06_21_family_clean_01",
+      "text": "goodq_text_epoch_2026_06_21_family_clean_01",
+      "audio": "goodq_audio_epoch_2026_06_21_family_clean_01"
+    },
+    "pilot_fixture_ingestion_promotion_run": {
+      "status": "completed",
+      "source_scope": "samples/onboarding_fixture.mp4",
+      "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",
+      "epoch": "epoch_2026_06_21_family_clean_01",
+      "ucf_ledger_census": {
+        "total_context_frames": 20,
+        "promotion_status": "promoted",
+        "workers": [
+          "clip",
+          "dino",
+          "clap",
+          "text-router/scene_text_embedder"
+        ]
+      },
+      "database_vector_api_counts": {
+        "sqlite_memory_db": {
+          "scenes": 1,
+          "segments": 18,
+          "scene_summaries": 1,
+          "embedding_rows": 20
+        },
+        "sqlite_knowledge_graph_db": {
+          "nodes": 25,
+          "edges": 49
+        },
+        "qdrant_counts": {
+          "clip": 1,
+          "dino": 1,
+          "text": 17,
+          "audio": 1,
+          "ucf_promotion_status": "promoted"
+        },
+        "faiss_indices": "counts match vector counts",
+        "api_status": {
+          "active_epoch": "epoch_2026_06_21_family_clean_01",
+          "database_scenes": 1
+        }
+      },
+      "active_search_verification_results": {
+        "text_search": {
+          "query": "ladder",
+          "results_count": 4,
+          "top_result": {
+            "id": "cdc0fdfe-77a0-52a1-a3b1-c7aac11fd35d",
+            "modality": "audio_transcript",
+            "score": 0.5,
+            "timestamp": "0.0s - 20.0s",
+            "provenance_ucf_frame_id": 17
+          }
+        },
+        "visual_search": {
+          "query": "large object",
+          "results_count": 2,
+          "top_result": {
+            "id": "7413f506-0c30-52dd-8407-140123bade9b",
+            "score": 0.17291014,
+            "provenance_ucf_frame_id": 19
+          }
+        },
+        "audio_search": {
+          "query": "ladder",
+          "results_count": 1,
+          "top_result": {
+            "id": "610c5b08-51d9-5ef8-8ca9-52441108bb49",
+            "score": -0.04425965,
+            "provenance_ucf_frame_id": 16
+          }
+        },
+        "search_lifecycle_rules": "confirmed that normal active search returns only promoted results by default"
+      }
     },
     "family_full_validation_run": {
       "status": "completed",
@@ -1082,7 +1154,7 @@
       "FAISS Index: paths.faiss_audio_path (HNSW explicit np.int64 fingerprint-derived IDMap)",
       "Qdrant: goodq_audio_<epoch_id> collection",
       "SQLite Sidecar: paths.clap_id_map_db (clap_id_map mapping faiss_id -> content fingerprint hash)",
-      "UCF Ledger raw_ref: L:\\_DATA\\GoodQ_Data\\epochs\\<epoch>\\processing\\...\\audio\\<hash>_raw_clap.json metadata reference (floats excluded)"
+      "UCF Ledger raw_ref: %GOODQ_DATA_ROOT%\\epochs\\<epoch>\\processing\\...\\audio\\<hash>_raw_clap.json metadata reference (floats excluded)"
     ]
   }
 }

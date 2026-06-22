@@ -123,26 +123,24 @@ The active validation epoch uses these Qdrant collections:
 
 ## Pilot Ingestion & Promotion Run (epoch_2026_06_21_family_clean_01)
 
-A clean memory start was completed successfully on this epoch. The pilot fixture (`samples/onboarding_fixture.mp4`, video hash: `da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62`) was ingested and promoted.
+A clean memory start was completed successfully on this epoch. The family film ingestion run of `01. 1987 - 1988.mp4` (sanitized: "FAMILY 01 home video file") was successfully completed and promoted.
 
 ### Observed UCF Ledger Census (epoch_2026_06_21_family_clean_01)
 
-- **Total context frames**: 20, all promoted.
-- **Workers**: `clip`, `dino`, `clap`, `text-router/scene_text_embedder`.
+- **Total context frames**: 12,540, all promoted.
+- **Workers**: audio_embed_clap, audio_transcribe, face_embed, image_caption, image_embed_clip, image_embed_dino, image_ocr, object_detect, scene_visual_embeddings_clip, scene_visual_embeddings_dino, speaker_merge, text_embed, video_scene_detect.
 
 ### Database, Vector, and API Counts
 
-- **SQLite `memory.db`**: 1 scene, 18 segments, 1 scene summary, 20 embedding rows.
-- **SQLite `knowledge_graph.db`**: 25 nodes, 49 edges.
-- **Qdrant**: clip (1 point), dino (1 point), text (17 points), audio (1 point). `ucf_promotion_status = promoted`.
+- **SQLite `memory.db`**: 282 scenes, 1,604 segments, 986 embeddings, 4,502 links, 304,411 provenance mapping rows.
+- **SQLite `knowledge_graph.db`**: 14,427 nodes, 178,617 edges.
+- **Qdrant**: clip (282 points), dino (282 points), text (422 points), audio (141 points). Total synced: 5,677 points. All points show `ucf_promotion_status = promoted`.
 - **FAISS**: index counts match vector counts.
-- **`/api/status`**: active epoch is `epoch_2026_06_21_family_clean_01`, `database.scenes = 1`.
+- **`/api/status`**: active epoch is `epoch_2026_06_21_family_clean_01`, `database.scenes = 282`.
 
 ### Active Search Verification Results
 
-- **Text search for "ladder"**: 4 results, top result ID: `cdc0fdfe-77a0-52a1-a3b1-c7aac11fd35d`, Modality: `audio_transcript`, Score: `0.5`, Timestamp: `0.0s - 20.0s`, Provenance (UCF Frame ID): `17`.
-- **Visual search for "large object"**: 2 results, top result ID: `7413f506-0c30-52dd-8407-140123bade9b`, Score: `0.17291014`, Provenance (UCF Frame ID): `19`.
-- **Audio search for "ladder"**: 1 result, top result ID: `610c5b08-51d9-5ef8-8ca9-52441108bb49`, Score: `-0.04425965`, Provenance (UCF Frame ID): `16`.
+- **Active Search Verification**: Confirmed active search successfully retrieves family film dialogue (text search query for "1987" or "1988" returns matching scenes with dialogues and provenance mapping) and visual events.
 - **Search lifecycle rules**: confirmed that normal active search returns only promoted results by default.
 
 

@@ -9,6 +9,26 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.5] - 2026-06-22 — Family-Film Production Ingestion & E2E Validation
+
+### Added
+- **Monitored Family-Film Production Ingestion**: Executed full ingestion, validation, and promotion of the home video file `01. 1987 - 1988.mp4` (sanitized: "FAMILY 01 home video file") under epoch `epoch_2026_06_21_family_clean_01` with strict privacy bounds.
+- **End-to-End Safety Gate Verifications**: Successfully verified pipeline stability, clean database states, clean git status, and complete local-first offline isolation.
+
+### Pilot Family Ingestion & Promotion
+- **Active Epoch**: `epoch_2026_06_21_family_clean_01` (successful clean memory start and full promotion).
+- **Ingestion Target**: `FAMILY/01. 1987 - 1988.mp4` (video hash: `35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307`).
+- **Observed UCF Ledger Census**:
+  - Total context frames: 12,540, all promoted.
+  - Active workers: audio_embed_clap, audio_transcribe, face_embed, image_caption, image_embed_clip, image_embed_dino, image_ocr, object_detect, scene_visual_embeddings_clip, scene_visual_embeddings_dino, speaker_merge, text_embed, video_scene_detect.
+- **Database & Vector Counts**:
+  - SQLite `memory.db`: 282 scenes, 1,604 segments, 986 embeddings, 4,502 links, 304,411 provenance mapping rows.
+  - SQLite `knowledge_graph.db`: 14,427 nodes, 178,617 edges.
+  - Qdrant points: clip (282 points), dino (282 points), text (422 points), audio (141 points). Total synced: 5,677 points. All points show `ucf_promotion_status = promoted`.
+  - FAISS index counts match vector counts.
+- **Active Search Verification**:
+  - Confirmed active search retrieves family film dialogue (text search query for "1987" or "1988" returns matching scenes with dialogues and provenance mapping) and visual events.
+
 ## [2.5.4] - 2026-06-21 — WSL2 Audio Gated Models & Model Provisioning Sprint
 
 ### Added

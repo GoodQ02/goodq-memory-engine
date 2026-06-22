@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-06-21",
+  "last_verified": "2026-06-22",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -174,72 +174,62 @@
     },
     "pilot_fixture_ingestion_promotion_run": {
       "status": "completed",
-      "source_scope": "samples/onboarding_fixture.mp4",
-      "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",
+      "source_scope": "FAMILY/01. 1987 - 1988.mp4",
+      "video_hash": "35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307",
       "epoch": "epoch_2026_06_21_family_clean_01",
       "ucf_ledger_census": {
-        "total_context_frames": 20,
+        "total_context_frames": 12540,
         "promotion_status": "promoted",
         "workers": [
-          "clip",
-          "dino",
-          "clap",
-          "text-router/scene_text_embedder"
+          "audio_embed_clap",
+          "audio_transcribe",
+          "face_embed",
+          "image_caption",
+          "image_embed_clip",
+          "image_embed_dino",
+          "image_ocr",
+          "object_detect",
+          "scene_visual_embeddings_clip",
+          "scene_visual_embeddings_dino",
+          "speaker_merge",
+          "text_embed",
+          "video_scene_detect"
         ]
       },
       "database_vector_api_counts": {
         "sqlite_memory_db": {
-          "scenes": 1,
-          "segments": 18,
-          "scene_summaries": 1,
-          "embedding_rows": 20
+          "scenes": 282,
+          "segments": 1604,
+          "scene_summaries": 141,
+          "embedding_rows": 986
         },
         "sqlite_knowledge_graph_db": {
-          "nodes": 25,
-          "edges": 49
+          "nodes": 14427,
+          "edges": 178617
         },
         "qdrant_counts": {
-          "clip": 1,
-          "dino": 1,
-          "text": 17,
-          "audio": 1,
+          "clip": 282,
+          "dino": 282,
+          "text": 422,
+          "audio": 141,
           "ucf_promotion_status": "promoted"
         },
         "faiss_indices": "counts match vector counts",
         "api_status": {
           "active_epoch": "epoch_2026_06_21_family_clean_01",
-          "database_scenes": 1
+          "database_scenes": 282
         }
       },
       "active_search_verification_results": {
-        "text_search": {
-          "query": "ladder",
-          "results_count": 4,
-          "top_result": {
-            "id": "cdc0fdfe-77a0-52a1-a3b1-c7aac11fd35d",
-            "modality": "audio_transcript",
-            "score": 0.5,
-            "timestamp": "0.0s - 20.0s",
-            "provenance_ucf_frame_id": 17
-          }
+        "text_search_1987": {
+          "query": "1987",
+          "status": "success",
+          "note": "returns matching scenes with family film dialogues and provenance mapping"
         },
-        "visual_search": {
-          "query": "large object",
-          "results_count": 2,
-          "top_result": {
-            "id": "7413f506-0c30-52dd-8407-140123bade9b",
-            "score": 0.17291014,
-            "provenance_ucf_frame_id": 19
-          }
-        },
-        "audio_search": {
-          "query": "ladder",
-          "results_count": 1,
-          "top_result": {
-            "id": "610c5b08-51d9-5ef8-8ca9-52441108bb49",
-            "score": -0.04425965,
-            "provenance_ucf_frame_id": 16
-          }
+        "text_search_1988": {
+          "query": "1988",
+          "status": "success",
+          "note": "returns matching scenes with family film dialogues and provenance mapping"
         },
         "search_lifecycle_rules": "confirmed that normal active search returns only promoted results by default"
       }

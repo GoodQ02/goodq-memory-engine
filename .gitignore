@@ -236,6 +236,7 @@ archive/**/legacy_data/
 
 # ===== QDRANT STORAGE =====
 # Don't commit Qdrant database files - regenerate on install
+/.qdrant-initialized
 vendor/qdrant/storage/
 vendor/qdrant/*.log
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-06-18 -->
+<!-- DOC_LAST_VERIFIED: 2026-06-22 -->
 
 # GoodQ RAG Context Pack
 
@@ -12,9 +12,17 @@ This document serves as the canonical context pack for GoodQ retrieval augmented
 
 The current active system epoch is:
 ```text
-epoch_2026_06_16_r0_smoke
+epoch_2026_06_21_family_clean_01
 ```
-*(Defined dynamically in `configs/config.local.yaml`)*
+*(Defined dynamically in `configs/config.local.yaml`; verified against `/api/status` and Qdrant collection inventory on 2026-06-22.)*
+
+Active epoch authority order:
+
+1. `configs/config.local.yaml`
+2. GoodQ API `/api/status`
+3. Qdrant `/collections`
+
+Generated run snapshots such as `processing_onboarding/_resolved_config.json` are historical artifacts and must not override the active epoch unless the user explicitly selects that workspace.
 
 ---
 
@@ -24,10 +32,10 @@ The active Qdrant vector database collections for the current epoch are defined 
 
 | Collection Name | Modality | Dimension | Embedding Model / Tag | Description |
 |---|---|---|---|---|
-| `goodq_text_epoch_2026_06_16_r0_smoke` | Text | 384 | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-level and chunk-level transcript text embeddings |
-| `goodq_audio_epoch_2026_06_16_r0_smoke` | Audio | 512 | `laion/clap-htsat-unfused` | Scene-level CLAP audio feature and sound event embeddings |
-| `goodq_clip_epoch_2026_06_16_r0_smoke` | Vision | 768 | `openai/clip-vit-large-patch14` | Visual frame embeddings extracted uniformly per scene |
-| `goodq_dino_epoch_2026_06_16_r0_smoke` | Vision | 1024 | `facebook/dinov2-large` | Dense visual feature representations for frame-level objects |
+| `goodq_text_epoch_2026_06_21_family_clean_01` | Text | 384 | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-level and chunk-level transcript text embeddings |
+| `goodq_audio_epoch_2026_06_21_family_clean_01` | Audio | 512 | `laion/clap-htsat-unfused` | Scene-level CLAP audio feature and sound event embeddings |
+| `goodq_clip_epoch_2026_06_21_family_clean_01` | Vision | 768 | `openai/clip-vit-large-patch14` | Visual frame embeddings extracted uniformly per scene |
+| `goodq_dino_epoch_2026_06_21_family_clean_01` | Vision | 1024 | `facebook/dinov2-large` | Dense visual feature representations for frame-level objects |
 
 ---
 
@@ -105,11 +113,15 @@ RAG agents must use read-only queries to access databases safely without risking
 ```python
 import sqlite3
 import json
+import os
+from pathlib import Path
 
-db_path = "data/epochs/epoch_2026_06_16_r0_smoke/memory.db"
+epoch_id = "epoch_2026_06_21_family_clean_01"
+data_root = Path(os.environ["GOODQ_DATA_ROOT"])
+db_path = data_root / "GoodQ_Data" / "epochs" / epoch_id / "memory.db"
 
 # Open read-only connection
-conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
 conn.row_factory = sqlite3.Row
 
 cursor = conn.cursor()
@@ -127,11 +139,11 @@ conn.close()
 ```python
 from qdrant_client import QdrantClient
 
-client = QdrantClient(url="http://localhost:6333")
+client = QdrantClient(url="http://127.0.0.1:6333")
 
 # Query text embeddings in the active collection
 results = client.search(
-    collection_name="goodq_text_epoch_2026_06_16_r0_smoke",
+    collection_name="goodq_text_epoch_2026_06_21_family_clean_01",
     query_vector=[0.0] * 384,  # Replace with real MiniLM embedding
     limit=3
 )

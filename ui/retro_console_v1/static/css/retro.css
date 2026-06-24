@@ -100,19 +100,81 @@ body {
   gap: 0;
 }
 
+/* Glass screen vignette glow and curvature */
+.crt-screen::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(0, 0, 0, 0) 55%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+  z-index: 9998;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.no-scanlines.crt-screen::after {
+  opacity: 0 !important;
+}
+
 /* Scanline overlay mesh */
 .scanlines {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  background: repeating-linear-gradient(
-    rgba(18, 16, 16, 0) 0%,
-    rgba(0, 0, 0, 0.22) 50%,
-    rgba(18, 16, 16, 0) 100%
-  );
-  background-size: 100% 4px;
-  opacity: 0.85;
+  /* Horizontal scanlines + vertical aperture mask stripe */
+  background: 
+    repeating-linear-gradient(
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.48) 2px,
+      rgba(0, 0, 0, 0.48) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.05) 0px,
+      rgba(255, 0, 0, 0.05) 1px,
+      rgba(0, 255, 0, 0.03) 1px,
+      rgba(0, 255, 0, 0.03) 2px,
+      rgba(0, 0, 255, 0.05) 2px,
+      rgba(0, 0, 255, 0.05) 3px
+    );
+  background-size: 100% 4px, 3px 100%;
+  opacity: 0.9;
+  animation: crt-shimmer 0.15s infinite;
+  transition: opacity 0.2s ease;
+}
+
+/* Day theme scanlines (contoured deep retro blue CRT tone) */
+body.theme-day .scanlines {
+  background: 
+    repeating-linear-gradient(
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 30, 0.52) 2px,
+      rgba(0, 0, 30, 0.52) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 100, 255, 0.07) 0px,
+      rgba(0, 100, 255, 0.07) 1px,
+      rgba(255, 255, 255, 0.04) 1px,
+      rgba(255, 255, 255, 0.04) 2px,
+      rgba(0, 0, 100, 0.07) 2px,
+      rgba(0, 0, 100, 0.07) 3px
+    );
+  background-size: 100% 4px, 3px 100%;
+}
+
+@keyframes crt-shimmer {
+  0% { opacity: 0.89; }
+  50% { opacity: 0.92; }
+  100% { opacity: 0.89; }
 }
 
 /* ─── Typography & Glows ──────────────────────────────────────── */

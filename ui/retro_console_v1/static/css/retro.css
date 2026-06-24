@@ -57,7 +57,7 @@ body.theme-day {
 }
 
 /* ─── Accessibility Hatches ──────────────────────────────────── */
-.no-effects {
+.no-sfx {
   --accent-glow: transparent !important;
   --error-glow: transparent !important;
   --selected-glow: transparent !important;
@@ -66,12 +66,12 @@ body.theme-day {
   animation: none !important;
 }
 
-.no-effects .blink {
+.no-sfx .blink {
   animation: none !important;
   opacity: 1 !important;
 }
 
-.no-scanlines .scanlines {
+.no-sfx .scanlines {
   display: none !important;
 }
 
@@ -104,7 +104,7 @@ body {
   animation: crt-screen-flutter 0.25s infinite;
 }
 
-.no-effects.crt-screen {
+.no-sfx.crt-screen {
   animation: none !important;
 }
 
@@ -137,7 +137,7 @@ body {
   transition: opacity 0.2s ease;
 }
 
-.no-scanlines.crt-screen::after {
+.no-sfx.crt-screen::after {
   opacity: 0 !important;
 }
 

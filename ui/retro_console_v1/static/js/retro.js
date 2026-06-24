@@ -441,7 +441,7 @@
     ctx.save();
     ctx.translate(canvas.width / 2 + state.canvasOffset.x, canvas.height / 2 + state.canvasOffset.y);
 
-    const isEffects = document.getElementById("crt-screen").classList.contains("no-effects") === false;
+    const isEffects = document.getElementById("crt-screen").classList.contains("no-sfx") === false;
 
     // Draw Edges (Connections)
     state.graph.edges.forEach((edge) => {
@@ -3151,14 +3151,13 @@
   // Accessibility Controls & Event Listeners
   function initAccessibility() {
     const screen = document.getElementById("crt-screen");
-    const toggleScanlines = document.getElementById("toggle-scanlines");
-    const toggleEffects = document.getElementById("toggle-effects");
+    const toggleSfx = document.getElementById("toggle-sfx");
     const toggleIntel = document.getElementById("toggle-intel-btn");
     const intelPanel = document.getElementById("video-intel-panel");
     const toggleDroppad = document.getElementById("toggle-droppad-btn");
     const droppadPanel = document.getElementById("droppad-panel");
 
-    if (!screen || !toggleScanlines || !toggleEffects) return;
+    if (!screen || !toggleSfx) return;
 
     // Theme toggle handler (NIGHT / DAY / AUTO)
     const toggleTheme = document.getElementById("toggle-theme");
@@ -3372,17 +3371,11 @@
       });
     }
 
-    toggleScanlines.addEventListener("click", () => {
-      const active = screen.classList.toggle("no-scanlines");
-      toggleScanlines.textContent = active ? "Scanlines: OFF" : "Scanlines: ON";
-      toggleScanlines.classList.toggle("btn-disabled", active);
-    });
-
-    toggleEffects.addEventListener("click", () => {
-      const active = screen.classList.toggle("no-effects");
-      toggleEffects.textContent = active ? "Effects: OFF" : "Effects: ON";
-      toggleEffects.classList.toggle("btn-disabled", active);
-      drawGraph(); // Redraw canvas graph to clear glows
+    toggleSfx.addEventListener("click", () => {
+      const active = screen.classList.toggle("no-sfx");
+      toggleSfx.textContent = active ? "Retro SFX: OFF" : "Retro SFX: ON";
+      toggleSfx.classList.toggle("btn-disabled", active);
+      drawGraph(); // Redraw canvas graph to toggle node glows
     });
   }
 

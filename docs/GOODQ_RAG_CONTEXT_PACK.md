@@ -22,7 +22,7 @@ Active epoch authority order:
 2. GoodQ API `/api/status`
 3. Qdrant `/collections`
 
-Generated run snapshots such as `processing_onboarding/_resolved_config.json` are historical artifacts and must not override the active epoch unless the user explicitly selects that workspace.
+Run-time snapshots (such as `processing_onboarding/_resolved_config.json`) are historical artifacts and must not override the active epoch unless the user explicitly selects that workspace.
 
 ---
 

@@ -15,6 +15,9 @@ and related canonical docs.
 - **Monitored Family-Film Production Ingestion**: Executed full ingestion, validation, and promotion of the home video file `01. 1987 - 1988.mp4` (sanitized: "FAMILY 01 home video file") under epoch `epoch_2026_06_21_family_clean_01` with strict privacy bounds.
 - **End-to-End Safety Gate Verifications**: Successfully verified pipeline stability, clean database states, clean git status, and complete local-first offline isolation.
 
+### Fixed
+- **Version Metadata Alignment**: Aligned version metadata to v2.5.5 across goodq_version.py, NSIS installer specifications, and versioninfo.json after the v2.5.4 release.
+
 ### Pilot Family Ingestion & Promotion
 - **Active Epoch**: `epoch_2026_06_21_family_clean_01` (successful clean memory start and full promotion).
 - **Ingestion Target**: `FAMILY/01. 1987 - 1988.mp4` (video hash: `35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307`).

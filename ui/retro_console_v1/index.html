@@ -1,13 +1,32 @@
 <!doctype html>
-<html lang="en" style="background-color: #0a0a0c;">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Retro Memory Explorer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050d06'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300ff66'%3ERM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/retro.css?v=1.5.1" />
+    <link rel="stylesheet" href="./static/css/retro.css?v=1.6.0" />
+    <script>
+      (function() {
+        var theme = localStorage.getItem("goodq-theme") || "night";
+        var isDay = theme === "day" || (theme === "auto" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (isDay) {
+          if (document.body) {
+            document.body.classList.add("theme-day");
+          } else {
+            var observer = new MutationObserver(function(_, obs) {
+              if (document.body) {
+                document.body.classList.add("theme-day");
+                obs.disconnect();
+              }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+          }
+        }
+      })();
+    </script>
   </head>
-  <body style="background-color: #0a0a0c;">
+  <body>
     <div class="crt-screen" id="crt-screen">
       <div class="scanlines" id="scanlines-layer"></div>
 
@@ -15,6 +34,7 @@
       <button class="restore-tab restore-left" id="restore-left-btn" hidden>▶ SEARCH</button>
       <button class="restore-tab restore-right" id="restore-right-btn" hidden>INSPECTOR ◀</button>
       <button class="restore-tab restore-bottom" id="restore-bottom-btn" hidden>▲ TIMELINE</button>
+      <button class="restore-tab restore-top" id="restore-top-btn" hidden>▼ HEADER</button>
       
       <header class="app-header">
         <div class="header-brand">
@@ -36,6 +56,8 @@
             <button id="toggle-intel-btn" class="accessibility-btn intel-btn" title="Toggle Video Intelligence Panel">Intel: OFF</button>
             <button id="toggle-scanlines" class="accessibility-btn" title="Toggle Scanline Grid Effect">Scanlines: ON</button>
             <button id="toggle-effects" class="accessibility-btn" title="Toggle Glow / Pulsing Effects">Effects: ON</button>
+            <button id="toggle-theme" class="accessibility-btn theme-btn" title="Toggle Theme (Green / Blue / Auto)">Theme: GREEN</button>
+            <button id="collapse-top-btn" class="accessibility-btn" title="Collapse Header">▲ Header</button>
           </div>
         </div>
       </header>
@@ -376,6 +398,6 @@
       </footer>
     </div>
     
-    <script src="./static/js/retro.js?v=1.5.2"></script>
+    <script src="./static/js/retro.js?v=1.6.0"></script>
   </body>
 </html>

@@ -36,6 +36,24 @@
   --logs-height: 180px;
 }
 
+body.theme-day {
+  color-scheme: light;
+  --bg-color: #00005a;         /* Deep Retro CRT Blue */
+  --bg-soft: #000080;          /* Medium Blue */
+  --text-color: #ffffff;       /* White text */
+  --text-dim: #a0c0ff;         /* Soft light-blue/dimmed text */
+  --text-faint: #3060b0;       /* Darker blue/faint text */
+  --accent-glow: rgba(255, 255, 255, 0.15);
+  --border-color: #ffffff;
+  --border-dim: #5090f0;
+  --border-faint: #204080;
+
+  /* Selected highlights in BIOS theme: bright yellow */
+  --selected-color: #ffff00;   /* Neon Yellow */
+  --selected-glow: rgba(255, 255, 0, 0.35);
+  --border-selected: #ffff00;
+}
+
 /* ─── Accessibility Hatches ──────────────────────────────────── */
 .no-effects {
   --accent-glow: transparent !important;
@@ -62,7 +80,7 @@
 }
 
 body {
-  background-color: #000;
+  background-color: var(--bg-color);
   color: var(--text-color);
   font-family: var(--font-mono);
   overflow: hidden;
@@ -2049,6 +2067,10 @@ h4 {
   transition: flex 0.2s ease;
 }
 
+.data-trail-section.resizing {
+  transition: none !important;
+}
+
 .subsection-header {
   display: flex;
   align-items: center;
@@ -2977,6 +2999,9 @@ h4 {
   background-color: rgba(0, 220, 200, 0.02);
   padding: 8px;
   margin-bottom: 12px;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
 }
 
 .cognitive-body ul {

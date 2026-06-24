@@ -482,7 +482,8 @@
         ctx.strokeStyle = applyOpacity("rgba(0, 210, 255, 0.7)", opacityMultiplier);
         ctx.lineWidth = Math.min(8, 2 + edge.weight * 2);
       } else {
-        ctx.strokeStyle = applyOpacity("rgba(0, 255, 102, 0.15)", opacityMultiplier);
+        const edgeColor = document.body.classList.contains("theme-day") ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 255, 102, 0.15)";
+        ctx.strokeStyle = applyOpacity(edgeColor, opacityMultiplier);
         ctx.lineWidth = Math.min(3, 0.5 + edge.weight / 2);
       }
       ctx.stroke();
@@ -518,25 +519,27 @@
       const ch = node.channel || "generic";
 
       // ── Channel color scheme ──────────────────────────────────
+      const isDayTheme = document.body.classList.contains("theme-day");
+
       const channelStroke = isSelected ? "#00d2ff" :
         ch === "scene_present"       ? "#00d2ff" :
         ch === "dialogue_mentioned"  ? "#5ba3ff" :
         ch === "candidate"           ? "#ffaa00" :
-        node.type === "location"     ? "#00e5ff" :
+        node.type === "location"     ? (isDayTheme ? "#80ffff" : "#00e5ff") :
         node.type === "event"        ? "#ff6644" :
-                                       "#00ff66";
+                                       (isDayTheme ? "#ffffff" : "#00ff66");
 
       const channelFill = isSelected ? "rgba(0, 210, 255, 1.0)" :
         ch === "scene_present"       ? "rgba(0, 210, 255, 0.25)" :
         ch === "dialogue_mentioned"  ? "rgba(91, 163, 255, 0.08)" :
         ch === "candidate"           ? "rgba(255, 170, 0, 0.18)" :
-                                       "rgba(2, 5, 2, 1.0)";
+                                       (isDayTheme ? "#000080" : "rgba(2, 5, 2, 1.0)");
 
       const channelLabel = isSelected ? "#00d2ff" :
         ch === "scene_present"       ? "#00d2ff" :
         ch === "dialogue_mentioned"  ? "#7ab8ff" :
         ch === "candidate"           ? "#ffcc55" :
-                                       "rgba(0, 255, 102, 0.85)";
+                                       (isDayTheme ? "#ffffff" : "rgba(0, 255, 102, 0.85)");
 
       const strokeColor = applyOpacity(channelStroke, opacityMultiplier);
       const fillColor = applyOpacity(channelFill, opacityMultiplier);
@@ -1174,19 +1177,6 @@
     state.selectedEntity = null;
     state.selectedEntities = [];
     state.selectedSceneId = null;
-    state.targetScale = 1.0;
-    state.targetOffset = { x: 0, y: 0 };
-    triggerGraphAnimation();
-    renderTimelineGrid();
-    drawGraph();
-    renderInspector();
-    renderEntityFilterChecklist(false);
-  }
-
-  // Reset Only Entity Filters (keeps scene selection and search)
-  function resetEntityFilters() {
-    state.selectedEntity = null;
-    state.selectedEntities = [];
     state.targetScale = 1.0;
     state.targetOffset = { x: 0, y: 0 };
     triggerGraphAnimation();
@@ -1892,13 +1882,13 @@
 
       const cogToggle = document.createElement("button");
       cogToggle.className = "disag-toggle-btn";
-      cogToggle.textContent = "Show";
+      cogToggle.textContent = "Hide";
       cogHeader.appendChild(cogToggle);
       cogSection.appendChild(cogHeader);
 
       const cogBody = document.createElement("div");
       cogBody.className = "cognitive-body";
-      cogBody.hidden = true;
+      cogBody.hidden = false;
       cogBody.style.marginTop = "8px";
       cogBody.style.fontSize = "11px";
       cogBody.style.lineHeight = "1.5";
@@ -2241,6 +2231,22 @@
         transcriptZone.innerHTML = "";
         transcriptZone.appendChild(transcriptHeader);
         transcriptZone.appendChild(container);
+      }
+    } else {
+      if (transcriptZone) {
+        transcriptZone.innerHTML = "";
+        const emptyMsg = document.createElement("div");
+        emptyMsg.className = "keyframe-placeholder empty-state-cyber";
+        emptyMsg.style.height = "100%";
+        emptyMsg.innerHTML = `
+          <div class="keyframe-placeholder-crt">
+            <div class="scanner-line"></div>
+            <div class="empty-state-icon">📡</div>
+            <div class="empty-state-title">NO TRANSCRIPT</div>
+            <div class="empty-state-text">SCENE CONTAINS NO DIALOGUE OR SPEECH DATA</div>
+          </div>
+        `;
+        transcriptZone.appendChild(emptyMsg);
       }
     }
     
@@ -3154,6 +3160,75 @@
 
     if (!screen || !toggleScanlines || !toggleEffects) return;
 
+    // Theme toggle handler (NIGHT / DAY / AUTO)
+    const toggleTheme = document.getElementById("toggle-theme");
+    if (toggleTheme) {
+      const themes = ["night", "day", "auto"];
+      let currentTheme = localStorage.getItem("goodq-theme") || "night";
+
+      function applyTheme(theme) {
+        currentTheme = theme;
+        localStorage.setItem("goodq-theme", theme);
+        
+        try {
+          window.matchMedia("(prefers-color-scheme: dark)").removeEventListener("change", handleSystemThemeChange);
+        } catch (e) {
+          try {
+            window.matchMedia("(prefers-color-scheme: dark)").removeListener(handleSystemThemeChange);
+          } catch (e2) {}
+        }
+
+        if (theme === "night") {
+          document.body.classList.remove("theme-day");
+          toggleTheme.textContent = "Theme: NIGHT";
+          toggleTheme.title = "Current: Night Mode (Green CRT). Click to change.";
+        } else if (theme === "day") {
+          document.body.classList.add("theme-day");
+          toggleTheme.textContent = "Theme: DAY";
+          toggleTheme.title = "Current: Day Mode (Blue CRT). Click to change.";
+        } else if (theme === "auto") {
+          toggleTheme.textContent = "Theme: AUTO";
+          toggleTheme.title = "Current: Auto Mode (System theme). Click to change.";
+          const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (isDark) {
+            document.body.classList.remove("theme-day");
+          } else {
+            document.body.classList.add("theme-day");
+          }
+          try {
+            window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", handleSystemThemeChange);
+          } catch (e) {
+            try {
+              window.matchMedia("(prefers-color-scheme: dark)").addListener(handleSystemThemeChange);
+            } catch (e2) {}
+          }
+        }
+        if (typeof drawGraph === "function") {
+          drawGraph();
+        }
+      }
+
+      function handleSystemThemeChange(e) {
+        if (currentTheme === "auto") {
+          if (e.matches) {
+            document.body.classList.remove("theme-day");
+          } else {
+            document.body.classList.add("theme-day");
+          }
+          if (typeof drawGraph === "function") {
+            drawGraph();
+          }
+        }
+      }
+
+      applyTheme(currentTheme);
+
+      toggleTheme.addEventListener("click", () => {
+        const nextIndex = (themes.indexOf(currentTheme) + 1) % themes.length;
+        applyTheme(themes[nextIndex]);
+      });
+    }
+
     // Intel panel toggle
     if (toggleIntel && intelPanel) {
       toggleIntel.addEventListener("click", () => {
@@ -3640,6 +3715,7 @@
 
         document.body.style.cursor = "row-resize";
         document.body.style.userSelect = "none";
+        dataTrailSection.classList.add("resizing");
 
         const contentRect = inspectorContent.getBoundingClientRect();
 
@@ -3656,6 +3732,7 @@
           document.removeEventListener("mouseup", stopResizing);
           document.body.style.cursor = "";
           document.body.style.userSelect = "";
+          dataTrailSection.classList.remove("resizing");
         }
 
         document.addEventListener("mousemove", onMouseMove);

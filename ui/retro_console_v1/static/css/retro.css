@@ -9,16 +9,16 @@
   --text-color: #00ff66;
   --text-dim: #00a844;
   --text-faint: #004d1f;
-  --accent-glow: rgba(0, 255, 102, 0.25);
+  --accent-glow: rgba(0, 255, 102, 0.42);
   --border-color: #00ff66;
   --border-dim: #008033;
   --border-faint: #003314;
   --error-color: #ff3333;
-  --error-glow: rgba(255, 51, 51, 0.25);
+  --error-glow: rgba(255, 51, 51, 0.42);
 
   /* Selected/highlight: high-contrast neon blue */
   --selected-color: #00d2ff;
-  --selected-glow: rgba(0, 210, 255, 0.4);
+  --selected-glow: rgba(0, 210, 255, 0.55);
   --border-selected: #00d2ff;
 
   --panel-radius: 4px;
@@ -43,14 +43,16 @@ body.theme-day {
   --text-color: #ffffff;       /* White text */
   --text-dim: #a0c0ff;         /* Soft light-blue/dimmed text */
   --text-faint: #3060b0;       /* Darker blue/faint text */
-  --accent-glow: rgba(255, 255, 255, 0.15);
+  --accent-glow: rgba(0, 210, 255, 0.45);
   --border-color: #ffffff;
   --border-dim: #5090f0;
   --border-faint: #204080;
+  --error-color: #ff3333;
+  --error-glow: rgba(255, 51, 51, 0.42);
 
   /* Selected highlights in BIOS theme: bright yellow */
   --selected-color: #ffff00;   /* Neon Yellow */
-  --selected-glow: rgba(255, 255, 0, 0.35);
+  --selected-glow: rgba(255, 255, 0, 0.55);
   --border-selected: #ffff00;
 }
 
@@ -58,6 +60,7 @@ body.theme-day {
 .no-effects {
   --accent-glow: transparent !important;
   --error-glow: transparent !important;
+  --selected-glow: transparent !important;
   text-shadow: none !important;
   box-shadow: none !important;
   animation: none !important;
@@ -106,12 +109,20 @@ body {
   display: block;
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(0, 0, 0, 0) 55%,
-    rgba(0, 0, 0, 0.45) 100%
-  );
+  background: 
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.01) 22%,
+      rgba(0, 0, 0, 0) 50%,
+      rgba(0, 0, 0, 0.45) 100%
+    ),
+    radial-gradient(
+      circle at center,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0.45) 100%
+    );
   z-index: 9998;
   pointer-events: none;
   transition: opacity 0.2s ease;

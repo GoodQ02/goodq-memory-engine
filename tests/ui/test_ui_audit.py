@@ -201,3 +201,122 @@ def test_stitching_workbench_load():
         assert len(page_errors) == 0, f"Uncaught exceptions found: {page_errors}"
         browser.close()
         print("Stitching Workbench Playwright tests passed successfully!")
+
+def test_retro_sfx_accessibility():
+    # Setup report directory
+    report_dir = os.path.join("reports", "ui_audit")
+    os.makedirs(report_dir, exist_ok=True)
+    
+    with sync_playwright() as p:
+        # Launch browser
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
+        
+        # Capture console errors
+        console_errors = []
+        page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+        
+        # Navigate to page
+        url = "http://127.0.0.1:30000/ui/retro_console_v1/"
+        response = page.goto(url)
+        assert response.status == 200, f"Page loaded with status {response.status}"
+        
+        # Wait for timeline to load scenes
+        page.wait_for_selector(".scene-card", timeout=15000)
+        
+        # 1. Verify Night Mode SFX ON displays CRT/Refresh lines.
+        crt_screen = page.locator("#crt-screen")
+        assert not crt_screen.evaluate("el => el.classList.contains('no-sfx')")
+        
+        scanlines = page.locator("#scanlines-layer")
+        assert scanlines.evaluate("el => window.getComputedStyle(el).display") != "none"
+        
+        # 2. Verify Day Mode SFX ON displays CRT/Bezel/Flicker effects.
+        theme_btn = page.locator("#toggle-theme")
+        # Currently we are on Theme: NIGHT. Click once to change to Theme: DAY.
+        theme_btn.click()
+        page.wait_for_timeout(200)
+        assert "Theme: DAY" in theme_btn.text_content()
+        assert page.evaluate("() => document.body.classList.contains('theme-day')")
+        
+        # Day Mode scanlines/aperture grille effects should be active.
+        assert scanlines.evaluate("el => window.getComputedStyle(el).display") != "none"
+        
+        # Flicker/flutter animation should be active.
+        crt_animation = crt_screen.evaluate("el => window.getComputedStyle(el).animationName")
+        assert crt_animation and crt_animation != "none"
+        
+        # 3. Verify SFX OFF applies .no-sfx class to #crt-screen.
+        sfx_btn = page.locator("#toggle-sfx")
+        sfx_btn.click()
+        page.wait_for_timeout(200)
+        assert crt_screen.evaluate("el => el.classList.contains('no-sfx')")
+        assert "Retro SFX: OFF" in sfx_btn.text_content()
+        
+        # 4. Verify SFX OFF completely disables text-shadows, box-shadows, animations, and filters on descendant elements
+        descendants_styles = page.evaluate("""() => {
+            const elements = [
+                document.getElementById('crt-screen'),
+                document.querySelector('.app-header'),
+                document.querySelector('h2'),
+                document.querySelector('.scene-card'),
+                document.getElementById('toggle-sfx'),
+                document.getElementById('search-submit')
+            ].filter(Boolean);
+            
+            return elements.map(el => {
+                const style = window.getComputedStyle(el);
+                return {
+                    tagName: el.tagName,
+                    className: el.className,
+                    textShadow: style.textShadow,
+                    boxShadow: style.boxShadow,
+                    animation: style.animation,
+                    filter: style.filter
+                };
+            });
+        }""")
+        
+        for style in descendants_styles:
+            assert style["textShadow"] == "none", f"textShadow for {style['className']} is {style['textShadow']}"
+            assert style["boxShadow"] == "none", f"boxShadow for {style['className']} is {style['boxShadow']}"
+            assert style["filter"] == "none", f"filter for {style['className']} is {style['filter']}"
+            assert "none" in style["animation"], f"animation for {style['className']} is {style['animation']}"
+            
+        # The scanlines should be hidden
+        assert scanlines.evaluate("el => window.getComputedStyle(el).display") == "none"
+        
+        # #crt-screen::after overlay opacity is set to 0.
+        after_opacity = page.evaluate("""() => {
+            const el = document.getElementById('crt-screen');
+            return window.getComputedStyle(el, '::after').opacity;
+        }""")
+        assert float(after_opacity) == 0.0, f"Opacity of ::after is {after_opacity}"
+        
+        # 5. Verify theme toggle and Retro SFX toggle remain independent and do not conflict.
+        # Transition theme: DAY -> AUTO. SFX is currently OFF.
+        theme_btn.click()
+        page.wait_for_timeout(200)
+        assert "Theme: AUTO" in theme_btn.text_content()
+        # SFX should remain OFF
+        assert crt_screen.evaluate("el => el.classList.contains('no-sfx')")
+        assert "Retro SFX: OFF" in sfx_btn.text_content()
+        
+        # Now switch SFX ON while theme is AUTO
+        sfx_btn.click()
+        page.wait_for_timeout(200)
+        assert not crt_screen.evaluate("el => el.classList.contains('no-sfx')")
+        assert "Retro SFX: ON" in sfx_btn.text_content()
+        assert "Theme: AUTO" in theme_btn.text_content()
+        
+        # 6. Verify no Javascript console errors.
+        assert len(console_errors) == 0, f"Console errors detected: {console_errors}"
+        
+        # 7. Verify that screenshot artifacts are saved locally/privately.
+        screenshot_path = os.path.join(report_dir, "screenshot_sfx_off.png")
+        page.screenshot(path=screenshot_path)
+        assert os.path.exists(screenshot_path)
+        
+        browser.close()
+

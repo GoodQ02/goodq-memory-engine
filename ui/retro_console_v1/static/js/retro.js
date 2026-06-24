@@ -3159,6 +3159,18 @@
 
     if (!screen || !toggleSfx) return;
 
+    // Load initial Retro SFX state from localStorage
+    const storedSfx = localStorage.getItem("goodq-retro-sfx");
+    if (storedSfx === "off") {
+      screen.classList.add("no-sfx");
+      toggleSfx.textContent = "Retro SFX: OFF";
+      toggleSfx.classList.add("btn-disabled");
+    } else {
+      screen.classList.remove("no-sfx");
+      toggleSfx.textContent = "Retro SFX: ON";
+      toggleSfx.classList.remove("btn-disabled");
+    }
+
     // Theme toggle handler (NIGHT / DAY / AUTO)
     const toggleTheme = document.getElementById("toggle-theme");
     if (toggleTheme) {
@@ -3375,6 +3387,7 @@
       const active = screen.classList.toggle("no-sfx");
       toggleSfx.textContent = active ? "Retro SFX: OFF" : "Retro SFX: ON";
       toggleSfx.classList.toggle("btn-disabled", active);
+      localStorage.setItem("goodq-retro-sfx", active ? "off" : "on");
       drawGraph(); // Redraw canvas graph to toggle node glows
     });
   }

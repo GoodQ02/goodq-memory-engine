@@ -8,7 +8,7 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.5.exe"
+OutFile "..\..\GoodQ4All_Setup_2.5.6.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -16,7 +16,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.5 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.6 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -183,7 +183,6 @@ runtime_ok:
   ${EndIf}
 
   ; --- STATE 8: WSL pre-baked distro import ---
-  /*
   DetailPrint "Step 8/12: Configuring WSL2 audio compute environment..."
   ; Stage wsl distro folder
   SetOutPath "$INSTDIR\wsl"
@@ -191,44 +190,70 @@ runtime_ok:
   File /nonfatal "staged\wsl\goodq_audio_wsl.tar"
 wsl_tar_staged_skip:
 
-  ; Check if wsl tar is present side-by-side or staged
+  ${If} $GpuEnhancedMode == 0
+    ; Baseline mode - check if tar file is absent to print a warning, but do not abort
+    StrCpy $WslTarPath "$EXEDIR\goodq_audio_wsl.tar"
+    IfFileExists "$WslTarPath" wsl_baseline_tar_ok 0
+    StrCpy $WslTarPath "$INSTDIR\wsl\goodq_audio_wsl.tar"
+    IfFileExists "$WslTarPath" wsl_baseline_tar_ok 0
+    DetailPrint "Warning: Pre-baked WSL2 audio container (goodq_audio_wsl.tar) is absent."
+wsl_baseline_tar_ok:
+    StrCpy $WslStatus "skipped_wsl_unavailable"
+    Goto wsl_done
+  ${EndIf}
+
+  ; GPU mode ($GpuEnhancedMode == 1)
+  ; Check if GoodQ_Audio_Distro is already registered
+  DetailPrint "Checking if GoodQ_Audio_Distro is already registered..."
+  nsExec::ExecToLog 'wsl -d GoodQ_Audio_Distro -- true'
+  Pop $0
+  ${If} $0 == 0
+    DetailPrint "GoodQ_Audio_Distro is already registered. Reusing the existing registration."
+    StrCpy $WslStatus "reused"
+    Goto wsl_done
+  ${EndIf}
+
+  ; Not registered: Check if the pre-baked tar file is present
   StrCpy $WslTarPath "$EXEDIR\goodq_audio_wsl.tar"
   IfFileExists "$WslTarPath" wsl_tar_found 0
   StrCpy $WslTarPath "$INSTDIR\wsl\goodq_audio_wsl.tar"
   IfFileExists "$WslTarPath" wsl_tar_found wsl_tar_missing
 
 wsl_tar_missing:
-  ${If} $GpuEnhancedMode == 1
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Pre-baked WSL2 audio container (goodq_audio_wsl.tar) is required for GPU-Accelerated mode but was not found."
-    Abort
-  ${Else}
-    DetailPrint "WSL2 tar package missing. Skipping WSL setup for baseline mode."
-    StrCpy $WslStatus "skipped_wsl_unavailable"
-    Goto wsl_done
-  ${EndIf}
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "Error: Pre-baked WSL2 audio container (goodq_audio_wsl.tar) is required for GPU-Accelerated mode but was not found."
+  Abort
 
 wsl_tar_found:
   DetailPrint "Importing pre-baked WSL2 Linux container..."
   nsExec::ExecToLog 'wsl --import GoodQ_Audio_Distro "$COMMONAPPDATA\GoodQ4All\wsl_runtime" "$WslTarPath"'
   Pop $0
   ${If} $0 != 0
-    ${If} $GpuEnhancedMode == 1
-      IfSilent +2
-      MessageBox MB_OK|MB_ICONSTOP "Error: Failed to import WSL2 audio compute container. Code: $0"
-      Abort
-    ${Else}
-      DetailPrint "WSL2 import failed in baseline mode. Proceeding with warning."
-      StrCpy $WslStatus "failed_import"
-      Goto wsl_done
-    ${EndIf}
-  ${Else}
-    DetailPrint "WSL2 audio compute container imported successfully."
-    StrCpy $WslStatus "imported"
+    DetailPrint "Error: Failed to import WSL2 audio compute container. Code: $0. Cleaning up registration..."
+    nsExec::ExecToLog 'wsl --unregister GoodQ_Audio_Distro'
+    Pop $1
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Failed to import WSL2 audio compute container. Code: $0"
+    Abort
   ${EndIf}
 
+  ; Usability verification
+  DetailPrint "Verifying usability of imported WSL2 container..."
+  nsExec::ExecToLog 'wsl -d GoodQ_Audio_Distro -- true'
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "Error: Imported WSL2 container failed usability check. Code: $0. Cleaning up registration..."
+    nsExec::ExecToLog 'wsl --unregister GoodQ_Audio_Distro'
+    Pop $1
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Imported WSL2 container failed usability check. Code: $0"
+    Abort
+  ${EndIf}
+
+  DetailPrint "WSL2 audio compute container imported and verified successfully."
+  StrCpy $WslStatus "imported"
+
 wsl_done:
-  */
 
   ; --- STATE 9: merge and verify model zips (non-fatal) ---
   DetailPrint "Step 9/12: Extracting and registering pre-staged model packs..."
@@ -271,7 +296,7 @@ wsl_done:
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.5"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.6"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd

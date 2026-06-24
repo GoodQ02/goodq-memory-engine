@@ -57,13 +57,15 @@ body.theme-day {
 }
 
 /* ─── Accessibility Hatches ──────────────────────────────────── */
-.no-sfx {
+.no-sfx, .no-sfx * {
   --accent-glow: transparent !important;
   --error-glow: transparent !important;
   --selected-glow: transparent !important;
   text-shadow: none !important;
   box-shadow: none !important;
   animation: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
 }
 
 .no-sfx .blink {
@@ -73,6 +75,10 @@ body.theme-day {
 
 .no-sfx .scanlines {
   display: none !important;
+}
+
+#crt-screen.no-sfx::after, .no-sfx.crt-screen::after {
+  opacity: 0 !important;
 }
 
 /* ─── Base Styles ────────────────────────────────────────────── */

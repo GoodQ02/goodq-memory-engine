@@ -9,7 +9,7 @@ surface, not a replacement for the canonical runtime contracts.
 
 ## Current Mission
 
-The governed materialization pipeline (v2.5.1) is verified end-to-end and ready
+The governed materialization pipeline (v2.5.6) is verified end-to-end and ready
 for production family film ingestion. Prior proving-ground memory, including
 Seinfeld/sample/test and prior home-movie test runs, is disposable and should
 not seed the next run.
@@ -30,7 +30,7 @@ not seed the next run.
 - Conda environment: `goodq_core`
 - Current profile from runtime config: `BASELINE`
 - WSL distro from runtime config: `Ubuntu-22.04`
-- Standalone Setup Installer (`GoodQ4All_Setup_2.4.0.exe`): Active zero-dependency sandboxed package containing full PyPI dependency closure, preflight perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg` for auto-resolved FFmpeg binaries), and a supervising Go launcher (`LAUNCH_GOODQ.exe`) that manages Qdrant/API/Watchdog and launches the browser automatically on boot.
+- Standalone Setup Installer (`GoodQ4All_Setup_2.5.6.exe`): Active zero-dependency sandboxed package containing full PyPI dependency closure, preflight perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg` for auto-resolved FFmpeg binaries), and a supervising Go launcher (`LAUNCH_GOODQ.exe`) that manages Qdrant/API/Watchdog and launches the browser automatically on boot.
 - Sandboxed execution safety: The python execution path loader (`python_paths.py`) automatically bypasses Conda when running in the sandboxed target environment or when conda is missing. The GPU configuration manager (`gpu_config.py`) wraps PyTorch (`torch`) imports in try-except blocks, falling back to CPU mode dynamically instead of failing with ModuleNotFoundError.
 - Log permission redirection: The mission logger (`goodq_logger.py`) dynamically maps log directories to writeable ProgramData (`%PROGRAMDATA%\GoodQ4All\logs`) when no custom path is specified, and wraps file logger creation in a try-except block to gracefully fall back to console logging on write permission errors.
 - Offline API documentation: Mounts and serves `/docs` and `/redoc` locally from offline caches (`ui/docs_offline/`) when internet access is absent.
@@ -895,6 +895,13 @@ Completed the offline isolation and governance of the WSL2 audio processing lane
 - **Unit Test Resolution**: Corrected mock logic in `test_wsl_process_audio_diarization.py` to support local-first check behaviors in offline simulation tests. Fixed the `test_model_provisioner.py` test suite regression by updating token assertions to expect the new `hf_***` mask format.
 - **Verification Gates**: 20 unit tests, 12 challenger offline tests, 10 robustness tests, and `scripts/wsl_audio_preflight.py` all passing. Banned-token scans confirmed PASS.
 - **Sanitized Workspaces**: Audited local workspace environments and verified that untracked `proof_workspace/` files have been cleaned up and are absent.
+
+## v2.5.6: Phase B Production Release Packaging, Linting, Syncing, and Tagging (2026-06-24)
+
+Production release packaging, linting, syncing, and tagging for version 2.5.6:
+- **Safety-Hardened WSL Distro Import**: Implemented safety checks in `goodqall_installer.nsi` to skip WSL setup entirely in baseline mode, reuse registered `GoodQ_Audio_Distro` if present, verify the pre-baked WSL container `goodq_audio_wsl.tar`, cleanly unregister on import or usability failure, and verify usability on success.
+- **Go Launcher & NSIS setup compilation**: Built `LAUNCH_GOODQ.exe` with Go compiler and compiled NSIS offline installer generating `GoodQ4All_Setup_2.5.6.exe`.
+- **Accessibility & UI SFX fixes**: Integrated Retro SFX accessibility corrections, verified with automated tests.
 
 ### UCF Ledger Census (epoch_2026_06_16_r0_smoke)
 

@@ -9,6 +9,19 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.6] - 2026-06-24 — Phase B Production Release Packaging & Safety-Hardening
+
+### Added
+- **Safety-Hardened WSL Distro Import**: Implemented safety checks in the NSIS installer (`goodqall_installer.nsi`) to:
+  - Skip WSL setup entirely in baseline mode (`$GpuEnhancedMode == 0`) and log a warning if the tar file is absent.
+  - Reuse the existing registered `GoodQ_Audio_Distro` if present for GPU mode, avoiding unnecessary imports.
+  - Perform validation on the pre-baked `goodq_audio_wsl.tar` file, aborting installation if absent in GPU mode.
+  - Run usability checks (`wsl -d GoodQ_Audio_Distro -- true`) on the imported container, cleaning up registration and aborting if checks fail.
+
+### Fixed
+- **UI Retro SFX accessibility corrections**: Resolved audio and accessibility issues in the operator console Retro SFX functionality.
+- **Go launcher compilation**: Recompiled the supervising Go launcher (`LAUNCH_GOODQ.exe`) and package installer with version 2.5.6 metadata.
+
 ## [2.5.5] - 2026-06-22 — Family-Film Production Ingestion & E2E Validation
 
 ### Added

@@ -14,7 +14,7 @@
     "wsl_distro": "Ubuntu-22.04",
     "setup_installer": {
       "status": "implemented",
-      "executable": "GoodQ4All_Setup_2.4.0.exe",
+      "executable": "GoodQ4All_Setup_2.5.6.exe",
       "launcher": "LAUNCH_GOODQ.exe",
       "sandboxed": true,
       "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],
@@ -1146,5 +1146,11 @@
       "SQLite Sidecar: paths.clap_id_map_db (clap_id_map mapping faiss_id -> content fingerprint hash)",
       "UCF Ledger raw_ref: %GOODQ_DATA_ROOT%\\epochs\\<epoch>\\processing\\...\\audio\\<hash>_raw_clap.json metadata reference (floats excluded)"
     ]
+  },
+  "release_v2_5_6_2026_06_24": {
+    "last_verified": "2026-06-24",
+    "status": "completed",
+    "tags": ["v2.5.6"],
+    "details": "Phase B production release packaging, linting, syncing, and tagging for version 2.5.6. Built Supervising Go Launcher and Compiled NSIS Setup Installer with safety-hardened WSL pre-baked distro import logic."
   }
 }

@@ -420,7 +420,7 @@ def test_redact_sensitive_info_bootstrap_models(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "my_secret_token_12345")
     redacted = bootstrap_models.redact_sensitive_info("error with token my_secret_token_12345 in line")
     assert "my_secret_token_12345" not in redacted
-    assert "my_se" in redacted
+    assert "<REDACTED>" in redacted
     
     redacted_pat = bootstrap_models.redact_sensitive_info("hf_abc123xyz789")
     assert "hf_abc123xyz789" not in redacted_pat

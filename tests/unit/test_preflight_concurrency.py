@@ -1,13 +1,35 @@
 import time
-import pytest
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
+from subprocess import CompletedProcess
 
-def test_preflight_concurrency_execution():
+from scripts import wsl_audio_preflight
+
+
+def test_preflight_concurrency_execution(monkeypatch):
     """Run the preflight check multiple times concurrently to test thread safety and system response."""
     distro = "Ubuntu-22.04"
     workspace = "/home/jdben/goodq_audio"
     num_threads = 5
+
+    def fake_run_wsl_probe(probe_distro, script, *, timeout):
+        assert probe_distro == distro
+        if "import faster_whisper" in script:
+            return CompletedProcess([], 0, "transcription_ready\ngpu_unavailable\n", "")
+        if "spec_from_file_location" in script:
+            return CompletedProcess([], 0, "process_import_ready\n", "")
+        if "torchvision.ops" in script:
+            return CompletedProcess([], 0, "abi_ready\n", "")
+        return CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(wsl_audio_preflight, "_run_wsl_probe", fake_run_wsl_probe)
+    monkeypatch.setattr(
+        wsl_audio_preflight,
+        "_probe_wsl_audio_black_box",
+        lambda _distro, _workspace: {
+            "package_versions": dict(wsl_audio_preflight._EXPECTED_TORCH_LANE),
+            "torchcodec": {"ready": True},
+        },
+    )
     
     print(f"\nStarting {num_threads} concurrent preflight check runs...")
     
@@ -16,7 +38,7 @@ def test_preflight_concurrency_execution():
     results = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = {
-            executor.submit(probe_wsl_audio_runtime, distro, workspace): i
+            executor.submit(wsl_audio_preflight.probe_wsl_audio_runtime, distro, workspace): i
             for i in range(num_threads)
         }
         

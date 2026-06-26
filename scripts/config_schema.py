@@ -192,6 +192,7 @@ class QdrantEmbeddingDims(BaseModel):
 class QdrantConfig(BaseModel):
     enabled: bool = True
     host: str = "http://localhost:6333"
+    port: Optional[int] = None
     collections: QdrantCollectionsConfig
     embedding_dims: QdrantEmbeddingDims
 

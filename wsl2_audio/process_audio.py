@@ -9,6 +9,7 @@ import sys
 import json
 import os
 import gc
+import importlib
 import logging
 import traceback
 from contextlib import redirect_stdout
@@ -17,8 +18,30 @@ from typing import Any, Dict, List, Optional
 
 # Core imports
 import torch
-import torchaudio
 import numpy as np
+
+
+class _LazyTorchaudio:
+    """Defer torchaudio import until audio I/O is actually needed."""
+
+    def _module(self):
+        try:
+            return importlib.import_module("torchaudio")
+        except Exception as exc:
+            raise RuntimeError(
+                "torchaudio is required for WSL audio processing but failed to import. "
+                "Verify the torch/torchaudio runtime in the selected environment."
+            ) from exc
+
+    def load(self, *args, **kwargs):
+        return self._module().load(*args, **kwargs)
+
+    @property
+    def transforms(self):
+        return self._module().transforms
+
+
+torchaudio = _LazyTorchaudio()
 
 # Whisper for transcription
 from faster_whisper import WhisperModel

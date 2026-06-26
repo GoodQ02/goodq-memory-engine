@@ -5,7 +5,10 @@ import sys
 import types
 from pathlib import Path
 
-# Setup global mocks for PyTorch, PIL, and Torchvision before any other imports
+import pytest
+
+
+# Mocks for PyTorch, PIL, and Torchvision used by this test module only.
 fake_torch = types.ModuleType("torch")
 fake_torch.__version__ = "1.13.0"
 
@@ -57,8 +60,6 @@ def dummy_sigmoid(*args, **kwargs):
     return DummyTensor()
 fake_torch.sigmoid = dummy_sigmoid
 
-sys.modules["torch"] = fake_torch
-
 # Mock PIL
 fake_pil = types.ModuleType("PIL")
 class MockImage:
@@ -76,7 +77,6 @@ class MockImage:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 fake_pil.Image = MockImage
-sys.modules["PIL"] = fake_pil
 
 # Mock torchvision
 fake_torchvision = types.ModuleType("torchvision")
@@ -89,9 +89,14 @@ class MockToTensor:
                 return self
         return MockTensor()
 fake_torchvision.transforms = types.SimpleNamespace(ToTensor=lambda: MockToTensor())
-sys.modules["torchvision"] = fake_torchvision
 
-# Now imports are safe
+
+@pytest.fixture(autouse=True)
+def _install_fake_runtime_modules(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil)
+    monkeypatch.setitem(sys.modules, "torchvision", fake_torchvision)
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT))
 

@@ -8,11 +8,11 @@ This addendum provides system-level verification details addressing follow-up au
 ## 1. API Version Source Audit & Reconciliation (R1)
 - **Codebase Declaration**: The canonical software version is declared in `goodq_version.py` as:
   ```python
-  GOODQ_VERSION = "2.5.3"
+  GOODQ_VERSION = "2.5.7"
   ```
   This version is imported and exposed by the `/runtime/status` endpoint in `api/routes/runtime.py` and FastAPI application setup in `api/main.py`. It is also embedded in the NSIS installer files (`scripts/install/goodq4all_installer.nsi`) and metadata (`scripts/install/versioninfo.json`).
-- **Release Tag**: The repository is tagged at `v2.5.4` on commit `63cca655865e5808ff5e76681c5dc926723c70aa` ("WSL2 Audio Gated Models & Model Provisioning Sprint").
-- **Reconciliation & Analysis**: The codebase version string and repository release tags are conceptually identical and represent the same software release. The mismatch (reporting `2.5.3` while tagged `v2.5.4`) is a release process oversight where `goodq_version.py` was not bumped during the `v2.5.4` tagging commit. Bumping `goodq_version.py` and running the NSIS version sync scripts in future sprints will align them.
+- **Release Tag**: The release candidate is aligned for `v2.5.7` after the `v2.5.6` tag and subsequent baseline CI recovery commits.
+- **Reconciliation & Analysis**: The codebase version string, installer metadata, and public installer references are aligned to `2.5.7`. Future release packaging should run the NSIS version sync script before tagging so `goodq_version.py`, `goodq4all_installer.nsi`, and `versioninfo.json` remain consistent.
 
 ---
 

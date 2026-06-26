@@ -43,7 +43,7 @@ truth for live claims. Do not treat this document as a live witness monitor.
 - Pause checkpoint, 2026-05-28:
   - status: unified sandboxed Setup Installer and local logs/GPU config mitigations are validated and committed.
   - Setup Installer features:
-    - Zero-dependency sandbox installer (`GoodQ4All_Setup_2.4.0.exe`) bundling base PyPI packages, perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg`), and pre-allocated model/offline-document folders.
+    - Zero-dependency sandbox installer (`GoodQ4All_Setup_2.5.7.exe`) bundling base PyPI packages, perception libraries (`opencv-python`, `scenedetect`, `imageio-ffmpeg`), and pre-allocated model/offline-document folders.
     - Go launcher supervisor (`LAUNCH_GOODQ.exe`) managing model signatures, booting Qdrant/API/Watchdog, and launching the browser console.
     - Bypasses Conda lookup (`python_paths.py`) and resolves modules dynamically relative to runtime when sandboxed.
   - Hardening & CPU-safe fallback:

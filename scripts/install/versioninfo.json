@@ -3,13 +3,13 @@
     "FileVersion": {
       "Major": 2,
       "Minor": 5,
-      "Patch": 6,
+      "Patch": 7,
       "Build": 0
     },
     "ProductVersion": {
       "Major": 2,
       "Minor": 5,
-      "Patch": 6,
+      "Patch": 7,
       "Build": 0
     },
     "FileFlagsMask": "3f",
@@ -21,12 +21,12 @@
   "StringFileInfo": {
     "CompanyName": "GoodQ4All Team",
     "FileDescription": "GoodQ4All Supervising Launcher",
-    "FileVersion": "2.5.6.0",
+    "FileVersion": "2.5.7.0",
     "InternalName": "LAUNCH_GOODQ.exe",
     "LegalCopyright": "\u00a9 2026 GoodQ4All",
     "OriginalFilename": "LAUNCH_GOODQ.exe",
     "ProductName": "GoodQ4All",
-    "ProductVersion": "2.5.6.0"
+    "ProductVersion": "2.5.7.0"
   },
   "VarFileInfo": {
     "Translation": {

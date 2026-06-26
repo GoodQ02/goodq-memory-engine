@@ -14,7 +14,7 @@
     "wsl_distro": "Ubuntu-22.04",
     "setup_installer": {
       "status": "implemented",
-      "executable": "GoodQ4All_Setup_2.5.6.exe",
+      "executable": "GoodQ4All_Setup_2.5.7.exe",
       "launcher": "LAUNCH_GOODQ.exe",
       "sandboxed": true,
       "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],
@@ -1153,4 +1153,4 @@
     "tags": ["v2.5.6"],
     "details": "Phase B production release packaging, linting, syncing, and tagging for version 2.5.6. Built Supervising Go Launcher and Compiled NSIS Setup Installer with safety-hardened WSL pre-baked distro import logic."
   }
-}
+}

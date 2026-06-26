@@ -1,4 +1,4 @@
 """Canonical GoodQ4All software version."""
 
-GOODQ_VERSION = "2.5.6"
+GOODQ_VERSION = "2.5.7"
 __version__ = GOODQ_VERSION

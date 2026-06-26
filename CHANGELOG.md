@@ -9,6 +9,13 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.7] - 2026-06-26 - Baseline CI Recovery & Release Alignment
+
+### Fixed
+- **Baseline CI Recovery**: Resolved GitHub Actions collection and unit-suite failures by deferring optional `torchaudio` import loading, isolating runtime test mocks, aligning config schema expectations, and removing live WSL dependence from baseline preflight tests.
+- **Release Signing Alignment**: Aligned the launcher embedded manifest verification key with the local release signing key so signed manifests verify before packaging.
+- **Public Install Alignment**: Bumped canonical version metadata and public installer references to `v2.5.7` for a clean patch release target after the `v2.5.6` tag.
+
 ## [2.5.6] - 2026-06-24 — Phase B Production Release Packaging & Safety-Hardening
 
 ### Added

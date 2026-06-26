@@ -160,7 +160,7 @@ runtime_ok:
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
   SetOutPath "$INSTDIR\wheels"
   File /r "staged\wheels\*.*"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --no-index --find-links="$INSTDIR\wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links="$INSTDIR\wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2

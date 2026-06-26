@@ -91,8 +91,8 @@ powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-a
 echo python310.zip
 echo .
 echo ..
-echo ..\vendor
 echo Lib\site-packages
+echo ..\vendor
 echo import site
 ) > staged\runtime\python310._pth
 

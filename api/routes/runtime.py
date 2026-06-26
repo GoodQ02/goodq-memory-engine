@@ -88,38 +88,54 @@ def _get_ollama_models_url(cfg: Dict[str, Any]) -> tuple[str | None, int | None]
     return f"{base}/models", port
 
 
+def _probe_openai_models(url: str, timeout: float, fallback_model: str, backend: str) -> List[str]:
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code != 200:
+            return []
+        payload = resp.json()
+        data = payload.get("data", []) if isinstance(payload, dict) else []
+        models: List[str] = []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    model_id = item.get("id") or item.get("name")
+                    if model_id:
+                        models.append(str(model_id))
+                elif item:
+                    models.append(str(item))
+        return models or [fallback_model]
+    except Exception as e:
+        logger.debug(f"{backend} model probe failed: {e}")
+        return []
+
+
 def _summarize_llm_health() -> Dict[str, Any]:
     """Lightweight LLM health summary used by /api/engines and dashboards."""
-    vllm_healthy = 0
-    vllm_total = 0
-    ollama_healthy = 0
-    ollama_total = 0
+    llm_cfg = _CFG.get("llm", {}) or {}
+    vllm_model = str(llm_cfg.get("vllm_model") or "Llama-1B-Speed")
+    ollama_model = str(llm_cfg.get("ollama_model") or "Ollama")
     ollama_models_url, ollama_port = _get_ollama_models_url(_CFG)
-
-    try:
-        resp = requests.get("http://localhost:38005/v1/models", timeout=2)
-        if resp.status_code == 200:
-            models = resp.json().get("data", [])
-            vllm_total = len(models)
-            vllm_healthy = vllm_total
-    except Exception as e:
-        logger.debug(f"vLLM health check failed: {e}")
-
-    def _probe_ollama(url: str):
-        try:
-            resp = requests.get(url, timeout=2)
-            if resp.status_code == 200:
-                models = resp.json().get("data", [])
-                total = len(models)
-                return True, total, total
-        except Exception as e:
-            logger.debug(f"Ollama probe failed: {e}")
-        return False, 0, 0
-
-    if ollama_models_url:
-        ok, t, h = _probe_ollama(ollama_models_url)
-        if ok:
-            ollama_total, ollama_healthy = t, h
+    vllm_models = _probe_openai_models(
+        "http://localhost:38005/v1/models",
+        timeout=2,
+        fallback_model=vllm_model,
+        backend="vLLM",
+    )
+    ollama_models = (
+        _probe_openai_models(
+            ollama_models_url,
+            timeout=2,
+            fallback_model=ollama_model,
+            backend="Ollama",
+        )
+        if ollama_models_url
+        else []
+    )
+    vllm_total = len(vllm_models)
+    ollama_total = len(ollama_models)
+    vllm_healthy = vllm_total
+    ollama_healthy = ollama_total
 
     def _status(healthy: int, total: int) -> str:
         if total == 0:
@@ -139,15 +155,17 @@ def _summarize_llm_health() -> Dict[str, Any]:
             "healthy": vllm_healthy,
             "total": max(vllm_total, 1),
             "port": 38005,
+            "models": vllm_models,
         },
         "ollama": {
             "status": _status(ollama_healthy, ollama_total),
             "healthy": ollama_healthy,
             "total": max(ollama_total, 1),
             "port": ollama_port,
+            "models": ollama_models,
         },
         "overall": {
-            "status": "healthy" if healthy_models == total_models else "degraded",
+            "status": "healthy" if healthy_models > 0 else "degraded",
             "total": total_models,
             "healthy": healthy_models,
             "unhealthy": max(total_models - healthy_models, 0),
@@ -649,33 +667,37 @@ def get_status() -> Dict[str, Any]:
 @router.get("/api/health/summary")
 def get_health_summary() -> Dict[str, Any]:
     """Get health summary for all LLM models (vLLM + Ollama)."""
-    vllm_healthy = 0
-    ollama_healthy = 0
+    llm_cfg = _CFG.get("llm", {}) or {}
+    vllm_model = str(llm_cfg.get("vllm_model") or "Llama-1B-Speed")
+    ollama_model = str(llm_cfg.get("ollama_model") or "Ollama")
     total_vllm = 1
     total_ollama = 1
-
-    try:
-        resp = requests.get("http://localhost:38005/v1/models", timeout=1)
-        if resp.status_code == 200:
-            vllm_healthy = 1
-    except Exception as e:
-        logger.debug(f"vLLM health summary check failed: {e}")
-
-    try:
-        ollama_models_url, _ = _get_ollama_models_url(_CFG)
-        if ollama_models_url:
-            resp = requests.get(ollama_models_url, timeout=1)
-            if resp.status_code == 200:
-                ollama_healthy = 1
-    except Exception as e:
-        logger.debug(f"Ollama health summary check failed: {e}")
+    vllm_models = _probe_openai_models(
+        "http://localhost:38005/v1/models",
+        timeout=1,
+        fallback_model=vllm_model,
+        backend="vLLM",
+    )
+    ollama_models_url, _ = _get_ollama_models_url(_CFG)
+    ollama_models = (
+        _probe_openai_models(
+            ollama_models_url,
+            timeout=1,
+            fallback_model=ollama_model,
+            backend="Ollama",
+        )
+        if ollama_models_url
+        else []
+    )
+    vllm_healthy = 1 if vllm_models else 0
+    ollama_healthy = 1 if ollama_models else 0
 
     total = 2
     healthy = vllm_healthy + ollama_healthy
 
     return {
         "overall": {
-            "status": "healthy" if healthy == total else "degraded",
+            "status": "healthy" if healthy > 0 else "degraded",
             "total": total,
             "healthy": healthy,
             "unhealthy": total - healthy,
@@ -684,13 +706,13 @@ def get_health_summary() -> Dict[str, Any]:
             "status": "healthy" if vllm_healthy > 0 else "unhealthy",
             "healthy": vllm_healthy,
             "total": total_vllm,
-            "models": ["Llama-1B-Speed"] if vllm_healthy > 0 else [],
+            "models": vllm_models,
         },
         "ollama": {
             "status": "healthy" if ollama_healthy > 0 else "unhealthy",
             "healthy": ollama_healthy,
             "total": total_ollama,
-            "models": ["Phi4-Ollama"] if ollama_healthy > 0 else [],
+            "models": ollama_models,
         },
     }
 
@@ -1024,15 +1046,27 @@ def get_models() -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"Model health service unavailable: {e}")
 
+    summary = _summarize_llm_health()
+    models = []
+    for backend in ("vllm", "ollama"):
+        for model_name in summary[backend].get("models", []):
+            models.append(
+                {
+                    "name": model_name,
+                    "backend": backend,
+                    "is_healthy": True,
+                }
+            )
+
     return {
-        "timestamp": None,
-        "total_models": 0,
-        "healthy_models": 0,
-        "vllm_total": 0,
-        "vllm_healthy": 0,
-        "ollama_total": 0,
-        "ollama_healthy": 0,
-        "models": [],
+        "timestamp": summary["timestamp"],
+        "total_models": summary["overall"]["total"],
+        "healthy_models": summary["overall"]["healthy"],
+        "vllm_total": summary["vllm"]["total"],
+        "vllm_healthy": summary["vllm"]["healthy"],
+        "ollama_total": summary["ollama"]["total"],
+        "ollama_healthy": summary["ollama"]["healthy"],
+        "models": models,
     }
 
 

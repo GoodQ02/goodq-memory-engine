@@ -92,6 +92,27 @@ def test_api_health_summary_all_healthy(api_client, mock_external_deps) -> None:
     assert payload["ollama"]["status"] == "healthy"
 
 
+def test_api_health_summary_ollama_only_ready(api_client, mock_external_deps) -> None:
+    def mock_get(url, *args, **kwargs):
+        if url == "http://localhost:31434/v1/models":
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {"data": [{"id": "llama3.2:latest"}]}
+            return response
+        raise requests.exceptions.ConnectionError("Connection refused")
+
+    mock_external_deps["requests_get"].side_effect = mock_get
+
+    response = api_client.get("/api/health/summary")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["overall"]["status"] == "healthy"
+    assert payload["overall"]["healthy"] == 1
+    assert payload["vllm"]["status"] == "unhealthy"
+    assert payload["ollama"]["status"] == "healthy"
+    assert payload["ollama"]["models"] == ["llama3.2:latest"]
+
+
 def test_api_status_aggregated_health(api_client, mock_external_deps) -> None:
     # Mock requests.get and subprocess.run to simulate active state
     mock_response = MagicMock()

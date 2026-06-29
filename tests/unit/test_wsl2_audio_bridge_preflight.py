@@ -44,6 +44,16 @@ def test_workspace_preflight_retries_once_after_timeout(monkeypatch):
     assert calls["count"] == 2
 
 
+def test_workspace_preflight_timeout_sequence_env_override(monkeypatch):
+    bridge_module = _load_bridge_module()
+
+    assert bridge_module._read_timeout_sequence("GOODQ_TEST_TIMEOUTS", (1, 2)) == (1, 2)
+
+    monkeypatch.setenv("GOODQ_TEST_TIMEOUTS", "3, invalid, 0, 12")
+
+    assert bridge_module._read_timeout_sequence("GOODQ_TEST_TIMEOUTS", (1, 2)) == (3, 12)
+
+
 def test_process_audio_raises_on_inaccessible_mount(monkeypatch, tmp_path):
     bridge_module = _load_bridge_module()
 

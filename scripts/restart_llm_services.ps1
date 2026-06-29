@@ -51,7 +51,7 @@ if ($OllamaProc) {
 # --- STEP 2: VERIFY VRAM & PORT RELEASE ---
 Write-Output "[2/4] Verifying port and VRAM release..."
 
-$Ports = @(38005, 31434)
+$Ports = @(38005, 11434, 31434)
 foreach ($Port in $Ports) {
     $Conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($Conn) {
@@ -140,15 +140,20 @@ if (-not $GamingMode) {
     Write-Output "[INFO] WSL vLLM is offline (VRAM preserved)."
 }
 
-$OllamaReady = Test-Endpoint -Url "http://127.0.0.1:31434/v1/models" -TimeoutSeconds 15
+$OllamaPort = 11434
+$OllamaReady = Test-Endpoint -Url "http://127.0.0.1:11434/v1/models" -TimeoutSeconds 15
+if (-not $OllamaReady) {
+    $OllamaReady = Test-Endpoint -Url "http://127.0.0.1:31434/v1/models" -TimeoutSeconds 5
+    if ($OllamaReady) { $OllamaPort = 31434 }
+}
 if ($OllamaReady) {
     if ($GamingMode) {
-        Write-Output "[OK] Fallback Ollama is active on CPU at http://127.0.0.1:31434/v1"
+        Write-Output "[OK] Fallback Ollama is active on CPU at http://127.0.0.1:$OllamaPort/v1"
     } else {
-        Write-Output "[OK] Fallback Ollama is active at http://127.0.0.1:31434/v1"
+        Write-Output "[OK] Fallback Ollama is active at http://127.0.0.1:$OllamaPort/v1"
     }
 } else {
-    Write-Warning "[WARN] Fallback Ollama failed to respond on port 31434 within timeout."
+    Write-Warning "[WARN] Fallback Ollama failed to respond on port 11434 or 31434 within timeout."
 }
 
 Write-Output ""

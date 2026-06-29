@@ -64,8 +64,8 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
 
 *   **Using This All-in-One Installer (Unified Windows Installer):**
     <p align="center">
-      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
-        🚀 Download GoodQ4All Setup v2.5.7.exe
+      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.5.8-rc1/GoodQ4All_Setup_2.5.8-rc1.exe" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
+        🚀 Download GoodQ4All Setup v2.5.8-rc1.exe
       </a>
     </p>
     
@@ -75,12 +75,12 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     > *   **SmartScreen Workaround:** Since the setup installer is currently self-signed, Windows SmartScreen may show an "Unknown Publisher" dialog. Click **More info** and select **Run anyway** to proceed.
     > *   **Integrity Checksum:** Verify your download authenticity by running the following command in PowerShell:
     >     ```powershell
-    >     Get-FileHash GoodQ4All_Setup_2.5.7.exe
+    >     Get-FileHash GoodQ4All_Setup_2.5.8-rc1.exe
     >     ```
     >     Expected SHA256 hash: Refer to the GitHub Releases page for the latest signed executable checksum.
 
     <p align="center">
-      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe">
+      <a href="https://github.com/GoodQ02/goodq4all/releases/download/v2.5.8-rc1/GoodQ4All_Setup_2.5.8-rc1.exe">
         <img src="samples/assets/one_click_installer_mockup.png" alt="GoodQ4All One-Click Setup Installer" width="550" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" />
       </a>
     </p>
@@ -121,7 +121,7 @@ The pipeline dynamically adjusts its computational needs to match your system sp
 
 ### Route A: Standalone User Installation (Recommended)
 GoodQ4All compiles the isolated Python environment, the Qdrant database, and perception libraries into a single executable wrapper:
-1.  Download and run `GoodQ4All_Setup_2.5.7.exe`.
+1.  Download and run `GoodQ4All_Setup_2.5.8-rc1.exe`.
 2.  Launch **GoodQ4All** from the desktop shortcut.
 3.  Open the local **Retro Memory Explorer** dashboard at `http://127.0.0.1:30000/ui/retro_console_v1/`.
 4.  Drag-and-drop video/audio files onto the yellow-dotted **Upload Pad** to begin automatic ingestion.

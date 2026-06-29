@@ -30,6 +30,17 @@ WSL_AUDIO_REQUIRED_CACHE_REPOS = (
 )
 
 
+def _env_timeout_seconds(name: str, default: int) -> int:
+    raw_value = os.environ.get(name, "").strip()
+    if not raw_value:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return default
+    return max(1, value)
+
+
 def _load_pinned_model_revisions() -> Dict[str, str]:
     registry_path = Path(__file__).resolve().parents[1] / "configs" / "model_registry.yaml"
     if not registry_path.exists():
@@ -218,7 +229,11 @@ def _probe_wsl_audio_black_box(distro: str, workspace: str) -> Dict[str, Any]:
         "PY"
     )
     try:
-        completed = _run_wsl_probe(distro, script, timeout=35)
+        completed = _run_wsl_probe(
+            distro,
+            script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_BLACK_BOX_PROBE_TIMEOUT_SEC", 180),
+        )
     except Exception as exc:
         return {
             "source": "wsl_audio_preflight",
@@ -371,7 +386,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         f"(test -x '{workspace}/venv/bin/python' || test -x '{workspace}/env/bin/python')"
     )
     try:
-        workspace_probe = _run_wsl_probe(distro, workspace_script, timeout=10)
+        workspace_probe = _run_wsl_probe(
+            distro,
+            workspace_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_WORKSPACE_PROBE_TIMEOUT_SEC", 90),
+        )
     except FileNotFoundError:
         result["detail"] = "wsl unavailable"
         return result
@@ -392,7 +411,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "print('gpu_ready' if torch.cuda.is_available() else 'gpu_unavailable')\""
     )
     try:
-        transcription_probe = _run_wsl_probe(distro, transcription_script, timeout=15)
+        transcription_probe = _run_wsl_probe(
+            distro,
+            transcription_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_TRANSCRIPTION_PROBE_TIMEOUT_SEC", 180),
+        )
     except Exception as exc:
         result["detail"] = f"runtime probe failed: {exc}"
         return result
@@ -421,7 +444,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "print('process_import_ready')\""
     )
     try:
-        process_import_probe = _run_wsl_probe(distro, process_import_script, timeout=20)
+        process_import_probe = _run_wsl_probe(
+            distro,
+            process_import_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_PROCESS_IMPORT_PROBE_TIMEOUT_SEC", 180),
+        )
     except Exception as exc:
         result["detail"] = f"process_audio import probe failed: {exc}"
         return result
@@ -445,7 +472,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "python3 -c \"import torch, torchvision; from torchvision.ops import nms; print('abi_ready')\""
     )
     try:
-        abi_probe = _run_wsl_probe(distro, abi_script, timeout=15)
+        abi_probe = _run_wsl_probe(
+            distro,
+            abi_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_ABI_PROBE_TIMEOUT_SEC", 120),
+        )
     except Exception as exc:
         result["ready"] = True
         result["detail"] = f"transcription runtime ready; ABI probe failed: {exc}"
@@ -458,7 +489,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     diarization_script = _build_diarization_probe_script(workspace)
     try:
-        diarization_probe = _run_wsl_probe(distro, diarization_script, timeout=20)
+        diarization_probe = _run_wsl_probe(
+            distro,
+            diarization_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_DIARIZATION_PROBE_TIMEOUT_SEC", 180),
+        )
     except Exception as exc:
         diarization_probe = None
         result["diarization_probe_stderr_tail"] = f"{type(exc).__name__}: {exc}"
@@ -490,7 +525,11 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     wav2vec_script = _build_wav2vec_enrichment_probe_script(workspace)
     try:
-        wav2vec_probe = _run_wsl_probe(distro, wav2vec_script, timeout=35)
+        wav2vec_probe = _run_wsl_probe(
+            distro,
+            wav2vec_script,
+            timeout=_env_timeout_seconds("GOODQ_WSL_WAV2VEC_PROBE_TIMEOUT_SEC", 180),
+        )
     except Exception as exc:
         wav2vec_probe = None
         result["wav2vec_enrichment_detail"] = f"{type(exc).__name__}: {exc}"

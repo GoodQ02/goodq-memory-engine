@@ -95,7 +95,7 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
                                         break
                             vram_estimate = float(registry_entry.get("vram_estimate_gb", 2.0))
                         
-                        raw_base_url = model_entry.get("base_url", "http://localhost:31434/v1")
+                        raw_base_url = model_entry.get("base_url", "http://localhost:11434/v1")
                         m_base, m_port = _split_base_and_port(raw_base_url)
                         
                         profile_model = ModelConfig(

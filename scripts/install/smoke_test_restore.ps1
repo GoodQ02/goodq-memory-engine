@@ -34,17 +34,9 @@ try {
 
     # Start Qdrant
     Write-Host "Starting Qdrant on port $testPort..." -ForegroundColor Cyan
-    $qdrantEnv = @{
-        QDRANT__SERVICE__HTTP_PORT = "$testPort"
-        QDRANT__STORAGE__STORAGE_PATH = $tempStorage
-    }
-    $qdrantProc = Start-Process -FilePath $qdrantExe -PassThru -NoNewWindow -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
-    # Set env vars before starting — actually, Qdrant reads CLI args or config
-    # Use command line args instead
-    Stop-Process -Id $qdrantProc.Id -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    
-    $qdrantProc = Start-Process -FilePath $qdrantExe -ArgumentList "--port", "$testPort", "--storage-path", $tempStorage -PassThru -NoNewWindow
+    $env:QDRANT__SERVICE__HTTP_PORT = "$testPort"
+    $env:QDRANT__STORAGE__STORAGE_PATH = $tempStorage
+    $qdrantProc = Start-Process -FilePath $qdrantExe -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\qdrant_out.tmp" -RedirectStandardError "$env:TEMP\qdrant_err.tmp"
 
     # Wait for readiness (max 30s)
     $deadline = (Get-Date).AddSeconds(30)
@@ -98,6 +90,9 @@ try {
         Stop-Process -Id $qdrantProc.Id -Force -ErrorAction SilentlyContinue
         Write-Host "  Qdrant process stopped." -ForegroundColor Gray
     }
+    # Clear environment variables
+    $env:QDRANT__SERVICE__HTTP_PORT = $null
+    $env:QDRANT__STORAGE__STORAGE_PATH = $null
     # Clean up temp storage
     if (Test-Path $tempStorage) {
         Remove-Item -Recurse -Force $tempStorage -ErrorAction SilentlyContinue

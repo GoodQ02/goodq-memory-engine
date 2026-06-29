@@ -9,6 +9,13 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.8-rc1] - 2026-06-29 - WSL Audio Fixes & Default Ollama Port Alignment
+
+### Fixed
+- **WSL Ingestion**: Applied WSL audio fallback fixes for standalone audio files in Watchdog and unified ingestion.
+- **Ollama Port Alignment**: Aligned Ollama ports to default to 11434 with legacy 31434 checks, supporting env overrides.
+- **NSIS Distro Preservation**: Hardened NSIS installer to preserve WSL2 audio distro on uninstall if silent or requested.
+
 ## [2.5.7] - 2026-06-26 - Baseline CI Recovery & Release Alignment
 
 ### Fixed

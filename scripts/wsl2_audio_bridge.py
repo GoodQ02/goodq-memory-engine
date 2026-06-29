@@ -17,7 +17,22 @@ try:
 except Exception:  # noqa: BLE001
     from wsl_audio_preflight import probe_wsl_audio_runtime
 
-_WORKSPACE_PREFLIGHT_TIMEOUTS = (5, 10)
+def _read_timeout_sequence(env_name: str, default: tuple[int, ...]) -> tuple[int, ...]:
+    raw_value = os.environ.get(env_name, "").strip()
+    if not raw_value:
+        return default
+    values: list[int] = []
+    for part in raw_value.split(","):
+        try:
+            value = int(part.strip())
+        except ValueError:
+            continue
+        if value > 0:
+            values.append(value)
+    return tuple(values) or default
+
+
+_WORKSPACE_PREFLIGHT_TIMEOUTS = _read_timeout_sequence("GOODQ_WSL_WORKSPACE_PREFLIGHT_TIMEOUTS", (30, 90))
 _WORKSPACE_PREFLIGHT_RETRY_DELAY_SEC = 0.25
 
 

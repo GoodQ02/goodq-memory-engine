@@ -94,7 +94,7 @@ def test_api_health_summary_all_healthy(api_client, mock_external_deps) -> None:
 
 def test_api_health_summary_ollama_only_ready(api_client, mock_external_deps) -> None:
     def mock_get(url, *args, **kwargs):
-        if str(url).endswith(":31434/v1/models"):
+        if str(url).endswith(":31434/v1/models") or str(url).endswith(":11434/v1/models"):
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {"data": [{"id": "llama3.2:latest"}]}

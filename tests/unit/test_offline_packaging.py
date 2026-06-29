@@ -78,9 +78,13 @@ class TestVersionInfo:
         ns = {}
         exec(version_py.read_text(encoding="utf-8"), ns)
         canonical = ns["GOODQ_VERSION"]
-        parts = canonical.split(".")
+        clean_canonical = canonical.lstrip('v')
+        parts = clean_canonical.split(".")
         major, minor = int(parts[0]), int(parts[1])
-        patch = int(parts[2]) if len(parts) > 2 else 0
+        import re
+        patch_part = parts[2] if len(parts) > 2 else "0"
+        patch_match = re.match(r'^(\d+)', patch_part)
+        patch = int(patch_match.group(1)) if patch_match else 0
 
         vi_path = ROOT / "scripts" / "install" / "versioninfo.json"
         vi = json.loads(vi_path.read_text(encoding="utf-8"))

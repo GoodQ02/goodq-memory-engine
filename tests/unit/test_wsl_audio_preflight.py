@@ -291,6 +291,55 @@ def test_probe_wsl_audio_runtime_reports_wav2vec_enrichment_ready(monkeypatch):
     assert result["detected_versions"]["transformers"] == "4.43.3"
 
 
+def test_probe_wsl_audio_runtime_uses_env_probe_timeouts(monkeypatch):
+    from scripts import wsl_audio_preflight
+
+    monkeypatch.setenv("GOODQ_WSL_WORKSPACE_PROBE_TIMEOUT_SEC", "31")
+    monkeypatch.setenv("GOODQ_WSL_TRANSCRIPTION_PROBE_TIMEOUT_SEC", "61")
+    monkeypatch.setenv("GOODQ_WSL_PROCESS_IMPORT_PROBE_TIMEOUT_SEC", "62")
+    monkeypatch.setenv("GOODQ_WSL_ABI_PROBE_TIMEOUT_SEC", "46")
+    monkeypatch.setenv("GOODQ_WSL_DIARIZATION_PROBE_TIMEOUT_SEC", "91")
+    monkeypatch.setenv("GOODQ_WSL_WAV2VEC_PROBE_TIMEOUT_SEC", "92")
+    observed = {}
+
+    def _fake_run_wsl_probe(distro, script, *, timeout):
+        if "test -f" in script:
+            observed["workspace"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        if "import faster_whisper, torch" in script:
+            observed["transcription"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "transcription_ready\ngpu_ready\n", "stderr": ""})()
+        if "spec_from_file_location('goodq_process_audio'" in script:
+            observed["process_import"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "process_import_ready\n", "stderr": ""})()
+        if "from torchvision.ops import nms" in script:
+            observed["abi"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "abi_ready\n", "stderr": ""})()
+        if "snapshot_download" in script and "speaker-diarization-3.1" in script:
+            observed["diarization"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "diarization_ready\n", "stderr": ""})()
+        if "Wav2Vec2Model" in script:
+            observed["wav2vec"] = timeout
+            return type("Probe", (), {"returncode": 0, "stdout": "wav2vec_enrichment_ready\n", "stderr": ""})()
+        raise AssertionError(f"unexpected probe script: {script}")
+
+    monkeypatch.setattr(wsl_audio_preflight, "_run_wsl_probe", _fake_run_wsl_probe)
+    monkeypatch.setattr(wsl_audio_preflight, "_probe_package_version", lambda *args: None)
+    monkeypatch.setattr(wsl_audio_preflight, "_probe_wsl_audio_black_box", lambda *args: {"package_versions": {}})
+
+    result = wsl_audio_preflight.probe_wsl_audio_runtime("Ubuntu-22.04", "/home/goodq/goodq_audio")
+
+    assert result["ready"] is True
+    assert observed == {
+        "workspace": 31,
+        "transcription": 61,
+        "process_import": 62,
+        "abi": 46,
+        "diarization": 91,
+        "wav2vec": 92,
+    }
+
+
 def test_probe_wsl_audio_runtime_keeps_base_ready_when_wav2vec_enrichment_missing(monkeypatch):
     from scripts import wsl_audio_preflight
 

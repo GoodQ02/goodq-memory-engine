@@ -3,9 +3,9 @@
     Post-install integrity validation for GoodQ4All offline installer.
 .DESCRIPTION
     Three-gate validation:
-    Gate 1: File Integrity — verify critical files exist
-    Gate 2: Launcher Manifest — run LAUNCH_GOODQ.exe --verify-manifest-only
-    Gate 3: Version Consistency — compare goodq_version.py vs install_receipt.json
+    Gate 1: File Integrity - verify critical files exist
+    Gate 2: Launcher Manifest - run LAUNCH_GOODQ.exe --verify-manifest-only
+    Gate 3: Version Consistency - compare goodq_version.py vs install_receipt.json
 .PARAMETER InstallDir
     Root directory of the GoodQ4All installation.
     Defaults to $env:ProgramFiles\GoodQ4All
@@ -46,7 +46,7 @@ $gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }
 $launcherPath = Join-Path $InstallDir "LAUNCH_GOODQ.exe"
 if (Test-Path $launcherPath) {
     try {
-        $proc = Start-Process -FilePath $launcherPath -ArgumentList "--verify-manifest-only" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
+        $proc = Start-Process -FilePath $launcherPath -ArgumentList "--verify-manifest-only" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\verify_out.tmp" -RedirectStandardError "$env:TEMP\verify_err.tmp"
         if ($proc.ExitCode -ne 0) {
             $gate2.pass = $false
             $gate2.errors += "Launcher manifest verification returned exit code $($proc.ExitCode)"
@@ -62,7 +62,7 @@ if (Test-Path $launcherPath) {
 } else {
     $gate2.pass = $false
     $gate2.errors += "Launcher binary not found"
-    Write-Host "  [SKIP] Launcher binary not found — skipping manifest gate" -ForegroundColor Yellow
+    Write-Host "  [SKIP] Launcher binary not found - skipping manifest gate" -ForegroundColor Yellow
 }
 if (-not $gate2.pass) { $results.pass = $false }
 $results.gates += $gate2

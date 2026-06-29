@@ -53,6 +53,42 @@ _SYNTHETIC_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE
 _SYNTHETIC_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
 
 
+def _has_wsl_unified_audio_embeddings(item: Dict[str, Any]) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if not bool(item.get('wsl2_unified')):
+        return False
+    if str(item.get('audio_backend_effective') or '').strip().lower() != 'wsl':
+        return False
+
+    embeddings = item.get('embeddings')
+    if isinstance(embeddings, list) and len(embeddings) > 0:
+        return True
+
+    embeddings_status = str(item.get('embeddings_status') or '').strip().lower()
+    if embeddings_status in {'ok', 'success', 'complete'} and item.get('embedding_dim') is not None:
+        return True
+
+    return False
+
+
+def _mark_wsl_unified_audio_embed_skip(item: Dict[str, Any]) -> Dict[str, Any]:
+    skip_meta = item.get('clap_meta')
+    if not isinstance(skip_meta, dict):
+        skip_meta = {}
+    skip_meta.update(
+        {
+            'status': 'skipped',
+            'reason': 'wsl_unified_embeddings_present',
+            'source': 'audio_unified_wsl2',
+            'embedding_dim': item.get('embedding_dim'),
+            'embeddings_status': item.get('embeddings_status'),
+        }
+    )
+    item['clap_meta'] = skip_meta
+    return skip_meta
+
+
 def _is_synthetic_speaker_label(value: Any) -> bool:
     if not isinstance(value, str):
         return False
@@ -2756,6 +2792,8 @@ def _aggregate_modality_status(
         audio = scene.get('audio')
         if isinstance(audio, dict):
             if audio.get('clap_embedding') is not None:
+                status['audio_embed'] = _merge_modality_state(status['audio_embed'], 'available')
+            if _has_wsl_unified_audio_embeddings(audio):
                 status['audio_embed'] = _merge_modality_state(status['audio_embed'], 'available')
             status['audio_embed'] = _merge_modality_state(
                 status['audio_embed'],
@@ -5897,6 +5935,29 @@ def _process_audio(
             # Transcript-bearing scenes should survive late enrichment failures.
             record_optional_audio_step_failure(env_name, step_name, exc)
 
+    def record_wsl_unified_audio_embed_skip() -> None:
+        clap_meta = _mark_wsl_unified_audio_embed_skip(item)
+        logger.info(
+            "[AUDIO] Skipping legacy audio_embed_clap because WSL unified audio already emitted embeddings scene_id=%s",
+            scene_id,
+        )
+        log_step_run(
+            _get_step_log_cfg(),
+            'audio_embed_clap',
+            item,
+            0.0,
+            'skipped',
+            None,
+            extra={
+                'reason': 'wsl_unified_embeddings_present',
+                'optional': True,
+                'backend': 'wsl',
+                'embedding_emitted': False,
+                'wsl_unified_embeddings_present': True,
+                'result_meta': {'clap_meta': clap_meta},
+            },
+        )
+
     def run_local_audio_fallback(reason: str) -> None:
         logger.info(
             "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
@@ -6151,7 +6212,10 @@ def _process_audio(
     merge_optional_audio_step('goodq_core', 'sentiment')
     merge_optional_audio_step('goodq_core', 'emotion_classify')
     merge_optional_audio_step('goodq_core', 'tagger')
-    merge_optional_audio_step('goodq_audio_embed', 'audio_embed_clap')
+    if _has_wsl_unified_audio_embeddings(item):
+        record_wsl_unified_audio_embed_skip()
+    else:
+        merge_optional_audio_step('goodq_audio_embed', 'audio_embed_clap')
 
     canonicalize_taxonomy(item)
     transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
@@ -6606,6 +6670,29 @@ async def _process_audio_async(
         except Exception as exc:
             record_optional_audio_step_failure(env_name, step_name, exc)
 
+    def record_wsl_unified_audio_embed_skip() -> None:
+        clap_meta = _mark_wsl_unified_audio_embed_skip(item)
+        logger.info(
+            "[AUDIO] Skipping legacy audio_embed_clap because WSL unified audio already emitted embeddings scene_id=%s",
+            scene_id,
+        )
+        log_step_run(
+            _get_step_log_cfg(),
+            'audio_embed_clap',
+            item,
+            0.0,
+            'skipped',
+            None,
+            extra={
+                'reason': 'wsl_unified_embeddings_present',
+                'optional': True,
+                'backend': 'wsl',
+                'embedding_emitted': False,
+                'wsl_unified_embeddings_present': True,
+                'result_meta': {'clap_meta': clap_meta},
+            },
+        )
+
     async def run_local_audio_fallback_async(reason: str) -> None:
         logger.info(
             "[AUDIO] WSL2 unified path disabled or unavailable; using local CPU-safe transcription fallback"
@@ -6845,8 +6932,11 @@ async def _process_audio_async(
         merge_optional_audio_step_async('goodq_core', 'sentiment'),
         merge_optional_audio_step_async('goodq_core', 'emotion_classify'),
         merge_optional_audio_step_async('goodq_core', 'tagger'),
-        merge_optional_audio_step_async('goodq_audio_embed', 'audio_embed_clap'),
     ]
+    if _has_wsl_unified_audio_embeddings(item):
+        record_wsl_unified_audio_embed_skip()
+    else:
+        enrichment_tasks.append(merge_optional_audio_step_async('goodq_audio_embed', 'audio_embed_clap'))
     await asyncio.gather(*enrichment_tasks, return_exceptions=True)
 
     canonicalize_taxonomy(item)

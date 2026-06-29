@@ -108,7 +108,7 @@ llm:
   vllm_model: meta-llama/Llama-3.2-1B-Instruct
   
   # Ollama (WSL2, fallback LLM)
-  ollama_url: http://127.0.0.1:31434/v1
+  ollama_url: http://127.0.0.1:11434/v1
   ollama_model: llama3.2:latest
 
 tts:

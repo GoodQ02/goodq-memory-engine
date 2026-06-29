@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from steps.common.atomic_io import atomic_write_json
 from steps.common.config_loader import get_runtime_paths, load_configs
+from steps.common.profile_config import require_wsl_audio, wsl_audio_auto_enabled
 
 _LOG_FORMAT = '%(asctime)s [%(levelname)s] %(message)s'
 _BOOTSTRAP_LOG_PATH = Path(tempfile.gettempdir()) / "goodq_watchdog_bootstrap.log"
@@ -833,7 +834,7 @@ class WatchdogProcessor:
             raise e
     
     def ingest_audio(self, audio_path: Path, run_id: str) -> bool:
-        """Ingest standalone audio file via conda step runner pipeline."""
+        """Ingest standalone audio, preferring WSL unified audio when requested."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
         from steps.common.tag_utils import canonicalize_taxonomy
 
@@ -875,8 +876,80 @@ class WatchdogProcessor:
                 return False
             return True
 
+        def _write_audio_result_sidecar() -> None:
+            self.processed_dir.mkdir(parents=True, exist_ok=True)
+            sidecar_path = self.processed_dir / f"{audio_path.stem}.{audio_hash}.audio_result.json"
+            payload = dict(item)
+            payload.update(
+                {
+                    "source_file": audio_path.name,
+                    "run_id": run_id,
+                    "audio_hash": audio_hash,
+                    "saved_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            atomic_write_json(sidecar_path, payload)
+            logger.info(f"[AUDIO] Wrote standalone audio result sidecar: {sidecar_path}")
+
+        def _try_wsl_unified_audio() -> bool:
+            if not bool(wsl_audio_auto_enabled() or require_wsl_audio()):
+                return False
+
+            if shutil.which("wsl") is None:
+                message = "WSL unified audio requested but wsl command is unavailable"
+                if require_wsl_audio():
+                    raise RuntimeError(message)
+                logger.warning(f"[AUDIO] {message}; falling back to Conda audio step runner")
+                return False
+
+            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+
+            try:
+                from steps.common.progress_tracker import get_tracker
+                tracker = get_tracker()
+                tracker.update_step(
+                    "Analyzing standalone audio (WSL2)",
+                    1,
+                    {
+                        "stage": "audio_unified_wsl2",
+                        "run_id": run_id,
+                        "file": audio_path.name,
+                    },
+                )
+            except Exception as progress_error:
+                logger.warning(f"[AUDIO] Failed to update WSL audio progress: {progress_error}")
+
+            logger.info(f"[AUDIO] Running standalone audio through WSL2 unified backend: {audio_path.name}")
+            result = audio_unified_wsl2(str(temp_audio), scene_id=audio_hash, duration=None)
+
+            if not isinstance(result, dict):
+                message = f"WSL unified audio returned unexpected payload: {type(result).__name__}"
+            elif str(result.get("status", "")).strip().lower() == "error":
+                message = str(
+                    result.get("error")
+                    or result.get("bridge_error_reason")
+                    or "WSL unified audio error"
+                ).strip()
+            else:
+                item.update(result)
+                item["audio_backend_selected"] = "wsl"
+                item["audio_backend_reason"] = "watchdog_audio_wsl_requested"
+                item["audio_backend_effective"] = "wsl"
+                item["audio_backend_effective_reason"] = "wsl_unified_success"
+                canonicalize_taxonomy(item)
+                _write_audio_result_sidecar()
+                return True
+
+            if require_wsl_audio():
+                raise RuntimeError(message)
+            logger.warning(f"[AUDIO] {message}; falling back to Conda audio step runner")
+            return False
+
         success = True
         try:
+            if _try_wsl_unified_audio():
+                return True
+
             step_plan = [
                 ("goodq_audio_transcribe", "audio_transcribe"),
                 ("goodq_audio_embed", "audio_embed_clap"),

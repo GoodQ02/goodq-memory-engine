@@ -17,12 +17,16 @@ if not version_match:
     raise ValueError("Could not find GOODQ_VERSION in goodq_version.py")
 
 v = version_match.group(1)
-p = v.split('.')
+# Handle optional 'v' prefix if present
+clean_v = v.lstrip('v')
+p = clean_v.split('.')
 major = int(p[0])
 minor = int(p[1])
-patch = int(p[2]) if len(p) > 2 else 0
+patch_part = p[2] if len(p) > 2 else "0"
+patch_match = re.match(r'^(\d+)', patch_part)
+patch = int(patch_match.group(1)) if patch_match else 0
 
-print(f"Canonical version resolved: {v} (Major: {major}, Minor: {minor}, Patch: {patch})")
+print(f"Canonical version resolved: {v} (Clean: {clean_v}, Major: {major}, Minor: {minor}, Patch: {patch})")
 
 # 2. Update goodq4all_installer.nsi
 if os.path.exists(nsi_path):

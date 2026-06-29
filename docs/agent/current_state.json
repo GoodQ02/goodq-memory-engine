@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-06-22",
+  "last_verified": "2026-06-29",
   "project": "GoodQ4All",
   "agent_first_read": "docs/agent/CURRENT_STATE.md",
   "human_index": "docs/agent/README.md",
@@ -14,7 +14,7 @@
     "wsl_distro": "Ubuntu-22.04",
     "setup_installer": {
       "status": "implemented",
-      "executable": "GoodQ4All_Setup_2.5.7.exe",
+      "executable": "GoodQ4All_Setup_2.5.8-rc1.exe",
       "launcher": "LAUNCH_GOODQ.exe",
       "sandboxed": true,
       "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],

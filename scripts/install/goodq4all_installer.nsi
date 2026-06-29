@@ -8,7 +8,7 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.7.exe"
+OutFile "..\..\GoodQ4All_Setup_2.5.8-rc1.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -16,7 +16,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.7 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.8-rc1 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -296,7 +296,7 @@ wsl_done:
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.7"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.8-rc1"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd
@@ -322,8 +322,12 @@ stop_service:
   nsExec::ExecToLog '"$INSTDIR\nssm\nssm.exe" remove GoodQ_Qdrant confirm'
 skip_service_cleanup:
 
-  ; Delete WSL2 Imported Distro if exists
+  ; Preserve the optional WSL2 audio distro by default. It can be a large
+  ; user-provisioned offline backend that may not be embedded in the installer.
+  IfSilent preserve_wsl_distro
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Would you like to delete the GoodQ4All WSL2 audio backend (GoodQ_Audio_Distro)? Choose No to preserve offline audio acceleration." IDNO preserve_wsl_distro
   nsExec::ExecToLog 'wsl --unregister GoodQ_Audio_Distro'
+preserve_wsl_distro:
 
   ; Delete Program Files directories
   Delete "$INSTDIR\LAUNCH_GOODQ.exe"
@@ -355,7 +359,8 @@ skip_service_cleanup:
   RMDir "$SMPROGRAMS\GoodQ4All"
   Delete "$DESKTOP\GoodQ4All.lnk"
 
-  ; Prompt user to delete user data
+  ; Prompt user to delete user data. Silent uninstall preserves data by default.
+  IfSilent preserve_data
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Would you like to delete your personal GoodQ4All memory database and downloaded model packs? (Warning: This will destroy all ingested memory and cannot be undone.)" IDNO preserve_data
   
   RMDir /r "$COMMONAPPDATA\GoodQ4All"

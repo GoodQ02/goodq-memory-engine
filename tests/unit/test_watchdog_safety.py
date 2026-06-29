@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
+import types
 from pathlib import Path
 import pytest
 import cli.watchdog as watchdog
@@ -131,3 +133,45 @@ def test_cleanup_stale_processing_files(tmp_path: Path, monkeypatch) -> None:
 
     # The not_stale file should NOT be deleted
     assert not_stale.exists()
+
+
+def test_ingest_audio_prefers_wsl_unified_when_required(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(watchdog, "CONTROL_AGENT_AVAILABLE", False)
+    monkeypatch.setattr(watchdog, "wsl_audio_auto_enabled", lambda: False)
+    monkeypatch.setattr(watchdog, "require_wsl_audio", lambda: True)
+    monkeypatch.setattr(watchdog.shutil, "which", lambda name: "wsl.exe" if name == "wsl" else None)
+
+    bridge_module = types.ModuleType("steps.audio.audio_wsl2_bridge")
+    observed: dict[str, str] = {}
+
+    def fake_audio_unified_wsl2(audio_path: str, *, scene_id=None, duration=None, **kwargs):
+        observed["audio_path"] = audio_path
+        observed["scene_id"] = scene_id
+        return {
+            "status": "success",
+            "transcript": "hello from wsl",
+            "segments": [],
+            "wsl2_unified": True,
+            "embeddings": [0.1, 0.2],
+            "embedding_dim": 768,
+            "embeddings_status": "success",
+        }
+
+    bridge_module.audio_unified_wsl2 = fake_audio_unified_wsl2
+    monkeypatch.setitem(sys.modules, "steps.audio.audio_wsl2_bridge", bridge_module)
+
+    cfg = _watchdog_cfg(tmp_path)
+    processor = watchdog.WatchdogProcessor(cfg)
+
+    audio_path = tmp_path / "sample.wav"
+    audio_path.write_bytes(b"not a real wav, but the bridge is mocked")
+
+    assert processor.ingest_audio(audio_path, "run-audio-wsl") is True
+    assert observed["audio_path"].endswith("sample.wav")
+
+    processed_dir = Path(cfg["paths"]["processed"])
+    sidecars = list(processed_dir.glob("sample.*.audio_result.json"))
+    assert len(sidecars) == 1
+    payload = json.loads(sidecars[0].read_text(encoding="utf-8"))
+    assert payload["audio_backend_effective"] == "wsl"
+    assert payload["embeddings_status"] == "success"

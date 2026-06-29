@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($ListenHost)) {
-    $ListenHost = "127.0.0.1:31434"
+    $ListenHost = "127.0.0.1:11434"
 }
 
 if ([string]::IsNullOrWhiteSpace($Models) -and -not [string]::IsNullOrWhiteSpace($env:GOODQ_DATA_ROOT)) {

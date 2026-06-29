@@ -883,8 +883,8 @@ def test_f3_05_promotion_succeeds_with_confirm_and_token():
     #    Real engine: blocks because staged frames have not been validated first.
     envelope_prom, rc_prom = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
     if mock_harness_active():
-        # Mock harness promotes directly; status is 'promoted'
-        assert MockState.staged_records["rec1"]["status"] == "promoted"
+        # Mock harness enforces validation check; status remains 'staged'
+        assert MockState.staged_records["rec1"]["status"] == "staged"
     else:
         # Real engine enforces staged -> validated -> promoted lifecycle.
         # The outer envelope status is always 'success' (call succeeded without exception).
@@ -1467,7 +1467,7 @@ def test_f4_tier4_01_complete_happy_path_loop():
     # Confirm promotion (without prior validate_ucf_frames)
     envelope_promote, rc_promote = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
     if mock_harness_active():
-        assert MockState.staged_records["frame001"]["status"] == "promoted"
+        assert MockState.staged_records["frame001"]["status"] == "staged"
     else:
         # Real engine enforces staged -> validated -> promoted lifecycle.
         # Outer envelope status is always 'success'; tool result contains the blocking details.
@@ -1582,7 +1582,7 @@ def test_f4_tier4_05_agent_failure_recovery_scenario():
     envelope_prom, rc_prom = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
     assert rc_prom == 0
     if mock_harness_active():
-        assert MockState.staged_records["recovery_rec"]["status"] == "promoted"
+        assert MockState.staged_records["recovery_rec"]["status"] == "staged"
     else:
         # Real engine blocks: staged frames must be validated first
         assert envelope_prom["output"]["status"] == "blocked"

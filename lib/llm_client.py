@@ -45,6 +45,61 @@ class ModelConfig:
     @property
     def endpoint(self) -> str:
         """Full API endpoint URL"""
+        if self.backend == "ollama":
+            # Check env overrides first
+            env_url = os.environ.get("GOODQ_OLLAMA_URL")
+            if env_url:
+                return env_url
+            env_host = os.environ.get("OLLAMA_HOST")
+            if env_host:
+                if not env_host.startswith("http"):
+                    env_host = f"http://{env_host}"
+                if not env_host.endswith("/v1"):
+                    env_host = f"{env_host.rstrip('/')}/v1"
+                return env_host
+
+            # Check cache (valid for 5 seconds to prevent network lag)
+            cached_val = getattr(self, "_cached_endpoint", None)
+            cached_time = getattr(self, "_cached_endpoint_time", 0.0)
+            if cached_val and (time.time() - cached_time < 5.0):
+                return cached_val
+
+            # Clean host from base_url
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(self.base_url)
+                host = parsed.hostname or "127.0.0.1"
+                scheme = parsed.scheme or "http"
+                clean_base = f"{scheme}://{host}"
+            except Exception:
+                clean_base = "http://127.0.0.1"
+
+            resolved = None
+            # Check responsiveness of 11434 first
+            try:
+                res = requests.get(f"{clean_base}:11434/v1/models", timeout=0.2)
+                if res.status_code == 200:
+                    resolved = f"{clean_base}:11434/v1"
+            except Exception:
+                pass
+            
+            # Check legacy 31434 only if 11434 is unresponsive
+            if not resolved:
+                try:
+                    res = requests.get(f"{clean_base}:31434/v1/models", timeout=0.2)
+                    if res.status_code == 200:
+                        resolved = f"{clean_base}:31434/v1"
+                except Exception:
+                    pass
+
+            # Default/prefer 11434
+            if not resolved:
+                resolved = f"{clean_base}:11434/v1"
+
+            self._cached_endpoint = resolved
+            self._cached_endpoint_time = time.time()
+            return resolved
+
         return f"{self.base_url}:{self.port}/v1"
     
     def __repr__(self):

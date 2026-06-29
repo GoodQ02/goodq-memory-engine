@@ -109,3 +109,22 @@ def test_aggregate_modality_status_prefers_available_when_any_scene_succeeds():
     status = run_ingestion._aggregate_modality_status(scene_outputs)
 
     assert status["text_embed"] == "available"
+
+
+def test_wsl_unified_embeddings_mark_audio_embed_available():
+    run_ingestion = _load_run_ingestion_module()
+
+    audio_payload = {
+        "wsl2_unified": True,
+        "audio_backend_effective": "wsl",
+        "embeddings": [0.1, 0.2, 0.3],
+        "embedding_dim": 768,
+        "embeddings_status": "success",
+        "clap_meta": {"status": "skipped", "reason": "wsl_unified_embeddings_present"},
+    }
+
+    assert run_ingestion._has_wsl_unified_audio_embeddings(audio_payload) is True
+
+    status = run_ingestion._aggregate_modality_status([{"audio": audio_payload}])
+
+    assert status["audio_embed"] == "available"

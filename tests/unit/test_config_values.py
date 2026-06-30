@@ -64,6 +64,12 @@ def test_validated_config_preserves_llm_runtime_contract():
     assert llm.get("features", {}).get("scene_context_analysis") is True
 
 
+def test_default_config_loads_11434_ollama_url():
+    result = load_configs()
+    llm = result.get("llm", {})
+    assert llm.get("ollama_url") == "http://127.0.0.1:11434/v1"
+
+
 def test_config_derives_modality_faiss_paths_from_faiss_dir(tmp_path):
     epoch_dir = tmp_path / "epoch_under_test"
     faiss_dir = epoch_dir / "faiss"

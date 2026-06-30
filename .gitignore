@@ -165,6 +165,7 @@ scripts/internal/*
 # ===== TESTING =====
 .pytest_cache/
 .pytest_tmp/
+throwaway_venv/
 .coverage
 htmlcov/
 .tox/

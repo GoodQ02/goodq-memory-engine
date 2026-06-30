@@ -71,6 +71,9 @@ $results.gates += $gate2
 $gate3 = @{ name = "version_consistency"; pass = $true; errors = @() }
 $versionPyPath = Join-Path $InstallDir "goodq_version.py"
 $receiptPath = Join-Path $InstallDir "data\install_receipt.json"
+if (-not (Test-Path $receiptPath)) {
+    $receiptPath = "$env:ProgramData\GoodQ4All\install_receipt.json"
+}
 try {
     $versionLine = Get-Content $versionPyPath | Where-Object { $_ -match 'GOODQ_VERSION\s*=\s*"([^"]+)"' }
     $sourceVersion = $Matches[1]

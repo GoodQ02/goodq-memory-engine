@@ -12,7 +12,7 @@ The supported local LLM surface is a **config-driven two-endpoint contract**:
   - Default: `http://localhost:38005/v1`
   - Model id from `llm.vllm_model`
 - **Fallback**: `llm.ollama_url`
-  - Default: `http://localhost:31434/v1`
+  - Default: `http://localhost:11434/v1`
   - Model id from `llm.ollama_model`
 
 These endpoints are turned into the live `LLMClient` model list by:
@@ -52,7 +52,7 @@ Those older direct-start scripts have now been retired from the tracked surface.
            ▼                               ▼
    Primary vLLM endpoint            Fallback Ollama endpoint
    llm.vllm_url                     llm.ollama_url
-   default :38005                  default :31434
+   default :38005                  default :11434
 ```
 
 ## Supported Start Paths
@@ -110,7 +110,7 @@ From Windows:
 
 ```powershell
 curl http://127.0.0.1:38005/v1/models
-curl http://localhost:31434/v1/models
+curl http://localhost:11434/v1/models
 ```
 
 If the primary vLLM service is installed and the fallback Ollama service is available, both commands should return model metadata.
@@ -120,7 +120,7 @@ If the primary vLLM service is installed and the fallback Ollama service is avai
 | Role | Source config | Default endpoint | Default model id |
 |------|---------------|------------------|------------------|
 | Primary | `llm.vllm_url` / `llm.vllm_model` | `http://localhost:38005/v1` | `meta-llama/Llama-3.2-1B-Instruct` |
-| Fallback | `llm.ollama_url` / `llm.ollama_model` | `http://localhost:31434/v1` | `phi4:latest` |
+| Fallback | `llm.ollama_url` / `llm.ollama_model` | `http://localhost:11434/v1` | `phi4:latest` |
 
 ## Management
 
@@ -189,7 +189,7 @@ wsl --shutdown
 Check the configured Ollama endpoint:
 
 ```powershell
-curl http://localhost:31434/v1/models
+curl http://localhost:11434/v1/models
 ```
 
 If unavailable, bring Ollama up separately before relying on failover.

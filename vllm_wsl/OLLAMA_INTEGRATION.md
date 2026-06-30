@@ -14,7 +14,7 @@
 
 **Ollama Version:** 0.12.11  
 **Service Status:** Active and running  
-**API Endpoint:** http://localhost:31434  
+**API Endpoint:** http://localhost:11434  
 **GPU Detection:** NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)  
 **Model Loaded:** phi4 (8.4 GB)
 
@@ -51,11 +51,11 @@
 
 ### Native Ollama API
 
-**Base URL:** `http://localhost:31434`
+**Base URL:** `http://localhost:11434`
 
 #### Generate Completion
 ```bash
-curl http://localhost:31434/api/generate -d '{
+curl http://localhost:11434/api/generate -d '{
   "model": "phi4",
   "prompt": "Your prompt here",
   "stream": false
@@ -64,7 +64,7 @@ curl http://localhost:31434/api/generate -d '{
 
 #### Chat Completion
 ```bash
-curl http://localhost:31434/api/chat -d '{
+curl http://localhost:11434/api/chat -d '{
   "model": "phi4",
   "messages": [
     {"role": "user", "content": "Hello!"}
@@ -74,11 +74,11 @@ curl http://localhost:31434/api/chat -d '{
 
 ### OpenAI-Compatible API
 
-**Base URL:** `http://localhost:31434/v1/`
+**Base URL:** `http://localhost:11434/v1/`
 
 #### Chat Completions (OpenAI format)
 ```bash
-curl http://localhost:31434/v1/chat/completions \
+curl http://localhost:11434/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "phi4",
@@ -122,7 +122,7 @@ import requests
 import json
 
 class OllamaClient:
-    def __init__(self, base_url="http://localhost:31434"):
+    def __init__(self, base_url="http://localhost:11434"):
         self.base_url = base_url
     
     def chat(self, message, model="phi4", stream=False):
@@ -174,7 +174,7 @@ from openai import OpenAI
 
 # Point OpenAI client to Ollama
 client = OpenAI(
-    base_url="http://localhost:31434/v1",
+    base_url="http://localhost:11434/v1",
     api_key="not-needed"  # Ollama doesn't require auth
 )
 
@@ -272,7 +272,7 @@ ollama create deepseek -f /tmp/deepseek.Modelfile
 Add to `/etc/systemd/system/ollama.service`:
 
 ```ini
-Environment="OLLAMA_HOST=0.0.0.0:31434"  # Allow external connections
+Environment="OLLAMA_HOST=0.0.0.0:11434"  # Allow external connections
 Environment="OLLAMA_MODELS=/mnt/l/_DATA/models/ollama"  # Custom path
 Environment="OLLAMA_NUM_PARALLEL=2"  # Concurrent requests
 Environment="OLLAMA_MAX_LOADED_MODELS=2"  # Multiple models in memory
@@ -362,8 +362,8 @@ sudo systemctl restart ollama
 ✅ **Ready for GoodQ4All integration**
 
 **API Endpoints:**
-- Native: http://localhost:31434/api/
-- OpenAI: http://localhost:31434/v1/
+- Native: http://localhost:11434/api/
+- OpenAI: http://localhost:11434/v1/
 
 **Current Model:** phi4 (8.4 GB, Q4_K_S)  
 **Performance:** ~70 tokens/second on RTX 4070 Ti SUPER

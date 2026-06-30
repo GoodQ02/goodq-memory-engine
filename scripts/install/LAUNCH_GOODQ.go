@@ -18,7 +18,7 @@ import (
 )
 
 // Hex-encoded Ed25519 Public Key for verifying the model manifest signature.
-const EmbeddedPublicKeyHex = "be4d9fb7d2e7122d445054d7a6c41f1ec75d996d41bad47b493c00385e501c22"
+const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af9678176d7b3438ac7b6"
 
 func main() {
 	verifyManifestOnly := flag.Bool("verify-manifest-only", false, "Verify manifest signature and exit without starting services")

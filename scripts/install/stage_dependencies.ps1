@@ -177,11 +177,7 @@ if ($Mode -eq "Acquire") {
 
     # Cross-reference wheelhouse against lockfile
     $AbsoluteCacheDir = [System.IO.Path]::GetFullPath($CacheDir)
-    $lockfilePath = Join-Path (Split-Path $AbsoluteCacheDir -Parent) "requirements-baseline-lock.txt"
-    if (-not (Test-Path $lockfilePath)) {
-        # Try repo root relative to script
-        $lockfilePath = Join-Path (Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent) "requirements-baseline-lock.txt"
-    }
+    $lockfilePath = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\requirements-baseline-lock.txt"))
     if (Test-Path $lockfilePath) {
         Write-Host "Cross-referencing wheelhouse against lockfile..." -ForegroundColor Cyan
         $lockPackages = Get-Content $lockfilePath | Where-Object { $_ -and -not $_.StartsWith("#") -and -not $_.StartsWith("--") } | ForEach-Object {
@@ -202,6 +198,47 @@ if ($Mode -eq "Acquire") {
             # Warning only — pip download resolves transitive deps which may use different names
         } else {
             Write-Host "  [OK] All lockfile packages have matching wheels." -ForegroundColor Green
+        }
+    }
+
+    # Transitive closure dry-run check
+    Write-Host "Performing transitive closure dry-run check..." -ForegroundColor Cyan
+    $TempErrorFile = [System.IO.Path]::GetTempFileName()
+    $StagedWheelsDir = [System.IO.Path]::GetFullPath($wheelsDir)
+    $PipArgs = @("-m", "pip", "install", "--dry-run", "--no-index", "--find-links=$StagedWheelsDir", "-r", "$lockfilePath")
+    
+    $ProcessParams = @{
+        FilePath = "python"
+        ArgumentList = $PipArgs
+        RedirectStandardError = $TempErrorFile
+        NoNewWindow = $true
+        Wait = $true
+        PassThru = $true
+    }
+    
+    try {
+        $Process = Start-Process @ProcessParams
+        $ExitCode = $Process.ExitCode
+        
+        if ($ExitCode -ne 0) {
+            $VerificationFailed = $true
+            Write-Host "  [ERROR] Transitive closure dry-run verification failed with exit code $ExitCode" -ForegroundColor Red
+            if (Test-Path $TempErrorFile) {
+                $ErrorContent = Get-Content $TempErrorFile
+                Write-Host "  Error output from pip:" -ForegroundColor Red
+                foreach ($line in $ErrorContent) {
+                    Write-Host "    $line" -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "  [OK] Transitive closure dry-run check succeeded." -ForegroundColor Green
+        }
+    } catch {
+        $VerificationFailed = $true
+        Write-Host "  [ERROR] Failed to execute python pip check: $_" -ForegroundColor Red
+    } finally {
+        if (Test-Path $TempErrorFile) {
+            Remove-Item $TempErrorFile -Force
         }
     }
     

@@ -48,7 +48,7 @@ echo vLLM Services Starting...
 echo ========================================
 echo.
 echo vLLM Primary:         http://127.0.0.1:38005/v1
-echo Ollama (Fallback):    http://localhost:31434/v1
+echo Ollama (Fallback):    http://localhost:11434/v1 (or fallback: http://localhost:31434/v1)
 echo.
 echo Services are starting in the background.
 echo It may take 30-60 seconds for the primary model to fully load.

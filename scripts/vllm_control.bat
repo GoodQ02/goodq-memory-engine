@@ -37,7 +37,7 @@ echo [INFO] Service status
 wsl -d %GOODQ_WSL_DISTRO% -u root -- bash -lc "systemctl is-active vllm-llama1b || true; systemctl is-active ollama || true"
 echo.
 echo [INFO] Listening ports (WSL)
-wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "ss -lntp | grep -E ':38005|:38004|:31434' || true"
+wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "ss -lntp | grep -E ':38005|:38004|:31434|:11434' || true"
 echo.
 echo [INFO] WSL keepalive anchor
 wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "pgrep -af '[g]oodq-vllm-keepalive' || true"

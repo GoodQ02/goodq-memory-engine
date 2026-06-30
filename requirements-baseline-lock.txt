@@ -12,7 +12,6 @@ requests==2.33.0
 fastapi==0.135.2
 uvicorn==0.42.0
 typer==0.24.0
-pytest==9.0.2
 imageio-ffmpeg==0.6.0
 transformers==5.4.0
 sentence-transformers==5.3.0

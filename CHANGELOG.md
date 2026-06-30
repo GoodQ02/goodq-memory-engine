@@ -9,6 +9,12 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.8-rc2] - 2026-06-29 - Ollama Port Alignment & Receipt Fallback
+
+### Changed
+- **Ollama Port Alignment**: Aligned default Ollama url/base to port 11434 in configuration, documentation guides, and scripts, while preserving 31434 fallback paths.
+- **Installer Receipt Fallback**: Hardened the post-install verification suite to check the local installer directory first for `install_receipt.json` before falling back to `ProgramData`.
+
 ## [2.5.8-rc1] - 2026-06-29 - WSL Audio Fixes & Default Ollama Port Alignment
 
 ### Fixed

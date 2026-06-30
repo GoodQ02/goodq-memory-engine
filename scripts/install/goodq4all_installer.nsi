@@ -8,7 +8,7 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.8-rc1.exe"
+OutFile "..\..\GoodQ4All_Setup_2.5.8-rc2.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -16,7 +16,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.8-rc1 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.8-rc2 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -155,6 +155,13 @@ runtime_ok:
   nsExec::ExecToLog '"$INSTDIR\binaries\vc_redist.x64.exe" /q /norestart'
   Pop $0
   DetailPrint "VC++ Redistributable setup completed. exit code = $0"
+  ${If} $0 != 0
+  ${AndIf} $0 != 3010
+  ${AndIf} $0 != 1638
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: VC++ Redistributable installation failed. Code $0"
+    Abort
+  ${EndIf}
 
   ; --- STATE 6: copy local wheelhouse & install offline ---
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
@@ -296,7 +303,7 @@ wsl_done:
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.8-rc1"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "2.5.8-rc2"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd

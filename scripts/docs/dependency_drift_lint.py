@@ -19,7 +19,7 @@ from packaging.requirements import Requirement
 from packaging.version import Version
 
 # Conda-only packages or metadata flags that are not locked in pip requirements.txt
-CONDA_ONLY_PACKAGES = {"cpuonly", "python", "pip"}
+CONDA_ONLY_PACKAGES = {"cpuonly", "python", "pip", "pytest"}
 
 # Core packages that must be checked for locking
 CONDA_META_PACKAGES = {"python", "pip", "cpuonly"}

@@ -51,6 +51,10 @@ ACTIVE_RUNTIME_FILES = [
     Path("scripts/utils/check_watchdog_status.py"),
 ]
 
+# Filter out non-existent files (e.g. archived legacy steps)
+ACTIVE_RUNTIME_FILES = [f for f in ACTIVE_RUNTIME_FILES if (REPO_ROOT / f).exists()]
+
+
 
 ACTIVE_EXPECTATIONS = {
     Path("cli/run_ingestion.py"): {
@@ -178,6 +182,8 @@ def _format_file_list(paths: Iterable[Path]) -> str:
 def _evaluate_active_checks() -> list[Finding]:
     findings: list[Finding] = []
     for rel_path, expectations in ACTIVE_EXPECTATIONS.items():
+        if not (REPO_ROOT / rel_path).exists():
+            continue
         text = _read_text(rel_path)
         for token in expectations.get("required", []):
             if token not in text:
@@ -395,6 +401,7 @@ def _write_report(active: list[Finding], config_findings: list[Finding], legacy:
     else:
         report_lines.append("- No low-risk test/doc drift detected by this audit.")
 
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
 
 

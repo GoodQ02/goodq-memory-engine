@@ -68,7 +68,7 @@ The current config-driven factory builds two models:
 | Name | Backend | Endpoint source | Default endpoint | Default model id |
 |------|---------|-----------------|------------------|------------------|
 | `Llama-1B-Speed` | `vllm` | `llm.vllm_url` / `llm.vllm_model` | `http://localhost:38005/v1` | `meta-llama/Llama-3.2-1B-Instruct` |
-| `Phi4-Ollama` | `ollama` | `llm.ollama_url` / `llm.ollama_model` | `http://localhost:31434/v1` | `phi4:latest` |
+| `Phi4-Ollama` | `ollama` | `llm.ollama_url` / `llm.ollama_model` | `http://localhost:11434/v1` | `phi4:latest` |
 
 The older multi-model entries for Llama-3B, Phi-3.5, and vision variants are **not** part of the current supported factory contract. The WSL vLLM service may serve the open Qwen bootstrap model when local config points the primary endpoint there; the client still treats it as the single configured primary vLLM slot.
 

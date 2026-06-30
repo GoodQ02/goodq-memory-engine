@@ -85,7 +85,7 @@
     },
     "vllm_url": "http://127.0.0.1:38005/v1",
     "vllm_model": "/home/jdben/models/Qwen2.5-0.5B-Instruct",
-    "ollama_url": "http://127.0.0.1:31434/v1",
+    "ollama_url": "http://127.0.0.1:11434/v1",
     "ollama_model": "llama3.2:latest"
   },
   "tts": {

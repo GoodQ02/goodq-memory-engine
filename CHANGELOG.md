@@ -9,6 +9,17 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.8-rc4] - 2026-06-30 - Version Sync & Model Prefetch Hardening
+
+### Added
+- **Model Registry Classifications**: Categorized all registry models into strict classification groups (`REQUIRED_FIRST_LAUNCH`, `DEFERRED_EXTERNAL_PAYLOAD`, `OPTIONAL_FEATURE`, etc.) to control prefetch behavior.
+- **Fail-Loud Bootstrap Propagation**: Updated model bootstrapper to parse classifications and fail loudly (exit code 1) on missing required assets.
+- **Go Launcher Abort**: Hardened supervising launcher to immediately abort and show fatal error details if model prefetching fails.
+
+### Fixed
+- **DisplayVersion Sync**: Fixed regex pattern in version synchronizer to support prerelease version strings.
+- **Bat Exit Propagation**: Propagated sync error codes to batch file compilation.
+
 ## [2.5.8-rc3] - 2026-06-29 - Bootstrap Writable Path Fixes
 
 ### Fixed

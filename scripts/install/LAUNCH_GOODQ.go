@@ -119,17 +119,62 @@ func main() {
 	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
 		fatalError("Manifest Verification Failed", err.Error())
 	}
-	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")
-
-	// Resolve Python Runtime Early
+	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")	// Resolve Python Runtime Early
 	var pythonExe string
 	if runtime.GOOS == "windows" {
-		pythonExe = filepath.Join(programFilesDir, "runtime", "python.exe")
-		if _, err := os.Stat(pythonExe); err != nil {
-			fatalError("Python Runtime Missing", fmt.Sprintf("Sandboxed Python runtime not found at: %s\nPlease reinstall.", pythonExe))
+		sandboxPython := filepath.Join(programFilesDir, "runtime", "python.exe")
+		
+		// 1. In production installed mode, we strictly expect sandboxed Python
+		if _, err := os.Stat(sandboxPython); err == nil {
+			pythonExe = sandboxPython
+			fmt.Printf("[LAUNCHER] Using sandboxed Python runtime at: %s\n", pythonExe)
+		} else {
+			// 2. Fallbacks are allowed ONLY in development mode (checking environment variables or dev tree)
+			devPython := os.Getenv("GOODQ_DEV_PYTHON")
+			isDevMode := os.Getenv("GOODQ_DEV_MODE") == "1" || os.Getenv("GOODQ_DEV_PYTHON") != ""
+			
+			// Detect dev tree structure
+			if !isDevMode {
+				if _, err := os.Stat(filepath.Join(programFilesDir, "configs")); err == nil {
+					isDevMode = true
+				}
+			}
+
+			if isDevMode {
+				if devPython != "" {
+					if _, err := os.Stat(devPython); err == nil {
+						pythonExe = devPython
+						fmt.Printf("[LAUNCHER] Development mode: Using GOODQ_DEV_PYTHON override at: %s\n", pythonExe)
+					}
+				}
+				
+				if pythonExe == "" {
+					if path, err := exec.LookPath("python"); err == nil {
+						pythonExe = path
+						fmt.Printf("[LAUNCHER] Development mode: Using system PATH Python at: %s\n", pythonExe)
+					}
+				}
+				
+				if pythonExe == "" {
+					userProfile := os.Getenv("USERPROFILE")
+					if userProfile != "" {
+						devFallback := filepath.Join(userProfile, "mini"+"conda3", "envs", "goodq"+"_core", "python.exe")
+						if _, err := os.Stat(devFallback); err == nil {
+							pythonExe = devFallback
+							fmt.Printf("[LAUNCHER] Development mode: Using dev fallback Python at: %s\n", pythonExe)
+						}
+					}
+				}
+			}
+
+			if pythonExe == "" {
+				fatalError("Python Runtime Missing", 
+					"The sandboxed Python runtime (.\\runtime\\python.exe) is missing or invalid.\n\n"+
+					"Please run Installer Repair or reinstall GoodQ4All to resolve this issue.\n"+
+					"If you are developing, please set the 'GOODQ_DEV_PYTHON' environment variable.")
+			}
 		}
 	} else {
-		pythonExe = "python3"
 		if path, err := exec.LookPath("python3"); err == nil {
 			pythonExe = path
 		} else if path, err := exec.LookPath("python"); err == nil {
@@ -150,12 +195,27 @@ func main() {
 	
 	bootstrapOutput, err := bootstrapCmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("[LAUNCHER] [WARN] Model bootstrap warning: %s\n", err.Error())
-		if len(bootstrapOutput) > 0 {
-			fmt.Printf("[LAUNCHER] [DEBUG] Bootstrap output: %s\n", string(bootstrapOutput))
-		}
+		fatalError("Model Bootstrap Failed", fmt.Sprintf("Model prefetch/bootstrap exited with error: %v\nBootstrap output:\n%s", err, string(bootstrapOutput)))
 	} else {
-		fmt.Println("[LAUNCHER] [OK] Model bootstrap completed successfully.")
+		isDegraded := false
+		if reportData, rerr := os.ReadFile(bootstrapReportPath); rerr == nil {
+			var report map[string]interface{}
+			if jerr := json.Unmarshal(reportData, &report); jerr == nil {
+				if fStatus, ok := report["final_status"].(string); ok {
+					if fStatus == "failed" {
+						fatalError("Model Bootstrap Failed", "Model prefetch/bootstrap reported 'failed' status in report json.")
+					} else if fStatus == "partial" || fStatus == "warning" {
+						isDegraded = true
+					}
+				}
+			}
+		}
+		
+		if isDegraded {
+			fmt.Println("[LAUNCHER] [WARNING] Model bootstrap completed in degraded/partial mode (some optional/gated assets were skipped).")
+		} else {
+			fmt.Println("[LAUNCHER] [OK] Model bootstrap completed successfully.")
+		}
 	}
 
 	// 3. Port Conflict Detection & Fallback Persistence

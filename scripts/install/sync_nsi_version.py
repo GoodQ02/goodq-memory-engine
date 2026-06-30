@@ -34,31 +34,50 @@ if os.path.exists(nsi_path):
         nsi_content = f.read()
     
     # Replace OutFile "..\..\GoodQ4All_Setup_*.exe"
-    nsi_content = re.sub(
-        r'OutFile\s+\"..\\[^\"]+GoodQ4All_Setup_[^\"]+\.exe\"', 
-        f'OutFile "..\\..\\GoodQ4All_Setup_{v}.exe"'.replace('\\', '\\\\'), 
+    nsi_content, count1 = re.subn(
+        r'OutFile\s+"[^"]+GoodQ4All_Setup_[^"]+\.exe"', 
+        lambda m: f'OutFile "..\\..\\GoodQ4All_Setup_{v}.exe"', 
         nsi_content
     )
+    if count1 == 0:
+        print("[ERROR] OutFile pattern not found or replaced.")
+        import sys
+        sys.exit(2)
     
     # Replace MUI_WELCOMEPAGE_TITLE
-    nsi_content = re.sub(
-        r'!define\s+MUI_WELCOMEPAGE_TITLE\s+\"[^\"]+Offline Installer\"', 
-        f'!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v{v} Offline Installer"'.replace('\\', '\\\\'), 
+    nsi_content, count2 = re.subn(
+        r'!define\s+MUI_WELCOMEPAGE_TITLE\s+"[^"]+Offline Installer"', 
+        f'!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v{v} Offline Installer"', 
         nsi_content
     )
+    if count2 == 0:
+        print("[ERROR] MUI_WELCOMEPAGE_TITLE pattern not found or replaced.")
+        import sys
+        sys.exit(2)
     
     # Replace DisplayVersion
-    nsi_content = re.sub(
-        r'\"DisplayVersion\"\s+\"[0-9\.]+\"', 
-        f'"DisplayVersion" "{v}"'.replace('\\', '\\\\'), 
+    nsi_content, count3 = re.subn(
+        r'"DisplayVersion"\s+"[^"]+"', 
+        f'"DisplayVersion" "{v}"', 
         nsi_content
     )
+    if count3 == 0:
+        print("[ERROR] DisplayVersion pattern not found or replaced.")
+        import sys
+        sys.exit(2)
     
-    with open(nsi_path, "w", encoding="utf-8", newline="\r\n") as f:
-        f.write(nsi_content)
-    print("[OK] goodq4all_installer.nsi version synced successfully.")
+    try:
+        with open(nsi_path, "w", encoding="utf-8", newline="\r\n") as f:
+            f.write(nsi_content)
+        print("[OK] goodq4all_installer.nsi version synced successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to write nsi file: {e}")
+        import sys
+        sys.exit(2)
 else:
-    print("[WARN] goodq4all_installer.nsi not found.")
+    print("[ERROR] goodq4all_installer.nsi not found.")
+    import sys
+    sys.exit(2)
 
 # 3. Update versioninfo.json
 if os.path.exists(version_json_path):
@@ -84,4 +103,6 @@ if os.path.exists(version_json_path):
         json.dump(vi, f, indent=2)
     print("[OK] versioninfo.json version synced successfully.")
 else:
-    print("[WARN] versioninfo.json not found.")
+    print("[ERROR] versioninfo.json not found.")
+    import sys
+    sys.exit(2)

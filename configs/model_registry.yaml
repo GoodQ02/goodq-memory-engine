@@ -3,7 +3,6 @@ huggingface_models:
     repo_id: Salesforce/blip-image-captioning-base
     revision: 82a37760796d32b1411fe092ab5d4e227313294b
     model_type: vision-to-text
-    required: true
     trust_level: stable
     modalities: [vision, text]
     engines:
@@ -18,11 +17,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   vit_gpt2_caption:
     repo_id: nlpconnect/vit-gpt2-image-captioning
     revision: dc68f91c06a1ba6f15268e5b9c13ae7a7c514084
     model_type: vision-to-text
-    required: false
     fallback_for: blip_caption
     trust_level: stable
     modalities: [vision, text]
@@ -36,11 +41,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   clip_vit:
     repo_id: openai/clip-vit-large-patch14
     revision: 32bd64288804d66eefd0ccbe215aa642df71cc41
     model_type: multimodal-embedding
-    required: true
     trust_level: stable
     modalities: [vision, text]
     engines:
@@ -53,11 +64,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   dinov2:
     repo_id: facebook/dinov2-large
     revision: 47b73eefe95e8d44ec3623f8890bd894b6ea2d6c
     model_type: vision-embedding
-    required: true
     trust_level: stable
     modalities: [vision]
     engines:
@@ -70,11 +87,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   sentence_transformer:
     repo_id: sentence-transformers/all-MiniLM-L6-v2
     revision: 8b3219a92973c328a8e22fadcfa821b5dc75636a
     model_type: text-embedding
-    required: true
     trust_level: stable
     modalities: [text]
     engines:
@@ -87,11 +110,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   clap_audio:
     repo_id: laion/clap-htsat-unfused
     revision: 8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a
     model_type: audio-embedding
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -104,13 +133,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   pyannote_diarization:
     repo_id: pyannote/speaker-diarization-3.1
     revision: 84fd25912480287da0247647c3d2b4853cb3ee5d
     model_type: audio-diarization
-    required: true
-    requires_auth: true
-    auth_token_env: PYANNOTE_TOKEN
     trust_level: stable
     modalities: [audio]
     engines:
@@ -123,13 +156,17 @@ huggingface_models:
       requires_license_acceptance: true
       commercial_use: restricted
       redistribution: restricted
+    tier_scope: [wsl_audio]
+    classification: OPTIONAL_FEATURE
+    gated: true
+    requires_token: true
+    token_env: PYANNOTE_TOKEN
+    failure_behavior: WARN_DEGRADED
+
   pyannote_segmentation:
     repo_id: pyannote/segmentation-3.0
     revision: e66f3d3b9eb0873085418a7b813d3b369bf160bb
     model_type: audio-segmentation
-    required: true
-    requires_auth: true
-    auth_token_env: PYANNOTE_TOKEN
     trust_level: stable
     modalities: [audio]
     engines:
@@ -142,13 +179,17 @@ huggingface_models:
       requires_license_acceptance: true
       commercial_use: restricted
       redistribution: restricted
+    tier_scope: [wsl_audio]
+    classification: OPTIONAL_FEATURE
+    gated: true
+    requires_token: true
+    token_env: PYANNOTE_TOKEN
+    failure_behavior: WARN_DEGRADED
+
   pyannote_wespeaker:
     repo_id: pyannote/wespeaker-voxceleb-resnet34-LM
     revision: 837717ddb9ff5507820346191109dc79c958d614
     model_type: audio-speaker-embedding
-    required: true
-    requires_auth: true
-    auth_token_env: PYANNOTE_TOKEN
     trust_level: stable
     modalities: [audio]
     engines:
@@ -161,11 +202,17 @@ huggingface_models:
       requires_license_acceptance: true
       commercial_use: restricted
       redistribution: restricted
+    tier_scope: [wsl_audio]
+    classification: OPTIONAL_FEATURE
+    gated: true
+    requires_token: true
+    token_env: PYANNOTE_TOKEN
+    failure_behavior: WARN_DEGRADED
+
   whisper_large_v3:
     repo_id: openai/whisper-large-v3
     revision: 06f233fe06e710322aca913c1bc4249a0d71fce1
     model_type: speech-to-text
-    required: false
     trust_level: stable
     modalities: [audio]
     engines:
@@ -178,11 +225,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   faster_whisper_large_v3:
     repo_id: Systran/faster-whisper-large-v3
     revision: edaa852ec7e145841d8ffdb056a99866b5f0a478
     model_type: speech-to-text
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -195,11 +248,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   faster_whisper_medium:
     repo_id: Systran/faster-whisper-medium
     revision: 08e178d48790749d25932bbc082711ddcfdfbc4f
     model_type: speech-to-text
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -212,28 +271,40 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   faster_whisper_tiny:
     repo_id: Systran/faster-whisper-tiny
-    revision: d90ca5fe260221311c53c58e660288d3deb8d356
+    revision: main
     model_type: speech-to-text
-    required: false
     trust_level: stable
     modalities: [audio]
     engines:
       CTranslate2: yes
     quantization: [FP16, INT8]
-    vram_estimate_gb: 0.2
+    vram_estimate_gb: 0.1
     load_policy: concurrent_safe
     access_control:
       requires_hf_token: false
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   hubert_emotion:
     repo_id: superb/hubert-large-superb-er
-    revision: ef1a2ebfd7cfc424dc7f0fbcdc406e8b794d63bb
+    revision: main
     model_type: audio-classification
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -246,11 +317,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   wav2vec2_emotion:
     repo_id: ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition
     revision: b520c9c46a719e36e1b9a91cad2cb5d0668757d8
     model_type: audio-classification
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -263,29 +340,40 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   wav2vec2_base_960h:
     repo_id: facebook/wav2vec2-base-960h
-    revision: 22aad52d435eb6dbaf354bdad9b0da84ce7d6156
-    model_type: audio-embedding
-    required: true
-    notes: WSL audio process_audio embedding cache gate
+    revision: main
+    model_type: speech-to-text
     trust_level: stable
     modalities: [audio]
     engines:
       Transformers: yes
     quantization: [FP16]
-    vram_estimate_gb: 0.4
+    vram_estimate_gb: 0.8
     load_policy: concurrent_safe
     access_control:
       requires_hf_token: false
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   bert_ner:
     repo_id: dslim/bert-base-NER
-    revision: d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc
-    model_type: token-classification
-    required: true
+    revision: main
+    model_type: text-classification
     trust_level: stable
     modalities: [text]
     engines:
@@ -298,28 +386,40 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   emotion_classify_model:
     repo_id: cardiffnlp/twitter-roberta-base-emotion-multilabel-latest
-    revision: 30a56d88e47e493f08f93c786d49c526550b55b9
+    revision: main
     model_type: text-classification
-    required: true
     trust_level: stable
     modalities: [text]
     engines:
       Transformers: yes
     quantization: [FP16]
-    vram_estimate_gb: 0.5
+    vram_estimate_gb: 0.4
     load_policy: concurrent_safe
     access_control:
       requires_hf_token: false
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   sentiment_model:
     repo_id: distilbert-base-uncased-finetuned-sst-2-english
-    revision: 714eb0fa89d2f80546fda750413ed43d93601a13
+    revision: main
     model_type: text-classification
-    required: true
     trust_level: stable
     modalities: [text]
     engines:
@@ -332,11 +432,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   silero_vad:
     repo_id: snakers4/silero-vad
-    revision: 290cda07f59d57a91176b6d601b04da12ee105fa
+    revision: v4.0
     model_type: audio-vad
-    required: true
     trust_level: stable
     modalities: [audio]
     engines:
@@ -349,13 +455,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
 
-  # Candidates and Experimental SOTA Models
   whisper_large_v3_turbo:
     repo_id: Systran/faster-whisper-large-v3-turbo
     revision: 153b6ab49080cf2dcffad5df2775f0a2c505f5b5
     model_type: speech-to-text
-    required: false
     trust_level: candidate
     modalities: [audio]
     engines:
@@ -368,11 +478,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   qwen2_5_vl_7b:
     repo_id: Qwen/Qwen2.5-VL-7B-Instruct
     revision: 390abebc0fed2211bbccaa32ddaa55ccff00aa33
     model_type: multimodal-vlm
-    required: false
     trust_level: candidate
     modalities: [vision, text]
     engines:
@@ -387,11 +503,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   qwen2_5_vl_3b:
     repo_id: Qwen/Qwen2.5-VL-3B-Instruct
     revision: 0482ecbfed33aab3bb55ccee44aa11bbaa00aa11
     model_type: multimodal-vlm
-    required: false
     trust_level: candidate
     modalities: [vision, text]
     engines:
@@ -406,11 +528,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   deepseek_r1_distill_qwen_14b:
     repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
     revision: 21db116e25f75e2ea8d867c29377484d16d6ea2f
     model_type: text-to-text
-    required: false
     trust_level: candidate
     modalities: [text]
     engines:
@@ -426,11 +554,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   deepseek_r1_distill_qwen_7b:
     repo_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
     revision: 4cf2adccab7bb5ea1b4f4c2c505fa55e8c1ab3ee
     model_type: text-to-text
-    required: false
     trust_level: candidate
     modalities: [text]
     engines:
@@ -446,11 +580,17 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   gemma_4_12b_unified:
     repo_id: google/gemma-4-12b-it
     revision: e66f3d3b9eb0bbccaa44aaccddff00aa33882299
     model_type: text-to-text
-    required: false
     trust_level: experimental
     modalities: [text, vision, audio]
     engines:
@@ -464,6 +604,12 @@ huggingface_models:
       requires_license_acceptance: true
       commercial_use: restricted
       redistribution: restricted
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: true
+    requires_token: true
+    token_env: HF_TOKEN
+    failure_behavior: WARN_DEGRADED
 
 external_models:
   yolo_v8n:
@@ -473,8 +619,14 @@ external_models:
     sha256: f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36
     local_path: yolo/yolov8n.pt
     file_size_bytes: 6549796
-    required: true
     model_type: object-detection
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   facenet_vggface2:
     name: FaceNet InceptionResnetV1 VGGFace2
     source_url: https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt
@@ -482,8 +634,14 @@ external_models:
     sha256: 8234f0ae076a4ca361a940d55e863457070567ea872ea7914fcc48f6963156f6
     local_path: checkpoints/20180402-114759-vggface2.pt
     file_size_bytes: 53116694
-    required: true
     model_type: face-embedding
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: DEV_TEST_ONLY
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
   whisper_ggml_large_v3:
     name: Whisper GGML Large v3
     source_url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
@@ -491,16 +649,22 @@ external_models:
     sha256: 64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2
     local_path: whisper/ggml-large-v3.bin
     file_size_bytes: 3095033483
-    required: false
     model_type: speech-to-text
     notes: Optional - only needed for whisper.cpp CLI alternative (not currently used)
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
 lexicons:
   nrc_emotion:
     name: NRC Emotion Lexicon
     source_url: http://sentiment.nrc.ca/lexicons-for-research/
     version: v0.92
     local_path: lexicons/NRC-Emotion-Lexicon
-    required: false
+    classification: OPTIONAL_FEATURE
     files:
     - NRC-Emotion-Lexicon-v0.92.txt
     - NRC-Emotion-Lexicon-Wordlevel-v0.92.txt
@@ -509,7 +673,7 @@ lexicons:
     name: VADER Sentiment Lexicon
     source: nltk.sentiment.vader
     version: 3.3.2
-    required: false
+    classification: OPTIONAL_FEATURE
     notes: Bundled with NLTK, no separate download needed
 datasets: null
 system_tools:

@@ -14,7 +14,7 @@
     "wsl_distro": "Ubuntu-22.04",
     "setup_installer": {
       "status": "implemented",
-      "executable": "GoodQ4All_Setup_2.5.8-rc3.exe",
+      "executable": "GoodQ4All_Setup_2.5.8-rc4.exe",
       "launcher": "LAUNCH_GOODQ.exe",
       "sandboxed": true,
       "preflight_packages": ["opencv-python", "scenedetect", "imageio-ffmpeg"],

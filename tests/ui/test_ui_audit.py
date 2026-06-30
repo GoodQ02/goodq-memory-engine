@@ -79,7 +79,7 @@ def test_ui_audit():
         assert page.evaluate("localStorage.getItem('goodq-theme')") == "night"
         
         # Select scene card with arbitration data and click Logs tab
-        target_scene_id = "91b081ff8e217a307f50fb8377add00ac55779975fb89e4d7e25927cf629c94f"
+        target_scene_id = "186466c96315bb367edd6bc72a96e36cde79291f3de35112379cf11fcd4076ad"
         scene_card = page.locator(f'[data-scene-id="{target_scene_id}"]')
         assert scene_card.is_visible(), f"Scene card {target_scene_id} not found"
         scene_card.click()

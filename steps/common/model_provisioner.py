@@ -22,34 +22,264 @@ logger = logging.getLogger(__name__)
 
 # Fallback registry matching configs/model_registry.yaml and bootstrap fallback list
 _FALLBACK_REGISTRY = {
-    "Salesforce/blip-image-captioning-base": {"gated": False, "required": True, "key": "blip_caption"},
-    "nlpconnect/vit-gpt2-image-captioning": {"gated": False, "required": False, "key": "vit_gpt2_caption"},
-    "openai/clip-vit-large-patch14": {"gated": False, "required": True, "key": "clip_vit"},
-    "openai/clip-vit-base-patch16": {"gated": False, "required": True, "key": "clip_vit"},
-    "facebook/dinov2-large": {"gated": False, "required": True, "key": "dinov2"},
-    "facebook/dinov2-base": {"gated": False, "required": True, "key": "dinov2"},
-    "sentence-transformers/all-MiniLM-L6-v2": {"gated": False, "required": True, "key": "sentence_transformer"},
-    "laion/clap-htsat-unfused": {"gated": False, "required": True, "key": "clap_audio"},
-    "pyannote/speaker-diarization-3.1": {"gated": True, "required": True, "key": "pyannote_diarization"},
-    "pyannote/segmentation-3.0": {"gated": True, "required": True, "key": "pyannote_segmentation"},
-    "pyannote/wespeaker-voxceleb-resnet34-LM": {"gated": True, "required": True, "key": "pyannote_wespeaker"},
-    "Systran/faster-whisper-medium": {"gated": False, "required": True, "key": "faster_whisper_medium"},
-    "Systran/faster-whisper-large-v3": {"gated": False, "required": True, "key": "faster_whisper_large_v3"},
-    "Systran/faster-whisper-large-v3-turbo": {"gated": False, "required": False, "key": "whisper_large_v3_turbo"},
-    "superb/hubert-large-superb-er": {"gated": False, "required": True, "key": "hubert_emotion"},
-    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition": {"gated": False, "required": True, "key": "wav2vec2_emotion"},
-    "facebook/wav2vec2-base-960h": {"gated": False, "required": True, "key": "wav2vec2_base_960h"},
-    "dslim/bert-base-NER": {"gated": False, "required": True, "key": "bert_ner"},
-    "Qwen/Qwen2.5-VL-7B-Instruct": {"gated": False, "required": False, "key": "qwen2_5_vl_7b"},
-    "Qwen/Qwen2.5-VL-3B-Instruct": {"gated": False, "required": False, "key": "qwen2_5_vl_3b"},
-    "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": {"gated": False, "required": False, "key": "deepseek_r1_distill_qwen_14b"},
-    "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {"gated": False, "required": False, "key": "deepseek_r1_distill_qwen_7b"},
-    "google/gemma-4-12b-it": {"gated": True, "required": False, "key": "gemma_4_12b_unified"},
-    "snakers4/silero-vad": {"gated": False, "required": True, "key": "silero_vad"},
-    "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest": {"gated": False, "required": True, "key": "emotion_classify_model"},
-    "distilbert-base-uncased-finetuned-sst-2-english": {"gated": False, "required": True, "key": "sentiment_model"},
-    "yolo_v8n": {"gated": False, "required": True, "key": "yolo_v8n", "is_external": True, "local_path": "yolo/yolov8n.pt", "source_url": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"},
-    "facenet_vggface2": {"gated": False, "required": True, "key": "facenet_vggface2", "is_external": True, "local_path": "checkpoints/20180402-114759-vggface2.pt", "source_url": "https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt"},
+    "Salesforce/blip-image-captioning-base": {
+        "key": "blip_caption",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "nlpconnect/vit-gpt2-image-captioning": {
+        "key": "vit_gpt2_caption",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "openai/clip-vit-large-patch14": {
+        "key": "clip_vit",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "openai/clip-vit-base-patch16": {
+        "key": "clip_vit_base",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "DEV_TEST_ONLY",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "facebook/dinov2-large": {
+        "key": "dinov2",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "facebook/dinov2-base": {
+        "key": "dinov2_base",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "DEV_TEST_ONLY",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "sentence-transformers/all-MiniLM-L6-v2": {
+        "key": "sentence_transformer",
+        "tier_scope": ["baseline", "cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "laion/clap-htsat-unfused": {
+        "key": "clap_audio",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "pyannote/speaker-diarization-3.1": {
+        "key": "pyannote_diarization",
+        "tier_scope": ["wsl_audio"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": True,
+        "requires_token": True,
+        "token_env": "PYANNOTE_TOKEN",
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "pyannote/segmentation-3.0": {
+        "key": "pyannote_segmentation",
+        "tier_scope": ["wsl_audio"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": True,
+        "requires_token": True,
+        "token_env": "PYANNOTE_TOKEN",
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "pyannote/wespeaker-voxceleb-resnet34-LM": {
+        "key": "pyannote_wespeaker",
+        "tier_scope": ["wsl_audio"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": True,
+        "requires_token": True,
+        "token_env": "PYANNOTE_TOKEN",
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "Systran/faster-whisper-medium": {
+        "key": "faster_whisper_medium",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "Systran/faster-whisper-large-v3": {
+        "key": "faster_whisper_large_v3",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "Systran/faster-whisper-large-v3-turbo": {
+        "key": "whisper_large_v3_turbo",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "superb/hubert-large-superb-er": {
+        "key": "hubert_emotion",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition": {
+        "key": "wav2vec2_emotion",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "facebook/wav2vec2-base-960h": {
+        "key": "wav2vec2_base_960h",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "dslim/bert-base-NER": {
+        "key": "bert_ner",
+        "tier_scope": ["baseline", "cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "Qwen/Qwen2.5-VL-7B-Instruct": {
+        "key": "qwen2_5_vl_7b",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "Qwen/Qwen2.5-VL-3B-Instruct": {
+        "key": "qwen2_5_vl_3b",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": {
+        "key": "deepseek_r1_distill_qwen_14b",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
+        "key": "deepseek_r1_distill_qwen_7b",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "google/gemma-4-12b-it": {
+        "key": "gemma_4_12b_unified",
+        "tier_scope": ["gpu_enhanced"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": True,
+        "requires_token": True,
+        "token_env": "HF_TOKEN",
+        "failure_behavior": "WARN_DEGRADED"
+    },
+    "snakers4/silero-vad": {
+        "key": "silero_vad",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest": {
+        "key": "emotion_classify_model",
+        "tier_scope": ["baseline", "cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "distilbert-base-uncased-finetuned-sst-2-english": {
+        "key": "sentiment_model",
+        "tier_scope": ["baseline", "cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "yolo_v8n": {
+        "key": "yolo_v8n",
+        "is_external": True,
+        "local_path": "yolo/yolov8n.pt",
+        "source_url": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
+    "facenet_vggface2": {
+        "key": "facenet_vggface2",
+        "is_external": True,
+        "local_path": "checkpoints/20180402-114759-vggface2.pt",
+        "source_url": "https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "DEV_TEST_ONLY",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED"
+    }
 }
 
 def redact_sensitive_info(text: str, repo_id: Optional[str] = None) -> str:
@@ -150,7 +380,6 @@ def resolve_hf_token(repo_id: Optional[str] = None) -> Optional[str]:
             except Exception:
                 pass
     return None
-
 def load_registry() -> Dict[str, Any]:
     registry_path = _REPO_ROOT / "configs" / "model_registry.yaml"
     if registry_path.is_file():
@@ -162,6 +391,91 @@ def load_registry() -> Dict[str, Any]:
             logger.warning(f"Failed to load model registry YAML: {e}")
     return {}
 
+VALID_CLASSIFICATIONS = {"REQUIRED_INSTALL_BLOCKER", "REQUIRED_FIRST_LAUNCH", "OPTIONAL_FEATURE", "DEV_TEST_ONLY", "DEFERRED_EXTERNAL_PAYLOAD"}
+VALID_FAILURE_BEHAVIORS = {"FATAL_HALT", "WARN_DEGRADED"}
+
+def _validate_and_normalize_metadata(info: Dict[str, Any], repo_id_or_key: str) -> Dict[str, Any]:
+    # 1. Resolve and validate tier_scope
+    tier_scope = info.get("tier_scope")
+    if tier_scope is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            tier_scope = fb.get("tier_scope")
+    if tier_scope is None:
+        raise ValueError(f"Model '{repo_id_or_key}' has missing tier_scope.")
+    if not isinstance(tier_scope, list):
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid tier_scope: {tier_scope} (must be list of strings)")
+    for scope in tier_scope:
+        if not isinstance(scope, str):
+            raise ValueError(f"Model '{repo_id_or_key}' has invalid scope item: {scope} (must be str)")
+
+    # 2. Resolve and validate classification
+    classification = info.get("classification")
+    if classification is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            classification = fb.get("classification")
+    if classification not in VALID_CLASSIFICATIONS:
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid or missing classification: {classification} (must be in {VALID_CLASSIFICATIONS})")
+
+    # 3. Resolve and validate gated
+    gated = info.get("gated")
+    if gated is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            gated = fb.get("gated")
+        else:
+            gated = info.get("requires_auth", False) or info.get("access_control", {}).get("requires_hf_token", False)
+    if not isinstance(gated, bool):
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid gated value: {gated} (must be boolean)")
+
+    # 4. Resolve and validate requires_token
+    requires_token = info.get("requires_token")
+    if requires_token is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            requires_token = fb.get("requires_token")
+        else:
+            requires_token = gated
+    if not isinstance(requires_token, bool):
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid requires_token value: {requires_token} (must be boolean)")
+
+    # 5. Resolve and validate token_env
+    token_env = info.get("token_env")
+    if token_env is None and (info.get("token_env") is not None or "token_env" in info):
+        token_env = None
+    if token_env is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            token_env = fb.get("token_env")
+    if token_env is not None and not isinstance(token_env, str):
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid token_env: {token_env} (must be string or null)")
+
+    # 6. Resolve and validate failure_behavior
+    failure_behavior = info.get("failure_behavior")
+    if failure_behavior is None:
+        fb = _FALLBACK_REGISTRY.get(repo_id_or_key) or next((v for k, v in _FALLBACK_REGISTRY.items() if v.get("key") == repo_id_or_key), None)
+        if fb:
+            failure_behavior = fb.get("failure_behavior")
+    if failure_behavior not in VALID_FAILURE_BEHAVIORS:
+        raise ValueError(f"Model '{repo_id_or_key}' has invalid or missing failure_behavior: {failure_behavior} (must be in {VALID_FAILURE_BEHAVIORS})")
+
+    revision = info.get("revision") or info.get("version")
+    
+    return {
+        "tier_scope": tier_scope,
+        "classification": classification,
+        "gated": gated,
+        "requires_token": requires_token,
+        "token_env": token_env,
+        "failure_behavior": failure_behavior,
+        "revision": revision,
+        "is_external": info.get("is_external", False),
+        "source_url": info.get("source_url"),
+        "local_path": info.get("local_path"),
+        "required": info.get("required", classification in ("REQUIRED_INSTALL_BLOCKER", "REQUIRED_FIRST_LAUNCH")),
+    }
+
 def lookup_model(repo_id_or_key: str) -> Tuple[Optional[str], Dict[str, Any]]:
     """Look up repo_id and access metadata from the model registry or fallbacks."""
     registry = load_registry()
@@ -170,55 +484,30 @@ def lookup_model(repo_id_or_key: str) -> Tuple[Optional[str], Dict[str, Any]]:
     hf_models = registry.get("huggingface_models", {})
     if repo_id_or_key in hf_models:
         info = hf_models[repo_id_or_key]
-        return info.get("repo_id"), {
-            "gated": info.get("requires_auth", False) or info.get("access_control", {}).get("requires_hf_token", False),
-            "required": info.get("required", True),
-            "revision": info.get("revision")
-        }
+        repo_id = info.get("repo_id")
+        return repo_id, _validate_and_normalize_metadata(info, repo_id_or_key)
         
     for key, info in hf_models.items():
         if info.get("repo_id") == repo_id_or_key:
-            return repo_id_or_key, {
-                "gated": info.get("requires_auth", False) or info.get("access_control", {}).get("requires_hf_token", False),
-                "required": info.get("required", True),
-                "revision": info.get("revision")
-            }
+            return repo_id_or_key, _validate_and_normalize_metadata(info, key)
 
     # 2. Check external models
     external_models = registry.get("external_models", {})
     if repo_id_or_key in external_models:
         info = external_models[repo_id_or_key]
-        return repo_id_or_key, {
-            "gated": False,
-            "required": info.get("required", True),
-            "revision": info.get("version"),
-            "is_external": True,
-            "source_url": info.get("source_url"),
-            "local_path": info.get("local_path")
-        }
+        info_with_ext = dict(info)
+        info_with_ext["is_external"] = True
+        return repo_id_or_key, _validate_and_normalize_metadata(info_with_ext, repo_id_or_key)
 
     # 3. Check fallbacks
     if repo_id_or_key in _FALLBACK_REGISTRY:
         fb = _FALLBACK_REGISTRY[repo_id_or_key]
-        return fb.get("key") or repo_id_or_key, {
-            "gated": fb.get("gated", False),
-            "required": fb.get("required", True),
-            "revision": fb.get("revision"),
-            "is_external": fb.get("is_external", False),
-            "source_url": fb.get("source_url"),
-            "local_path": fb.get("local_path")
-        }
+        key = fb.get("key") or repo_id_or_key
+        return key, _validate_and_normalize_metadata(fb, repo_id_or_key)
         
     for r_id, fb in _FALLBACK_REGISTRY.items():
         if fb.get("key") == repo_id_or_key or r_id == repo_id_or_key:
-            return r_id, {
-                "gated": fb.get("gated", False),
-                "required": fb.get("required", True),
-                "revision": fb.get("revision"),
-                "is_external": fb.get("is_external", False),
-                "source_url": fb.get("source_url"),
-                "local_path": fb.get("local_path")
-            }
+            return r_id, _validate_and_normalize_metadata(fb, r_id)
             
     return None, {}
 
@@ -616,6 +905,7 @@ def ensure_model_cached(
                 import zipfile
                 import io
                 import shutil
+                import ssl
                 
                 attempts = 4
                 target_dir = models_root / "hub" / "snakers4_silero-vad_master"
@@ -627,17 +917,24 @@ def ensure_model_cached(
                         rev_part = resolved_revision if resolved_revision and resolved_revision != "master" else "master"
                         url = f"https://github.com/snakers4/silero-vad/archive/{rev_part}.zip"
                         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                        with urllib.request.urlopen(req) as response:
+                        
+                        ctx = ssl._create_unverified_context()
+                        with urllib.request.urlopen(req, context=ctx) as response:
                             zip_data = response.read()
                         
                         with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
                             zip_ref.extractall(str(models_root / "hub"))
                         
                         extracted_dir = models_root / "hub" / f"silero-vad-{rev_part}"
-                        if not extracted_dir.exists() and rev_part == "master":
-                            cands = list(models_root.glob("hub/silero-vad-*"))
-                            if cands:
-                                extracted_dir = cands[0]
+                        if not extracted_dir.exists():
+                            clean_rev = rev_part.lstrip("v")
+                            alt_dir = models_root / "hub" / f"silero-vad-{clean_rev}"
+                            if alt_dir.exists():
+                                extracted_dir = alt_dir
+                            else:
+                                cands = list(models_root.glob("hub/silero-vad-*"))
+                                if cands:
+                                    extracted_dir = cands[0]
                                 
                         if target_dir.exists():
                             shutil.rmtree(target_dir)

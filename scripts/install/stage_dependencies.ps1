@@ -207,8 +207,19 @@ if ($Mode -eq "Acquire") {
     $StagedWheelsDir = [System.IO.Path]::GetFullPath($wheelsDir)
     $PipArgs = @("-m", "pip", "install", "--dry-run", "--no-index", "--find-links=$StagedWheelsDir", "-r", "$lockfilePath")
     
+    $pythonExe = "python"
+    if ($env:GOODQ_DEV_PYTHON) {
+        $pythonExe = $env:GOODQ_DEV_PYTHON
+    } elseif ($env:CONDA_PREFIX) {
+        $pythonExe = Join-Path $env:CONDA_PREFIX "python.exe"
+    }
+    
+    Write-Host "  Using Python executable: $pythonExe" -ForegroundColor Yellow
+    Write-Host "  Using Wheels Dir: $StagedWheelsDir" -ForegroundColor Yellow
+    Write-Host "  Using Lockfile Path: $lockfilePath" -ForegroundColor Yellow
+    
     $ProcessParams = @{
-        FilePath = "python"
+        FilePath = $pythonExe
         ArgumentList = $PipArgs
         RedirectStandardError = $TempErrorFile
         NoNewWindow = $true

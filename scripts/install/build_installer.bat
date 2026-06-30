@@ -8,6 +8,14 @@ echo ==============================================
 
 cd "%~dp0"
 
+:: Resolve PowerShell command (pwsh preferred, fallback to powershell)
+where pwsh >nul 2>nul
+if %ERRORLEVEL% equ 0 (
+    set "PS_CMD=pwsh"
+) else (
+    set "PS_CMD=powershell"
+)
+
 :: 1. Enforce strict offline environment variables
 set PIP_NO_INDEX=1
 set HF_HUB_OFFLINE=1
@@ -18,7 +26,7 @@ set NETWORK_POLICY=blocked
 
 :: 2. Preflight Check: Run Poison Scan and Script Verification via PowerShell
 echo Running pre-build security audits and network blocks...
-powershell -NoProfile -ExecutionPolicy Bypass -File preflight_check.ps1
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File preflight_check.ps1
 
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Pre-build security audits failed. Code: %ERRORLEVEL%
@@ -27,14 +35,14 @@ if %ERRORLEVEL% neq 0 (
 
 :: 3. Run stage_dependencies.ps1 in Verify and Audit modes
 echo Running offline cache checksum verification...
-powershell -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging verification failed. Cache files are missing or corrupt.
     exit /b 2
 )
 
 echo Running offline licensing compliance audit...
-powershell -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
@@ -59,7 +67,8 @@ if %ERRORLEVEL% neq 0 (
 echo Syncing installer version and metadata...
 python sync_nsi_version.py
 if %ERRORLEVEL% neq 0 (
-    echo [WARN] Could not sync version metadata — continuing with existing values.
+    echo [ERROR] Version synchronization failed. Aborting build.
+    exit /b 12
 )
 
 :: 4b. Compile Supervising Launcher LAUNCH_GOODQ.go
@@ -85,7 +94,7 @@ if not exist "staged\wsl" mkdir "staged\wsl"
 
 :: Copy from staged_cache to staging folder
 copy /y "staged_cache\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
-powershell -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
+%PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 
 (
 echo python310.zip
@@ -106,10 +115,10 @@ if %ERRORLEVEL% neq 0 (
 del staged\get-pip.py
 
 copy /y "staged_cache\db\qdrant.zip" "staged\qdrant.zip" >nul
-powershell -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
+%PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
 
-copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul
-powershell -NoProfile -Command "Expand-Archive -Path 'staged\nssm.zip' -DestinationPath 'staged\nssm_bin' -Force"
+copy /y "staged_cache\build_tools\nssm.zip" "staged\nssm.zip" >nul
+%PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\nssm.zip' -DestinationPath 'staged\nssm_bin' -Force"
 copy /y staged\nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.exe >nul
 
 copy /y "staged_cache\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
@@ -179,8 +188,8 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 7. Write Release Manifest
-echo Generating Release Manifest...
-powershell -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1
+echo Generating release manifest and signatures...
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1
 
 echo ==============================================
 echo [OK] Installer compilation successfully complete.

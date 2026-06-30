@@ -185,7 +185,7 @@ def load_silero_vad(offline: bool = False) -> Tuple[Any, Any]:
         
     if is_offline:
         raise OSError(
-            "Offline mode: Silero VAD model 'snakers4/silero-vad' (revision '290cda0' pinned) is missing from local cache (hubconf.py not found in any search path).\n"
+            "Offline mode: Silero VAD model 'snakers4/silero-vad' (revision 'v4.0' pinned) is missing from local cache (hubconf.py not found in any search path).\n"
             "Status: Non-gated.\n"
             "Requirements: No Hugging Face token or license terms required.\n"
             "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-silero"

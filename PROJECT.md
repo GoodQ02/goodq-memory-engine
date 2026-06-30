@@ -1,17 +1,33 @@
-# Project: WSL2 Gated Models Migration (Sprint B2)
+# Project: GoodQ4All v2.5.8-rc4 Candidate — Version Sync & Model Prefetch Hardening
 
 ## Architecture
-WSL2 Audio Processing Lane connects to the Windows UCF ingestion pipeline. Gated models (PyAnnote diarization, Wav2Vec2 emotion, Wav2Vec2 audio embedder) must run in offline mode (local-first cache loading), governed by local configuration with zero network reachability during normal execution. Tokens (HF_TOKEN) are securely propagated and redacted in all logs.
+- **Version Sync**: `goodq_version.py` is the version source of truth. `sync_nsi_version.py` parses it and synchronizes the version string to `goodq4all_installer.nsi` (DisplayVersion) and `versioninfo.json` (prerelease strings). `build_installer.bat` runs the sync script and must fail the build pipeline if version synchronization fails.
+- **Model Prefetch**: `configs/model_registry.yaml` lists model definitions. `scripts/bootstrap_models.py` downloads models using `steps/common/model_provisioner.py` and logs to writable logs path. It must exit non-zero if any `REQUIRED` model fails to prefetch. `LAUNCH_GOODQ.go` executes bootstrap and must fail startup if it exits non-zero.
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | WSL2 Audio Model Audit & Inventory | Audit files and create `wsl2_audio_model_inventory.md` | None | DONE (Conv ID: 79c0ec7b-d4ef-409b-be9f-f71e50e0ef7b) |
-| 2 | Offline Isolation & Loader Refactoring | Local-first loading, token propagation & redaction, cache mapping | M1 | DONE (Conv ID: c2b328b3-4daf-4c05-81cf-0f04d6e304d9) |
-| 3 | Verification & Windows UCF Integration | No-network tests, controlled pipeline run, UCF evidence check | M2 | DONE (Conv ID: 2a740f59-77d3-40ea-affc-d48ed1c2abd6) |
+| 1 | Phase 0 Audit & Fix Plan | Audit version surfaces, model prefetch registries, and prepare Fix Plan | None | DONE |
+| 2 | Version Sync Automation (R1, R5) | Regex fix in `sync_nsi_version.py`, build script error gating, and update version files to rc4 | M1 | PLANNED |
+| 3 | Model Prefetch Hardening & Python Path Resolution (R2, R3, R4) | Pin `silero_vad` to tag `v4.0.2`, exit 1 in `bootstrap_models.py` on required failure, terminate startup in `LAUNCH_GOODQ.go`, and implement fallback Python path resolution | M1 | PLANNED |
+| 4 | Testing & Build Gates | Verify unit tests, check mock failures, run stage check, and rebuild installer | M2, M3 | PLANNED |
+| 5 | Sandbox & Release Verification | Verify DisplayVersion and bootstrap failure behavior in sandbox; generate release manifest and tags | M4 | PLANNED |
 
 ## Interface Contracts
-### Windows Ingestion ↔ WSL2 Audio Service
-- Communication via HTTP bridge / process invocation
-- Output artifacts (diarization segments, speaker labels, voice signatures, emotion outputs) must be consumed by Windows UCF pipeline and written to DB.
-- Tokens (HF_TOKEN) must be resolved from `.env.local` / config on Windows and propagated securely without being printed in command line or logs.
+### `sync_nsi_version.py` ↔ `build_installer.bat`
+- Exit Code: `0` on successful update of all fields. Non-zero if regex replacement fails or file cannot be written.
+- Error Handling: Batch script checks `%ERRORLEVEL%` and exits immediately, halting installer compilation.
+
+### `bootstrap_models.py` ↔ `LAUNCH_GOODQ.go`
+- Exit Code: `0` on success or only optional model failures. `1` if any required model (e.g. `silero_vad`) fails.
+- Output Report: Writes progress and report JSON.
+- Launcher Handling: Launcher checks command execution exit error and aborts with fatal error box instead of continuing.
+
+## Code Layout
+- `goodq_version.py` - package version source of truth.
+- `scripts/install/sync_nsi_version.py` - version sync automation script.
+- `scripts/install/goodq4all_installer.nsi` - NSIS installer configuration script.
+- `scripts/install/versioninfo.json` - metadata for built executable.
+- `configs/model_registry.yaml` - model definitions registry.
+- `scripts/bootstrap_models.py` - model download orchestrator.
+- `LAUNCH_GOODQ.go` - Go launcher and watchdog manager.

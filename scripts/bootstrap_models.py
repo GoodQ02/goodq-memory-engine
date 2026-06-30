@@ -28,6 +28,8 @@ except Exception:  # pragma: no cover
 
 
 DEFAULT_DOWNLOAD_RETRIES = 4
+
+from steps.common.model_provisioner import lookup_model
 YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
 _HF_TOKEN_CANDIDATES = ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACE_TOKEN")
 _PLACEHOLDER_TOKENS = {
@@ -232,6 +234,49 @@ def _normalize_main_ref_for_pinned_snapshot(
     (refs_dir / "main").write_bytes(resolved_revision.encode("utf-8"))
 
 
+def resolve_active_scopes(repo_root: Path) -> List[str]:
+    # Look for install_receipt.json
+    # Precedence:
+    # 1. GOODQ_DATA_ROOT / install_receipt.json
+    # 2. C:\ProgramData\GoodQ4All\install_receipt.json
+    # 3. repo_root / "install_receipt.json"
+    
+    receipt_paths = []
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        receipt_paths.append(Path(data_root) / "install_receipt.json")
+    receipt_paths.append(Path("C:/ProgramData/GoodQ4All/install_receipt.json"))
+    receipt_paths.append(repo_root / "install_receipt.json")
+    
+    active_scopes = ["baseline"]
+    
+    for path in receipt_paths:
+        if path.is_file():
+            try:
+                import json
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if data.get("cpu_only_status") in ("ok", "installed") or data.get("cpu_status") in ("ok", "installed"):
+                    if "cpu_only" not in active_scopes:
+                        active_scopes.append("cpu_only")
+                if data.get("gpu_enhanced_status") in ("ok", "installed", True):
+                    if "gpu_enhanced" not in active_scopes:
+                        active_scopes.append("gpu_enhanced")
+                if data.get("wsl_status") in ("ok", "installed", True) or data.get("wsl_audio_status") in ("ok", "installed", True):
+                    if "wsl_audio" not in active_scopes:
+                        active_scopes.append("wsl_audio")
+                print(f"[bootstrap] Read install_receipt.json from {path}. Active scopes: {active_scopes}")
+                return active_scopes
+            except Exception as e:
+                print(f"[bootstrap] Warning: Failed to parse receipt at {path}: {e}")
+                
+    if os.environ.get("GOODQ_DEV_MODE") == "true" or os.environ.get("GOODQ_DEV_PYTHON"):
+        active_scopes.extend(["cpu_only", "gpu_enhanced", "wsl_audio"])
+    else:
+        active_scopes.extend(["cpu_only", "gpu_enhanced"])
+        
+    print(f"[bootstrap] No install_receipt.json found. Default active scopes: {active_scopes}")
+    return active_scopes
+
 def _build_report(
     *,
     models_root: Path,
@@ -244,17 +289,95 @@ def _build_report(
     progress_path: Path,
     current_model: str | None = None,
     fatal_error: str | None = None,
+    final_status: str | None = None,
+    active_scopes: List[str] = None,
 ) -> Dict[str, Any]:
+    from steps.common.model_provisioner import lookup_model
+    if active_scopes is None:
+        active_scopes = ["baseline", "cpu_only", "gpu_enhanced"]
+        
+    total_assets = len(results)
+    
+    success_count = 0
+    warning_count = 0
+    error_count = 0
+    required_assets = 0
+    optional_assets = 0
+    failed_required_assets = []
+    failed_optional_assets = []
+    
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HF_HUB_TOKEN")
+    pyannote_token = os.environ.get("PYANNOTE_TOKEN")
+    
+    for r in results:
+        repo_id = r.get("repo_id") or r.get("name")
+        status_val = r.get("status")
+        
+        _, metadata = lookup_model(repo_id)
+        
+        tier_scope = metadata.get("tier_scope", [])
+        is_active = any(scope in active_scopes for scope in tier_scope)
+        gated = metadata.get("gated", False)
+        requires_token = metadata.get("requires_token", False)
+        token_env = metadata.get("token_env")
+        has_token = False
+        if token_env:
+            token_val = os.environ.get(token_env) or (hf_token if token_env == "HF_TOKEN" else pyannote_token)
+            has_token = bool(token_val and token_val.strip())
+            
+        is_required_failure = False
+        if is_active:
+            if gated and requires_token:
+                if has_token and metadata.get("failure_behavior") == "FATAL_HALT":
+                    is_required_failure = True
+            else:
+                if metadata.get("failure_behavior") == "FATAL_HALT":
+                    is_required_failure = True
+                    
+        if is_required_failure:
+            required_assets += 1
+        else:
+            optional_assets += 1
+            
+        if status_val == "error":
+            error_count += 1
+            if is_required_failure:
+                failed_required_assets.append(repo_id)
+            else:
+                failed_optional_assets.append(repo_id)
+        elif status_val == "warning":
+            warning_count += 1
+            failed_optional_assets.append(repo_id)
+        else:
+            success_count += 1
+            
+    if failed_required_assets or status == "failed":
+        resolved_final_status = "failed"
+    elif failed_optional_assets or error_count > 0 or warning_count > 0:
+        resolved_final_status = "partial"
+    else:
+        resolved_final_status = "success"
+        
     payload: Dict[str, Any] = {
         "models_dir": str(models_root),
         "registry_loaded": registry_loaded,
         "pinned_models_count": pinned_models_count,
         "download_retries": retries,
         "status": status,
+        "final_status": resolved_final_status,
         "completed_count": len(results),
         "current_model": current_model,
         "progress_path": str(progress_path),
         "updated_at": time.time(),
+        "active_scopes": active_scopes,
+        "total_assets": total_assets,
+        "required_assets": required_assets,
+        "optional_assets": optional_assets,
+        "success_count": success_count,
+        "warning_count": warning_count,
+        "error_count": error_count,
+        "failed_required_assets": failed_required_assets,
+        "failed_optional_assets": failed_optional_assets,
         "env": {
             "HF_HOME": os.environ.get("HF_HOME"),
             "TORCH_HOME": os.environ.get("TORCH_HOME"),
@@ -667,7 +790,9 @@ def main() -> None:
         progress_state["last_progress_at"] = time.time()
         _write_json_atomic(progress_path, progress_state)
 
-    def write_report(status: str, *, current_model: str | None = None, fatal_error: str | None = None) -> None:
+    active_scopes = resolve_active_scopes(repo_root)
+
+    def write_report(status: str, *, current_model: str | None = None, fatal_error: str | None = None, final_status: str | None = None) -> None:
         _write_json_atomic(
             report_path,
             _build_report(
@@ -681,6 +806,8 @@ def main() -> None:
                 progress_path=progress_path,
                 current_model=current_model,
                 fatal_error=fatal_error,
+                final_status=final_status,
+                active_scopes=active_scopes,
             ),
         )
 
@@ -711,7 +838,18 @@ def main() -> None:
             )
             if revision:
                 result["pinned_revision"] = revision
+            
+            # Find and track classification
+            _, metadata = lookup_model(repo_id)
+            classification = metadata.get("classification")
+            if not classification:
+                if metadata.get("required") or repo_id in WSL_DIARIZATION_MODEL_REPOS:
+                    classification = "REQUIRED_FIRST_LAUNCH"
+                else:
+                    classification = "OPTIONAL_FEATURE"
+            result["classification"] = classification
             results.append(result)
+
             emit_progress(
                 current_model=repo_id,
                 current_index=index,
@@ -719,6 +857,41 @@ def main() -> None:
                 last_event="model_completed",
                 completed_count=len(results),
             )
+
+            # Enforce classification check
+            if result.get("status") == "error":
+                is_active = any(scope in active_scopes for scope in metadata.get("tier_scope", []))
+                gated = metadata.get("gated", False)
+                requires_token = metadata.get("requires_token", False)
+                token_env = metadata.get("token_env")
+                has_token = False
+                if token_env:
+                    token_val = os.environ.get(token_env) or (hf_token if token_env == "HF_TOKEN" else pyannote_token)
+                    has_token = bool(token_val and token_val.strip())
+                    
+                enforce_fatal = False
+                if is_active:
+                    if gated and requires_token:
+                        if has_token and metadata.get("failure_behavior") == "FATAL_HALT":
+                            enforce_fatal = True
+                    else:
+                        if metadata.get("failure_behavior") == "FATAL_HALT":
+                            enforce_fatal = True
+                            
+                if enforce_fatal:
+                    err_msg = f"Required model {repo_id} failed to download: {result.get('error')}"
+                    _log(f"[ERROR] {err_msg}")
+                    write_report("failed", current_model=repo_id, fatal_error=err_msg, final_status="failed")
+                    emit_progress(
+                        status="failed",
+                        last_event="fatal_error",
+                        last_error=err_msg,
+                        completed_count=len(results),
+                    )
+                    sys.exit(1)
+                else:
+                    _log(f"[WARN] Optional or inactive model {repo_id} failed to download: {result.get('error')}. Skipping since it is non-fatal for active scopes.")
+
             write_report("in_progress", current_model=repo_id)
 
         emit_progress(
@@ -728,21 +901,44 @@ def main() -> None:
             last_event="asset_started",
             completed_count=len(results),
         )
-        results.append(
-            download_yolo_n(
-                retries=args.retries,
-                progress_label=f"{total_assets}/{total_assets}",
-                progress_cb=emit_progress,
-            )
+        yolo_res = download_yolo_n(
+            retries=args.retries,
+            progress_label=f"{total_assets}/{total_assets}",
+            progress_cb=emit_progress,
         )
+        _, yolo_metadata = lookup_model("yolo_v8n")
+        yolo_classification = yolo_metadata.get("classification", "REQUIRED_FIRST_LAUNCH")
+        yolo_res["classification"] = yolo_classification
+        results.append(yolo_res)
+
         emit_progress(
             current_model="yolov8n.pt",
             current_index=total_assets,
-            current_attempt=results[-1].get("attempts"),
+            current_attempt=yolo_res.get("attempts"),
             last_event="asset_completed",
             completed_count=len(results),
         )
-        write_report("complete", current_model=None)
+
+        if yolo_res.get("status") == "error":
+            yolo_tier_scope = yolo_metadata.get("tier_scope", [])
+            is_yolo_active = any(scope in active_scopes for scope in yolo_tier_scope)
+            enforce_yolo_fatal = is_yolo_active and yolo_metadata.get("failure_behavior") == "FATAL_HALT"
+            
+            if enforce_yolo_fatal:
+                err_msg = f"Required asset yolov8n.pt failed to download: {yolo_res.get('error')}"
+                _log(f"[ERROR] {err_msg}")
+                write_report("failed", current_model="yolov8n.pt", fatal_error=err_msg, final_status="failed")
+                emit_progress(
+                    status="failed",
+                    last_event="fatal_error",
+                    last_error=err_msg,
+                    completed_count=len(results),
+                )
+                sys.exit(1)
+            else:
+                _log(f"[WARN] Optional or inactive asset yolov8n.pt failed to download: {yolo_res.get('error')}. Skipping since it is non-fatal for active scopes.")
+
+        write_report("complete", current_model=None, final_status="success")
         emit_progress(
             status="complete",
             current_model=None,
@@ -758,7 +954,7 @@ def main() -> None:
             last_event="keyboard_interrupt",
             completed_count=len(results),
         )
-        write_report("interrupted", current_model=str(progress_state.get("current_model") or ""), fatal_error="KeyboardInterrupt")
+        write_report("interrupted", current_model=str(progress_state.get("current_model") or ""), fatal_error="KeyboardInterrupt", final_status="failed")
         log_download_event("Bootstrap models interrupted by user.")
         raise
     except Exception as exc:
@@ -769,7 +965,7 @@ def main() -> None:
             last_error=exc_str,
             completed_count=len(results),
         )
-        write_report("failed", current_model=str(progress_state.get("current_model") or ""), fatal_error=exc_str)
+        write_report("failed", current_model=str(progress_state.get("current_model") or ""), fatal_error=exc_str, final_status="failed")
         log_download_event(f"Bootstrap models failed: {exc_str}")
         raise
 

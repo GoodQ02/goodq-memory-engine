@@ -1,3 +1,4 @@
+<!-- DOC_LAST_VERIFIED: 2026-06-30 -->
 # Gemini Desktop Agent & Workspace Integration
 
 This guide documents the integration, environment path settings, Model Context Protocol (MCP) servers, credentials, and local workstation configurations for the primary dev workstation.
@@ -19,17 +20,30 @@ To prevent command resolution failures for development tools (such as Node.js, C
 
 ## 2. Model Context Protocol (MCP) Setup
 
-MCP servers are registered globally in `%USERPROFILE%\.gemini\config\mcp_config.json` to equip the agent with local tools:
+MCP servers are registered globally in `%USERPROFILE%\.gemini\config\mcp_config.json`. As of 2026-06-30, 12 servers are configured:
 
-1. **Sequential Thinking (`sequential-thinking`)**:
-   * **Runner**: `npx -y @modelcontextprotocol/server-sequential-thinking`
-   * **Status**: Fully enabled (the `"disabledTools"` constraint has been removed, unlocking the `sequentialthinking` reasoning tool).
-2. **Mock Reference Server (`everything`)**:
-   * **Runner**: `npx -y @modelcontextprotocol/server-everything`
-   * **Status**: Enabled for testing prompts, resources, and mock tools.
-3. **Global Permission Grants**:
-   * Configured in `%USERPROFILE%\.gemini\config\config.json`.
-   * Permitted domains: Includes `127.0.0.1`, `192.168.1.1`, `github.com`, and `*` (global URL reading via `read_url(*)`) to allow the agent to parse web search results.
+**Local npx-based servers:**
+1. **`chrome-devtools-mcp`** — Chrome DevTools automation (click, navigate, screenshot, etc.)
+2. **`sequential-thinking`** — Structured reasoning tool
+3. **`everything`** — Mock reference server for testing
+
+**Google Cloud managed MCP servers** (authenticated via `google_credentials`):
+4. **`cloud-sql-managed-mcp`** — Cloud SQL instance management
+5. **`gmp-code-assist`** — Google Maps code assistance
+6. **`google-cloud-logging`** — Cloud Logging queries
+7. **`google-cloud-monitoring`** — Cloud Monitoring metrics and alerts
+8. **`google-cloud-resource-manager`** — Project search
+9. **`google-compute-engine`** — Compute Engine instance management
+10. **`google-developer-knowledge`** — Developer documentation search
+11. **`vertex-ai-search`** — Vertex AI Search and conversational search
+12. **`knowledge-catalog`** — Dataplex knowledge catalog
+
+**HTTP MCP servers with API keys:**
+- **`context7`** — Library documentation (requires `CONTEXT7_API_KEY` header). Key stored as literal in JSON because Gemini does not support env var expansion in MCP headers. Must match canonical key in `%USERPROFILE%\.env.local`.
+
+**Global Permission Grants:**
+* Configured in `%USERPROFILE%\.gemini\config\config.json`.
+* Permitted domains: Includes `127.0.0.1`, `192.168.1.1`, `github.com`, and `*` (global URL reading via `read_url(*)`).
 
 ---
 
@@ -68,7 +82,7 @@ To support automated model weight downloads (including gated models like Gemma 2
 
 ## 5. Local Compute Clustering Roadmap (LAN Extension)
 
-For utilizing underutilized LAN compute nodes on the secure network:
+> **STATUS: ROADMAP — Not yet implemented.** The following describes future intent, not production reality.
 
 ```
                   [ प्राइमरी Workstation (GOOD-CUBE) ]

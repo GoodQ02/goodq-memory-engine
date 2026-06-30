@@ -100,6 +100,12 @@ func main() {
 	_ = os.MkdirAll(programDataDir, 0755)
 	_ = os.MkdirAll(appDataDir, 0700)
 
+	logsDir := filepath.Join(programDataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+
+	appLogsDir := filepath.Join(appDataDir, "logs")
+	_ = os.MkdirAll(appLogsDir, 0755)
+
 	// Ensure GoodQ_Data and import/export/processed/failed directories exist
 	goodqDataDir := filepath.Join(programDataDir, "GoodQ_Data")
 	_ = os.MkdirAll(filepath.Join(goodqDataDir, "import_inbox"), 0755)
@@ -133,7 +139,13 @@ func main() {
 
 	fmt.Println("[LAUNCHER] Bootstrapping model cache (First-Launch required models only)...")
 	bootstrapScript := filepath.Join(programFilesDir, "scripts", "bootstrap_models.py")
-	bootstrapCmd := exec.Command(pythonExe, bootstrapScript, "--first-launch")
+	bootstrapReportPath := filepath.Join(logsDir, "bootstrap_models_report.json")
+	bootstrapProgressPath := filepath.Join(logsDir, "bootstrap_models_progress.json")
+	bootstrapCmd := exec.Command(pythonExe, bootstrapScript,
+		"--first-launch",
+		"--report-path", bootstrapReportPath,
+		"--progress-path", bootstrapProgressPath,
+	)
 	prepareCmd(bootstrapCmd)
 	
 	bootstrapOutput, err := bootstrapCmd.CombinedOutput()
@@ -176,8 +188,7 @@ func main() {
 	_ = os.WriteFile(filepath.Join(appDataDir, "session_token.json"), tokenBytes, 0600)
 	fmt.Println("[LAUNCHER] [OK] Secure localhost session token written to User AppData.")
 
-	logsDir := filepath.Join(programDataDir, "logs")
-	_ = os.MkdirAll(logsDir, 0755)
+	// logsDir is already created and defined above
 
 	// 5. Start Qdrant in Personal Mode (bound to localhost only)
 	var qdrantExeName string

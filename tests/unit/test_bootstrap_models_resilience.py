@@ -425,3 +425,93 @@ def test_redact_sensitive_info_bootstrap_models(monkeypatch):
     redacted_pat = bootstrap_models.redact_sensitive_info("hf_abc123xyz789")
     assert "hf_abc123xyz789" not in redacted_pat
     assert "hf_" in redacted_pat
+
+
+def test_resolve_bootstrap_log_dir_precedence(monkeypatch, tmp_path):
+    from scripts import bootstrap_models
+    import sys
+
+    # Save sys.argv
+    old_argv = list(sys.argv)
+
+    # We will mock _is_log_dir_writable to control writability dynamically.
+    # We will use a dictionary mapped by string of path to boolean.
+    writable_paths = {}
+    monkeypatch.setattr(bootstrap_models, "_is_log_dir_writable", lambda path: writable_paths.get(str(Path(path).resolve()), True))
+
+    # Helper to clean environment and sys.argv
+    def clean_env():
+        monkeypatch.delenv("GOODQ_DATA_ROOT", raising=False)
+        monkeypatch.delenv("LOCALAPPDATA", raising=False)
+        monkeypatch.delenv("ProgramFiles", raising=False)
+        monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+        monkeypatch.delenv("ProgramW6432", raising=False)
+        monkeypatch.setattr(sys, "argv", ["bootstrap_models.py"])
+        writable_paths.clear()
+
+    # Define mock paths inside tmp_path
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    
+    # 1. Test CLI path override: --report-path
+    clean_env()
+    cli_report = repo_root / "custom_cli_report" / "report.json"
+    monkeypatch.setattr(sys, "argv", ["bootstrap_models.py", "--report-path", str(cli_report)])
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == cli_report.parent
+
+    # 1b. Test CLI path override: --progress-path
+    clean_env()
+    cli_progress = repo_root / "custom_cli_progress" / "progress.json"
+    monkeypatch.setattr(sys, "argv", ["bootstrap_models.py", "--progress-path", str(cli_progress)])
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == cli_progress.parent
+
+    # 2. Test GOODQ_DATA_ROOT\logs
+    clean_env()
+    data_root = tmp_path / "data_root"
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(data_root))
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == data_root / "logs"
+
+    # 2b. Test GOODQ_DATA_ROOT\logs when not writable -> should fallback to C:\ProgramData\GoodQ4All\logs
+    clean_env()
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(data_root))
+    writable_paths[str((data_root / "logs").resolve())] = False
+    writable_paths[str(Path("C:/ProgramData/GoodQ4All/logs").resolve())] = True
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == Path("C:/ProgramData/GoodQ4All/logs")
+
+    # 3. Test C:\ProgramData\GoodQ4All\logs (writable)
+    clean_env()
+    writable_paths[str(Path("C:/ProgramData/GoodQ4All/logs").resolve())] = True
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == Path("C:/ProgramData/GoodQ4All/logs")
+
+    # 4. Test %LOCALAPPDATA%\GoodQ4All\logs when ProgramData is not writable
+    clean_env()
+    local_appdata = tmp_path / "local_appdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+    writable_paths[str(Path("C:/ProgramData/GoodQ4All/logs").resolve())] = False
+    writable_paths[str((local_appdata / "GoodQ4All" / "logs").resolve())] = True
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == local_appdata / "GoodQ4All" / "logs"
+
+    # 5. Test repo_root\logs (dev mode checkout)
+    clean_env()
+    writable_paths[str(Path("C:/ProgramData/GoodQ4All/logs").resolve())] = False
+    writable_paths[str((repo_root / "logs").resolve())] = True
+    res = bootstrap_models.resolve_bootstrap_log_dir(repo_root)
+    assert res == repo_root / "logs"
+
+    # 5b. Test installed mode under Program Files (must never use repo_root\logs even if writable)
+    clean_env()
+    installed_repo_root = tmp_path / "Program Files" / "GoodQ4All"
+    installed_repo_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "Program Files"))
+    writable_paths[str(Path("C:/ProgramData/GoodQ4All/logs").resolve())] = False
+    writable_paths[str((installed_repo_root / "logs").resolve())] = True
+    res = bootstrap_models.resolve_bootstrap_log_dir(installed_repo_root)
+    assert res != installed_repo_root / "logs"
+    assert "program files" not in str(res).lower()
+

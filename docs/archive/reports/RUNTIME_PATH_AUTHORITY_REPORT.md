@@ -1,4 +1,5 @@
 # Runtime Path Authority Report
+<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 
 - Generated: 2026-06-30T01:09:03.783255+00:00
 - Canonical authority: `steps.common.config_loader.load_configs()` -> `configs/config.yaml`

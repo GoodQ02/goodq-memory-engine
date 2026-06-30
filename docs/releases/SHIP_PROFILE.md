@@ -7,7 +7,7 @@
 **Purpose:** Define the supported, “shippable” surface of GoodQ4All – the commands, environments, and documentation that must remain stable for production use.
 
 **Release stability note:** the current public-facing software version is
-`v2.5.8-rc2`. Treat this shipping profile as a pre-1.0 contract: the supported
+`v2.5.8-rc3`. Treat this shipping profile as a pre-1.0 contract: the supported
 bootstrap path and canonical runtime surface are the priority, while APIs and
 adjacent helper tooling may still evolve between releases.
 

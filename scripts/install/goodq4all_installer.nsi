@@ -8,7 +8,7 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.8-rc2.exe"
+OutFile "..\..\GoodQ4All_Setup_2.5.8-rc3.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -16,7 +16,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.8-rc2 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v2.5.8-rc3 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -130,6 +130,7 @@ runtime_ok:
 
   ; Create data directories under ProgramData
   CreateDirectory "$COMMONAPPDATA\GoodQ4All"
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All\logs"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\storage"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\logs"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\qdrant\config"

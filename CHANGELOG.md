@@ -9,6 +9,14 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.8-rc3] - 2026-06-29 - Bootstrap Writable Path Fixes
+
+### Fixed
+- **Precedence-based Log Directory Resolution**: Implemented a 5-point log path resolution hierarchy to defensively choose safe, writable directories, ensuring installed mode never writes mutable files under `Program Files` or `Program Files (x86)`.
+- **Go Launcher Path Enforcement**: Enforced launcher to pre-create logs folders and pass explicit `--report-path` and `--progress-path` arguments to the bootstrapper pointing to files inside `$ProgramData\GoodQ4All\logs`.
+- **Installer Logs Provisioning**: Configured NSIS installer to create logs folders and recursively apply Normal User Modify rights.
+- **Regression Test Coverage**: Added comprehensive test cases verifying path resolution and security boundaries.
+
 ## [2.5.8-rc2] - 2026-06-29 - Ollama Port Alignment & Receipt Fallback
 
 ### Changed

@@ -456,6 +456,105 @@ def resolve_models_root() -> Path:
     return Path("models")
 
 
+def _is_log_dir_writable(path: Path) -> bool:
+    try:
+        p = Path(path)
+        # Find the closest parent that exists
+        while not p.exists() and p != p.parent:
+            p = p.parent
+        if not p.exists():
+            return False
+        # Try to write a temp file
+        test_file = p / f".tmp_write_test_{os.getpid()}"
+        try:
+            test_file.write_text("test", encoding="utf-8")
+            test_file.unlink()
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
+
+
+def _is_under_program_files(path: Path) -> bool:
+    try:
+        path_str = str(Path(path).resolve()).lower()
+        if "program files" in path_str or "programfiles" in path_str:
+            return True
+        for env_var in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+            val = os.environ.get(env_var)
+            if val:
+                p_val = Path(val).resolve()
+                res_path = Path(path).resolve()
+                if p_val in res_path.parents or res_path == p_val:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def resolve_bootstrap_log_dir(repo_root: Path) -> Path:
+    # 1. Explicit CLI paths: if `--report-path` or `--progress-path` are provided, use their directories.
+    report_path_cli = None
+    progress_path_cli = None
+    try:
+        for idx, arg in enumerate(sys.argv):
+            if arg == "--report-path" and idx + 1 < len(sys.argv):
+                report_path_cli = sys.argv[idx + 1]
+            elif arg.startswith("--report-path="):
+                report_path_cli = arg.split("=", 1)[1]
+            elif arg == "--progress-path" and idx + 1 < len(sys.argv):
+                progress_path_cli = sys.argv[idx + 1]
+            elif arg.startswith("--progress-path="):
+                progress_path_cli = arg.split("=", 1)[1]
+    except Exception:
+        pass
+
+    if report_path_cli:
+        return Path(report_path_cli).parent
+    if progress_path_cli:
+        return Path(progress_path_cli).parent
+
+    # 2. GOODQ_DATA_ROOT\logs (if the GOODQ_DATA_ROOT env var is set and writable).
+    data_root = os.environ.get("GOODQ_DATA_ROOT")
+    if data_root:
+        candidate = Path(data_root) / "logs"
+        if not _is_under_program_files(candidate) and _is_log_dir_writable(candidate):
+            return candidate
+
+    # 3. C:\ProgramData\GoodQ4All\logs (if writable).
+    candidate = Path("C:/ProgramData/GoodQ4All/logs")
+    if not _is_under_program_files(candidate) and _is_log_dir_writable(candidate):
+        return candidate
+
+    # 4. %LOCALAPPDATA%\GoodQ4All\logs (as the final user-writable fallback, using os.getenv("LOCALAPPDATA") or similar).
+    local_appdata = os.getenv("LOCALAPPDATA")
+    if local_appdata:
+        candidate = Path(local_appdata) / "GoodQ4All" / "logs"
+        if not _is_under_program_files(candidate) and _is_log_dir_writable(candidate):
+            return candidate
+
+    # 5. repo_root\logs (ONLY when bootstrap detects dev/source-tree mode; i.e., repo_root is NOT under Program Files or Program Files (x86)).
+    if not _is_under_program_files(repo_root):
+        candidate = repo_root / "logs"
+        if _is_log_dir_writable(candidate):
+            return candidate
+
+    # Fallback in case of absolute failure
+    temp_dir = os.getenv("TEMP") or os.getenv("TMP")
+    if temp_dir:
+        candidate = Path(temp_dir) / "GoodQ4All" / "logs"
+        if not _is_under_program_files(candidate) and _is_log_dir_writable(candidate):
+            return candidate
+
+    fallback = Path(os.path.expanduser("~")) / "GoodQ4All" / "logs"
+    if not _is_under_program_files(fallback):
+        return fallback
+
+    import tempfile
+    return Path(tempfile.gettempdir()) / "GoodQ4All" / "logs"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prefetch local model cache for GoodQ bootstrap")
     parser.add_argument("--report-path", help="Write machine-readable JSON report to this path")
@@ -538,8 +637,15 @@ def main() -> None:
     _log("Model: yolov8n.pt | Source: GitHub | Gated: False | Required: True")
     _log("[bootstrap] --------------------------------")
 
-    report_path = Path(args.report_path) if args.report_path else repo_root / "logs" / "bootstrap_models_report.json"
-    progress_path = Path(args.progress_path) if args.progress_path else repo_root / "logs" / "bootstrap_models_progress.json"
+    log_dir = resolve_bootstrap_log_dir(repo_root)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    report_path = Path(args.report_path) if args.report_path else log_dir / "bootstrap_models_report.json"
+    progress_path = Path(args.progress_path) if args.progress_path else log_dir / "bootstrap_models_progress.json"
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+
     results: List[Dict[str, Any]] = []
     total_assets = len(wanted) + 1
     progress_state: Dict[str, Any] = {

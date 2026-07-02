@@ -310,7 +310,11 @@ def _build_report(
     pyannote_token = os.environ.get("PYANNOTE_TOKEN")
     
     for r in results:
-        repo_id = r.get("repo_id") or r.get("name")
+        repo_id = r.get("repo_id") or r.get("name") or r.get("model") or r.get("asset")
+        if repo_id and "@" in repo_id:
+            repo_id = repo_id.split("@", 1)[0]
+        if repo_id == "yolov8n.pt":
+            repo_id = "yolo_v8n"
         status_val = r.get("status")
         
         _, metadata = lookup_model(repo_id)
@@ -836,6 +840,7 @@ def main() -> None:
                 progress_label=f"{index}/{total_assets}",
                 progress_cb=emit_progress,
             )
+            result["repo_id"] = repo_id
             if revision:
                 result["pinned_revision"] = revision
             
@@ -906,6 +911,7 @@ def main() -> None:
             progress_label=f"{total_assets}/{total_assets}",
             progress_cb=emit_progress,
         )
+        yolo_res["repo_id"] = "yolo_v8n"
         _, yolo_metadata = lookup_model("yolo_v8n")
         yolo_classification = yolo_metadata.get("classification", "REQUIRED_FIRST_LAUNCH")
         yolo_res["classification"] = yolo_classification

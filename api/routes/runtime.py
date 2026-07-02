@@ -65,7 +65,42 @@ _QDRANT_STORAGE = Path(_PATHS_CFG.get("qdrant_storage") or (_DATA_ROOT.parent / 
 _FAISS_DIR = Path(_PATHS_CFG.get("faiss_dir") or (_DATA_ROOT / "faiss"))
 _MODEL_CACHE = Path(_PATHS_CFG.get("model_cache") or os.environ.get("HF_HOME") or (_DATA_ROOT / "cache"))
 _REPORTS_ROOT = Path(os.environ.get("GOODQ_RUN_REPORTS_ROOT") or (_DATA_ROOT / "reports"))
-_WSL_DISTRO = str(os.environ.get("GOODQ_WSL_DISTRO") or _HOST_CFG.get("wsl_distro") or "Ubuntu")
+def _resolve_wsl_distro() -> str:
+    env_override = os.environ.get("GOODQ_WSL_DISTRO")
+    if env_override:
+        return env_override
+    cfg_override = _HOST_CFG.get("wsl_distro")
+    if cfg_override and cfg_override != "auto":
+        return str(cfg_override)
+    try:
+        result = subprocess.run(["wsl", "-l", "-q"], capture_output=True, timeout=1.0)
+        stdout_bytes = result.stdout
+        decoded = ""
+        if isinstance(stdout_bytes, str):
+            decoded = stdout_bytes
+        elif stdout_bytes:
+            encodings = ("utf-16-le", "utf-16", "utf-8") if b"\x00" in stdout_bytes else ("utf-8", "utf-16-le", "utf-16")
+            for encoding in encodings:
+                try:
+                    temp = stdout_bytes.decode(encoding).strip()
+                    temp = temp.replace("\x00", "").strip()
+                    if temp:
+                        decoded = temp
+                        break
+                except Exception:
+                    pass
+        lines = [line.strip().replace("\x00", "") for line in decoded.splitlines() if line.strip()]
+        if lines:
+            for line in lines:
+                if line == "GoodQ_Audio_Distro":
+                    return "GoodQ_Audio_Distro"
+            for line in lines:
+                if "ubuntu" in line.lower():
+                    return line
+            return lines[0]
+    except Exception as e:
+        logger.warning(f"Failed to check registered WSL distros: {e}")
+    return "Ubuntu"
 _WSL_USER = str(os.environ.get("GOODQ_WSL_USER") or "").strip()
 if not _WSL_USER or _WSL_USER.lower() == "auto":
     _WSL_USER = str(os.environ.get("USER") or os.environ.get("USERNAME") or os.environ.get("LOGNAME") or "user")
@@ -331,6 +366,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
     """Combine the previously separate WSL status checks into one shared helper."""
     import shutil
 
+    wsl_distro = _resolve_wsl_distro()
+
     status: Dict[str, Any] = {
         "available": False,
         "status": "not_installed",
@@ -379,7 +416,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
 
     try:
         vllm_check = subprocess.run(
-            ["wsl", "-d", _WSL_DISTRO, "--", "systemctl", "is-active", "vllm-llama1b.service"],
+            ["wsl", "-d", wsl_distro, "--", "systemctl", "is-active", "vllm-llama1b.service"],
             capture_output=True,
             text=True,
             timeout=1.0,
@@ -398,7 +435,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                _WSL_DISTRO,
+                wsl_distro,
                 "--",
                 "bash",
                 "-lc",
@@ -448,7 +485,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                _WSL_DISTRO,
+                wsl_distro,
                 "--",
                 "bash",
                 "-lc",
@@ -470,7 +507,7 @@ def _collect_wsl_status() -> Dict[str, Any]:
             [
                 "wsl",
                 "-d",
-                _WSL_DISTRO,
+                wsl_distro,
                 "--",
                 "bash",
                 "-lc",
@@ -653,7 +690,7 @@ def get_status() -> Dict[str, Any]:
         "components": {
             "api": "running",
             "pipeline": processing_data["status"],
-            "wsl_audio": "available" if wsl_status.get("available") else "unavailable",
+            "wsl_audio": "available" if (wsl_status.get("available") and wsl_status.get("audio_processing") == "available") else "unavailable",
         },
         "gpu": gpu_data,
         "models": models_data,

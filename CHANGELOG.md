@@ -9,6 +9,15 @@ and related canonical docs.
 
 ## [Unreleased]
 
+## [2.5.8-rc5] - 2026-07-02 - API Status & WSL Distro Alignment
+
+### Added
+- **Dynamic WSL Distro Resolution**: Converted static WSL distro to dynamic check that scans registered distros and prefers "GoodQ_Audio_Distro" if found.
+- **Model Bootstrap Report Count Alignment**: Resolved model repo_id with additional fallback keys, handled revision split, mapped yolov8n.pt to yolo_v8n, and populated repo_id in bootstrap results.
+
+### Fixed
+- **Version Bump**: Aligned software version to v2.5.8-rc5 across the codebase.
+
 ## [2.5.8-rc4] - 2026-06-30 - Version Sync & Model Prefetch Hardening
 
 ### Added

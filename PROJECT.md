@@ -1,4 +1,4 @@
-# Project: GoodQ4All v2.5.8-rc4 Candidate — Version Sync & Model Prefetch Hardening
+# Project: GoodQ4All v2.5.8-rc5 Candidate — Version Sync & Model Prefetch Hardening
 
 ## Architecture
 - **Version Sync**: `goodq_version.py` is the version source of truth. `sync_nsi_version.py` parses it and synchronizes the version string to `goodq4all_installer.nsi` (DisplayVersion) and `versioninfo.json` (prerelease strings). `build_installer.bat` runs the sync script and must fail the build pipeline if version synchronization fails.

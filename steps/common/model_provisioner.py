@@ -755,7 +755,7 @@ def ensure_model_cached(
         files_checked = verify_snapshot_files(candidate_snapshot, repo_id)
         if files_checked:
             local_path = candidate_snapshot
-    else:
+    if not local_path:
         # Check refs/main first
         refs_main = repo_cache_dir / "refs" / "main"
         if refs_main.is_file():

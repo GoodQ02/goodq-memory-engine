@@ -75,20 +75,24 @@ def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) 
     repo_root = Path(__file__).resolve().parents[2]
     db_path = tmp_path / "memory.db"
 
+    # Ensure environment override is cleared to test resolution logic
+    monkeypatch.delenv("GOODQ_WSL_DISTRO", raising=False)
+
     runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
-    runtime._WSL_DISTRO = "Ubuntu-22.04"
     runtime._WSL_WORKSPACE = "/home/goodq/goodq_audio"
 
     monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
 
-    def _completed(args: list[str], stdout: str = "", returncode: int = 0):
+    def _completed(args: list[str], stdout: Any = "", returncode: int = 0):
         return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr="")
 
-    def _fake_run(args, *, capture_output, text, timeout):
+    def _fake_run(args, *, capture_output=None, text=None, timeout=None):
         if args == ["wsl", "--status"]:
             return _completed(args, "Default Distribution: Ubuntu-22.04\n")
         if args == ["wsl", "-l", "-v"]:
             return _completed(args, "Ubuntu-22.04 Running 2\n")
+        if args == ["wsl", "-l", "-q"]:
+            return _completed(args, "Ubuntu-22.04\n")
         if args == ["wsl", "-d", "Ubuntu-22.04", "--", "systemctl", "is-active", "vllm-llama1b.service"]:
             return _completed(args, "active\n")
         if args[:5] == ["wsl", "-d", "Ubuntu-22.04", "--", "bash"]:
@@ -111,6 +115,27 @@ def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) 
     assert status["faster_whisper"] == "ready"
     assert status["faster_whisper_version"] == "1.2.1"
     assert status["cuda_version"] == "13.2"
+
+
+def test_resolve_wsl_distro_prefers_goodq_audio_distro(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+
+    monkeypatch.delenv("GOODQ_WSL_DISTRO", raising=False)
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
+
+    def _completed(args: list[str], stdout: Any = "", returncode: int = 0):
+        return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr="")
+
+    def _fake_run(args, *, capture_output=None, text=None, timeout=None):
+        if args == ["wsl", "-l", "-q"]:
+            return _completed(args, b"Ubuntu\r\nGoodQ_Audio_Distro\r\nLegacyDistro\r\n")
+        raise AssertionError(f"unexpected subprocess call: {args!r}")
+
+    monkeypatch.setattr(runtime.subprocess, "run", _fake_run)
+
+    distro = runtime._resolve_wsl_distro()
+    assert distro == "GoodQ_Audio_Distro"
 
 
 def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path, monkeypatch) -> None:
@@ -174,3 +199,22 @@ def test_cli_progress_reader_keeps_completed_progress_non_active(tmp_path: Path,
     assert progress["available"] is True
     assert progress["active"] is False
     assert progress["status"] == "completed"
+
+
+def test_wsl_audio_status_requires_verified_audio_processing(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+
+    monkeypatch.delenv("GOODQ_WSL_DISTRO", raising=False)
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path)
+
+    # 1. WSL available but audio processing unavailable
+    monkeypatch.setattr(runtime, "_collect_wsl_status", lambda: {"available": True, "audio_processing": "unavailable"})
+    status_resp = runtime.get_status()
+    assert status_resp["components"]["wsl_audio"] == "unavailable"
+
+    # 2. WSL available and audio processing available
+    monkeypatch.setattr(runtime, "_collect_wsl_status", lambda: {"available": True, "audio_processing": "available"})
+    status_resp = runtime.get_status()
+    assert status_resp["components"]["wsl_audio"] == "available"
+

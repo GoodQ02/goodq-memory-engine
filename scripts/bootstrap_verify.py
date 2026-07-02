@@ -83,6 +83,8 @@ def _detect_wsl_distro(default: str = DEFAULT_WSL_DISTRO) -> tuple[bool, str, Li
     distros = [line.strip() for line in raw_stdout.splitlines() if line.strip()]
     if not distros:
         return True, default, []
+    if "GoodQ_Audio_Distro" in distros:
+        return True, "GoodQ_Audio_Distro", distros
     ubuntu_like = [candidate for candidate in distros if candidate.lower().startswith("ubuntu")]
     if ubuntu_like:
         chosen = next((candidate for candidate in ubuntu_like if candidate.lower() == "ubuntu"), None) or ubuntu_like[0]

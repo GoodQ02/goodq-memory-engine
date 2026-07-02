@@ -18,7 +18,12 @@ net start "GoodQ_Qdrant" >nul 2>&1
 echo [DEV ON] Starting API Server and Ingestion Watchdog...
 
 set "PYTHONPATH=%~dp0"
-set "PYTHON_EXE=C:\Users\jdben\miniconda3\envs\goodq_core\python.exe"
+set "PYTHON_EXE="
+if exist "%USERPROFILE%\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\envs\goodq_core\python.exe"
+if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\anaconda3\envs\goodq_core\python.exe"
+if not defined PYTHON_EXE if exist "C:\ProgramData\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\miniconda3\envs\goodq_core\python.exe"
+if not defined PYTHON_EXE if exist "C:\ProgramData\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\anaconda3\envs\goodq_core\python.exe"
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
 
 REM Ensure existing API / Watchdog instances are closed first to prevent conflicts
 powershell -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"

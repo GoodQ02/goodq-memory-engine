@@ -83,7 +83,31 @@ if ($Mode -eq "Acquire") {
         if ($needDownload) {
             if ($art.source_url -like "local://*") {
                 # Resolve local Conda environment path
-                $condaBase = "C:\Users\jdben\miniconda3\envs\goodq_audio_embed\Lib\site-packages"
+                $condaBase = ""
+                if ($env:CONDA_PREFIX) {
+                    $condaRoot = Split-Path $env:CONDA_PREFIX -Parent
+                    $envPath = Join-Path $condaRoot "goodq_audio_embed"
+                    if (Test-Path $envPath) {
+                        $condaBase = Join-Path $envPath "Lib\site-packages"
+                    }
+                }
+                if (-not $condaBase -or -not (Test-Path $condaBase)) {
+                    $userHome = [Environment]::GetFolderPath('UserProfile')
+                    $envPath = Join-Path $userHome "miniconda3\envs\goodq_audio_embed"
+                    if (Test-Path $envPath) {
+                        $condaBase = Join-Path $envPath "Lib\site-packages"
+                    }
+                }
+                if (-not $condaBase -or -not (Test-Path $condaBase)) {
+                    $envPath = "C:\ProgramData\miniconda3\envs\goodq_audio_embed"
+                    if (Test-Path $envPath) {
+                        $condaBase = Join-Path $envPath "Lib\site-packages"
+                    }
+                }
+                if (-not $condaBase -or -not (Test-Path $condaBase)) {
+                    Write-Error "  Unable to resolve local Conda environment 'goodq_audio_embed'. Ensure the env exists under Miniconda/Anaconda."
+                    exit 1
+                }
                 $localRel = $art.source_url.Substring(8).Replace("/", "\")
                 $localSrcPath = Join-Path $condaBase $localRel
                 Write-Host "  Copying from local source: $localSrcPath..." -ForegroundColor Yellow

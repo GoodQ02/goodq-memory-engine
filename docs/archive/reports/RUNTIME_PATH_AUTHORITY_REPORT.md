@@ -1,11 +1,12 @@
 # Runtime Path Authority Report
-<!-- ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS -->
 
-- Generated: 2026-06-30T01:09:03.783255+00:00
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+
+- Generated: 2026-07-02T01:39:04.527953+00:00
 - Canonical authority: `steps.common.config_loader.load_configs()` -> `configs/config.yaml`
 - Active runtime HIGH findings: 0
 - Legacy/diagnostic MEDIUM findings: 54
-- Test/docs LOW findings: 130
+- Test/docs LOW findings: 133
 
 ## Runtime Path Authority Map
 

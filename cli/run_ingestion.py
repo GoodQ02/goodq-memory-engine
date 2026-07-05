@@ -3806,6 +3806,7 @@ def _run_step(
         # PHASE 3: Learn from successful execution
         if _control_agent_runtime_enabled():
             try:
+                models_root = _resolve_models_dir(cfg_json=cfg_json)
                 agent = _get_control_agent(cfg_json)
                 agent.learn_from_success(
                     step_name=step_name,

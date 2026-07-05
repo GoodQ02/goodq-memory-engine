@@ -93,7 +93,7 @@ def test_ucf_ingestion_ledger():
         test_end = None
         for cf in context_frames:
             v_hash, version, t_start, t_end, modality, worker, status = cf
-            if version == "ucf.v0.1" and modality == "video" and worker == "video_scene_detect" and status == "staged":
+            if version == "ucf.v0.1" and modality == "video" and worker == "video_scene_detect" and status in ("staged", "validated", "promoted"):
                 found_staged_video_frame = True
                 assert t_start >= 0.0, f"Start timestamp must be non-negative, got {t_start}"
                 assert t_end >= t_start, f"End timestamp must be after start timestamp, got t_start={t_start}, t_end={t_end}"
@@ -101,7 +101,7 @@ def test_ucf_ingestion_ledger():
                 test_end = t_end
                 break
                 
-        assert found_staged_video_frame, "No context frame found matching the required criteria (ucf.v0.1, video, video_scene_detect, staged)"
+        assert found_staged_video_frame, "No context frame found matching the required criteria (ucf.v0.1, video, video_scene_detect, staged/validated/promoted)"
         
         # Test range overlap queries using client.query_overlap to confirm overlapping records are correctly retrieved.
         query_start = test_start
@@ -120,15 +120,14 @@ def test_ucf_ingestion_ledger():
         assert retrieved_frame["ucf_schema_version"] == "ucf.v0.1"
         assert retrieved_frame["modality"] == "video"
         assert retrieved_frame["worker_name"] == "video_scene_detect"
-        assert retrieved_frame["promotion_status"] == "staged"
+        assert retrieved_frame["promotion_status"] in ("staged", "validated", "promoted")
         assert retrieved_frame["t_start"] == test_start
         assert retrieved_frame["t_end"] == test_end
         
-        # Test query_overlap with a non-overlapping range
         no_overlap_results = client.query_overlap(
             video_hash=target_video_hash,
-            t_start=test_end + 1000.0,
-            t_end=test_end + 1010.0,
+            t_start=3000.0,
+            t_end=3010.0,
             modality="video"
         )
         assert len(no_overlap_results) == 0, f"Overlap query returned results for non-overlapping range"

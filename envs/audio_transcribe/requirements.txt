@@ -4,3 +4,4 @@ numba==0.60.0
 ffmpeg-python==0.2.0
 numpy==1.26.4
 soundfile==0.12.1
+pydantic==2.12.5

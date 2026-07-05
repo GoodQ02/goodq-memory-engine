@@ -556,3 +556,80 @@ def test_checks_failed_no_double_count_on_exception(setup_env, monkeypatch):
     failed_count = sum(1 for cat in check_categories if report[cat]["status"] == "failed")
     
     assert report["summary"]["checks_failed"] == failed_count
+
+
+def test_skill_schema_sync():
+    """Verify that canonical ucf_ledger.py and the copy in ucf-invariant-anchor skill are identical."""
+    canonical_path = Path("scripts/ucf/ucf_ledger.py")
+    skill_path = Path(".agents/skills/ucf-invariant-anchor/scripts/ucf_ledger.py")
+    assert canonical_path.exists(), f"{canonical_path} does not exist"
+    assert skill_path.exists(), f"{skill_path} does not exist"
+    
+    # Read both and assert equality to show a detailed diff if they differ
+    canonical_content = canonical_path.read_text(encoding="utf-8")
+    skill_content = skill_path.read_text(encoding="utf-8")
+    assert canonical_content == skill_content, (
+        f"ucf_ledger.py and its skill copy are not identical! "
+        f"Canonical path: {canonical_path.resolve()}, Skill copy path: {skill_path.resolve()}"
+    )
+
+
+def test_timestamp_rounding_and_conflict_handling(setup_env):
+    env = setup_env
+    db_path = env["tmp_path"] / "rounding_test.db"
+    
+    # Reload ucf_ledger module to ensure we get the latest code
+    import importlib
+    import scripts.ucf.ucf_ledger
+    importlib.reload(scripts.ucf.ucf_ledger)
+    from scripts.ucf.ucf_ledger import UCFLedgerClient
+    
+    client = UCFLedgerClient(str(db_path))
+    client.init_schema()
+    
+    video_hash = "mock_video_rounding"
+    client.register_media(
+        video_hash=video_hash,
+        file_path="mock_video.mp4",
+        duration=60.0,
+        fps=30.0,
+        width=1920,
+        height=1080
+    )
+    
+    # Log first frame with high-precision floats: 1.2341 -> 1.234, 2.3456 -> 2.346
+    client.log_frame(
+        video_hash=video_hash,
+        epoch_id="ep1",
+        run_id="run1",
+        t_start=1.2341,
+        t_end=2.3456,
+        modality="audio",
+        worker_name="whisper",
+        model_tag="large",
+        payload={"text": "hello"}
+    )
+    
+    # Log second frame with slightly different floats that round to the same values: 1.2344 -> 1.234, 2.3459 -> 2.346
+    # This should trigger ON CONFLICT and update the payload to {"text": "world"}
+    client.log_frame(
+        video_hash=video_hash,
+        epoch_id="ep1",
+        run_id="run1",
+        t_start=1.2344,
+        t_end=2.3459,
+        modality="audio",
+        worker_name="whisper",
+        model_tag="large",
+        payload={"text": "world"}
+    )
+    
+    # Retrieve the frames from DB and assert only 1 frame exists and it is rounded and updated
+    frames = client.query_overlap(video_hash, 0.0, 10.0)
+    assert len(frames) == 1
+    frame = frames[0]
+    assert frame["t_start"] == 1.234
+    assert frame["t_end"] == 2.346
+    assert frame["payload"] == {"text": "world"}
+    
+    client.close()

@@ -14,3 +14,4 @@ numpy==1.26.4
 faiss-cpu==1.9.0
 reverse_geocoder==1.5.1
 timezonefinder==6.2.0
+pydantic==2.12.5

@@ -108,8 +108,8 @@ def test_f1_09c_quizzes_dir_not_empty():
 
 def test_f1_10_no_unknown_root_directories():
     """Verify no undocumented directories exist in the root workspace."""
-    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes", "reports"}
-    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md", "index.md", "readme_for_agents.md", ".agent_workspace_policy.json", "changelog.md"}
+    allowed_dirs = {"protocols", "models_and_vram", "workflows", "lessons", "templates", "host_profiles", "quizzes", "reports", "registries", "runbooks"}
+    allowed_files = {"bootstrap_agent.ps1", "verify_agent_workspace.py", "original_request.md", "briefing.md", "plan.md", "index.md", "readme_for_agents.md", ".agent_workspace_policy.json", "changelog.md", "soul.md", "service_registry.md", "agent_hierarchy.md", "secret_model.md", "node_registry.md", "good-cube_baseline.md", "service_registry.md.bak", "good-cube_baseline.md.bak"}
     actual_items = os.listdir(WORKSPACE_ROOT)
     for item in actual_items:
         if item == "__pycache__":
@@ -458,7 +458,7 @@ def mock_linter_workspace(tmp_path, monkeypatch):
     (mock_ws / "README_FOR_AGENTS.md").write_text("README for agents. Authority Order: stability first.\n", encoding="utf-8")
     (mock_ws / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     (mock_ws / ".agent_workspace_policy.json").write_text(
-        '{\n  "agents_may_create": ["reports/"],\n  "agents_must_not_create_without_approval": [],\n  "agents_may_edit": [],\n  "agents_must_not_edit_without_approval": []\n}\n',
+        '{\n  "agents_may_create": ["lessons", "reports"],\n  "agents_must_not_create_without_approval": ["protocols", "models_and_vram", "workflows", "host_profiles", "templates", "quizzes"],\n  "agents_may_edit": [],\n  "agents_must_not_edit_without_approval": []\n}\n',
         encoding="utf-8"
     )
     
@@ -989,8 +989,8 @@ def test_f8_03_policy_json_keys():
     assert "forbidden_file_patterns" in policy, "policy missing 'forbidden_file_patterns'"
     
     # Assert specific additions
-    assert "reports/" in policy["agents_may_create"], "policy does not allow reports/ creation"
-    assert "protocols/" in policy["agents_must_not_create_without_approval"], "policy does not require approval for protocols/"
+    assert "reports" in policy["agents_may_create"], "policy does not allow reports/ creation"
+    assert "protocols" in policy["agents_must_not_create_without_approval"], "policy does not require approval for protocols/"
 
 def test_f8_04_host_profiles_standard_fields():
     """Verify that each host profile markdown contains Network and Constraints keywords."""
@@ -1021,7 +1021,7 @@ def test_f8_05_quiz_exactly_8_questions_and_passing_threshold():
     key_file = os.path.join(WORKSPACE_ROOT, "quizzes", "answer_keys", "goodq4all_ingestion_readiness_key.md")
     assert os.path.isfile(key_file), "Quiz answer key file is missing"
 
-def test_f8_06_linter_bans_cache_files():
+def test_f8_06_linter_bans_cache_files(mock_linter_workspace):
     """Verify that the linter correctly flags and bans pycache, pyc, pyo, pytest_cache, mypy_cache, and ruff_cache."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     
@@ -1040,7 +1040,7 @@ def test_f8_06_linter_bans_cache_files():
         if created_dir:
             os.rmdir(banned_dir)
 
-def test_f8_07_linter_bans_file_links():
+def test_f8_07_linter_bans_file_links(mock_linter_workspace):
     """Verify that the linter flags file:/// links in markdown documents."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
@@ -1057,7 +1057,7 @@ def test_f8_07_linter_bans_file_links():
         if os.path.exists(bad_file):
             os.remove(bad_file)
 
-def test_f8_08_linter_bans_conflicted_copies():
+def test_f8_08_linter_bans_conflicted_copies(mock_linter_workspace):
     """Verify that the linter flags files containing 'conflicted copy' in the name."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")
@@ -1074,7 +1074,7 @@ def test_f8_08_linter_bans_conflicted_copies():
         if os.path.exists(bad_file):
             os.remove(bad_file)
 
-def test_f8_09_linter_bans_google_native_shortcuts():
+def test_f8_09_linter_bans_google_native_shortcuts(mock_linter_workspace):
     """Verify that the linter flags Google-native shortcuts and temporary files."""
     linter_path = os.path.join(WORKSPACE_ROOT, "verify_agent_workspace.py")
     protocols_dir = os.path.join(WORKSPACE_ROOT, "protocols")

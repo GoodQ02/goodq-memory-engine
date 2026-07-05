@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-04 -->
+
 # UCF Clean Reingest Verification Report
 
 This report presents the verification details, lifecycle state transitions, direct database/Qdrant payloads, search behavior checks, and final regression results for the UCF Clean Reingest procedure under epoch `epoch_2026_06_15_ucf_clean_verify`.

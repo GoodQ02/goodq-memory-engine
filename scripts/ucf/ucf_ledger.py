@@ -69,7 +69,7 @@ class UCFRecord(BaseModel):
     def validate_timestamps(cls, v: float) -> float:
         if v < 0.0:
             raise ValueError("timestamps must be non-negative double-precision floats")
-        return v
+        return round(v, 3)
 
     @field_validator("worker_name", "model_tag", "video_hash", "epoch_id", "run_id")
     @classmethod
@@ -158,7 +158,8 @@ class UCFLedgerClient:
                 payload_hash TEXT NOT NULL,
                 promotion_status TEXT NOT NULL DEFAULT 'staged',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash)
+                FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash),
+                UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end)
             );
             """,
             "CREATE INDEX IF NOT EXISTS idx_cf_temporal ON context_frames(video_hash, t_start, t_end);",
@@ -306,6 +307,16 @@ class UCFLedgerClient:
             vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
             source_artifact_id, raw_ref, payload, payload_hash, promotion_status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(video_hash, epoch_id, modality, worker_name, t_start, t_end) DO UPDATE SET
+            payload = excluded.payload,
+            payload_hash = excluded.payload_hash,
+            run_id = excluded.run_id,
+            vector_key = excluded.vector_key,
+            confidence = excluded.confidence,
+            promotion_status = excluded.promotion_status,
+            model_tag = excluded.model_tag,
+            raw_ref = excluded.raw_ref,
+            source_artifact_id = excluded.source_artifact_id
         """
         cursor = self.execute_with_retry(query, (
             record.video_hash, record.ucf_schema_version, record.epoch_id, record.run_id,

@@ -254,8 +254,8 @@ def _parse_llm_json_response(content: str) -> Optional[Dict]:
             if end > start:
                 try:
                     return json.loads(content[start:end].strip())
-                except:
-                    pass
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse extracted JSON markdown block: {e}")
         
         # Try to find JSON object boundaries
         start = content.find('{')
@@ -263,8 +263,8 @@ def _parse_llm_json_response(content: str) -> Optional[Dict]:
         if start >= 0 and end > start:
             try:
                 return json.loads(content[start:end])
-            except:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse bounded JSON object: {e}")
     
     logger.warning("Failed to parse JSON from emotional arc LLM response")
     return None

@@ -250,8 +250,8 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
             print(f'[ERROR] Source: {src_path}, slice: {start:.2f}s-{end:.2f}s')
             try:
                 os.remove(tmp_path)
-            except:
-                pass
+            except Exception as remove_err:
+                print(f"[DEBUG] Failed to remove temp slice file: {remove_err}")
             return None
     
     # Try ffmpeg fallback
@@ -301,8 +301,8 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
                 print(f'[DEBUG] Keeping failed temp file for inspection: {tmp_path}')
             else:
                 os.remove(tmp_path)
-    except:
-        pass
+    except Exception as remove_err:
+        print(f"[DEBUG] Failed to clean up temp slice: {remove_err}")
     return None
 
 
@@ -380,8 +380,8 @@ def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: s
                         print(f'[DEBUG] Keeping whisper output for inspection: {fpath}')
                     else:
                         os.remove(fpath)
-            except:
-                pass
+            except Exception as remove_err:
+                print(f"[DEBUG] Failed to clean up whisper helper file {fpath}: {remove_err}")
 
 
 def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional[Dict[str, Any]]:

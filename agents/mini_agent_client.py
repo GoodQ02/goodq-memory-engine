@@ -66,6 +66,7 @@ class ReentrantFileLock:
                     try:
                         fd.close()
                     except Exception:
+                        # Swallowing close exception is intentional and safe when lock acquisition fails
                         pass
                     fd = None
                 if time.time() - start_time > timeout:
@@ -303,7 +304,8 @@ class MiniAgentClient:
                 try:
                     with open(token_store_path, "r", encoding="utf-8") as f:
                         return json.load(f)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to load tokens from {token_store_path}: {e}", exc_info=True)
                     return {}
             return {}
 
@@ -433,6 +435,7 @@ class MiniAgentClient:
             try:
                 os.remove(temp_path_str)
             except Exception:
+                # Swallowing file removal exception is safe as this is a temporary file cleanup attempt
                 pass
 
     def validate_action(
@@ -1224,7 +1227,8 @@ class MiniAgentClient:
                         for cat_key, cat_val in rep_data.items():
                             if isinstance(cat_val, dict) and "errors" in cat_val:
                                 details.extend(cat_val["errors"])
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to load or parse UCF validation report from {report_path}: {e}", exc_info=True)
                     pass
             if not details:
                 details = val_errors
@@ -1263,7 +1267,8 @@ class MiniAgentClient:
                             for cat_key, cat_val in rep_data.items():
                                 if isinstance(cat_val, dict) and "errors" in cat_val:
                                     validation_errors.extend(cat_val["errors"])
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Failed to load or parse UCF validation report from {report_path}: {e}", exc_info=True)
                         pass
                 if not validation_errors:
                     validation_errors.append("Validator script returned non-zero exit code.")

@@ -314,8 +314,9 @@ def preprocess_audio_with_vad(
     if not success:
         try:
             os.remove(temp_path)
-        except:
-            pass
+        except Exception as e:
+            # Swallowing removal error of temp_path as cleanup is on best-effort basis
+            print(f"[VAD] Warning: Failed to remove temporary file {temp_path}: {e}")
         return None, merged_segments
     
     return temp_path, merged_segments

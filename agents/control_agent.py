@@ -43,8 +43,9 @@ def _resolve_control_agent_data_dir(explicit_data_dir: Optional[Path]) -> Path:
         data_root = cfg.get("paths", {}).get("data_root")
         if data_root:
             return Path(data_root)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to load configs in _resolve_control_agent_data_dir: {e}")
 
     env_data_root = (os.environ.get("GOODQ_DATA_ROOT") or "").strip()
     if env_data_root:
@@ -767,8 +768,8 @@ Format your response as JSON:
         try:
             import traceback
             stack_trace = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
-        except:
-            pass
+        except Exception as e:
+            print(f"Failed to format traceback: {e}")
         
         # Record failure in database
         failure_id = self.recovery_db.record_failure(

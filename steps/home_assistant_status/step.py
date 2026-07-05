@@ -21,7 +21,7 @@ def _summarize_entity(entity: Dict[str, Any]) -> str:
 def home_assistant_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
     # Use HA_TOKEN only (deprecated GOODQ_PIPELINE_HA_API removed per ops guidance)
     token = os.getenv("HA_TOKEN")
-    base_url = cfg.get("config", {}).get("ha", {}).get("url", "")
+    base_url = cfg.get("config", {}).get("home_assistant", {}).get("url", "")
     entities: List[str] = cfg.get("entities", {}).get("list", [])
     if not token or not base_url or not entities:
         return {"status": "unavailable"}

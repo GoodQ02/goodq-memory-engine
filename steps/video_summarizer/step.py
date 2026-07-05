@@ -44,7 +44,8 @@ def generate_video_summary_llm(cfg: Dict, video_hash: str, db_path: str) -> Opti
                 if summary:
                     scene_summaries.append(summary)
                     scene_count += 1
-            except:
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse content JSON from summary records: {e}")
                 continue
         
         if not scene_summaries:

@@ -88,8 +88,12 @@ class ModelLifecycleManager:
         self,
         model_name: str,
         requested_vram_gb: Optional[float] = None,
-        target_engine: Optional[str] = None
+        target_engine: Optional[str] = None,
+        device: str = "cuda"
     ) -> bool:
+        if device == "cpu":
+            logger.info("Bypassing VRAM preflight check for CPU execution of '%s'", model_name)
+            return True
         """
         Verify if loading the target model fits inside the usable target budget and free VRAM.
         Automatically unloads other resident models if the active profile is sequential_only.
@@ -186,19 +190,22 @@ class ModelLifecycleManager:
         load_fn: Callable[[], Any],
         unload_fn: Optional[Callable[[], None]] = None,
         requested_vram_gb: Optional[float] = None,
-        target_engine: Optional[str] = None
+        target_engine: Optional[str] = None,
+        device: str = "cuda"
     ) -> ModelContext:
         """
         Execute preflight VRAM audits and load the model.
         Returns a context manager ensuring clean unloads.
         """
         # Run budget & compatibility checks
-        self.preflight_check(model_name, requested_vram_gb, target_engine)
+        self.preflight_check(model_name, requested_vram_gb, target_engine, device=device)
         
         # Resolve registry metadata
         model_entry = self.model_registry.get(model_name, {}) or {}
         if requested_vram_gb is None:
             requested_vram_gb = float(model_entry.get("vram_estimate_gb", 2.0))
+        if device == "cpu":
+            requested_vram_gb = 0.0
             
         engine = target_engine or next(iter([eng for eng, cap in model_entry.get("engines", {}).items() if cap in ("yes", True)]), "unknown")
         quantization = model_entry.get("quantization", ["FP16"])[0]

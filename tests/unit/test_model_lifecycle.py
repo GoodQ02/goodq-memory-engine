@@ -115,9 +115,18 @@ class TestModelLifecycleManager(unittest.TestCase):
             self.manager.preflight_check("mock_stable_model", target_engine="llama.cpp/GGUF")
         with self.assertRaises(ValueError):
             self.manager.preflight_check("mock_stable_model", target_engine="Ollama")
-        # Should raise ValueError when requesting any engine on a model with no engines declared
         with self.assertRaises(ValueError):
             self.manager.preflight_check("mock_massive_model", target_engine="Transformers")
+
+    @patch("lib.model_lifecycle.ModelLifecycleManager.get_free_vram_gb")
+    def test_preflight_check_cpu_bypass(self, mock_free_vram):
+        mock_free_vram.return_value = 0.5  # Crucially low VRAM
+        # Loading massive model on CUDA would fail preflight
+        with self.assertRaises(MemoryError):
+            self.manager.preflight_check("mock_massive_model")
+            
+        # Loading massive model on CPU should bypass VRAM checks and return True
+        self.assertTrue(self.manager.preflight_check("mock_massive_model", device="cpu"))
 
 
 if __name__ == "__main__":

@@ -790,7 +790,7 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
             _FW_CACHE.clear()
 
         try:
-            model_ctx = manager.load(registry_key, load_fn, unload_fn, target_engine="CTranslate2")
+            model_ctx = manager.load(registry_key, load_fn, unload_fn, target_engine="CTranslate2", device=device)
             model_ctx_holder[0] = model_ctx
             fw_model = model_ctx.__enter__()
         except Exception as e:

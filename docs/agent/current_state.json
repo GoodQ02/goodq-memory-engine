@@ -119,8 +119,8 @@
   "clean_start": {
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
-    "fresh_epoch": "epoch_2026_06_21_family_clean_01",
-    "fresh_epoch_note": "Clean memory start completed successfully on this epoch. Pilot fixture ingested and promoted: samples/onboarding_fixture.mp4 (video hash: da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62).",
+    "fresh_epoch": "epoch_2026_07_05_home_memory_clean_01",
+    "fresh_epoch_note": "Clean memory start completed successfully on this epoch, preparing for the first home movie ingestion. Qdrant and relational memory databases are initialized empty.",
     "onboarding_cleanup_audit_seal": {
       "certified_date": "2026-06-06",
       "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",
@@ -132,14 +132,14 @@
     "tracked_cleanup_summary": "docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md",
     "tracked_power_loss_summary": "docs/diagnostics/POWER_LOSS_INGESTION_AUDIT_2026-05-20.md",
     "tracked_home_memory_witness": "docs/diagnostics/HOME_MEMORY_WITNESS_RUN_2026-05-22.md",
-    "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-05-20-memory-clean-start",
+    "qdrant_cleanup_manifest_dir": "reports/local_housekeeping/2026-07-04-memory-clean-start",
     "qdrant_pre_cleanup": {
-      "collections": 68,
-      "epochs": 17,
-      "points": 17767
+      "collections": 4,
+      "epochs": 1,
+      "points": 335
     },
     "qdrant_post_cleanup": {
-      "deleted_goodq_collections": 68,
+      "deleted_goodq_collections": 4,
       "delete_errors": 0,
       "collections": 4,
       "points": 0,
@@ -162,15 +162,15 @@
       "retained_epoch_stubs": 1,
       "retained_stub": "epoch_2025_12_22 service-held qdrant logs",
       "reclaimed_mb": 5244.99,
-      "fresh_database_exists": true,
-      "fresh_database_scenes": 1,
-      "fresh_database_note": "port 30000 is bound to the epoch_2026_06_21_family_clean_01 active validation epoch and currently reports 1 scene; clean memory start completed successfully on this epoch."
+      "fresh_database_exists": false,
+      "fresh_database_scenes": 0,
+      "fresh_database_note": "clean memory start completed successfully on this epoch; Qdrant collections initialized and relational databases deleted, ready for clean ingestion."
     },
     "fresh_qdrant_collections": {
-      "clip": "goodq_clip_epoch_2026_06_21_family_clean_01",
-      "dino": "goodq_dino_epoch_2026_06_21_family_clean_01",
-      "text": "goodq_text_epoch_2026_06_21_family_clean_01",
-      "audio": "goodq_audio_epoch_2026_06_21_family_clean_01"
+      "clip": "goodq_clip_epoch_2026_07_05_home_memory_clean_01",
+      "dino": "goodq_dino_epoch_2026_07_05_home_memory_clean_01",
+      "text": "goodq_text_epoch_2026_07_05_home_memory_clean_01",
+      "audio": "goodq_audio_epoch_2026_07_05_home_memory_clean_01"
     },
     "pilot_fixture_ingestion_promotion_run": {
       "status": "completed",

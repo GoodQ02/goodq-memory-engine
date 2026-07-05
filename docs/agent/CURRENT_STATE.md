@@ -100,7 +100,7 @@ Pre-clean audit found and cleared:
 - Prior filesystem epochs were removed except for a small
   `epoch_2025_12_22` log stub held open by the Qdrant Windows service.
 - Active API status on port `30000` is bound to the
-  `epoch_2026_06_21_family_clean_01` epoch.
+  `epoch_2026_07_05_home_memory_clean_01` epoch.
 
 ### 🛡️ Onboarding Cleanup Audit Seal (2026-06-06)
 
@@ -110,16 +110,16 @@ The onboarding fixture (`da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821
 - **Filesystem**: Cleaned up the `processing/onboarding_fixture` directory and all cached frame data.
 - **Post-Purge Status**: Relational DB and Qdrant collections verified clean of onboarding metadata. Ready for personal memory ingestion.
 
-Latest full home-memory validation epoch:
+Latest active home-memory epoch (initialized clean on July 5, 2026):
 
-- `epoch_2026_06_21_family_clean_01`
+- `epoch_2026_07_05_home_memory_clean_01`
 
-The active validation epoch uses these Qdrant collections:
+The active clean epoch uses these Qdrant collections:
 
-- `goodq_clip_epoch_2026_06_21_family_clean_01`
-- `goodq_dino_epoch_2026_06_21_family_clean_01`
-- `goodq_text_epoch_2026_06_21_family_clean_01`
-- `goodq_audio_epoch_2026_06_21_family_clean_01`
+- `goodq_clip_epoch_2026_07_05_home_memory_clean_01`
+- `goodq_dino_epoch_2026_07_05_home_memory_clean_01`
+- `goodq_text_epoch_2026_07_05_home_memory_clean_01`
+- `goodq_audio_epoch_2026_07_05_home_memory_clean_01`
 
 ## Pilot Ingestion & Promotion Run (epoch_2026_06_21_family_clean_01)
 

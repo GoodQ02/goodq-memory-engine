@@ -48,7 +48,7 @@ Follow `docs/agent/workflows/CLEAN_MEMORY_START.md`. The safe pattern is:
 
 1. manifest old Qdrant collections
 2. point local config at a fresh epoch
-3. delete old `goodq_` Qdrant collections
+3. delete old `goodq_` Qdrant collections, watchdog state registry (`watchdog_state.json`), and processing cache directory
 4. initialize fresh empty collections
 5. generate post-cleanup manifest using `scripts/generate_post_manifest.py`
 6. run one scene first

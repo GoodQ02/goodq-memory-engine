@@ -207,6 +207,33 @@ if faiss_dir:
             for d in dirs:
                 d_path = Path(root) / d
                 os.makedirs(d_path, exist_ok=True)
+
+print("\n=== Wiping watchdog state file and processing cache ===")
+try:
+    from cli.watchdog import _resolve_watchdog_paths
+    wd_paths = _resolve_watchdog_paths(config)
+    state_file = wd_paths.get('state_file')
+    processing_root = wd_paths.get('processing_dir')
+    
+    if state_file:
+        state_p = Path(state_file)
+        if state_p.exists():
+            state_p.unlink()
+            print(f"[SUCCESS] Deleted watchdog state: {state_p}")
+            
+    if processing_root:
+        proc_p = Path(processing_root)
+        if proc_p.exists():
+            import shutil
+            for item in proc_p.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                    print(f"[SUCCESS] Deleted processing dir: {item}")
+                elif item.is_file() and item.name != "_resolved_config.json":
+                    item.unlink()
+                    print(f"[SUCCESS] Deleted processing file: {item}")
+except Exception as e:
+    print(f"[ERROR] Failed to clean watchdog state/processing cache: {e}")
 PY
 ```
 

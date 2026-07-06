@@ -70,8 +70,8 @@ Last checked: 2026-05-19.
   [`docs/reference/API.md`](../../reference/API.md)
 - Install and launch:
   [`README.md`](../../../README.md),
-  [`docs/guides/install/INSTALL.md`](../install/INSTALL.md),
-  [`docs/guides/install/QUICKSTART.md`](../install/QUICKSTART.md)
+  [`docs/guides/install/INSTALL.md`](../../bootstrap/INSTALL_BOOTSTRAP.md),
+  [`docs/guides/install/QUICKSTART.md`](../../archive/guides/install/QUICKSTART.md)
 - Runtime authority:
-  [`docs/HANDOFF_BASEMENT_PHASE.md`](../../HANDOFF_BASEMENT_PHASE.md),
+  [`docs/HANDOFF_BASEMENT_PHASE.md`](../../archive/HANDOFF_BASEMENT_PHASE.md),
   [`docs/reference/CLI-REFERENCE.md`](../../reference/CLI-REFERENCE.md)

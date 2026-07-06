@@ -337,7 +337,7 @@ Combined benefits:
 
 ## Related Documentation
 
-- [Environment Setup](../guides/install/INSTALL.md)
+- [Environment Setup](../bootstrap/INSTALL_BOOTSTRAP.md)
 - [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md)
 - Development Guide
 

@@ -129,9 +129,9 @@ Before any item moves from roadmap to supported surface:
 
 ## Related Docs
 
-- First run: [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md)
-- Release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
-- Shipping profile: [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
-- API reference: [`docs/reference/API.md`](reference/API.md)
-- Vendor payload exit plan: [`docs/releases/VENDOR_PAYLOAD_EXIT_PLAN.md`](releases/VENDOR_PAYLOAD_EXIT_PLAN.md)
-- Offline release asset model: [`docs/bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md`](bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md)
+- First run: [`docs/guides/FIRST_RUN.md`](../guides/FIRST_RUN.md)
+- Release checkpoint: [`docs/releases/RELEASE_0.1.1.md`](../archive/releases/RELEASE_0.1.1.md)
+- Shipping profile: [`docs/releases/SHIP_PROFILE.md`](../archive/releases/SHIP_PROFILE.md)
+- API reference: [`docs/reference/API.md`](../reference/API.md)
+- Vendor payload exit plan: [`docs/releases/VENDOR_PAYLOAD_EXIT_PLAN.md`](../archive/releases/VENDOR_PAYLOAD_EXIT_PLAN.md)
+- Offline release asset model: [`docs/bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md`](../bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md)

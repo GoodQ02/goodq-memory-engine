@@ -47,6 +47,6 @@ Compact operational quick reference for the current release surface.
 ## Follow-Up Docs
 
 - Docs landing page: [`docs/README.md`](../../README.md)
-- Launch runbook: [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../guides/general/LAUNCH_INSTRUCTIONS.md)
+- Launch runbook: [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
 - API reference: [`docs/reference/API.md`](../API.md)
 - UI status: [`docs/guides/ui/JUSTIFICATION_UI.md`](../../guides/ui/JUSTIFICATION_UI.md)

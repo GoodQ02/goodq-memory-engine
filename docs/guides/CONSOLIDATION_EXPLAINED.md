@@ -28,13 +28,13 @@ That phase was real and useful, but it was not the final steady-state model.
 - Bootstrap contract:
   [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](../bootstrap/INSTALL_BOOTSTRAP.md)
 - Install guide:
-  [`docs/guides/install/INSTALL.md`](install/INSTALL.md)
+  [`docs/guides/install/INSTALL.md`](../bootstrap/INSTALL_BOOTSTRAP.md)
 - System architecture:
   [`docs/architecture/SYSTEM_ARCHITECTURE.md`](../architecture/SYSTEM_ARCHITECTURE.md)
 - Environment index:
   [`docs/reference/indexes/ENVIRONMENT_INDEX.md`](../reference/indexes/ENVIRONMENT_INDEX.md)
 - Troubleshooting:
-  [`docs/guides/general/TROUBLESHOOTING.md`](general/TROUBLESHOOTING.md)
+  [`docs/guides/general/TROUBLESHOOTING.md`](../archive/guides/general/TROUBLESHOOTING.md)
 
 ## Practical Guidance
 

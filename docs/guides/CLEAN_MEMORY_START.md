@@ -18,7 +18,7 @@ Before resetting your databases and collections, understand what is cleared and 
 
 To prevent manual command-line errors and document drift, the step-by-step cleanup commands are maintained in the authoritative agent runbook:
 
-👉 **[Clean Memory Start Runbook](../../agent/workflows/CLEAN_MEMORY_START.md)**
+👉 **[Clean Memory Start Runbook](../agent/workflows/CLEAN_MEMORY_START.md)**
 
 Please follow the runbook to:
 - Capture pre-cleanup Qdrant manifests and count statistics.

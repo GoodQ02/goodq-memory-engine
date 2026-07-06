@@ -71,7 +71,7 @@ This index serves as the master blueprint mapping every core subsystem in GoodQ4
 
 ### 4. WSL2 Audio Lane Subsystem
 - **Files**:
-  - WSL Diarization step: [wsl_process_audio_diarization.py](../../../steps/audio/wsl_process_audio_diarization.py)
+  - WSL Diarization step: [process_audio.py](../../../wsl2_audio/process_audio.py)
   - WSL Script assets: [wsl2_audio/](../../../wsl2_audio/) (Whisper workers, environment setups).
 - **Role**: Bridges Windows hosts to WSL2 Linux environments for accelerated Faster-Whisper transcription, speaker speaker-diarization, and speech emotion classifications.
 - **Checklist**:

@@ -34,7 +34,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 * **`watchdog`**:
   - *Description*: Background folder observer that monitors the import inbox for new media, running the ingestion DAG automatically.
   - *Location*: [`cli/watchdog.py`](../../../cli/watchdog.py)
-  - *Documentation*: [`docs/systems/WATCHDOG_SYSTEM.md`](../systems/WATCHDOG_SYSTEM.md)
+  - *Documentation*: [`docs/systems/WATCHDOG_SYSTEM.md`](../../systems/WATCHDOG_SYSTEM.md)
 * **`run_ingestion`**:
   - *Description*: Canonical CLI entrypoint for manual and batch ingestion of media.
   - *Location*: [`cli/run_ingestion.py`](../../../cli/run_ingestion.py)
@@ -42,7 +42,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 * **`LAUNCH_GOODQ.exe` / `LAUNCH_GOODQ.ps1`**:
   - *Description*: Supervising Go launcher / PowerShell bootstrap wrapper that checks ports, environment variables, starts the local daemons (Qdrant, API), and boots the visual consoles.
   - *Location*: Root executable/script.
-  - *Documentation*: [`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md)
+  - *Documentation*: [`docs/guides/FIRST_RUN.md`](../../guides/FIRST_RUN.md)
 
 ## Visual & Browsing Consoles
 
@@ -60,7 +60,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 * **`Qdrant`**:
   - *Description*: Windows native service serving as the authoritative vector store for CLIP, DINOv2, Text, and Audio embedding collection points.
   - *Default Port*: 6333
-  - *Documentation*: [`docs/guides/QDRANT_SETUP.md`](../QDRANT_SETUP.md)
+  - *Documentation*: [`docs/guides/QDRANT_SETUP.md`](../../guides/QDRANT_SETUP.md)
 * **`FAISS`**:
   - *Description*: Dense vector indexes stored in the active epoch folder used for parity retrieval. Locked via `FaissLock` to prevent concurrency collisions.
   - *Code location*: [`steps/common/faiss_utils.py`](../../../steps/common/faiss_utils.py)
@@ -81,7 +81,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
   - *Documentation*: [`docs/architecture/CONFIG_LOADING_CONTRACT.md`](../../architecture/CONFIG_LOADING_CONTRACT.md)
 * **`import_inbox`**:
   - *Description*: Folder monitored by watchdog for incoming files, resolved as `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox\`.
-  - *Documentation*: [`docs/guides/FIRST_RUN.md`](../FIRST_RUN.md)
+  - *Documentation*: [`docs/guides/FIRST_RUN.md`](../../guides/FIRST_RUN.md)
 * **`epochs`**:
   - *Description*: Dynamic directory structure storing logs, intermediate state, and vector indexes for a specific run campaign (e.g., `epoch_2026_06_02_family_clean_01`).
   - *Documentation*: [`docs/architecture/SCENE_MANIFEST_SPECIFICATION.md`](../../architecture/SCENE_MANIFEST_SPECIFICATION.md)

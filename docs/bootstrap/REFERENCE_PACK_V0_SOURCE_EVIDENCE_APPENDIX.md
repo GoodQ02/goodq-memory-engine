@@ -205,7 +205,7 @@ This appendix is subordinate supporting evidence for:
 - [CORPUS_PACK_INVENTORY_LEDGER.md](CORPUS_PACK_INVENTORY_LEDGER.md)
 - [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - [REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md](REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
-- [OFFLINE_BUNDLE_REBUILD_PLAN.md](OFFLINE_BUNDLE_REBUILD_PLAN.md)
+- [OFFLINE_BUNDLE_REBUILD_PLAN.md](../archive/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md)
 
 The manifest remains the policy layer. The inventory ledger remains the
 classification layer. The selection proposal names the candidate set. The

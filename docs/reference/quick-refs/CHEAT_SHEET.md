@@ -80,8 +80,8 @@ the literal envelope renderer.
 ## Related Docs
 
 - Launch:
-  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md)
+  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
 - API:
-  [`docs/reference/API.md`](reference/API.md)
+  [`docs/reference/API.md`](../API.md)
 - Quick index:
-  [`docs/reference/indexes/QUICK_INDEX.md`](reference/indexes/QUICK_INDEX.md)
+  [`docs/reference/indexes/QUICK_INDEX.md`](../indexes/QUICK_INDEX.md)

@@ -11,7 +11,7 @@ This older extended command sheet is kept only to preserve incoming links.
 - Full canonical CLI surface:
   [`docs/reference/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 - Current Windows launch runbook:
-  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../guides/general/LAUNCH_INSTRUCTIONS.md)
+  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
 - Compact current operator quick ref:
   [`docs/reference/quick-refs/QUICK_REFERENCE_CARD.md`](QUICK_REFERENCE_CARD.md)
 

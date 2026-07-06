@@ -4,7 +4,7 @@
 # Welcome Aboard GoodQ4All
 
 > [!TIP]
-> **Recommended User Setup**: For the easiest path, download and run the [GoodQ4All Standalone Setup Installer](https://github.com/GoodQ02/goodq4all/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe) which does not require Git, Conda, or Python. Refer to the [Installation Guide](install/INSTALL.md).
+> **Recommended User Setup**: For the easiest path, download and run the [GoodQ4All Standalone Setup Installer](https://github.com/GoodQ02/goodq4all/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe) which does not require Git, Conda, or Python. Refer to the [Installation Guide](../bootstrap/INSTALL_BOOTSTRAP.md).
 
 For developers and advanced operators who want to run the project from source and use the CLI, we preserve the full walk-through demo video below as an alternative installation route.
 

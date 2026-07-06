@@ -123,7 +123,7 @@ For the current operator-facing details, see:
 
 ## Related Docs
 
-- [`docs/releases/SHIP_PROFILE.md`](../releases/SHIP_PROFILE.md)
+- [`docs/releases/SHIP_PROFILE.md`](../archive/releases/SHIP_PROFILE.md)
 - [`docs/reference/DEPENDENCIES.md`](DEPENDENCIES.md)
 - [`docs/reference/GPU_CAPABILITY_MATRIX.md`](GPU_CAPABILITY_MATRIX.md)
 - [`docs/reference/WSL_AUDIO_RUNTIME.md`](WSL_AUDIO_RUNTIME.md)

@@ -20,7 +20,7 @@
 ## 2. Pre-Run Blank Slate Verification
 | Surface Name | Target Path or Collection | Pre-Run State | Verified |
 | :--- | :--- | :---: | :---: |
-| **Epoch Directory** | `L:\_DATA\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01` | **Wiped / Empty Layout** | **Yes** |
+| **Epoch Directory** | `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01` | **Wiped / Empty Layout** | **Yes** |
 | **Processing Directory** | `.../epoch_2026_07_05_home_memory_clean_01/processing` | **Wiped / Empty** | **Yes** |
 | **FAISS Index Files** | `.../faiss/*` | **Absent** | **Yes** |
 | **UCF Ledger Database** | `.../ucf/ucf_ledger.db` | **Absent** | **Yes** |

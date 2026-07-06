@@ -15,7 +15,7 @@ Machine memory should earn every claim it makes.
 - Machine-readable current state:
   [`docs/agent/current_state.json`](agent/current_state.json)
 - Current release checkpoint:
-  [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
+  [`docs/releases/RELEASE_0.1.1.md`](archive/releases/RELEASE_0.1.1.md)
 - Current operator baseline:
   [`docs/goodq4all_agent_status.md`](goodq4all_agent_status.md)
 - Agent environment integration:
@@ -29,9 +29,9 @@ Machine memory should earn every claim it makes.
 - Reports and evidence map:
   [`reports/README.md`](../reports/README.md)
 - Diagnostics index:
-  [`docs/diagnostics/README.md`](diagnostics/README.md)
+  [`docs/diagnostics/README.md`](archive/diagnostics/README.md)
 - Current clean-start audit:
-  [`docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md`](diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md)
+  [`docs/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md`](archive/diagnostics/MEMORY_CLEAN_START_AUDIT_2026-05-20.md)
 
 These operator documents are bounded release-era baselines, not live witness
 monitors. Use them to understand the supported runtime surface, then use
@@ -56,11 +56,11 @@ Current operator-validated additions on the active line:
 - First run:
   [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md)
 - Install:
-  [`docs/guides/install/INSTALL.md`](guides/install/INSTALL.md)
+  [`docs/guides/install/INSTALL.md`](bootstrap/INSTALL_BOOTSTRAP.md)
 - Quickstart:
-  [`docs/guides/install/QUICKSTART.md`](guides/install/QUICKSTART.md)
+  [`docs/guides/install/QUICKSTART.md`](archive/guides/install/QUICKSTART.md)
 - Launch and control:
-  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md)
+  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](archive/guides/general/LAUNCH_INSTRUCTIONS.md)
 - API reference:
   [`docs/reference/API.md`](reference/API.md)
 - Quick references:
@@ -71,7 +71,7 @@ Current operator-validated additions on the active line:
 ## Paths By Role
 
 - New user: watch the guided demo, then run [`docs/guides/FIRST_RUN.md`](guides/FIRST_RUN.md).
-- Operator: use [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](guides/general/LAUNCH_INSTRUCTIONS.md), then Watchdog and API docs.
+- Operator: use [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](archive/guides/general/LAUNCH_INSTRUCTIONS.md), then Watchdog and API docs.
 - Contributor: read [`CONTRIBUTING.md`](../CONTRIBUTING.md), then the architecture index.
 - Support request: read [`SUPPORT.md`](../SUPPORT.md), then choose the
   matching issue template or discussion path.
@@ -84,7 +84,7 @@ Current operator-validated additions on the active line:
 - System snapshot:
   [`docs/SYSTEM_SNAPSHOT.md`](SYSTEM_SNAPSHOT.md)
 - Data privacy statement:
-  [`docs/guides/general/PRIVACY.md`](guides/general/PRIVACY.md)
+  [`docs/guides/general/PRIVACY.md`](archive/guides/general/PRIVACY.md)
 - Architecture index:
   [`docs/architecture/README.md`](architecture/README.md)
 - System architecture:
@@ -96,7 +96,7 @@ Current operator-validated additions on the active line:
 - CLI reference:
   [`docs/reference/CLI-REFERENCE.md`](reference/CLI-REFERENCE.md)
 - Shipping profile:
-  [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
+  [`docs/releases/SHIP_PROFILE.md`](archive/releases/SHIP_PROFILE.md)
 - Dependencies:
   [`docs/reference/DEPENDENCIES.md`](reference/DEPENDENCIES.md)
 - Platform support:
@@ -108,7 +108,7 @@ Current operator-validated additions on the active line:
 - GPU capability matrix:
   [`docs/reference/GPU_CAPABILITY_MATRIX.md`](reference/GPU_CAPABILITY_MATRIX.md)
 - Sealed basement record:
-  [`docs/HANDOFF_BASEMENT_PHASE.md`](HANDOFF_BASEMENT_PHASE.md)
+  [`docs/HANDOFF_BASEMENT_PHASE.md`](archive/HANDOFF_BASEMENT_PHASE.md)
 
 ## Documentation Organization
 
@@ -172,9 +172,9 @@ changes.
 ## Release Checkpoint
 
 - Release `0.1.1`:
-  [`docs/releases/RELEASE_0.1.1.md`](releases/RELEASE_0.1.1.md)
+  [`docs/releases/RELEASE_0.1.1.md`](archive/releases/RELEASE_0.1.1.md)
 - Shipping profile:
-  [`docs/releases/SHIP_PROFILE.md`](releases/SHIP_PROFILE.md)
+  [`docs/releases/SHIP_PROFILE.md`](archive/releases/SHIP_PROFILE.md)
 - Control recurrence v0.5 source status:
   [`docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md`](releases/CONTROL_RECURRENCE_v0.5_STATUS.md)
 - Public changelog:

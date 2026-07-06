@@ -41,7 +41,7 @@ is packaging truth until the rebuild plan is completed and validated.
 
 Current rebuild plan:
 
-- [`OFFLINE_BUNDLE_REBUILD_PLAN.md`](OFFLINE_BUNDLE_REBUILD_PLAN.md)
+- [`OFFLINE_BUNDLE_REBUILD_PLAN.md`](../archive/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md)
 
 The rebuild must preserve the canonical WSL audio bootstrap target and must not
 package the observed cu128 WSL drift lane as an offline target.

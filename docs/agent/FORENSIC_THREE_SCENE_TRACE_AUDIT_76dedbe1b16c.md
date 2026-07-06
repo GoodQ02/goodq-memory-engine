@@ -22,13 +22,13 @@ Key findings show that **141 total scenes** were successfully detected and visua
 
 ## Run Identity Verification
 The target manifest exists at:
-`L:\_DATA\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\processing\302650262b0f4af7a62dd49387bb97f6\video\scene_manifest.json`
+`<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\processing\302650262b0f4af7a62dd49387bb97f6\video\scene_manifest.json`
 
 Metadata parameters extracted:
 * **Epoch Name**: `epoch_2026_07_05_home_memory_clean_01`
 * **Run ID**: `9db4992b-5b13-43b6-b1f0-76dedbe1b16c`
 * **Video/Processing Hash**: `302650262b0f4af7a62dd49387bb97f6`
-* **Source Media Path Reference**: `L:\_DATA\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\logs\temp_inbox_302650262b0f4af7a62dd49387bb97f6\302650262b0f4af7a62dd49387bb97f6.mp4`
+* **Source Media Path Reference**: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\logs\temp_inbox_302650262b0f4af7a62dd49387bb97f6\302650262b0f4af7a62dd49387bb97f6.mp4`
 * **Total Scenes**: 141
 
 ---
@@ -76,11 +76,11 @@ The table below represents the run-wide metrics calculated across the manifest, 
 * **Scene ID**: `e3a4f5d6f3b749b9ddd43e6d61b4cb58ff8e4876dba137e39b78e6258ca2ef32`
 * **Video ID**: `35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307`
 * **Expected Directories**:
-  * Processing Dir: `L:\_DATA\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\processing\302650262b0f4af7a62dd49387bb97f6`
+  * Processing Dir: `<GOODQ_DATA_ROOT>\GoodQ_Data\epochs\epoch_2026_07_05_home_memory_clean_01\processing\302650262b0f4af7a62dd49387bb97f6`
 * **Verification Status**: **Verified**. Manifest matches Qdrant points, FAISS sidecar maps, and UCF ledger frames.
 
 ### B. Media Artifacts
-* **Keyframe Image**: `L:/_DATA/GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0032_frame_01.jpg` (Exists: **Yes**, Size: 6,271 bytes, Modified: `2026-07-05 04:46:57`)
+* **Keyframe Image**: `<GOODQ_DATA_ROOT>\GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0032_frame_01.jpg` (Exists: **Yes**, Size: 6,271 bytes, Modified: `2026-07-05 04:46:57`)
 * **Keyframe Frame 00**: `.../frames/scene_0032_frame_00.jpg` (Exists: **Yes**, Size: 4,572 bytes)
 * **Keyframe Frame 02**: `.../frames/scene_0032_frame_02.jpg` (Exists: **Yes**, Size: 6,353 bytes)
 * **Audio Chunk**: `.../audio/chunks/scene_0032.wav` (Exists: **Yes**, Size: 966,380 bytes)
@@ -147,7 +147,7 @@ The table below represents the run-wide metrics calculated across the manifest, 
 * **Verification Status**: **Verified**.
 
 ### B. Media Artifacts
-* **Keyframe Image**: `L:/_DATA/GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0066_frame_01.jpg` (Exists: **Yes**, Size: 7,225 bytes)
+* **Keyframe Image**: `<GOODQ_DATA_ROOT>\GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0066_frame_01.jpg` (Exists: **Yes**, Size: 7,225 bytes)
 * **Frame 00**: `.../frames/scene_0066_frame_00.jpg` (Exists: **Yes**, Size: 4,604 bytes)
 * **Frame 02**: `.../frames/scene_0066_frame_02.jpg` (Exists: **Yes**, Size: 5,841 bytes)
 * **Audio Chunk**: `.../audio/chunks/scene_0066.wav` (Exists: **Yes**, Size: 3,123,180 bytes)
@@ -208,7 +208,7 @@ The table below represents the run-wide metrics calculated across the manifest, 
 * **Verification Status**: **Verified**.
 
 ### B. Media Artifacts
-* **Keyframe Image**: `L:/_DATA/GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0127_frame_01.jpg` (Exists: **Yes**, Size: 8,176 bytes)
+* **Keyframe Image**: `<GOODQ_DATA_ROOT>\GoodQ_Data/epochs/epoch_2026_07_05_home_memory_clean_01/processing/302650262b0f4af7a62dd49387bb97f6/video/frames/scene_0127_frame_01.jpg` (Exists: **Yes**, Size: 8,176 bytes)
 * **Frame 00**: `.../frames/scene_0127_frame_00.jpg` (Exists: **Yes**, Size: 6,287 bytes)
 * **Frame 02**: `.../frames/scene_0127_frame_02.jpg` (Exists: **Yes**, Size: 9,429 bytes)
 * **Audio Chunk**: `.../audio/chunks/scene_0127.wav` (Exists: **Yes**, Size: 3,314,316 bytes)
@@ -320,17 +320,17 @@ Multimodal search queries successfully retrieve the staged scenes when `ucf_incl
 
 ## Exact Commands Run
 The following commands were executed in `conda run -n goodq_core`:
-1. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\run_audit.py` (Deterministic scene selection).
-2. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\query_all.py` (Database schemas, database row counts, Qdrant scrolls, file existence checks).
-3. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\run_retrieval.py` (Search queries with default and terminal inclusion filters).
-4. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\check_extra.py` (Audio wave file sizes and FAISS sqlite maps targeting).
-5. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\check_audio_map.py` (CLAP FAISS sqlite map targeting).
-6. `python C:\Users\jdben\AppData\Local\Temp\goodq_audit\manifest_stats.py` (Sanity counts and VAD/Silence statistics).
+1. `python <temp_dir>\goodq_audit\run_audit.py` (Deterministic scene selection).
+2. `python <temp_dir>\goodq_audit\query_all.py` (Database schemas, database row counts, Qdrant scrolls, file existence checks).
+3. `python <temp_dir>\goodq_audit\run_retrieval.py` (Search queries with default and terminal inclusion filters).
+4. `python <temp_dir>\goodq_audit\check_extra.py` (Audio wave file sizes and FAISS sqlite maps targeting).
+5. `python <temp_dir>\goodq_audit\check_audio_map.py` (CLAP FAISS sqlite map targeting).
+6. `python <temp_dir>\goodq_audit\manifest_stats.py` (Sanity counts and VAD/Silence statistics).
 
 ---
 
 ## Temporary Files Created and Cleaned
-The following files were created in `C:\Users\jdben\AppData\Local\Temp\goodq_audit\`:
+The following files were created in `<temp_dir>\goodq_audit\`:
 * `run_audit.py`
 * `query_all.py`
 * `run_retrieval.py`
@@ -345,7 +345,7 @@ The following files were created in `C:\Users\jdben\AppData\Local\Temp\goodq_aud
 ---
 
 ## Final Git Status
-* **Repository**: `L:\GOODCUBE\projects\goodq4all`
+* **Repository**: `<project_root>`
 * **Status**: Clean workspace except for the three active hotfix/test files:
   ```
   ## dev...origin/dev

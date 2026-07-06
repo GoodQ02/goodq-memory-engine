@@ -254,9 +254,9 @@ should not be treated as the supported release surface.
 ## Related Docs
 
 - Install:
-  [`docs/guides/install/INSTALL.md`](../guides/install/INSTALL.md)
+  [`docs/guides/install/INSTALL.md`](../bootstrap/INSTALL_BOOTSTRAP.md)
 - Quickstart:
-  [`docs/guides/install/QUICKSTART.md`](../guides/install/QUICKSTART.md)
+  [`docs/guides/install/QUICKSTART.md`](../archive/guides/install/QUICKSTART.md)
 - CLI reference:
   [`docs/reference/CLI-REFERENCE.md`](CLI-REFERENCE.md)
 - UI status:

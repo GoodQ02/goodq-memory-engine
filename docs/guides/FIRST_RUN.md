@@ -153,8 +153,8 @@ If you skipped Qdrant service installation during bootstrap, the launcher health
 
 ## After First Success
 
-- For install details, read [`docs/guides/install/INSTALL.md`](install/INSTALL.md).
-- For the shorter setup path, read [`docs/guides/install/QUICKSTART.md`](install/QUICKSTART.md).
+- For install details, read [`docs/guides/install/INSTALL.md`](../bootstrap/INSTALL_BOOTSTRAP.md).
+- For the shorter setup path, read [`docs/guides/install/QUICKSTART.md`](../archive/guides/install/QUICKSTART.md).
 - For file-watcher operations, read [`docs/guides/watchdog/WATCHDOG_QUICKREF.md`](watchdog/WATCHDOG_QUICKREF.md).
 - For local API routes, read [`docs/reference/API.md`](../reference/API.md).
 - For architecture, read [`docs/architecture/README.md`](../architecture/README.md).

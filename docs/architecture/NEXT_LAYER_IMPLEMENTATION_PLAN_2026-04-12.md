@@ -82,8 +82,8 @@ Current scaffold already exists in:
 
 - [identity_ledger.py](../../lib/identity_ledger.py)
 - [narrative_layer.md](narrative_layer.md)
-- [SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md](../testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md)
-- [SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md](../diagnostics/SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md)
+- [SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md](../archive/testing/SEASON3_FIVE_EPISODE_CAMPAIGN_MEMO_2026-04-12.md)
+- [SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md](../archive/diagnostics/SEASON3_EPISODE_FORENSIC_AUDIT_03x05_2026-04-12.md)
 
 Relevant existing mechanics:
 

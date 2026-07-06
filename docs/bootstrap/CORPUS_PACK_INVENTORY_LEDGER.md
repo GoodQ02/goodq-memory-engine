@@ -14,8 +14,8 @@ This ledger is not a download plan, copy manifest, license grant, memory snapsho
 
 The governing policy is [CORPUS_PACK_MANIFEST.md](CORPUS_PACK_MANIFEST.md). This ledger is subordinate to that manifest and to the offline bundle contract:
 
-- [OFFLINE_BUNDLE_CONTRACT.md](OFFLINE_BUNDLE_CONTRACT.md)
-- [OFFLINE_BUNDLE_REBUILD_PLAN.md](OFFLINE_BUNDLE_REBUILD_PLAN.md)
+- [OFFLINE_BUNDLE_CONTRACT.md](../archive/bootstrap/OFFLINE_BUNDLE_CONTRACT.md)
+- [OFFLINE_BUNDLE_REBUILD_PLAN.md](../archive/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md)
 
 The hard policy remains:
 

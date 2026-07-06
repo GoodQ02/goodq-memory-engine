@@ -217,6 +217,7 @@ Validated memory/evidence posture:
 
 Known follow-up from this validation:
 
+- **Watchdog Progressive Index Skip Mitigation**: Hardened the watchdog's completion checker (`check_video_completion_on_disk`) in `cli/watchdog.py`. Previously, if the watchdog crashed during ingestion and restarted, it could mistake a partial, progressive `temporal_index.json` (which is written incrementally with `"phase6_complete": true` during progressive windows) as completion of the entire video. This caused the watchdog to skip the remaining scenes and move the file to `processed/`. The check now queries `ucf/ucf_ledger.db` to verify that `total_scenes` in the index matches the actual number of scenes registered by `video_scene_detect` in the database. Stale/progressive indexes are skipped, forcing the watchdog to resume full ingestion.
 - Native CLAP crash mitigation now preserves non-speech audio embedding
   intent: `audio_embed_clap` keeps the original audio fallback when speech VAD
   finds no speech, and a Windows native crash retries once with

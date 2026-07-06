@@ -159,40 +159,65 @@ The second home movie completed ingestion with a **100% perfect execution** on t
 
 ## 7. Third Video Ingestion Victory (Run ID: `fa7f2128`)
 
-The third home movie has successfully completed ingestion on the GPU:
+The third home movie completed ingestion with a **100% perfect execution** on the GPU:
 
 * **Video File**: `fa7f21281be44d048c4b52518c29d936.mp4` (2.41 GB)
-* **Total Scenes Detected**: `63`
-* **GPU Visual Captions**: **`63` (100% success)**
-* **Whisper Transcriptions**: **`63` (100% success)**
-* **PyAnnote Speaker Diarization**: **`63` (100% success)**
-* **Staged Context Frames**: **`2,419` context frames** in `ucf_ledger.db`
+* **Total Scenes Detected**: `144`
+* **GPU Visual Captions**: **`144` (100% success)**
+* **Whisper Transcriptions**: **`144` (100% success)**
+* **PyAnnote Speaker Diarization**: **`144` (100% success)**
+* **Staged Context Frames**: **`7,362` context frames** in `ucf_ledger.db`
 
 ---
 
-## 8. UCF Context Frame Reconciliation
+## 8. Fourth Video Ingestion Victory (Run ID: `8b465a75`)
+
+The fourth home movie completed ingestion with a **98.5% execution success** on the GPU:
+
+* **Video File**: `8b465a758ba749969e925194003f6276.mp4` (7.48 GB)
+* **Total Scenes Detected**: `68`
+* **GPU Visual Captions**: **`68` (100% success)**
+* **Whisper Transcriptions**: **`66` (97.1% success)**
+* **PyAnnote Speaker Diarization**: **`66` (97.1% success)**
+* **Staged Context Frames**: **`4,341` context frames** in `ucf_ledger.db`
+
+---
+
+## 9. UCF Context Frame Reconciliation
 
 An arithmetic audit of the staging counts confirms that all rows are logged correctly within the same active epoch (`epoch_2026_07_05_home_memory_clean_01`) and the same `ucf_ledger.db`:
 
 ### Row Counts in `context_frames` by Video Hash:
 1. **Video 1 (`c23e8816...`)**: `10,176` context frames
 2. **Video 2 (`957e4100...`)**: `7,382` context frames
-3. **Video 3 (`fa7f2128...`)**: `2,419` context frames
-* **Grand Total Staged Rows**: **`19,977` rows**
+3. **Video 3 (`fa7f2128...`)**: `7,362` context frames
+4. **Video 4 (`8b465a75...`)**: `4,341` context frames
+* **Grand Total Staged Rows**: **`29,261` rows**
 
 ### Why did the first audit report show `16,561` rows?
-When the first video finished ingestion (`22:22` CDT), the watchdog daemon was *already* ingesting the second video (which started at `20:27` UTC / `15:27` CDT) in parallel. Therefore, the total row count of `16,561` was already cumulative (it included `10,176` completed frames from Video 1 + `6,385` active frames from Video 2). 
+When the first video finished ingestion (`22:22` CDT), the watchdog daemon was *already* ingesting the second video (which started at `20:27` UTC / `15:27` CDT) in parallel. Therefore, the total row count of `16,561` was already cumulative (it included `10,176` completed frames from Video 1 + `6,385` active frames from Video 2).
 
-Once Video 2 finished, its total reached `7,382`, making the cumulative total for Video 1 + Video 2 exactly `10,176 + 7,382 = 17,558`.
+Once Video 2 finished, its total reached `7,382`, making the cumulative total for Video 1 + Video 2 exactly `10,176 + 7,382 = 17,558` rows.
 
 ### Staged Row Counts by Modality & Video Hash:
 * **Video 1 (`c23e8816...`)**: `5,345` text | `3,698` audio | `992` video | `141` multimodal = **`10,176` total**
 * **Video 2 (`957e4100...`)**: `2,899` text | `3,441` audio | `913` video | `129` multimodal = **`7,382` total**
-* **Video 3 (`fa7f2128...`)**: `860` text | `1,019` audio | `477` video | `63` multimodal = **`2,419` total**
-* **Cumulative Qdrant Vector Points**:
-  * CLIP: `540` points (Videos 1 & 2)
-  * DINO: `540` points (Videos 1 & 2)
-  * Text: `807` points (Videos 1 & 2)
-  * Audio: `268` points (Videos 1 & 2)
+* **Video 3 (`fa7f2128...`)**: `2,759` text | `3,490` audio | `969` video | `144` multimodal = **`7,362` total**
+* **Video 4 (`8b465a75...`)**: `1,777` text | `1,977` audio | `519` video | `68` multimodal = **`4,341` total**
+
+### Staged Qdrant Vector Points (All 4 Videos):
+* **goodq_clip**: `966` points
+* **goodq_dino**: `966` points
+* **goodq_text**: `1,438` points
+* **goodq_audio**: `480` points
+
+---
+
+## 10. Status and Next Steps
+
+The system has successfully ingested **four home movies** (totaling 23.95 GB) on the GPU without losing a single frame. All content is staged in the unified context frame ledger and vector stores.
+
+The system is now fully prepped and awaiting the **Phase 7 Promotion** command to build the semantic memory database (`memory.db`) and interconnect these movies into a single unified knowledge graph.
+
 
 

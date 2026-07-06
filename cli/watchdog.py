@@ -500,6 +500,29 @@ class WatchdogProcessor:
                         with open(candidate, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                         if isinstance(data, dict) and data.get('phase6_complete') is True:
+                            # Verify that it is not a progressive/partial run
+                            db_dir_val = self._cfg_base.get('paths', {}).get('db_dir')
+                            if db_dir_val:
+                                db_path = Path(db_dir_val) / "ucf_ledger.db"
+                                if db_path.exists():
+                                    import sqlite3
+                                    conn = sqlite3.connect(db_path)
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        "SELECT count(*) FROM context_frames WHERE video_hash = ? AND worker_name = 'video_scene_detect'",
+                                        (file_hash,)
+                                    )
+                                    db_scenes = cursor.fetchone()[0]
+                                    conn.close()
+                                    
+                                    idx_scenes = data.get('total_scenes', 0)
+                                    if db_scenes > 0 and idx_scenes < db_scenes:
+                                        logger.warning(
+                                            f"Temporal index has {idx_scenes} scenes, but ucf_ledger.db has {db_scenes} detected scenes. "
+                                            "Skipping progressive index to force full resumption."
+                                        )
+                                        continue
+                            
                             logger.debug(f"Found completed phase6 index at {candidate}")
                             return True
                     except Exception as e:

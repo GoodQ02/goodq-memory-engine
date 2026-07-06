@@ -140,3 +140,23 @@ Verification of Scene 68 proves the millisecond accuracy of the Whisper/PyAnnote
 * **Sentiment**: `NEGATIVE (95.6% confidence)`
 * **Visual Description**: "*a man in a white shirt standing next to a woman*"
 * **Object Detections**: `person`
+
+---
+
+## 6. Second Video Ingestion Victory (Run ID: `957e4100`)
+
+The second home movie completed ingestion with a **100% perfect execution** on the GPU:
+
+* **Video File**: `957e41002ef04c89ab85733c7d72b6cb.mp4` (7.05 GB)
+* **Total Scenes Detected**: `129`
+* **GPU Visual Captions**: **`129` (100% success)**
+* **Whisper Transcriptions**: **`129` (100% success)**
+* **PyAnnote Speaker Diarization**: **`128` (99.2% success)**
+* **Unique Speakers Identified**: **`6`** (`SPEAKER_00` to `SPEAKER_05`)
+* **Total Staged Context Frames (Cumulative)**: **`17,558` context frames** in `ucf_ledger.db`
+* **Qdrant Vector Points (Cumulative)**:
+  * CLIP: `540` points
+  * DINO: `540` points
+  * Text: `807` points
+  * Audio: `268` points
+

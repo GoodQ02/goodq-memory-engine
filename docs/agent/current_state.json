@@ -120,7 +120,7 @@
     "prior_pipeline_memory_is_disposable": true,
     "prior_home_movie_tests_are_disposable": true,
     "fresh_epoch": "epoch_2026_07_05_home_memory_clean_01",
-    "fresh_epoch_note": "Active home-memory ingestion epoch. Videos 1, 2, 3, and 4 are completely ingested, and Video 5 is actively ingesting. Cumulative staged context frames in ucf_ledger.db: 29,261.",
+    "fresh_epoch_note": "Active home-memory ingestion epoch. Videos 1, 2, 3, 4, and 5 are completely ingested, and Video 6 is actively ingesting. Cumulative staged context frames in ucf/ucf_ledger.db: 36,963.",
     "onboarding_cleanup_audit_seal": {
       "certified_date": "2026-06-06",
       "video_hash": "da735e12e1dba6fcfc511d5c3d8a6428ad85845a8d4cef61a03f821e00c90a62",

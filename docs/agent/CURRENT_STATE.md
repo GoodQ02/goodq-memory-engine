@@ -126,25 +126,26 @@ The active clean epoch uses these Qdrant collections:
 A clean memory start was successfully completed on this epoch. Ingestion is actively occurring on the GPU for the home movie dataset.
 
 ### Current Staging Progress:
-- **Total context frames**: 29,261 context frames staged in `ucf_ledger.db`.
-- **Ingested Videos (4/12 complete)**:
+- **Total context frames**: 36,963 context frames staged in `ucf/ucf_ledger.db`.
+- **Ingested Videos (5/12 complete)**:
   1. `c23e8816...` (Video 1): 10,176 frames, 100% complete.
   2. `957e4100...` (Video 2): 7,382 frames, 100% complete.
   3. `fa7f2128...` (Video 3): 7,362 frames, 100% complete.
-  4. `8b465a75...` (Video 4): 4,341 frames, 100% complete.
+  4. `8b465a75...` (Video 4): 4,341 frames, 100% complete (resolved +2 point Qdrant anomaly due to aborted run residue).
+  5. `86a55a48...` (Video 5): 7,702 frames, 100% complete.
 - **Actively Ingesting (1/12 in-progress)**:
-  5. `86a55a48...` (Video 5): actively processing step `tagger`.
-- **Remaining Videos**: 7 files queued.
+  6. `b2b0f870...` (Video 6): actively processing step `video_scene_detect`.
+- **Remaining Videos**: 6 files queued.
 
 ### Database, Vector, and API Counts:
-- **SQLite `ucf_ledger.db`**: 4 media sources registered, 29,261 staged context frames.
+- **SQLite `ucf/ucf_ledger.db`**: 5 media sources registered, 36,963 staged context frames.
 - **SQLite `memory.db`**: 0 scenes (Semantic promotion to semantic memory awaits user command to run Phase 7 Promotion).
 - **Qdrant Vector Points**:
-  - `goodq_clip`: 966 points
-  - `goodq_dino`: 966 points
-  - `goodq_text`: 1,438 points
-  - `goodq_audio`: 480 points
-  - Total synced: 3,850 points.
+  - `goodq_clip`: 1,177 points
+  - `goodq_dino`: 1,178 points
+  - `goodq_text`: 1,650 points
+  - `goodq_audio`: 585 points
+  - Total synced: 4,590 points.
 - **`/api/status`**: active epoch is `epoch_2026_07_05_home_memory_clean_01`.
 
 ## Pilot Ingestion & Promotion Run (epoch_2026_06_21_family_clean_01)

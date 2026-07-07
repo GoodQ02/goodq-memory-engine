@@ -190,6 +190,10 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         transcribe_cfg = audio_cfg.get("transcribe", {})
         timeout = transcribe_cfg.get("timeout", 3600)
         return audio_transcribe_wsl2(str(audio_path), timeout=timeout)
+    if step_name == "audio_transcribe_local":
+        from steps.audio_transcribe.step import audio_transcribe
+        assert item is not None
+        return audio_transcribe(item, cfg)
     if step_name == "image_ocr":
         from steps.image_ocr.step import image_ocr
         assert item is not None

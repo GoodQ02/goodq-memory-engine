@@ -42,6 +42,7 @@ LOCK_PATH = REGISTRY_DIR / "vram_registry.lock"
 STEP_VRAM_FRACTIONS = {
     "video_scene_detect": 0.20,
     "audio_transcribe": 0.25,
+    "audio_transcribe_local": 0.25,
     "audio_diarize": 0.35,
     "face_embed": 0.20,
     "emotion_classify": 0.20,

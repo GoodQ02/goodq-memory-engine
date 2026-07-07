@@ -6712,18 +6712,6 @@ async def _process_audio_async(
                 }
             )
         try:
-            from steps.audio_transcribe.step import audio_transcribe as local_audio_transcribe
-
-            cfg_payload = json.loads(cfg_json.read_text(encoding='utf-8'))
-            audio_cfg = cfg_payload.get('audio')
-            if not isinstance(audio_cfg, dict):
-                audio_cfg = {}
-                cfg_payload['audio'] = audio_cfg
-            tx_cfg = audio_cfg.get('transcribe')
-            if not isinstance(tx_cfg, dict):
-                tx_cfg = {}
-                audio_cfg['transcribe'] = tx_cfg
-            tx_cfg['use_wsl2'] = False
             local_item = {
                 'source_path': str(audio_path),
                 'path': str(audio_path),
@@ -6736,7 +6724,12 @@ async def _process_audio_async(
             os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = '0'
             try:
                 local_start = time.perf_counter()
-                local_result = await asyncio.to_thread(local_audio_transcribe, local_item, cfg_payload)
+                local_result = await _run_step_async(
+                    'goodq_audio_transcribe',
+                    'audio_transcribe_local',
+                    local_item,
+                    cfg_json
+                )
                 step_timings['audio_transcribe_local'] = time.perf_counter() - local_start
             finally:
                 if prior_require_wsl_audio is None:

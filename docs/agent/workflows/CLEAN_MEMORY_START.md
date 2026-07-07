@@ -173,16 +173,33 @@ kg_path = paths.get('knowledge_graph_db')
 faiss_dir = paths.get('faiss_dir')
 legacy_kg = Path("data/knowledge_graph.db")
 
-print("=== Wiping active epoch relational memory ===")
-for p_str in [db_path, f"{db_path}-shm", f"{db_path}-wal", kg_path]:
-    if p_str:
-        p = Path(p_str)
-        if p.exists():
-            try:
-                p.unlink()
-                print(f"[SUCCESS] Deleted: {p}")
-            except Exception as e:
-                print(f"[ERROR] Failed to delete {p}: {e}")
+# Control agent and recovery databases
+data_root = paths.get('data_root') or "L:/_DATA/GoodQ_Data"
+control_dbs = [
+    Path(data_root) / "control_memory.db",
+    Path(data_root) / "recovery.db",
+    Path(data_root) / "agent_checkpoints" / "control_memory.db",
+]
+
+print("=== Wiping active epoch relational memory and control/recovery state ===")
+targets = [db_path, kg_path]
+for db in control_dbs:
+    targets.append(str(db))
+
+# Include SQLite SHM/WAL files for all databases
+all_targets = []
+for t in targets:
+    if t:
+        all_targets.extend([t, f"{t}-shm", f"{t}-wal"])
+
+for p_str in all_targets:
+    p = Path(p_str)
+    if p.exists():
+        try:
+            p.unlink()
+            print(f"[SUCCESS] Deleted: {p}")
+        except Exception as e:
+            print(f"[ERROR] Failed to delete {p}: {e}")
 
 print("\n=== Wiping legacy database files ===")
 if legacy_kg.exists():

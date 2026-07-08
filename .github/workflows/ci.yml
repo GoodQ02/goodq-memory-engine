@@ -41,7 +41,7 @@ jobs:
       GOODQ_REQUIRE_WSL_AUDIO: "0"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Prepare CI data root
         shell: pwsh

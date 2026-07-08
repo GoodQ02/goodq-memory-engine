@@ -1,0 +1,9 @@
+# configs/identity — Private identity artifacts are gitignored.
+# Only committed: templates, schemas, .gitignore.
+# Populate from *.template.yaml — never commit populated files.
+
+family_roster.yaml
+family_terms.yaml
+face_clusters.json
+speaker_clusters.json
+name_mentions.json

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en" style="background-color:#0a0a0c;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodQ Identity Curation Workbench</title>
+    <meta name="description" content="GoodQ4All identity curation tool — label face clusters, confirm speaker hypotheses, and build the family roster." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050c1e'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2300d2ff'%3EIC%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/identity.css" />
+  </head>
+  <body>
+    <div class="crt-screen">
+      <div class="scanlines"></div>
+
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="header-logo">GOODQ // IDENTITY CURATION WORKBENCH</span>
+          <span class="header-status" id="system-status">Status: CONNECTING</span>
+        </div>
+        <div class="header-controls">
+          <span class="phase-indicator" id="phase-indicator">PHASE 1 — FACE CLUSTERS</span>
+          <a class="nav-link" href="/ui/stitching_workbench/" title="Speaker Stitching Workbench">STITCHING ›</a>
+          <a class="nav-link" href="/ui/retro_console_v1/" title="Return to Memory Explorer">EXPLORER ›</a>
+        </div>
+      </header>
+
+      <!-- Tab Navigation -->
+      <nav class="tab-nav" role="tablist" aria-label="Curation phases">
+        <button class="tab-btn active" id="tab-faces" role="tab" aria-selected="true" aria-controls="panel-faces" data-tab="faces">
+          <span class="tab-icon">⬡</span> FACE CLUSTERS
+          <span class="tab-badge" id="badge-faces">—</span>
+        </button>
+        <button class="tab-btn" id="tab-speakers" role="tab" aria-selected="false" aria-controls="panel-speakers" data-tab="speakers">
+          <span class="tab-icon">◈</span> SPEAKER HYPOTHESES
+          <span class="tab-badge" id="badge-speakers">—</span>
+        </button>
+        <button class="tab-btn" id="tab-names" role="tab" aria-selected="false" aria-controls="panel-names" data-tab="names">
+          <span class="tab-icon">◉</span> NAME MENTIONS
+          <span class="tab-badge" id="badge-names">—</span>
+        </button>
+        <button class="tab-btn" id="tab-roster" role="tab" aria-selected="false" aria-controls="panel-roster" data-tab="roster">
+          <span class="tab-icon">◼</span> FAMILY ROSTER
+          <span class="tab-badge" id="badge-roster">—</span>
+        </button>
+      </nav>
+
+      <!-- Main content area -->
+      <main class="workspace" id="workspace">
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PANEL 1 — FACE CLUSTERS
+        ════════════════════════════════════════════════════════════════ -->
+        <section id="panel-faces" class="tab-panel active" role="tabpanel" aria-labelledby="tab-faces">
+          <div class="panel-toolbar">
+            <div class="toolbar-left">
+              <span class="toolbar-label">EPS THRESHOLD</span>
+              <input type="number" id="eps-input" class="mini-input" value="0.4" min="0.05" max="0.95" step="0.05" title="DBSCAN eps — lower = stricter separation" />
+              <button class="toolbar-btn" id="rerun-faces-btn" title="Re-run face clustering with new eps">RE-CLUSTER ↻</button>
+            </div>
+            <div class="toolbar-right">
+              <span class="toolbar-note" id="faces-note">Load face_clusters.json to begin.</span>
+              <button class="toolbar-btn secondary" id="load-faces-btn">LOAD FROM DATA PATH</button>
+            </div>
+          </div>
+
+          <div class="clusters-grid" id="faces-grid">
+            <div class="empty-card">
+              <span class="pulse-icon">⬡</span>
+              <p>No face cluster data loaded.</p>
+              <p class="hint">Run Phase 1 first:<br><code>python scripts/identity/build_face_clusters.py --epoch-id &lt;epoch&gt;</code></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PANEL 2 — SPEAKER HYPOTHESES
+        ════════════════════════════════════════════════════════════════ -->
+        <section id="panel-speakers" class="tab-panel" role="tabpanel" aria-labelledby="tab-speakers" hidden>
+          <div class="panel-toolbar">
+            <div class="toolbar-left">
+              <span class="toolbar-label">SPEAKER CLUSTERS</span>
+              <span class="hypothesis-badge">HYPOTHESIS ONLY — MANUAL CONFIRMATION REQUIRED</span>
+            </div>
+            <div class="toolbar-right">
+              <span class="toolbar-note" id="speakers-note">Load speaker_clusters.json.</span>
+              <button class="toolbar-btn secondary" id="load-speakers-btn">LOAD FROM DATA PATH</button>
+            </div>
+          </div>
+
+          <div class="speakers-list" id="speakers-list">
+            <div class="empty-card">
+              <span class="pulse-icon">◈</span>
+              <p>No speaker hypothesis data loaded.</p>
+              <p class="hint">Run Phase 2 first:<br><code>python scripts/identity/build_speaker_clusters.py --epoch-id &lt;epoch&gt;</code></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PANEL 3 — NAME MENTIONS
+        ════════════════════════════════════════════════════════════════ -->
+        <section id="panel-names" class="tab-panel" role="tabpanel" aria-labelledby="tab-names" hidden>
+          <div class="panel-toolbar">
+            <div class="toolbar-left">
+              <span class="toolbar-label">TRANSCRIPT NAME SIGNALS</span>
+              <input type="search" id="name-search" class="mini-input wide" placeholder="filter terms..." autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="toolbar-right">
+              <span class="toolbar-note" id="names-note">Load name_mentions.json.</span>
+              <button class="toolbar-btn secondary" id="load-names-btn">LOAD FROM DATA PATH</button>
+            </div>
+          </div>
+
+          <div class="names-table-wrap" id="names-table-wrap">
+            <table class="names-table" id="names-table" hidden>
+              <thead>
+                <tr>
+                  <th>TERM</th>
+                  <th>TYPE</th>
+                  <th class="num-col" id="sort-count" title="Sort by count (click)">MENTIONS ↕</th>
+                  <th class="num-col">SCENES</th>
+                  <th class="num-col">VIDEOS</th>
+                  <th>ROSTER ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="names-tbody"></tbody>
+            </table>
+            <div class="empty-card" id="names-empty">
+              <span class="pulse-icon">◉</span>
+              <p>No name mention data loaded.</p>
+              <p class="hint">Run Phase 3 first:<br><code>python scripts/identity/extract_name_mentions.py --epoch-id &lt;epoch&gt;</code></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PANEL 4 — FAMILY ROSTER
+        ════════════════════════════════════════════════════════════════ -->
+        <section id="panel-roster" class="tab-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
+          <div class="panel-toolbar">
+            <div class="toolbar-left">
+              <span class="toolbar-label">FAMILY ROSTER EDITOR</span>
+              <span class="hypothesis-badge" style="--hbg: rgba(0,210,255,0.12); --hcol: #00d2ff; --hborder: #00d2ff44;">HUMAN AUTHORITY — THIS FILE DEFINES IDENTITY</span>
+            </div>
+            <div class="toolbar-right">
+              <button class="toolbar-btn secondary" id="load-roster-btn">LOAD ROSTER</button>
+              <button class="toolbar-btn" id="validate-roster-btn" title="Run validate_roster.py">VALIDATE ✓</button>
+              <button class="toolbar-btn danger" id="export-roster-btn" title="Export current roster as YAML to data path">EXPORT YAML</button>
+            </div>
+          </div>
+
+          <!-- Roster identity list -->
+          <div class="roster-layout">
+            <aside class="roster-sidebar">
+              <div class="roster-sidebar-header">
+                IDENTITIES <span class="count-badge" id="roster-count">0</span>
+              </div>
+              <div class="roster-sidebar-list" id="roster-sidebar-list">
+                <div class="empty-state-small">No identities. Add one below.</div>
+              </div>
+              <div class="roster-add-form">
+                <input type="text" id="new-identity-input" class="mini-input wide" placeholder="New identity display name..." autocomplete="off" spellcheck="false" />
+                <button class="toolbar-btn" id="add-identity-btn">+ ADD</button>
+              </div>
+            </aside>
+
+            <div class="roster-detail" id="roster-detail">
+              <div class="roster-no-selection">
+                <span class="pulse-icon" style="font-size:2.5rem">◼</span>
+                <p>SELECT AN IDENTITY FROM THE LEFT PANEL TO EDIT</p>
+                <p class="hint">Or add a new identity using the input below the list.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- ── Face Cluster Label Modal ───────────────────────────────── -->
+      <div class="modal-backdrop" id="label-modal" hidden role="dialog" aria-modal="true" aria-labelledby="label-modal-title">
+        <div class="modal-content wide-modal">
+          <div class="modal-header">
+            <span id="label-modal-title">⬡ LABEL FACE CLUSTER</span>
+            <button class="close-btn" id="label-modal-close" aria-label="Close">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="cluster-thumbnails" id="modal-thumbnails"></div>
+            <div class="modal-cluster-meta" id="modal-cluster-meta"></div>
+            <div class="modal-form-row">
+              <label for="cluster-label-input">ASSIGN IDENTITY LABEL</label>
+              <input type="text" id="cluster-label-input" class="modal-input" placeholder="Person's name (e.g. Joe)" autocomplete="off" spellcheck="false" list="known-identities-list" />
+              <datalist id="known-identities-list"></datalist>
+            </div>
+            <div class="modal-form-row">
+              <label for="cluster-note-input">OPERATOR NOTE (optional)</label>
+              <input type="text" id="cluster-note-input" class="modal-input" placeholder="Brief justification..." />
+            </div>
+            <div class="modal-warning" id="label-modal-warning" hidden></div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn cancel-btn" id="label-modal-cancel">CANCEL</button>
+            <button class="modal-btn confirm-btn" id="label-modal-confirm">APPLY LABEL ▶</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Validation Result Modal ────────────────────────────────── -->
+      <div class="modal-backdrop" id="validate-modal" hidden role="dialog" aria-modal="true" aria-labelledby="validate-modal-title">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span id="validate-modal-title">✓ ROSTER VALIDATION RESULT</span>
+            <button class="close-btn" id="validate-modal-close" aria-label="Close">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="validate-result" id="validate-result"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn confirm-btn" id="validate-modal-ok">CLOSE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast notifications -->
+      <div class="toast-container" id="toast-container" aria-live="polite"></div>
+    </div>
+
+    <script src="./static/js/identity.js"></script>
+  </body>
+</html>

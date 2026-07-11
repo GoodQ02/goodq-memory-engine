@@ -367,6 +367,10 @@ the failure is not currently visible.
 - Completion gate: link, badge, drift, and authority-map checks pass; searches
   find no superseded active plan path.
 - Public impact: RELEASE_REQUIRED
+- Prerequisite evidence (2026-07-11): the foundational project orientation and
+  instruction chain are already checkpointed. R-13 must not recreate them; it
+  owns remaining archive moves, indexes, active-document classification,
+  `PROJECT.md`, naming, and semantic drift.
 - Cutover evidence (2026-07-10): rebuilt this roadmap in place; moved eight
   superseded plans/reports to the archive; verified 175 active Markdown files,
   695 relative links, zero broken links, zero active drive-root violations, and
@@ -420,6 +424,11 @@ the failure is not currently visible.
   remain the only product branches and public `main` is an ancestor of private
   `dev`. Public-checkout reconciliation and release verification remain open;
   no public branch or checkout state was changed during this repair.
+- Local-hook finding (2026-07-11): a private post-commit hook automatically
+  copied/staged `AGENTS.md` in the public checkout during the foundational-docs
+  checkpoint. The working-tree side effect was immediately reversed without
+  changing public history. R-16 must remove or replace this implicit release
+  authority before any approved public reconciliation.
 
 ### R-17 — Extract the frozen mixed main checkout
 
@@ -439,6 +448,10 @@ the failure is not currently visible.
   inventory found no dirty Qori work,
   separated identity evidence from unsafe R-08 authority prototypes, and marked
   the untracked API restart script as incompatible with R-19.
+- Foundational documentation evidence (2026-07-11): the timeless project
+  orientation, instruction-first-read alignment, authority-map classification,
+  and archived completed plan are checkpointed at `ac4f58f6`. Evidence:
+  `docs/diagnostics/FOUNDATIONAL_ORIENTATION_CHECKPOINT_2026-07-11.md`.
 
 ### R-18 — Isolate validator tests and generated reports
 
@@ -683,6 +696,9 @@ tagging, and public push remain separate approval gates.
 - 2026-07-11: Closed R-06 after binding final cleanup to fresh exact-window
   five-target evidence, adding the failed-target retention regression, and
   creating the isolated progressive-ingestion checkpoint.
+- 2026-07-11: Checkpointed the foundational project orientation and instruction
+  chain, archived its completed plan, and recorded the unsafe automatic public
+  `AGENTS.md` sync hook under R-16 after reversing its side effect.
 - 2026-07-10: Replaced the stale public-preview roadmap with the lifetime
   roadmap and repair register. Consolidated the sixteen audit findings,
   preserved unfinished intent, moved eight superseded plans/reports to the

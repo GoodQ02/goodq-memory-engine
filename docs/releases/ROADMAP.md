@@ -169,7 +169,7 @@ the failure is not currently visible.
 ### R-05 — Define API and Command Center execution authority
 
 - Priority: P0
-- Status: OPEN
+- Status: IN_PROGRESS
 - Finding: doctrine calls the API and console read-only while the identity
   branch adds roster writes and background process launch.
 - Repair: adopt the loopback-only local-operator API model; classify every route
@@ -201,15 +201,14 @@ the failure is not currently visible.
   operator surfaces as read-only. The 2026-07-10 Identity Workbench walkthrough
   confirms that its curated roster and cluster writes are intentional product
   behavior; it does not settle authority for the other control surfaces.
-- Existing-authority trace (2026-07-10): two independent confirmation mechanisms
-  already exist. The ingest facade uses a self-issued in-memory token that is
-  neither operation/scope-bound nor durable. `MiniAgentClient` uses a persistent
-  token store and policy contracts, but only promotion tokens are scope-bound;
-  its native bypass currently permits `run_ingestion` and `file_delete` without
-  the confirmation required by their contracts, and native result envelopes do
-  not themselves create the promised generic durable tool-audit record. Neither
-  mechanism is a safe common API authority as implemented, and a third gate must
-  not be layered beside them.
+- Original authority trace (2026-07-10): two independent confirmation mechanisms
+  existed. The ingest facade used a self-issued in-memory token that was neither
+  operation/scope-bound nor durable. `MiniAgentClient` had a persistent token
+  store and policy contracts, but only promotion tokens were scope-bound; its
+  native bypass permitted `run_ingestion` and `file_delete` without the required
+  confirmation, and native result envelopes lacked generic durable audit
+  evidence. R-11 has now repaired the MiniAgent authority. The ingest mechanism
+  remains superseded, and a third gate must not be layered beside them.
 - Approved direction (2026-07-11): Retro Console, Command Center, Identity
   Workbench, Stitching Workbench, and Summary Console are explicit loopback-only
   local-operator control surfaces. Request staging converges on one ledgered
@@ -219,8 +218,21 @@ the failure is not currently visible.
   binding denies mutation by default. The superseded upload, token, boolean-confirm,
   and duplicate route authorities must be removed rather than retained as
   compatibility layers. R-08 remains responsible for durable identity process
-  recovery after this authority choice; R-11 owns repair of the MiniAgent policy
-  contradictions and must complete before it can serve as the common gate.
+  recovery after this authority choice. Verified R-11 MiniAgent authority is now
+  the prerequisite common confirmation/audit foundation for this seam.
+- Fresh audit evidence (2026-07-11): after the verified R-11 checkpoint, the
+  clean R-05 worktree mounts 70 API operations: 49 passive, 4 staging, 8 curated
+  mutations, and 9 process executions. The earlier 78-operation inventory is
+  reconciled exactly by eight frozen R-08-only identity prototype routes; the
+  coincidental clean `app.routes` count of 78 includes `/openapi.json` and seven
+  static mounts and is not an operation count. MiniAgent now supplies the
+  repaired persistent exact-scope authority, but the API still uses its
+  superseded process-local ingest token and no common route-effect/client guard.
+  Retro Console still calls the unledgered upload bypass and overstates staging
+  as ingestion. The first bounded repair is therefore staging convergence;
+  identity prototypes remain frozen under R-08 and status side effects remain
+  R-14-owned. Evidence:
+  `docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -722,6 +734,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Opened R-05 implementation from a fresh mounted-route and UI
+  authority audit. Reconciled 70 clean operations against eight frozen
+  R-08-only identity routes, preserved the R-08/R-14 boundaries, and selected
+  the unledgered Retro upload bypass as the first isolated repair seam.
 - 2026-07-11: Verified R-11 after replacing native confirmation bypasses with
   one exact-operation/full-scope authority, adding durable generic decision and
   execution audit evidence, aligning dormant Control Agent activation and

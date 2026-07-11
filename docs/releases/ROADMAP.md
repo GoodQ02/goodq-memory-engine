@@ -233,6 +233,16 @@ the failure is not currently visible.
   identity prototypes remain frozen under R-08 and status side effects remain
   R-14-owned. Evidence:
   `docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md`.
+- First-seam checkpoint evidence (2026-07-11): `b69803af` removed the duplicate
+  token/upload authorities and converged local-path and multipart preparation,
+  exact-scope confirmation/cancellation, durable request state, bounded private
+  staging, recovery, and Retro Console truth on one loopback-only submit route.
+  Fresh verification passed 167 focused tests plus compilation,
+  documentation/configuration/static gates, and independent specification and
+  security reviews. R-05 remains `IN_PROGRESS`; route-effect classification,
+  common remote-mutation denial, and the other mutation/process authorities are
+  not closed. Evidence:
+  `docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -376,6 +386,13 @@ the failure is not currently visible.
   tests, compilation, documentation authority/drift, banned-token,
   dependency-drift, staged-diff, and independent review gates. Evidence:
   `docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md`.
+- Follow-up `R-11-F1` (OPEN, discovered during R-05 review): unchanged base
+  behavior can preserve wrapper success and return code zero when a native
+  MiniAgent handler explicitly returns `status=error`. The R-11 confirmation,
+  token, audit, Control Agent, and governor checkpoint remains valid, but this
+  handler-outcome truth gap must be repaired in its own isolated seam before
+  R-05 widens process/mutation authority. Focused tests must prove the outward
+  envelope and execution audit both report the handler failure truthfully.
 
 ### R-12 — Reconcile workstation doctrine and follower validation
 
@@ -704,7 +721,9 @@ recreated under a new name.
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
 2. Restore truthful evidence: completed R-18, R-09, R-10, and R-13 checkpoints.
-3. Establish one control authority: R-11, R-05, then R-07.
+3. Establish one control authority: verified R-11, the current R-05 staging
+   checkpoint, isolated R-11-F1 handler-outcome truth, remaining R-05, then
+   R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.
 5. Complete identity safely: R-08, then human-curated Phase 5A readiness.
@@ -734,6 +753,11 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Checkpointed the first R-05 seam after converging ingest
+  preparation/confirmation/cancellation on one bounded loopback-only ledgered
+  route. Recorded the independently discovered unchanged MiniAgent
+  handler-error truth gap as isolated follow-up R-11-F1 rather than mixing it
+  into R-05.
 - 2026-07-11: Opened R-05 implementation from a fresh mounted-route and UI
   authority audit. Reconciled 70 clean operations against eight frozen
   R-08-only identity routes, preserved the R-08/R-14 boundaries, and selected

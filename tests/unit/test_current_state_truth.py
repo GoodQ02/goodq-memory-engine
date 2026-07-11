@@ -592,7 +592,8 @@ def test_capture_is_redacted_and_uses_only_explicit_epoch_authority(tmp_path, mo
     assert captured["authority"]["epoch_id"] == EPOCH_ID
     assert captured["evidence_id"]
     assert str(tmp_path) not in json.dumps(captured)
-    assert all("R-20" not in item for item in captured["limitations"])
+    assert all("R-" not in item for item in captured["limitations"])
+    assert "R-" not in json.dumps(captured["observed_services"])
 
 
 def _expected_test_collections():

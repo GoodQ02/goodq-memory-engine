@@ -497,7 +497,7 @@ def capture_evidence(
             "ollama": _probe_ollama(probe_endpoints["ollama"]),
             "wsl": {
                 "state": "not_probed",
-                "reason": "passive R-09 capture does not start or query WSL",
+                "reason": "passive current-state capture does not start or query WSL",
             },
         },
         "historical_evidence": _historical_evidence(),

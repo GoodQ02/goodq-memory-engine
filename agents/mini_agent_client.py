@@ -136,6 +136,16 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "supersede_ucf_frames",
 }
 
+LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
 PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
 SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
 
@@ -394,10 +404,10 @@ class MiniAgentClient:
                 "code": "token_already_used",
                 "message": "Token has already been used.",
             }
-        if tool_name in SCOPE_BOUND_UCF_TOOLS and token_info.get("tool_args", {}) != tool_args:
+        if token_info.get("tool_args", {}) != tool_args:
             return {
                 "code": "token_scope_mismatch",
-                "message": "Confirmation token was not issued for this exact UCF scope.",
+                "message": "Confirmation token was not issued for these exact tool arguments.",
             }
 
         expired = bool(
@@ -599,17 +609,10 @@ class MiniAgentClient:
         tool_args = tool_args or {}
         
         # 1. Confirmation token validation if provided
-        NATIVELY_GATED_TOOLS = {
-            "promote_ucf_to_memory",
-            "reconcile_ucf_qdrant",
-            "validate_ucf_frames",
-            "reject_ucf_frames",
-            "supersede_ucf_frames",
-        }
         if confirmation_token:
             with self._lock_token_store():
                 tokens = self._load_tokens()
-                if confirmation_token not in tokens and tool_name not in NATIVELY_GATED_TOOLS:
+                if confirmation_token not in tokens and tool_name not in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
                     # Non-native token for a non-native tool: delegate to subprocess
                     pass
                 else:
@@ -659,6 +662,17 @@ class MiniAgentClient:
                 }
                 return self.sanitize_envelope(envelope), 1
 
+        if tool_name == "file_delete" and os.environ.get("GOODQ_BREAK_GLASS") != "1":
+            envelope = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [{"code": "break_glass_required", "message": f"Destructive operation '{tool_name}' requires break-glass override."}],
+            }
+            return self.sanitize_envelope(envelope), 1
+
         if tool_name in SCOPE_BOUND_UCF_TOOLS:
             scope_violations = _validate_promote_ucf_scope(tool_args)
             if scope_violations:
@@ -677,24 +691,28 @@ class MiniAgentClient:
                 return self.sanitize_envelope(envelope), 1
 
         # 4. Human-in-the-Loop Gating Validation
-        if self.profile != "unrestricted" and tool_name in (
-            "promote_ucf_to_memory",
-            "reconcile_ucf_qdrant",
-            "validate_ucf_frames",
-            "reject_ucf_frames",
-            "supersede_ucf_frames",
-        ):
+        if tool_name in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
-                with self._lock_token_store():
-                    tokens = self._load_tokens()
-                    tokens[token] = {
-                        "operation": tool_name,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "used": False,
-                        "tool_args": tool_args or {}
-                    }
-                    self._save_tokens(tokens)
+                try:
+                    with self._lock_token_store():
+                        tokens = self._load_tokens()
+                        tokens[token] = {
+                            "operation": tool_name,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "used": False,
+                            "tool_args": tool_args or {}
+                        }
+                        self._save_tokens(tokens)
+                except Exception:
+                    logger.error("Failed to persist confirmation token issuance", exc_info=True)
+                    return self._confirmation_error_envelope(
+                        request_id,
+                        {
+                            "code": "confirmation_token_store_error",
+                            "message": "Confirmation token issuance could not be persisted.",
+                        },
+                    )
                 envelope = {
                     "request_id": request_id,
                     "profile": self.profile,
@@ -717,18 +735,7 @@ class MiniAgentClient:
                     }
                     return self.sanitize_envelope(envelope), 1
 
-        # 5. Native tool validation bypass & Destructive break-glass check
-        if tool_name == "file_delete" and self.profile in ("safe", "offline") and os.environ.get("GOODQ_BREAK_GLASS") != "1":
-            envelope = {
-                "request_id": request_id,
-                "profile": self.profile,
-                "status": "error",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "result": {"allowed": False},
-                "errors": [{"code": "break_glass_required", "message": f"Destructive operation '{tool_name}' requires break-glass override."}],
-            }
-            return self.sanitize_envelope(envelope), 1
-
+        # 5. Native tool validation bypass
         if tool_name in (
             "run_ingestion",
             "promote_ucf_to_memory",

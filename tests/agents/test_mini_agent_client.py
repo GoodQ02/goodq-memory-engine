@@ -291,6 +291,248 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
     assert list(agent_home.glob("confirmation_tokens.json.tmp-*")) == []
 
 
+EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
+
+def test_local_confirmation_required_tools_have_one_module_level_authority():
+    import agents.mini_agent_client as mini_agent_client
+
+    assert getattr(mini_agent_client, "LOCAL_CONFIRMATION_REQUIRED_TOOLS", None) == (
+        EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
+    )
+
+
+@pytest.mark.parametrize("profile", ["safe", "unrestricted"])
+def test_run_ingestion_requires_exact_local_confirmation(
+    profile,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / profile))
+    client = MiniAgentClient(
+        profile=profile,
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"status": "staged_complete", "epoch": "epoch-one"})
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+    requested_args = {"input_dir": "incoming-one", "epoch": "epoch-one"}
+
+    envelope, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=requested_args,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    handler.assert_not_called()
+    token = envelope["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming-two", "epoch": "epoch-one"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+    handler.assert_not_called()
+
+    result, confirm_rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=requested_args,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirm_rc == 0
+    assert result["status"] == "success"
+    handler.assert_called_once_with(requested_args)
+
+
+@pytest.mark.parametrize("profile", ["safe", "unrestricted"])
+def test_file_delete_requires_break_glass_and_exact_confirmation(
+    profile,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / profile))
+    monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
+    client = MiniAgentClient(
+        profile=profile,
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"deleted": "target-one.txt"})
+    monkeypatch.setattr(client, "_execute_file_delete", handler)
+    requested_args = {"path": "target-one.txt"}
+
+    blocked, blocked_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+    )
+    assert blocked_rc == 1
+    assert blocked["errors"][0]["code"] == "break_glass_required"
+    assert "confirmation_token" not in blocked["result"]
+    handler.assert_not_called()
+
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    envelope, rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    handler.assert_not_called()
+    token = envelope["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args={"path": "target-two.txt"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+    handler.assert_not_called()
+
+    result, confirm_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirm_rc == 0
+    assert result["status"] == "success"
+    handler.assert_called_once_with(requested_args)
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "requested_args", "changed_args"),
+    [
+        (
+            "validate_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one"},
+            {"video_hash": "video-one", "epoch_id": "epoch-two"},
+        ),
+        (
+            "reject_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "bad frame"},
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "different reason"},
+        ),
+        (
+            "supersede_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one"},
+            {"video_hash": "video-two", "epoch_id": "epoch-one"},
+        ),
+    ],
+)
+def test_lifecycle_confirmation_token_rejects_changed_complete_args(
+    tool_name,
+    requested_args,
+    changed_args,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / tool_name))
+    client = MiniAgentClient(profile="safe")
+    envelope, rc = client.validate_action(
+        prompt="Request lifecycle mutation",
+        tool_name=tool_name,
+        tool_args=requested_args,
+    )
+    assert rc == 3
+
+    mismatch, mismatch_rc = client.validate_action(
+        prompt="Attempt changed lifecycle mutation",
+        tool_name=tool_name,
+        tool_args=changed_args,
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+
+def test_unrestricted_promotion_still_requires_local_confirmation(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "unrestricted"))
+    client = MiniAgentClient(profile="unrestricted")
+    scope = {"video_hash": "video-one", "epoch_id": "epoch-one"}
+
+    envelope, rc = client.validate_action(
+        prompt="Promote exact scope",
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "tool_args"),
+    [
+        ("run_ingestion", {"input_dir": "incoming", "epoch": "epoch-one"}),
+        ("file_delete", {"path": "target.txt"}),
+        ("promote_ucf_to_memory", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        ("reconcile_ucf_qdrant", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        ("validate_ucf_frames", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        (
+            "reject_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "bad frame"},
+        ),
+        ("supersede_ucf_frames", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+    ],
+)
+def test_local_confirmation_rejects_confirm_true_without_token(
+    tool_name,
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / tool_name))
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    client = MiniAgentClient(profile="safe")
+
+    envelope, rc = client.validate_action(
+        prompt="Attempt confirmation without token",
+        tool_name=tool_name,
+        tool_args=tool_args,
+        confirm=True,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_confirmation_token_issuance_store_failure_is_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "issuance-failure"))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(
+        client,
+        "_save_tokens",
+        MagicMock(side_effect=OSError("simulated issuance persistence failure")),
+    )
+
+    envelope, rc = client.validate_action(
+        prompt="Ingest exact scope",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "confirmation_token_store_error"
+    assert "confirmation_token" not in envelope["result"]
+
+
 def test_assets_dir_monkeypatch():
     """Verify that ASSETS_DIR was successfully redirected to our local folder."""
     expected_path = Path(__file__).resolve().parent.parent.parent / "agents" / "stack"
@@ -1556,76 +1798,40 @@ def test_reingest_supersession_flow(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_hitl_tool_registry_completeness():
-    """Phase 0.8: every HITL-gated native tool must appear in all 6 required locations.
+    """Every locally confirmed native tool must stay registered for execution and audit.
 
     This test is the single source of truth for the tool registration contract.
     If a new HITL-gated tool is added without being registered in all locations,
     this test will fail immediately on the first run.
 
     Required locations:
-    1. MUTATING_DENY_ON_AGENT_FAILURE (module-level set)
-    2. Local NATIVELY_GATED_TOOLS in validate_action() (line ~454)
-    3. HITL gate 'if tool_name in (...)' in validate_action() (line ~561)
-    4. Native bypass list in validate_action() (line ~596)
-    5. Dispatch 'elif tool_name ==' chain in execute_tool()
-    6. side_effect_report.mutated set in execute_tool()
+    1. LOCAL_CONFIRMATION_REQUIRED_TOOLS (module-level authority)
+    2. MUTATING_DENY_ON_AGENT_FAILURE
+    3. Dispatch 'elif tool_name ==' chain in execute_tool()
+    4. side_effect_report.mutated set in execute_tool()
     """
     import inspect
     import re
-    from agents.mini_agent_client import MUTATING_DENY_ON_AGENT_FAILURE
+    from agents.mini_agent_client import (
+        LOCAL_CONFIRMATION_REQUIRED_TOOLS,
+        MUTATING_DENY_ON_AGENT_FAILURE,
+    )
 
-    # The canonical set of HITL-gated native tools. Update this list when
-    # adding a new HITL-gated tool — the test will enforce all registrations.
-    HITL_GATED_TOOLS = {
-        "promote_ucf_to_memory",
-        "validate_ucf_frames",
-        "reject_ucf_frames",
-        "supersede_ucf_frames",
-    }
+    assert LOCAL_CONFIRMATION_REQUIRED_TOOLS == EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
 
-    # 1. All HITL tools must be in the module-level MUTATING set
-    for tool in HITL_GATED_TOOLS:
+    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
         assert tool in MUTATING_DENY_ON_AGENT_FAILURE, (
             f"HITL tool '{tool}' missing from MUTATING_DENY_ON_AGENT_FAILURE"
         )
 
-    # Inspect source for the remaining 5 locations
+    # Inspect source for dispatch and mutation reporting registrations.
     source = inspect.getsource(MiniAgentClient)
 
-    for tool in HITL_GATED_TOOLS:
-        # 2. Local NATIVELY_GATED_TOOLS in validate_action
-        assert f'"{tool}"' in source or f"'{tool}'" in source, (
-            f"HITL tool '{tool}' not found in MiniAgentClient source"
-        )
-
-        # 3. HITL gate presence — look for tool in the HITL 'if tool_name in' block
-        hitl_gate_match = re.search(
-            r'# 4\. Human-in-the-Loop.*?if tool_name in \(([^)]+)\)',
-            source, re.DOTALL
-        )
-        assert hitl_gate_match, "HITL gate block not found in MiniAgentClient"
-        hitl_tools_str = hitl_gate_match.group(1)
-        assert tool in hitl_tools_str, (
-            f"HITL tool '{tool}' missing from HITL gate in validate_action()"
-        )
-
-        # 4. Native bypass list
-        bypass_match = re.search(
-            r'# 5\. Native tool validation bypass.*?if tool_name in \(([^)]+)\)',
-            source, re.DOTALL
-        )
-        assert bypass_match, "Native bypass list not found in MiniAgentClient"
-        bypass_tools_str = bypass_match.group(1)
-        assert tool in bypass_tools_str, (
-            f"HITL tool '{tool}' missing from native bypass list"
-        )
-
-        # 5. Dispatch chain — each tool must have an elif branch
+    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
         assert f'tool_name == "{tool}"' in source or f"tool_name == '{tool}'" in source, (
             f"HITL tool '{tool}' missing from dispatch elif chain in execute_tool()"
         )
 
-        # 6. side_effect_report.mutated
         mutated_match = re.search(
             r'"mutated":\s*tool_name\s+in\s+\(([^)]+)\)',
             source, re.DOTALL
@@ -1748,25 +1954,17 @@ def test_tool_registration_matrix_extraction():
     for tool in expected_mutating:
         assert tool in mutating_tools, f"Expected mutating tool '{tool}' not found in MUTATING_DENY_ON_AGENT_FAILURE matrix"
         
-    # Slice out NATIVELY_GATED_TOOLS set
-    start_str_native = "NATIVELY_GATED_TOOLS = {"
+    # Slice out the one module-level local confirmation authority set.
+    start_str_native = "LOCAL_CONFIRMATION_REQUIRED_TOOLS = {"
     idx_start_native = src.find(start_str_native)
-    assert idx_start_native != -1, "NATIVELY_GATED_TOOLS not found in source code"
+    assert idx_start_native != -1, "LOCAL_CONFIRMATION_REQUIRED_TOOLS not found in source code"
     idx_end_native = src.find("}", idx_start_native)
-    assert idx_end_native != -1, "Closing bracket for NATIVELY_GATED_TOOLS not found"
+    assert idx_end_native != -1, "Closing bracket for LOCAL_CONFIRMATION_REQUIRED_TOOLS not found"
     
     native_slice = src[idx_start_native + len(start_str_native):idx_end_native]
     native_gated_tools = set(re.findall(r'["\']([^"\']+)["\']', native_slice))
     
-    expected_native_gated = {
-        "promote_ucf_to_memory",
-        "reconcile_ucf_qdrant",
-        "validate_ucf_frames",
-        "reject_ucf_frames",
-        "supersede_ucf_frames"
-    }
-    
-    assert native_gated_tools == expected_native_gated, f"NATIVELY_GATED_TOOLS set mismatch: {native_gated_tools}"
+    assert native_gated_tools == EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -2989,7 +3187,7 @@ def test_sanitize_envelope_diverse_inputs():
 
 
 def test_break_glass_gate_for_file_delete(monkeypatch):
-    """Verify that file_delete is blocked in safe/offline profiles unless GOODQ_BREAK_GLASS=1 is set."""
+    """Verify break-glass is necessary but does not replace local confirmation."""
     # 1. Under safe profile without break-glass
     monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
     client_safe = MiniAgentClient(profile="safe")
@@ -3011,8 +3209,9 @@ def test_break_glass_gate_for_file_delete(monkeypatch):
         tool_name="file_delete",
         tool_args={"path": "some_file.json"}
     )
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
 
     # 3. Under offline profile without break-glass
     monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)

@@ -434,7 +434,7 @@ def test_security_profiles_and_agent_controls():
     token = envelope["result"]["confirmation_token"]
     assert token.startswith("token-promote-ucf-to-memory-")
     
-    # 4. Unrestricted profile checks: allows execution without confirmation
+    # 4. Unrestricted profile uses the same explicit local confirmation rule.
     unrestricted_client = MiniAgentClient(profile="unrestricted")
     unrestricted_client.agent_available = True
     
@@ -444,6 +444,9 @@ def test_security_profiles_and_agent_controls():
         tool_name="promote_ucf_to_memory",
         tool_args={"video_hash": "test_video", "epoch_id": "test_epoch"}
     )
-    # Direct bypass should return success / status="ok" (allowed to proceed without token)
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["errors"][0]["code"] == "mutability_requires_confirmation"
+    assert envelope["result"]["confirmation_token"].startswith(
+        "token-promote-ucf-to-memory-"
+    )

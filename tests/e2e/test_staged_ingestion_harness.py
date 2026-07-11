@@ -29,6 +29,17 @@ class MockState:
         cls.qdrant_points.clear()
         cls.faiss_points.clear()
 
+
+MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
 def sanitize_envelope(data: Any) -> Any:
     """Recursively redacts absolute Windows/UNC local file paths (C:\\ or L:\\) in the envelope."""
     import re
@@ -165,6 +176,10 @@ class MockMiniAgentClient:
                 "process_start",
                 "process_stop",
                 "promote_ucf_to_memory",
+                "reconcile_ucf_qdrant",
+                "validate_ucf_frames",
+                "reject_ucf_frames",
+                "supersede_ucf_frames",
             }
             if tool_name in mutating_ops:
                 envelope = {
@@ -202,8 +217,22 @@ class MockMiniAgentClient:
                 }
                 return sanitize_envelope(envelope), 1
 
+        if tool_name == "file_delete" and os.environ.get("GOODQ_BREAK_GLASS") != "1":
+            envelope = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [{
+                    "code": "break_glass_required",
+                    "message": "Destructive operation 'file_delete' requires break-glass override.",
+                }],
+            }
+            return sanitize_envelope(envelope), 1
+
         # 3. Human-in-the-Loop Gating Validation
-        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
+        if tool_name in MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS:
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 MockState.tokens[token] = {
@@ -243,15 +272,7 @@ class MockMiniAgentClient:
                         "errors": [{"code": "token_already_used", "message": "Token has already been used."}],
                     }
                     return sanitize_envelope(envelope), 1
-                if (
-                    tool_name in {
-                        "promote_ucf_to_memory",
-                        "validate_ucf_frames",
-                        "reject_ucf_frames",
-                        "supersede_ucf_frames",
-                    }
-                    and tok_info.get("tool_args") != tool_args
-                ):
+                if tok_info.get("tool_args") != tool_args:
                     envelope = {
                         "request_id": request_id,
                         "profile": self.profile,
@@ -325,6 +346,9 @@ class MockMiniAgentClient:
         )
         if val_rc != 0:
             return val_envelope, val_rc
+
+        if tool_name in MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS:
+            MockState.tokens[confirmation_token]["used"] = True
 
         started_at = datetime.utcnow().isoformat() + "Z"
 
@@ -435,8 +459,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0 if not validation_errors else 1
 
         elif tool_name == "promote_ucf_to_memory":
-            MockState.tokens[confirmation_token]["used"] = True
-            
             # Orphan vector check
             attempted_vectors = tool_args.get("vectors", [])
             staged_vector_keys = {rec["ucf_data"].get("vector_key") for rec in MockState.staged_records.values() if rec["ucf_data"].get("vector_key")}
@@ -507,7 +529,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "validate_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
             epoch_id = tool_args.get("epoch_id")
             
@@ -535,7 +556,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "reject_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             reason = tool_args.get("reason", "").strip()
             if not reason:
                 envelope = {
@@ -579,7 +599,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "supersede_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
             epoch_id = tool_args.get("epoch_id")
             
@@ -724,6 +743,23 @@ def mock_harness_active() -> bool:
     return os.environ.get("TEST_MOCK_HARNESS") == "1"
 
 
+def execute_locally_confirmed(client, *, tool_name: str, tool_args: Dict[str, Any]):
+    """Exercise the explicit request -> confirm -> execute flow."""
+    confirmation, confirmation_rc = client.validate_action(
+        prompt=f"Confirm {tool_name}",
+        mode="ops",
+        tool_name=tool_name,
+        tool_args=tool_args,
+    )
+    assert confirmation_rc == 3, confirmation
+    return client.execute_tool(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+
 def seed_validated_scope(client, monkeypatch, *, video_hash: str, epoch_id: str):
     """Creates one exact, validated UCF scope using only temporary stores."""
     scope = {"video_hash": video_hash, "epoch_id": epoch_id}
@@ -762,7 +798,8 @@ def seed_validated_scope(client, monkeypatch, *, video_hash: str, epoch_id: str)
             "payload": {},
         }]
     }
-    ingest_envelope, ingest_rc = client.execute_tool(
+    ingest_envelope, ingest_rc = execute_locally_confirmed(
+        client,
         tool_name="run_ingestion",
         tool_args=ingest_args,
     )
@@ -791,17 +828,25 @@ def seed_validated_scope(client, monkeypatch, *, video_hash: str, epoch_id: str)
 
 # Feature 1: Gated Execution (F1.01-05)
 
-def test_f1_01_ingestion_allowed_in_safe_profile():
+def test_f1_01_ingestion_requires_confirmation_in_safe_profile():
     client = MiniAgentClient(profile="safe")
-    envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    envelope, rc = client.validate_action(
+        prompt="Ingest video",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
 
-def test_f1_02_ingestion_allowed_in_unrestricted_profile():
+def test_f1_02_ingestion_requires_confirmation_in_unrestricted_profile():
     client = MiniAgentClient(profile="unrestricted")
-    envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    envelope, rc = client.validate_action(
+        prompt="Ingest video",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
 
 def test_f1_03_ingestion_blocked_in_offline_profile():
     client = MiniAgentClient(profile="offline")
@@ -834,7 +879,9 @@ def test_f2_01_ingestion_triggers_post_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 5.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     # Ingestion successfully ran and completed post-validation check
     assert envelope["status"] == "success"
@@ -846,7 +893,9 @@ def test_f2_02_ingestion_success_with_valid_ucf():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {"text": "hello"}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     assert envelope["status"] == "success"
     assert envelope["output"]["status"] == "staged_complete"
@@ -858,7 +907,9 @@ def test_f2_03_ingestion_aborts_on_validation_failure():
     args = {
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert envelope["status"] == "fatal_error"
     assert "ucf_validation_failed" in envelope["errors"][0]["code"]
@@ -870,7 +921,9 @@ def test_f2_04_validation_failure_prevents_subsequent_steps():
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
     # Should fail validation during run_ingestion
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     # No staged records should exist
     if mock_harness_active():
@@ -888,7 +941,9 @@ def test_f2_05_validation_error_surfaced_in_envelope():
     args = {
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert "details" in envelope["errors"][0]
     assert len(envelope["errors"][0]["details"]) > 0
@@ -902,7 +957,7 @@ def test_f3_01_ingested_records_remain_staged():
     args = {
         "ucf_records": [{"frame_id": "rec1", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    execute_locally_confirmed(client, tool_name="run_ingestion", tool_args=args)
     if mock_harness_active():
         assert MockState.staged_records["rec1"]["status"] == "staged"
     else:
@@ -959,7 +1014,9 @@ def test_f3_05_promotion_succeeds_with_confirm_and_token():
     args_ingest = {
         "ucf_records": [{"frame_id": "rec1", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     
     # 2. Get confirmation token
     envelope_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False)
@@ -1002,7 +1059,9 @@ def test_f4_01_redacts_absolute_paths_in_output():
         args = {
             "path": "L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         # Absolute path should be redacted/sanitized
         assert "L:\\GOODCUBE" not in str(envelope)
@@ -1021,7 +1080,9 @@ def test_f4_02_redacts_absolute_paths_in_artifacts():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["C:\\Users\\jdben\\mock_report.json"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     assert "C:\\Users" not in str(envelope)
     assert "relative/mock_report.json" in envelope["artifacts"]
@@ -1034,7 +1095,9 @@ def test_f4_03_redacts_absolute_paths_in_errors():
         "simulate_validation_fail": True,
         "absolute_path_artifacts": ["L:\\projects\\error_log.txt"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert "L:\\projects" not in str(envelope)
     assert "relative/error_log.txt" in envelope["artifacts"]
@@ -1047,7 +1110,9 @@ def test_f4_04_preserves_path_agnostic_relative_references():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     # Break-glass required: testing path sanitization, not security gate
     _prev = os.environ.get("GOODQ_BREAK_GLASS")
@@ -1059,7 +1124,9 @@ def test_f4_04_preserves_path_agnostic_relative_references():
             "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
             "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
         }
-        envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="run_ingestion", tool_args=args
+        )
         assert rc == 0
         # Relative path should remain unchanged
         assert "db/ucf/ucf_ledger.db" in envelope["artifacts"]
@@ -1082,7 +1149,9 @@ def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
         args = {
             "path": "\\\\server\\share\\subfolder\\file.txt",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "\\\\server" not in str(envelope)
         assert "relative/file.txt" in envelope["output"]["deleted"]
@@ -1101,13 +1170,13 @@ def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
 def test_f1_06_profile_case_insensitivity():
     client = MiniAgentClient(profile="Safe")
     envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     assert envelope["profile"] == "safe"
 
 def test_f1_07_invalid_profile_fallback_to_safe():
     client = MiniAgentClient(profile="invalid-profile-name")
     envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     assert envelope["profile"] == "safe"
 
 def test_f1_08_custom_operation_unrecognized_blocked():
@@ -1127,9 +1196,9 @@ def test_f1_09_file_delete_blocked_under_agent_failure():
 def test_f1_10_multiple_operations_gating_consistency():
     pass
     client = MiniAgentClient(profile="safe")
-    # Safe allows ingestion
+    # Safe requires confirmation for ingestion.
     _, rc1 = client.validate_action(prompt="Ingest", tool_name="run_ingestion")
-    assert rc1 == 0
+    assert rc1 == 3
     # Offline blocks ingestion
     client_off = MiniAgentClient(profile="offline")
     _, rc2 = client_off.validate_action(prompt="Ingest", tool_name="run_ingestion")
@@ -1144,7 +1213,9 @@ def test_f2_06_missing_media_sources_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v_missing", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Unregistered media source" in envelope["errors"][0]["details"][0]
 
@@ -1156,7 +1227,9 @@ def test_f2_07_temporal_bounds_out_of_range_fails():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 15.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "t_end exceeds duration" in envelope["errors"][0]["details"][0]
 
@@ -1168,7 +1241,9 @@ def test_f2_08_non_flat_payload_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {"nested": {"key": "val"}}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Non-flat payload" in envelope["errors"][0]["details"][0]
 
@@ -1180,7 +1255,9 @@ def test_f2_09_schema_version_mismatch_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.2", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Schema version mismatch" in envelope["errors"][0]["details"][0]
 
@@ -1192,7 +1269,9 @@ def test_f2_10_invalid_spatial_coordinates_fails():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "spatial_region": [0.1, 0.2, 1.5, 0.4], "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "not normalized" in envelope["errors"][0]["details"][0]
 
@@ -1310,7 +1389,9 @@ def test_f4_06_nested_json_path_sanitization():
             "path": "C:\\some\\path\\file.txt",
             "absolute_path_artifacts": [{"nested_list": ["L:\\subfolder\\another_file.json", "relative.txt"]}]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "C:\\some" not in str(envelope)
         assert "L:\\subfolder" not in str(envelope)
@@ -1332,7 +1413,9 @@ def test_f4_07_empty_paths_and_none_handled_gracefully():
             "path": "",
             "absolute_path_artifacts": [None, ""]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert envelope["artifacts"] == [None, ""]
     finally:
@@ -1352,7 +1435,9 @@ def test_f4_08_already_relative_paths_untouched():
             "path": "subfolder/file.txt",
             "absolute_path_artifacts": ["another_sub/data.json"]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert envelope["output"]["deleted"] == "subfolder/file.txt"
         assert envelope["artifacts"] == ["another_sub/data.json"]
@@ -1375,7 +1460,9 @@ def test_f4_09_lowercase_drive_letters_sanitized():
         args = {
             "path": "c:\\lowercase\\drive\\file.mp4",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "c:\\lowercase" not in str(envelope)
         assert "relative/file.mp4" in envelope["output"]["deleted"]
@@ -1393,7 +1480,7 @@ def test_f4_10_path_like_strings_in_text_prompts_not_redacted():
     # "JSON results/envelopes/reports sanitized to redact absolute local file paths"
     # Prompt is in the task/envelope. Let's verify prompt contains absolute path but results/outputs are sanitized.
     envelope, rc = client.validate_action(prompt="Ingest L:\\test.mp4", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     # The result envelope is sanitized, so any drive letters inside the envelope string are redacted.
     assert "L:\\test" not in str(envelope)
 
@@ -1449,7 +1536,9 @@ def test_f3_tier3_02_qdrant_faiss_backfilling_sync(tmp_path):
         ]
     }
     # Ingest should synchronize vector backfill points
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     if mock_harness_active():
         assert dino_key in MockState.qdrant_points["dino"]
@@ -1499,7 +1588,9 @@ def test_f3_tier3_04_sanitization_applied_to_validation_failure_report():
         "simulate_validation_fail": True,
         "absolute_path_artifacts": ["C:\\Windows\\System32\\cmd.exe"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     # Check that paths inside error report are sanitized
     assert "C:\\Windows" not in str(envelope)
@@ -1513,7 +1604,9 @@ def test_f3_tier3_05_promotion_validation_handshake_loop():
     args_invalid = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": -1.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    env_fail, rc_fail = client.execute_tool(tool_name="run_ingestion", tool_args=args_invalid)
+    env_fail, rc_fail = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_invalid
+    )
     assert rc_fail != 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 0
@@ -1529,7 +1622,9 @@ def test_f3_tier3_05_promotion_validation_handshake_loop():
     args_valid = {
         "ucf_records": [{"frame_id": "rec_fixed", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 1.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    env_ok, rc_ok = client.execute_tool(tool_name="run_ingestion", tool_args=args_valid)
+    env_ok, rc_ok = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_valid
+    )
     assert rc_ok == 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 1
@@ -1574,7 +1669,9 @@ def test_f4_tier4_01_complete_happy_path_loop():
         "ucf_records": [{"frame_id": "frame001", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["C:\\Users\\jdben\\My Drive\\_AGENT\\scene_001.json"]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     assert rc_ingest == 0
     assert envelope_ingest["status"] == "success"
     assert "C:\\Users" not in str(envelope_ingest)
@@ -1623,7 +1720,9 @@ def test_f4_tier4_02_validation_failure_aborts_pipeline():
     args_ingest = {
         "ucf_records": [{"frame_id": "frame002", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "spatial_region": [0.8, 0.1, 0.2, 0.4], "payload": {}}]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     assert rc_ingest != 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 0
@@ -1648,7 +1747,9 @@ def test_f4_tier4_03_path_audit_scenario():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["L:\\_DATA\\GoodQ_Data\\db\\ucf\\ucf_ledger.db"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     envelope_str = str(envelope)
     assert "L:\\_DATA" not in envelope_str
@@ -1733,7 +1834,9 @@ def test_f4_tier4_05_agent_failure_recovery_scenario():
     
     # 2. Agent recovers
     client.agent_available = True
-    envelope_ok, rc_ok = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope_ok, rc_ok = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc_ok == 0 # Allowed
     
     # 3. Attempt promotion without prior validate_ucf_frames
@@ -1947,7 +2050,8 @@ def test_full_lifecycle_staged_validated_promoted(monkeypatch):
             },
         ]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client,
         tool_name="run_ingestion", tool_args=args_ingest
     )
     assert rc_ingest == 0
@@ -2131,7 +2235,8 @@ def helper_ingest_two_records(client, video_hash, epoch_id, run_id):
             },
         ]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client,
         tool_name="run_ingestion", tool_args=args_ingest
     )
     assert rc_ingest == 0

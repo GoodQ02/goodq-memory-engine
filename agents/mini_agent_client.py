@@ -146,6 +146,9 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "supersede_ucf_frames",
 }
 
+TOOL_AUDIT_SCHEMA_VERSION = "goodq.tool-audit.v1"
+TOOL_AUDIT_LOG_ENV = "GOODQ_TOOL_AUDIT_LOG"
+
 PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
 SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
 
@@ -332,6 +335,100 @@ class MiniAgentClient:
             return res
         return data
 
+    def _tool_audit_log_path(self) -> Path:
+        override = os.environ.get(TOOL_AUDIT_LOG_ENV)
+        if override:
+            return Path(os.path.expandvars(override)).expanduser()
+        return REPO_ROOT / ".goodq" / "logs" / "tool-audit.jsonl"
+
+    def _redact_tool_audit_value(self, value: Any) -> Any:
+        """Recursively redact contract-declared secrets before durable audit."""
+        if isinstance(value, dict):
+            redacted: Dict[str, Any] = {}
+            for key, item in value.items():
+                normalized = str(key).lower()
+                sensitive = (
+                    normalized == "elevenlabs_voice_id"
+                    or "authorization" in normalized
+                    or "password" in normalized
+                    or "token" in normalized
+                )
+                redacted[key] = (
+                    "[REDACTED]"
+                    if sensitive
+                    else self._redact_tool_audit_value(item)
+                )
+            return redacted
+        if isinstance(value, list):
+            return [self._redact_tool_audit_value(item) for item in value]
+        if isinstance(value, tuple):
+            return [self._redact_tool_audit_value(item) for item in value]
+        return self.sanitize_envelope(value)
+
+    def _append_tool_audit(self, row: Dict[str, Any]) -> None:
+        """Append one locked, flushed JSONL audit row or raise visibly."""
+        audit_path = self._tool_audit_log_path()
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        lock = ReentrantFileLock(
+            audit_path.with_name(f"{audit_path.name}.lock")
+        )
+        durable_row = self._redact_tool_audit_value(
+            {"schema_version": TOOL_AUDIT_SCHEMA_VERSION, **row}
+        )
+        encoded = json.dumps(
+            durable_row,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        with lock.lock():
+            with open(audit_path, "a", encoding="utf-8") as audit_file:
+                audit_file.write(encoded + "\n")
+                audit_file.flush()
+                os.fsync(audit_file.fileno())
+
+    @staticmethod
+    def _audit_error_codes(envelope: Dict[str, Any]) -> List[str]:
+        codes: List[str] = []
+        for error in envelope.get("errors", []) or []:
+            if isinstance(error, dict) and error.get("code"):
+                codes.append(str(error["code"]))
+        return codes
+
+    def _audit_log_error_envelope(
+        self,
+        request_id: str,
+        *,
+        original: Optional[Dict[str, Any]] = None,
+        side_effects_may_have_occurred: bool = False,
+        confirmation_token_revocation_failed: bool = False,
+    ) -> Tuple[Dict[str, Any], int]:
+        error = {
+            "code": "audit_log_error",
+            "message": "Durable tool audit evidence could not be persisted.",
+            "details": {
+                "side_effects_may_have_occurred": side_effects_may_have_occurred,
+                "confirmation_token_revocation_failed": (
+                    confirmation_token_revocation_failed
+                ),
+            },
+        }
+        if original is None:
+            envelope: Dict[str, Any] = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [error],
+            }
+        else:
+            envelope = dict(original)
+            envelope["status"] = "error"
+            envelope["errors"] = [error]
+            envelope["error"] = error
+        return self.sanitize_envelope(envelope), 1
+
     @contextmanager
     def _lock_token_store(self):
         home_dir = Path(os.environ.get("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agent")))
@@ -380,6 +477,15 @@ class MiniAgentClient:
                     )
                 logger.error("Failed to save confirmation tokens", exc_info=True)
                 raise
+
+    def _revoke_confirmation_token(self, confirmation_token: str) -> None:
+        """Remove an unexposed token when its decision cannot be audited."""
+        with self._lock_token_store():
+            tokens = self._load_tokens()
+            if confirmation_token not in tokens:
+                return
+            del tokens[confirmation_token]
+            self._save_tokens(tokens)
 
     def _confirmation_token_error(
         self,
@@ -590,6 +696,63 @@ class MiniAgentClient:
                 pass
 
     def validate_action(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Validate a proposed action and durably record the decision."""
+        envelope, return_code = self._validate_action_impl(
+            prompt=prompt,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+            context_overrides=context_overrides,
+        )
+        if not tool_name:
+            return envelope, return_code
+
+        decision_row = {
+            "event_type": "decision",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "request_id": envelope.get("request_id"),
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": tool_name,
+            "status": envelope.get("status", "unknown"),
+            "return_code": return_code,
+            "arguments": tool_args or {},
+            "confirmed": bool(confirm and confirmation_token),
+            "error_codes": self._audit_error_codes(envelope),
+        }
+        try:
+            self._append_tool_audit(decision_row)
+        except Exception:
+            logger.error("Failed to persist MiniAgent decision audit", exc_info=True)
+            issued_token = (envelope.get("result") or {}).get("confirmation_token")
+            revocation_failed = False
+            if issued_token:
+                try:
+                    self._revoke_confirmation_token(str(issued_token))
+                except Exception:
+                    revocation_failed = True
+                    logger.critical(
+                        "Failed to revoke unaudited confirmation token",
+                        exc_info=True,
+                    )
+            return self._audit_log_error_envelope(
+                str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                confirmation_token_revocation_failed=revocation_failed,
+            )
+        return envelope, return_code
+
+    def _validate_action_impl(
         self,
         prompt: str,
         mode: str = "research",
@@ -914,6 +1077,28 @@ class MiniAgentClient:
 
         completed_at = datetime.utcnow().isoformat() + "Z"
         duration_ms = int((time.monotonic() - start_time) * 1000)
+        handler_status = (
+            str(tool_result.get("status"))
+            if isinstance(tool_result, dict) and tool_result.get("status") is not None
+            else None
+        )
+        handler_reason = (
+            str(tool_result.get("reason"))
+            if isinstance(tool_result, dict) and tool_result.get("reason") is not None
+            else None
+        )
+        declared_mutation = tool_name in (
+            "qdrant_upsert",
+            "home_assistant_call_service",
+            "run_ingestion",
+            "promote_ucf_to_memory",
+            "validate_ucf_frames",
+            "reconcile_ucf_qdrant",
+            "reject_ucf_frames",
+            "supersede_ucf_frames",
+            "file_delete",
+        )
+        mutation_blocked = handler_status in {"blocked", "error"}
         
         # 3. Construct result envelope matching tool-result-v1.schema.json
         result_envelope: Dict[str, Any] = {
@@ -924,10 +1109,7 @@ class MiniAgentClient:
             "completed_at": completed_at,
             "duration_ms": duration_ms,
             "side_effect_report": {
-                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion",
-                                          "promote_ucf_to_memory", "validate_ucf_frames",
-                                          "reconcile_ucf_qdrant", "reject_ucf_frames",
-                                          "supersede_ucf_frames", "file_delete"),
+                "mutated": declared_mutation and not mutation_blocked,
                 "targets": [tool_name]
             }
         }
@@ -954,7 +1136,41 @@ class MiniAgentClient:
             # Also set deprecated 'error' field for backward compatibility
             result_envelope["error"] = errors_list[0] if errors_list else {"code": "execution_failed", "message": "Tool execution error"}
             
-        return self.sanitize_envelope(result_envelope), 0 if status == "success" else 1
+        return_code = 0 if status == "success" else 1
+        sanitized_result = self.sanitize_envelope(result_envelope)
+        execution_row = {
+            "event_type": "execution",
+            "timestamp": completed_at,
+            "request_id": sanitized_result.get("request_id"),
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": tool_name,
+            "status": (
+                handler_status
+                if handler_status in {"blocked", "error"}
+                else status
+            ),
+            "return_code": return_code,
+            "arguments": tool_args,
+            "confirmed": bool(confirm and confirmation_token),
+            "error_codes": self._audit_error_codes(sanitized_result),
+            "duration_ms": duration_ms,
+            "side_effect_report": sanitized_result["side_effect_report"],
+            "handler_status": handler_status,
+            "handler_reason": handler_reason,
+        }
+        try:
+            self._append_tool_audit(execution_row)
+        except Exception:
+            logger.error("Failed to persist MiniAgent execution audit", exc_info=True)
+            return self._audit_log_error_envelope(
+                str(sanitized_result.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                original=sanitized_result,
+                side_effects_may_have_occurred=bool(
+                    sanitized_result.get("side_effect_report", {}).get("mutated")
+                ),
+            )
+        return sanitized_result, return_code
 
     def _get_ucf_db_path(self) -> Path:
         db_dir = self.config.get('paths', {}).get('db_dir')

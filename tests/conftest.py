@@ -43,3 +43,16 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def goodq_test_profile(request):
     return request.config.getoption("--goodq-test-profile")
+
+
+@pytest.fixture(autouse=True)
+def isolate_goodq_agent_state(tmp_path, monkeypatch):
+    """Keep MiniAgent tokens/audits out of operator-owned repository paths."""
+    monkeypatch.setenv(
+        "GOODQ_MINI_AGENT_HOME",
+        str(tmp_path / "goodq-mini-agent"),
+    )
+    monkeypatch.setenv(
+        "GOODQ_TOOL_AUDIT_LOG",
+        str(tmp_path / "goodq-tool-audit" / "tool-audit.jsonl"),
+    )

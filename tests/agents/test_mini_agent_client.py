@@ -1808,7 +1808,7 @@ def test_hitl_tool_registry_completeness():
     1. LOCAL_CONFIRMATION_REQUIRED_TOOLS (module-level authority)
     2. MUTATING_DENY_ON_AGENT_FAILURE
     3. Dispatch 'elif tool_name ==' chain in execute_tool()
-    4. side_effect_report.mutated set in execute_tool()
+    4. declared_mutation set used by side_effect_report in execute_tool()
     """
     import inspect
     import re
@@ -1833,13 +1833,13 @@ def test_hitl_tool_registry_completeness():
         )
 
         mutated_match = re.search(
-            r'"mutated":\s*tool_name\s+in\s+\(([^)]+)\)',
+            r'declared_mutation\s*=\s*tool_name\s+in\s+\(([^)]+)\)',
             source, re.DOTALL
         )
-        assert mutated_match, "side_effect_report.mutated set not found in MiniAgentClient"
+        assert mutated_match, "declared_mutation set not found in MiniAgentClient"
         mutated_tools_str = mutated_match.group(1)
         assert tool in mutated_tools_str, (
-            f"HITL tool '{tool}' missing from side_effect_report.mutated"
+            f"HITL tool '{tool}' missing from declared_mutation"
         )
 
 

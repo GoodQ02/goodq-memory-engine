@@ -374,13 +374,18 @@ the failure is not currently visible.
   instruction chain are already checkpointed. R-13 must not recreate them; it
   owns remaining archive moves, indexes, active-document classification,
   `PROJECT.md`, naming, and semantic drift.
-- Cutover evidence (2026-07-10): rebuilt this roadmap in place; moved eight
-  superseded plans/reports to the archive; verified 175 active Markdown files,
-  695 relative links, zero broken links, zero active drive-root violations, and
-  a passing banned-token check.
-- Remaining before VERIFIED: classify or badge the 25 active Markdown files
-  still missing documentation authority metadata and reconcile the generated
-  file index with the post-cutover tree.
+- Checkpoint evidence (2026-07-11): implementation checkpoint `3a78e3c0`
+  archived the eight R-17-owned surfaces plus one duplicate witness, classified
+  every active root/docs Markdown authority surface, explicitly exempted four
+  schema-governed `SKILL.md` files, replaced competing status/mission
+  narratives, and generated both repository indexes from tracked-file scope.
+  Focused tests report 11 passed; active metadata, links, mission, epoch,
+  current-state, index, path-drift, banned-token, and dependency gates pass.
+  Evidence: `docs/diagnostics/R13_DOCUMENTATION_AUTHORITY_CHECKPOINT_2026-07-11.md`.
+- Remaining before VERIFIED: the new semantic detector truthfully reports one
+  Qdrant storage-root conflict between configuration and canonical architecture
+  prose. R-10 owns that trace/correction. After its checkpoint, rerun the full
+  R-13 verifier and mark this item VERIFIED only if every gate passes.
 
 ### R-14 — Make WSL and model status probing passive and accurate
 
@@ -668,7 +673,8 @@ recreated under a new name.
 
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
-2. Restore truthful evidence: completed R-18, then R-09, R-13, and R-10.
+2. Restore truthful evidence: completed R-18 and R-09; checkpoint R-13, close
+   the exposed R-10 storage contract, then complete R-13 verification.
 3. Establish one control authority: R-11, R-05, then R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.

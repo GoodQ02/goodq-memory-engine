@@ -4,27 +4,25 @@
 
 # Active bounded mission
 
-Roadmap item: R-13 — finish documentation authority consolidation.
+Roadmap item: R-10 — align architecture contracts.
 
 ## Outcome
 
-Checkpoint the documentation authority cutover: archive superseded plans,
-classify active docs, replace competing mission/status narratives, generate
-deterministic indexes, and install link, metadata, current-state, epoch, and
-semantic drift gates.
+Resolve the Qdrant storage-root contradiction exposed by the documentation
+semantic gate. The configured path, runtime consumers, operator guidance, and
+canonical architecture contracts must describe one proven layout.
 
 ## Scope
 
-- Preserve the already-owned archive moves and update their inbound links.
-- Require exact policy badges on active docs, with schema-governed skills
-  explicitly exempt.
-- Generate both active repository indexes from one tracked-file scope.
-- Record the remaining storage-root contradiction as a blocking semantic
-  finding for the next bounded seam.
+- Trace `paths.qdrant_storage` from configuration through service launchers and
+  runtime consumers.
+- Correct only the canonical contract claims that the trace proves wrong.
+- Add focused storage-path evidence or tests before changing prose.
+- Rerun the full documentation authority and current-state gates.
 
 ## Boundaries
 
-- Do not change the configured storage root merely to make this seam green.
+- Do not change the configured storage root merely to make prose green.
 - Do not move Qdrant data, restart services, or alter network bindings.
 - Do not reopen the verified current-state evidence unless a fresh capture
   proves drift.

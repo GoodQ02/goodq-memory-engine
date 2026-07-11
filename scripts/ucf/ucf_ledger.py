@@ -405,9 +405,9 @@ class UCFLedgerClient:
     ) -> None:
         """Records a lifecycle status transition in the ucf_status_transitions audit table.
 
-        Called by all HITL lifecycle tools after a status write completes.
-        Does not raise on failure — transition logging must not block the
-        primary write operation.
+        This standalone entry point commits one audit row. Lifecycle status
+        mutations use ``_transition_frames`` so the mutation and its audit
+        evidence share a transaction.
 
         Args:
             old_status: The promotion_status before the transition.
@@ -420,23 +420,153 @@ class UCFLedgerClient:
             evidence: Optional dict of supporting evidence (e.g. report path, commit hash).
             frame_ids: Optional list of affected frame IDs. Stored as JSON array string.
         """
-        try:
-            frame_ids_json = json.dumps(frame_ids) if frame_ids else None
-            evidence_json = json.dumps(evidence) if evidence else None
-            transitioned_at = datetime.now(timezone.utc).isoformat()
-            self.execute_with_retry(
-                """
-                INSERT INTO ucf_status_transitions
-                    (frame_ids, video_hash, epoch_id, old_status, new_status,
-                     tool_name, reason, scope, evidence, transitioned_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (frame_ids_json, video_hash, epoch_id, old_status, new_status,
-                 tool_name, reason, scope, evidence_json, transitioned_at),
-            )
-        except Exception:
-            # Audit logging must not interrupt the primary write path
-            pass
+        for attempt in range(5):
+            try:
+                self.conn.execute("BEGIN IMMEDIATE")
+                self.insert_status_transition(
+                    self.conn,
+                    old_status=old_status,
+                    new_status=new_status,
+                    tool_name=tool_name,
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    reason=reason,
+                    scope=scope,
+                    evidence=evidence,
+                    frame_ids=frame_ids,
+                )
+                self.conn.commit()
+                return
+            except sqlite3.OperationalError as exc:
+                self.conn.rollback()
+                if "locked" in str(exc).lower() and attempt < 4:
+                    time.sleep(0.05 + random.uniform(0, 0.05))
+                    continue
+                raise
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    @staticmethod
+    def insert_status_transition(
+        conn: sqlite3.Connection,
+        *,
+        old_status: str,
+        new_status: str,
+        tool_name: str,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        scope: Optional[str] = None,
+        evidence: Optional[Dict[str, Any]] = None,
+        frame_ids: Optional[Sequence[int]] = None,
+    ) -> None:
+        """Insert transition evidence without committing the caller's transaction."""
+        frame_ids_json = json.dumps(list(frame_ids)) if frame_ids is not None else None
+        evidence_json = json.dumps(evidence) if evidence is not None else None
+        transitioned_at = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """
+            INSERT INTO ucf_status_transitions
+                (frame_ids, video_hash, epoch_id, old_status, new_status,
+                 tool_name, reason, scope, evidence, transitioned_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                frame_ids_json,
+                video_hash,
+                epoch_id,
+                old_status,
+                new_status,
+                tool_name,
+                reason,
+                scope,
+                evidence_json,
+                transitioned_at,
+            ),
+        )
+
+    def _transition_frames(
+        self,
+        *,
+        old_statuses: Sequence[str],
+        new_status: str,
+        tool_name: str,
+        video_hash: Optional[str] = None,
+        epoch_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        log_audit: bool = True,
+    ) -> int:
+        """Atomically update statuses and record exact pre-transition evidence."""
+        if not old_statuses:
+            raise ValueError("old_statuses must not be empty")
+
+        placeholders = ",".join("?" for _ in old_statuses)
+        where = f"promotion_status IN ({placeholders})"
+        where_params: List[Any] = list(old_statuses)
+        scope_parts = []
+        if video_hash:
+            where += " AND video_hash = ?"
+            where_params.append(video_hash)
+            scope_parts.append(f"video_hash={video_hash}")
+        if epoch_id:
+            where += " AND epoch_id = ?"
+            where_params.append(epoch_id)
+            scope_parts.append(f"epoch_id={epoch_id}")
+        scope = ",".join(scope_parts) if scope_parts else None
+
+        for attempt in range(5):
+            try:
+                self.conn.execute("BEGIN IMMEDIATE")
+                rows = self.conn.execute(
+                    f"SELECT frame_id, promotion_status FROM context_frames WHERE {where} "
+                    "ORDER BY frame_id",
+                    tuple(where_params),
+                ).fetchall()
+                if not rows:
+                    self.conn.commit()
+                    return 0
+
+                cursor = self.conn.execute(
+                    f"UPDATE context_frames SET promotion_status = ? WHERE {where}",
+                    (new_status, *where_params),
+                )
+                if cursor.rowcount != len(rows):
+                    raise RuntimeError(
+                        "lifecycle transition row count changed inside transaction"
+                    )
+
+                if log_audit:
+                    frame_ids_by_status: Dict[str, List[int]] = {}
+                    for frame_id, old_status in rows:
+                        frame_ids_by_status.setdefault(str(old_status), []).append(
+                            int(frame_id)
+                        )
+                    for old_status, exact_frame_ids in frame_ids_by_status.items():
+                        self.insert_status_transition(
+                            self.conn,
+                            old_status=old_status,
+                            new_status=new_status,
+                            tool_name=tool_name,
+                            video_hash=video_hash,
+                            epoch_id=epoch_id,
+                            reason=reason,
+                            scope=scope,
+                            evidence={"affected_count": len(exact_frame_ids)},
+                            frame_ids=exact_frame_ids,
+                        )
+
+                self.conn.commit()
+                return cursor.rowcount
+            except sqlite3.OperationalError as exc:
+                self.conn.rollback()
+                if "locked" in str(exc).lower() and attempt < 4:
+                    time.sleep(0.05 + random.uniform(0, 0.05))
+                    continue
+                raise
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def mark_frames_validated(
         self,
@@ -458,31 +588,14 @@ class UCFLedgerClient:
         Returns:
             The number of rows updated (0 if already validated or no match).
         """
-        query = "UPDATE context_frames SET promotion_status = 'validated' WHERE promotion_status = 'staged'"
-        params: list = []
-        if video_hash:
-            query += " AND video_hash = ?"
-            params.append(video_hash)
-        if epoch_id:
-            query += " AND epoch_id = ?"
-            params.append(epoch_id)
-        cursor = self.execute_with_retry(query, tuple(params))
-        count = cursor.rowcount
-        if log_audit and count > 0:
-            scope_parts = []
-            if video_hash:
-                scope_parts.append(f"video_hash={video_hash}")
-            if epoch_id:
-                scope_parts.append(f"epoch_id={epoch_id}")
-            self.log_status_transition(
-                old_status="staged",
-                new_status="validated",
-                tool_name="validate_ucf_frames",
-                video_hash=video_hash,
-                epoch_id=epoch_id,
-                scope=",".join(scope_parts) if scope_parts else None,
-            )
-        return count
+        return self._transition_frames(
+            old_statuses=("staged",),
+            new_status="validated",
+            tool_name="validate_ucf_frames",
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+            log_audit=log_audit,
+        )
 
     def mark_frames_rejected(
         self,
@@ -515,35 +628,15 @@ class UCFLedgerClient:
         if not reason or not reason.strip():
             raise ValueError("reason is required and must be a non-empty string for mark_frames_rejected")
 
-        query = (
-            "UPDATE context_frames SET promotion_status = 'rejected' "
-            "WHERE promotion_status IN ('staged', 'validated')"
+        return self._transition_frames(
+            old_statuses=("staged", "validated"),
+            new_status="rejected",
+            tool_name="reject_ucf_frames",
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+            reason=reason,
+            log_audit=log_audit,
         )
-        params: list = []
-        if video_hash:
-            query += " AND video_hash = ?"
-            params.append(video_hash)
-        if epoch_id:
-            query += " AND epoch_id = ?"
-            params.append(epoch_id)
-        cursor = self.execute_with_retry(query, tuple(params))
-        count = cursor.rowcount
-        if log_audit and count > 0:
-            scope_parts = []
-            if video_hash:
-                scope_parts.append(f"video_hash={video_hash}")
-            if epoch_id:
-                scope_parts.append(f"epoch_id={epoch_id}")
-            self.log_status_transition(
-                old_status="staged_or_validated",
-                new_status="rejected",
-                tool_name="reject_ucf_frames",
-                video_hash=video_hash,
-                epoch_id=epoch_id,
-                reason=reason,
-                scope=",".join(scope_parts) if scope_parts else None,
-            )
-        return count
 
     def mark_frames_superseded(
         self,
@@ -568,34 +661,14 @@ class UCFLedgerClient:
         Returns:
             The number of rows transitioned to 'superseded'.
         """
-        query = (
-            "UPDATE context_frames SET promotion_status = 'superseded' "
-            "WHERE promotion_status IN ('promoted', 'validated')"
+        return self._transition_frames(
+            old_statuses=("promoted", "validated"),
+            new_status="superseded",
+            tool_name="supersede_ucf_frames",
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+            log_audit=log_audit,
         )
-        params: list = []
-        if video_hash:
-            query += " AND video_hash = ?"
-            params.append(video_hash)
-        if epoch_id:
-            query += " AND epoch_id = ?"
-            params.append(epoch_id)
-        cursor = self.execute_with_retry(query, tuple(params))
-        count = cursor.rowcount
-        if log_audit and count > 0:
-            scope_parts = []
-            if video_hash:
-                scope_parts.append(f"video_hash={video_hash}")
-            if epoch_id:
-                scope_parts.append(f"epoch_id={epoch_id}")
-            self.log_status_transition(
-                old_status="promoted_or_validated",
-                new_status="superseded",
-                tool_name="supersede_ucf_frames",
-                video_hash=video_hash,
-                epoch_id=epoch_id,
-                scope=",".join(scope_parts) if scope_parts else None,
-            )
-        return count
 
     def close(self):
         """Closes the connection."""

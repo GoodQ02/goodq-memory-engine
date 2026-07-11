@@ -601,6 +601,353 @@ def test_promote_ucf_succeeds_when_frames_validated(tmp_path, monkeypatch):
     assert row[0] == "promoted"
 
 
+def test_promote_ucf_records_scoped_transition_with_frame_evidence(tmp_path, monkeypatch):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    frame_id = conn.execute("SELECT frame_id FROM context_frames").fetchone()[0]
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 0
+    assert result["output"]["promoted_count"] == 1
+    conn = sqlite3.connect(str(db_path))
+    transition = conn.execute(
+        "SELECT frame_ids, video_hash, epoch_id, old_status, new_status, "
+        "tool_name, scope, evidence FROM ucf_status_transitions"
+    ).fetchone()
+    conn.close()
+    assert transition is not None
+    assert json.loads(transition[0]) == [frame_id]
+    assert transition[1:6] == (
+        "vh_test_001",
+        "epoch_test",
+        "validated",
+        "promoted",
+        "promote_ucf_to_memory",
+    )
+    assert transition[6] == "video_hash=vh_test_001,epoch_id=epoch_test"
+    assert json.loads(transition[7]) == {"affected_count": 1}
+
+
+def test_promote_ucf_audit_failure_rolls_back_without_dematerializing(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.execute(
+        "CREATE TRIGGER force_promotion_transition_failure "
+        "BEFORE INSERT ON ucf_status_transitions "
+        "BEGIN SELECT RAISE(ABORT, 'forced promotion transition failure'); END"
+    )
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    outbox_table_exists = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ucf_qdrant_sync_outbox'"
+    ).fetchone()[0]
+    outbox_count = (
+        conn.execute("SELECT COUNT(*) FROM ucf_qdrant_sync_outbox").fetchone()[0]
+        if outbox_table_exists
+        else 0
+    )
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert outbox_count == 0
+    assert dematerialized == []
+
+
+def test_promote_ucf_staged_gate_and_transition_share_write_lock(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    from types import SimpleNamespace
+
+    import agents.mini_agent_client as mini_agent_module
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    assert rc == 3
+
+    real_ledger_module = mini_agent_module._load_ucf_ledger()
+
+    class SchemaReadyLedger:
+        insert_status_transition = staticmethod(
+            real_ledger_module.UCFLedgerClient.insert_status_transition
+        )
+
+        def __init__(self, _db_path):
+            pass
+
+        def init_schema(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        mini_agent_module,
+        "_load_ucf_ledger",
+        lambda: SimpleNamespace(UCFLedgerClient=SchemaReadyLedger),
+    )
+
+    real_connect = sqlite3.connect
+    injection_results = []
+
+    class StagedCountCursor:
+        def __init__(self, cursor):
+            self._cursor = cursor
+
+        def fetchone(self):
+            row = self._cursor.fetchone()
+            writer = real_connect(str(db_path), timeout=0.05)
+            try:
+                writer.execute(
+                    """
+                    INSERT INTO context_frames (
+                        video_hash, ucf_schema_version, epoch_id, run_id,
+                        t_start, t_end, modality, worker_name, model_tag,
+                        payload, payload_hash, promotion_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "vh_test_001",
+                        "ucf.v0.1",
+                        "epoch_test",
+                        "run_race",
+                        2.0,
+                        3.0,
+                        "video",
+                        "image_embed_clip",
+                        "openai/clip-vit-large-patch14",
+                        json.dumps({"label": "racing_staged_frame"}),
+                        "racing-staged-frame",
+                        "staged",
+                    ),
+                )
+                writer.commit()
+                injection_results.append("inserted")
+            except sqlite3.OperationalError as exc:
+                writer.rollback()
+                assert "locked" in str(exc).lower()
+                injection_results.append("blocked")
+            finally:
+                writer.close()
+            return row
+
+        def __getattr__(self, name):
+            return getattr(self._cursor, name)
+
+    class PromotionConnection:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def execute(self, query, params=()):
+            cursor = self._connection.execute(query, params)
+            if (
+                "SELECT count(*) FROM context_frames" in query
+                and "promotion_status = 'staged'" in query
+            ):
+                return StagedCountCursor(cursor)
+            return cursor
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+    def connect_with_race_probe(database, *args, **kwargs):
+        connection = real_connect(database, *args, **kwargs)
+        if Path(database).resolve() == db_path.resolve():
+            return PromotionConnection(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", connect_with_race_probe)
+    result, confirm_rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert confirm_rc == 0
+    assert result["output"]["promoted_count"] == 1
+    assert injection_results == ["blocked"]
+    conn = real_connect(str(db_path))
+    staged_count = conn.execute(
+        "SELECT COUNT(*) FROM context_frames WHERE promotion_status = 'staged'"
+    ).fetchone()[0]
+    conn.close()
+    assert staged_count == 0
+
+
+def test_promote_ucf_pre_materialization_failure_rolls_back_status_and_transition(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(config={"paths": {"db_dir": str(tmp_path)}})
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    token = envelope["result"]["confirmation_token"]
+    result, confirm_rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert rc == 3
+    assert confirm_rc == 1
+    assert result["status"] == "fatal_error"
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert dematerialized == []
+
+
+def test_promote_ucf_post_write_failure_rolls_back_and_compensates(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    import lib.knowledge_graph as knowledge_graph_module
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    memory_db = tmp_path / "memory.db"
+    client = MiniAgentClient(
+        config={
+            "paths": {
+                "db_path": str(memory_db),
+                "knowledge_graph_db": str(tmp_path / "knowledge_graph.db"),
+                "processing": str(tmp_path / "processing"),
+            }
+        }
+    )
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    class FailingKnowledgeGraph:
+        def __init__(self, _path):
+            raise RuntimeError("forced post-write materialization failure")
+
+    monkeypatch.setattr(
+        knowledge_graph_module, "KnowledgeGraph", FailingKnowledgeGraph
+    )
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    assert memory_db.exists()
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    outbox_table_exists = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ucf_qdrant_sync_outbox'"
+    ).fetchone()[0]
+    outbox_count = (
+        conn.execute("SELECT COUNT(*) FROM ucf_qdrant_sync_outbox").fetchone()[0]
+        if outbox_table_exists
+        else 0
+    )
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert outbox_count == 0
+    assert dematerialized == [{"video_hash": "vh_test_001"}]
+
+
 def test_validate_ucf_frames_transitions_staged_to_validated(tmp_path, monkeypatch):
     """S1: validate_ucf_frames must transition staged frames to validated status.
 

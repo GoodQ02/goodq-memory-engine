@@ -2278,21 +2278,9 @@ class MiniAgentClient:
         if epoch_id:
             check_staged += " AND epoch_id = ?"
             check_args.append(epoch_id)
-        staged_count = conn.execute(check_staged, tuple(check_args)).fetchone()[0]
-        if staged_count > 0:
-            conn.close()
-            return {
-                "status": "blocked",
-                "reason": "promotion_blocked_unvalidated_frames",
-                "staged_count": staged_count,
-                "message": (
-                    f"Cannot promote: {staged_count} context frame(s) are still in "
-                    "'staged' status. Run validate_ucf_frames (with confirmation) "
-                    "before calling promote_ucf_to_memory."
-                ),
-            }
-
-        # Build scoped promotion queries.
+        # Build scoped promotion queries. The staged gate, exact frame capture,
+        # status mutation, transition evidence, and delivery outbox enqueue all
+        # execute under the same immediate transaction below.
         select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"
         sync_args = []
         if video_hash:
@@ -2301,9 +2289,7 @@ class MiniAgentClient:
         if epoch_id:
             select_sync += " AND epoch_id = ?"
             sync_args.append(epoch_id)
-        frames_to_sync = conn.execute(select_sync, tuple(sync_args)).fetchall()
-
-        select_validated = "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
+        select_validated = "SELECT frame_id FROM context_frames WHERE promotion_status = 'validated'"
         update_validated = "UPDATE context_frames SET promotion_status = 'promoted' WHERE promotion_status = 'validated'"
         if video_hash:
             select_validated += " AND video_hash = ?"
@@ -2311,18 +2297,10 @@ class MiniAgentClient:
         if epoch_id:
             select_validated += " AND epoch_id = ?"
             update_validated += " AND epoch_id = ?"
+        select_validated += " ORDER BY frame_id"
         promote_args = list(sync_args)
-        promoted_count = conn.execute(
-            select_validated, tuple(promote_args)
-        ).fetchone()[0]
-
-        conn.execute("BEGIN TRANSACTION")
-        conn.execute(update_validated, tuple(promote_args))
-        if promoted_count:
-            self._queue_promotion_qdrant_sync(
-                conn, video_hash=video_hash, epoch_id=epoch_id
-            )
-
+        frames_to_sync = []
+        promoted_count = 0
         scenes_count = 0
         segments_count = 0
         embeddings_count = 0
@@ -2333,8 +2311,58 @@ class MiniAgentClient:
         graph_db_path = _resolve_graph_db_path(self.config)
         scene_manifest_path = Path()
         temporal_index_path = Path()
+        active_view_write_started = False
 
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            staged_count = conn.execute(
+                check_staged, tuple(check_args)
+            ).fetchone()[0]
+            if staged_count > 0:
+                conn.rollback()
+                conn.close()
+                return {
+                    "status": "blocked",
+                    "reason": "promotion_blocked_unvalidated_frames",
+                    "staged_count": staged_count,
+                    "message": (
+                        f"Cannot promote: {staged_count} context frame(s) are still in "
+                        "'staged' status. Run validate_ucf_frames (with confirmation) "
+                        "before calling promote_ucf_to_memory."
+                    ),
+                }
+
+            frames_to_sync = conn.execute(
+                select_sync, tuple(sync_args)
+            ).fetchall()
+            transition_frame_ids = [
+                int(row[0])
+                for row in conn.execute(
+                    select_validated, tuple(promote_args)
+                ).fetchall()
+            ]
+            promoted_count = len(transition_frame_ids)
+            update_cursor = conn.execute(update_validated, tuple(promote_args))
+            if update_cursor.rowcount != promoted_count:
+                raise RuntimeError(
+                    "promotion row count changed inside materialization transaction"
+                )
+            if transition_frame_ids:
+                UCFLedgerClient.insert_status_transition(
+                    conn,
+                    old_status="validated",
+                    new_status="promoted",
+                    tool_name="promote_ucf_to_memory",
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    scope=f"video_hash={video_hash},epoch_id={epoch_id}",
+                    evidence={"affected_count": promoted_count},
+                    frame_ids=transition_frame_ids,
+                )
+                self._queue_promotion_qdrant_sync(
+                    conn, video_hash=video_hash, epoch_id=epoch_id
+                )
+
             cursor_ms = conn.execute("SELECT file_path FROM media_sources WHERE video_hash = ?", (video_hash,))
             row_ms = cursor_ms.fetchone()
             file_path = row_ms[0] if row_ms else None
@@ -2388,6 +2416,7 @@ class MiniAgentClient:
             if not db_path:
                 raise RuntimeError("db_path is not defined in config paths")
             
+            active_view_write_started = True
             conn_mem = _connect(str(db_path))
             conn_mem.execute("PRAGMA foreign_keys = ON;")
             
@@ -2684,13 +2713,18 @@ class MiniAgentClient:
             conn.close()
 
         except Exception as materialization_err:
-            logger.error(f"Materialization failed for video_hash {video_hash}: {materialization_err}", exc_info=True)
+            logger.error(
+                f"Promotion transaction/materialization failed for video_hash "
+                f"{video_hash}: {materialization_err}",
+                exc_info=True,
+            )
             try:
                 conn.execute("ROLLBACK")
                 conn.close()
             except Exception:
                 pass
-            self._dematerialize_active_views(video_hash=video_hash)
+            if active_view_write_started:
+                self._dematerialize_active_views(video_hash=video_hash)
             raise materialization_err
 
         val_errors = []

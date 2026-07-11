@@ -29,6 +29,146 @@ DOC_STATUS_RE = re.compile(r"<!--\s*DOC_STATUS:\s*([^>]*?)\s*-->")
 QDRANT_CONFIG_RE = re.compile(r"^\s*qdrant_storage:\s*([^#\r\n]+)", re.MULTILINE)
 QDRANT_DOC_RE = re.compile(r"\$\{GOODQ_DATA_ROOT\}[/\\][^\s`<>]*qdrant_storage")
 EPOCH_RE = re.compile(r"epoch_\d{4}_\d{2}_\d{2}_[A-Za-z0-9_]+")
+MARKDOWN_HEADING_RE = re.compile(
+    r"^(?P<marks>#{1,6})[ \t]+(?P<title>[^\r\n]+?)\s*$",
+    re.MULTILINE,
+)
+FENCED_BLOCK_RE = re.compile(
+    r"^```[^\r\n]*\r?\n(?P<body>.*?)^```[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
+TREE_ENTRY_RE = re.compile(
+    r"^(?P<prefix>(?:│   |    )*)(?:├──|└──)\s+(?P<name>.+?)\s*$"
+)
+
+GOVERNED_MATERIALIZATION_DOCS = (
+    "docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md",
+    "docs/architecture/MEMORY_STORAGE.md",
+    "docs/architecture/ARCHITECTURE_REFERENCE.md",
+    "docs/architecture/SYSTEM_ARCHITECTURE.md",
+)
+GOVERNED_MATERIALIZATION_SEMANTICS = (
+    (
+        "isolation policy",
+        re.compile(re.escape("`ingestion_isolation: true`"), re.IGNORECASE),
+    ),
+    (
+        "scene manifest artifact evidence",
+        re.compile(
+            r"(?:scene_manifest\.json.{0,160}artifact evidence|"
+            r"artifact evidence.{0,160}scene_manifest\.json)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "lifecycle ledger",
+        re.compile(
+            re.escape("`ucf_ledger.db`")
+            + r"\s+is\s+(?:the\s+)?lifecycle(?:\s+and|/)\s+evidence authority",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "staged UCF and Qdrant",
+        re.compile(
+            r"\bstages?\b(?=.{0,260}\bUCF\b)(?=.{0,260}\bQdrant\b)"
+            + r"(?=.{0,320}"
+            + re.escape("`ucf_promotion_status = staged`")
+            + r").{0,320}"
+            + re.escape("`ucf_promotion_status = staged`"),
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "explicit validation",
+        re.compile(
+            r"(?:\bexplicit(?:ly)?\b.{0,100}"
+            + re.escape("`validate_ucf_frames`")
+            + r"|"
+            + re.escape("`validate_ucf_frames`")
+            + r".{0,100}\bexplicit(?:ly)?\b)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "human-gated exact promotion scope",
+        re.compile(
+            r"human-gated(?=.{0,320}"
+            + re.escape("`promote_ucf_to_memory`")
+            + r")(?=.{0,320}\bexact\b)(?=.{0,320}"
+            + re.escape("`video_hash`")
+            + r")(?=.{0,320}"
+            + re.escape("`epoch_id`")
+            + r").{0,320}"
+            + re.escape("`epoch_id`"),
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "active SQLite materialization",
+        re.compile(
+            r"materializ\w*.{0,120}active "
+            + re.escape("`memory.db`")
+            + r".{0,120}"
+            + re.escape("`knowledge_graph.db`"),
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "transactional transition and outbox",
+        re.compile(
+            r"transition audit(?=.{0,260}durable Qdrant outbox)"
+            r"(?=.{0,320}(?:one|same).{0,60}SQLite transaction)"
+            r".{0,320}SQLite transaction",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "compensating active-view cleanup",
+        re.compile(
+            r"active-view cleanup(?=.{0,120}\bcompensating\b)"
+            r"(?=.{0,120}\brecoverable\b).{0,120}\brecoverable\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "no cross-store ACID",
+        re.compile(r"\b(?:no|not)\b.{0,120}cross-store ACID", re.IGNORECASE),
+    ),
+    (
+        "post-commit Qdrant reconciliation",
+        re.compile(
+            r"post-commit Qdrant status delivery and reconciliation are "
+            r"separate durable, recoverable obligations",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "pending delivery meaning",
+        re.compile(
+            re.escape("`promotion_committed_sync_pending`")
+            + r"(?=.{0,260}active (?:materialization|commit))"
+            r"(?=.{0,300}succeeded)(?=.{0,340}durable Qdrant)"
+            r"(?=.{0,380}pending).{0,380}pending",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "promoted-only default retrieval",
+        re.compile(
+            r"Default active retrieval.{0,160}(?:promoted-only|only.{0,100}promoted)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "raw audit distinction",
+        re.compile(
+            r"(?:A|Explicit)\s+raw audit(?: queries)?\s+may inspect.{0,180}"
+            r"(?:non-active|other.{0,100}(?:lifecycle|states)|staged|validated)",
+            re.IGNORECASE,
+        ),
+    ),
+)
 
 EXCLUDED_INDEX_PREFIXES = (
     "archive/",
@@ -473,6 +613,43 @@ def _normalize_storage_path(value: str) -> str:
     return value.strip().strip("`'\"").replace("\\", "/").rstrip("/")
 
 
+def _qdrant_nested_under_goodq_data(text: str) -> bool:
+    for block_match in FENCED_BLOCK_RE.finditer(text):
+        lines = block_match.group("body").splitlines()
+        normalized_roots = {
+            line.strip().replace("\\", "/").rstrip("/")
+            for line in lines
+        }
+        tree_entries: list[tuple[int, str]] = []
+        for line in lines:
+            entry = TREE_ENTRY_RE.match(line.rstrip())
+            if not entry:
+                continue
+            depth = len(entry.group("prefix")) // 4
+            name = entry.group("name").strip().replace("\\", "/").rstrip("/")
+            tree_entries.append((depth, name))
+
+        if "${GOODQ_DATA_ROOT}/GoodQ_Data" in normalized_roots and any(
+            name == "qdrant_storage" for _, name in tree_entries
+        ):
+            return True
+
+        goodq_data_depth: int | None = None
+        for depth, name in tree_entries:
+            if name == "GoodQ_Data":
+                goodq_data_depth = depth
+                continue
+            if name == "qdrant_storage":
+                if goodq_data_depth is not None and depth > goodq_data_depth:
+                    return True
+                if goodq_data_depth is not None and depth <= goodq_data_depth:
+                    goodq_data_depth = None
+                continue
+            if goodq_data_depth is not None and depth <= goodq_data_depth:
+                goodq_data_depth = None
+    return False
+
+
 def check_qdrant_storage_parity(repo_root: Path) -> list[Finding]:
     config_path = repo_root / "configs" / "config.yaml"
     config_text = config_path.read_text(encoding="utf-8", errors="replace") if config_path.is_file() else ""
@@ -482,22 +659,80 @@ def check_qdrant_storage_parity(repo_root: Path) -> list[Finding]:
     configured = _normalize_storage_path(config_match.group(1))
 
     claims: dict[str, list[str]] = {}
+    nested_trees: list[str] = []
     for relative in (
         "docs/architecture/MEMORY_STORAGE.md",
         "docs/architecture/ARCHITECTURE_REFERENCE.md",
+        "docs/architecture/SYSTEM_ARCHITECTURE.md",
     ):
         path = repo_root / relative
         text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
         claims[relative] = sorted({_normalize_storage_path(item) for item in QDRANT_DOC_RE.findall(text)})
+        if _qdrant_nested_under_goodq_data(text):
+            nested_trees.append(relative)
     mismatches = {
         relative: values
         for relative, values in claims.items()
         if values != [configured]
     }
-    if mismatches:
-        detail = f"config={configured}; docs={mismatches}"
+    if mismatches or nested_trees:
+        detail = (
+            f"config={configured}; docs={mismatches}; "
+            f"nested_under_GoodQ_Data={nested_trees}"
+        )
         return [Finding("QDRANT_STORAGE_DRIFT", "configs/config.yaml", detail)]
     return []
+
+
+def _governed_materialization_section(text: str) -> str | None:
+    headings = list(MARKDOWN_HEADING_RE.finditer(text))
+    for index, heading in enumerate(headings):
+        title = heading.group("title")
+        if not (
+            re.search(r"\bgoverned\b", title, re.IGNORECASE)
+            and re.search(r"\bmaterialization\b", title, re.IGNORECASE)
+        ):
+            continue
+        level = len(heading.group("marks"))
+        end = len(text)
+        for candidate in headings[index + 1 :]:
+            if len(candidate.group("marks")) <= level:
+                end = candidate.start()
+                break
+        return text[heading.start() : end]
+    return None
+
+
+def check_governed_materialization_contract(repo_root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for relative in GOVERNED_MATERIALIZATION_DOCS:
+        path = repo_root / relative
+        text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        section = _governed_materialization_section(text)
+        if section is None:
+            findings.append(
+                Finding(
+                    "MATERIALIZATION_CONTRACT_DRIFT",
+                    relative,
+                    "missing governed materialization section",
+                )
+            )
+            continue
+        normalized_section = re.sub(r"\s+", " ", section)
+        missing = [
+            name
+            for name, pattern in GOVERNED_MATERIALIZATION_SEMANTICS
+            if not pattern.search(normalized_section)
+        ]
+        if missing:
+            findings.append(
+                Finding(
+                    "MATERIALIZATION_CONTRACT_DRIFT",
+                    relative,
+                    f"missing governed materialization semantics: {', '.join(missing)}",
+                )
+            )
+    return sorted(findings)
 
 
 def check_current_state_projection(repo_root: Path) -> list[Finding]:
@@ -609,6 +844,7 @@ def collect_findings(repo_root: Path) -> list[Finding]:
         check_epoch_parity,
         check_current_state_projection,
         check_qdrant_storage_parity,
+        check_governed_materialization_contract,
     ):
         findings.extend(checker(repo_root))
     return sorted(set(findings))

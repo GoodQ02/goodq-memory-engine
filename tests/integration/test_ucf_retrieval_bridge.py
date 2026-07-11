@@ -685,6 +685,8 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     res, rc = _confirm_tool_directly(client, "validate_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     assert res["output"]["validated_count"] == 1
+    assert not Path(client.config["paths"]["db_path"]).exists()
+    assert not Path(client.config["paths"]["knowledge_graph_db"]).exists()
 
     # 4. Promote (trigger materialization)
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})

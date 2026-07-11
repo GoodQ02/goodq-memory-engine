@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from scripts.docs import doc_authority_lint as lint
 
 
@@ -243,20 +245,22 @@ def test_qdrant_storage_parity_detects_contract_mismatch(tmp_path: Path) -> None
         tmp_path / "configs" / "config.yaml",
         "paths:\n  qdrant_storage: ${GOODQ_DATA_ROOT}/qdrant_storage\n",
     )
-    _write(
-        tmp_path / "docs" / "architecture" / "MEMORY_STORAGE.md",
-        "`${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage`\n",
+    doc_names = (
+        "MEMORY_STORAGE.md",
+        "ARCHITECTURE_REFERENCE.md",
+        "SYSTEM_ARCHITECTURE.md",
     )
-    _write(
-        tmp_path / "docs" / "architecture" / "ARCHITECTURE_REFERENCE.md",
-        "`${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage`\n",
-    )
+    for name in doc_names:
+        _write(
+            tmp_path / "docs" / "architecture" / name,
+            "`${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage`\n",
+        )
 
     findings = lint.check_qdrant_storage_parity(tmp_path)
 
     assert [item.code for item in findings] == ["QDRANT_STORAGE_DRIFT"]
 
-    for name in ("MEMORY_STORAGE.md", "ARCHITECTURE_REFERENCE.md"):
+    for name in doc_names:
         _write(
             tmp_path / "docs" / "architecture" / name,
             "`${GOODQ_DATA_ROOT}/qdrant_storage`\n",
@@ -270,6 +274,247 @@ def test_qdrant_storage_parity_detects_contract_mismatch(tmp_path: Path) -> None
     )
     findings = lint.check_qdrant_storage_parity(tmp_path)
     assert [item.code for item in findings] == ["QDRANT_STORAGE_DRIFT"]
+
+
+@pytest.mark.parametrize("tree_entry", ("└── qdrant_storage/", "└── qdrant_storage"))
+def test_qdrant_storage_parity_rejects_nested_goodq_data_tree(
+    tmp_path: Path,
+    tree_entry: str,
+) -> None:
+    _write(
+        tmp_path / "configs" / "config.yaml",
+        "paths:\n  qdrant_storage: ${GOODQ_DATA_ROOT}/qdrant_storage\n",
+    )
+    relative_paths = [
+        "docs/architecture/MEMORY_STORAGE.md",
+        "docs/architecture/ARCHITECTURE_REFERENCE.md",
+        "docs/architecture/SYSTEM_ARCHITECTURE.md",
+    ]
+    for relative in relative_paths:
+        _write(
+            tmp_path / relative,
+            "`${GOODQ_DATA_ROOT}/qdrant_storage`\n",
+        )
+    _write(
+        tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md",
+        "`${GOODQ_DATA_ROOT}/qdrant_storage`\n\n"
+        "```text\n"
+        "${GOODQ_DATA_ROOT}/GoodQ_Data/\n"
+        f"{tree_entry}\n"
+        "```\n",
+    )
+
+    findings = lint.check_qdrant_storage_parity(tmp_path)
+
+    assert [item.code for item in findings] == ["QDRANT_STORAGE_DRIFT"]
+
+
+@pytest.mark.parametrize(
+    "correct_literal",
+    ("${GOODQ_DATA_ROOT}/qdrant_storage", "${GOODQ_DATA_ROOT}/qdrant_storage/"),
+)
+def test_qdrant_storage_parity_allows_plain_correct_literal_in_same_fence(
+    tmp_path: Path,
+    correct_literal: str,
+) -> None:
+    _write(
+        tmp_path / "configs" / "config.yaml",
+        "paths:\n  qdrant_storage: ${GOODQ_DATA_ROOT}/qdrant_storage\n",
+    )
+    relative_paths = (
+        "docs/architecture/MEMORY_STORAGE.md",
+        "docs/architecture/ARCHITECTURE_REFERENCE.md",
+        "docs/architecture/SYSTEM_ARCHITECTURE.md",
+    )
+    for relative in relative_paths:
+        _write(
+            tmp_path / relative,
+            "```text\n"
+            "${GOODQ_DATA_ROOT}/GoodQ_Data/\n"
+            f"{correct_literal}\n"
+            "```\n",
+        )
+
+    assert lint.check_qdrant_storage_parity(tmp_path) == []
+
+
+_GOVERNED_MATERIALIZATION_LINES = (
+    ("isolation policy", "`ingestion_isolation: true` governs isolated ingest."),
+    (
+        "scene manifest artifact evidence",
+        "`scene_manifest.json` is per-video artifact evidence.",
+    ),
+    ("lifecycle ledger", "`ucf_ledger.db` is lifecycle and evidence authority."),
+    (
+        "staged UCF and Qdrant",
+        "Isolated ingest stages UCF and Qdrant with exact "
+        "`ucf_promotion_status = staged`.",
+    ),
+    (
+        "explicit validation",
+        "Explicit `validate_ucf_frames` validation precedes promotion.",
+    ),
+    (
+        "human-gated exact promotion scope",
+        "Human-gated exact `promote_ucf_to_memory` acts on `video_hash` plus "
+        "`epoch_id`.",
+    ),
+    (
+        "active SQLite materialization",
+        "Promotion materializes active `memory.db` and `knowledge_graph.db`.",
+    ),
+    (
+        "transactional transition and outbox",
+        "The transition audit and durable Qdrant outbox enqueue share one "
+        "SQLite transaction.",
+    ),
+    (
+        "compensating active-view cleanup",
+        "Active-view cleanup is compensating and recoverable.",
+    ),
+    ("no cross-store ACID", "There is no cross-store ACID guarantee."),
+    (
+        "post-commit Qdrant reconciliation",
+        "Post-commit Qdrant status delivery and reconciliation are separate "
+        "durable, recoverable obligations.",
+    ),
+    (
+        "pending delivery meaning",
+        "`promotion_committed_sync_pending` means the active commit succeeded "
+        "while durable Qdrant delivery remains pending.",
+    ),
+    (
+        "promoted-only default retrieval",
+        "Default active retrieval is promoted-only.",
+    ),
+    (
+        "raw audit distinction",
+        "A raw audit may inspect non-active lifecycle states.",
+    ),
+)
+_GOVERNED_MATERIALIZATION_PATHS = (
+        "docs/architecture/INGEST_ORCHESTRATION_CONTRACT.md",
+        "docs/architecture/MEMORY_STORAGE.md",
+        "docs/architecture/ARCHITECTURE_REFERENCE.md",
+        "docs/architecture/SYSTEM_ARCHITECTURE.md",
+)
+
+
+def _governed_materialization_contract(*, omit: str | None = None) -> str:
+    lines = [
+        line
+        for name, line in _GOVERNED_MATERIALIZATION_LINES
+        if name != omit
+    ]
+    return "## Governed Materialization Contract\n\n" + "\n".join(lines) + "\n"
+
+
+def _write_governed_materialization_docs(tmp_path: Path, text: str) -> None:
+    for relative in _GOVERNED_MATERIALIZATION_PATHS:
+        _write(tmp_path / relative, text)
+
+
+def test_governed_materialization_contract_requires_named_section(
+    tmp_path: Path,
+) -> None:
+    token_complete_body = "\n".join(
+        line for _, line in _GOVERNED_MATERIALIZATION_LINES
+    )
+    _write_governed_materialization_docs(
+        tmp_path,
+        "## Unrelated Storage Notes\n\n" + token_complete_body + "\n",
+    )
+
+    findings = lint.check_governed_materialization_contract(tmp_path)
+
+    assert [item.path for item in findings] == sorted(
+        _GOVERNED_MATERIALIZATION_PATHS
+    )
+    assert all("section" in item.detail for item in findings)
+
+
+def test_governed_materialization_contract_accepts_complete_section(
+    tmp_path: Path,
+) -> None:
+    _write_governed_materialization_docs(
+        tmp_path,
+        _governed_materialization_contract(),
+    )
+
+    assert lint.check_governed_materialization_contract(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "missing_semantic",
+    [name for name, _ in _GOVERNED_MATERIALIZATION_LINES],
+)
+def test_governed_materialization_contract_requires_each_semantic_family(
+    tmp_path: Path,
+    missing_semantic: str,
+) -> None:
+    complete = _governed_materialization_contract()
+    _write_governed_materialization_docs(tmp_path, complete)
+    _write(
+        tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md",
+        _governed_materialization_contract(omit=missing_semantic),
+    )
+
+    findings = lint.check_governed_materialization_contract(tmp_path)
+
+    assert [(item.code, item.path, item.detail) for item in findings] == [
+        (
+            "MATERIALIZATION_CONTRACT_DRIFT",
+            "docs/architecture/SYSTEM_ARCHITECTURE.md",
+            f"missing governed materialization semantics: {missing_semantic}",
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("semantic_name", "mutated_line"),
+    (
+        ("lifecycle ledger", "`ucf_ledger.db` is present."),
+        (
+            "compensating active-view cleanup",
+            "Active-view cleanup is compensating.",
+        ),
+        (
+            "post-commit Qdrant reconciliation",
+            "Post-commit Qdrant reconciliation is mentioned.",
+        ),
+        (
+            "raw audit distinction",
+            "A raw audit may not inspect non-active lifecycle states.",
+        ),
+    ),
+)
+def test_governed_materialization_contract_rejects_qualifier_mutation(
+    tmp_path: Path,
+    semantic_name: str,
+    mutated_line: str,
+) -> None:
+    complete = _governed_materialization_contract()
+    _write_governed_materialization_docs(tmp_path, complete)
+    mutated_lines = [
+        mutated_line if name == semantic_name else line
+        for name, line in _GOVERNED_MATERIALIZATION_LINES
+    ]
+    _write(
+        tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md",
+        "## Governed Materialization Contract\n\n"
+        + "\n".join(mutated_lines)
+        + "\n",
+    )
+
+    findings = lint.check_governed_materialization_contract(tmp_path)
+
+    assert [(item.code, item.path, item.detail) for item in findings] == [
+        (
+            "MATERIALIZATION_CONTRACT_DRIFT",
+            "docs/architecture/SYSTEM_ARCHITECTURE.md",
+            f"missing governed materialization semantics: {semantic_name}",
+        )
+    ]
 
 
 def test_current_state_projection_rejects_evidence_path_escape(tmp_path: Path) -> None:

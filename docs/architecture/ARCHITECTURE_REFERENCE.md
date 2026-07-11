@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # GoodQ4All Architecture Reference
 
-**Last Updated:** April 1, 2026  
+**Last Updated:** 2026-07-11
 **Status:** ✅ Updated with epoch-scoped storage and stitching-era verification  
 **Purpose:** Definitive reference for current storage surfaces, core runtime entry points, and canonical architecture components
 
@@ -15,10 +15,11 @@
 ## Core Runtime Truth
 
 - **Canonical ingest owner:** `cli/run_ingestion.py`
-- **Canonical data root:** `${GOODQ_DATA_ROOT}/GoodQ_Data`
+- **Canonical artifact/epoch root:** `${GOODQ_DATA_ROOT}/GoodQ_Data`
 - **Canonical vector store:** Qdrant
 - **Canonical relational memory:** epoch-scoped SQLite
-- **Canonical scene bundle:** epoch-scoped `scene_manifest.json`
+- **Canonical per-video artifact evidence:** epoch-scoped `scene_manifest.json`
+- **Canonical lifecycle/evidence ledger:** epoch-scoped `ucf/ucf_ledger.db`
 - **Canonical audio acceleration path:** direct unified WSL worker
 - **Canonical identity ladder:** `speaker_pattern -> voice_pattern_match -> identity_candidate -> identity_supported -> identity_evidence`
 
@@ -70,8 +71,13 @@ http://localhost:6333
 **Storage Root**
 
 ```text
-${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
+${GOODQ_DATA_ROOT}/qdrant_storage
 ```
+
+For canonical desktop/config authority, this Qdrant root is a sibling of
+`GoodQ_Data`. It does not claim that the packaged installer's ProgramData layout
+is identical; installer/package path reconciliation remains a separate release
+concern.
 
 **Canonical Collections**
 
@@ -86,6 +92,32 @@ For CLAP audio coverage, current-run vector success requires
 `clap_meta.status == ok` plus a Qdrant audio payload with matching `run_id` and
 required provenance fields. A matching `scene_id` alone is not proof. See
 `AUDIO_VECTOR_PROVENANCE_CONTRACT.md`.
+
+---
+
+## Governed Materialization Lifecycle
+
+When `ingestion_isolation: true`, `scene_manifest.json` and the per-video
+temporal index are artifact evidence. The epoch ledger is `ucf/ucf_ledger.db`.
+`ucf_ledger.db` is the lifecycle and evidence authority. Isolated ingest stages
+UCF rows and Qdrant points with
+`ucf_promotion_status = staged`; it does not directly materialize active
+`memory.db` or `knowledge_graph.db`.
+
+The required path is staged ingest, explicit `validate_ucf_frames`, then a
+separately approved human-gated `promote_ucf_to_memory` operation for one exact
+`video_hash` plus `epoch_id` scope. Promotion materializes active `memory.db`
+and `knowledge_graph.db`.
+
+The UCF status change, transition audit, and durable Qdrant outbox enqueue are
+one immediate SQLite transaction in `ucf_ledger.db`. Active-view cleanup is
+compensating/recoverable work; there is no cross-store ACID claim. Post-commit
+Qdrant status delivery and reconciliation are separate durable, recoverable
+obligations. `promotion_committed_sync_pending` means the active materialization
+and UCF commit succeeded while durable Qdrant status delivery remains pending.
+
+Default active retrieval exposes only promoted evidence. Explicit raw audit queries
+may inspect other lifecycle states without promoting them.
 
 ---
 
@@ -124,18 +156,20 @@ Anonymous speaker and face nodes remain structural until the identity ladder has
 ## File System Layout
 
 ```text
-${GOODQ_DATA_ROOT}/GoodQ_Data/
-├── import_inbox/
-├── epochs/<epoch>/
-│   ├── memory.db
-│   ├── knowledge_graph.db
-│   ├── output/
-│   │   └── scene_ingest_results.json
-│   └── processing/<video_name>/
-│       ├── audio/
-│       ├── video/
-│       │   └── scene_manifest.json
-│       └── temporal_index.json
+${GOODQ_DATA_ROOT}/
+├── GoodQ_Data/
+│   ├── import_inbox/
+│   └── epochs/<epoch>/
+│       ├── memory.db
+│       ├── knowledge_graph.db
+│       ├── ucf/ucf_ledger.db
+│       ├── output/
+│       │   └── scene_ingest_results.json
+│       └── processing/<video_name>/
+│           ├── audio/
+│           ├── video/
+│           │   └── scene_manifest.json
+│           └── temporal_index.json
 └── qdrant_storage/
 ```
 
@@ -227,6 +261,8 @@ When validating runtime truth, confirm:
 3. `phase6_complete = true` and `qdrant_ok = true` on successful witnesses.
 4. `audio_backend_effective` truth matches the actual backend used.
 5. `speaker_voice_signatures` and stitching-era fields appear in fresh manifests when the runtime has enough voiced speech.
+6. Active retrieval scopes show promoted UCF/Qdrant state; artifact completion
+   alone is not promotion proof.
 
 ---
 
@@ -247,4 +283,5 @@ GoodQ4All is now an epoch-scoped, scene-centric memory system with:
 - SQLite as canonical memory and graph persistence
 - direct unified WSL audio acceleration
 - operational Phase 6 multimodal fusion
+- governed staged-to-promoted materialization
 - a conservative identity formation ladder built on persisted speaker and voice-pattern evidence

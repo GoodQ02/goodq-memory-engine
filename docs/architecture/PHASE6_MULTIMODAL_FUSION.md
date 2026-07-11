@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -14,6 +14,12 @@ Phase 6 consumes persisted scene artifacts and converts them into:
 - top-level `phase6_status` / `phase6_complete` truth
 
 It is backend-agnostic once the required scene and audio artifacts exist.
+
+Phase 6 completion is artifact/vector-stage evidence, not automatic memory
+promotion. Under `ingestion_isolation: true`, its Qdrant writes remain staged
+and its manifest/temporal outputs remain per-video evidence. The UCF ledger,
+explicit validation, and human-gated promotion own activation of memory and
+graph views.
 
 ---
 
@@ -86,7 +92,10 @@ When WSL audio is enabled, Phase 6 consumes WSL-produced transcript/diarization/
 To support timeline-sliced progressive ingestion, Phase 6 steps operate in deterministic sliding windows. Under this framework:
 - Visual embedding generation (`Phase 6a`) and cross-modal harmonization (`Phase 6b`) execute progressively per window index, enabling rapid recovery from interruptions.
 - The pipeline skips vector calculation and Qdrant/FAISS insertion for scenes that are already committed (`qdrant_ok == true`) to minimize VRAM and compute overhead.
-- Cross-modal harmonization incrementally updates the database and manifest, committing the final merged `temporal_index.json` upon video ingestion completion.
+- Cross-modal harmonization incrementally updates the manifest and temporal
+  artifacts, committing the final merged `temporal_index.json` upon video
+  ingestion completion. It does not itself promote evidence or materialize
+  active memory.
 
 ---
 
@@ -189,6 +198,10 @@ shape.
 
 The epoch processing tree is the canonical artifact root. Compatibility fallbacks may exist in code, but they are not the active operator truth.
 
+Under isolated ingest, successful vector persistence uses staged lifecycle
+payloads. Qdrant presence and `qdrant_ok = true` prove the vector stage, not
+promotion into the default active retrieval view.
+
 ---
 
 ## Runtime Truth
@@ -245,7 +258,8 @@ That includes:
 - additive interaction ownership (`conversation_owner`) without promoting visual presence
 - richer perception context from already-produced audio metadata
 
-This means Phase 6 is now part of memory truth, not just a convenience layer.
+This means Phase 6 is durable governed artifact evidence, not just a convenience
+layer. It becomes part of active memory only through explicit promotion.
 
 The temporal index also carries additive operator-facing visibility rollups for
 the interaction ladder and transcript/entity seam. Common read-only rollups now
@@ -358,5 +372,6 @@ Phase 6 is no longer a “planned” or “available but not wired” component.
 - finalizes scene-level visual vector truth
 - commits canonical CLIP/DINO scene vectors to Qdrant
 - writes a durable multimodal temporal index
-- carries stitching-era semantic and audio surfaces into retrieval and memory
+- supplies stitching-era semantic and audio surfaces to governed promotion and,
+  after promotion, active retrieval
 - exposes richer situational-awareness context without relaxing visible-person truth

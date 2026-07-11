@@ -179,6 +179,11 @@ def test_no_local_overlay_loads_portable_baseline(monkeypatch, tmp_path):
     }
     assert cfg["phase6"]["clip_collection"] == "goodq_clip_default"
     assert cfg["phase6"]["dino_collection"] == "goodq_dino_default"
+    portable_root = (tmp_path / "portable-data").as_posix()
+    assert cfg["paths"]["qdrant_storage"].replace("\\", "/") == f"{portable_root}/qdrant_storage"
+    assert cfg["paths"]["db_path"].replace("\\", "/") == (
+        f"{portable_root}/GoodQ_Data/epochs/default/memory.db"
+    )
     assert not any(
         "${" in value
         for value in _config_scalar_values(

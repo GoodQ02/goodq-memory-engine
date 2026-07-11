@@ -1,8 +1,11 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-12 -->
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
 
 # Next Layer Implementation Plan (2026-04-12)
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 ## Purpose
 

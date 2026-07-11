@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # GPU-Accelerated Ingestion Victory & Witness Report
 
 This report documents the verification, resource optimization metrics, and relational/vector database proofs of the first successful, fully GPU-accelerated home movie ingestion run. 

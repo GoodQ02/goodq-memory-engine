@@ -1,4 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
+
 # UCF Remaining Work & Closure Plan
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 **Last Verified Date**: 2026-06-16
 **Last Updated**: 2026-06-16 (Qdrant lifecycle coverage closure)

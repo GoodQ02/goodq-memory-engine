@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-30 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All Logo" width="130" />
@@ -170,10 +170,10 @@ GoodQ4All ships with two local operator console variants:
 ### Start Here
 *   Guided demo: [`docs/guides/DEMO.md`](docs/guides/DEMO.md)
 *   First run: [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
-*   Install: [`docs/guides/install/INSTALL.md`](docs/guides/install/INSTALL.md)
-*   Quickstart: [`docs/guides/install/QUICKSTART.md`](docs/guides/install/QUICKSTART.md)
+*   Install: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
+*   Historical quickstart: [`docs/archive/guides/install/QUICKSTART.md`](docs/archive/guides/install/QUICKSTART.md)
 *   Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
-*   Data Privacy: [`docs/guides/general/PRIVACY.md`](docs/guides/general/PRIVACY.md)
+*   Historical privacy guide: [`docs/archive/guides/general/PRIVACY.md`](docs/archive/guides/general/PRIVACY.md)
 
 ### Technical Details
 *   Architecture: [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)

@@ -1,9 +1,11 @@
 <!-- DOC_BADGE: HISTORICAL -->
-<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_STATUS: ARCHIVED -->
 <!-- DOC_CANONICAL_POINTER: docs/reference/WSL_AUDIO_RUNTIME.md -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
 
 # Audio Diarization Optimization Plan
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 ## Current State Analysis
 

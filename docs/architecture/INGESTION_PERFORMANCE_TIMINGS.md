@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Ingestion Performance Timings Report
 
 This report summarizes execution metrics for the GoodQ4All local multimodal ingestion pipeline, compiled from the `step_runs.jsonl` logs for epoch `epoch_2026_05_22_family_full_01`.

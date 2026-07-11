@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # HITL Stitching Contract
 
 **Purpose:** Define the mutation, persistence, and evaluation contracts for human-in-the-loop (HITL) identity stitching in GoodQ.

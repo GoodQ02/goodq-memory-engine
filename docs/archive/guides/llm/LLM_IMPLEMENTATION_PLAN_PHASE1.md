@@ -1,7 +1,7 @@
 <!-- DOC_BADGE: HISTORICAL -->
-<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_STATUS: ARCHIVED -->
 <!-- DOC_CANONICAL_POINTER: docs/guides/llm/LLM_INFRASTRUCTURE.md -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
 
 ⚠ Historical planning document.
 
@@ -10,6 +10,8 @@ Active runtime documentation uses environment abstractions:
 <project_root>, <GOODQ_DATA_ROOT>, <GOODQ_WSL_WORKSPACE>.
 
 # 🚀 LLM INTEGRATION - PHASE 1 IMPLEMENTATION PLAN
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 > ⚠ Historical planning document — contains legacy path references.
 

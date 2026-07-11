@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: EXPERIMENTAL -->
+<!-- DOC_STATUS: DEFERRED -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Fine-Tuning Training Dataset Generator Specification (v1.0.0)
 **Status:** `APPROVED SPECIFICATION`
 **Epoch ID:** `epoch_2026_07_05_home_memory_clean_01`

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_RELEASE_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Offline Dependencies & Wheelhouse Checksums
 
 This document lists the official SHA256 checksums and verification commands for the offline installation wheelhouses, host tools packages, and environment manifests required for air-gapped installation of GoodQ4All.

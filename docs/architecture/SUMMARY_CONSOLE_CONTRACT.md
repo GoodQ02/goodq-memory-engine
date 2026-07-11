@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # SUMMARY_CONSOLE_CONTRACT
 
 **Purpose:** Define the data structure, safety constraints, persistence schema, and validation rules for the GoodQ Summary Console and Saved Collections system.

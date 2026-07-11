@@ -1,4 +1,12 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
+
 # GoodQ4All Post-Promotion Knowledge Graph Signal-to-Noise Audit
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
+
 **Epoch ID:** `epoch_2026_07_05_home_memory_clean_01`
 **Status:** `AUDIT COMPLETE (READ-ONLY)`
 

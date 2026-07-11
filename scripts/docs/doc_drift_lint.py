@@ -33,7 +33,6 @@ SNAPSHOT_HEADER_PATTERN = re.compile(
 ALLOWED_LEGACY_DOCS = [
     "docs/technical/LEGACY_PATHS_DEPRECATED.md",
     "docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md",
-    "docs/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md",
     "docs/diagnostics/ENV_DISCOVERY_REPORT.md",
     "docs/diagnostics/HOST_COMPAT_DISCOVERY_REPORT.md",
     "docs/diagnostics/HOST_COMPAT_PATCH_NOTES.md",

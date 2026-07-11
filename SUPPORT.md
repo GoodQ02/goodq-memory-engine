@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_SUPPORT_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # GoodQ4All Support
 
 GoodQ4All is a local-first public preview. The fastest way to get useful help is
@@ -8,7 +12,7 @@ before posting.
 
 - First install, reset, or ingestion trouble: read
   [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md) or the
-  [Clean Memory Start Guide](docs/guides/CLEAN_MEMORY_START.md) / [Uninstall Guide](docs/guides/install/UNINSTALL.md), then use the
+  [Clean Memory Start Guide](docs/guides/CLEAN_MEMORY_START.md) / [historical uninstall guide](docs/archive/guides/install/UNINSTALL.md), then use the
   **First-Run Problem** issue template if the problem persists.
 - Reproducible runtime or documentation bug: use the **Bug Report** issue
   template.

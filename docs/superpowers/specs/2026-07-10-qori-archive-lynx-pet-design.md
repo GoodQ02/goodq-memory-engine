@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: EXPERIMENTAL -->
+<!-- DOC_STATUS: DEFERRED -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Qori Archive Lynx Pet Design
 
 ## Purpose

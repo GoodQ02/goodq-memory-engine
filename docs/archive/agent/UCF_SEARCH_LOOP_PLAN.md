@@ -1,4 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
+
 # UCF Search-Loop Visibility & Hardening Plan
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 This document outlines the detailed technical answers regarding the searchability posture of Unified Context Frame (UCF) records upon promotion, the architectural gaps in the current retrieval layer, and the proposed verification test shape.
 

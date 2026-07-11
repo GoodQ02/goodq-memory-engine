@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Architecture Documentation Index
 
@@ -76,7 +76,7 @@ the same claim.
 | Document | Status |
 | --- | --- |
 | [PIPELINES.md](../archive/architecture/PIPELINES.md) | Active compatibility reference for historical pipeline definitions. |
-| [NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md](NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md) | Historical implementation plan referenced by current status docs. |
+| [NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md](../archive/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md) | Archived implementation plan; future higher-order memory work is gated by the active roadmap. |
 | [narrative_layer.md](narrative_layer.md) | Descriptive narrative-layer reference. |
 | [LEGACY_WORKFLOWS.md](LEGACY_WORKFLOWS.md) | Historical workflow reference. |
 | [DATA_STRUCTURE.md](../archive/architecture/DATA_STRUCTURE.md) | Historical data-layout snapshot. |

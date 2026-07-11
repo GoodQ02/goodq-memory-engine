@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: EXPERIMENTAL -->
+<!-- DOC_STATUS: DEFERRED -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Qori Archive Lynx Pet Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

@@ -1,26 +1,37 @@
-# Project: GoodQ4All v2.5.8-rc5 Comprehensive Final Release Audit
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_BOUNDED_MISSION -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
-## Architecture
-- **Installed Runtime Resolution**: In installed mode, the launcher and runtime must strictly use the relative `.\runtime\python.exe` binary. It must fail visibly if this file is missing to prevent fallback to system Python.
-- **Bootstrap Intercept**: The launcher must parse the bootstrap report (`bootstrap_report.json` or similar) to intercept and display failures on first-run setup.
-- **WSL Distro Mapping**: WSL integration maps dynamically, preferring `GoodQ_Audio_Distro` for GPU/audio workloads.
-- **Model Token Safety**: Hugging Face gated models are skipped or warning messages are logged on missing credentials instead of halting the launch flow.
+# Active bounded mission
 
-## Milestones
-| # | Name | Scope | Dependencies | Status |
-|---|------|-------|-------------|--------|
-| 1 | M1: Codebase Cross-Reference Verification | Verify python.exe resolution, bootstrap reporting, version surfaces, WSL fallback, and gated model token handling. | None | DONE |
-| 2 | M2: Post-Build Installer & Manifest Validation | Verify setup.exe and launcher hashes, source_commit, and source_tree_clean status. | None | DONE |
-| 3 | M3: Linter & Static Analysis Verification | Execute doc, dependency, and banned token linters, and run pytest unit tests. | None | DONE |
-| 4 | M4: Forensic Verification and Final Synthesis | Run the forensic auditor, aggregate all streams, and compile the final audit report. | M1, M2, M3 | DONE |
+Roadmap item: R-13 — finish documentation authority consolidation.
 
-## Interface Contracts
-- **Version Surfacing**: Version strings must match exactly across all 8 surfaces (NSIS, versioninfo.json, goodq_version.py, etc.).
-- **Installer Manifest**: Manifest metadata `source_commit` must align with the target tag and HEAD commit, and `source_tree_clean` must be `true`.
+## Outcome
 
-## Code Layout
-- `goodq_version.py` - Core package version definitions
-- `scripts/install/` - NSIS build scripts, compiler configs, and sync scripts
-- `dist/` - Released installers and JSON manifests
-- `tests/unit/` - Unit tests for configuration, launcher, and APIs
-- `scripts/utils/` - Static linters (banned_token_lint.py, doc_drift_lint.py)
+Checkpoint the documentation authority cutover: archive superseded plans,
+classify active docs, replace competing mission/status narratives, generate
+deterministic indexes, and install link, metadata, current-state, epoch, and
+semantic drift gates.
+
+## Scope
+
+- Preserve the already-owned archive moves and update their inbound links.
+- Require exact policy badges on active docs, with schema-governed skills
+  explicitly exempt.
+- Generate both active repository indexes from one tracked-file scope.
+- Record the remaining storage-root contradiction as a blocking semantic
+  finding for the next bounded seam.
+
+## Boundaries
+
+- Do not change the configured storage root merely to make this seam green.
+- Do not move Qdrant data, restart services, or alter network bindings.
+- Do not reopen the verified current-state evidence unless a fresh capture
+  proves drift.
+- Do not touch the frozen mixed checkout or the public checkout.
+
+## Resume authority
+
+Use `docs/releases/ROADMAP.md` for the long-running register. Use this file only
+for the bounded mission above; completed work belongs in checkpoints and Git
+history, not in another backlog.

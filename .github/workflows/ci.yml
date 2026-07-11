@@ -8,8 +8,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/**"
-      - "README.md"
-      - "CONTRIBUTING.md"
+      - "*.md"
       - "docs/**"
       - "configs/**"
       - "envs/**"
@@ -57,6 +56,10 @@ jobs:
       - name: Documentation drift lint
         shell: pwsh
         run: conda run -n goodq_core python scripts/docs/doc_drift_lint.py
+
+      - name: Documentation authority lint
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/docs/doc_authority_lint.py verify
 
       - name: Dependency drift lint
         shell: pwsh

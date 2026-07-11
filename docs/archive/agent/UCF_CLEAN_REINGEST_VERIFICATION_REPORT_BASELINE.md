@@ -1,15 +1,18 @@
-<!-- DOC_BADGE: CANONICAL -->
-<!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-04 -->
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../agent/UCF_CLEAN_REINGEST_VERIFICATION_REPORT.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-11 -->
 
 # UCF Clean Reingest Verification Report
+
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 This report presents the verification details, lifecycle state transitions, direct database/Qdrant payloads, search behavior checks, and final regression results for the UCF Clean Reingest procedure under epoch `epoch_2026_06_15_ucf_clean_verify`.
 
 ---
 
 ## 1. Backfill Status
-**Status**: Deferred. Refer to the plan details documented at `docs/agent/UCF_QDRANT_STATUS_BACKFILL_PLAN.md`. All active Qdrant write paths now write the `ucf_promotion_status: "staged"` payload key at point creation time, rendering retroactive backfill unnecessary for future runs.
+**Status**: Deferred. The superseded plan is retained at `docs/archive/agent/UCF_QDRANT_STATUS_BACKFILL_PLAN.md`. All active Qdrant write paths now write the `ucf_promotion_status: "staged"` payload key at point creation time, rendering retroactive backfill unnecessary for future runs.
 
 ---
 

@@ -1,8 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
+
 # Documentation Audit & Reorganization Report
 
-<!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-06 -->
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 This report presents the complete inventory, deduping matrix, and path/link alignment details resulting from the documentation audit of v2.5.8-rc5.
 

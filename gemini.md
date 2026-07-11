@@ -1,3 +1,5 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: WORKSTATION_INTEGRATION_GUIDE -->
 <!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 # Gemini Desktop Agent & Workspace Integration
 

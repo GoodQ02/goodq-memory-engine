@@ -1,7 +1,11 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: ARCHIVED -->
+<!-- DOC_CANONICAL_POINTER: ../../releases/ROADMAP.md -->
+<!-- DOC_ARCHIVED_ON: 2026-07-10 -->
+
 # UCF Qdrant Status Backfill Plan
 
-<!-- DOC_STATUS: RESOLVED -->
-<!-- DOC_LAST_VERIFIED: 2026-06-16 -->
+> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
 
 > [!NOTE]
 > **RESOLVED (2026-06-16)**: This backfill plan is no longer needed. All Qdrant

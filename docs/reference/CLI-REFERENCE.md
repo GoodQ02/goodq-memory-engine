@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-10 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** May 1, 2026
+**Last Updated:** July 10, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -40,14 +40,17 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 
 **Progressive Ingestion & Interruption Resumption**
 - **Sliding Windows**: Video files are partitioned into timeline-sliced progressive analysis windows.
-- **Durable Checkpoints**: A state checkpoint `progressive_ingestion_state.json` tracks committed windows.
-- **Interruption Recovery**: If interrupted, the orchestrator resumes from the first uncompleted window index, skipping already-processed segments.
-- **Deduplication Scene Guard**: Bypasses SQLite database scene list rehydration on recovery, loading complete scene boundaries from the scene detection cache instead.
+- **Durable Checkpoints**: Schema-v2 `progressive_ingestion_state.json` retains each window and records `committed`, `not_applicable`, or `failed` for memory DB, knowledge graph, Phase 6 vectors, scene manifest, and temporal index.
+- **Evidence Gate**: SQLite/graph scenes and parseable artifacts are probed; the vector target requires persisted successful Phase 6/Qdrant evidence in the scene manifest.
+- **Interruption Recovery**: Resume re-probes current persistence before skipping an exact window. Failed or stale windows are retried even when later windows committed.
+- **Cleanup Gate**: The checkpoint is removed only after every current window re-probes as committed across all five targets; Qdrant completion alone does not clear recovery evidence.
+- **Isolation Safety**: With `ingestion_isolation: true`, memory DB and knowledge graph are `not_applicable`; resume reads the scene manifest without opening or creating `memory.db`.
+- **Legacy Replacement**: Old boolean checkpoints are not trusted or layered into v2. Their windows are re-evaluated and the checkpoint is replaced.
 
 **Current Truth**
 - owns orchestration
 - writes epoch-scoped artifacts
-- updates the KG in realtime
+- updates active SQLite/KG only when ingestion isolation is disabled
 - invokes Phase 6
 
 **Primary Outputs**

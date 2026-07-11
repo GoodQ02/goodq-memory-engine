@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-10 -->
 
 # Ingest Orchestration Contract
 
@@ -112,6 +112,52 @@ The canonical runner must remain responsible for:
 
 Steps may produce data, but they do not decide whether a scene is canonical,
 materialized, or persisted as a bundle.
+
+### 4a. Progressive checkpoint truth
+
+`progressive_ingestion_state.json` is a schema-v2 recovery record. Its
+`windows` map retains one record per window index. Every window names exactly
+these persistence targets:
+
+- `memory_db`
+- `knowledge_graph`
+- `vectors`
+- `scene_manifest`
+- `temporal_index`
+
+Each target has one status: `committed`, `not_applicable`, or `failed`. A window
+is resumable only when its own `window_status` is `committed`, all five targets
+are present, and none is `failed`.
+
+Target status must come from persistence evidence, not from reaching the end of
+the window loop:
+
+- `memory_db` and `knowledge_graph` use read-only scene-presence probes when
+  those stores are enabled for the run.
+- `vectors` means the canonical Phase 6 Qdrant scene-vector target. It requires
+  persisted successful Phase 6 commit evidence for every window scene in
+  `scene_manifest.json`. It is `not_applicable` when Phase 6 retrieval is
+  disabled.
+- `scene_manifest` requires every window scene in the parseable manifest.
+- `temporal_index` requires a parseable artifact when Phase 6b is applicable.
+
+Under `ingestion_isolation: true`, active `memory.db` and knowledge-graph writes
+are deliberately suppressed, so those targets are `not_applicable`. Recovery
+must rehydrate skipped scenes from `scene_manifest.json` and must not open or
+create `memory.db` merely to resume.
+
+Resume re-runs the applicable read-only persistence and artifact probes before
+trusting a schema-v2 record. It is per exact verified window index: a failed or
+now-stale window is re-evaluated even if a later window committed, and
+rehydrated plus newly processed scene outputs are restored to timeline order
+before the manifest is written. Legacy boolean checkpoints have insufficient
+persistence evidence and are ignored; their windows are re-evaluated and
+replaced by schema v2 rather than migrated by assumption.
+
+Final cleanup uses the same evidence gate. The checkpoint may be deleted only
+when Phase 6 is complete and a fresh re-probe verifies every current window as
+committed with exactly the five targets above and no failed target. Qdrant
+completion alone is not sufficient to discard recovery evidence.
 
 ## Config Loading Contract
 

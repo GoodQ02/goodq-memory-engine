@@ -530,14 +530,16 @@ def check_mission_contract(repo_root: Path) -> list[Finding]:
     project_path = repo_root / "PROJECT.md"
     project = project_path.read_text(encoding="utf-8", errors="replace") if project_path.is_file() else ""
     header = _header(project)
-    roadmap_ids = re.findall(r"\bR-\d+\b", project)
+    roadmap_item_pattern = r"R-\d+(?:-[A-Z]\d+)?"
+    roadmap_ids = re.findall(rf"\b{roadmap_item_pattern}\b", project)
     roadmap_path = repo_root / "docs" / "releases" / "ROADMAP.md"
     roadmap = roadmap_path.read_text(encoding="utf-8", errors="replace") if roadmap_path.is_file() else ""
     mission_is_open = False
     if len(roadmap_ids) == 1:
         roadmap_id = roadmap_ids[0]
         section_match = re.search(
-            rf"^###\s+{re.escape(roadmap_id)}\b.*?(?=^###\s+R-\d+\b|\Z)",
+            rf"^###\s+{re.escape(roadmap_id)}\b.*?"
+            rf"(?=^###\s+{roadmap_item_pattern}\b|\Z)",
             roadmap,
             flags=re.MULTILINE | re.DOTALL,
         )

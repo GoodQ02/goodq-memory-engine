@@ -386,13 +386,22 @@ the failure is not currently visible.
   tests, compilation, documentation authority/drift, banned-token,
   dependency-drift, staged-diff, and independent review gates. Evidence:
   `docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md`.
-- Follow-up `R-11-F1` (OPEN, discovered during R-05 review): unchanged base
-  behavior can preserve wrapper success and return code zero when a native
-  MiniAgent handler explicitly returns `status=error`. The R-11 confirmation,
-  token, audit, Control Agent, and governor checkpoint remains valid, but this
-  handler-outcome truth gap must be repaired in its own isolated seam before
-  R-05 widens process/mutation authority. Focused tests must prove the outward
-  envelope and execution audit both report the handler failure truthfully.
+
+### R-11-F1 — Make MiniAgent handler outcomes truthful
+
+- Priority: P0
+- Status: IN_PROGRESS
+- Finding: unchanged base behavior can preserve wrapper success and return code
+  zero when a native MiniAgent handler explicitly returns `status=error`.
+- Repair: map explicit handler error to a generic outward error envelope and
+  nonzero return code while preserving handler output, nonmutation truth, and a
+  matching durable execution audit. Keep existing `blocked` semantics intact.
+- Completion gate: focused tests prove reasoned and reasonless handler errors
+  agree across envelope, return code, side-effect report, and execution audit;
+  the full MiniAgent and governed-ingest regression set remains green.
+- Public impact: RELEASE_REQUIRED
+- Boundary: the verified R-11 confirmation, token, Control Agent, and governor
+  checkpoint remains valid. This follow-up does not reopen those mechanisms.
 
 ### R-12 — Reconcile workstation doctrine and follower validation
 

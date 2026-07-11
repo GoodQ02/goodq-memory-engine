@@ -4,41 +4,34 @@
 
 # Active bounded mission
 
-Roadmap item: R-05 — define API and Command Center execution authority.
+Roadmap item: R-11-F1 — repair MiniAgent handler-outcome truth.
 
 ## Outcome
 
-Adopt one loopback-only local-operator API model. Every mounted route must have
-one truthful effect class, request staging must converge on one ledgered path,
-curated writes must be atomic, scope-constrained, and audited, and process or
-destructive actions must use the checkpointed single-use exact-scope confirmation
-authority plus a persistent job record. Remote mutation remains denied by
-default.
+When a native MiniAgent handler explicitly reports `status=error`, the outward
+tool envelope, return code, side-effect report, and durable execution audit must
+all report that failure truthfully without exposing raw handler details.
 
 ## Scope
 
-- Freshly inventory the mounted API and operator surfaces by actual effect:
-  passive read, request staging, curated mutation, or process execution.
-- Reconcile that inventory with the existing 78-operation decision evidence and
-  prove which routes have changed before implementation.
-- Trace duplicate staging paths, upload authorities, token mechanisms, boolean
-  confirmations, UI callers, and route-local execution gates.
-- Reconstruct the approved repair in a new isolated worktree with focused
-  contract, route, UI-copy, and authority tests.
-- Preserve the separately owned passive-status, identity-recovery, and LAN
-  boundary seams.
+- Preserve existing `blocked` handler semantics.
+- Map only explicit handler `status=error` to outward error and return code one.
+- Use the controlled handler reason as the error code, with a generic fallback
+  when no reason exists and a generic outward message in both cases.
+- Prove execution audit status, return code, error codes, and nonmutation agree
+  with the outward envelope.
+- Re-run the MiniAgent and governed-ingest staging regressions.
 
 ## Boundaries
 
-- Work in a new isolated worktree; do not continue implementation in the
-  completed control-authority checkpoint.
+- Work only in this isolated follow-up worktree.
 - Keep the frozen mixed checkout and public checkout unchanged.
 - Do not run ingestion, mutate live memory or identity data, expose a service to
   the LAN, or perform destructive/process actions against live state.
-- Do not implement passive runtime status, identity recovery, network-boundary,
-  or clean-memory replacement work inside this seam.
-- Preserve the checkpointed MiniAgent confirmation/audit authority and the
-  preflight-only governor boundary; do not create a third approval mechanism.
+- Do not change confirmation, token, handler, route, Control Agent, or governor
+  authority in this follow-up.
+- Return to remaining API-authority work only after focused evidence and a private
+  checkpoint close this contradiction.
 
 ## Resume authority
 

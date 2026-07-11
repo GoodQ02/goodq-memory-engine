@@ -1290,6 +1290,14 @@ class MiniAgentClient:
             if isinstance(tool_result, dict) and tool_result.get("reason") is not None
             else None
         )
+        if handler_status == "error" and status == "success":
+            status = "error"
+            errors_list = [
+                {
+                    "code": handler_reason or "handler_reported_error",
+                    "message": "Tool handler reported an error.",
+                }
+            ]
         declared_mutation = tool_name in (
             "qdrant_upsert",
             "home_assistant_call_service",

@@ -196,6 +196,20 @@ def test_plan_and_project_contracts_are_bounded(tmp_path: Path) -> None:
         "<!-- DOC_BADGE: OPERATIONAL -->\n"
         "<!-- DOC_STATUS: ACTIVE_BOUNDED_MISSION -->\n"
         "<!-- DOC_LAST_VERIFIED: 2026-07-11 -->\n\n"
+        "# Active bounded mission\n\nRoadmap item: R-11-F1\n",
+    )
+    _write(
+        tmp_path / "docs" / "releases" / "ROADMAP.md",
+        "### R-11 — Control authority\n\n- Status: VERIFIED\n\n"
+        "### R-11-F1 — Handler truth\n\n- Status: OPEN\n",
+    )
+    assert lint.check_mission_contract(tmp_path) == []
+
+    _write(
+        tmp_path / "PROJECT.md",
+        "<!-- DOC_BADGE: OPERATIONAL -->\n"
+        "<!-- DOC_STATUS: ACTIVE_BOUNDED_MISSION -->\n"
+        "<!-- DOC_LAST_VERIFIED: 2026-07-11 -->\n\n"
         "# Active bounded mission\n\nRoadmap item: R-10\n",
     )
     _write(

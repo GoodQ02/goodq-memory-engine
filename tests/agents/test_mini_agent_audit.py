@@ -303,3 +303,57 @@ def test_blocked_handler_outcome_is_not_audited_as_mutation():
     assert execution["handler_status"] == "blocked"
     assert execution["handler_reason"] == "promotion_blocked_unvalidated_frames"
     assert execution["side_effect_report"]["mutated"] is False
+
+
+def test_handler_declared_error_returns_error_envelope_and_truthful_audit():
+    client = _client()
+    args = {
+        "collection": "goodq_text",
+        "query_vector": [0.1] * 384,
+        "top_k": 5,
+        "ucf_status_filter": "staged",
+    }
+
+    result, rc = client.execute_tool(
+        tool_name="qdrant_query",
+        tool_args=args,
+        mode="research",
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"] == [
+        {
+            "code": "invalid_ucf_status_filter",
+            "message": "Tool handler reported an error.",
+        }
+    ]
+    assert result["output"]["status"] == "error"
+    assert result["side_effect_report"]["mutated"] is False
+    execution = _rows()[-1]
+    assert execution["event_type"] == "execution"
+    assert execution["status"] == "error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["invalid_ucf_status_filter"]
+    assert execution["handler_status"] == "error"
+    assert execution["handler_reason"] == "invalid_ucf_status_filter"
+    assert execution["side_effect_report"]["mutated"] is False
+
+
+def test_handler_declared_error_without_reason_uses_generic_error_code():
+    client = _client()
+    client._execute_qdrant_query = MagicMock(return_value={"status": "error"})
+
+    result, rc = client.execute_tool(
+        tool_name="qdrant_query",
+        tool_args={"collection": "goodq_text", "query_vector": [0.1]},
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "handler_reported_error"
+    execution = _rows()[-1]
+    assert execution["status"] == "error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["handler_reported_error"]
+    assert execution["handler_reason"] is None

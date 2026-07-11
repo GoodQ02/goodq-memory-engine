@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1175**
+Indexed active tracked paths: **1177**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -864,6 +864,7 @@ Indexed active tracked paths: **1175**
 | `/tests/README.md` | Verification | Test, fixture, or verification asset. |
 | `/tests/__init__.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/agents/test_challenger_concurrency_database.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/agents/test_mini_agent_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/agents/test_mini_agent_client.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/check_syntax.bat` | Verification | Test, fixture, or verification asset. |
 | `/tests/conftest.py` | Verification | Test, fixture, or verification asset. |
@@ -985,6 +986,7 @@ Indexed active tracked paths: **1175**
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_context_analyzer_llm.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_control_agent_activation_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_agent_disable_invariant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_recurrence_api.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_recurrence_output_contract.py` | Verification | Test, fixture, or verification asset. |

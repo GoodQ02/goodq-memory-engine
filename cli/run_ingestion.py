@@ -348,22 +348,66 @@ _PIPELINE_OBSERVER: Optional[PipelineObserver] = None
 _GLOBAL_LLM_CLIENT: Optional[Any] = None
 
 
+def _control_agent_activation_requested(
+    cfg: Dict[str, Any],
+    *,
+    cli_enabled: bool = False,
+) -> bool:
+    """Return true only for an explicit CLI, config, or environment opt-in."""
+    control_agent_cfg = cfg.get("control_agent", {}) or {}
+    return bool(
+        cli_enabled is True
+        or control_agent_cfg.get("enabled", False) is True
+        or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"
+    )
+
+
+def _control_agent_mutation_requested(
+    *,
+    activation_requested: bool,
+    auto_healing_requested: bool,
+    dry_run: bool,
+) -> bool:
+    """Mutation is dormant unless all three explicit safety gates agree."""
+    return (
+        activation_requested is True
+        and auto_healing_requested is True
+        and dry_run is False
+    )
+
+
 def _control_agent_runtime_enabled() -> bool:
     global _GLOBAL_LLM_CLIENT, CONTROL_AGENT_AVAILABLE
     if not CONTROL_AGENT_AVAILABLE:
         return False
-    
-    # Try to initialize LLM Client on demand for test hooks or direct calls
+
+    status = (
+        _CURRENT_RUN_CONTEXT.get("control_agent_status")
+        if isinstance(_CURRENT_RUN_CONTEXT, dict)
+        else None
+    )
+    if status is not None and status != "initialized":
+        return False
+
+    cfg: Optional[Dict[str, Any]] = None
+    activated_by_current_run = status == "initialized"
+    if not activated_by_current_run:
+        try:
+            from steps.common.config_loader import load_configs
+            cfg = load_configs({})
+            if not _control_agent_activation_requested(cfg):
+                return False
+        except Exception:
+            return False
+
+    # Try to initialize LLM Client on demand for explicit test hooks/direct calls.
     if _GLOBAL_LLM_CLIENT is None:
         try:
             from steps.common.config_loader import load_configs
             from steps.common.llm_model_factory import build_llm_models
             from lib.llm_client import LLMClient
-            cfg = load_configs({})
-            control_agent_cfg = cfg.get('control_agent', {}) or {}
-            # Explicit enable gate
-            if not (control_agent_cfg.get('enabled', False) or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"):
-                return False
+            if cfg is None:
+                cfg = load_configs({})
             models = build_llm_models(cfg)
             _GLOBAL_LLM_CLIENT = LLMClient(
                 models=models,
@@ -377,9 +421,6 @@ def _control_agent_runtime_enabled() -> bool:
             return False
 
     if not isinstance(_CURRENT_RUN_CONTEXT, dict):
-        return _GLOBAL_LLM_CLIENT is not None
-    status = _CURRENT_RUN_CONTEXT.get('control_agent_status')
-    if status is None:
         return _GLOBAL_LLM_CLIENT is not None
     return status == 'initialized'
 
@@ -7496,7 +7537,7 @@ def run(
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
-    ENABLE_AUTO_HEALING = enable_auto_healing
+    ENABLE_AUTO_HEALING = False
 
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
@@ -7659,10 +7700,14 @@ def run(
 
     # Initialize Control Agent if available
     control_agent_cfg = cfg.get('control_agent', {}) or {}
-    control_agent_enabled_gate = (
-        enable_control_agent
-        or control_agent_cfg.get('enabled', False)
-        or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"
+    control_agent_enabled_gate = _control_agent_activation_requested(
+        cfg,
+        cli_enabled=enable_control_agent,
+    )
+    ENABLE_AUTO_HEALING = _control_agent_mutation_requested(
+        activation_requested=control_agent_enabled_gate,
+        auto_healing_requested=enable_auto_healing,
+        dry_run=True,
     )
     control_agent = None
     control_agent_status = 'disabled'
@@ -7700,6 +7745,11 @@ def run(
                 )
             # Default to dry_run = True for safety unless explicitly configured False
             dry_run_val = control_agent_cfg.get('dry_run', True)
+            ENABLE_AUTO_HEALING = _control_agent_mutation_requested(
+                activation_requested=control_agent_enabled_gate,
+                auto_healing_requested=enable_auto_healing,
+                dry_run=dry_run_val,
+            )
             control_agent = ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val, enable_mutation=ENABLE_AUTO_HEALING)
             control_agent_status = 'initialized'
             control_agent_reason = None
@@ -7715,6 +7765,7 @@ def run(
             control_agent_status = CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
             control_agent_reason = f"{CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT}: {exc}"
             control_agent = None
+            ENABLE_AUTO_HEALING = False
 
     run_context['control_agent_status'] = control_agent_status
     run_context['control_agent_reason'] = control_agent_reason

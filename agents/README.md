@@ -1,7 +1,7 @@
 # GoodQ Agent Utilities
 
 **Status:** Mixed state - conditional runtime utilities plus legacy orchestration artifacts  
-**Last Verified:** 2026-03-13
+**Last Verified:** 2026-07-11
 
 ---
 
@@ -12,7 +12,7 @@ The `agents/` directory is **not** a single canonical production runtime.
 Current runtime truth:
 
 - The authoritative ingestion entry points are `cli/run_ingestion.py` and `cli/watchdog.py`.
-- `ControlAgent` still exists, but default CLI/runtime flows record `disabled_no_llm_client` unless an `llm_client` is explicitly injected.
+- `ControlAgent` still exists, but default CLI/runtime flows do not activate it or construct an LLM client. `cli.run_ingestion` accepts explicit CLI/config/environment activation; Watchdog remains injection-only. Mutation additionally requires auto-healing opt-in and non-dry-run configuration.
 - `watchdog_agent_integration.py`, `pipeline_integration.py`, and `orchestrator.py` belonged to an older parallel orchestration path and are now retired from the tracked surface.
 
 ---
@@ -21,7 +21,7 @@ Current runtime truth:
 
 | Component | File | Current role | Status |
 |-----------|------|--------------|--------|
-| Control Agent | `control_agent.py` | Conditional diagnosis/healing utility requiring injected `llm_client` | Conditional |
+| Control Agent | `control_agent.py` | Conditional diagnosis/healing utility; explicit CLI activation or injected client, with a separate mutation gate | Conditional |
 | Config Healer | `config_healer.py` | Runtime healing helper used by Control Agent flows | Runtime utility |
 | Self-Healing Monitor | `self_healing_monitor.py` | Runtime/diagnostic helper | Runtime utility |
 | Recovery Database | `recovery_db.py` | Stores recovery history and outcomes | Runtime utility |

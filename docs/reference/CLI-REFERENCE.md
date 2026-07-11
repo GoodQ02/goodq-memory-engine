@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-10 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** July 10, 2026
+**Last Updated:** July 11, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -37,6 +37,14 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 - `--step-timeout`
 - `--chunk-size` (default `300.0` seconds)
 - `--chunk-overlap` (default `10.0` seconds)
+- `--enable-control-agent` (explicit diagnostic activation; default off)
+- `--enable-auto-healing` (separate mutation opt-in; inert unless Control Agent is activated)
+
+Control Agent activation may also come from `control_agent.enabled: true` or
+`GOODQ_CONTROL_AGENT_ENABLED=1`. Activation alone remains diagnostic because
+`control_agent.dry_run` defaults to true. Config mutation requires activation,
+`--enable-auto-healing`, and `control_agent.dry_run: false` together. Watchdog
+does not use these CLI gates and remains injection-only.
 
 **Progressive Ingestion & Interruption Resumption**
 - **Sliding Windows**: Video files are partitioned into timeline-sliced progressive analysis windows.
@@ -52,6 +60,8 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 - writes epoch-scoped artifacts
 - updates active SQLite/KG only when ingestion isolation is disabled
 - invokes Phase 6
+- leaves Control Agent disabled unless an explicit activation source is present
+- leaves config mutation disabled unless both auto-healing and non-dry-run gates are explicit
 
 **Primary Outputs**
 

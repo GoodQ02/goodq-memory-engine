@@ -462,7 +462,7 @@ the failure is not currently visible.
 ### R-18 — Isolate validator tests and generated reports
 
 - Priority: P0
-- Status: OPEN
+- Status: VERIFIED
 - Finding: validator tests can overwrite operator reports, legacy tests depend
   on a machine-local skill copy, stale lifecycle `xfail` cases remain, and one
   ingestion test resolves an obsolete live epoch.
@@ -472,6 +472,17 @@ the failure is not currently visible.
   required-service absence fails rather than skips.
 - Completion gate: hermetic tests leave operator evidence unchanged and the
   live/golden profile fails truthfully when dependencies are missing.
+- Checkpoint evidence (2026-07-11): commit `892976f7` adds explicit report
+  ownership, stale-report rejection, exact-scope lifecycle tests, central
+  isolated collection, a pinned golden manifest, immutable live-ledger reads,
+  and caller-independent OS-temp evidence runners. The guarded validator suite
+  passed 122 tests with operator reports unchanged and no residual worktree
+  artifacts. R-02/R-06 non-regression packs passed 137, 42, and 29 tests. Four
+  read-only July runtime witnesses passed; with the API intentionally stopped,
+  the complete golden runner failed only the required API witness instead of
+  skipping it. The extracted `absolute_timestamps` correction is explicitly
+  owned and verified as a frozen-main validator sub-seam. Evidence:
+  `docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md`.
 
 ### R-19 — Establish one canonical API and Watchdog supervisor
 
@@ -654,7 +665,7 @@ recreated under a new name.
 
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
-2. Restore truthful evidence: R-18, R-09, R-13, and R-10.
+2. Restore truthful evidence: completed R-18, then R-09, R-13, and R-10.
 3. Establish one control authority: R-11, R-05, then R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.
@@ -685,6 +696,11 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Verified R-18 after isolating validator outputs, replacing stale
+  lifecycle skips with exact-scope evidence, pinning a truthful golden runtime
+  profile, proving immutable live-ledger reads, and adding artifact-free
+  evidence runners. Fresh R-02/R-06 no-repeat gates passed, and three
+  independent final reviews returned READY.
 - 2026-07-11: Privately checkpointed R-02 and R-03, opened R-17 through R-23
   and R-25,
   replaced the obsolete repair order with the approved stability-first master

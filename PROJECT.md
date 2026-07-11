@@ -4,34 +4,35 @@
 
 # Active bounded mission
 
-Roadmap item: R-11-F1 — repair MiniAgent handler-outcome truth.
+Roadmap item: R-05 — define API and Command Center execution authority.
 
 ## Outcome
 
-When a native MiniAgent handler explicitly reports `status=error`, the outward
-tool envelope, return code, side-effect report, and durable execution audit must
-all report that failure truthfully without exposing raw handler details.
+Finish one local-operator authority model for mounted API and Command Center
+surfaces. Every route must have one truthful effect class, and remote clients
+must be denied mutation by a common policy rather than route-local convention.
 
 ## Scope
 
-- Preserve existing `blocked` handler semantics.
-- Map only explicit handler `status=error` to outward error and return code one.
-- Use the controlled handler reason as the error code, with a generic fallback
-  when no reason exists and a generic outward message in both cases.
-- Prove execution audit status, return code, error codes, and nonmutation agree
-  with the outward envelope.
-- Re-run the MiniAgent and governed-ingest staging regressions.
+- Re-audit the committed mounted route inventory after staging convergence.
+- Define one effect registry for passive reads, request staging, curated
+  mutation, and process execution.
+- Enforce a shared client-boundary rule that keeps passive reads available as
+  designed while denying remote mutation by default.
+- Preserve the separately owned passive-status and identity-recovery seams.
+- Add focused route inventory, policy, OpenAPI, and operator-surface tests.
 
 ## Boundaries
 
-- Work only in this isolated follow-up worktree.
+- Continue from the verified handler-truth descendant in an isolated worktree.
 - Keep the frozen mixed checkout and public checkout unchanged.
 - Do not run ingestion, mutate live memory or identity data, expose a service to
   the LAN, or perform destructive/process actions against live state.
-- Do not change confirmation, token, handler, route, Control Agent, or governor
-  authority in this follow-up.
-- Return to remaining API-authority work only after focused evidence and a private
-  checkpoint close this contradiction.
+- Do not reopen the completed staging or handler-truth checkpoints.
+- Do not implement passive runtime probing, identity recovery, LAN gateway,
+  clean-memory replacement, or live process execution inside this seam.
+- Preserve the exact-scope confirmation/audit authority and the preflight-only
+  governor boundary.
 
 ## Resume authority
 

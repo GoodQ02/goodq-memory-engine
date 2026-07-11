@@ -390,7 +390,7 @@ the failure is not currently visible.
 ### R-11-F1 — Make MiniAgent handler outcomes truthful
 
 - Priority: P0
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: unchanged base behavior can preserve wrapper success and return code
   zero when a native MiniAgent handler explicitly returns `status=error`.
 - Repair: map explicit handler error to a generic outward error envelope and
@@ -402,6 +402,13 @@ the failure is not currently visible.
 - Public impact: RELEASE_REQUIRED
 - Boundary: the verified R-11 confirmation, token, Control Agent, and governor
   checkpoint remains valid. This follow-up does not reopen those mechanisms.
+- Checkpoint evidence (2026-07-11): `9661d8db` maps explicit handler error to
+  outward error/return code one, preserves generic outward text and
+  nonmutation, and aligns the durable execution audit. Mission lint now
+  recognizes registered roadmap sub-items. Fresh verification passed 204
+  focused tests plus compilation, documentation/static gates, and independent
+  specification and security review. Evidence:
+  `docs/diagnostics/R11_F1_HANDLER_OUTCOME_TRUTH_CHECKPOINT_2026-07-11.md`.
 
 ### R-12 — Reconcile workstation doctrine and follower validation
 
@@ -762,6 +769,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Verified R-11-F1 after aligning native handler-declared error
+  with the outward envelope, return code, nonmutation report, and durable audit;
+  also taught the bounded-mission lint to recognize registered roadmap
+  sub-items.
 - 2026-07-11: Checkpointed the first R-05 seam after converging ingest
   preparation/confirmation/cancellation on one bounded loopback-only ledgered
   route. Recorded the independently discovered unchanged MiniAgent

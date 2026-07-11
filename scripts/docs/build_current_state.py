@@ -504,7 +504,7 @@ def capture_evidence(
         "limitations": [
             "Service observations are a point-in-time snapshot and do not start stopped services.",
             "WSL was intentionally not probed because that can change runtime state.",
-            "Configured loopback URLs do not prove listener bindings; R-20 owns that boundary audit.",
+            "Configured loopback URLs show routing intent; listener bindings were not independently audited.",
             "Historical lifecycle events were not reconstructed; the ledger is reported as found.",
             "Hermes, OpenViking, and Nanobot are GOOD-CUBE-local adapters, not GoodQ epoch authority.",
         ],
@@ -636,6 +636,16 @@ def _state(value: Any) -> str:
     return str(value or "unknown")
 
 
+def _configured_optional_description(value: dict[str, Any]) -> str:
+    location = value.get("location")
+    endpoint = value.get("endpoint")
+    if location == "non_loopback_configured":
+        return "redacted (non-loopback configured)"
+    if not endpoint:
+        return "not configured"
+    return f"`{endpoint}` ({str(location or 'location_unknown').replace('_', ' ')})"
+
+
 def render_current_state_markdown(evidence: dict[str, Any]) -> str:
     validate_evidence(evidence)
     epoch = evidence["authority"]["epoch_id"]
@@ -650,6 +660,8 @@ def render_current_state_markdown(evidence: dict[str, Any]) -> str:
         if lifecycle["complete_and_fully_promoted"]
         else "The active corpus is not proven complete or fully promoted by this capture."
     )
+    vllm_description = _configured_optional_description(configured["vllm"])
+    ollama_description = _configured_optional_description(configured["ollama"])
     historical = "\n".join(
         f"- [{item['label']}](../{item['path'].removeprefix('docs/')}) — historical evidence; not active authority."
         for item in evidence.get("historical_evidence", [])
@@ -688,6 +700,9 @@ Generated from evidence `{evidence['evidence_id']}` captured at
 | Distinct videos in UCF | {completion['distinct_videos']:,} |
 | UCF context frames | {completion['context_frames']:,} |
 | Promoted UCF frames | {completion['promotion_status'].get('promoted', 0):,} |
+| Processed media | {completion['processed_media']:,} |
+| Import inbox media | {completion['import_inbox_media']:,} |
+| Failed media | {completion['failed_media']:,} |
 | Materialized scenes | {persistence['memory'].get('scenes', 0):,} |
 | Materialized segments | {persistence['memory'].get('segments', 0):,} |
 | Embeddings | {persistence['memory'].get('embeddings', 0):,} |
@@ -719,11 +734,9 @@ column says so.
 
 - Configured GoodQ API: `{configured['api']['endpoint']}`
 - Configured Qdrant: `{configured['qdrant']['endpoint']}`
-- Configured vLLM: `{configured['vllm'].get('endpoint')}`
-  (`{configured['vllm'].get('location')}`) with model
+- Configured vLLM: {vllm_description} with model
   `{configured['vllm'].get('model')}`
-- Configured GoodQ Ollama: `{configured['ollama'].get('endpoint')}`
-  (`{configured['ollama'].get('location')}`) with model
+- Configured GoodQ Ollama: {ollama_description} with model
   `{configured['ollama'].get('model')}`
 - Hermes/Gemma on the GOOD-CUBE toolbelt is a separate local agent runtime and
   does not define GoodQ epoch or model authority.

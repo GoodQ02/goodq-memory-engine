@@ -83,7 +83,11 @@ def evidence():
         "configured_runtime": {
             "api": {"endpoint": "http://127.0.0.1:30000", "loopback_only": True},
             "qdrant": {"endpoint": "http://127.0.0.1:6333", "loopback_only": True},
-            "vllm": {"endpoint": "http://192.168.0.237:38005/v1", "model": "Qwen2.5-0.5B-Instruct"},
+            "vllm": {
+                "endpoint": None,
+                "location": "non_loopback_configured",
+                "model": "Qwen2.5-0.5B-Instruct",
+            },
             "ollama": {"endpoint": "http://127.0.0.1:11434/v1", "model": "llama3.2:latest"},
         },
         "observed_services": {
@@ -123,6 +127,12 @@ def test_human_json_and_rag_render_from_one_evidence_source(evidence):
     assert "configured" in markdown.lower()
     assert "observed" in markdown.lower()
     assert "## Next Work" not in markdown
+    assert "R-20" not in markdown
+    assert "redacted (non-loopback configured)" in markdown
+    assert "`None`" not in markdown
+    assert "| Processed media | 12 |" in markdown
+    assert "| Import inbox media | 0 |" in markdown
+    assert "| Failed media | 0 |" in markdown
 
 
 def test_tampered_evidence_is_rejected_before_projection(evidence, tmp_path):
@@ -582,6 +592,7 @@ def test_capture_is_redacted_and_uses_only_explicit_epoch_authority(tmp_path, mo
     assert captured["authority"]["epoch_id"] == EPOCH_ID
     assert captured["evidence_id"]
     assert str(tmp_path) not in json.dumps(captured)
+    assert all("R-20" not in item for item in captured["limitations"])
 
 
 def _expected_test_collections():

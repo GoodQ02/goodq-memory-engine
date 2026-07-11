@@ -53,7 +53,7 @@
           <div class="accessibility-menu">
             <a href="/ui/stitching_workbench/" target="_blank" class="accessibility-btn stitching-btn" title="Open Identity Stitching Workbench">Stitcher</a>
             <a href="/ui/identity_workbench/" target="_blank" class="accessibility-btn stitching-btn" title="Open Identity Curation Workbench" style="border-color:#00d2ff;color:#00d2ff">Identity</a>
-            <button id="toggle-droppad-btn" class="accessibility-btn droppad-btn" title="Toggle File Ingestion Upload Pad">Upload Pad</button>
+            <button id="toggle-droppad-btn" class="accessibility-btn droppad-btn" title="Toggle governed request staging pad">Stage Media</button>
             <button id="toggle-intel-btn" class="accessibility-btn intel-btn" title="Toggle Video Intelligence Panel">Intel: OFF</button>
             <button id="toggle-sfx" class="accessibility-btn" title="Toggle Retro CRT Shaders and Glows">Retro SFX: ON</button>
             <button id="toggle-theme" class="accessibility-btn theme-btn" title="Toggle Theme (Green / Blue / Auto)">Theme: GREEN</button>
@@ -69,7 +69,7 @@
             <div class="helipad-square">
               <div class="helipad-h">H</div>
             </div>
-            <p class="drop-zone-text">DRAG & DROP VIDEO/AUDIO HERE OR <span class="browse-link">CLICK TO BROWSE</span></p>
+            <p class="drop-zone-text">STAGE A LOCAL MEDIA REQUEST — DRAG & DROP OR <span class="browse-link">CLICK TO BROWSE</span></p>
             <input type="file" id="droppad-file-input" style="display: none;" accept="video/*,audio/*" />
             <div id="upload-status" class="upload-status" hidden></div>
           </div>
@@ -393,11 +393,11 @@
       </main>
 
       <footer class="app-footer">
-        <span>READ-ONLY MODE // NO INGESTION // NO MUTATION // MEMORY VIEWER ACTIVE</span>
+        <span>LOCAL OPERATOR MODE // READS + EXPLICIT REQUEST STAGING // NO DIRECT INGEST EXECUTION</span>
         <span id="footer-version">v1.5.1</span>
       </footer>
     </div>
     
-    <script src="./static/js/retro.js?v=1.6.0"></script>
+    <script src="./static/js/retro.js?v=1.6.2"></script>
   </body>
 </html>

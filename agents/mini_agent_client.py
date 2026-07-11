@@ -125,6 +125,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "config_write",
     "file_delete",
     "file_move",
+    "stage_ingest_request",
     "run_ingestion",
     "watchdog_trigger",
     "process_start",
@@ -137,6 +138,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 }
 
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "stage_ingest_request",
     "run_ingestion",
     "file_delete",
     "promote_ucf_to_memory",
@@ -145,6 +147,11 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "reject_ucf_frames",
     "supersede_ucf_frames",
 }
+
+# These operations reuse the durable exact-scope confirmation authority but
+# intentionally have no native execution handler. The caller owns the governed
+# side effect after ``authorize_action`` succeeds.
+LOCAL_AUTHORIZATION_ONLY_ACTIONS = {"stage_ingest_request"}
 
 TOOL_AUDIT_SCHEMA_VERSION = "goodq.tool-audit.v1"
 TOOL_AUDIT_LOG_ENV = "GOODQ_TOOL_AUDIT_LOG"
@@ -505,15 +512,15 @@ class MiniAgentClient:
                 "code": "token_operation_mismatch",
                 "message": "Token was not issued for this operation.",
             }
-        if token_info.get("used"):
-            return {
-                "code": "token_already_used",
-                "message": "Token has already been used.",
-            }
         if token_info.get("tool_args", {}) != tool_args:
             return {
                 "code": "token_scope_mismatch",
                 "message": "Confirmation token was not issued for these exact tool arguments.",
+            }
+        if token_info.get("used"):
+            return {
+                "code": "token_already_used",
+                "message": "Token has already been used.",
             }
 
         expired = bool(
@@ -715,6 +722,28 @@ class MiniAgentClient:
             confirmation_token=confirmation_token,
             context_overrides=context_overrides,
         )
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=tool_args or {},
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+        )
+
+    def _record_decision_result(
+        self,
+        *,
+        envelope: Dict[str, Any],
+        return_code: int,
+        mode: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        confirm: bool,
+        confirmation_token: str,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Persist the final observed decision after any token transition."""
         if not tool_name:
             return envelope, return_code
 
@@ -727,7 +756,7 @@ class MiniAgentClient:
             "tool_name": tool_name,
             "status": envelope.get("status", "unknown"),
             "return_code": return_code,
-            "arguments": tool_args or {},
+            "arguments": tool_args,
             "confirmed": bool(confirm and confirmation_token),
             "error_codes": self._audit_error_codes(envelope),
         }
@@ -751,6 +780,203 @@ class MiniAgentClient:
                 confirmation_token_revocation_failed=revocation_failed,
             )
         return envelope, return_code
+
+    def authorize_action(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Authorize one exact-scope action owned by an external caller.
+
+        Native executable tools must use :meth:`execute_tool` so their handler
+        outcome receives the durable execution audit. Only explicitly declared
+        authorization-only actions may cross this boundary.
+        """
+        if tool_name not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+            envelope, return_code = self._confirmation_error_envelope(
+                f"task-{uuid.uuid4().hex[:8]}",
+                {
+                    "code": "authorization_only_action_required",
+                    "message": "This operation must use the native execution path.",
+                },
+            )
+            return self._record_decision_result(
+                envelope=envelope,
+                return_code=return_code,
+                mode=mode,
+                tool_name=tool_name,
+                tool_args=tool_args or {},
+                confirm=confirm,
+                confirmation_token=confirmation_token,
+            )
+        return self._authorize_action_impl(
+            prompt=prompt,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+            context_overrides=context_overrides,
+        )
+
+    def _authorize_action_impl(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Validate and atomically claim without dispatching a handler."""
+        resolved_args = tool_args or {}
+        envelope, return_code = self._validate_action_impl(
+            prompt=prompt,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+            context_overrides=context_overrides,
+        )
+        if return_code == 0 and confirm and confirmation_token:
+            try:
+                claimed, claim_error = self._claim_confirmation_token(
+                    confirmation_token,
+                    tool_name,
+                    resolved_args,
+                )
+            except Exception:
+                logger.error(
+                    "Failed to persist confirmation token claim",
+                    exc_info=True,
+                )
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    {
+                        "code": "confirmation_token_store_error",
+                        "message": "Confirmation token claim could not be persisted.",
+                    },
+                )
+                claimed = False
+                claim_error = None
+            if return_code == 0 and claim_error:
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    claim_error,
+                )
+            if (
+                return_code == 0
+                and tool_name in LOCAL_CONFIRMATION_REQUIRED_TOOLS
+                and not claimed
+            ):
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    {
+                        "code": "invalid_confirmation_token",
+                        "message": "Invalid confirmation token.",
+                    },
+                )
+
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+        )
+
+    def revoke_action_authorization(
+        self,
+        prompt: str,
+        mode: str,
+        tool_name: str,
+        tool_args: Optional[Dict[str, Any]],
+        confirmation_token: str,
+        context_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Validate exact scope, then atomically revoke an unused local token."""
+        if tool_name not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+            envelope, return_code = self._confirmation_error_envelope(
+                f"task-{uuid.uuid4().hex[:8]}",
+                {
+                    "code": "authorization_only_action_required",
+                    "message": "This operation must use the native execution path.",
+                },
+            )
+            return self._record_decision_result(
+                envelope=envelope,
+                return_code=return_code,
+                mode=mode,
+                tool_name=tool_name,
+                tool_args=tool_args or {},
+                confirm=True,
+                confirmation_token=confirmation_token,
+            )
+        resolved_args = tool_args or {}
+        envelope, return_code = self._validate_action_impl(
+            prompt=prompt,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=True,
+            confirmation_token=confirmation_token,
+            context_overrides=context_overrides,
+        )
+        if return_code == 0:
+            try:
+                with self._lock_token_store():
+                    tokens = self._load_tokens()
+                    token_error = self._confirmation_token_error(
+                        tokens,
+                        confirmation_token,
+                        tool_name,
+                        resolved_args,
+                    )
+                    if token_error:
+                        envelope, return_code = self._confirmation_error_envelope(
+                            str(
+                                envelope.get("request_id")
+                                or f"task-{uuid.uuid4().hex[:8]}"
+                            ),
+                            token_error,
+                        )
+                    else:
+                        del tokens[confirmation_token]
+                        self._save_tokens(tokens)
+            except Exception:
+                logger.error(
+                    "Failed to persist confirmation token revocation",
+                    exc_info=True,
+                )
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(
+                        envelope.get("request_id")
+                        or f"task-{uuid.uuid4().hex[:8]}"
+                    ),
+                    {
+                        "code": "confirmation_token_store_error",
+                        "message": "Confirmation token revocation could not be persisted.",
+                    },
+                )
+
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=True,
+            confirmation_token=confirmation_token,
+        )
 
     def _validate_action_impl(
         self,
@@ -900,6 +1126,7 @@ class MiniAgentClient:
 
         # 5. Native tool validation bypass
         if tool_name in (
+            "stage_ingest_request",
             "run_ingestion",
             "promote_ucf_to_memory",
             "reconcile_ucf_qdrant",
@@ -981,8 +1208,8 @@ class MiniAgentClient:
         started_at = datetime.utcnow().isoformat() + "Z"
         start_time = time.monotonic()
         
-        # 1. Run policy check
-        envelope, rc = self.validate_action(
+        # 1. Validate and atomically claim any local confirmation authority.
+        envelope, rc = self._authorize_action_impl(
             prompt=prompt,
             mode=mode,
             tool_name=tool_name,
@@ -994,31 +1221,7 @@ class MiniAgentClient:
         if rc != 0:
             # Rejections or confirmation requests are returned directly
             return envelope, rc
-            
-        # Claim locally issued tokens atomically before native execution. This
-        # closes the cross-process gap between validation and single-use marking.
-        if confirm and confirmation_token:
-            try:
-                _claimed, claim_error = self._claim_confirmation_token(
-                    confirmation_token,
-                    tool_name,
-                    tool_args,
-                )
-            except Exception:
-                logger.error("Failed to persist confirmation token claim", exc_info=True)
-                return self._confirmation_error_envelope(
-                    envelope.get("request_id", f"task-{uuid.uuid4().hex[:8]}"),
-                    {
-                        "code": "confirmation_token_store_error",
-                        "message": "Confirmation token claim could not be persisted.",
-                    },
-                )
-            if claim_error:
-                return self._confirmation_error_envelope(
-                    envelope.get("request_id", f"task-{uuid.uuid4().hex[:8]}"),
-                    claim_error,
-                )
-            
+
         # 2. Route and execute tool logic
         tool_result: Dict[str, Any] = {}
         status = "success"

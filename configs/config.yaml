@@ -306,6 +306,7 @@ api:
   reload: true
   cors_enabled: false
   max_upload_size: 5368709120  # 5GB
+  max_pending_ingest_bytes: 5368709120  # Aggregate unconfirmed staging budget
 
 # ============================================================================
 # UI CONFIGURATION

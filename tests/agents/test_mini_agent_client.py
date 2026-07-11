@@ -292,6 +292,7 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
 
 
 EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "stage_ingest_request",
     "run_ingestion",
     "file_delete",
     "promote_ucf_to_memory",
@@ -301,12 +302,17 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "supersede_ucf_frames",
 }
 
+EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {"stage_ingest_request"}
+
 
 def test_local_confirmation_required_tools_have_one_module_level_authority():
     import agents.mini_agent_client as mini_agent_client
 
     assert getattr(mini_agent_client, "LOCAL_CONFIRMATION_REQUIRED_TOOLS", None) == (
         EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
+    )
+    assert getattr(mini_agent_client, "LOCAL_AUTHORIZATION_ONLY_ACTIONS", None) == (
+        EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS
     )
 
 
@@ -354,6 +360,259 @@ def test_run_ingestion_requires_exact_local_confirmation(
     assert confirm_rc == 0
     assert result["status"] == "success"
     handler.assert_called_once_with(requested_args)
+
+
+def test_authorize_action_claims_exact_scope_once_without_executing_handler(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "authorize"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"status": "should-not-run"})
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+    scope = {
+        "request_id": "ingest-request-one",
+        "source_kind": "upload",
+        "original_name": "family.mp4",
+        "file_size": 12,
+        "file_hash": "a" * 64,
+        "policy_profile": "local_ingest_facade_v1",
+    }
+
+    requested, requested_rc = client.authorize_action(
+        prompt="Authorize one exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    assert requested["status"] == "needs_confirmation"
+    token = requested["result"]["confirmation_token"]
+
+    authorized, authorized_rc = client.authorize_action(
+        prompt="Confirm one exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert authorized_rc == 0
+    assert authorized["status"] == "ok"
+    handler.assert_not_called()
+
+    changed_after_use, changed_after_use_rc = client.authorize_action(
+        prompt="Attempt used authorization against changed scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={**scope, "request_id": "ingest-request-two"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert changed_after_use_rc == 1
+    assert changed_after_use["errors"][0]["code"] == "token_scope_mismatch"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Attempt confirmation token reuse",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+    handler.assert_not_called()
+
+
+def test_authorize_action_scope_mismatch_does_not_consume_token(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "scope"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_hash": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Request exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Attempt changed ingestion scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={"request_id": "request-two", "file_hash": "a" * 64},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    authorized, authorized_rc = client.authorize_action(
+        prompt="Confirm original ingestion scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert authorized_rc == 0
+    assert authorized["status"] == "ok"
+
+
+def test_authorize_action_fails_closed_when_token_disappears_before_claim(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "claim-race"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_hash": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Request exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    monkeypatch.setattr(
+        client,
+        "_claim_confirmation_token",
+        MagicMock(return_value=(False, None)),
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Confirm exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_authorize_action_rejects_native_execution_tools_without_claiming(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "native-reject"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Attempt standalone native authorization",
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args={"ucf_records": []},
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "authorization_only_action_required"
+    token_store = Path(tmp_path / "native-reject" / "confirmation_tokens.json")
+    assert not token_store.exists()
+
+
+def test_revoke_action_authorization_requires_exact_scope_and_removes_token(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "revoke"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.revoke_action_authorization(
+        prompt="Cancel changed staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={"request_id": "request-two", "file_sha256": "a" * 64},
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    revoked, revoked_rc = client.revoke_action_authorization(
+        prompt="Cancel exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirmation_token=token,
+    )
+    assert revoked_rc == 0
+    assert revoked["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Attempt revoked staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_execute_tool_delegates_to_authorize_action_once(monkeypatch):
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    authorized = {
+        "request_id": "task-authorized",
+        "profile": "safe",
+        "status": "ok",
+        "timestamp": "2026-07-11T00:00:00Z",
+        "result": {"allowed": True},
+        "errors": [],
+    }
+    authorize = MagicMock(return_value=(authorized, 0))
+    claim = MagicMock(side_effect=AssertionError("execute_tool claimed twice"))
+    handler = MagicMock(return_value={"status": "staged_complete"})
+    monkeypatch.setattr(client, "_authorize_action_impl", authorize)
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args={"ucf_records": []},
+        mode="ops",
+        confirm=True,
+        confirmation_token="token-one",
+    )
+
+    assert rc == 0
+    assert result["status"] == "success"
+    authorize.assert_called_once()
+    claim.assert_not_called()
+    handler.assert_called_once_with({"ucf_records": []})
 
 
 @pytest.mark.parametrize("profile", ["safe", "unrestricted"])
@@ -1813,6 +2072,7 @@ def test_hitl_tool_registry_completeness():
     import inspect
     import re
     from agents.mini_agent_client import (
+        LOCAL_AUTHORIZATION_ONLY_ACTIONS,
         LOCAL_CONFIRMATION_REQUIRED_TOOLS,
         MUTATING_DENY_ON_AGENT_FAILURE,
     )
@@ -1827,7 +2087,7 @@ def test_hitl_tool_registry_completeness():
     # Inspect source for dispatch and mutation reporting registrations.
     source = inspect.getsource(MiniAgentClient)
 
-    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
+    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS - LOCAL_AUTHORIZATION_ONLY_ACTIONS:
         assert f'tool_name == "{tool}"' in source or f"tool_name == '{tool}'" in source, (
             f"HITL tool '{tool}' missing from dispatch elif chain in execute_tool()"
         )

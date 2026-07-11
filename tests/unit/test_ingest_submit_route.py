@@ -1,27 +1,32 @@
 from __future__ import annotations
 
-import asyncio
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-def _load_route_module(module_name: str):
+from agents.mini_agent_client import MiniAgentClient
+
+
+def _load_route_module():
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
-
-    module_path = repo_root / "api" / "routes" / f"{module_name}.py"
-    spec = importlib.util.spec_from_file_location(f"tests.{module_name}_route", module_path)
+    module_path = repo_root / "api" / "routes" / "ingest.py"
+    spec = importlib.util.spec_from_file_location("tests.ingest_route", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-ingest_module = _load_route_module("ingest")
+ingest_module = _load_route_module()
 
 
 def _runtime_paths(tmp_path: Path) -> dict[str, Path]:
@@ -41,136 +46,258 @@ def _runtime_paths(tmp_path: Path) -> dict[str, Path]:
     return paths
 
 
-def test_submit_ingest_stages_file_and_returns_request_handle(tmp_path: Path, monkeypatch) -> None:
+def _client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[TestClient, dict[str, Path], MiniAgentClient]:
     runtime_paths = _runtime_paths(tmp_path)
-    source_path = tmp_path / "sample.mp4"
-    source_path.write_bytes(b"video-bytes")
-
-    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
-
-    # Generate token
-    res = asyncio.run(ingest_module.generate_confirmation_token())
-    token = res["confirmation_token"]
-
-    request = ingest_module.IngestSubmitRequest(
-        file_path=str(source_path),
-        confirmation_token=token,
-        policy_profile="local_ingest_facade_v1",
+    authority = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    monkeypatch.setattr(
+        ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths
+    )
+    monkeypatch.setattr(ingest_module, "get_ingest_authority", lambda: authority)
+    app = FastAPI()
+    app.include_router(ingest_module.router)
+    return (
+        TestClient(app, client=("127.0.0.1", 50000)),
+        runtime_paths,
+        authority,
     )
 
-    response = asyncio.run(ingest_module.submit_ingest(request))
 
-    staged_path = Path(response.staged_path)
-    assert response.status == "staged"
-    assert response.request_id
-    assert response.original_name == "sample.mp4"
-    assert response.policy_profile == "local_ingest_facade_v1"
-    assert response.pickup_estimate == "best_effort"
-    assert response.watchdog_detection_window_seconds == 5
-    assert response.queue_depth_snapshot == 1
-    assert staged_path.exists()
-    assert staged_path.parent == runtime_paths["import_inbox"]
-
-    record_path = runtime_paths["ingest_requests"] / f"{response.request_id}.json"
-    assert record_path.exists()
-    record = json.loads(record_path.read_text(encoding="utf-8"))
-    assert record["status"] == "staged"
-    assert record["staged_path"] == str(staged_path)
+def _prepare(client: TestClient, name: str, content: bytes):
+    return client.post(
+        "/api/ingest/submit",
+        files={"file": (name, content, "video/mp4")},
+        data={"action": "prepare", "policy_profile": "local_ingest_facade_v1"},
+    )
 
 
-def test_submit_ingest_returns_duplicate_without_restaging(tmp_path: Path, monkeypatch) -> None:
-    runtime_paths = _runtime_paths(tmp_path)
-    source_path = tmp_path / "sample.mp4"
-    source_path.write_bytes(b"video-bytes")
-    file_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+def _confirm_payload(prepared: dict[str, object]) -> dict[str, object]:
+    return {
+        "action": "confirm",
+        "request_id": prepared["request_id"],
+        "confirmation_token": prepared["confirmation_token"],
+    }
+
+
+def test_prepare_returns_duplicate_without_issuing_or_restaging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    content = b"already-completed"
+    file_sha256 = hashlib.sha256(content).hexdigest()
     runtime_paths["watchdog_state_file"].write_text(
         json.dumps(
             {
-                file_hash: {
-                    "original_name": "sample.mp4",
+                file_sha256: {
                     "status": "success",
                     "run_id": "run-321",
-                    "timestamp": "2026-04-22T12:00:00Z",
+                    "timestamp": "2026-07-11T00:00:00Z",
                 }
             }
         ),
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
+    response = _prepare(client, "sample.mp4", content)
 
-    # Generate token
-    res = asyncio.run(ingest_module.generate_confirmation_token())
-    token = res["confirmation_token"]
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "duplicate"
+    assert payload["duplicate_of_run_id"] == "run-321"
+    assert payload["confirmation_required"] is False
+    assert payload["confirmation_token"] is None
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
+    pending_dir = runtime_paths["ingest_requests"] / ".pending"
+    assert list(pending_dir.iterdir()) == []
 
-    request = ingest_module.IngestSubmitRequest(
-        file_path=str(source_path),
-        confirmation_token=token,
-        policy_profile="local_ingest_facade_v1",
+
+def test_remote_client_cannot_prepare_mutating_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    remote_client = TestClient(
+        local_client.app,
+        client=("192.168.1.44", 50000),
     )
 
-    response = asyncio.run(ingest_module.submit_ingest(request))
+    response = _prepare(remote_client, "remote.mp4", b"remote")
 
-    assert response.status == "duplicate"
-    assert response.duplicate_of_run_id == "run-321"
-    assert response.staged_path is None
+    assert response.status_code == 403
+    assert list(runtime_paths["ingest_requests"].glob("*.json")) == []
     assert list(runtime_paths["import_inbox"].iterdir()) == []
 
 
-def test_submit_ingest_rejects_invalid_token(tmp_path: Path, monkeypatch) -> None:
-    from fastapi import HTTPException
-    import pytest
+def test_wrong_or_cross_request_token_never_exposes_file_to_watchdog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    first = _prepare(client, "one.mp4", b"one").json()
+    second = _prepare(client, "two.mp4", b"two").json()
 
-    runtime_paths = _runtime_paths(tmp_path)
-    source_path = tmp_path / "sample.mp4"
-    source_path.write_bytes(b"video-bytes")
-
-    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
-
-    request = ingest_module.IngestSubmitRequest(
-        file_path=str(source_path),
-        confirmation_token="invalid-token",
-        policy_profile="local_ingest_facade_v1",
+    invalid = client.post(
+        "/api/ingest/submit",
+        json={
+            "action": "confirm",
+            "request_id": first["request_id"],
+            "confirmation_token": "invalid-token",
+        },
+    )
+    crossed = client.post(
+        "/api/ingest/submit",
+        json={
+            "action": "confirm",
+            "request_id": second["request_id"],
+            "confirmation_token": first["confirmation_token"],
+        },
     )
 
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(ingest_module.submit_ingest(request))
-
-    assert exc.value.status_code == 403
-    assert "Invalid or expired confirmation_token" in exc.value.detail
+    assert invalid.status_code == 403
+    assert crossed.status_code == 403
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
 
 
-def test_submit_ingest_accepts_server_generated_token(tmp_path: Path, monkeypatch) -> None:
-    runtime_paths = _runtime_paths(tmp_path)
-    source_path = tmp_path / "sample.mp4"
-    source_path.write_bytes(b"video-bytes")
+def test_request_id_path_traversal_is_rejected_before_ledger_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"status":"forged"}', encoding="utf-8")
 
-    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
+    confirm = client.post(
+        "/api/ingest/submit",
+        json={
+            "action": "confirm",
+            "request_id": "../../outside",
+            "confirmation_token": "forged",
+        },
+    )
+    status = client.get("/api/ingest/status/..%2F..%2Foutside")
 
-    # Generate token
-    res = asyncio.run(ingest_module.generate_confirmation_token())
-    token = res["confirmation_token"]
+    assert confirm.status_code == 422
+    assert status.status_code in {400, 404}
+    assert outside.read_text(encoding="utf-8") == '{"status":"forged"}'
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
 
-    request = ingest_module.IngestSubmitRequest(
-        file_path=str(source_path),
-        confirmation_token=token,
-        policy_profile="local_ingest_facade_v1",
+
+def test_ordinary_move_failure_records_stage_failed_without_inbox_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    prepared = _prepare(client, "sample.mp4", b"video").json()
+
+    def fail_move(_source: Path, _destination: Path) -> None:
+        raise OSError("simulated move failure")
+
+    monkeypatch.setattr(ingest_module, "_place_staged_file", fail_move)
+    response = client.post(
+        "/api/ingest/submit",
+        json=_confirm_payload(prepared),
     )
 
-    response = asyncio.run(ingest_module.submit_ingest(request))
-    assert response.status == "staged"
+    assert response.status_code == 500
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
+    record = json.loads(
+        (
+            runtime_paths["ingest_requests"] / f"{prepared['request_id']}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert record["status"] == "stage_failed"
+    assert record["error"] == "Failed to stage ingest request"
 
-    # Verifying one-time consumption: using the same token again should be rejected
-    request_retry = ingest_module.IngestSubmitRequest(
-        file_path=str(source_path),
-        confirmation_token=token,
-        policy_profile="local_ingest_facade_v1",
+
+def test_authority_evidence_failure_removes_pending_copy_and_exposes_no_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, authority = _client(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        authority,
+        "authorize_action",
+        lambda **_kwargs: (
+            {
+                "request_id": "task-failed",
+                "status": "error",
+                "result": {"allowed": False},
+                "errors": [{"code": "audit_log_error"}],
+            },
+            1,
+        ),
     )
 
-    from fastapi import HTTPException
-    import pytest
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(ingest_module.submit_ingest(request_retry))
-    assert exc.value.status_code == 403
+    response = _prepare(client, "sample.mp4", b"video")
+
+    assert response.status_code == 500
+    assert "confirmation_token" not in response.text
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
+    pending_dir = runtime_paths["ingest_requests"] / ".pending"
+    assert list(pending_dir.iterdir()) == []
+    records = list(runtime_paths["ingest_requests"].glob("*.json"))
+    assert len(records) == 1
+    assert json.loads(records[0].read_text(encoding="utf-8"))["status"] == (
+        "authorization_failed"
+    )
 
 
+def test_concurrent_confirms_stage_exactly_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    prepared = _prepare(client, "sample.mp4", b"video").json()
+    payload = _confirm_payload(prepared)
+
+    def confirm_once() -> int:
+        with TestClient(client.app, client=("127.0.0.1", 50001)) as concurrent_client:
+            return concurrent_client.post(
+                "/api/ingest/submit",
+                json=payload,
+            ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = sorted(pool.map(lambda _index: confirm_once(), range(2)))
+
+    assert statuses == [202, 409]
+    assert len(list(runtime_paths["import_inbox"].iterdir())) == 1
+
+
+def test_confirm_cancel_race_has_one_legal_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    prepared = _prepare(client, "sample.mp4", b"video").json()
+    confirm_payload = _confirm_payload(prepared)
+    cancel_payload = {
+        "action": "cancel",
+        "request_id": prepared["request_id"],
+        "confirmation_token": prepared["confirmation_token"],
+    }
+
+    def transition(payload: dict[str, object]) -> int:
+        with TestClient(client.app, client=("127.0.0.1", 50001)) as concurrent_client:
+            return concurrent_client.post(
+                "/api/ingest/submit",
+                json=payload,
+            ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = sorted(pool.map(transition, [confirm_payload, cancel_payload]))
+
+    assert statuses in ([200, 409], [202, 409])
+    record = json.loads(
+        (
+            runtime_paths["ingest_requests"] / f"{prepared['request_id']}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert record["status"] in {"canceled", "staged"}
+    assert len(list(runtime_paths["import_inbox"].iterdir())) in {0, 1}

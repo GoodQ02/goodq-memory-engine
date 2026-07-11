@@ -235,6 +235,39 @@ def test_multiple_decisions_append_without_overwriting():
     ]
 
 
+def test_authorization_claim_race_audits_final_rejection(monkeypatch):
+    client = _client()
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact staged request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    monkeypatch.setattr(
+        client,
+        "_claim_confirmation_token",
+        MagicMock(return_value=(False, None)),
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Confirm exact staged request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "invalid_confirmation_token"
+    rows = _rows()
+    assert rows[-1]["status"] == "error"
+    assert rows[-1]["return_code"] == 1
+    assert rows[-1]["error_codes"] == ["invalid_confirmation_token"]
+
+
 def test_blocked_handler_outcome_is_not_audited_as_mutation():
     client = _client()
     args = {"video_hash": "video-one", "epoch_id": "epoch-one"}

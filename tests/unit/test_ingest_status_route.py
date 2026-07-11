@@ -93,6 +93,55 @@ def test_get_ingest_status_raises_404_for_unknown_request(tmp_path: Path, monkey
     monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths)
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(ingest_module.get_ingest_status("missing-request"))
+        asyncio.run(
+            ingest_module.get_ingest_status("ingest_20260711T000000Z_deadbeef")
+        )
 
     assert exc_info.value.status_code == 404
+
+
+def test_get_ingest_status_redacts_raw_watchdog_error_details(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runtime_paths = _runtime_paths(tmp_path)
+    source_path = tmp_path / "sample.mp4"
+    source_path.write_bytes(b"video-bytes")
+    staged_path = runtime_paths["import_inbox"] / "req_004__sample.mp4"
+    ledger = IngestRequestLedger(runtime_paths["ingest_requests"])
+    record = ledger.create_record(
+        source_path=source_path,
+        staged_path=staged_path,
+        file_hash="abc456",
+        confirmation_token_present=False,
+        policy_profile="local_ingest_facade_v1",
+        queue_depth_snapshot=1,
+        watchdog_detection_window_seconds=5,
+        budget_scope="single_local_file_handoff",
+        budget_status="accepted",
+        status="staged",
+    )
+    raw_error = r"failed at C:\private\family.mp4 token=secret-value"
+    runtime_paths["watchdog_state_file"].write_text(
+        json.dumps(
+            {
+                "abc456": {
+                    "original_name": staged_path.name,
+                    "status": "failed",
+                    "run_id": "run-failed",
+                    "error": raw_error,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        ingest_module, "get_ingest_runtime_paths", lambda: runtime_paths
+    )
+
+    response = asyncio.run(ingest_module.get_ingest_status(record["request_id"]))
+
+    assert response.status == "failed"
+    assert response.error == "Watchdog processing failed"
+    assert "private" not in response.model_dump_json()
+    assert "secret-value" not in response.model_dump_json()

@@ -3307,7 +3307,7 @@
         }
       }, false);
 
-      function handleUpload(file) {
+      async function handleUpload(file) {
         if (!file) return;
         const supportedExts = [
           ".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v",
@@ -3321,12 +3321,14 @@
           return;
         }
 
-        showStatus(`[STAGING] Preparing upload for ${file.name}...`, false);
+        showStatus(`[REQUEST] Preparing governed staging for ${file.name}...`, false);
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("action", "prepare");
+        formData.append("policy_profile", "local_ingest_facade_v1");
 
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/ingest/upload", true);
+        xhr.open("POST", "/api/ingest/submit", true);
 
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) {
@@ -3335,9 +3337,69 @@
           }
         });
 
-        xhr.addEventListener("load", () => {
-          if (xhr.status === 200) {
-            showStatus(`[OK] Upload complete. staged: ${file.name}. Ingestion starting...`, false);
+        xhr.addEventListener("load", async () => {
+          if (xhr.status !== 201 && xhr.status !== 200) {
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              showStatus(`[ERROR] ${resp.detail || "Upload failed"}`, true);
+            } catch {
+              showStatus(`[ERROR] Upload failed with code ${xhr.status}`, true);
+            }
+            return;
+          }
+
+          const prepared = JSON.parse(xhr.responseText);
+          if (prepared.status === "duplicate") {
+            showStatus(
+              `[DUPLICATE] Already processed${prepared.duplicate_of_run_id ? ` in ${prepared.duplicate_of_run_id}` : ""}.`,
+              false
+            );
+            fileInput.value = "";
+            return;
+          }
+          const hashPrefix = (prepared.file_sha256 || "").slice(0, 12);
+          showStatus(
+            `[WAITING] Awaiting confirmation: ${prepared.request_id}. No Watchdog visibility yet.`,
+            false
+          );
+          const approved = window.confirm(
+            `Stage this exact file for Watchdog?\n\n` +
+            `Name: ${prepared.original_name}\n` +
+            `Size: ${prepared.size_bytes} bytes\n` +
+            `SHA-256: ${hashPrefix}...\n` +
+            `Request: ${prepared.request_id}`
+          );
+          const transitionPayload = approved
+            ? {
+                action: "confirm",
+                request_id: prepared.request_id,
+                confirmation_token: prepared.confirmation_token
+              }
+            : {
+                action: "cancel",
+                request_id: prepared.request_id,
+                confirmation_token: prepared.confirmation_token
+              };
+          try {
+            const transitionResponse = await fetch("/api/ingest/submit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(transitionPayload)
+            });
+            const transition = await transitionResponse.json();
+            if (!transitionResponse.ok) {
+              throw new Error(transition.detail || `HTTP ${transitionResponse.status}`);
+            }
+            if (!approved) {
+              showStatus(`[CANCELED] Prepared request ${prepared.request_id} removed.`, false);
+              fileInput.value = "";
+              return;
+            }
+
+            showStatus(
+              `[OK] Request staged: ${transition.request_id}. Waiting for Watchdog pickup.`,
+              false
+            );
             fileInput.value = "";
             setTimeout(() => {
               state.droppadVisible = false;
@@ -3345,13 +3407,8 @@
               if (toggleDroppad) toggleDroppad.classList.remove("droppad-active");
               uploadStatus.hidden = true;
             }, 4000);
-          } else {
-            try {
-              const resp = JSON.parse(xhr.responseText);
-              showStatus(`[ERROR] ${resp.detail || "Upload failed"}`, true);
-            } catch {
-              showStatus(`[ERROR] Upload failed with code ${xhr.status}`, true);
-            }
+          } catch (err) {
+            showStatus(`[ERROR] Staging decision failed: ${err.message}`, true);
           }
         });
 

@@ -47,7 +47,7 @@ This glossary maps the key nouns, databases, tools, APIs, and directory-level co
 ## Visual & Browsing Consoles
 
 * **`Retro Memory Explorer`**:
-  - *Description*: Read-only visual cockpit, served locally at `/ui/retro_console_v1/`. Includes the helipad drag-and-drop Upload Pad, resizable split-panels, CRT frame previews, and entity co-occurrence canvas graphs.
+  - *Description*: Local-operator visual cockpit, served at `/ui/retro_console_v1/`. Browsing is read-only; **Stage Media** prepares a ledgered pending copy, shows its exact hash/size/name scope for human confirmation, and exposes it to the canonical inbox only after that single-use confirmation. It never runs ingestion directly. The surface also includes resizable split-panels, CRT frame previews, and entity co-occurrence canvas graphs.
   - *Code location*: `ui/retro_console_v1/`
   - *Documentation*: [`docs/agent/CURRENT_STATE.md`](../../agent/CURRENT_STATE.md)
 * **`Operator Console`**:

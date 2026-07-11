@@ -76,7 +76,7 @@ the failure is not currently visible.
 ### R-01 — Align the promotion tool contract and implementation
 
 - Priority: P0
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: the declared contract, native validation path, accepted scope, and
   returned result do not describe one interface.
 - Repair: define and enforce one explicit schema; reject ambiguous scope.
@@ -250,6 +250,14 @@ the failure is not currently visible.
   cleanup requires every current window to have an exact five-target committed
   record and a regression proves a Qdrant-complete run retains the checkpoint
   when any other target failed.
+- Checkpoint evidence (2026-07-11): final cleanup now requires Phase 6
+  completion plus equality between every current window and the freshly
+  re-probed exact five-target committed set. A Qdrant-complete video with any
+  failed target retains its checkpoint. Fresh verification passed 42 hermetic
+  tests, 29 expanded persistence tests, compile, diff, banned-token,
+  fixed-root, legacy-flag, and two independent review gates. Private checkpoint:
+  `ffc2b841`; evidence:
+  `docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md`.
 
 ### R-07 — Replace the unsafe clean-memory workflow
 
@@ -427,9 +435,8 @@ the failure is not currently visible.
 - Completion gate: every wanted family has an isolated checkpoint or an
   explicit later repair owner; generated/discarded entries are classified; the
   mixed tree is retired only through separate approval.
-- Evidence (2026-07-11): R-02, R-03, and R-04 are checkpointed. Read-only
-  inventory found no dirty Qori work, identified R-06 as
-  verified-but-unextracted,
+- Evidence (2026-07-11): R-02, R-03, R-04, and R-06 are checkpointed. Read-only
+  inventory found no dirty Qori work,
   separated identity evidence from unsafe R-08 authority prototypes, and marked
   the untracked API restart script as incompatible with R-19.
 
@@ -673,6 +680,9 @@ tagging, and public push remain separate approval gates.
 - 2026-07-11: Reopened R-06 during isolated extraction after review proved the
   final checkpoint cleanup gate could discard failed non-Qdrant persistence
   evidence despite a Qdrant-complete video result.
+- 2026-07-11: Closed R-06 after binding final cleanup to fresh exact-window
+  five-target evidence, adding the failed-target retention regression, and
+  creating the isolated progressive-ingestion checkpoint.
 - 2026-07-10: Replaced the stale public-preview roadmap with the lifetime
   roadmap and repair register. Consolidated the sixteen audit findings,
   preserved unfinished intent, moved eight superseded plans/reports to the

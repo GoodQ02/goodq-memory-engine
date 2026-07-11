@@ -335,7 +335,7 @@ the failure is not currently visible.
 ### R-11 — Remove Control Agent authority contradictions
 
 - Priority: P1
-- Status: OPEN
+- Status: VERIFIED
 - Finding: active docs mix observer-only operation, bounded healing, autonomous
   mutation, and disabled defaults.
 - Repair: remove native confirmation bypasses; bind every approval to operation
@@ -345,14 +345,25 @@ the failure is not currently visible.
 - Completion gate: docs, contracts, configuration, scope-bound token tests,
   audit tests, and disabled-by-default tests name one authority model.
 - Public impact: RELEASE_REQUIRED
-- Audit evidence (2026-07-10): the local MiniAgent contract marks
+- Original audit evidence (2026-07-10): the local MiniAgent contract marked
   `run_ingestion` and `file_delete` as confirmation-required, but the in-process
   native bypass returns them as allowed without the contract's HITL exchange
   (`file_delete` checks break-glass only). Scope equality is enforced only for
-  promotion tokens, token-store writes are not atomic, and native result
-  envelopes are returned without a generic durable audit append. Do not route
-  API control surfaces through this path until these contradictions are replaced
-  and verified.
+  promotion tokens, and native result envelopes are returned without a generic
+  durable audit append. The contemporaneous claim that token-store writes were
+  not atomic was superseded by the completed R-02 checkpoint; R-11 re-audited
+  and preserved that authority rather than reimplementing it.
+- Checkpoint evidence (2026-07-11): `d2e8f72a` removed native confirmation
+  bypasses and bound all seven confirmation-required operations to exact full
+  argument scope; `8f0b424d` added locked, redacted, durable generic decision
+  and execution audit records with fail-closed decision auditing; `2afa9d69`
+  made Control Agent activation exact and disabled by default while requiring
+  activation, auto-healing, and non-dry-run state for configuration mutation.
+  The live `goodq_governor` MCP remained preflight-only with exactly two
+  non-executing tools. Fresh committed-HEAD verification passed 229 focused
+  tests, compilation, documentation authority/drift, banned-token,
+  dependency-drift, staged-diff, and independent review gates. Evidence:
+  `docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md`.
 
 ### R-12 — Reconcile workstation doctrine and follower validation
 
@@ -711,6 +722,12 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Verified R-11 after replacing native confirmation bypasses with
+  one exact-operation/full-scope authority, adding durable generic decision and
+  execution audit evidence, aligning dormant Control Agent activation and
+  mutation gates, and proving the governor MCP remains preflight-only. Three
+  private checkpoints, 229 focused tests, documentation/static gates, and
+  independent reviews passed.
 - 2026-07-11: Verified R-09 from one task-neutral evidence snapshot, generated
   human/JSON/RAG state from that source, removed stale active-epoch and runtime
   claims, and replaced the dated Hermes prompt with a dynamic read-only

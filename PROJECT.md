@@ -4,37 +4,41 @@
 
 # Active bounded mission
 
-Roadmap item: R-11 — remove Control Agent authority contradictions.
+Roadmap item: R-05 — define API and Command Center execution authority.
 
 ## Outcome
 
-Establish one truthful MiniAgent/control authority: approvals bind to an exact
-operation and scope, confirmation material is persisted atomically, every
-decision/execution produces durable generic audit evidence, and the governor
-MCP remains preflight-only and non-executing.
+Adopt one loopback-only local-operator API model. Every mounted route must have
+one truthful effect class, request staging must converge on one ledgered path,
+curated writes must be atomic, scope-constrained, and audited, and process or
+destructive actions must use the checkpointed single-use exact-scope confirmation
+authority plus a persistent job record. Remote mutation remains denied by
+default.
 
 ## Scope
 
-- Audit the current MiniAgent contracts, native confirmation paths, token
-  persistence, generic tool audit records, and governor MCP boundary.
-- Write focused failing tests for each confirmed authority contradiction before
-  changing production code.
-- Remove confirmation bypasses and bind approvals to the exact operation and
-  scope they authorize.
-- Make confirmation persistence atomic and append durable generic decision and
-  execution audit evidence.
-- Keep disabled-by-default behavior explicit and verified.
+- Freshly inventory the mounted API and operator surfaces by actual effect:
+  passive read, request staging, curated mutation, or process execution.
+- Reconcile that inventory with the existing 78-operation decision evidence and
+  prove which routes have changed before implementation.
+- Trace duplicate staging paths, upload authorities, token mechanisms, boolean
+  confirmations, UI callers, and route-local execution gates.
+- Reconstruct the approved repair in a new isolated worktree with focused
+  contract, route, UI-copy, and authority tests.
+- Preserve the separately owned passive-status, identity-recovery, and LAN
+  boundary seams.
 
 ## Boundaries
 
-- Work in a new isolated worktree; do not continue implementation in this
-  completed architecture-contract checkpoint.
-- Do not turn the governor MCP into an executor.
-- Do not absorb the later route-convergence or clean-memory replacement seams.
-- Do not change network bindings, run ingestion, mutate live memory, or touch
-  the frozen mixed checkout or public checkout.
-- Preserve exact-scope UCF promotion and lifecycle behavior already
-  checkpointed.
+- Work in a new isolated worktree; do not continue implementation in the
+  completed control-authority checkpoint.
+- Keep the frozen mixed checkout and public checkout unchanged.
+- Do not run ingestion, mutate live memory or identity data, expose a service to
+  the LAN, or perform destructive/process actions against live state.
+- Do not implement passive runtime status, identity recovery, network-boundary,
+  or clean-memory replacement work inside this seam.
+- Preserve the checkpointed MiniAgent confirmation/audit authority and the
+  preflight-only governor boundary; do not create a third approval mechanism.
 
 ## Resume authority
 

@@ -4,15 +4,191 @@
 Validates that settings are being loaded correctly
 """
 import sys
+import re
 from pathlib import Path
 
 import yaml
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from steps.common import config_loader
 from steps.common.config_loader import load_configs
+
+
+_GENERIC_USER_DEFAULTS = {
+    "name": "Local User",
+    "nickname": "Local Operator",
+    "pronouns": "unspecified",
+    "personality_traits": "Configured in configs/config.local.yaml",
+    "values": "Configured in configs/config.local.yaml",
+    "background": "Private local profile belongs in configs/config.local.yaml",
+    "music_style": "Configured in configs/config.local.yaml",
+    "role_nursing": "Configured in configs/config.local.yaml",
+    "nursing_philosophy": "Configured in configs/config.local.yaml",
+    "role_personal": "Configured in configs/config.local.yaml",
+}
+
+_GENERIC_MODEL_LOCAL_DEFAULTS = {
+    "zone_1": "local",
+    "zone_1_desc": "Configured in configs/config.local.yaml",
+    "zone_2": "optional",
+    "zone_2_desc": "Configured in configs/config.local.yaml",
+    "zone_3": "optional",
+    "zone_3_desc": "Configured in configs/config.local.yaml",
+    "main_hardware": "auto",
+    "main_hardware_codename": "local",
+    "mission_name": "GoodQ4All",
+    "assigned_zone": "local",
+    "workplace": "Configured in configs/config.local.yaml",
+}
+
+_GENERIC_TTS_DEFAULTS = {
+    "elevenlabs_voice_id": "${ELEVENLABS_VOICE_ID:-example_voice_id}",
+    "piper_voice": "${GOODQ_PIPER_VOICE:-default}",
+    "last_used_voice": "${GOODQ_TTS_LAST_USED_VOICE:-default}",
+}
+
+
+def _config_scalar_values(value):
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from _config_scalar_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _config_scalar_values(child)
+    else:
+        yield value
+
+
+def test_tracked_config_is_generic_and_portable():
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "config.yaml"
+    tracked = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    if tracked["user"] != _GENERIC_USER_DEFAULTS:
+        pytest.fail("tracked user defaults are not generic", pytrace=False)
+    if set(tracked["system"].values()) != {"auto"}:
+        pytest.fail("tracked system defaults are not portable", pytrace=False)
+    model_local_defaults = {
+        key: tracked["model"][key]
+        for key in _GENERIC_MODEL_LOCAL_DEFAULTS
+    }
+    if model_local_defaults != _GENERIC_MODEL_LOCAL_DEFAULTS:
+        pytest.fail("tracked model topology is not generic", pytrace=False)
+    if tracked["tts"] != _GENERIC_TTS_DEFAULTS:
+        pytest.fail("tracked voice preferences are not generic", pytrace=False)
+    assert tracked["home_assistant"]["url"] == (
+        "${GOODQ_HOME_ASSISTANT_URL:-http://127.0.0.1:8123}"
+    )
+
+    strings = [value for value in _config_scalar_values(tracked) if isinstance(value, str)]
+    assert not any(re.search(r"epoch[_-]?20\d{2}", value, re.IGNORECASE) for value in strings)
+    assert not any(re.match(r"^[A-Za-z]:[\\/]", value) for value in strings)
+    assert not any(value.startswith("\\\\") for value in strings)
+    assert not any(re.match(r"^/home/[^/]+", value) for value in strings)
+    assert not any(
+        re.search(r"(?:^|[^0-9])(?:10\.\d{1,3}|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.", value)
+        for value in strings
+    )
+
+
+def test_local_override_template_covers_private_authority_fields():
+    template_path = (
+        Path(__file__).resolve().parents[2]
+        / "configs"
+        / "config.local.example.yaml"
+    )
+    template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+
+    assert set(_GENERIC_MODEL_LOCAL_DEFAULTS).issubset(template["model"])
+    assert set(_GENERIC_TTS_DEFAULTS).issubset(template["tts"])
+    assert template["home_assistant"]["url"].startswith(
+        "${GOODQ_HOME_ASSISTANT_URL:-"
+    )
+
+
+def test_tracked_configuration_surface_has_no_literal_drive_roots():
+    config_dir = Path(__file__).resolve().parents[2] / "configs"
+    violations = []
+    for path in config_dir.rglob("*"):
+        if path.name == "config.local.yaml" or path.suffix.lower() not in {".py", ".yaml", ".json"}:
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(lines, start=1):
+            if re.search(r"(?<![A-Za-z])[A-Za-z]:[\\/]", line):
+                violations.append(f"{path.relative_to(config_dir)}:{line_no}")
+
+    assert violations == []
+
+
+def test_conda_fallback_uses_programdata_environment(monkeypatch, tmp_path):
+    from configs import python_paths
+
+    program_data = tmp_path / "program-data"
+    conda_root = program_data / "miniconda3"
+    conda_exe = conda_root / "Scripts" / "conda.exe"
+    conda_exe.parent.mkdir(parents=True)
+    conda_exe.touch()
+
+    monkeypatch.delenv("CONDA_EXE", raising=False)
+    monkeypatch.setenv("PROGRAMDATA", str(program_data))
+    monkeypatch.setattr(python_paths.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(python_paths.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(python_paths.Path, "home", staticmethod(lambda: tmp_path / "home"))
+
+    assert python_paths.PythonPathConfig()._find_conda_base() == conda_root
+
+
+def test_no_local_overlay_loads_portable_baseline(monkeypatch, tmp_path):
+    real_isfile = config_loader.os.path.isfile
+
+    def without_local_files(path_value):
+        normalized = str(path_value).replace("\\", "/")
+        if normalized.endswith("/.env.local"):
+            return False
+        if normalized.endswith("/configs/config.local.yaml"):
+            return False
+        return real_isfile(path_value)
+
+    monkeypatch.setattr(config_loader.os.path, "isfile", without_local_files)
+    monkeypatch.delenv("GOODQ_DATA_ROOT", raising=False)
+    monkeypatch.delenv("GOODQ_EPOCH_ID", raising=False)
+    monkeypatch.setenv("GOODQ_WSL_USER", "portable-user")
+    monkeypatch.setattr(
+        config_loader.PlatformHelper,
+        "get_data_root",
+        staticmethod(lambda: tmp_path / "portable-data"),
+    )
+
+    cfg = load_configs()
+
+    if cfg["user"] != _GENERIC_USER_DEFAULTS:
+        pytest.fail("no-overlay user defaults are not generic", pytrace=False)
+    if set(cfg["system"].values()) != {"auto"}:
+        pytest.fail("no-overlay system defaults are not portable", pytrace=False)
+    assert cfg["qdrant"]["collections"] == {
+        "clip": "goodq_clip_default",
+        "dino": "goodq_dino_default",
+        "text": "goodq_text_default",
+        "audio": "goodq_audio_default",
+    }
+    assert cfg["phase6"]["clip_collection"] == "goodq_clip_default"
+    assert cfg["phase6"]["dino_collection"] == "goodq_dino_default"
+    assert not any(
+        "${" in value
+        for value in _config_scalar_values(
+            {
+                key: cfg[key]
+                for key in ("host", "paths", "qdrant", "phase6")
+            }
+        )
+        if isinstance(value, str)
+    )
 
 
 def test_config_clap_model_matches_registry_authority():

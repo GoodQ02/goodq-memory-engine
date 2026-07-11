@@ -3,7 +3,7 @@
 # PRIVATE — copy this file to the identity data path and populate it.
 # The actual family_roster.yaml is gitignored and never committed.
 #
-# Default data path: L:/_DATA/GoodQ_Data/identity/family_roster.yaml
+# Default data path: ${GOODQ_DATA_ROOT}/GoodQ_Data/identity/family_roster.yaml
 # Override with env var: GOODQ_IDENTITY_PATH
 #
 # Rules:

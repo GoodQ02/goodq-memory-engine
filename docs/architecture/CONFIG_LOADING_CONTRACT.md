@@ -1,33 +1,66 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-10 -->
 
 # Canonical Runtime Configuration Loading Contract
 
-### 1) Single Source of Truth
-- **Canonical runtime config:** `configs/config.yaml`
+### 1) Configuration authority
+
+- **Tracked portable baseline:** `configs/config.yaml`
+- **Ignored private override:** `configs/config.local.yaml`
+- **Private override template:** `configs/config.local.example.yaml`
+- **Secrets:** environment variables, optionally provisioned from ignored
+  `.env.local`
 - **Canonical loader/API:** `steps/common/config_loader.py::load_configs()`
-- **Secrets/config that must not live in YAML:** environment variables (optionally provisioned from `.env.local`)
-- **Service-local runtime configs (allowed but non-canonical):** WSL2 audio JSON configs under `wsl2_audio/` (kept scoped to that subsystem)
+- **Canonical runtime truth:** the resolved dictionary returned by
+  `load_configs()`, not either YAML file in isolation
+- **Service-local runtime configs:** WSL2 audio JSON configs under `wsl2_audio/`
+  remain scoped to that subsystem and are not core configuration authority
+
+Tracked configuration must contain generic defaults only. Operator identity,
+machine descriptions, active epoch routing, private service values, and secrets
+belong in ignored local authority or environment variables.
+
+Machine topology labels, household service addresses, hardware descriptions,
+and operator voice preferences are private deployment values. Their tracked
+defaults must remain generic; the concrete values belong in
+`configs/config.local.yaml` or supported environment references.
 
 ### 2) How Runtime Code MUST Obtain Config
 - Runtime **entry points** MUST call `load_configs()` exactly once at process start (optionally with explicit `overrides`) and then pass the resulting `cfg` dict downward.
 - Non-entry-point modules MUST NOT call `load_configs()`; they MUST accept `cfg` (or specific config slices) as parameters.
 - Runtime code MUST treat the returned config as read-only (no in-place mutation).
 
-### 3) `load_configs()` Guarantees (Current + Normative)
-`load_configs()` (as implemented today) guarantees:
-- Loads `.env.local` from repo root **if present** and `python-dotenv` is available (best-effort; warns and continues on failure).
-- Loads YAML from `configs/config.yaml` (raises `FileNotFoundError` if missing).
-- Returns a `dict` (empty YAML becomes `{}`).
-- Deep-merges `overrides` into the loaded config (nested dict merge).
-- Normalizes Windows drive paths like `<project_root>/...` into `/mnt/l/...` when running on non-Windows hosts (recursive over dict/list/string values).
-- Attempts schema validation via `config_schema.GoodQConfig` when importable; otherwise falls back to the raw dict (validation is not guaranteed).
+### 3) Resolution order
 
-### 4) Environment Variables + `.env.local`
+`load_configs()` resolves configuration in this order:
+
+1. Load ignored `.env.local` when present; externally supplied environment
+   variables retain precedence.
+2. Establish a platform-derived `GOODQ_DATA_ROOT` when the environment does not
+   provide one.
+3. Load and normalize tracked `configs/config.yaml`.
+4. Deep-merge ignored `configs/config.local.yaml` when present.
+5. Deep-merge caller-supplied `overrides`.
+6. Derive missing runtime paths and resolve supported tools.
+7. Apply the local `runtime_config.json` Qdrant host/port override when present
+   under `GOODQ_DATA_ROOT`.
+8. Validate through `config_schema.GoodQConfig` when importable; otherwise
+   return the resolved dictionary with a visible warning on validation failure.
+
+String values support `${NAME}` and `${NAME:-default}` environment references.
+Tracked defaults must use those references or platform helpers instead of
+literal workstation roots or a dated active epoch.
+
+### 4) Environment variables and private local configuration
+
 - Runtime code MAY read environment variables directly (e.g., `os.getenv(...)`) for secrets and host-specific values.
 - Runtime code MUST NOT parse `.env.local` itself; only `load_configs()` performs `.env.local` loading for runtime.
 - `.env.local` is a **local developer convenience**, not an authoritative config file; externally-provided environment variables remain authoritative (consistent with default `python-dotenv` behavior).
+- `configs/config.local.yaml` is the local non-secret configuration authority and
+  is ignored by Git.
+- Private values must never be copied back into `configs/config.yaml` merely to
+  make the current workstation work.
 
 ### 4a) Display and Logging Redaction
 - `load_configs()` returns raw runtime config for runtime consumers; do not weaken or redact that object before passing it to runtime code.
@@ -36,7 +69,10 @@
 - Local path tokenization is display-only; it must not change runtime config semantics or persisted runtime paths.
 
 ### 5) Windows ↔ WSL2 Interop
-- `configs/config.yaml` may contain Windows-style drive paths (`<drive>:/...`); `load_configs()` normalizes these automatically when executed under WSL/Linux.
+- Tracked active configuration must not contain literal Windows drive roots.
+- Local overrides may resolve host-specific paths from environment variables;
+  the loader normalizes Windows drive paths when the resolved config is consumed
+  on WSL/Linux.
 - WSL2 audio services currently use JSON configs (`wsl2_audio/config.json`, `wsl2_audio/bridge_config.json`). These remain **subsystem-local**; core runtime code must not treat `~/goodq_audio/config.json` or direct WSL UNC-share reads as authoritative runtime configuration; those reads are diagnostics-only.
 
 ### 6) What’s Allowed (Runtime vs Tooling)
@@ -48,16 +84,21 @@
 Tolerated temporarily (do not expand usage; migrate when touched):
 - Direct reads of repo-root `config.yaml` in control-plane/agent code.
 - `config/gpu_config.yaml` reads in `cli/step_runner.py`.
-- Hardcoded absolute config paths in scripts (e.g., `<project_root>/...`) and references to older/nonexistent config filenames.
+- References to older or nonexistent config filenames in tooling that is not a
+  verified runtime entry point.
 
 ## Invariants Runtime Code May Rely On
-- `load_configs()` reads from `configs/config.yaml` and returns a dict.
+- `load_configs()` resolves the tracked baseline, optional ignored local
+  override, explicit caller overrides, and runtime-derived values into one dict.
 - Missing canonical config is a hard failure (`FileNotFoundError`).
 - Windows→WSL path normalization is applied to string values when not on Windows.
 - `.env.local` loading is best-effort and does not gate startup if unavailable.
+- Absence of `config.local.yaml` is valid and must produce a generic portable
+  baseline.
 
 ## Unsupported Access Patterns Going Forward
 - Runtime modules (non-entry points) calling `load_configs()` internally or inside hot loops.
 - Runtime code directly doing `open(...config...)`, `yaml.safe_load(...)`, or hardcoding config file paths.
 - Runtime code introducing new “extra” config files/formats outside `configs/config.yaml` (except explicitly-scoped subsystem configs like WSL2 audio).
-- Runtime code relying on implicit `${VAR}` interpolation inside YAML (use env vars explicitly instead).
+- Tracked configuration embedding private identity, secrets, literal workstation
+  roots, or a dated active epoch.

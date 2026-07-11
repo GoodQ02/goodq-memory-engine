@@ -4,7 +4,37 @@
 user:
   name: Example User
   nickname: Local Operator
+  pronouns: unspecified
+  personality_traits: Private local profile details belong here
+  values: Private local values belong here
   background: Private local deployment details belong here
+  music_style: Private local preferences belong here
+  role_nursing: Private local role details belong here
+  nursing_philosophy: Private local professional details belong here
+  role_personal: Private local role details belong here
+
+model:
+  zone_1: Local primary zone
+  zone_1_desc: Local primary-zone description
+  zone_2: Local secondary zone
+  zone_2_desc: Local secondary-zone description
+  zone_3: Local tertiary zone
+  zone_3_desc: Local tertiary-zone description
+  main_hardware: Local hardware description
+  main_hardware_codename: Local hardware codename
+  mission_name: Local mission name
+  assigned_zone: Local assigned zone
+  workplace: Local workplace description
+
+system:
+  cpu: Local CPU description
+  gpu: Local GPU description
+  ram1: Local memory description
+  ram2: Local memory description
+  ssd1: Local storage description
+  ssd2: Local storage description
+  network: Local network description
+  storage: Local storage summary
 
 host:
   data_root: ${GOODQ_DATA_ROOT:-./_DATA}
@@ -13,6 +43,8 @@ host:
 
 tts:
   elevenlabs_voice_id: ${ELEVENLABS_VOICE_ID:-example_voice_id}
+  piper_voice: ${GOODQ_PIPER_VOICE:-default}
+  last_used_voice: ${GOODQ_TTS_LAST_USED_VOICE:-default}
 
 home_assistant:
   url: ${GOODQ_HOME_ASSISTANT_URL:-http://localhost:8123}

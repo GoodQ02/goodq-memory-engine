@@ -3,7 +3,7 @@
 # PRIVATE — copy this file to the identity data path and populate it.
 # This file is gitignored and never committed.
 #
-# Default data path: L:/_DATA/GoodQ_Data/identity/family_terms.yaml
+# Default data path: ${GOODQ_DATA_ROOT}/GoodQ_Data/identity/family_terms.yaml
 # Override with env var: GOODQ_IDENTITY_PATH
 #
 # If this file is absent, the name extractor runs a frequency-only pass

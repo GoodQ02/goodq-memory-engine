@@ -1,7 +1,16 @@
-<!-- DOC_LAST_VERIFIED: 2026-06-30 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 # Gemini Desktop Agent & Workspace Integration
 
 This guide documents the integration, environment path settings, Model Context Protocol (MCP) servers, credentials, and local workstation configurations for the primary dev workstation.
+
+## Authority Boundary
+
+Read `docs/agent/PROJECT_ORIENTATION.md` first. This file is an operational
+Gemini/workstation integration guide, not authority for live service state,
+current model inventory, persisted GoodQ results, branch governance, or product
+behavior. Counts, model names, permissions, and roadmap items below are snapshots
+or configuration examples and must be verified before use. Repository contracts
+and live evidence retain their question-specific authority.
 
 ---
 

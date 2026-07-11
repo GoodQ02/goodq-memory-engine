@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Documentation Authority Map
 
@@ -60,18 +60,12 @@ These documents define current runtime, architecture, identity, and operator tru
 - [VAULT_TOKEN_RESOLVER_CONTRACT.md](../architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md)
 - [LLM_CLIENT_INJECTION_CONTRACT.md](../architecture/LLM_CLIENT_INJECTION_CONTRACT.md)
 
-### Runtime Operator Authority
+### Runtime And Operator Contracts
 
-- [Agent current state](../agent/CURRENT_STATE.md)
-- [Agent current state JSON](../agent/current_state.json)
-- [Agent office index](../agent/README.md)
-- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
 - [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 - [WATCHDOG_SYSTEM.md](../systems/WATCHDOG_SYSTEM.md)
 - [CONTROL_AGENT.md](../agent/CONTROL_AGENT.md)
 - [CLI-REFERENCE.md](../reference/CLI-REFERENCE.md)
-- [goodq4all_agent_status.md](../goodq4all_agent_status.md)
-- [SYSTEM_SNAPSHOT.md](../SYSTEM_SNAPSHOT.md)
 
 ### Documentation Governance Authority
 
@@ -85,6 +79,19 @@ These documents define current runtime, architecture, identity, and operator tru
 
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
+- [PROJECT_ORIENTATION.md](../agent/PROJECT_ORIENTATION.md) - timeless project
+  topology, evidence hierarchy, component boundaries, and no-repeat preflight.
+- [Agent office index](../agent/README.md)
+- [Agent current state](../agent/CURRENT_STATE.md) - transient restart snapshot;
+  verify time-sensitive claims against live evidence.
+- [Agent current state JSON](../agent/current_state.json) - machine-readable
+  transient state mirror.
+- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
+- [goodq4all_agent_status.md](../goodq4all_agent_status.md) - generated status
+  snapshot, not timeless authority.
+- [SYSTEM_SNAPSHOT.md](../SYSTEM_SNAPSHOT.md) - generated system snapshot, not
+  timeless authority.
+- [ROADMAP.md](../releases/ROADMAP.md)
 - [USER_INTERFACE_WALKTHROUGH.md](../guides/ui/USER_INTERFACE_WALKTHROUGH.md)
 - [AGENT_FILE_INDEX.md](../reference/indexes/AGENT_FILE_INDEX.md)
 - [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)

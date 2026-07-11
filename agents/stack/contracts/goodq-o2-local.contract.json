@@ -598,28 +598,85 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "epoch": {
-            "type": "string"
+          "video_hash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "epoch_id": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
-          "epoch"
+          "video_hash",
+          "epoch_id"
         ],
         "additionalProperties": false
       },
       "output_schema": {
-        "type": "object",
-        "properties": {
-          "promoted": {
-            "type": "boolean"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "promoted_complete"
+              },
+              "promoted_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "qdrant_sync": {
+                "type": "object"
+              },
+              "scope_sync": {
+                "type": "object"
+              },
+              "materialization_report": {
+                "type": "object"
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "promoted_count",
+              "qdrant_sync",
+              "scope_sync",
+              "materialization_report"
+            ],
+            "additionalProperties": false
           },
-          "count": {
-            "type": "integer"
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "blocked"
+              },
+              "reason": {
+                "const": "promotion_blocked_unvalidated_frames"
+              },
+              "staged_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "reason",
+              "staged_count",
+              "message"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "promoted"
-        ]
+        ],
+        "additionalProperties": false
       },
       "side_effects": [
         "reads_files",

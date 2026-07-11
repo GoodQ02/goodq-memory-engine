@@ -123,6 +123,30 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "supersede_ucf_frames",
 }
 
+PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
+SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory"}
+
+
+def _validate_promote_ucf_scope(tool_args: Dict[str, Any]) -> List[str]:
+    """Validate the exact, non-ambiguous promotion scope."""
+    violations: List[str] = []
+    expected = set(PROMOTE_UCF_SCOPE_FIELDS)
+    actual = set(tool_args)
+
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    for field in PROMOTE_UCF_SCOPE_FIELDS:
+        value = tool_args.get(field)
+        if field in tool_args and (not isinstance(value, str) or not value.strip()):
+            violations.append(f"{field} must be a non-empty string")
+
+    return violations
+
 def _load_ucf_ledger() -> Any:
     """Dynamically imports ucf_ledger from the scripts directory."""
     import importlib.util
@@ -147,11 +171,6 @@ class UCFValidationError(Exception):
     def __init__(self, details: List[str]):
         self.details = details
         super().__init__("Validation failed.")
-
-class OrphanVectorError(Exception):
-    def __init__(self, vector_key: str):
-        self.vector_key = vector_key
-        super().__init__(f"Orphan vector {vector_key} blocked from injection.")
 
 # Module-level deferred bootstrapping of the policy engine package
 _DEFAULT_AGENT_AVAILABLE = False
@@ -321,6 +340,74 @@ class MiniAgentClient:
             except Exception as e:
                 logger.error(f"Failed to save tokens: {e}")
 
+    def _confirmation_token_error(
+        self,
+        tokens: Dict[str, Any],
+        confirmation_token: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+    ) -> Optional[Dict[str, str]]:
+        if confirmation_token not in tokens:
+            return {
+                "code": "invalid_confirmation_token",
+                "message": "Invalid confirmation token.",
+            }
+        token_info = tokens[confirmation_token]
+        if token_info.get("operation") != tool_name:
+            return {
+                "code": "token_operation_mismatch",
+                "message": "Token was not issued for this operation.",
+            }
+        if token_info.get("used"):
+            return {
+                "code": "token_already_used",
+                "message": "Token has already been used.",
+            }
+        if tool_name in SCOPE_BOUND_UCF_TOOLS and token_info.get("tool_args", {}) != tool_args:
+            return {
+                "code": "token_scope_mismatch",
+                "message": "Confirmation token was not issued for this exact UCF scope.",
+            }
+
+        expired = bool(
+            tool_args.get("simulate_expired_token")
+            or token_info.get("tool_args", {}).get("simulate_expired_token")
+        )
+        if not expired:
+            timestamp = token_info.get("timestamp")
+            if timestamp:
+                try:
+                    normalized = timestamp[:-1] if timestamp.endswith("Z") else timestamp
+                    issued_at = datetime.fromisoformat(normalized)
+                    if issued_at.tzinfo is not None:
+                        from datetime import timezone
+
+                        issued_at = issued_at.astimezone(timezone.utc).replace(tzinfo=None)
+                    expired = (datetime.utcnow() - issued_at).total_seconds() > 600
+                except Exception:
+                    expired = False
+        if expired:
+            return {
+                "code": "token_expired",
+                "message": "Confirmation token expired.",
+            }
+        return None
+
+    def _confirmation_error_envelope(
+        self,
+        request_id: str,
+        error: Dict[str, str],
+    ) -> Tuple[Dict[str, Any], int]:
+        envelope = {
+            "request_id": request_id,
+            "profile": self.profile,
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "result": {"allowed": False},
+            "errors": [error],
+        }
+        return self.sanitize_envelope(envelope), 1
+
     def _offline_fallback_validation(
         self,
         task: Dict[str, Any],
@@ -466,66 +553,14 @@ class MiniAgentClient:
                     # Non-native token for a non-native tool: delegate to subprocess
                     pass
                 else:
-                    if confirmation_token not in tokens:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "invalid_confirmation_token", "message": "Invalid confirmation token."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-                    tok_info = tokens[confirmation_token]
-                    if tok_info.get("operation") != tool_name:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_operation_mismatch", "message": "Token was not issued for this operation."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-                    if tok_info.get("used"):
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_already_used", "message": "Token has already been used."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-
-                    # Check expiration
-                    expired = False
-                    if tool_args.get("simulate_expired_token") or tok_info.get("tool_args", {}).get("simulate_expired_token"):
-                        expired = True
-                    else:
-                        ts_str = tok_info.get("timestamp")
-                        if ts_str:
-                            try:
-                                if ts_str.endswith("Z"):
-                                    ts_str = ts_str[:-1]
-                                t_val = datetime.fromisoformat(ts_str)
-                                if t_val.tzinfo is not None:
-                                    from datetime import timezone
-                                    t_val = t_val.astimezone(timezone.utc).replace(tzinfo=None)
-                                if (datetime.utcnow() - t_val).total_seconds() > 600:
-                                    expired = True
-                            except Exception:
-                                pass
-                    if expired:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_expired", "message": "Confirmation token expired."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
+                    token_error = self._confirmation_token_error(
+                        tokens,
+                        confirmation_token,
+                        tool_name,
+                        tool_args,
+                    )
+                    if token_error:
+                        return self._confirmation_error_envelope(request_id, token_error)
 
         # 2. Profile Routing (Offline Profile check)
         if self.profile == "offline":
@@ -561,6 +596,23 @@ class MiniAgentClient:
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "result": {"allowed": False, "offline_fallback_active": True},
                     "errors": [{"code": "agent_offline_mutation_blocked", "message": f"Tool '{tool_name}' blocked under offline fallback policy."}],
+                }
+                return self.sanitize_envelope(envelope), 1
+
+        if tool_name == "promote_ucf_to_memory":
+            scope_violations = _validate_promote_ucf_scope(tool_args)
+            if scope_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [{
+                        "code": "invalid_tool_arguments",
+                        "message": "promote_ucf_to_memory requires an explicit video_hash and epoch_id scope.",
+                        "details": {"violations": scope_violations},
+                    }],
                 }
                 return self.sanitize_envelope(envelope), 1
 
@@ -744,10 +796,6 @@ class MiniAgentClient:
             status = "fatal_error"
             errors_list = [{"code": "ucf_validation_failed", "message": "Validation failed.", "details": e.details}]
             logger.error(f"Validation failed for tool {tool_name}: {e.details}")
-        except OrphanVectorError as e:
-            status = "error"
-            errors_list = [{"code": "orphan_vector_blocked", "message": str(e)}]
-            logger.error(f"Orphan vector blocked: {e}")
         except Exception as e:
             status = "fatal_error"
             errors_list = [{"code": "execution_failed", "message": str(e)}]
@@ -1625,21 +1673,8 @@ class MiniAgentClient:
         
         conn = sqlite3.connect(str(ucf_db_path))
         
-        attempted_vectors = args.get("vectors", [])
-        video_hash = args.get("video_hash") or args.get("video_id")
-        epoch_id = args.get("epoch_id")
-        
-        # Auto-resolve scope from validated records
-        if not video_hash:
-            cursor = conn.execute("SELECT DISTINCT video_hash FROM context_frames WHERE promotion_status = 'validated'")
-            rows = cursor.fetchall()
-            if len(rows) == 1:
-                video_hash = rows[0][0]
-        if not epoch_id:
-            cursor = conn.execute("SELECT DISTINCT epoch_id FROM context_frames WHERE promotion_status = 'validated'")
-            rows = cursor.fetchall()
-            if len(rows) == 1:
-                epoch_id = rows[0][0]
+        video_hash = args["video_hash"]
+        epoch_id = args["epoch_id"]
 
         # 0. Pre-check: block promotion if any staged frames exist
         check_staged = "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
@@ -1663,24 +1698,6 @@ class MiniAgentClient:
                     "before calling promote_ucf_to_memory."
                 ),
             }
-
-        # 1. Orphan vector check
-        query = "SELECT vector_key FROM context_frames WHERE promotion_status IN ('validated', 'promoted')"
-        query_args: list = []
-        if video_hash:
-            query += " AND video_hash = ?"
-            query_args.append(video_hash)
-        if epoch_id:
-            query += " AND epoch_id = ?"
-            query_args.append(epoch_id)
-            
-        cursor = conn.execute(query, tuple(query_args))
-        valid_vector_keys = {row[0] for row in cursor.fetchall() if row[0]}
-        
-        for v_key in attempted_vectors:
-            if v_key not in valid_vector_keys:
-                conn.close()
-                raise OrphanVectorError(v_key)
 
         # Query vector_key, vector_collection, vector_backend for frames to be promoted
         select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"

@@ -1,9 +1,94 @@
 import pytest
 import os
+import json
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from agents.mini_agent_client import MiniAgentClient
 import goodq_mini_agent.paths
+
+
+def _tool_contract(tool_name):
+    contract_path = (
+        Path(__file__).resolve().parents[2]
+        / "agents"
+        / "stack"
+        / "contracts"
+        / "goodq-o2-local.contract.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    return next(tool for tool in contract["tools"] if tool["name"] == tool_name)
+
+
+def _promotion_contract():
+    return _tool_contract("promote_ucf_to_memory")
+
+
+def test_promote_ucf_contract_declares_explicit_scope_and_actual_results():
+    tool = _promotion_contract()
+    input_schema = tool["input_schema"]
+
+    assert input_schema["required"] == ["video_hash", "epoch_id"]
+    assert input_schema["additionalProperties"] is False
+    assert input_schema["properties"] == {
+        "video_hash": {"type": "string", "minLength": 1},
+        "epoch_id": {"type": "string", "minLength": 1},
+    }
+
+    output_schema = tool["output_schema"]
+    assert output_schema["additionalProperties"] is False
+    assert {
+        variant["properties"]["status"]["const"]
+        for variant in output_schema["oneOf"]
+    } == {"blocked", "promoted_complete"}
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        {},
+        {"video_hash": "vh_test_001"},
+        {"epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "epoch": "legacy"},
+        {"video_id": "vh_test_001", "epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "vectors": []},
+        {"video_hash": "", "epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "   "},
+    ],
+)
+def test_promote_ucf_rejects_missing_extra_ambiguous_or_blank_scope(tool_args):
+    client = MiniAgentClient(profile="safe")
+    envelope, rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+
+
+def test_promote_ucf_confirmation_token_is_bound_to_exact_scope():
+    client = MiniAgentClient(profile="safe")
+    requested_scope = {"video_hash": "vh_test_001", "epoch_id": "epoch_one"}
+    envelope, rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args=requested_scope,
+    )
+    assert rc == 3
+
+    result, confirm_rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_two"},
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert confirm_rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "token_scope_mismatch"
 
 def test_assets_dir_monkeypatch():
     """Verify that ASSETS_DIR was successfully redirected to our local folder."""

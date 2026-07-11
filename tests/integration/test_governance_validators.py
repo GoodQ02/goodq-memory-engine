@@ -424,7 +424,7 @@ def test_security_profiles_and_agent_controls():
         prompt="Promote ucf frames",
         mode="ops",
         tool_name="promote_ucf_to_memory",
-        tool_args={"epoch_id": "test_epoch"}
+        tool_args={"video_hash": "test_video", "epoch_id": "test_epoch"}
     )
     assert rc == 3
     assert envelope["status"] == "needs_confirmation"
@@ -442,7 +442,7 @@ def test_security_profiles_and_agent_controls():
         prompt="Promote ucf frames",
         mode="ops",
         tool_name="promote_ucf_to_memory",
-        tool_args={"epoch_id": "test_epoch"}
+        tool_args={"video_hash": "test_video", "epoch_id": "test_epoch"}
     )
     # Direct bypass should return success / status="ok" (allowed to proceed without token)
     assert rc == 0

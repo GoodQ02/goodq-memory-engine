@@ -315,7 +315,7 @@ the failure is not currently visible.
 ### R-10 — Align architecture with governed materialization
 
 - Priority: P1
-- Status: OPEN
+- Status: VERIFIED
 - Finding: older canonical documents still imply ingestion-time active
   SQLite and graph persistence.
 - Repair: correct Qdrant storage-root documentation and align staged ingestion,
@@ -324,6 +324,13 @@ the failure is not currently visible.
 - Completion gate: focused code traces/tests and docs agree; staged-only and
   promoted-materialization tests demonstrate the written model.
 - Public impact: RELEASE_REQUIRED
+- Checkpoint evidence (2026-07-11): implementation checkpoint `24edd572`
+  corrected the canonical desktop/config Qdrant sibling root, aligned six
+  architecture contracts with the governed evidence lifecycle, and added
+  structured semantic/tree-topology guards. Fresh verification passed 37
+  focused contract tests, 42 lifecycle/retrieval witnesses, the full
+  documentation authority/current-state/drift chain, and independent review.
+  Evidence: `docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md`.
 
 ### R-11 — Remove Control Agent authority contradictions
 
@@ -362,7 +369,7 @@ the failure is not currently visible.
 ### R-13 — Finish documentation authority consolidation
 
 - Priority: P1
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: resolved and historical plans remain active; some docs lack badges,
   contain fixed roots, or point to nonexistent archive locations.
 - Repair: use this roadmap as the single global register, archive superseded
@@ -382,10 +389,10 @@ the failure is not currently visible.
   Focused tests report 11 passed; active metadata, links, mission, epoch,
   current-state, index, path-drift, banned-token, and dependency gates pass.
   Evidence: `docs/diagnostics/R13_DOCUMENTATION_AUTHORITY_CHECKPOINT_2026-07-11.md`.
-- Remaining before VERIFIED: the new semantic detector truthfully reports one
-  Qdrant storage-root conflict between configuration and canonical architecture
-  prose. R-10 owns that trace/correction. After its checkpoint, rerun the full
-  R-13 verifier and mark this item VERIFIED only if every gate passes.
+- Closure evidence (2026-07-11): architecture checkpoint `24edd572` resolved the
+  Qdrant storage-root conflict and added governed-materialization semantic
+  guards. The full R-13 verifier and every supporting drift/current-state gate
+  now pass; the contradiction was corrected, not allowlisted.
 
 ### R-14 — Make WSL and model status probing passive and accurate
 
@@ -673,8 +680,7 @@ recreated under a new name.
 
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
-2. Restore truthful evidence: completed R-18 and R-09; checkpoint R-13, close
-   the exposed R-10 storage contract, then complete R-13 verification.
+2. Restore truthful evidence: completed R-18, R-09, R-10, and R-13 checkpoints.
 3. Establish one control authority: R-11, R-05, then R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.

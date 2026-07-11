@@ -11,7 +11,7 @@ data, model, service, or network behavior. Implementation checkpoint:
 `3a78e3c0` (`docs: consolidate documentation authority`).
 
 The frozen mixed checkout remained untouched at 96 expanded status entries.
-The public checkout remained clean.
+The public checkout working tree remained clean.
 
 ## Completed Cutover
 
@@ -59,23 +59,22 @@ availability signals, not documentation failures.
 Three independent read-only reviews confirmed the archive cutover, machine-tools
 handoff, and checker implementation after their findings were repaired.
 
-## Deliberate Blocker
+## Closure
 
-The full authority verifier remains red on exactly one semantic contradiction:
+Architecture-contract checkpoint `24edd572` proved and documented the canonical
+desktop/config Qdrant root as `${GOODQ_DATA_ROOT}/qdrant_storage`, a sibling of
+`GoodQ_Data`. It also added governed-materialization semantic checks and aligned
+the canonical architecture narrative with the implemented staged, validated,
+promoted, and post-commit reconciliation lifecycle.
 
-```text
-QDRANT_STORAGE_DRIFT
-config: ${GOODQ_DATA_ROOT}/qdrant_storage
-canonical docs: ${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
-```
-
-This is not hidden or allowlisted. Architecture-contract alignment owns the
-trace and correction. R-13 must remain `IN_PROGRESS` until that bounded seam
-proves one storage root and the full documentation verifier passes.
+Fresh post-checkpoint verification passed the full authority verifier, all 37
+focused documentation/config/materialization tests, the 42-test lifecycle and
+retrieval witness, current-state projection parity, documentation drift,
+banned-token, dependency-drift, compile, and diff gates. R-13's final semantic
+blocker is therefore closed rather than allowlisted.
 
 ## Resume
 
-Continue with the active bounded mission in `PROJECT.md`. Trace the configured
-Qdrant storage root through runtime consumers and focused tests; do not move
-data or change runtime configuration merely to make documentation green. After
-that checkpoint, rerun every R-13 gate and update the roadmap from evidence.
+Continue with the single active bounded mission in `PROJECT.md`. Do not recreate
+the completed authority consolidation or reopen the current-state projections
+without fresh contradictory evidence.

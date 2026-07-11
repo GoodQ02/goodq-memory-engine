@@ -76,7 +76,7 @@ the failure is not currently visible.
 ### R-01 — Align the promotion tool contract and implementation
 
 - Priority: P0
-- Status: VERIFIED
+- Status: IN_PROGRESS
 - Finding: the declared contract, native validation path, accepted scope, and
   returned result do not describe one interface.
 - Repair: define and enforce one explicit schema; reject ambiguous scope.
@@ -243,6 +243,13 @@ the failure is not currently visible.
   Fresh verification passed 41 tests with 1 intentional skip, Python compile,
   JSON parsing, documentation drift, forbidden-token, fixed-root, legacy-flag,
   and diff checks.
+- Reopened evidence (2026-07-11): isolated extraction review found that final
+  cleanup deletes the schema-v2 checkpoint whenever scene Qdrant status makes
+  `phase6_complete` true, even if memory DB, knowledge graph, scene-manifest,
+  or temporal-index evidence recorded a failed target. R-06 remains open until
+  cleanup requires every current window to have an exact five-target committed
+  record and a regression proves a Qdrant-complete run retains the checkpoint
+  when any other target failed.
 
 ### R-07 — Replace the unsafe clean-memory workflow
 
@@ -663,6 +670,9 @@ tagging, and public push remain separate approval gates.
   machine, location, household-LAN, and voice authority; added regression
   coverage; proved private runtime equivalence without printing private values;
   and created the isolated configuration checkpoint.
+- 2026-07-11: Reopened R-06 during isolated extraction after review proved the
+  final checkpoint cleanup gate could discard failed non-Qdrant persistence
+  evidence despite a Qdrant-complete video result.
 - 2026-07-10: Replaced the stale public-preview roadmap with the lifetime
   roadmap and repair register. Consolidated the sixteen audit findings,
   preserved unfinished intent, moved eight superseded plans/reports to the

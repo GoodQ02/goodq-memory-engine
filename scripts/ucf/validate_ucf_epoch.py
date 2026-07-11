@@ -113,8 +113,12 @@ def normalize_qdrant_id(raw_id: str) -> str:
     return str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
 
 
-def run_validation(mode: str = "offline") -> int:
+def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> int:
     cfg = load_configs({})
+    configured_report_dir = cfg.get("paths", {}).get("reports_dir")
+    resolved_report_dir = resolve_path(report_dir or configured_report_dir)
+    if resolved_report_dir is None:
+        resolved_report_dir = REPO_ROOT / "reports"
     db_dir = cfg.get('paths', {}).get('db_dir')
     if not db_dir:
         print("ERROR: paths.db_dir is not configured in config.")
@@ -310,7 +314,7 @@ def run_validation(mode: str = "offline") -> int:
         print("ERROR: Cannot perform validation checks because ucf_ledger.db was not found.")
         report["summary"]["success"] = False
         report["summary"]["checks_failed"] += 1
-        write_reports(report)
+        write_reports(report, resolved_report_dir)
         return 1
             
     # Connect to database
@@ -321,7 +325,7 @@ def run_validation(mode: str = "offline") -> int:
         print(f"ERROR: Failed to connect to database at {target_db_path}: {e}")
         report["summary"]["success"] = False
         report["summary"]["checks_failed"] += 1
-        write_reports(report)
+        write_reports(report, resolved_report_dir)
         return 1
         
     try:
@@ -408,6 +412,10 @@ def run_validation(mode: str = "offline") -> int:
             if media and t_end > duration + 0.05: # 50ms tolerance
                 report["temporal_bounds"]["status"] = "failed"
                 report["temporal_bounds"]["errors"].append(
+                    f"Frame {fid}: t_end ({t_end:.3f}) exceeds video duration ({duration:.3f}) beyond 50ms tolerance"
+                )
+                report["absolute_timestamps"]["status"] = "failed"
+                report["absolute_timestamps"]["errors"].append(
                     f"Frame {fid}: t_end ({t_end:.3f}) exceeds video duration ({duration:.3f}) beyond 50ms tolerance"
                 )
                 
@@ -1407,16 +1415,15 @@ def run_validation(mode: str = "offline") -> int:
     else:
         print("Validation PASSED successfully 100%!")
         
-    write_reports(report)
+    write_reports(report, resolved_report_dir)
     return 0 if report["summary"]["success"] else 1
 
-def write_reports(report: Dict[str, Any]):
+def write_reports(report: Dict[str, Any], report_dir: Path):
     # Ensure reports folder exists
-    reports_dir = REPO_ROOT / 'reports'
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    report_dir.mkdir(parents=True, exist_ok=True)
     
-    json_path = reports_dir / 'ucf_validation_report.json'
-    md_path = reports_dir / 'ucf_validation_report.md'
+    json_path = report_dir / 'ucf_validation_report.json'
+    md_path = report_dir / 'ucf_validation_report.md'
     
     # Write JSON report
     with open(json_path, 'w', encoding='utf-8') as f:
@@ -1538,5 +1545,11 @@ def generate_markdown_report(report: Dict[str, Any]) -> str:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UCF Epoch-level Validator with Vector Reference Integrity Gate")
     parser.add_argument("--mode", choices=["offline", "online", "strict"], default="offline", help="Validation mode")
+    parser.add_argument(
+        "--report-dir",
+        type=Path,
+        default=None,
+        help="Directory for JSON and Markdown reports (defaults to configured reports_dir or repository reports/)",
+    )
     args = parser.parse_args()
-    sys.exit(run_validation(mode=args.mode))
+    sys.exit(run_validation(mode=args.mode, report_dir=args.report_dir))

@@ -60,26 +60,10 @@ def _get_video_dimensions(path: str) -> Tuple[float, float, int, int]:
 
 
 def _load_ucf_ledger() -> Any:
-    """Dynamically imports ucf_ledger from the skill scripts directory."""
-    import importlib.util
-    import sys
-    from pathlib import Path
-    
-    current_file = Path(__file__).resolve()
-    repo_root = current_file.parents[2]  # steps/video_scene_detect/step.py -> parents[2] is repo_root
-    ucf_ledger_path = repo_root / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    
-    if not ucf_ledger_path.exists():
-        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
-    
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
-    
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ucf_ledger"] = module
-    spec.loader.exec_module(module)
-    return module
+    """Loads the repository-owned UCF ledger implementation."""
+    from scripts.ucf import ucf_ledger
+
+    return ucf_ledger
 
 
 def _load_params(cfg: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:

@@ -4,6 +4,8 @@ Integrates goodq_mini_agent checks with the unified codebase LLMClient.
 """
 
 from __future__ import annotations
+import hashlib
+import json
 import os
 import sys
 import uuid
@@ -26,6 +28,16 @@ from lib.llm_client import LLMClient
 
 import threading
 from contextlib import contextmanager
+
+
+def _report_evidence_state(path: Path) -> Optional[Tuple[int, int, str]]:
+    """Returns a stable fingerprint used to reject stale validator reports."""
+    try:
+        stat = path.stat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        return stat.st_mtime_ns, stat.st_size, digest
+    except OSError:
+        return None
 
 class ReentrantFileLock:
     def __init__(self, lock_file_path: Path):
@@ -1847,8 +1859,11 @@ class MiniAgentClient:
         from scripts.ucf.validate_ucf_epoch import run_validation
         validation_failed = False
         val_errors = []
+        reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
+        report_path = reports_dir / 'ucf_validation_report.json'
+        report_before = _report_evidence_state(report_path)
         try:
-            val_rc = run_validation(mode="offline")
+            val_rc = run_validation(mode="offline", report_dir=reports_dir)
             if val_rc != 0:
                 validation_failed = True
                 val_errors.append("validate_ucf_epoch validator script returned non-zero exit code.")
@@ -1858,10 +1873,9 @@ class MiniAgentClient:
             
         if validation_failed:
             # Try reading report for details
-            reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
-            report_path = reports_dir / 'ucf_validation_report.json'
             details = []
-            if report_path.exists():
+            report_after = _report_evidence_state(report_path)
+            if report_after is not None and report_after != report_before:
                 try:
                     with open(report_path, "r", encoding="utf-8") as f:
                         rep_data = json.load(f)
@@ -1895,13 +1909,15 @@ class MiniAgentClient:
     def _execute_validate_ucf_epoch(self, args: Dict[str, Any]) -> Dict[str, Any]:
         from scripts.ucf.validate_ucf_epoch import run_validation
         validation_errors = []
+        reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
+        report_path = reports_dir / 'ucf_validation_report.json'
+        report_before = _report_evidence_state(report_path)
         try:
-            val_rc = run_validation(mode="offline")
+            val_rc = run_validation(mode="offline", report_dir=reports_dir)
             success = (val_rc == 0)
             if not success:
-                reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
-                report_path = reports_dir / 'ucf_validation_report.json'
-                if report_path.exists():
+                report_after = _report_evidence_state(report_path)
+                if report_after is not None and report_after != report_before:
                     try:
                         with open(report_path, "r", encoding="utf-8") as f:
                             rep_data = json.load(f)

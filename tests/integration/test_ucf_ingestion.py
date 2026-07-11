@@ -5,10 +5,18 @@ Verifies that media sources and context frames are properly logged
 to the UCF database, and range overlap queries function correctly.
 """
 
+import hashlib
+import sqlite3
 import sys
-import os
 from pathlib import Path
+import pytest
+
 from steps.common.config_loader import load_configs
+from tests.runtime_profile import (
+    require_live_profile,
+    require_runtime_evidence,
+    selected_runtime_epoch,
+)
 
 # Add repo root to path for imports
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -16,78 +24,107 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
-def _load_ucf_ledger():
-    import importlib.util
-    import sys
-    
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    
-    if not ucf_ledger_path.exists():
-        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
-    
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
-    
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ucf_ledger"] = module
-    spec.loader.exec_module(module)
-    return module
+def _file_evidence(path: Path) -> dict:
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "sha256": digest.hexdigest(),
+    }
 
 
-def test_ucf_ingestion_ledger():
+def _ledger_evidence(db_path: Path) -> dict:
+    return {
+        candidate.name: _file_evidence(candidate)
+        for candidate in (
+            db_path,
+            Path(f"{db_path}-wal"),
+            Path(f"{db_path}-shm"),
+        )
+    }
+
+@pytest.mark.live_runtime
+def test_ucf_ingestion_ledger(goodq_test_profile):
+    require_live_profile(goodq_test_profile, "live UCF ledger witness")
     cfg = load_configs({})
     db_dir = cfg.get('paths', {}).get('db_dir')
-    assert db_dir is not None, "paths.db_dir must be configured"
-    epoch = os.path.basename(db_dir)
-    
-    data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
+    require_runtime_evidence(
+        goodq_test_profile,
+        bool(db_dir),
+        "paths.db_dir is not configured",
+    )
     ucf_db_path = Path(db_dir) / 'ucf' / 'ucf_ledger.db'
-    
-    # Assert database file exists
-    assert ucf_db_path.exists(), f"UCF ledger database not found at {ucf_db_path}"
-    
-    # Access the DB tables using UCFLedgerClient loaded dynamically
-    ucf_module = _load_ucf_ledger()
-    UCFLedgerClient = ucf_module.UCFLedgerClient
-    
-    client = UCFLedgerClient(str(ucf_db_path))
+    require_runtime_evidence(
+        goodq_test_profile,
+        ucf_db_path.exists(),
+        "resolved UCF ledger database does not exist",
+    )
+    epoch_id = selected_runtime_epoch(goodq_test_profile)
+    evidence_before = _ledger_evidence(ucf_db_path)
+    wal_evidence = evidence_before.get(f"{ucf_db_path.name}-wal", {})
+    require_runtime_evidence(
+        goodq_test_profile,
+        not wal_evidence.get("exists") or wal_evidence.get("size") == 0,
+        "UCF ledger has a non-empty WAL and is not safe for an immutable witness",
+    )
+
+    connection = sqlite3.connect(
+        f"{ucf_db_path.resolve().as_uri()}?mode=ro&immutable=1",
+        uri=True,
+    )
     try:
+        connection.execute("PRAGMA query_only = ON")
         # Check media_sources
-        cursor = client.execute_with_retry("SELECT video_hash, file_path, duration, fps, width, height FROM media_sources")
+        cursor = connection.execute(
+            "SELECT video_hash, file_path, duration, fps, width, height FROM media_sources"
+        )
         media_sources = cursor.fetchall()
-        assert len(media_sources) >= 1, "At least one registered media source must exist"
-        
-        # Verify attributes for at least one registered media source
-        found_target = False
+        require_runtime_evidence(
+            goodq_test_profile,
+            bool(media_sources),
+            "UCF ledger has no registered media sources",
+        )
+
         target_video_hash = None
+        target_duration = None
+        context_frames = []
         for row in media_sources:
             video_hash, file_path, duration, fps, width, height = row
-            if "05x14 - The Marine Biologist.mp4" in os.path.basename(file_path):
-                found_target = True
+            cursor_cf = connection.execute(
+                """
+                SELECT video_hash, ucf_schema_version, t_start, t_end, modality, worker_name, promotion_status
+                FROM context_frames
+                WHERE video_hash = ? AND epoch_id = ? AND ucf_schema_version = 'ucf.v0.1'
+                  AND modality = 'video' AND worker_name = 'video_scene_detect'
+                  AND promotion_status IN ('staged', 'validated', 'promoted')
+                ORDER BY t_start
+                """,
+                (video_hash, epoch_id),
+            )
+            candidate_frames = cursor_cf.fetchall()
+            if candidate_frames:
                 target_video_hash = video_hash
+                target_duration = duration
                 assert duration > 0, f"Duration must be greater than 0, got {duration}"
                 assert fps > 0, f"FPS must be greater than 0, got {fps}"
                 assert width > 0, f"Width must be greater than 0, got {width}"
                 assert height > 0, f"Height must be greater than 0, got {height}"
+                context_frames = candidate_frames
                 break
-        
-        if not found_target:
-            import pytest
-            pytest.skip("Target media source '05x14 - The Marine Biologist.mp4' not found in media_sources; skipping default database integration test")
-        
-        # Check context_frames
-        cursor_cf = client.execute_with_retry(
-            """
-            SELECT video_hash, ucf_schema_version, t_start, t_end, modality, worker_name, promotion_status
-            FROM context_frames
-            WHERE video_hash = ?
-            """,
-            (target_video_hash,)
+
+        require_runtime_evidence(
+            goodq_test_profile,
+            target_video_hash is not None,
+            "no registered media source has a lifecycle-visible video_scene_detect frame",
         )
-        context_frames = cursor_cf.fetchall()
-        assert len(context_frames) >= 1, f"No context frames found for video_hash {target_video_hash}"
-        
+
         found_staged_video_frame = False
         test_start = None
         test_end = None
@@ -103,34 +140,48 @@ def test_ucf_ingestion_ledger():
                 
         assert found_staged_video_frame, "No context frame found matching the required criteria (ucf.v0.1, video, video_scene_detect, staged/validated/promoted)"
         
-        # Test range overlap queries using client.query_overlap to confirm overlapping records are correctly retrieved.
+        # Reproduce the ledger overlap predicate directly so this witness never
+        # constructs a write-capable UCFLedgerClient against operator state.
         query_start = test_start
         query_end = test_end
-        
-        overlap_results = client.query_overlap(
-            video_hash=target_video_hash,
-            t_start=query_start,
-            t_end=query_end,
-            modality="video"
-        )
+
+        overlap_results = connection.execute(
+            """
+            SELECT video_hash, ucf_schema_version, t_start, t_end, modality,
+                   worker_name, promotion_status
+            FROM context_frames
+            WHERE video_hash = ? AND epoch_id = ?
+              AND t_start <= ? AND t_end >= ? AND modality = ?
+            ORDER BY t_start
+            """,
+            (target_video_hash, epoch_id, query_end, query_start, "video"),
+        ).fetchall()
         assert len(overlap_results) >= 1, f"Overlap query failed to retrieve overlapping frames in [{query_start}, {query_end}]"
-        
+
         # Verify the retrieved frame details
         retrieved_frame = overlap_results[0]
-        assert retrieved_frame["ucf_schema_version"] == "ucf.v0.1"
-        assert retrieved_frame["modality"] == "video"
-        assert retrieved_frame["worker_name"] == "video_scene_detect"
-        assert retrieved_frame["promotion_status"] in ("staged", "validated", "promoted")
-        assert retrieved_frame["t_start"] == test_start
-        assert retrieved_frame["t_end"] == test_end
-        
-        no_overlap_results = client.query_overlap(
-            video_hash=target_video_hash,
-            t_start=3000.0,
-            t_end=3010.0,
-            modality="video"
-        )
+        assert retrieved_frame[1] == "ucf.v0.1"
+        assert retrieved_frame[4] == "video"
+        assert retrieved_frame[5] == "video_scene_detect"
+        assert retrieved_frame[6] in ("staged", "validated", "promoted")
+        assert retrieved_frame[2] == test_start
+        assert retrieved_frame[3] == test_end
+
+        no_overlap_start = float(target_duration) + 1.0
+        no_overlap_end = float(target_duration) + 11.0
+        no_overlap_results = connection.execute(
+            """
+            SELECT frame_id
+            FROM context_frames
+            WHERE video_hash = ? AND epoch_id = ?
+              AND t_start <= ? AND t_end >= ? AND modality = ?
+            """,
+            (target_video_hash, epoch_id, no_overlap_end, no_overlap_start, "video"),
+        ).fetchall()
         assert len(no_overlap_results) == 0, f"Overlap query returned results for non-overlapping range"
-        
+
     finally:
-        client.close()
+        connection.close()
+        assert _ledger_evidence(ucf_db_path) == evidence_before, (
+            "read-only UCF witness changed the operator ledger or SQLite sidecars"
+        )

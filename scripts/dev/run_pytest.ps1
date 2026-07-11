@@ -3,6 +3,8 @@ param(
     [ValidateSet("goodq_core")]
     [string]$CondaEnv = "goodq_core",
 
+    [string]$TempRoot,
+
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$PytestArgs
 )
@@ -14,7 +16,12 @@ $bindings = Join-Path $repoRoot "scripts\_lib\interpreter_bindings.ps1"
 . $bindings
 
 $condaExe = Get-GoodQCondaExe
-$localTemp = Join-Path $repoRoot "tmp\conda_run"
+$localTemp = if ($TempRoot) {
+    Join-Path ([IO.Path]::GetFullPath($TempRoot)) "conda_run"
+}
+else {
+    Join-Path $repoRoot "tmp\conda_run"
+}
 New-Item -ItemType Directory -Force -Path $localTemp | Out-Null
 
 $previousTemp = $env:TEMP
@@ -26,7 +33,7 @@ try {
     $env:TMP = $localTemp
 
     Write-Host "[INFO] Running pytest through canonical Conda env: $CondaEnv"
-    Write-Host "[INFO] Repo-local TEMP/TMP: $localTemp"
+    Write-Host "[INFO] Conda TEMP/TMP: $localTemp"
 
     $argsToPass = @("run", "--no-capture-output", "-n", $CondaEnv, "python", "-m", "pytest")
     if ($PytestArgs -and $PytestArgs.Count -gt 0) {

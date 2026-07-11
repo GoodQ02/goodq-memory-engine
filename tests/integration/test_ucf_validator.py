@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ucf.validate_ucf_epoch import run_validation, is_overlapping, make_scene_hash
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 def test_is_overlapping():
     # 1. Standard overlap cases (max(start1, start2) < min(end1, end2))
@@ -33,6 +34,37 @@ def test_is_overlapping():
     assert is_overlapping(2.5, 2.5, 1.0, 2.0) is False  # Point outside standard
     assert is_overlapping(1.0, 2.0, 2.5, 2.5) is False  # Standard does not overlap point
 
+
+def test_explicit_report_dir_preserves_operator_reports(tmp_path, monkeypatch):
+    """Validator tests must never overwrite durable operator evidence."""
+    operator_root = tmp_path / "operator-root"
+    operator_reports = operator_root / "reports"
+    operator_reports.mkdir(parents=True)
+    operator_json = operator_reports / "ucf_validation_report.json"
+    operator_md = operator_reports / "ucf_validation_report.md"
+    operator_json.write_bytes(b"operator-json-sentinel")
+    operator_md.write_bytes(b"operator-markdown-sentinel")
+
+    db_dir = tmp_path / "missing-epoch"
+    test_cfg = {
+        "paths": {
+            "db_dir": str(db_dir),
+            "data_root": str(tmp_path),
+        }
+    }
+    monkeypatch.setattr("scripts.ucf.validate_ucf_epoch.load_configs", lambda _overrides: test_cfg)
+    monkeypatch.setattr("scripts.ucf.validate_ucf_epoch.REPO_ROOT", operator_root)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+
+    isolated_reports = tmp_path / "pytest-reports"
+    ret = run_validation(report_dir=isolated_reports)
+
+    assert ret == 1
+    assert (isolated_reports / "ucf_validation_report.json").exists()
+    assert (isolated_reports / "ucf_validation_report.md").exists()
+    assert operator_json.read_bytes() == b"operator-json-sentinel"
+    assert operator_md.read_bytes() == b"operator-markdown-sentinel"
+
 def test_ucf_validation_logic(tmp_path, monkeypatch):
     """
     Sets up a mock ucf_ledger database, runs the validation script,
@@ -45,7 +77,8 @@ def test_ucf_validation_logic(tmp_path, monkeypatch):
     test_cfg = {
         "paths": {
             "db_dir": str(db_dir),
-            "data_root": str(tmp_path)
+            "data_root": str(tmp_path),
+            "reports_dir": str(tmp_path / "reports"),
         }
     }
     
@@ -60,14 +93,6 @@ def test_ucf_validation_logic(tmp_path, monkeypatch):
     expected_db_dir = db_dir / "ucf"
     expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
-    
-    # Import ucf_ledger dynamically from skill scripts
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    ucf_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ucf_module)
-    UCFLedgerClient = ucf_module.UCFLedgerClient
     
     client = UCFLedgerClient(str(db_path))
     client.init_schema()
@@ -210,7 +235,8 @@ def test_ucf_validation_failure_modes(tmp_path, monkeypatch):
     test_cfg = {
         "paths": {
             "db_dir": str(db_dir),
-            "data_root": str(tmp_path)
+            "data_root": str(tmp_path),
+            "reports_dir": str(tmp_path / "reports"),
         }
     }
     
@@ -221,13 +247,6 @@ def test_ucf_validation_failure_modes(tmp_path, monkeypatch):
     expected_db_dir = db_dir / "ucf"
     expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
-    
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    ucf_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ucf_module)
-    UCFLedgerClient = ucf_module.UCFLedgerClient
     
     client = UCFLedgerClient(str(db_path))
     client.init_schema()
@@ -272,14 +291,14 @@ def test_ucf_validation_failure_modes(tmp_path, monkeypatch):
         payload={"scene_index": 1, "duration": 3.0}
     )
 
-    # Transcript 1: does NOT overlap scene_0000 or scene_0001 [8.5, 9.5]
+    # Transcript 1: does NOT overlap either scene and exceeds media duration [8.5, 11.5]
     # Also, raw_ref file does NOT exist
     client.log_frame(
         video_hash=video_hash,
         epoch_id="epoch_456",
         run_id="run_1",
         t_start=8.5,
-        t_end=9.5,
+        t_end=11.5,
         modality="text",
         worker_name="audio_transcribe",
         model_tag="faster_whisper",

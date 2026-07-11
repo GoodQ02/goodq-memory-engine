@@ -41,6 +41,96 @@ def _allow_verified_promotion_delivery(client, monkeypatch):
     )
 
 
+def test_validate_ucf_epoch_uses_configured_report_directory(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    captured = {}
+
+    def fake_run_validation(*, mode, report_dir):
+        captured["mode"] = mode
+        captured["report_dir"] = report_dir
+        return 0
+
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        fake_run_validation,
+    )
+    expected_report_dir = tmp_path / "validator-reports"
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(expected_report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {"success": True, "errors": []}
+    assert captured == {
+        "mode": "offline",
+        "report_dir": expected_report_dir,
+    }
+
+
+def test_validate_ucf_epoch_reads_failure_from_same_report_directory(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    expected_report_dir = tmp_path / "validator-reports"
+
+    def fake_run_validation(*, mode, report_dir):
+        assert mode == "offline"
+        assert report_dir == expected_report_dir
+        report_dir.mkdir(parents=True)
+        (report_dir / "ucf_validation_report.json").write_text(
+            json.dumps({"vector_integrity": {"errors": ["isolated validator failure"]}}),
+            encoding="utf-8",
+        )
+        return 1
+
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        fake_run_validation,
+    )
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(expected_report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {
+        "success": False,
+        "errors": ["isolated validator failure"],
+    }
+
+
+def test_validate_ucf_epoch_rejects_stale_failure_report(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    report_dir = tmp_path / "validator-reports"
+    report_dir.mkdir(parents=True)
+    (report_dir / "ucf_validation_report.json").write_text(
+        json.dumps({"vector_integrity": {"errors": ["stale operator error"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        lambda **_kwargs: 1,
+    )
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {
+        "success": False,
+        "errors": ["Validator script returned non-zero exit code."],
+    }
+
+
 def test_promote_ucf_contract_declares_explicit_scope_and_actual_results():
     tool = _promotion_contract()
     input_schema = tool["input_schema"]

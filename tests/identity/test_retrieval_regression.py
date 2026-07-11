@@ -12,13 +12,14 @@ identity enrichment is added. If any pre-existing top result disappears,
 the identity layer has regressed retrieval.
 
 Usage:
-    conda run -n goodq_core pytest tests/identity/test_retrieval_regression.py -v
-    conda run -n goodq_core pytest tests/identity/test_retrieval_regression.py -v -s
+    conda run -n goodq_core pytest tests/identity/test_retrieval_regression.py -v --goodq-test-profile=live
+    conda run -n goodq_core pytest tests/identity/test_retrieval_regression.py -v -s --goodq-test-profile=live
 
 Environment:
     Requires the API to be running on GOODQ_API_URL (default: http://127.0.0.1:30000).
-    Set GOODQ_SKIP_RETRIEVAL_REGRESSION=1 to skip these tests in CI environments
-    where the API is not running.
+    Isolated collection skips this live_runtime module centrally. Explicit live
+    or golden profiles treat GOODQ_SKIP_RETRIEVAL_REGRESSION=1, an unavailable
+    API, or missing query evidence as a test failure rather than a skip.
 """
 
 import json
@@ -28,6 +29,11 @@ import urllib.error
 from typing import Optional
 
 import pytest
+
+from tests.runtime_profile import require_live_profile, require_runtime_evidence
+
+
+pytestmark = pytest.mark.live_runtime
 
 API_URL = os.environ.get("GOODQ_API_URL", "http://127.0.0.1:30000")
 SKIP_IF_NO_API = os.environ.get("GOODQ_SKIP_RETRIEVAL_REGRESSION", "0") == "1"
@@ -85,16 +91,19 @@ def _api_is_reachable() -> bool:
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session", autouse=True)
-def require_api():
-    """Skips all tests if the API is not reachable and skip flag is set."""
-    if SKIP_IF_NO_API:
-        pytest.skip("GOODQ_SKIP_RETRIEVAL_REGRESSION=1 — skipping API-dependent tests")
-    if not _api_is_reachable():
-        pytest.skip(
-            f"GoodQ4All API not reachable at {API_URL}. "
-            "Start the API before running regression tests, or set "
-            "GOODQ_SKIP_RETRIEVAL_REGRESSION=1 to skip."
-        )
+def require_api(goodq_test_profile):
+    """Require the API whenever live/golden evidence was explicitly selected."""
+    require_live_profile(goodq_test_profile, "identity retrieval regression witness")
+    require_runtime_evidence(
+        goodq_test_profile,
+        not SKIP_IF_NO_API,
+        "GOODQ_SKIP_RETRIEVAL_REGRESSION disables required retrieval evidence",
+    )
+    require_runtime_evidence(
+        goodq_test_profile,
+        _api_is_reachable(),
+        f"GoodQ4All API is not reachable at {API_URL}",
+    )
 
 
 # ── Tests ───────────────────────────────────────────────────────────────────────
@@ -118,14 +127,17 @@ def test_canonical_query_returns_results(query: str) -> None:
 
 
 @pytest.mark.parametrize("query", REGRESSION_QUERIES)
-def test_canonical_query_top_result_is_visual(query: str) -> None:
+def test_canonical_query_top_result_is_visual(query: str, goodq_test_profile) -> None:
     """
     The top result for each canonical visual query should have visual evidence.
     Identity layer enrichment must not push visual results below identity results.
     """
     results = _api_search(query, top_k=3)
-    if not results:
-        pytest.skip(f"No results for '{query}' — covered by test_canonical_query_returns_results")
+    require_runtime_evidence(
+        goodq_test_profile,
+        bool(results),
+        f"no retrieval results for required canonical query {query!r}",
+    )
     top = results[0]
     # The top result should have a scene_id or similar video-backed field
     has_scene = (
@@ -140,7 +152,7 @@ def test_canonical_query_top_result_is_visual(query: str) -> None:
     )
 
 
-def test_identity_search_does_not_replace_visual_search() -> None:
+def test_identity_search_does_not_replace_visual_search(goodq_test_profile) -> None:
     """
     When identity_search is enabled with a score_boost, visual queries
     must not exclusively return identity-result scenes.
@@ -150,8 +162,11 @@ def test_identity_search_does_not_replace_visual_search() -> None:
     """
     query = "bicycle"
     results = _api_search(query, top_k=5)
-    if not results:
-        pytest.skip("No results for 'bicycle' — cannot verify augmentation behavior")
+    require_runtime_evidence(
+        goodq_test_profile,
+        bool(results),
+        "no retrieval results for required bicycle augmentation witness",
+    )
 
     # If all results have identity_boost=True and none have visual scores,
     # that indicates replacement rather than augmentation. Check that at least

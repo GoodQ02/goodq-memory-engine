@@ -634,6 +634,12 @@
               "materialization_report": {
                 "type": "object"
               },
+              "outbox": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "warnings": {
                 "type": "array",
                 "items": {
@@ -646,7 +652,48 @@
               "promoted_count",
               "qdrant_sync",
               "scope_sync",
-              "materialization_report"
+              "materialization_report",
+              "outbox"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "promotion_committed_sync_pending"
+              },
+              "promoted_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "qdrant_sync": {
+                "type": "object"
+              },
+              "scope_sync": {
+                "type": "object"
+              },
+              "materialization_report": {
+                "type": "object"
+              },
+              "outbox": {
+                "type": "object"
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "promoted_count",
+              "qdrant_sync",
+              "scope_sync",
+              "materialization_report",
+              "outbox",
+              "warnings"
             ],
             "additionalProperties": false
           },
@@ -686,6 +733,129 @@
       ],
       "risk_tier": "high",
       "idempotency": "non_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 120000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "mutate_canonical"
+    },
+    {
+      "name": "reconcile_ucf_qdrant",
+      "description": "Retry one durable pending promotion-to-Qdrant projection without repeating promotion or materialization.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "video_hash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "epoch_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "video_hash",
+          "epoch_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "qdrant_sync_reconciled"
+              },
+              "qdrant_sync": {
+                "type": "object"
+              },
+              "scope_sync": {
+                "type": "object"
+              },
+              "outbox": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "status",
+              "qdrant_sync",
+              "scope_sync",
+              "outbox"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "qdrant_sync_pending"
+              },
+              "qdrant_sync": {
+                "type": "object"
+              },
+              "scope_sync": {
+                "type": "object"
+              },
+              "outbox": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "qdrant_sync",
+              "scope_sync",
+              "outbox",
+              "warnings"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "blocked"
+              },
+              "reason": {
+                "const": "qdrant_sync_not_pending"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "reason",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "network_access",
+        "external_mutation"
+      ],
+      "risk_tier": "high",
+      "idempotency": "conditionally_idempotent",
       "requires_confirmation": true,
       "timeout_ms": 120000,
       "retry_policy": {

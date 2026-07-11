@@ -79,6 +79,71 @@ python -m cli.watchdog
 
 ---
 
+### `python -m cli.ucf_promotion`
+
+**Purpose**
+- inspect promotion readiness without mutation
+- request a scope-bound confirmation token
+- execute promotion only in a later, explicit command
+- surface a locally committed promotion whose Qdrant projection is still pending
+- reconcile only that durable pending projection through a fresh approval token
+
+The configured `paths.db_dir` is authoritative. The requested `--epoch-id`
+must match that configured epoch, and both approval and execution require one
+exact `video_hash` plus `epoch_id` scope.
+
+**Inspect (read-only)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion inspect --epoch-id <epoch_id>
+```
+
+Add `--video-hash <video_hash>` to inspect one scope. A scope is promotable only
+when it contains validated frames and no staged frames.
+
+**Approve (issues a token; does not promote)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion approve --epoch-id <epoch_id> --video-hash <video_hash>
+```
+
+**Execute (consumes the separately issued token)**
+
+```powershell
+$env:GOODQ_CONFIRMATION_TOKEN = '<confirmation_token>'
+conda run -n goodq_core python -m cli.ucf_promotion execute --epoch-id <epoch_id> --video-hash <video_hash>
+Remove-Item Env:GOODQ_CONFIRMATION_TOKEN
+```
+
+`--confirmation-token` is also supported, but the environment variable avoids
+placing the short-lived token directly in the process command line. Tokens are
+single-use, expire after ten minutes, and are bound to the exact approved scope.
+No command both issues and consumes a token.
+
+If local promotion commits but verified Qdrant payload delivery does not, execute
+returns nonzero with `promotion_committed_sync_pending`. The local ledger retains
+an exact-scope pending outbox row; rerunning promotion is not the recovery path.
+
+**Approve Qdrant reconciliation (issues a fresh token)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion reconcile-approve --epoch-id <epoch_id> --video-hash <video_hash>
+```
+
+**Execute Qdrant reconciliation**
+
+```powershell
+$env:GOODQ_CONFIRMATION_TOKEN = '<reconciliation_token>'
+conda run -n goodq_core python -m cli.ucf_promotion reconcile-execute --epoch-id <epoch_id> --video-hash <video_hash>
+Remove-Item Env:GOODQ_CONFIRMATION_TOKEN
+```
+
+Reconciliation retries only the exact pending Qdrant projection. It does not
+repeat the lifecycle transition or materialization. The pending state clears
+only after exact-video payloads are read back with the promoted status.
+
+---
+
 ## Monitoring & Status
 
 ### `python -m cli.system_status`
@@ -375,6 +440,11 @@ The CLI truth is healthy when:
 4. `cli.print_config` reflects the effective resolved profile/path truth.
 5. `cli.memory` subcommands operate against the configured epoch database paths.
 6. `cli.control_recurrence_report` reads existing run artifacts without activating healing or mutating runtime state.
+7. `cli.ucf_promotion inspect`, `approve`, and `execute` remain separate and
+   reject a requested epoch that differs from the configured runtime epoch.
+8. `cli.ucf_promotion reconcile-approve` and `reconcile-execute` remain separate,
+   require a fresh exact-scope token, and operate only on a durable pending
+   Qdrant projection.
 
 ---
 
@@ -391,6 +461,7 @@ The CLI truth is healthy when:
 
 The CLI layer is now centered on:
 - one canonical ingest owner
+- one separated, scope-bound UCF promotion and projection-recovery path
 - deterministic monitoring/status helpers
 - read-only control recurrence reporting
 - query/retrieval helpers

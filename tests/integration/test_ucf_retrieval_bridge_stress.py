@@ -270,27 +270,39 @@ def test_qdrant_query_filter_override_composition(mock_build):
 # Section 3: Robustness of ucf sync in lifecycle operations (simulate outage)
 # ---------------------------------------------------------------------------
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_lifecycle_promote_qdrant_outage_resilience(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_lifecycle_promote_qdrant_outage_resilience(mock_post, tmp_path, monkeypatch):
     """Simulate Qdrant network outage (raises ConnectionError) during promote_ucf_to_memory.
     Verify SQLite succeeds and warning payload is returned.
     """
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-outage", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    # set_payload raises exception representing network outage
-    mock_set_payload.side_effect = requests.exceptions.ConnectionError("Connection refused")
+    mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {
+            "status": "error",
+            "failed_collections": ["goodq_clip"],
+        },
+    )
+    monkeypatch.setattr(
+        client, "_execute_validate_ucf_epoch", lambda _args: {"success": True, "errors": []}
+    )
 
     # Invoke promote_ucf_to_memory
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
-    assert rc == 0
-    assert res["status"] == "success"
+    assert rc == 1
+    assert res["status"] == "error"
+    assert res["errors"][0]["code"] == "promotion_committed_sync_pending"
 
     output = res["output"]
-    assert output["status"] == "promoted_complete"
+    assert output["status"] == "promotion_committed_sync_pending"
     assert output["promoted_count"] == 1
 
     # Verify qdrant sync details are logged as warning
@@ -300,9 +312,8 @@ def test_lifecycle_promote_qdrant_outage_resilience(mock_set_payload, tmp_path, 
     assert "goodq_clip" in q_sync["failed_collections"]
     assert q_sync["points_attempted"] == 1
 
-    # Verify warning in envelope
-    assert "warnings" in res
-    assert "qdrant_payload_sync_failed" in res["warnings"]
+    assert "qdrant_payload_sync_failed" in output["warnings"]
+    assert output["outbox"]["delivery_state"] == "pending"
 
     # Verify SQLite row was promoted anyway (database integrity preserved)
     conn = sqlite3.connect(str(db_path))
@@ -311,19 +322,23 @@ def test_lifecycle_promote_qdrant_outage_resilience(mock_set_payload, tmp_path, 
     assert status == "promoted"
 
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_lifecycle_reject_qdrant_outage_resilience(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_lifecycle_reject_qdrant_outage_resilience(mock_post, tmp_path, monkeypatch):
     """Simulate Qdrant network outage (returns False) during reject_ucf_frames.
     Verify SQLite succeeds and warning is returned.
     """
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-outage", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    # set_payload returns False representing HTTP error / outage
-    mock_set_payload.return_value = False
+    mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
 
     # Invoke reject_ucf_frames
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "outage test"})
@@ -349,19 +364,23 @@ def test_lifecycle_reject_qdrant_outage_resilience(mock_set_payload, tmp_path, m
     assert status == "rejected"
 
 
-@patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_lifecycle_supersede_qdrant_outage_resilience(mock_set_payload, tmp_path, monkeypatch):
+@patch("requests.post")
+def test_lifecycle_supersede_qdrant_outage_resilience(mock_post, tmp_path, monkeypatch):
     """Simulate Qdrant network outage (raises Timeout) during supersede_ucf_frames.
     Verify SQLite succeeds and warning is returned.
     """
     db_path = _create_mock_db_for_test(tmp_path, "promoted", vector_key="vec-key-outage", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    # set_payload raises Timeout exception
-    mock_set_payload.side_effect = requests.exceptions.Timeout("Request timed out")
+    mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
 
     # Invoke supersede_ucf_frames
     res, rc = _confirm_tool_directly(client, "supersede_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})

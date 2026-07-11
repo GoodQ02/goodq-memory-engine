@@ -452,6 +452,12 @@ the failure is not currently visible.
   orientation, instruction-first-read alignment, authority-map classification,
   and archived completed plan are checkpointed at `ac4f58f6`. Evidence:
   `docs/diagnostics/FOUNDATIONAL_ORIENTATION_CHECKPOINT_2026-07-11.md`.
+- Frozen-tree inventory evidence (2026-07-11): all 96 expanded status entries
+  are classified with zero unknown paths; every wanted family has either an
+  isolated checkpoint or an explicit later repair owner. The original checkout
+  remains frozen because extraction, evidence comparison, and separate
+  retirement approval are still outstanding. Evidence:
+  `docs/diagnostics/R17_FROZEN_MAIN_INVENTORY_2026-07-11.md`.
 
 ### R-18 — Isolate validator tests and generated reports
 
@@ -699,6 +705,10 @@ tagging, and public push remain separate approval gates.
 - 2026-07-11: Checkpointed the foundational project orientation and instruction
   chain, archived its completed plan, and recorded the unsafe automatic public
   `AGENTS.md` sync hook under R-16 after reversing its side effect.
+- 2026-07-11: Completed the entry-by-entry R-17 inventory of the frozen mixed
+  checkout: 96 expanded paths, zero unknowns, and explicit later owners or
+  no-repeat dispositions for every entry. Kept R-17 open and the source tree
+  frozen pending isolated extraction and separately approved retirement.
 - 2026-07-10: Replaced the stale public-preview roadmap with the lifetime
   roadmap and repair register. Consolidated the sixteen audit findings,
   preserved unfinished intent, moved eight superseded plans/reports to the

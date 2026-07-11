@@ -128,7 +128,7 @@ the failure is not currently visible.
 ### R-04 — Sanitize tracked configuration without changing private runtime
 
 - Priority: P0
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: tracked configuration contains private identity fields and dated
   machine-specific defaults inherited by the public release.
 - Repair: preserve private values in ignored local authority and replace tracked
@@ -157,6 +157,14 @@ the failure is not currently visible.
   R-04 is not checkpoint-ready until those fields are genericized or moved,
   equivalent private runtime resolution is re-proved, and regression scans cover
   local network addresses and the remaining local-authority sections.
+- Checkpoint evidence (2026-07-11): the reopened fields now use generic tracked
+  defaults, the local template covers every displaced topology, voice, and
+  household-service field, and regression tests reject RFC1918 literals and
+  non-generic local authority. The redacted in-memory comparison proved the
+  complete private runtime and all named authority sections unchanged. Fresh
+  verification passed 25 focused tests plus Python, YAML, diff, portability,
+  and independent seam-review gates. Private checkpoint: `84c1d22d`; evidence:
+  `docs/diagnostics/R04_CONFIG_PORTABILITY_CHECKPOINT_2026-07-11.md`.
 
 ### R-05 — Define API and Command Center execution authority
 
@@ -412,9 +420,9 @@ the failure is not currently visible.
 - Completion gate: every wanted family has an isolated checkpoint or an
   explicit later repair owner; generated/discarded entries are classified; the
   mixed tree is retired only through separate approval.
-- Evidence (2026-07-11): R-02 and R-03 are checkpointed. Read-only inventory
-  found no dirty Qori work, identified R-04 as previously implemented but
-  reopened/uncheckpointed and R-06 as verified-but-unextracted,
+- Evidence (2026-07-11): R-02, R-03, and R-04 are checkpointed. Read-only
+  inventory found no dirty Qori work, identified R-06 as
+  verified-but-unextracted,
   separated identity evidence from unsafe R-08 authority prototypes, and marked
   the untracked API restart script as incompatible with R-19.
 
@@ -651,6 +659,10 @@ tagging, and public push remain separate approval gates.
   and the no-repeat register. Reopened R-04 after independent review found
   residual tracked workstation/location and private-LAN authority that its
   passing tests did not detect.
+- 2026-07-11: Closed the R-04 reopening after genericizing the remaining
+  machine, location, household-LAN, and voice authority; added regression
+  coverage; proved private runtime equivalence without printing private values;
+  and created the isolated configuration checkpoint.
 - 2026-07-10: Replaced the stale public-preview roadmap with the lifetime
   roadmap and repair register. Consolidated the sixteen audit findings,
   preserved unfinished intent, moved eight superseded plans/reports to the

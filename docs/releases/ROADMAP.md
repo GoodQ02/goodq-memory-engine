@@ -297,7 +297,7 @@ the failure is not currently visible.
 ### R-09 — Rebuild current-state truth from live evidence
 
 - Priority: P1
-- Status: OPEN
+- Status: VERIFIED
 - Finding: human and JSON state surfaces describe earlier ingestion, promotion,
   service, installer, and toolchain snapshots.
 - Repair: capture one fresh evidence snapshot after checkpointing, then generate
@@ -307,6 +307,9 @@ the failure is not currently visible.
 - Completion gate: human and JSON state agree with one live probe and
   verification time; no older epoch is described as active; historical evidence
   is clearly non-authoritative.
+- Checkpoint: `docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` records
+  evidence `2923b9a7ca972db2`, deterministic human/JSON/RAG projections, the
+  dynamic Hermes prompt contract, focused tests, and independent final reviews.
 - Public impact: SANITIZE
 
 ### R-10 — Align architecture with governed materialization
@@ -696,6 +699,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-11: Verified R-09 from one task-neutral evidence snapshot, generated
+  human/JSON/RAG state from that source, removed stale active-epoch and runtime
+  claims, and replaced the dated Hermes prompt with a dynamic read-only
+  contract. Focused tests and three independent final reviews passed.
 - 2026-07-11: Verified R-18 after isolating validator outputs, replacing stale
   lifecycle skips with exact-scope evidence, pinning a truthful golden runtime
   profile, proving immutable live-ledger reads, and adding artifact-free

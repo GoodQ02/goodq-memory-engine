@@ -16,7 +16,8 @@ through a fresh human-gated token without repeating materialization.
 - Branch: `codex/r01-r02-checkpoints`
 - Base: `19274ca7`
 - R-01 prerequisite: `c0e9099f fix: align scoped UCF promotion contract`
-- R-02 status: independently verified and ready for a seam-only checkpoint
+- R-02 checkpoint: `3fc79f94 fix: checkpoint portable promotion delivery`
+- R-02 status: independently verified and privately checkpointed
 
 ## Included R-02 Surface
 
@@ -108,6 +109,6 @@ authority repair seams and were not imported into this checkpoint.
 
 ## Resume
 
-Inspect the seam-only staged diff, create the private R-02 checkpoint, then add
-the resulting commit hash to the current-state handoff surfaces before starting
-R-03 isolation.
+Start R-03 in a new isolated worktree from the private R-02 checkpoint. Rebuild
+the stale human/JSON current-state surfaces only in the ordered R-09 evidence
+seam; do not disguise that later reconstruction as part of this checkpoint.

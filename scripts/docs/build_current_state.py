@@ -383,7 +383,6 @@ def _git_state(repo_root: Path) -> dict[str, Any]:
 
     return {
         "commit": run("rev-parse", "--short=8", "HEAD"),
-        "branch": run("branch", "--show-current"),
         "dirty": bool(run("status", "--short")),
     }
 
@@ -457,6 +456,7 @@ def capture_evidence(
     )
 
     faiss_indexes = sorted(epoch_root.rglob("*.index"))
+    repository_state = _git_state(repo_root)
     evidence: dict[str, Any] = {
         "schema_version": 1,
         "captured_at_utc": captured_at_utc,
@@ -466,7 +466,10 @@ def capture_evidence(
             "config_source": "sanitized_resolved_config",
             "collections": extracted["collections"],
         },
-        "repository": _git_state(repo_root),
+        "repository": {
+            "commit": repository_state["commit"],
+            "dirty": bool(repository_state["dirty"]),
+        },
         "completion": {
             "media_sources": media_sources,
             "distinct_videos": distinct_videos,

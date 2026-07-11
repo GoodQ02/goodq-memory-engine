@@ -594,6 +594,7 @@ def test_capture_is_redacted_and_uses_only_explicit_epoch_authority(tmp_path, mo
     assert str(tmp_path) not in json.dumps(captured)
     assert all("R-" not in item for item in captured["limitations"])
     assert "R-" not in json.dumps(captured["observed_services"])
+    assert "branch" not in captured["repository"]
 
 
 def _expected_test_collections():

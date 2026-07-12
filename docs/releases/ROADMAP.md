@@ -172,12 +172,14 @@ the failure is not currently visible.
 - Status: IN_PROGRESS
 - Finding: doctrine calls the API and console read-only while the identity
   branch adds roster writes and background process launch.
-- Repair: adopt the loopback-only local-operator API model; classify every route
-  as passive read, request staging, curated mutation, or process execution;
+- Repair: adopt the loopback-only local-operator API model; classify every
+  mounted method/path operation as passive read, request staging, automatic
+  mutation, curated mutation, or process execution;
   converge staging on one ledgered path; make curated writes atomic,
   scope-constrained, and audited; use one single-use scope-bound confirmation
   plus persistent job record for process/destructive actions; deny remote
-  mutation by default; remove duplicate upload/token/boolean/route authorities.
+  non-passive effects by default; remove duplicate upload/token/boolean/route
+  authorities.
 - Completion gate: API contract, routes, UI copy, and authority tests agree.
 - Public impact: RELEASE_REQUIRED
 - Decision evidence (2026-07-10): the live mounted surface has 78 operations.
@@ -243,6 +245,43 @@ the failure is not currently visible.
   common remote-mutation denial, and the other mutation/process authorities are
   not closed. Evidence:
   `docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md`.
+- Post-staging route-effect audit evidence (2026-07-12): the mounted surface
+  contains 68 method/path operations. Transitive-effect tracing classifies 39
+  as passive reads, 1 as request staging, 11 as automatic mutations, 8 as
+  curated mutations, and 9 as process executions. Sixty-six operations are
+  OpenAPI-published; `/docs` and `/redoc` account for the other two.
+  Separately, `/openapi.json` and seven static mounts produce 76 route objects.
+  The prior 70-operation census is reconciled by removal of the ingest
+  token/upload routes, reclassification of disabled `/api/system/ingest` as
+  passive, and recognition of eleven nominal reads/previews that create or
+  persist state. The route registry must preserve those current effects until
+  their owning repair gates pass. Evidence:
+  `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md`.
+
+### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
+
+- Priority: P0
+- Status: OPEN
+- Finding: four retrieval operations can create missing Qdrant collections,
+  persist retrieval events, and populate or download model caches, while
+  `GET /api/ingest/status/{request_id}` constructs a ledger that creates its
+  request directory. Summary read projections also open writable SQLite
+  connections and require a focused side-effect audit before passive
+  classification is trusted.
+- Repair: separate read-only retrieval/status inspection from collection,
+  retrieval-event, model-provisioning, and ledger initialization; make every
+  intentional write an explicit governed effect; require preseeded offline model
+  resolution for read-only retrieval; and audit summary projections with
+  read-only connections or equivalent no-write evidence.
+- Completion gate: seeded temporary-root and immutable-store witnesses prove
+  that nominal reads cannot create directories, SQLite files or sidecars, DDL,
+  Qdrant collections, retrieval-event rows, fallback JSONL output, or model
+  downloads/cache writes. A seeded write-capable implementation must make the
+  oracle fail. Any operation that retains an intentional write remains
+  `automatic_mutation` and governed as such.
+- Public impact: RELEASE_REQUIRED
+- Boundary: this follow-up does not reopen governed ingest staging, the common
+  R-05 route/client guard, R-08 identity recovery, or R-14 status probing.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -305,11 +344,22 @@ the failure is not currently visible.
   roster authority with JSON as a derived read projection; use locked atomic
   writes; correct `GOODQ_IDENTITY_PATH` precedence; persist process identity;
   recover stale/dead jobs; and redact path, subprocess, and exception detail.
-- Completion gate: live roster checksums remain unchanged by tests; route
-  uniqueness, exclusion, synchronization failure, concurrent write, crash,
-  restart recovery, and redaction tests pass before the Workbench browser
+- Completion gate: live roster checksums remain unchanged by tests; read and
+  preview operations leave live and temporary identity/graph roots unchanged;
+  route uniqueness, exclusion, synchronization failure, concurrent write,
+  crash, restart recovery, and redaction tests pass before the Workbench browser
   witness is rerun.
 - Public impact: RELEASE_REQUIRED
+- Route-effect evidence (2026-07-12): six nominal identity reads/previews
+  currently mutate automatically. After confirming the graph database exists,
+  the two system identity projections construct `KnowledgeGraph`, which opens a
+  writable connection, enables WAL, can create sidecars, can execute
+  schema/index DDL, and commits; four identity GET routes call `_data_path()`,
+  which creates the identity root. R-05 must classify these operations as
+  `automatic_mutation` until R-08 supplies read-only/no-create constructors and
+  temporary-root evidence. R-05 must not repair identity persistence inside the
+  common boundary seam. Evidence:
+  `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md`.
 - Human-curated Phase 5A sub-gate: review face clusters, speaker clusters,
   mentions, and unresolved roster members; create mappings only from confirmed
   human decisions; run roster validation and scene-first identity tests; promote
@@ -461,6 +511,11 @@ the failure is not currently visible.
 - Completion gate: stopped, running, unavailable, timeout, and malformed-output
   tests pass without side effects; live status matches wsl -l -v.
 - Public impact: RELEASE_REQUIRED
+- Route-effect evidence (2026-07-12): five mounted operations across four
+  nominal status paths remain `process_execution`, including both `GET` and
+  `HEAD` on `/api/status`. R-05 records and guards their current effect; only
+  R-14 may reclassify them after its no-side-effect witnesses pass. Evidence:
+  `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md`.
 
 ### R-15 — Triage critical exception suppression
 

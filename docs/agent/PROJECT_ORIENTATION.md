@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: TIMELESS_AGENT_OVERVIEW -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-12 -->
 
 # GoodQ Project Orientation
 
@@ -92,6 +92,37 @@ This overview owns invariants and topology. `CURRENT_STATE.md` and
 `current_state.json` own a restart-oriented snapshot. Live probes own the final
 answer to time-sensitive questions.
 
+## Why the Repair Roadmap Exists
+
+GoodQ's core pipeline has proven its central path on the July 2026 home-memory
+corpus. That corpus was ingested and promoted, providing durable evidence that
+the scene-first multimodal path works for it. The repair roadmap is not
+permission to rebuild or re-ingest that corpus. Its purpose is to transform a
+successful but organically assembled system into one whose authority is
+explicit, dependable, portable, and safe to extend.
+
+The ordered repair phases establish:
+
+- **Repository truth:** preserve wanted work and eliminate branch and document
+  ambiguity.
+- **Evidence truth:** ensure tests and reports cannot falsify operator evidence.
+- **Control authority:** establish exactly which component may approve or
+  perform an action.
+- **Runtime ownership:** create one reliable startup, watchdog, and recovery
+  path.
+- **Security boundaries:** keep raw services private and introduce controlled
+  access.
+- **Identity quality:** promote people and speaker mappings only after human
+  confirmation.
+- **Portability:** align follower systems without creating a second development
+  authority.
+- **Release integrity:** reconcile the public repository only after private
+  verification.
+
+These are one stabilization program, not invitations to create parallel
+architectures. Each repair must preserve the working asset, close one proven
+seam, and leave clearer authority for the next operator.
+
 ## System Relationship
 
 ```mermaid
@@ -152,6 +183,20 @@ about evidence without becoming evidence.
 - The Hermes governor MCP is advisory and non-executing.
 - Before packaging or upgrading, compare portable assets with the repository's
   embedded contracts. Do not assume equal version labels mean equal contracts.
+
+### Context7 public reference
+
+- The registered Context7 library `/goodq02/goodq4all` indexes the downstream
+  public `main` branch. It is a useful public-documentation reference, not a
+  private-development authority.
+- Before using it for a GoodQ claim, resolve the library again and record its
+  observable `state` and `lastUpdateDate` in the task evidence.
+- If the library is not finalized, its update predates the relevant private
+  change, or its text conflicts with the private checkout, use current private
+  code and canonical contracts instead.
+- Context7 freshness proves only the indexed public source's age. It does not
+  prove that private checkpoints, live services, or persisted runtime artifacts
+  match that public snapshot.
 
 ### OpenViking
 

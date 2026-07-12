@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-12 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -523,6 +523,12 @@ the failure is not currently visible.
   orientation, instruction-first-read alignment, authority-map classification,
   and archived completed plan are checkpointed at `ac4f58f6`. Evidence:
   `docs/diagnostics/FOUNDATIONAL_ORIENTATION_CHECKPOINT_2026-07-11.md`.
+- Foundational documentation refinement (2026-07-12): the orientation now
+  explains why the repair roadmap exists and requires freshness evidence before
+  Context7's downstream public library can support a GoodQ claim. The
+  authenticated Context7 metadata probe reported `/goodq02/goodq4all` on public
+  `main` as `finalized`, with `lastUpdateDate=2026-07-01T15:47:03.914Z`; private
+  code and contracts remain authoritative for later work.
 - Frozen-tree inventory evidence (2026-07-11): all 96 expanded status entries
   are classified with zero unknown paths; every wanted family has either an
   isolated checkpoint or an explicit later repair owner. The original checkout

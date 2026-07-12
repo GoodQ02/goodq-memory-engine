@@ -561,6 +561,25 @@ the failure is not currently visible.
   owned and verified as a frozen-main validator sub-seam. Evidence:
   `docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md`.
 
+### R-18-F1 — Keep synthetic API authority tests truthful
+
+- Priority: P0
+- Status: VERIFIED
+- Finding: two API authority suites maintained duplicated synthetic router
+  inventories, so five tests failed during `api.main` import after `identity`
+  and `summary` were mounted. Their behavioral assertions never ran.
+- Repair: use one explicit test-only router inventory, compare it with the real
+  `api.main` import before module execution, and prove the harness names a
+  deliberately removed router.
+- Completion gate: the oracle catches the seeded missing-router defect, both
+  suites execute their original assertions, and no production file changes.
+- Checkpoint evidence (2026-07-12): commit `c136861f` replaced the duplicated
+  stub lists with one AST-checked harness. The seeded oracle named the missing
+  `identity` router, the formerly broken pair passed 13 tests, all three files
+  compiled, diff checks passed, and independent review approved the seam.
+  Evidence:
+  `docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md`.
+
 ### R-19 — Establish one canonical API and Watchdog supervisor
 
 - Priority: P0

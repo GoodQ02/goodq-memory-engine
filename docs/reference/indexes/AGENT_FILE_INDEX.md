@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1182**
+Indexed active tracked paths: **1184**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -261,6 +261,7 @@ Indexed active tracked paths: **1182**
 | `/docs/diagnostics/R11_F1_HANDLER_OUTCOME_TRUTH_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R13_DOCUMENTATION_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R17_FROZEN_MAIN_INVENTORY_2026-07-11.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
@@ -970,6 +971,7 @@ Indexed active tracked paths: **1182**
 | `/tests/test_ucf_challenger_verification.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/ui/test_ui_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/__init__.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/api_main_test_harness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_health_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_main_legacy_prune_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_surface_truth.py` | Verification | Test, fixture, or verification asset. |

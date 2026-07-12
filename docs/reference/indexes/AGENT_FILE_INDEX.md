@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1185**
+Indexed active tracked paths: **1188**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -87,6 +87,7 @@ Indexed active tracked paths: **1185**
 | `/api/API_DOCUMENTATION.md` | API | API or local control-plane implementation. |
 | `/api/main.py` | API | API or local control-plane implementation. |
 | `/api/requirements.txt` | API | API or local control-plane implementation. |
+| `/api/route_effects.py` | API | API or local control-plane implementation. |
 | `/api/routes/__init__.py` | API | API or local control-plane implementation. |
 | `/api/routes/control_recurrence.py` | API | API or local control-plane implementation. |
 | `/api/routes/identity.py` | API | API or local control-plane implementation. |
@@ -255,6 +256,7 @@ Indexed active tracked paths: **1185**
 | `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -975,6 +977,7 @@ Indexed active tracked paths: **1185**
 | `/tests/unit/api_main_test_harness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_health_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_main_legacy_prune_truth.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_api_route_effect_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_surface_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_async_dag.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_atomic_json_write.py` | Verification | Test, fixture, or verification asset. |

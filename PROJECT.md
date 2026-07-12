@@ -4,44 +4,41 @@
 
 # Active bounded mission
 
-Roadmap item: R-05 — define API and Command Center execution authority.
+Roadmap item: R-05 — audit remaining explicit mutation and execution authority.
 
 ## Outcome
 
-Finish one local-operator authority model for mounted API and Command Center
-surfaces. Every mounted method/path operation must have exactly one truthful
-current-effect class based on transitive behavior rather than HTTP verb, route
-name, or intended product semantics. A common client-boundary policy must deny
-every non-passive class to non-loopback clients rather than relying on
-route-local convention.
+Produce one evidence-backed authority map for the eight curated-mutation and
+nine process-execution operations that remain after the verified route-effect
+checkpoint. Trace whether each operation uses the verified exact-scope confirmation,
+atomic mutation, persistent job, and durable decision/execution audit contracts.
+Select one smallest unfinished repair seam only after that map is complete.
 
 ## Scope
 
-- Re-audit the committed mounted route inventory after staging convergence.
-- Define one effect registry for passive reads, request staging, automatic
-  mutation, curated mutation, and process execution.
-- Enforce a shared client-boundary rule that keeps passive reads available as
-  designed while denying remote non-passive effects by default.
-- Preserve the separately owned passive-status and identity-recovery seams.
-- Add focused route inventory, policy, OpenAPI, and operator-surface tests.
+- Trace the 17 registry operations from mounted route through confirmation,
+  mutation or process dispatch, persistence, and outward response.
+- Compare each path with the verified MiniAgent control authority rather than
+  inventing another token or boolean-confirmation mechanism.
+- Record duplicate, missing, process-local, non-atomic, unaudited, or
+  non-recoverable authority with exact file/function evidence.
+- Inspect directly related Command Center or operator UI calls only when they
+  invoke one of those operations.
+- End with one bounded implementation recommendation and focused test gate.
 
 ## Boundaries
 
-- Continue from the verified handler-truth descendant in an isolated worktree.
-- Keep the frozen mixed checkout and public checkout unchanged.
-- Do not run ingestion, mutate live memory or identity data, expose a service to
-  the LAN, or perform destructive/process actions against live state.
-- Do not reopen the completed staging or handler-truth checkpoints.
-- Implement only the exhaustive registry, OpenAPI projection, and common
-  remote-effect denial in this seam. Do not repair hidden retrieval or identity
-  writes, and do not make status probes passive.
-- Do not relabel an `automatic_mutation` operation as passive until its owning
-  temporary-root or immutable-store witness proves the complete transitive call
-  path is non-mutating.
-- Do not implement passive runtime probing, identity recovery, LAN gateway,
-  clean-memory replacement, or live process execution inside this seam.
-- Preserve the exact-scope confirmation/audit authority and the preflight-only
-  governor boundary.
+- This mission is read-only audit work. Do not change production code until its
+  evidence is checkpointed and the next seam is explicit.
+- Keep the frozen mixed checkout, public checkout, live services, and data stores
+  unchanged.
+- Do not call curated or process routes, start jobs, run ingestion, or exercise
+  destructive actions against live state.
+- Do not reopen governed staging, the exhaustive effect registry, common client
+  boundary, verified handler truth, or completed documentation authority work.
+- Keep hidden read mutation, identity recovery, passive status, supervision, and
+  LAN/gateway work under their existing roadmap owners.
+- Preserve the preflight-only non-executing governor boundary.
 
 ## Resume authority
 

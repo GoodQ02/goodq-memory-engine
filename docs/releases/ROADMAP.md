@@ -257,6 +257,17 @@ the failure is not currently visible.
   persist state. The route registry must preserve those current effects until
   their owning repair gates pass. Evidence:
   `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md`.
+- Route/client-boundary checkpoint evidence (2026-07-12): `31344a9f` adds the
+  exhaustive five-class registry, 66-operation OpenAPI projection, fail-closed
+  startup reconciliation, raw-peer loopback policy, common pre-body remote
+  denial, explicit proxy-header boundary, and removal of the duplicate ingest
+  locality guard. A final review found and TDD closed duplicate-mount and
+  same-operation lifespan-replacement gaps. Fresh verification passed 184
+  focused/adjacent tests, compilation, exact-scope and diff gates, plus clean
+  independent re-review. R-05 remains `IN_PROGRESS`; the next bounded seam is a
+  read-only audit of the eight curated mutations and nine process executions
+  against the verified R-11 confirmation/audit authority. Evidence:
+  `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 
@@ -849,6 +860,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-12: Checkpointed the R-05 exhaustive route-effect registry and common
+  client boundary after TDD closed duplicate-mount and lifespan route-replacement
+  fail-open gaps; retained R-05 as in progress for explicit curated/process
+  authority convergence.
 - 2026-07-11: Verified R-11-F1 after aligning native handler-declared error
   with the outward envelope, return code, nonmutation report, and durable audit;
   also taught the bounded-mission lint to recognize registered roadmap

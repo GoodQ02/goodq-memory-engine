@@ -16,6 +16,7 @@ from tests.unit.api_main_test_harness import (
 
 _STUBBED_MODULES = [
     *API_MAIN_ROUTE_MODULE_NAMES,
+    "api.route_effects",
     "lib.llm_client",
     "steps.common.config_loader",
     "steps.common.llm_model_factory",

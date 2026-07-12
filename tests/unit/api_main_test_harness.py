@@ -83,3 +83,7 @@ def install_api_main_router_stubs(
     for name, module in route_modules.items():
         sys.modules[f"api.routes.{name}"] = module
     sys.modules["api.routes"] = routes_package
+
+    route_effects_module = types.ModuleType("api.route_effects")
+    route_effects_module.install_route_effect_authority = lambda app, **_kwargs: None
+    sys.modules["api.route_effects"] = route_effects_module

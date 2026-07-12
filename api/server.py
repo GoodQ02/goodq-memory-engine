@@ -91,7 +91,7 @@ def main() -> None:
     from uvicorn import run  # type: ignore
     from api.main import app
     print(f"[api] Starting FastAPI on http://{host}:{port}")
-    run(app, host=host, port=port, log_level="info")
+    run(app, host=host, port=port, log_level="info", proxy_headers=False)
 
 
 if __name__ == "__main__":

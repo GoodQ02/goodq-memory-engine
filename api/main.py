@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
+from api.route_effects import install_route_effect_authority
 from api.routes import control_recurrence, identity, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
 
@@ -177,6 +178,9 @@ try:
     api_loaders.configure_from_cfg(_CFG)
 except Exception as e:
     logger.warning(f"DataLoader config injection failed: {e}")
+
+
+install_route_effect_authority(app, static_root=_REPO_ROOT / _UI_SUBDIR)
 
 
 # Legacy UI/log static mounts intentionally disabled.

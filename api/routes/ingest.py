@@ -268,15 +268,6 @@ def _require_policy_profile(policy_profile: str) -> str:
     return profile
 
 
-def _require_loopback_client(http_request: Request) -> None:
-    client = http_request.client
-    if client is None or client.host not in {"127.0.0.1", "::1"}:
-        raise HTTPException(
-            status_code=403,
-            detail="Ingest mutation is restricted to the local operator",
-        )
-
-
 def _place_staged_file(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     os.replace(source, destination)
@@ -1104,7 +1095,6 @@ async def submit_ingest(
     http_request: Request,
     response: Response,
 ) -> IngestSubmitResponse:
-    _require_loopback_client(http_request)
     content_type = http_request.headers.get("content-type", "").lower()
     if content_type.startswith("multipart/form-data"):
         form = await _parse_budgeted_multipart(http_request)

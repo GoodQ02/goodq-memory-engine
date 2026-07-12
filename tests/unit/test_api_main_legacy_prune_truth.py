@@ -6,22 +6,17 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
+from tests.unit.api_main_test_harness import (
+    API_MAIN_ROUTE_MODULE_NAMES,
+    API_MAIN_ROUTER_NAMES,
+    install_api_main_router_stubs,
+)
 
 
 _STUBBED_MODULES = [
-    "api.routes",
-    "api.routes.control_recurrence",
-    "api.routes.ingest",
-    "api.routes.media",
-    "api.routes.meta",
-    "api.routes.runtime",
-    "api.routes.scenes",
-    "api.routes.search",
-    "api.routes.summary",
-    "api.routes.system",
-    "api.routes.timeline",
+    *API_MAIN_ROUTE_MODULE_NAMES,
     "lib.llm_client",
     "steps.common.config_loader",
     "steps.common.llm_model_factory",
@@ -109,19 +104,10 @@ def _load_api_main():
     runtime_module = _load_runtime_route_module(repo_root)
     meta_module = _load_meta_route_module(repo_root)
 
-    routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "control_recurrence", "summary"]:
-        mod = types.ModuleType(f"api.routes.{name}")
-        mod.router = APIRouter()
-        if name == "search":
-            mod.configure_search_from_cfg = lambda cfg: None
-        setattr(routes_pkg, name, mod)
-        sys.modules[f"api.routes.{name}"] = mod
-    setattr(routes_pkg, "meta", meta_module)
-    setattr(routes_pkg, "runtime", runtime_module)
-    sys.modules["api.routes.meta"] = meta_module
-    sys.modules["api.routes.runtime"] = runtime_module
-    sys.modules["api.routes"] = routes_pkg
+    install_api_main_router_stubs(
+        repo_root,
+        real_router_modules={"meta": meta_module, "runtime": runtime_module},
+    )
 
     module_path = repo_root / "api" / "main.py"
     spec = importlib.util.spec_from_file_location("tests.api_main_legacy_prune_truth", module_path)
@@ -129,6 +115,22 @@ def _load_api_main():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_api_main_router_inventory_oracle_names_missing_stub() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    inventory_without_identity = tuple(
+        name for name in API_MAIN_ROUTER_NAMES if name != "identity"
+    )
+
+    with pytest.raises(
+        AssertionError,
+        match=r"missing synthetic routers: \['identity'\]",
+    ):
+        install_api_main_router_stubs(
+            repo_root,
+            synthetic_router_names=inventory_without_identity,
+        )
 
 
 def test_main_api_prunes_legacy_compatibility_endpoints() -> None:

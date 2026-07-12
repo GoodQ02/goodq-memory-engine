@@ -6,21 +6,16 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
+from tests.unit.api_main_test_harness import (
+    API_MAIN_ROUTE_MODULE_NAMES,
+    install_api_main_router_stubs,
+)
 
 
 _STUBBED_MODULES = [
-    "api.routes",
-    "api.routes.control_recurrence",
-    "api.routes.ingest",
-    "api.routes.media",
-    "api.routes.meta",
-    "api.routes.runtime",
-    "api.routes.scenes",
-    "api.routes.search",
-    "api.routes.system",
-    "api.routes.timeline",
+    *API_MAIN_ROUTE_MODULE_NAMES,
     "lib.llm_client",
     "steps.common.config_loader",
     "steps.common.llm_model_factory",
@@ -93,15 +88,10 @@ def _load_api_main():
 
     meta_module = _load_meta_route()
 
-    routes_pkg = types.ModuleType("api.routes")
-    for name in ["search", "scenes", "timeline", "media", "system", "ingest", "runtime", "control_recurrence"]:
-        mod = types.ModuleType(f"api.routes.{name}")
-        mod.router = APIRouter()
-        setattr(routes_pkg, name, mod)
-        sys.modules[f"api.routes.{name}"] = mod
-    setattr(routes_pkg, "meta", meta_module)
-    sys.modules["api.routes.meta"] = meta_module
-    sys.modules["api.routes"] = routes_pkg
+    install_api_main_router_stubs(
+        repo_root,
+        real_router_modules={"meta": meta_module},
+    )
 
     module_path = repo_root / "api" / "main.py"
     spec = importlib.util.spec_from_file_location("tests.api_main_truth", module_path)

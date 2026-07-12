@@ -268,6 +268,17 @@ the failure is not currently visible.
   read-only audit of the eight curated mutations and nine process executions
   against the verified R-11 confirmation/audit authority. Evidence:
   `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md`.
+- Mutation/execution authority audit evidence (2026-07-12): all eight curated
+  mutations and nine process executions remain correctly effect-classified and
+  remotely denied, but none uses the verified MiniAgent exact-scope authority.
+  The identity and passive-status subsets remain with their existing owners.
+  Within this explicit curated/process register, the smallest coherent next
+  seam is video-summary generation because its process-local background marker
+  loses failure/restart truth and Summary Console equates `idle` with success.
+  Temporal summarization remains separate because it is synchronous and has a
+  different result/recovery boundary.
+  Evidence:
+  `docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 

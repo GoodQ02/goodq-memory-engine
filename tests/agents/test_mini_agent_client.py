@@ -295,6 +295,7 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "create_summary_collection",
     "delete_summary_collection",
     "generate_video_summary",
+    "generate_temporal_summary",
     "stage_ingest_request",
     "run_ingestion",
     "file_delete",
@@ -309,6 +310,7 @@ EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
     "create_summary_collection",
     "delete_summary_collection",
     "generate_video_summary",
+    "generate_temporal_summary",
     "stage_ingest_request",
 }
 
@@ -323,10 +325,132 @@ def test_local_confirmation_required_tools_have_one_module_level_authority():
         EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS
     )
     assert "generate_video_summary" in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert "generate_temporal_summary" in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
     assert (
         "generate_video_summary"
         in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
     )
+    assert (
+        "generate_temporal_summary"
+        in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    )
+
+
+def _temporal_summary_scope(**overrides):
+    scope = {
+        "job_id": "job_" + "a" * 32,
+        "epoch_id": "epoch_2026_07_family",
+        "request_sha256": "b" * 64,
+        "execution_policy_sha256": "c" * 64,
+    }
+    scope.update(overrides)
+    return scope
+
+
+def test_generate_temporal_summary_accepts_only_exact_digest_scope(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "temporal-exact"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact temporal summary",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=_temporal_summary_scope(),
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        [],
+        {},
+        _temporal_summary_scope(job_id="job_short"),
+        _temporal_summary_scope(epoch_id="../private"),
+        _temporal_summary_scope(request_sha256="B" * 64),
+        _temporal_summary_scope(execution_policy_sha256="short"),
+        _temporal_summary_scope(query={"entities": ["private"]}),
+        _temporal_summary_scope(confirmation_token="must-not-persist"),
+    ],
+)
+def test_generate_temporal_summary_rejects_invalid_scope_before_token_issue(
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "temporal-invalid"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject an invalid temporal summary scope",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_generate_temporal_summary_token_is_scope_bound_and_single_use(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "temporal-token"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = _temporal_summary_scope()
+    prepared, prepared_rc = client.authorize_action(
+        prompt="Prepare temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+    )
+    assert prepared_rc == 3
+    token = prepared["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Reject changed temporal policy",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args={**scope, "execution_policy_sha256": "d" * 64},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    claimed, claimed_rc = client.authorize_action(
+        prompt="Claim exact temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert claimed_rc == 0
+    assert claimed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reject reused temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
 
 
 def test_generate_video_summary_accepts_only_exact_nonempty_job_video_scope(

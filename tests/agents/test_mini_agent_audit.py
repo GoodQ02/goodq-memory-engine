@@ -777,6 +777,121 @@ def test_summary_collection_external_outcome_surfaces_audit_write_failure(
     append.assert_called_once()
 
 
+def _temporal_summary_scope(**overrides):
+    scope = {
+        "job_id": "job_" + "a" * 32,
+        "epoch_id": "epoch_2026_07_family",
+        "request_sha256": "b" * 64,
+        "execution_policy_sha256": "c" * 64,
+    }
+    scope.update(overrides)
+    return scope
+
+
+def test_temporal_summary_external_outcome_uses_exact_redacted_target():
+    client = _client()
+    arguments = _temporal_summary_scope()
+    target = f"temporal-summary:{arguments['job_id']}"
+
+    result = client.record_external_execution_outcome(
+        operation="generate_temporal_summary",
+        arguments=arguments,
+        request_id="request-temporal-summary",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=25,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[-1]
+    assert row["tool_name"] == "generate_temporal_summary"
+    assert row["arguments"] == arguments
+    assert row["side_effect_report"] == {
+        "mutated": True,
+        "targets": [target],
+    }
+    serialized = json.dumps(row, sort_keys=True)
+    for private in (
+        "private entity",
+        "source_file",
+        "prompt",
+        "narrative",
+        "confirmation_token",
+        "C:\\",
+        "/home/",
+    ):
+        assert private not in serialized
+
+
+@pytest.mark.parametrize(
+    ("arguments", "targets", "expected_code"),
+    [
+        (
+            _temporal_summary_scope(query={"entities": ["private entity"]}),
+            [f"temporal-summary:{_temporal_summary_scope()['job_id']}"],
+            "invalid_tool_arguments",
+        ),
+        (
+            _temporal_summary_scope(),
+            ["C:\\private\\temporal-result.json"],
+            "invalid_side_effect_report",
+        ),
+        (
+            _temporal_summary_scope(),
+            ["temporal-summary:job_wrong"],
+            "invalid_side_effect_report",
+        ),
+    ],
+)
+def test_temporal_summary_external_outcome_rejects_scope_or_target_leaks(
+    arguments,
+    targets,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation="generate_temporal_summary",
+        arguments=arguments,
+        request_id="request-temporal-summary",
+        mode="ops",
+        status="failed",
+        return_code=1,
+        duration_ms=25,
+        side_effect_report={"mutated": False, "targets": targets},
+        error_codes=["model_unavailable"],
+    )
+
+    assert result == {"audit_status": "failed", "error_codes": [expected_code]}
+    assert _rows() == []
+
+
+def test_temporal_summary_invalid_decision_audit_redacts_raw_scope():
+    client = _client()
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject private temporal scope",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=_temporal_summary_scope(
+            query={"entities": ["private entity"]},
+            source_file="C:\\private\\source.mp4",
+        ),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    row = _rows()[-1]
+    assert row["arguments"] == {"scope_valid": False}
+    serialized = json.dumps(row, sort_keys=True)
+    assert "private entity" not in serialized
+    assert "source_file" not in serialized
+    assert "C:\\" not in serialized
+
+
 @pytest.mark.parametrize(
     ("operation", "arguments", "target"),
     [

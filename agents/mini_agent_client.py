@@ -120,6 +120,7 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 MUTATING_DENY_ON_AGENT_FAILURE = {
     "create_summary_collection",
     "delete_summary_collection",
+    "generate_temporal_summary",
     "generate_video_summary",
     "home_assistant_call_service",
     "qdrant_upsert",
@@ -143,6 +144,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "create_summary_collection",
     "delete_summary_collection",
+    "generate_temporal_summary",
     "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
@@ -160,6 +162,7 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
     "create_summary_collection",
     "delete_summary_collection",
+    "generate_temporal_summary",
     "generate_video_summary",
     "stage_ingest_request",
 }
@@ -167,6 +170,7 @@ LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
 LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
     "create_summary_collection",
     "delete_summary_collection",
+    "generate_temporal_summary",
     "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
@@ -189,6 +193,13 @@ EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH = 64
 PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
 SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
 VIDEO_SUMMARY_SCOPE_FIELDS = ("job_id", "video_hash")
+TEMPORAL_SUMMARY_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "request_sha256",
+    "execution_policy_sha256",
+)
+TEMPORAL_SUMMARY_TARGET_PREFIX = "temporal-summary:"
 SUMMARY_COLLECTION_CREATE_SCOPE_FIELDS = (
     "action_id",
     "epoch_id",
@@ -203,6 +214,9 @@ SUMMARY_COLLECTION_DELETE_SCOPE_FIELDS = (
 SUMMARY_COLLECTION_ACTIONS = {
     "create_summary_collection",
     "delete_summary_collection",
+}
+REDACTED_SCOPE_AUTHORIZATION_ACTIONS = SUMMARY_COLLECTION_ACTIONS | {
+    "generate_temporal_summary"
 }
 SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH = 128
 SUMMARY_COLLECTION_CREATE_TARGET_PREFIX = "summary-collection:create:"
@@ -345,8 +359,45 @@ def _validate_summary_collection_delete_scope(tool_args: Any) -> List[str]:
     )
 
 
+def _validate_temporal_summary_scope(tool_args: Any) -> List[str]:
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    if any(not isinstance(field, str) for field in tool_args):
+        return ["scope field names must be strings"]
+
+    violations: List[str] = []
+    expected = set(TEMPORAL_SUMMARY_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    job_id = tool_args.get("job_id")
+    if "job_id" in tool_args and (
+        not isinstance(job_id, str)
+        or len(job_id) != 36
+        or not job_id.startswith("job_")
+        or any(character not in "0123456789abcdef" for character in job_id[4:])
+    ):
+        violations.append("job_id must be an opaque lowercase action job identifier")
+    if "epoch_id" in tool_args:
+        violations.extend(
+            _validate_summary_collection_identifier("epoch_id", tool_args["epoch_id"])
+        )
+    for field in ("request_sha256", "execution_policy_sha256"):
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_digest(field, tool_args[field])
+            )
+    return violations
+
+
 AUTHORIZATION_SCOPE_VALIDATORS = {
     "generate_video_summary": _validate_video_summary_scope,
+    "generate_temporal_summary": _validate_temporal_summary_scope,
     "create_summary_collection": _validate_summary_collection_create_scope,
     "delete_summary_collection": _validate_summary_collection_delete_scope,
 }
@@ -363,9 +414,18 @@ def _expected_summary_collection_audit_target(
     return None
 
 
+def _expected_temporal_summary_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == "generate_temporal_summary":
+        return f"{TEMPORAL_SUMMARY_TARGET_PREFIX}{arguments['job_id']}"
+    return None
+
+
 def _decision_audit_arguments(tool_name: str, tool_args: Any) -> Dict[str, Any]:
     """Persist exact safe scope, never rejected collection request material."""
-    if tool_name not in SUMMARY_COLLECTION_ACTIONS:
+    if tool_name not in REDACTED_SCOPE_AUTHORIZATION_ACTIONS:
         return tool_args
     scope_validator = AUTHORIZATION_SCOPE_VALIDATORS[tool_name]
     if scope_validator(tool_args):
@@ -1096,6 +1156,15 @@ class MiniAgentClient:
         if (
             expected_collection_target is not None
             and targets != [expected_collection_target]
+        ):
+            return failed("invalid_side_effect_report")
+        expected_temporal_target = _expected_temporal_summary_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_temporal_target is not None
+            and targets != [expected_temporal_target]
         ):
             return failed("invalid_side_effect_report")
 

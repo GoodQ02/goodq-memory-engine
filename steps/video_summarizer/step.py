@@ -9,6 +9,42 @@ from typing import Dict, Any, List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+MAX_SCENE_SUMMARIES_IN_PROMPT = 20
+
+
+def _scene_summary_records_for_prompt(
+    records: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    return records[:MAX_SCENE_SUMMARIES_IN_PROMPT]
+
+
+def _filter_target_scene_summary_records(
+    db_path: str,
+    video_hash: str,
+    records: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    conn = sqlite3.connect(db_path)
+    try:
+        c = conn.cursor()
+        c.execute("SELECT id FROM scenes WHERE video_hash=?", (video_hash,))
+        target_scene_ids = {row[0] for row in c.fetchall() if row[0] is not None}
+    finally:
+        conn.close()
+
+    filtered_records = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        scene_id = record.get('scene_id')
+        summary = record.get('summary')
+        if (
+            scene_id not in target_scene_ids
+            or not isinstance(summary, str)
+            or not summary.strip()
+        ):
+            continue
+        filtered_records.append(record)
+    return filtered_records
 
 
 def _load_target_scene_summary_records(
@@ -40,7 +76,11 @@ def _load_target_scene_summary_records(
                 continue
             scene_id = content.get('scene_id')
             summary = content.get('summary')
-            if scene_id not in target_scene_ids or not isinstance(summary, str) or not summary:
+            if (
+                scene_id not in target_scene_ids
+                or not isinstance(summary, str)
+                or not summary.strip()
+            ):
                 continue
             records.append({
                 "summary_id": summary_id,
@@ -76,8 +116,15 @@ def generate_video_summary_llm(
                 db_path,
                 video_hash,
             )
-        scene_summaries = [record["summary"] for record in scene_summary_records]
-        scene_count = len(scene_summaries)
+        else:
+            scene_summary_records = _filter_target_scene_summary_records(
+                db_path,
+                video_hash,
+                scene_summary_records,
+            )
+        prompt_records = _scene_summary_records_for_prompt(scene_summary_records)
+        scene_summaries = [record["summary"] for record in prompt_records]
+        scene_count = len(scene_summary_records)
         
         if not scene_summaries:
             logger.warning(f"No scene summaries found for video {video_hash}")
@@ -109,11 +156,13 @@ def generate_video_summary_llm(
         # Build prompt
         scenes_text = "\n\n".join([
             f"Scene {i+1}: {summary}" 
-            for i, summary in enumerate(scene_summaries[:20])  # Limit to first 20 scenes
+            for i, summary in enumerate(scene_summaries)
         ])
         
-        if len(scene_summaries) > 20:
-            scenes_text += f"\n\n[... and {len(scene_summaries) - 20} more scenes]"
+        if len(scene_summary_records) > len(prompt_records):
+            scenes_text += (
+                f"\n\n[... and {len(scene_summary_records) - len(prompt_records)} more scenes]"
+            )
         
         duration = video_meta.get('duration', 0)
         filename = video_meta.get('filename', 'Unknown')
@@ -262,7 +311,7 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
             "scene_id": record["scene_id"],
             "created_at": record["created_at"],
         }
-        for record in scene_summary_records
+        for record in _scene_summary_records_for_prompt(scene_summary_records)
     ]
 
     # Generate video summary

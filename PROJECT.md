@@ -4,49 +4,56 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — isolate summary SQLite read authority.
+Roadmap item: R-05-F1 — select the remaining retrieval SQLite or telemetry seam.
 
 ## Outcome
 
-Make summary dashboard/entity/video projections incapable of creating a missing
-database or executing DDL/DML while preserving truthful visibility of committed
-rows that still reside in a live WAL.
+Reconcile the two remaining retrieval effects and select one exact owner,
+mutation oracle, rollback boundary, and verification gate before another
+production edit. Do not treat intentional durable observability as accidental
+hidden mutation or infer the next repair from an older order.
 
 ## Governing evidence
 
 - `docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md`
 - `docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md`
+- `docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Live committed WAL truth outranks byte-identical SQLite sidecar purity. A
-read-only projection may participate in SQLite's required WAL coordination, but
-it must not create an absent database or possess DDL/DML capability.
+Authority follows the effect actually required by the product. A query-side
+SQLite read must not possess creation/write capability, while intentional
+retrieval telemetry must remain durable, explicit, and governed until evidence
+justifies a different policy. No retrieval route becomes passive while either
+effect remains open.
 
 ## Scope
 
-- Trace only summary SQLite projections and their mounted summary callers.
-- Add mutation-sensitive temporary SQLite witnesses before production changes.
-- Require absent-path no-create, URI read-only mode, `PRAGMA query_only=ON`,
-  rejected DDL/DML, and visibility of committed uncheckpointed WAL rows.
-- Reuse one narrowly owned summary read primitive only where the focused trace
-  proves the same contract.
+- Trace retrieval SQLite opens and retrieval-event persistence from each of the
+  four retrieval routes to their exact owners.
+- Use temporary roots, fake clients/models, and seeded SQLite evidence only.
+- Distinguish mandatory product observability from incidental request-side
+  mutation, fallback output, and write-capable database access.
+- Record one selection checkpoint naming the chosen seam, intended RED, frozen
+  surfaces, and completion evidence before production implementation.
 
 ## Boundaries
 
-- Do not repeat the completed Windows SQLite comparison or model-cache repair.
-- Do not change retrieval SQLite, retrieval telemetry, Qdrant, action-job
-  lifecycle, route effects, response contracts, dependencies, or runtime
-  packages.
+- Do not repeat completed Qdrant, ingest-status, summary-status, model-cache, or
+  summary SQLite authority work.
+- Do not change production code, route effects, responses, telemetry policy,
+  dependencies, or runtime packages during selection.
 - Do not invoke configured databases, live endpoints, Qdrant, models, ingestion,
   identity, WSL, public checkout, or the mixed main checkout.
-- Use temporary SQLite databases and focused tests only.
+- Keep retrieval SQLite and telemetry separate unless the trace proves one
+  shared authority and rollback boundary.
 
 ## Completion gate
 
-The current write-capable summary connection must fail the focused RED. The
-corrected reader must prove absent-path no-create, live-WAL visibility, DDL/DML
-rejection, bounded close behavior, unchanged response semantics, focused route
-regressions, diff checks, and independent review before checkpoint.
+A read-only evidence checkpoint must identify every remaining retrieval SQLite
+and telemetry callsite, state which behavior is intentional, select one exact
+next seam, define its mutation-sensitive RED and focused regression gate, and
+receive independent review. If the evidence contradicts ROADMAP ordering or
+route classification, update the register before implementation.

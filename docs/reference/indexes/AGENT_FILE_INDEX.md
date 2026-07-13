@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1213**
+Indexed active tracked paths: **1215**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -262,6 +262,7 @@ Indexed active tracked paths: **1213**
 | `/docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
@@ -1119,6 +1120,7 @@ Indexed active tracked paths: **1213**
 | `/tests/unit/test_summary_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_routes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_engine_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_route_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tag_utils_taxonomy.py` | Verification | Test, fixture, or verification asset. |

@@ -352,23 +352,23 @@ the failure is not currently visible.
 
 - Priority: P0
 - Status: IN_PROGRESS
-- Finding: four retrieval operations can still persist retrieval events, may
-  populate or download model caches, and use write-capable SQLite reads. Their
-  query-side Qdrant creation and the ingest-status constructor mutation are
-  checkpointed closed. Summary read projections also open writable SQLite
-  connections and require a focused side-effect audit before passive
-  classification is trusted.
+- Finding: four retrieval operations still persist retrieval events and use
+  write-capable SQLite reads. Their query-side Qdrant creation, model-cache
+  resolution, and the ingest-status constructor mutation are checkpointed
+  closed. Summary SQLite projection authority is also checkpointed closed.
 - Repair: separate read-only retrieval/status inspection from collection,
   retrieval-event, model-provisioning, and ledger initialization; make every
   intentional write an explicit governed effect; require preseeded offline model
   resolution for read-only retrieval; and audit summary projections with
   read-only connections or equivalent no-write evidence.
 - Completion gate: seeded temporary-root and immutable-store witnesses prove
-  that nominal reads cannot create directories, SQLite files or sidecars, DDL,
-  Qdrant collections, retrieval-event rows, fallback JSONL output, or model
-  downloads/cache writes. A seeded write-capable implementation must make the
-  oracle fail. Any operation that retains an intentional write remains
-  `automatic_mutation` and governed as such.
+  that nominal reads cannot create directories, SQLite databases, unauthorized
+  sidecars, DDL, Qdrant collections, retrieval-event rows, fallback JSONL
+  output, or model downloads/cache writes. Required SQLite WAL coordination
+  sidecars are permitted only under an explicit live-WAL truth policy. A seeded
+  write-capable implementation must make the oracle fail. Any operation that
+  retains an intentional write remains `automatic_mutation` and governed as
+  such.
 - Public impact: RELEASE_REQUIRED
 - Boundary: this follow-up does not reopen governed ingest staging, the common
   R-05 route/client guard, R-08 identity recovery, or R-14 status probing.
@@ -459,6 +459,18 @@ the failure is not currently visible.
   SQLite read authority using the already-proven live-WAL contract. Retrieval
   SQLite and telemetry remain separate. Evidence:
   `docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Summary SQLite authority checkpoint evidence (2026-07-13): the dashboard,
+  entity-profile, persisted video-summary, and knowledge-graph fallback readers
+  now share one existing-file URI read primitive with `mode=ro`, verified
+  `query_only`, and a SQLite authorizer. Independent review found and closed a
+  P1 capability gap where `ATTACH`, `VACUUM INTO`, and query-only downgrade
+  escaped the initial read-only policy. Fresh verification passed the focused
+  authority witnesses and a 372-test adjacent union, preserved committed WAL
+  visibility and the unchanged 69-operation route census, and received a clean
+  independent rereview. R-05-F1 remains `IN_PROGRESS`; the next bounded mission
+  is a fresh selection between retrieval SQLite and intentional retrieval
+  telemetry. Evidence:
+  `docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1047,6 +1059,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed summary-only SQLite read authority with existing-file
+  URI mode, live-WAL visibility, operation-level authorization, and bounded
+  connection ownership. Advanced R-05-F1 to a fresh selection between retrieval
+  SQLite and intentional retrieval telemetry without reopening completed seams.
 - 2026-07-13: Checkpointed exact local-only text/CLIP retrieval model loading,
   including rejection of incomplete, unpinned, and redirected snapshot
   directories. Advanced R-05-F1 to summary-only live-WAL read authority without

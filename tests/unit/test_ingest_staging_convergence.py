@@ -33,7 +33,11 @@ def _load_ingest_module():
 ingest_module = _load_ingest_module()
 
 
-def _runtime_paths(tmp_path: Path) -> dict[str, Path]:
+def _runtime_paths(
+    tmp_path: Path,
+    *,
+    create: bool = True,
+) -> dict[str, Path]:
     paths = {
         "ingest_requests": tmp_path / "ingest_requests",
         "import_inbox": tmp_path / "import_inbox",
@@ -42,19 +46,22 @@ def _runtime_paths(tmp_path: Path) -> dict[str, Path]:
         "failed": tmp_path / "failed",
         "watchdog_state_file": tmp_path / "logs" / "watchdog_state.json",
     }
-    for path in paths.values():
-        if path.suffix:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        else:
-            path.mkdir(parents=True, exist_ok=True)
+    if create:
+        for path in paths.values():
+            if path.suffix:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                path.mkdir(parents=True, exist_ok=True)
     return paths
 
 
 def _app_client(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    create_runtime_paths: bool = True,
 ) -> tuple[TestClient, dict[str, Path], MiniAgentClient]:
-    runtime_paths = _runtime_paths(tmp_path)
+    runtime_paths = _runtime_paths(tmp_path, create=create_runtime_paths)
     authority = MiniAgentClient(
         profile="safe",
         config={"agent": {"execution_mode": "in_process"}},
@@ -181,6 +188,44 @@ def test_multipart_prepare_requires_separate_exact_confirmation_before_watchdog(
     )
     assert reused.status_code == 409
     assert len(list(runtime_paths["import_inbox"].iterdir())) == 1
+
+
+def test_cold_start_prepare_and_confirm_create_governed_storage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, runtime_paths, _authority = _app_client(
+        tmp_path,
+        monkeypatch,
+        create_runtime_paths=False,
+    )
+    assert not runtime_paths["ingest_requests"].exists()
+    assert not runtime_paths["import_inbox"].exists()
+
+    prepared = _prepare_upload(client, b"cold-start-video")
+
+    assert prepared.status_code == 201
+    payload = prepared.json()
+    record_path = (
+        runtime_paths["ingest_requests"] / f"{payload['request_id']}.json"
+    )
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    pending_path = Path(record["pending_path"])
+    assert pending_path.is_file()
+
+    confirmed = client.post(
+        "/api/ingest/submit",
+        json={
+            "action": "confirm",
+            "request_id": payload["request_id"],
+            "confirmation_token": payload["confirmation_token"],
+        },
+    )
+
+    assert confirmed.status_code == 202
+    assert confirmed.json()["status"] == "staged"
+    assert len(list(runtime_paths["import_inbox"].iterdir())) == 1
+    assert not pending_path.exists()
 
 
 def test_local_path_prepare_copies_source_then_uses_same_confirm_action(
@@ -427,6 +472,7 @@ def test_cleanup_scans_beyond_terminal_history_and_expires_receiving_artifacts(
     tmp_path: Path,
 ) -> None:
     requests_dir = tmp_path / "requests"
+    requests_dir.mkdir()
     ledger = ingest_module.IngestRequestLedger(requests_dir)
     terminal_record = {
         "status": "completed",

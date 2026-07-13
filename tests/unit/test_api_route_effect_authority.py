@@ -63,7 +63,7 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
     ("GET", "/api/summary/video/{video_hash}/status"): "passive_read",
     ("POST", "/api/summary/video/{video_hash}/generate"): "process_execution",
     ("POST", "/api/ingest/submit"): "request_staging",
-    ("GET", "/api/ingest/status/{request_id}"): "automatic_mutation",
+    ("GET", "/api/ingest/status/{request_id}"): "passive_read",
     ("HEAD", "/api/status"): "process_execution",
     ("GET", "/api/status"): "process_execution",
     ("GET", "/api/health/summary"): "passive_read",
@@ -105,9 +105,9 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
 }
 
 EXPECTED_COUNTS = {
-    "passive_read": 40,
+    "passive_read": 41,
     "request_staging": 1,
-    "automatic_mutation": 11,
+    "automatic_mutation": 10,
     "curated_mutation": 8,
     "process_execution": 9,
 }

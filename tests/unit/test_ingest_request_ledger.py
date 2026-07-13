@@ -57,6 +57,29 @@ def test_request_ledger_persists_round_trip_record(tmp_path: Path) -> None:
     assert loaded["budget_status"] == "accepted"
 
 
+def test_create_record_creates_missing_requests_directory(tmp_path: Path) -> None:
+    requests_dir = tmp_path / "runtime" / "ingest_requests"
+    ledger = IngestRequestLedger(requests_dir)
+    assert not requests_dir.exists()
+
+    source_path = tmp_path / "sample.mp4"
+    source_path.write_bytes(b"video-bytes")
+    record = ledger.create_record(
+        source_path=source_path,
+        staged_path=tmp_path / "import_inbox" / "req__sample.mp4",
+        file_hash=hashlib.sha256(source_path.read_bytes()).hexdigest(),
+        confirmation_token_present=True,
+        policy_profile="local_ingest_facade_v1",
+        queue_depth_snapshot=0,
+        watchdog_detection_window_seconds=5,
+        budget_scope="single_local_file_handoff",
+        budget_status="accepted",
+    )
+
+    assert requests_dir.is_dir()
+    assert ledger.record_path(record["request_id"]).is_file()
+
+
 def test_resolve_request_status_tracks_waiting_processing_and_completed(tmp_path: Path) -> None:
     runtime_paths = _runtime_paths(tmp_path)
     ledger = IngestRequestLedger(runtime_paths["ingest_requests"])

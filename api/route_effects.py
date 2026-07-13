@@ -89,7 +89,7 @@ ROUTE_EFFECTS: dict[RouteOperation, RouteEffect] = {
         "/api/summary/video/{video_hash}/generate",
     ): RouteEffect.PROCESS_EXECUTION,
     ("POST", "/api/ingest/submit"): RouteEffect.REQUEST_STAGING,
-    ("GET", "/api/ingest/status/{request_id}"): RouteEffect.AUTOMATIC_MUTATION,
+    ("GET", "/api/ingest/status/{request_id}"): RouteEffect.PASSIVE_READ,
     ("HEAD", "/api/status"): RouteEffect.PROCESS_EXECUTION,
     ("GET", "/api/status"): RouteEffect.PROCESS_EXECUTION,
     ("GET", "/api/health/summary"): RouteEffect.PASSIVE_READ,

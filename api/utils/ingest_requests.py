@@ -64,7 +64,6 @@ def load_watchdog_registry(watchdog_state_file: Path) -> Dict[str, Dict[str, Any
 class IngestRequestLedger:
     def __init__(self, requests_dir: Path | str):
         self.requests_dir = Path(requests_dir)
-        self.requests_dir.mkdir(parents=True, exist_ok=True)
 
     def allocate_request_id(self) -> str:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

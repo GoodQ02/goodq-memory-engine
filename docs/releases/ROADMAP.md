@@ -559,6 +559,20 @@ the failure is not currently visible.
   routes remain `automatic_mutation`. R-05-F1 remains `IN_PROGRESS`; the next
   bounded mission is a fresh producer-side privacy/detail selection. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Retrieval query-log privacy selection evidence (2026-07-13): temporary-only
+  witnesses proved the exact query enters four application INFO records and the
+  text/visual GET endpoints' Uvicorn access targets. A similar-scene query can
+  include persisted transcript and scene-summary material, and one multimodal
+  request can repeat it up to four times. The selected repair owns only these
+  shared-log producers in `retrieval/multimodal_search.py` and `api/server.py`;
+  it preserves the functional query, responses, access logging, telemetry,
+  route effects, and existing secret redaction. FAISS absolute-path event/log
+  propagation remains the next independent privacy boundary. The same census
+  recorded separate analytics-question and derived-intent logging candidates
+  for later evidence rather than silently bundling them. R-05-F1 remains
+  `IN_PROGRESS`; the next mission is mutation-sensitive raw-query privacy RED.
+  Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1147,6 +1161,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Selected one complete retrieval raw-query log boundary after a
+  fresh audit found both four engine INFO producers and Uvicorn GET access-log
+  exposure. Kept FAISS path privacy, analytics-question logging, and derived
+  intent logging as separately owned follow-up evidence.
 - 2026-07-13: Checkpointed explicit origin-owned retrieval context across API,
   MiniAgent, CLI, engine, router, Qdrant, ephemeral-memory, and FAISS. Removed
   ambient attribution, preserved telemetry and route effects, and advanced

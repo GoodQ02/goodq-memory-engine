@@ -29,6 +29,61 @@ function isSafeSummaryJob(job, videoHash) {
     && typeof job.state === "string";
 }
 
+function isSafeCollectionCreatePrepare(data, confirmationToken) {
+  return !!data
+    && typeof data === "object"
+    && data.success === true
+    && typeof data.action_id === "string"
+    && /^action_[0-9a-f]{32}$/.test(data.action_id)
+    && typeof data.epoch_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(data.epoch_id)
+    && typeof data.payload_sha256 === "string"
+    && /^[0-9a-f]{64}$/.test(data.payload_sha256)
+    && typeof confirmationToken === "string"
+    && confirmationToken.trim().length > 0;
+}
+
+function isSafeCollectionCreateConfirm(data, actionId, epochId, expectedName) {
+  return !!data
+    && typeof data === "object"
+    && data.success === true
+    && data.action_id === actionId
+    && typeof data.recovered === "boolean"
+    && ["recorded", "failed"].includes(data.audit_status)
+    && !!data.collection
+    && typeof data.collection === "object"
+    && typeof data.collection.collection_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(data.collection.collection_id)
+    && data.collection.name === expectedName
+    && data.collection.status === "active"
+    && data.collection.source_epoch === epochId
+    && Array.isArray(data.collection.history)
+    && data.collection.history.every(entry => {
+      if (!entry || typeof entry !== "object") return false;
+      const keys = Object.keys(entry);
+      return typeof entry.action === "string"
+        && typeof entry.timestamp_utc === "string"
+        && keys.every(key => ["action", "timestamp_utc", "operator_note"].includes(key));
+    });
+}
+
+function isSafeCollectionDeleteJob(job, collectionId) {
+  return !!job
+    && typeof job === "object"
+    && typeof job.job_id === "string"
+    && /^job_[0-9a-f]{32}$/.test(job.job_id)
+    && job.operation === "summary_collection.delete"
+    && !!job.scope
+    && typeof job.scope === "object"
+    && Object.keys(job.scope).length === 3
+    && job.scope.collection_id === collectionId
+    && typeof job.scope.epoch_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(job.scope.epoch_id)
+    && typeof job.scope.expected_record_sha256 === "string"
+    && /^[0-9a-f]{64}$/.test(job.scope.expected_record_sha256)
+    && typeof job.state === "string";
+}
+
 function stopSummaryPolling(regenBtn, message = null, type = "error") {
   if (pollInterval) {
     clearTimeout(pollInterval);
@@ -110,6 +165,7 @@ function setupModalListeners() {
   const closeBtn = document.getElementById('modal-close-btn');
   const cancelBtn = document.getElementById('modal-cancel-btn');
   const saveBtn = document.getElementById('save-playlist-btn');
+  const submitBtn = document.getElementById('modal-submit-btn');
   const form = document.getElementById('save-collection-form');
   
   saveBtn.addEventListener('click', () => {
@@ -151,24 +207,76 @@ function setupModalListeners() {
       operator_note: `Created from summary workbench playlist with ${state.currentPlaylistScenes.length} scenes.`
     };
     
+    submitBtn.disabled = true;
     try {
-      const resp = await fetch('/api/summary/collections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!resp.ok) throw new Error('Failed to create collection.');
-      
-      const data = await resp.json();
-      showToast(`Collection "${data.collection.name}" saved successfully!`);
+      const collection = await createSummaryCollection(payload);
+      if (!collection) return;
       closeModal();
-      loadCustomCollections();
+      await loadCustomCollections();
     } catch (err) {
-      console.error(err);
-      showToast(err.message, 'error');
+      showToast('Collection could not be confirmed. Try again.', 'error');
+    } finally {
+      submitBtn.disabled = false;
     }
   });
+}
+
+async function createSummaryCollection(payload) {
+  const confirmed = window.confirm(`Save collection "${payload.name}"?`);
+  if (!confirmed) return null;
+
+  const endpoint = '/api/summary/collections';
+  const prepareResp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "prepare",
+      collection: payload
+    })
+  });
+  if (!prepareResp.ok) throw new Error("collection_prepare_failed");
+
+  const prepareData = await prepareResp.json();
+  let confirmationToken = prepareData && prepareData.confirmation_token;
+  if (prepareData) prepareData.confirmation_token = null;
+  if (!isSafeCollectionCreatePrepare(prepareData, confirmationToken)) {
+    throw new Error("collection_prepare_invalid");
+  }
+  const actionId = prepareData.action_id;
+  const epochId = prepareData.epoch_id;
+  const payloadSha256 = prepareData.payload_sha256;
+
+  let confirmResp;
+  try {
+    confirmResp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "confirm",
+        action_id: actionId,
+        epoch_id: epochId,
+        payload_sha256: payloadSha256,
+        confirmation_token: confirmationToken,
+        collection: payload
+      })
+    });
+  } finally {
+    confirmationToken = null;
+  }
+
+  if (!confirmResp.ok) throw new Error("collection_confirm_failed");
+  if (confirmResp.status !== 200) throw new Error("collection_confirm_failed");
+  const confirmData = await confirmResp.json();
+  if (!isSafeCollectionCreateConfirm(confirmData, actionId, epochId, payload.name)) {
+    throw new Error("collection_confirm_invalid");
+  }
+
+  if (confirmData.audit_status === "failed") {
+    showToast("Collection saved, but durable audit recording needs attention.", "error");
+  } else {
+    showToast("Collection saved successfully.");
+  }
+  return confirmData.collection;
 }
 
 // Load scope metadata and dashboard metrics
@@ -594,17 +702,103 @@ function loadCustomCollection(col) {
 
 // Delete custom collection
 async function handleDeleteCollection(collectionId) {
-  if (!confirm(`Are you sure you want to delete collection ${collectionId}?`)) return;
-  
+  const confirmed = window.confirm(`Are you sure you want to delete collection ${collectionId}?`);
+  if (!confirmed) return;
+
+  const endpoint = `/api/summary/collections/${encodeURIComponent(collectionId)}`;
+  const deleteButtons = document.querySelectorAll('.col-delete-btn');
+  deleteButtons.forEach(button => { button.disabled = true; });
   try {
-    const resp = await fetch(`/api/summary/collections/${encodeURIComponent(collectionId)}`, {
-      method: 'DELETE'
+    const prepareResp = await fetch(endpoint, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "prepare" })
     });
-    
-    if (!resp.ok) throw new Error('Failed to delete collection.');
-    
-    showToast('Collection deleted.');
-    
+    if (prepareResp.status === 409) throw new Error("collection_delete_active");
+    if (!prepareResp.ok) throw new Error("collection_delete_prepare_failed");
+
+    const prepareData = await prepareResp.json();
+    const preparedJob = prepareData && prepareData.job;
+    let confirmationToken = prepareData && prepareData.confirmation_token;
+    if (prepareData) prepareData.confirmation_token = null;
+    if (
+      !prepareData
+      || prepareData.success !== true
+      || !isSafeCollectionDeleteJob(preparedJob, collectionId)
+      || preparedJob.state !== "pending_confirmation"
+      || typeof confirmationToken !== "string"
+      || !confirmationToken.trim()
+    ) {
+      throw new Error("collection_delete_prepare_invalid");
+    }
+    const jobId = preparedJob.job_id;
+    const epochId = preparedJob.scope.epoch_id;
+    const expectedRecordSha256 = preparedJob.scope.expected_record_sha256;
+
+    let confirmResp;
+    try {
+      confirmResp = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "confirm",
+          job_id: jobId,
+          epoch_id: epochId,
+          expected_record_sha256: expectedRecordSha256,
+          confirmation_token: confirmationToken
+        })
+      });
+    } finally {
+      confirmationToken = null;
+    }
+
+    if (confirmResp.status !== 200) {
+      let failureData = null;
+      try {
+        failureData = await confirmResp.json();
+      } catch (error) {
+        failureData = null;
+      }
+      const detail = failureData && failureData.detail;
+      if (
+        confirmResp.status === 503
+        && detail
+        && detail.code === "collection_finalization_pending"
+        && isSafeCollectionDeleteJob(detail.job, collectionId)
+        && detail.job.job_id === jobId
+        && detail.job.scope.epoch_id === epochId
+        && detail.job.scope.expected_record_sha256 === expectedRecordSha256
+        && detail.job.state === "running"
+      ) {
+        throw new Error("collection_finalization_pending");
+      }
+      throw new Error("collection_delete_confirm_failed");
+    }
+
+    const confirmData = await confirmResp.json();
+    if (
+      !confirmData
+      || confirmData.success !== true
+      || typeof confirmData.recovered !== "boolean"
+      || !isSafeCollectionDeleteJob(confirmData && confirmData.job, collectionId)
+      || confirmData.job.job_id !== jobId
+      || confirmData.job.scope.epoch_id !== epochId
+      || confirmData.job.scope.expected_record_sha256 !== expectedRecordSha256
+      || confirmData.job.state !== "succeeded"
+      || !confirmData.job.outcome
+      || typeof confirmData.job.outcome !== "object"
+      || confirmData.job.outcome.code !== "collection_deleted"
+      || !["recorded", "failed"].includes(confirmData.job.audit_status)
+    ) {
+      throw new Error("collection_delete_confirm_invalid");
+    }
+
+    if (confirmData.job.audit_status === "failed") {
+      showToast("Collection deleted, but durable audit recording needs attention.", "error");
+    } else {
+      showToast('Collection deleted.');
+    }
+
     // Clear display if the deleted collection was open
     if (state.activeCollection && state.activeCollection.collection_id === collectionId) {
       document.getElementById('no-profile-selected').hidden = false;
@@ -612,10 +806,18 @@ async function handleDeleteCollection(collectionId) {
       state.activeCollection = null;
       state.currentPlaylistScenes = [];
     }
-    
-    loadCustomCollections();
+
+    await loadCustomCollections();
   } catch (err) {
-    showToast(err.message, 'error');
+    if (err.message === "collection_finalization_pending") {
+      showToast('Collection deletion is awaiting durable finalization. Reload before retrying.', 'error');
+    } else if (err.message === "collection_delete_active") {
+      showToast('A collection delete is already pending. Reload before retrying.', 'error');
+    } else {
+      showToast('Collection deletion could not be confirmed. Try again.', 'error');
+    }
+  } finally {
+    deleteButtons.forEach(button => { button.disabled = false; });
   }
 }
 

@@ -112,6 +112,179 @@ def _case_block(function_source: str, state: str) -> str:
     return function_source[start:end]
 
 
+def test_collection_create_requires_native_confirmation_before_prepare_fetch() -> None:
+    creator = _function_source("createSummaryCollection")
+
+    assert "window.confirm(" in creator
+    assert "if (!confirmed) return null;" in creator
+    assert creator.index("window.confirm(") < creator.index("await fetch(")
+
+
+def test_collection_create_uses_exact_prepare_and_confirm_bodies() -> None:
+    creator = _function_source("createSummaryCollection")
+
+    assert re.search(
+        r"body:\s*JSON\.stringify\(\{\s*"
+        r'action:\s*"prepare",\s*'
+        r"collection:\s*payload\s*"
+        r"\}\)",
+        creator,
+    )
+    assert re.search(
+        r"body:\s*JSON\.stringify\(\{\s*"
+        r'action:\s*"confirm",\s*'
+        r"action_id:\s*actionId,\s*"
+        r"epoch_id:\s*epochId,\s*"
+        r"payload_sha256:\s*payloadSha256,\s*"
+        r"confirmation_token:\s*confirmationToken,\s*"
+        r"collection:\s*payload\s*"
+        r"\}\)",
+        creator,
+    )
+
+
+def test_collection_create_validates_exact_prepare_and_confirm_evidence() -> None:
+    prepare_validator = _function_source("isSafeCollectionCreatePrepare")
+    confirm_validator = _function_source("isSafeCollectionCreateConfirm")
+
+    assert "/^action_[0-9a-f]{32}$/" in prepare_validator
+    assert "/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/" in prepare_validator
+    assert "/^[0-9a-f]{64}$/" in prepare_validator
+    assert "data.success === true" in prepare_validator
+    assert "data.action_id === actionId" in confirm_validator
+    assert "data.collection.source_epoch === epochId" in confirm_validator
+    assert "data.collection.name === expectedName" in confirm_validator
+    assert '["recorded", "failed"].includes(data.audit_status)' in confirm_validator
+
+
+def test_collection_create_token_is_local_cleared_and_never_rendered() -> None:
+    creator = _function_source("createSummaryCollection")
+    state_declaration = SUMMARY_JS.split("let pollInterval", maxsplit=1)[0]
+
+    assert "let confirmationToken =" in creator
+    assert "prepareData.confirmation_token = null;" in creator
+    assert creator.index("prepareData.confirmation_token = null;") < creator.index(
+        "isSafeCollectionCreatePrepare(prepareData, confirmationToken)"
+    )
+    assert "finally" in creator
+    assert "confirmationToken = null;" in creator
+    assert "confirmationToken" not in state_declaration
+    for line in creator.splitlines():
+        if any(
+            surface in line
+            for surface in (
+                "state.",
+                "localStorage",
+                "sessionStorage",
+                "textContent",
+                "innerHTML",
+                "showToast",
+                "console.",
+                "URLSearchParams",
+            )
+        ):
+            assert "confirmationToken" not in line
+
+
+def test_collection_create_ui_success_follows_confirmed_durable_result() -> None:
+    creator = _function_source("createSummaryCollection")
+    listener = _function_source("setupModalListeners")
+
+    assert "if (!confirmResp.ok)" in creator
+    assert "isSafeCollectionCreateConfirm(" in creator
+    assert creator.index("if (!confirmResp.ok)") < creator.index("return confirmData.collection;")
+    assert creator.index("isSafeCollectionCreateConfirm(") < creator.index(
+        'showToast("Collection saved successfully.")'
+    )
+    assert 'confirmData.audit_status === "failed"' in creator
+    assert "durable audit recording needs attention" in creator
+    assert "await createSummaryCollection(payload)" in listener
+    assert listener.index("await createSummaryCollection(payload)") < listener.index("closeModal()")
+    assert listener.index("await createSummaryCollection(payload)") < listener.index("loadCustomCollections()")
+    assert "body: JSON.stringify(payload)" not in listener
+
+
+def test_collection_delete_requires_confirmation_before_prepare_fetch() -> None:
+    deleter = _function_source("handleDeleteCollection")
+
+    assert "window.confirm(" in deleter
+    assert "if (!confirmed) return;" in deleter
+    assert deleter.index("window.confirm(") < deleter.index("await fetch(")
+
+
+def test_collection_delete_uses_exact_prepare_and_confirm_bodies() -> None:
+    deleter = _function_source("handleDeleteCollection")
+
+    assert "encodeURIComponent(collectionId)" in deleter
+    assert 'body: JSON.stringify({ action: "prepare" })' in deleter
+    assert re.search(
+        r"body:\s*JSON\.stringify\(\{\s*"
+        r'action:\s*"confirm",\s*'
+        r"job_id:\s*jobId,\s*"
+        r"epoch_id:\s*epochId,\s*"
+        r"expected_record_sha256:\s*expectedRecordSha256,\s*"
+        r"confirmation_token:\s*confirmationToken\s*"
+        r"\}\)",
+        deleter,
+    )
+
+
+def test_collection_delete_validates_exact_public_job_scope() -> None:
+    validator = _function_source("isSafeCollectionDeleteJob")
+
+    assert "/^job_[0-9a-f]{32}$/" in validator
+    assert 'job.operation === "summary_collection.delete"' in validator
+    assert "Object.keys(job.scope).length === 3" in validator
+    assert "job.scope.collection_id === collectionId" in validator
+    assert "/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/" in validator
+    assert "/^[0-9a-f]{64}$/" in validator
+
+
+def test_collection_delete_token_is_local_cleared_and_never_rendered() -> None:
+    deleter = _function_source("handleDeleteCollection")
+
+    assert "let confirmationToken =" in deleter
+    assert "prepareData.confirmation_token = null;" in deleter
+    assert deleter.index("prepareData.confirmation_token = null;") < deleter.index(
+        "!isSafeCollectionDeleteJob(preparedJob, collectionId)"
+    )
+    assert "finally" in deleter
+    assert "confirmationToken = null;" in deleter
+    for line in deleter.splitlines():
+        if any(
+            surface in line
+            for surface in (
+                "state.",
+                "localStorage",
+                "sessionStorage",
+                "textContent",
+                "innerHTML",
+                "showToast",
+                "console.",
+                "URLSearchParams",
+            )
+        ):
+            assert "confirmationToken" not in line
+
+
+def test_collection_delete_success_requires_exact_terminal_outcome() -> None:
+    deleter = _function_source("handleDeleteCollection")
+
+    assert "if (confirmResp.status !== 200)" in deleter
+    assert "isSafeCollectionDeleteJob(confirmData && confirmData.job, collectionId)" in deleter
+    assert 'confirmData.job.state !== "succeeded"' in deleter
+    assert 'confirmData.job.outcome.code !== "collection_deleted"' in deleter
+    assert "collection_finalization_pending" in deleter
+    assert "detail.job.scope.epoch_id === epochId" in deleter
+    assert "detail.job.scope.expected_record_sha256 === expectedRecordSha256" in deleter
+    assert 'detail.job.state === "running"' in deleter
+    assert 'confirmData.job.audit_status === "failed"' in deleter
+    assert "durable audit recording needs attention" in deleter
+    assert deleter.index('confirmData.job.outcome.code !== "collection_deleted"') < deleter.index(
+        "showToast('Collection deleted.')"
+    )
+
+
 def test_public_summary_job_validation_is_exact() -> None:
     validator = _function_source("isSafeSummaryJob")
 

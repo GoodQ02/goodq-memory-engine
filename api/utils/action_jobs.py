@@ -1,0 +1,394 @@
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from filelock import FileLock
+
+from steps.common.atomic_io import atomic_write_json
+
+
+SCHEMA_VERSION = "goodq.action-job.v1"
+JOB_ID_RE = re.compile(r"^job_[0-9a-f]{32}$")
+NONTERMINAL_STATES = frozenset(
+    {"pending_confirmation", "authorizing", "queued", "running"}
+)
+TERMINAL_STATES = frozenset({"succeeded", "failed", "interrupted", "expired"})
+ALL_STATES = NONTERMINAL_STATES | TERMINAL_STATES
+PERMITTED_TRANSITIONS = {
+    "pending_confirmation": frozenset({"authorizing", "failed", "expired"}),
+    "authorizing": frozenset({"queued", "failed", "expired"}),
+    "queued": frozenset({"running", "failed", "interrupted"}),
+    "running": frozenset({"succeeded", "failed", "interrupted"}),
+}
+_SECRET_KEY_NAMES = {
+    "apikey",
+    "authorization",
+    "authtoken",
+    "bearer",
+    "bearertoken",
+    "confirmationtoken",
+    "password",
+    "secret",
+    "token",
+}
+_UPDATE_FIELDS = {
+    "token_fingerprint",
+    "authorization_request_id",
+    "outcome",
+    "audit_status",
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalized_key(key: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", key.lower())
+
+
+def _reject_secret_bearing(value: Any) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            normalized_key = _normalized_key(str(key))
+            if normalized_key in _SECRET_KEY_NAMES or "bearer" in normalized_key:
+                raise ValueError("Action job data contains a secret-bearing field")
+            _reject_secret_bearing(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _reject_secret_bearing(nested)
+    elif isinstance(value, str) and re.search(r"\bbearer\s+\S+", value, re.IGNORECASE):
+        raise ValueError("Action job data contains bearer token material")
+
+
+def _reject_unsanitized_message(message: str) -> None:
+    unsafe_patterns = (
+        r"traceback\s*\(",
+        r"\b(?:stdout|stderr)\b\s*[:=]",
+        r"\bsubprocess\s+output\b",
+        r"\bcompletedprocess\s*\(",
+        r"\b[A-Za-z]+(?:Error|Exception):",
+        r"[A-Za-z]:[\\/]",
+        r"(?:^|\s)\\\\[^\s]+",
+        r"(?:^|\s)/(?:[^/\s]+/)*[^/\s]+",
+        r"(?:^|\s)~[\\/]",
+    )
+    if "\n" in message or "\r" in message or any(
+        re.search(pattern, message, re.IGNORECASE) for pattern in unsafe_patterns
+    ):
+        raise ValueError("Action job outcome message contains unsanitized detail")
+
+
+def _normalize_scope(scope: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(scope, dict):
+        raise ValueError("Action job scope must be a JSON object")
+    try:
+        payload = json.dumps(
+            scope,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Action job scope must contain only JSON values") from exc
+    normalized = json.loads(payload)
+    if not isinstance(normalized, dict):
+        raise ValueError("Action job scope must be a JSON object")
+    _reject_secret_bearing(normalized)
+    return normalized
+
+
+def _scope_identity(scope: dict[str, Any]) -> str:
+    return json.dumps(
+        scope,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
+    unknown = set(updates) - _UPDATE_FIELDS
+    if unknown:
+        raise ValueError(f"Unsupported action job update fields: {sorted(unknown)}")
+    _reject_secret_bearing(updates)
+
+    validated: dict[str, Any] = {}
+    if "token_fingerprint" in updates:
+        fingerprint = updates["token_fingerprint"]
+        if not isinstance(fingerprint, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", fingerprint
+        ):
+            raise ValueError("Token fingerprint must be a lowercase SHA-256 digest")
+        validated["token_fingerprint"] = fingerprint
+    if "authorization_request_id" in updates:
+        request_id = updates["authorization_request_id"]
+        if not isinstance(request_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.:-]{1,128}", request_id
+        ):
+            raise ValueError("Invalid authorization request ID")
+        validated["authorization_request_id"] = request_id
+    if "outcome" in updates:
+        outcome = updates["outcome"]
+        if not isinstance(outcome, dict) or set(outcome) != {"code", "message"}:
+            raise ValueError("Outcome must contain only code and message")
+        code = outcome["code"]
+        message = outcome["message"]
+        if not isinstance(code, str) or not re.fullmatch(r"[a-z0-9_.-]{1,64}", code):
+            raise ValueError("Invalid sanitized outcome code")
+        if not isinstance(message, str) or not 1 <= len(message) <= 512:
+            raise ValueError("Invalid sanitized outcome message")
+        _reject_unsanitized_message(message)
+        validated["outcome"] = {"code": code, "message": message}
+    if "audit_status" in updates:
+        audit_status = updates["audit_status"]
+        if not isinstance(audit_status, str) or not re.fullmatch(
+            r"[a-z0-9_.-]{1,64}", audit_status
+        ):
+            raise ValueError("Invalid audit status")
+        validated["audit_status"] = audit_status
+    return validated
+
+
+class ActionJobTransitionError(RuntimeError):
+    """Base error for a rejected action-job state transition."""
+
+
+class InvalidTransitionError(ActionJobTransitionError):
+    """The requested state edge is not part of the lifecycle contract."""
+
+
+class StaleTransitionError(ActionJobTransitionError):
+    """The persisted state no longer matches the caller's expectation."""
+
+
+class TerminalTransitionError(ActionJobTransitionError):
+    """A terminal action job cannot be modified."""
+
+
+class ActionJobLedger:
+    def __init__(self, root_dir: Path | str):
+        self.root_dir = Path(root_dir)
+        self.root_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = FileLock(str(self.root_dir / ".action-jobs.lock"))
+
+    def allocate_job_id(self) -> str:
+        return f"job_{uuid.uuid4().hex}"
+
+    def create_pending(
+        self,
+        *,
+        operation: str,
+        scope: dict[str, Any],
+        owner_instance: str,
+    ) -> dict[str, Any]:
+        normalized_scope = _normalize_scope(scope)
+        with self._lock:
+            return self._create_pending_unlocked(
+                operation=operation,
+                normalized_scope=normalized_scope,
+                owner_instance=owner_instance,
+            )
+
+    def prepare_or_find_active(
+        self,
+        *,
+        operation: str,
+        scope: dict[str, Any],
+        owner_instance: str,
+    ) -> dict[str, Any]:
+        normalized_scope = _normalize_scope(scope)
+        scope_identity = _scope_identity(normalized_scope)
+        with self._lock:
+            for record in self._records_unlocked():
+                if (
+                    record.get("operation") == operation
+                    and isinstance(record.get("scope"), dict)
+                    and _scope_identity(record["scope"]) == scope_identity
+                    and record.get("state") in NONTERMINAL_STATES
+                ):
+                    return record
+            return self._create_pending_unlocked(
+                operation=operation,
+                normalized_scope=normalized_scope,
+                owner_instance=owner_instance,
+            )
+
+    def list_records(
+        self,
+        *,
+        operation: str | None = None,
+        scope: dict[str, Any] | None = None,
+        states: str | set[str] | frozenset[str] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("Action job list limit must be between 1 and 100")
+        normalized_scope = _normalize_scope(scope) if scope is not None else None
+        scope_identity = (
+            _scope_identity(normalized_scope) if normalized_scope is not None else None
+        )
+        if isinstance(states, str):
+            state_filter = {states}
+        elif states is None:
+            state_filter = None
+        else:
+            state_filter = set(states)
+        with self._lock:
+            records = [
+                record
+                for record in self._records_unlocked()
+                if (operation is None or record.get("operation") == operation)
+                and (
+                    scope_identity is None
+                    or (
+                        isinstance(record.get("scope"), dict)
+                        and _scope_identity(record["scope"]) == scope_identity
+                    )
+                )
+                and (state_filter is None or record.get("state") in state_filter)
+            ]
+        records.sort(
+            key=lambda record: (
+                str(record.get("updated_at_utc") or ""),
+                str(record.get("created_at_utc") or ""),
+            ),
+            reverse=True,
+        )
+        return records[:limit]
+
+    def latest(
+        self,
+        *,
+        operation: str,
+        scope: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        records = self.list_records(operation=operation, scope=scope, limit=1)
+        return records[0] if records else None
+
+    def transition(
+        self,
+        job_id: str,
+        *,
+        expected_states: str | set[str] | frozenset[str],
+        new_state: str,
+        **updates: Any,
+    ) -> dict[str, Any]:
+        if isinstance(expected_states, str):
+            expected = {expected_states}
+        else:
+            expected = set(expected_states)
+        if not expected or not expected <= ALL_STATES:
+            raise ValueError("Expected action job states must be known and non-empty")
+        if new_state not in ALL_STATES:
+            raise InvalidTransitionError(f"Unknown action job state: {new_state}")
+        validated_updates = _validate_updates(updates)
+
+        with self._lock:
+            record = self.load(job_id)
+            if record is None:
+                raise FileNotFoundError(f"Action job record not found: {job_id}")
+            current_state = record.get("state")
+            if current_state in TERMINAL_STATES:
+                raise TerminalTransitionError(
+                    f"Action job {job_id} is terminal in state {current_state}"
+                )
+            if current_state not in expected:
+                raise StaleTransitionError(
+                    f"Action job {job_id} expected {sorted(expected)}, found {current_state}"
+                )
+            if new_state not in PERMITTED_TRANSITIONS.get(str(current_state), frozenset()):
+                raise InvalidTransitionError(
+                    f"Action job transition {current_state} -> {new_state} is not permitted"
+                )
+            updated = dict(record)
+            updated.update(validated_updates)
+            updated["state"] = new_state
+            updated["updated_at_utc"] = _utc_now_iso()
+            atomic_write_json(self.record_path(job_id), updated)
+            return updated
+
+    def reconcile_prior_owner(
+        self, current_owner_instance: str
+    ) -> list[dict[str, Any]]:
+        if not isinstance(current_owner_instance, str) or not current_owner_instance:
+            raise ValueError("Current owner instance must be a non-empty string")
+        interrupted: list[dict[str, Any]] = []
+        with self._lock:
+            for record in self._records_unlocked():
+                if (
+                    record.get("state") not in {"queued", "running"}
+                    or record.get("owner_instance") == current_owner_instance
+                ):
+                    continue
+                updated = dict(record)
+                updated["state"] = "interrupted"
+                updated["updated_at_utc"] = _utc_now_iso()
+                updated["outcome"] = {
+                    "code": "owner_replaced",
+                    "message": "Interrupted after owner instance changed",
+                }
+                job_id = str(updated.get("job_id"))
+                atomic_write_json(self.record_path(job_id), updated)
+                interrupted.append(updated)
+        return interrupted
+
+    def _create_pending_unlocked(
+        self,
+        *,
+        operation: str,
+        normalized_scope: dict[str, Any],
+        owner_instance: str,
+    ) -> dict[str, Any]:
+        job_id = self.allocate_job_id()
+        while self.record_path(job_id).exists():
+            job_id = self.allocate_job_id()
+        timestamp = _utc_now_iso()
+        record: dict[str, Any] = {
+            "schema": SCHEMA_VERSION,
+            "job_id": job_id,
+            "operation": operation,
+            "scope": normalized_scope,
+            "owner_instance": owner_instance,
+            "state": "pending_confirmation",
+            "created_at_utc": timestamp,
+            "updated_at_utc": timestamp,
+            "token_fingerprint": None,
+            "authorization_request_id": None,
+            "outcome": None,
+            "audit_status": None,
+        }
+        atomic_write_json(self.record_path(job_id), record)
+        return record
+
+    def _records_unlocked(self) -> list[dict[str, Any]]:
+        records = []
+        for path in self.root_dir.glob("job_*.json"):
+            if not JOB_ID_RE.fullmatch(path.stem):
+                continue
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                raise ValueError(f"Action job record is not a JSON object: {path.name}")
+            records.append(loaded)
+        return records
+
+    def load(self, job_id: str) -> dict[str, Any] | None:
+        path = self.record_path(job_id)
+        if not path.exists():
+            return None
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Action job record is not a JSON object: {job_id}")
+        return loaded
+
+    def record_path(self, job_id: str) -> Path:
+        if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+            raise ValueError("Invalid action job ID")
+        return self.root_dir / f"{job_id}.json"

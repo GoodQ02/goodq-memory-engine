@@ -292,6 +292,8 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
 
 
 EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
@@ -304,6 +306,8 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 }
 
 EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "stage_ingest_request",
 }
@@ -3737,4 +3741,378 @@ def test_offline_profile_denies_mutating_operations():
         assert rc == 1, f"Mutating tool {tool} was not blocked under offline profile!"
         assert envelope["status"] == "error"
         assert envelope["errors"][0]["code"] == "offline_blocked"
+
+
+_DIGEST_A = "a" * 64
+_DIGEST_B = "b" * 64
+_CREATE_COLLECTION_SCOPE = {
+    "action_id": "action_1234abcd",
+    "epoch_id": "epoch_2026_07_12_test",
+    "payload_sha256": _DIGEST_A,
+}
+_DELETE_COLLECTION_SCOPE = {
+    "job_id": "job_1234abcd",
+    "epoch_id": "epoch_2026_07_12_test",
+    "collection_id": "col_20260712_120000_deadbeef",
+    "expected_record_sha256": _DIGEST_B,
+}
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_accept_only_exact_privacy_safe_scope(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+    token_store = json.loads(
+        (tmp_path / operation / "confirmation_tokens.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    stored = next(iter(token_store.values()))
+    assert stored["tool_args"] == scope
+
+
+@pytest.mark.parametrize(
+    ("operation", "invalid_scope"),
+    [
+        ("create_summary_collection", []),
+        ("create_summary_collection", {}),
+        (
+            "create_summary_collection",
+            {"action_id": "action_1234abcd", "epoch_id": "epoch_test"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "raw_payload": "private transcript"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "action_id": " ../action "},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "epoch_id": "epoch/test"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "action_id": "a" * 129},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": "A" * 64},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": "a" * 63},
+        ),
+        ("delete_summary_collection", []),
+        ("delete_summary_collection", {}),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+            },
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "confirmation_token": "secret"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "job_id": "job\\one"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": "../collection"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": 7},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "expected_record_sha256": "g" * 64},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "expected_record_sha256": "b" * 65},
+        ),
+    ],
+)
+def test_summary_collection_actions_reject_invalid_scope_before_token_issue(
+    operation,
+    invalid_scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / f"invalid-{operation}"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=invalid_scope,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope", "changed_scope"),
+    [
+        (
+            "create_summary_collection",
+            _CREATE_COLLECTION_SCOPE,
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": _DIGEST_B},
+        ),
+        (
+            "delete_summary_collection",
+            _DELETE_COLLECTION_SCOPE,
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": "col_changed"},
+        ),
+    ],
+)
+def test_summary_collection_action_tokens_are_scope_bound_and_single_use(
+    operation,
+    scope,
+    changed_scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatched, mismatch_rc = client.authorize_action(
+        prompt="Reject changed summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=changed_scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatched["errors"][0]["code"] == "token_scope_mismatch"
+
+    confirmed, confirmed_rc = client.authorize_action(
+        prompt="Confirm exact summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirmed_rc == 0
+    assert confirmed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reject reused summary collection token",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_reject_invalid_scope_before_token_claim(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    claim = MagicMock(side_effect=AssertionError("invalid scope reached claim"))
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid claim scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args={**scope, "raw_payload": "private transcript"},
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    claim.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_action_tokens_expire(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / operation
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare expiring collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = "2020-01-01T00:00:00"
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject expired collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "token_expired"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_action_claim_is_atomic_across_clients(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    first = MiniAgentClient(profile="safe")
+    second = MiniAgentClient(profile="safe")
+    first.agent_available = True
+    second.agent_available = True
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic collection claim",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait(timeout=10)
+        return client.authorize_action(
+            prompt="Claim atomic collection authority",
+            mode="ops",
+            tool_name=operation,
+            tool_args=dict(scope),
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_are_denied_offline_without_token(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / operation
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="offline")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject offline summary collection mutation",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "offline_blocked"
+    assert not (agent_home / "confirmation_tokens.json").exists()
 

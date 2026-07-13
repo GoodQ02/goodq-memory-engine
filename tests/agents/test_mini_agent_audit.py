@@ -614,3 +614,164 @@ def test_handler_declared_error_without_reason_uses_generic_error_code():
     assert execution["return_code"] == 1
     assert execution["error_codes"] == ["handler_reported_error"]
     assert execution["handler_reason"] is None
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "target"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_2026_07_12_test",
+                "payload_sha256": "a" * 64,
+            },
+            "summary-collection:create:action_1234abcd",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_2026_07_12_test",
+                "collection_id": "col_20260712_deadbeef",
+                "expected_record_sha256": "b" * 64,
+            },
+            "summary-collection:delete:job_1234abcd",
+        ),
+    ],
+)
+def test_summary_collection_external_outcome_uses_redacted_exact_scope(
+    operation,
+    arguments,
+    target,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[-1]
+    assert row["schema_version"] == "goodq.tool-audit.v1"
+    assert row["event_type"] == "execution"
+    assert row["tool_name"] == operation
+    assert row["arguments"] == arguments
+    serialized = json.dumps(row, sort_keys=True)
+    assert "private transcript" not in serialized
+    assert "confirmation_token" not in serialized
+    assert "C:\\" not in serialized
+    assert "/home/" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "targets", "expected_code"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_test",
+                "payload_sha256": "A" * 64,
+            },
+            ["summary-collection:create:action_1234abcd"],
+            "invalid_tool_arguments",
+        ),
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_test",
+                "payload_sha256": "a" * 64,
+                "name": "private collection name",
+            },
+            ["summary-collection:create:action_1234abcd"],
+            "invalid_tool_arguments",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            ["C:\\private\\saved_collections.json"],
+            "invalid_side_effect_report",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            ["summary-collection:delete:wrong-job"],
+            "invalid_side_effect_report",
+        ),
+    ],
+)
+def test_summary_collection_external_outcome_rejects_scope_or_target_leaks(
+    operation,
+    arguments,
+    targets,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": targets},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "failed", "error_codes": [expected_code]}
+    assert _rows() == []
+
+
+def test_summary_collection_external_outcome_surfaces_audit_write_failure(
+    monkeypatch,
+):
+    client = _client()
+    append = MagicMock(side_effect=OSError("audit unavailable"))
+    monkeypatch.setattr(client, "_append_tool_audit", append)
+
+    result = client.record_external_execution_outcome(
+        operation="create_summary_collection",
+        arguments={
+            "action_id": "action_1234abcd",
+            "epoch_id": "epoch_test",
+            "payload_sha256": "a" * 64,
+        },
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={
+            "mutated": True,
+            "targets": ["summary-collection:create:action_1234abcd"],
+        },
+        error_codes=[],
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["audit_log_error"],
+    }
+    append.assert_called_once()

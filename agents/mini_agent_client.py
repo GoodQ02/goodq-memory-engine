@@ -118,6 +118,8 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 }
 
 MUTATING_DENY_ON_AGENT_FAILURE = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "home_assistant_call_service",
     "qdrant_upsert",
@@ -139,6 +141,8 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 }
 
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
@@ -154,11 +158,15 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 # intentionally have no native execution handler. The caller owns the governed
 # side effect after ``authorize_action`` succeeds.
 LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "stage_ingest_request",
 }
 
 LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
+    "create_summary_collection",
+    "delete_summary_collection",
     "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
@@ -181,6 +189,25 @@ EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH = 64
 PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
 SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
 VIDEO_SUMMARY_SCOPE_FIELDS = ("job_id", "video_hash")
+SUMMARY_COLLECTION_CREATE_SCOPE_FIELDS = (
+    "action_id",
+    "epoch_id",
+    "payload_sha256",
+)
+SUMMARY_COLLECTION_DELETE_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "collection_id",
+    "expected_record_sha256",
+)
+SUMMARY_COLLECTION_ACTIONS = {
+    "create_summary_collection",
+    "delete_summary_collection",
+}
+SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH = 128
+SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+)
 
 
 def _validate_promote_ucf_scope(tool_args: Dict[str, Any]) -> List[str]:
@@ -226,6 +253,101 @@ def _validate_video_summary_scope(tool_args: Any) -> List[str]:
             violations.append(f"{field} must be a non-empty string")
 
     return violations
+
+
+def _validate_summary_collection_identifier(field: str, value: Any) -> List[str]:
+    if not isinstance(value, str) or not value:
+        return [f"{field} must be a non-empty string"]
+    if value != value.strip():
+        return [f"{field} must not contain surrounding whitespace"]
+    if len(value) > SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH:
+        return [
+            f"{field} exceeds {SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH} characters"
+        ]
+    if not value[0].isalnum() or any(
+        character not in SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS
+        for character in value
+    ):
+        return [f"{field} must be a path-free identifier"]
+    return []
+
+
+def _validate_summary_collection_digest(field: str, value: Any) -> List[str]:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        return [f"{field} must be a lowercase SHA-256 digest"]
+    return []
+
+
+def _validate_summary_collection_scope(
+    tool_args: Any,
+    *,
+    expected_fields: Tuple[str, ...],
+    identifier_fields: Tuple[str, ...],
+    digest_fields: Tuple[str, ...],
+) -> List[str]:
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+
+    violations: List[str] = []
+    expected = set(expected_fields)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    for field in identifier_fields:
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_identifier(field, tool_args[field])
+            )
+    for field in digest_fields:
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_digest(field, tool_args[field])
+            )
+    return violations
+
+
+def _validate_summary_collection_create_scope(tool_args: Any) -> List[str]:
+    return _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=SUMMARY_COLLECTION_CREATE_SCOPE_FIELDS,
+        identifier_fields=("action_id", "epoch_id"),
+        digest_fields=("payload_sha256",),
+    )
+
+
+def _validate_summary_collection_delete_scope(tool_args: Any) -> List[str]:
+    return _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=SUMMARY_COLLECTION_DELETE_SCOPE_FIELDS,
+        identifier_fields=("job_id", "epoch_id", "collection_id"),
+        digest_fields=("expected_record_sha256",),
+    )
+
+
+AUTHORIZATION_SCOPE_VALIDATORS = {
+    "generate_video_summary": _validate_video_summary_scope,
+    "create_summary_collection": _validate_summary_collection_create_scope,
+    "delete_summary_collection": _validate_summary_collection_delete_scope,
+}
+
+
+def _expected_summary_collection_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == "create_summary_collection":
+        return f"summary-collection:create:{arguments['action_id']}"
+    if operation == "delete_summary_collection":
+        return f"summary-collection:delete:{arguments['job_id']}"
+    return None
 
 
 def _load_ucf_ledger() -> Any:
@@ -897,9 +1019,10 @@ class MiniAgentClient:
 
         if not isinstance(arguments, dict):
             return failed("invalid_tool_arguments")
+        scope_validator = AUTHORIZATION_SCOPE_VALIDATORS.get(operation)
         scope_violations = (
-            _validate_video_summary_scope(arguments)
-            if operation == "generate_video_summary"
+            scope_validator(arguments)
+            if scope_validator is not None
             else ["no exact-scope validator is declared"]
         )
         if scope_violations:
@@ -940,6 +1063,16 @@ class MiniAgentClient:
                 or len(target) > EXTERNAL_AUDIT_MAX_TARGET_LENGTH
                 for target in targets
             )
+        ):
+            return failed("invalid_side_effect_report")
+
+        expected_collection_target = _expected_summary_collection_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_collection_target is not None
+            and targets != [expected_collection_target]
         ):
             return failed("invalid_side_effect_report")
 
@@ -1152,8 +1285,9 @@ class MiniAgentClient:
         request_id = f"task-{uuid.uuid4().hex[:8]}"
         tool_args = tool_args or {}
 
-        if tool_name == "generate_video_summary" and self.profile != "offline":
-            scope_violations = _validate_video_summary_scope(tool_args)
+        scope_validator = AUTHORIZATION_SCOPE_VALIDATORS.get(tool_name)
+        if scope_validator is not None and self.profile != "offline":
+            scope_violations = scope_validator(tool_args)
             if scope_violations:
                 envelope = {
                     "request_id": request_id,
@@ -1164,8 +1298,7 @@ class MiniAgentClient:
                     "errors": [{
                         "code": "invalid_tool_arguments",
                         "message": (
-                            "generate_video_summary requires an exact job_id "
-                            "and video_hash scope."
+                            f"{tool_name} requires its exact declared scope."
                         ),
                         "details": {"violations": scope_violations},
                     }],

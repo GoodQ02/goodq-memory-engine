@@ -423,6 +423,18 @@ the failure is not currently visible.
   now includes an opt-in action-job atomic replacement helper. Generic atomic
   writes, action-job state transitions, and unrelated callers remain frozen;
   the concurrency oracle must not be weakened to preserve the narrower plan.
+- Summary-status authority checkpoint evidence (2026-07-13): exact and latest
+  video-summary status now use a non-creating reader that never constructs or
+  acquires the writer lock. Action-job writers retain the existing lifecycle
+  lock and use an action-job-only Windows replacement helper compatible with
+  share-delete readers; generic atomic writes remain unchanged. Fresh
+  verification passed 103 action-job tests, 128 summary-route tests, 119
+  regression tests, ten repetitions of both concurrency witnesses, compilation,
+  the unchanged 69-operation census, diff checks, and independent review with
+  no actionable findings. R-05-F1 remains `IN_PROGRESS`; the next bounded
+  mission is a fresh read-only selection among the remaining retrieval and
+  summary SQLite effects. Evidence:
+  `docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 

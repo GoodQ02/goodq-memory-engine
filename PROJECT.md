@@ -4,14 +4,13 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — make summary video status a lock-free passive read.
+Roadmap item: R-05-F1 — select the next remaining hidden-effect repair.
 
 ## Outcome
 
-Split passive action-job record inspection from the writer-oriented ledger so
-`GET /api/summary/video/{video_hash}/status` cannot acquire or create a lock,
-create its root, or mutate persisted job state, while preserving concurrent
-Windows writer replacement.
+Reconcile the remaining retrieval and summary SQLite effects using fresh
+read-only evidence, then select one exact owner, rollback boundary, and
+mutation-sensitive RED oracle before another production edit.
 
 ## Governing evidence
 
@@ -19,37 +18,34 @@ Windows writer replacement.
 - `docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md`
+- `docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Scope
 
-- Add a non-creating, lock-free passive action-job reader.
-- Use it for exact-ID and latest video-summary status projections.
-- Pair Windows share-delete reads with an action-job-only replace-compatible
-  atomic JSON writer; leave the generic atomic writer unchanged.
-- Preserve operation/scope filtering, ordering, response shape, and errors.
-- Prove atomic-replace concurrency returns only complete old/new records.
-- Retain the writer ledger, lock, transitions, reconciliation, and atomic write
-  paths unchanged.
+- Compare retrieval telemetry, text/visual model and cache resolution,
+  retrieval SQLite reads, and summary SQLite projections.
+- Re-probe each candidate with temporary roots, fakes, and monkeypatches only.
+- Name the exact persistent or external effect, owner, rollback boundary, and
+  smallest deterministic RED witness for each candidate.
+- Select one seam using current authority, risk, and dependency evidence.
+- Checkpoint the selection before production implementation begins.
 
 ## Boundaries
 
-- Production changes are limited to the passive action-job reader, summary
-  video-status projection, and an opt-in action-job atomic replacement helper
-  plus their focused tests.
+- This mission is read-only except for its selection evidence, roadmap entry,
+  active bounded mission, and regenerated documentation indexes.
 - Do not invoke live endpoints, Qdrant, model downloads, ingestion, identity,
   configured data roots, operator data, WSL, or active services.
 - Use temporary roots, fakes, and monkeypatches only for bounded evidence.
-- Do not modify retrieval, model, SQLite, route-effect, runtime, generic atomic
-  write behavior, or action-job state-transition semantics.
-- Do not reopen Qdrant query or ingest-status authority without contradictory
-  focused evidence.
+- Do not modify retrieval, model, SQLite, route-effect, runtime, action-job,
+  ingestion, identity, or configuration production code during selection.
+- Do not reopen Qdrant query, ingest-status, or summary-status authority without
+  contradictory focused evidence.
 
 ## Completion gate
 
-Focused tests must fail first on writer-lock entry, then prove exact/latest
-status reads never enter the lock or change the temp tree. Absent-root,
-scope/operation filtering, share-delete read behavior, concurrent atomic
-replacement without `PermissionError`, writer-lock controls, generic atomic
-writer controls, route census, compilation, diff, and independent review must
-pass before the implementation checkpoint.
+The selection must include current code traces, mutation-sensitive temporary
+witnesses, a no-repeat comparison against completed authority checkpoints, one
+exact chosen owner and rollback boundary, documentation authority/drift gates,
+the frozen route census, diff checks, and independent read-only review.

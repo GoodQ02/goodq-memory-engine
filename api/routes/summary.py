@@ -5,9 +5,14 @@ Provides dashboard, entity profile aggregation, and custom collections.
 from __future__ import annotations
 
 import logging
+import hashlib
+import hmac
 from pathlib import Path
+import time
 from typing import List
-from fastapi import APIRouter, HTTPException, Path as PathParam, Body, BackgroundTasks
+import uuid
+from fastapi import APIRouter, HTTPException, Path as PathParam, Body, BackgroundTasks, Query
+from fastapi.responses import JSONResponse
 import asyncio
 
 from api.utils.response_models import (
@@ -18,6 +23,7 @@ from api.utils.response_models import (
     SaveCollectionResponse
 )
 from api.utils.loaders import DataLoader
+from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
 from lib import summary_aggregator
 
 logger = logging.getLogger(__name__)
@@ -25,6 +31,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/summary", tags=["summary"])
 
 _data_loader = None
+
+_VIDEO_SUMMARY_JOB_OPERATION = "video_summary.generate"
+_VIDEO_SUMMARY_AUTH_OPERATION = "generate_video_summary"
+_SUMMARY_OWNER_INSTANCE = f"summary-api-{uuid.uuid4().hex}"
 
 
 def get_data_loader() -> DataLoader:
@@ -39,6 +49,71 @@ def _get_kg_db_path() -> Path:
     from steps.common.config_loader import load_configs
     cfg = load_configs({})
     return Path(cfg.get("paths", {}).get("knowledge_graph_db", "data/knowledge_graph.db"))
+
+
+def _get_summary_job_ledger(cfg: dict) -> ActionJobLedger:
+    return ActionJobLedger(_get_summary_job_root(cfg))
+
+
+def _get_summary_job_root(cfg: dict) -> Path:
+    data_root = cfg.get("paths", {}).get("data_root")
+    if not isinstance(data_root, str) or not data_root.strip():
+        raise ValueError("GoodQ data root is not configured")
+    return Path(data_root) / "control" / "action_jobs"
+
+
+def _get_summary_authority(cfg: dict):
+    from agents.mini_agent_client import MiniAgentClient
+
+    return MiniAgentClient(profile="safe")
+
+
+def _summary_job_scope(video_hash: str) -> dict:
+    return {"video_hash": video_hash}
+
+
+def _public_summary_job(record: dict) -> dict:
+    return {
+        key: record.get(key)
+        for key in (
+            "job_id",
+            "operation",
+            "scope",
+            "state",
+            "created_at_utc",
+            "updated_at_utc",
+            "outcome",
+            "audit_status",
+        )
+    }
+
+
+def _validate_summary_action_body(body: dict) -> str:
+    action = body.get("action")
+    if action == "prepare" and set(body) == {"action"}:
+        return action
+    if (
+        action == "confirm"
+        and set(body) == {"action", "job_id", "confirmation_token"}
+        and isinstance(body.get("job_id"), str)
+        and body["job_id"].strip()
+        and isinstance(body.get("confirmation_token"), str)
+        and body["confirmation_token"].strip()
+    ):
+        return action
+    raise HTTPException(status_code=422, detail="Invalid summary action body")
+
+
+def _authorization_error_code(envelope: object) -> str:
+    if not isinstance(envelope, dict):
+        return "authorization_failed"
+    errors = envelope.get("errors")
+    if not isinstance(errors, list):
+        return "authorization_failed"
+    for error in errors:
+        if isinstance(error, dict) and isinstance(error.get("code"), str):
+            return error["code"]
+    return "authorization_failed"
 
 
 @router.get("/dashboard", response_model=SummaryDashboardResponse)
@@ -137,21 +212,78 @@ async def delete_collection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Concurrency Control & Duplicate-run Protection
-_running_summarizations = set()
-_summarization_lock = asyncio.Lock()
+async def _generate_summary_worker(job_id: str, video_hash: str, cfg: dict):
+    ledger = _get_summary_job_ledger(cfg)
+    try:
+        record = ledger.transition(
+            job_id,
+            expected_states="queued",
+            new_state="running",
+        )
+    except (ActionJobTransitionError, FileNotFoundError, ValueError):
+        logger.warning("Video summary worker could not claim queued job %s", job_id)
+        return
 
-
-async def _generate_summary_worker(video_hash: str, cfg: dict):
+    started = time.monotonic()
     try:
         from steps.video_summarizer.step import run_step as run_video_summarizer
+
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, run_video_summarizer, cfg, video_hash)
-    except Exception as e:
-        logger.error(f"Background summary worker failed for video {video_hash}: {e}", exc_info=True)
-    finally:
-        async with _summarization_lock:
-            _running_summarizations.discard(video_hash)
+        result = await loop.run_in_executor(
+            None, run_video_summarizer, cfg, video_hash
+        )
+        succeeded = isinstance(result, dict) and result.get("success") is True
+        outcome = (
+            {
+                "code": "summary_generated",
+                "message": "Video summary generation succeeded",
+            }
+            if succeeded
+            else {
+                "code": "summary_generation_failed",
+                "message": "Video summary generation reported failure",
+            }
+        )
+    except Exception:
+        logger.error("Video summary generation raised an error for job %s", job_id)
+        succeeded = False
+        outcome = {
+            "code": "summary_generation_error",
+            "message": "Video summary generation raised an error",
+        }
+
+    duration_ms = max(0, int((time.monotonic() - started) * 1000))
+    audit_status = "failed"
+    try:
+        audit = _get_summary_authority(cfg).record_external_execution_outcome(
+            operation=_VIDEO_SUMMARY_AUTH_OPERATION,
+            arguments={"job_id": job_id, "video_hash": video_hash},
+            request_id=str(record.get("authorization_request_id") or ""),
+            mode="ops",
+            status="succeeded" if succeeded else "failed",
+            return_code=0 if succeeded else 1,
+            duration_ms=duration_ms,
+            side_effect_report={
+                "mutated": succeeded,
+                "targets": [f"video-summary:{job_id}"],
+            },
+            error_codes=[] if succeeded else [outcome["code"]],
+        )
+        if isinstance(audit, dict) and audit.get("audit_status") == "recorded":
+            audit_status = "recorded"
+    except Exception:
+        logger.error("Video summary external audit failed for job %s", job_id)
+
+    try:
+        ledger.transition(
+            job_id,
+            expected_states="running",
+            new_state="succeeded" if succeeded else "failed",
+            outcome=outcome,
+            audit_status=audit_status,
+        )
+    except (ActionJobTransitionError, FileNotFoundError, ValueError):
+        logger.error("Video summary terminal state could not be persisted for job %s", job_id)
 
 
 @router.get("/capabilities", response_model=dict)
@@ -248,35 +380,67 @@ def _check_kg_existence_fallback(video_hash: str) -> dict:
 
 @router.get("/video/{video_hash}/status", response_model=dict)
 async def get_summary_status(
-    video_hash: str = PathParam(..., description="Target video hash to check status")
+    video_hash: str = PathParam(..., description="Target video hash to check status"),
+    job_id: str | None = Query(None, description="Optional exact summary job ID"),
 ):
     """
-    Check if a summary task is currently running for this video hash.
+    Return durable summary-job state without mutating lifecycle records.
     """
     import re
     if not video_hash or not re.match(r"^[a-fA-F0-9]{8,64}$", video_hash):
         raise HTTPException(status_code=400, detail="Invalid video hash format")
-    async with _summarization_lock:
-        status = "running" if video_hash in _running_summarizations else "idle"
-    return {"status": status}
+    from steps.common.config_loader import load_configs
+
+    cfg = load_configs({})
+    try:
+        root = _get_summary_job_root(cfg)
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Summary job ledger is unavailable")
+    if not root.exists():
+        if job_id is not None:
+            raise HTTPException(status_code=404, detail="Summary job not found")
+        return {"status": "not_started", "job": None}
+
+    ledger = _get_summary_job_ledger(cfg)
+    scope = _summary_job_scope(video_hash)
+    if job_id is not None:
+        try:
+            record = ledger.load(job_id)
+        except ValueError:
+            record = None
+        if (
+            record is None
+            or record.get("operation") != _VIDEO_SUMMARY_JOB_OPERATION
+            or record.get("scope") != scope
+        ):
+            raise HTTPException(status_code=404, detail="Summary job not found")
+    else:
+        record = ledger.latest(
+            operation=_VIDEO_SUMMARY_JOB_OPERATION,
+            scope=scope,
+        )
+        if record is None:
+            return {"status": "not_started", "job": None}
+    return {"status": record["state"], "job": _public_summary_job(record)}
 
 
 @router.post("/video/{video_hash}/generate", response_model=dict)
 async def generate_video_summary(
     background_tasks: BackgroundTasks,
-    video_hash: str = PathParam(..., description="Target video hash to summarize")
+    video_hash: str = PathParam(..., description="Target video hash to summarize"),
+    body: dict = Body(...),
 ):
     """
     Trigger async generation/regeneration of video LLM summary with full audits and checks.
     """
     import re
     import sqlite3
-    import requests
     from steps.common.config_loader import load_configs
 
     # 1. Input Validation
     if not video_hash or not re.match(r"^[a-fA-F0-9]{8,64}$", video_hash):
         raise HTTPException(status_code=400, detail="Invalid video hash format")
+    action = _validate_summary_action_body(body)
 
     # 2. Database Existence Check
     db_path = _get_kg_db_path()
@@ -293,26 +457,203 @@ async def generate_video_summary(
         logger.error(f"Database query error during video existence check: {se}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database query failed")
 
-    # 3. LLM Pre-flight Connectivity Check
+    # 3. Durable authorization preparation
     cfg = load_configs({})
-    use_llm = cfg.get('llm', {}).get('features', {}).get('video_summarization', True)
-    if use_llm:
-        llm_config = cfg.get('llm', {})
-        api_url = llm_config.get('api_url', 'http://localhost:1234/v1/chat/completions')
+    try:
+        ledger = _get_summary_job_ledger(cfg)
+    except ValueError:
+        logger.error("Video summary job ledger configuration is invalid")
+        raise HTTPException(status_code=500, detail="Summary job ledger is unavailable")
+
+    if action == "confirm":
+        job_id = body["job_id"]
+        confirmation_token = body["confirmation_token"]
         try:
-            base_url = api_url.rsplit("/chat/completions", 1)[0]
-            # Simple GET probe to /models or base endpoint to verify responsiveness
-            resp = requests.get(f"{base_url}/models", timeout=1.5)
-        except Exception as le:
-            logger.warning(f"LLM API pre-flight check failed for url={api_url}: {le}")
-            raise HTTPException(status_code=503, detail="LLM service is offline or unreachable")
+            record = ledger.load(job_id)
+        except ValueError:
+            record = None
+        if (
+            record is None
+            or record.get("operation") != _VIDEO_SUMMARY_JOB_OPERATION
+            or record.get("scope") != _summary_job_scope(video_hash)
+        ):
+            raise HTTPException(status_code=404, detail="Summary job not found")
+        if record.get("owner_instance") != _SUMMARY_OWNER_INSTANCE:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_owner_changed", "job": _public_summary_job(record)},
+            )
+        if record.get("state") != "pending_confirmation":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_confirmable", "job": _public_summary_job(record)},
+            )
+        fingerprint = hashlib.sha256(confirmation_token.encode("utf-8")).hexdigest()
+        if not isinstance(record.get("token_fingerprint"), str) or not hmac.compare_digest(
+            record["token_fingerprint"], fingerprint
+        ):
+            raise HTTPException(status_code=403, detail="Confirmation token mismatch")
 
-    # 4. Duplicate-Run Protection
-    async with _summarization_lock:
-        if video_hash in _running_summarizations:
-            raise HTTPException(status_code=409, detail="A summarization task is already running for this video")
-        _running_summarizations.add(video_hash)
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="pending_confirmation",
+                new_state="authorizing",
+            )
+        except ActionJobTransitionError:
+            current = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_confirmable", "job": _public_summary_job(current)},
+            )
 
-    # 5. Queue Background Task
-    background_tasks.add_task(_generate_summary_worker, video_hash, cfg)
-    return {"success": True, "message": "Video summarization task successfully started"}
+        authority = _get_summary_authority(cfg)
+        tool_args = {"job_id": job_id, "video_hash": video_hash}
+        try:
+            envelope, return_code = authority.authorize_action(
+                prompt="Confirm one exact video summary",
+                mode="ops",
+                tool_name=_VIDEO_SUMMARY_AUTH_OPERATION,
+                tool_args=tool_args,
+                confirm=True,
+                confirmation_token=confirmation_token,
+            )
+        except Exception:
+            logger.error("Video summary authorization claim failed")
+            envelope, return_code = {}, 1
+
+        result = envelope.get("result") if isinstance(envelope, dict) else None
+        authorized = (
+            return_code == 0
+            and envelope.get("status") == "ok"
+            and isinstance(result, dict)
+            and result.get("allowed") is True
+        )
+        if not authorized:
+            error_code = _authorization_error_code(envelope)
+            expired = error_code == "token_expired"
+            try:
+                record = ledger.transition(
+                    job_id,
+                    expected_states="authorizing",
+                    new_state="expired" if expired else "failed",
+                    outcome={
+                        "code": "authorization_expired" if expired else "authorization_failed",
+                        "message": (
+                            "Video summary authorization expired"
+                            if expired
+                            else "Video summary authorization failed"
+                        ),
+                    },
+                )
+            except ActionJobTransitionError:
+                record = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "authorization_expired" if expired else "authorization_failed",
+                    "job": _public_summary_job(record),
+                },
+            )
+
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="authorizing",
+                new_state="queued",
+            )
+        except ActionJobTransitionError:
+            current = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_queueable", "job": _public_summary_job(current)},
+            )
+        background_tasks.add_task(_generate_summary_worker, job_id, video_hash, cfg)
+        return JSONResponse(
+            status_code=202,
+            content={"success": True, "job": _public_summary_job(record)},
+        )
+
+    try:
+        record, created = ledger.prepare_or_find_active_with_status(
+            operation=_VIDEO_SUMMARY_JOB_OPERATION,
+            scope=_summary_job_scope(video_hash),
+            owner_instance=_SUMMARY_OWNER_INSTANCE,
+        )
+    except ValueError:
+        logger.error("Video summary job preparation failed")
+        raise HTTPException(status_code=500, detail="Summary job ledger is unavailable")
+
+    if not created:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "active_job_exists",
+                "job": _public_summary_job(record),
+            },
+        )
+
+    authority = _get_summary_authority(cfg)
+    tool_args = {"job_id": record["job_id"], "video_hash": video_hash}
+    token = None
+    authorization_evidence_persisted = False
+    try:
+        envelope, return_code = authority.authorize_action(
+            prompt="Prepare one exact video summary",
+            mode="ops",
+            tool_name=_VIDEO_SUMMARY_AUTH_OPERATION,
+            tool_args=tool_args,
+        )
+        result = envelope.get("result") if isinstance(envelope, dict) else None
+        token = result.get("confirmation_token") if isinstance(result, dict) else None
+        request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+        if (
+            return_code != 3
+            or envelope.get("status") != "needs_confirmation"
+            or not isinstance(token, str)
+            or not token
+            or not isinstance(request_id, str)
+            or not request_id
+        ):
+            raise RuntimeError("authorization_not_prepared")
+        record = ledger.compare_and_update(
+            record["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            authorization_request_id=request_id,
+        )
+        authorization_evidence_persisted = True
+    except Exception:
+        logger.error("Failed to prepare video summary authorization")
+        if isinstance(token, str) and token and not authorization_evidence_persisted:
+            try:
+                authority.revoke_action_authorization(
+                    prompt="Revoke unpersisted video summary authorization",
+                    mode="ops",
+                    tool_name=_VIDEO_SUMMARY_AUTH_OPERATION,
+                    tool_args=tool_args,
+                    confirmation_token=token,
+                )
+            except Exception:
+                logger.error(
+                    "Failed to revoke unpersisted video summary authorization"
+                )
+        try:
+            record = ledger.transition(
+                record["job_id"],
+                expected_states="pending_confirmation",
+                new_state="failed",
+                outcome={
+                    "code": "authorization_prepare_failed",
+                    "message": "Video summary authorization could not be prepared",
+                },
+            )
+        except Exception:
+            logger.error("Failed to persist video summary preparation failure")
+        raise HTTPException(status_code=503, detail="Summary authorization unavailable")
+
+    return {
+        "success": True,
+        "confirmation_token": token,
+        "job": _public_summary_job(record),
+    }

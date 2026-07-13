@@ -1,39 +1,37 @@
 <!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: DRAFT_SELECTION -->
+<!-- DOC_STATUS: CHECKPOINT_EVIDENCE_COMPLETE -->
 <!-- DOC_LAST_VERIFIED: 2026-07-13 -->
 
 # R-07 Protected-Authority Source Decision Brief
 
 ## Status
 
-No protected-authority source or trust bootstrap is approved by this document.
-R-07 runnable planning remains fail closed for the eight unresolved protected
-roles until the operator explicitly approves one source or rejects or defers
-both models below.
+Operator decision recorded on 2026-07-13: approve the canonical machine-local
+manifest plus independently trusted external digest-pin model. The strict local-
+configuration mapping and deferral alternatives were not selected.
+
+This approval selects only the source and trust model. R-07 runnable planning
+remains fail closed until exact member semantics, pin-source provenance, and the
+authoring/reader contracts are separately selected, implemented, and verified.
 
 This brief is decision evidence, not a second backlog. Future work remains
 tracked only in `docs/releases/ROADMAP.md`.
 
-## Decision Requested
+## Recorded Operator Decision
 
-The operator must choose one of three outcomes:
+The operator approved the strongest audited separation model:
 
-1. **Approve the recommended manifest plus independent external pin model.**
-   The next isolated checkpoint may then select its exact trust root and member
-   semantics before code is written.
-2. **Select a strict full mapping in ignored local configuration instead.**
-   This viable simpler alternative removes the manifest reader but accepts the
-   configuration-loader provenance tradeoffs described below. The next isolated
-   checkpoint must bind the exact pre-normalization file source and member
-   semantics before code is written.
-3. **Reject or defer both models.** No substitute is inferred; runnable
-   planning remains unavailable until a different explicit source is approved.
+1. one canonical manifest supplies the eight unresolved role memberships;
+2. one separately trusted external source authorizes only the manifest's exact
+   canonical SHA-256 digest; and
+3. manifest publication and pin authorization remain separate deliberate
+   operator actions and later implementation seams.
 
 Approval means approval of the source and trust model only. It does not approve
 member values, configuration changes, a manifest writer, a reader, an observer,
 Qdrant access, plan composition, or cleanup execution.
 
-## Recommended Source
+## Approved Source Model
 
 Use one versioned machine-local canonical JSON manifest at the single fixed
 logical location:
@@ -62,7 +60,7 @@ It cannot override the ten configured roles. Its schema is
 `goodq.clean-memory-protected-authority.v1`, and its canonical bytes have one
 lowercase SHA-256 digest.
 
-## Recommended Integrity Binding
+## Approved Integrity Model
 
 Pin only the expected canonical manifest SHA-256 in a separately trusted
 machine-local source outside every protected member. Its exact location and
@@ -71,7 +69,7 @@ must have exact-file provenance, stable physical and security identity, and an
 independent authorization boundary that the manifest author cannot modify.
 
 Repository-local `configs/config.local.yaml` cannot serve as the external pin
-under this recommended model because `repository` is itself a protected member.
+under this approved model because `repository` is itself a protected member.
 Using that file as the single trust root belongs only to the separate strict-
 mapping option below; it may not be hybridized into the independently pinned
 manifest model.
@@ -95,7 +93,7 @@ expected digest and pin provenance independently of Pydantic, and perform no
 filesystem, network, process, persistence, plan, job/token, MiniAgent, or
 cleanup operation.
 
-## Viable Simpler Alternative
+## Unselected Simpler Alternative
 
 A strict typed full mapping for the eight roles in ignored
 `configs/config.local.yaml` is evidence-backed and viable. A separate pure
@@ -116,13 +114,26 @@ Protected-authority values must reject interpolation rather than silently
 becoming environment-derived. The option must still reject environment,
 runtime, CLI, caller, CWD, Git, producer, and ledger fallbacks.
 
-The manifest model remains recommended because it separates selected member
-content from the authority that approves those exact bytes. The configuration
-mapping remains a real operator choice, not a rejected strawman.
+The operator did not select this alternative. It remains documented so a future
+decision can understand the rejected tradeoff, but subsequent R-07 design must
+not hybridize or silently reintroduce it without a new explicit operator
+decision.
 
 ## Configuration Provenance Constraints
 
-Either model must account for current loader behavior:
+Under the approved model, `candidate_evidence_root` and
+`configuration_scope_sha256` come from the completed v1 projection. The constant
+manifest child is not independently configurable, but the projected candidate
+root inherits the current resolved-config provenance, including existing local-
+overlay and caller-override behavior. Its projection digest binds the resolved
+value; it does not prove which loader source supplied that value. The next
+decision checkpoint must select the required entrypoint provenance/no-override
+contract without modifying v1. No new configuration field, environment
+reference, CLI value, caller override, or bootstrap rewrite may directly supply
+the manifest child, external pin, or eight member values.
+
+If the unselected local-configuration alternative is ever reopened, it would
+additionally inherit these loader constraints:
 
 - `GoodQConfig` forbids unknown root keys, so a typed schema addition must
   precede any local overlay field; validation fallback to a raw mapping is not
@@ -134,7 +145,8 @@ Either model must account for current loader behavior:
   must preserve an existing protected-authority value or refuse the rewrite;
   and
 - the portable baseline omits machine-local member values and pins, so runnable
-  cleanup planning remains fail closed until local authority is selected.
+  cleanup planning remains fail closed until machine-local authority is
+  implemented and verified.
 
 ## Non-Circular Trust Bootstrap
 
@@ -193,9 +205,10 @@ they are private and target-specific. They may be reused only after the already
 required projection-agnostic shared-backend extraction and full parity
 checkpoint. No private symbol may be imported or copied into the reader.
 
-The current code does not verify Windows process-token identity, owner identity,
-or access-control lists. Those are real missing primitives and cannot be
-replaced by file IDs, inode values, or a self-declared author field.
+The current code does not verify effective Windows access-token identity,
+including impersonation state, owner identity, or access-control lists. Those
+are real missing primitives and cannot be replaced by file IDs, inode values,
+or a self-declared author field.
 
 ## Rejected Existing Alternatives
 
@@ -219,8 +232,7 @@ viable alternative; both require an explicit operator trust-root decision.
 
 ## Deliberately Unselected Semantics
 
-Even if the source/bootstrap recommendation is approved, the following remain
-unselected until the next isolated decision checkpoint:
+The following remain unselected until the next isolated decision checkpoint:
 
 - exact member identifiers and logical-ID format;
 - allowed ordinary object kinds;
@@ -228,7 +240,7 @@ unselected until the next isolated decision checkpoint:
 - which members must exist and whether structural absence is ever valid;
 - the exact multi-member representation for `source_media` and other roles;
 - cross-role and within-role physical-alias rejection;
-- exact local configuration field and selection-projection schema names;
+- exact selection-projection schema name and external pin-source identifier;
 - pin-source location and provenance contract;
 - trusted effective access identity, including impersonation state, owner, and
   access-control policy; and
@@ -248,4 +260,4 @@ Keep these checkpoints closed:
 
 Do not modify the v1 configuration projection, import or copy private observer
 backends, recreate completed tests, inspect live roots, or begin implementation
-until the operator decision is recorded.
+until the next exact-semantics and trust-root decision is recorded.

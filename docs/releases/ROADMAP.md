@@ -829,22 +829,25 @@ the failure is not currently visible.
   read-only audits found no existing repository source capable of authorizing
   all eight unresolved protected roles. Tracked defaults, environment or caller
   injection, runtime state, discovery, producer roots, live ledgers, reports,
-  and self-hashes remain non-authoritative. The stronger candidate is one fixed
+  and self-hashes remain non-authoritative. The operator approved one fixed
   machine-local canonical manifest beneath `candidate_evidence_root` with its
-  expected SHA-256 held by an independently trusted external pin source. A
+  expected SHA-256 held by an independently trusted external pin source. The
+  manifest supplies member content; the external pin alone authorizes its exact
+  canonical bytes, and the two publications remain separate actions. A
   strict typed full mapping in ignored local configuration is also viable and
-  simpler, but couples content and authorization to the merged loader and a
-  repository-local trust root. Either model uses a separate pure selection
-  projection and leaves the completed v1 projection closed. Exact pin location,
-  pre-normalization local-file provenance, interpolation and override rejection,
-  trusted effective-access-token/owner/access-control policy, bootstrap rewrite
-  preservation, authoring, reader, shared
-  no-follow backend, member semantics, and rotation/recovery remain later
-  decisions or seams. Neither model is approved or implemented. No live
-  configuration, root, service, data, Qdrant, evidence store, job, token,
-  MiniAgent, or cleanup authority was read or exercised. Evidence:
+  simpler, but was not selected because it couples content and authorization to
+  the merged loader and a repository-local trust root. The approved model uses
+  a separate pure selection projection and leaves the completed v1 projection
+  closed. Existing resolved-config provenance/no-override policy, exact pin
+  location and provenance, trusted effective-access-token, owner and access-
+  control policy, authoring, reader, shared no-follow backend, member semantics,
+  and rotation/recovery remain later decisions or seams. The
+  source/trust model is approved but not implemented. No live configuration,
+  root, service, data, Qdrant, evidence store, job, token, MiniAgent, or cleanup
+  authority was read or exercised. Evidence:
   `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`.
-  R-07 remains `IN_PROGRESS` and awaits the explicit operator decision.
+  R-07 remains `IN_PROGRESS`; the next bounded gate defines exact path-free
+  member semantics and the external-pin trust-root contract before code.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

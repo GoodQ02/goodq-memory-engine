@@ -513,8 +513,12 @@ the failure is not currently visible.
   propagation, existing-database-only event writes, replacement-safe schema
   readiness, exact locked/busy fallback destination, and sanitized failure
   visibility. Context authority and raw-query/FAISS-path redaction remain
-  separate later selections. R-05-F1 remains `IN_PROGRESS`; the next bounded
-  mission is mutation-sensitive persistence/config implementation. Evidence:
+  separate later selections. A final caller census also found that the
+  read-only observability-health sample disables telemetry only after client
+  construction; implementation must inject an explicit disabled policy there
+  so resolve-once semantics cannot turn the health probe into an event writer.
+  R-05-F1 remains `IN_PROGRESS`; the next bounded mission is mutation-sensitive
+  persistence/config implementation. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful

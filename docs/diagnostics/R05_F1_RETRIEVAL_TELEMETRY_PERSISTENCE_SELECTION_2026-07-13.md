@@ -86,6 +86,14 @@ configured log directory. This creates three authorities—raw config, a boolean
 and an optional path—while the sink reparses ambient defaults without the
 original policy.
 
+The observability-health sample has one additional construction-order hazard:
+it constructs a Qdrant client and only then temporarily disables retrieval
+events through `GOODQ_RETRIEVAL_EVENTS`. A resolve-once policy would make that
+late toggle ineffective and turn the nominally read-only health sample into an
+event writer. The health sampler must therefore inject an explicit disabled
+policy when it constructs its sample client; it must not depend on ambient
+environment mutation around the query.
+
 On SQLite lock/busy, `_fallback_log_dir()` prefers an existing explicit path,
 then a config path, then silently falls back to the database parent. Because the
 engine drops both config and log directory, its fallback lands beside the
@@ -211,6 +219,8 @@ Expected production/configuration scope:
 - `steps/common/memory_stores.py` — ephemeral/FAISS policy carrier and shared
   builder;
 - `retrieval/multimodal_search.py` — cached-engine Qdrant policy propagation;
+- `cli/observability_health.py` — explicit disabled policy for the read-only
+  Qdrant provenance sample instead of a post-construction environment toggle;
 - `scripts/config_schema.py` — strict/frozen observability models plus a
   targeted competing-key validator that does not globally tighten legacy
   memory configuration; and
@@ -261,7 +271,9 @@ Tests must fail against the current implementation and prove:
    database-parent relocation;
 11. event and fallback failures never suppress or alter Qdrant, ephemeral, or
     FAISS hits; and
-12. the 69-operation census remains 41 passive, 1 staging, 10 automatic, 8
+12. the observability-health provenance sample carries an explicit disabled
+    policy and cannot create retrieval events after policy resolution; and
+13. the 69-operation census remains 41 passive, 1 staging, 10 automatic, 8
     curated, and 9 process operations.
 
 ## Selection Verification

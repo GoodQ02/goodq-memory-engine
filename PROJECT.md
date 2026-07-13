@@ -37,6 +37,9 @@ remain best effort for hits but visible without query text or absolute paths.
   and canonical log destination.
 - Propagate that policy through the cached search engine, generic Qdrant
   builder, shared text-store builder, and all Qdrant/ephemeral/FAISS emitters.
+- Give the observability-health provenance sampler an explicit disabled policy
+  so its read-only query never depends on a post-construction environment
+  toggle.
 - Require an existing primary database, preserve intentional schema/event
   writes inside it, and make schema readiness robust to same-path replacement.
 - Restrict JSONL to locked/busy fallback at the exact existing configured log

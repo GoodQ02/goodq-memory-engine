@@ -708,6 +708,23 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is the import-pure,
   job-independent immutable candidate-plan authority using injected temporary
   inventories only.
+- Immutable candidate-plan checkpoint (2026-07-13): private checkpoint
+  `c870a1cb` adds the import-pure `goodq.clean-memory-plan.v1` authority and an
+  immutable first-writer evidence store. The authority binds exact regular-file
+  pre-state, the exact four configured Qdrant roles, canonical loopback endpoint
+  identity, and the complete protected-boundary role set without binding jobs,
+  approval, time, or random identity into its digest. Root/ancestor reparse and
+  non-directory boundaries, Windows path aliases, duplicate physical-file
+  identities, foreign first-writer evidence, and foreign temporary-path
+  replacements fail closed or remain preserved for recovery. The 54-test
+  temporary-only suite passed ten consecutive concurrency stress rounds plus
+  compilation, import-purity, documentation-authority, semantic-drift,
+  banned-token, dependency, and diff gates; three independent current-byte
+  reviews returned clean. No configured data, target adapter, Qdrant service,
+  action job, token, cleanup executor, or retention authority was read, added,
+  or exercised. R-07 remains `IN_PROGRESS`; the next bounded seam is a
+  read-only no-repeat audit of the passive `plan` orchestration boundary before
+  any production adapter or CLI implementation.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1270,6 +1287,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 import-pure immutable candidate-plan
+  authority and advanced only to a read-only audit of passive `plan`
+  orchestration ownership.
 
 - 2026-07-13: Checkpointed the R-07 cleanup approval foundation with atomic
   initial job metadata, one-lock lifecycle claims, and exact cleanup-only

@@ -4,72 +4,64 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — establish immutable clean-memory candidate-plan authority.
+Roadmap item: R-07 — select the passive clean-memory `plan` orchestration seam.
 
 ## Outcome
 
-Implement only the import-pure, job-independent candidate-plan core selected in
-`8ed29592`, building on the completed approval-authority checkpoint `248bbd33`.
-The core accepts already-resolved logical scope and injected temporary inventory
-evidence, produces one canonical `goodq.clean-memory-plan.v1` authority and
-digest, and atomically preserves first-writer immutable plan evidence. It does
-not resolve production configuration or make cleanup executable.
+Run one read-only no-repeat audit of the production authorities needed to turn
+an exact configured epoch into injected `ResolvedCleanupScope` evidence for the
+completed immutable-plan core at checkpoint `c870a1cb`. Select the smallest next
+implementation seam only after proving which existing configuration, path,
+filesystem-identity, Qdrant-fingerprint, and evidence-root helpers are reusable
+and which invariants are still absent.
 
 ## Governing evidence
 
 - `docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
-- `steps/common/clean_memory.py` (new)
-- `tests/unit/test_clean_memory_authority.py` (new)
-- private foundation checkpoint `248bbd33`
+- `steps/common/clean_memory.py`
+- `tests/unit/test_clean_memory_authority.py`
+- private candidate-plan checkpoint `c870a1cb`
 
 ## Governing invariant
 
-Unchanged resolved scope produces one stable candidate-plan identity independent
-of time, random IDs, action jobs, approval, disposition, and rollback evidence.
-Only injected read-only observations may enter its authority. The first
-successful writer atomically preserves the exact canonical plan; a repeated or
-concurrent identical writer verifies and returns it, while any same-digest
-authority mismatch fails closed. Planning cannot reach a cleanup target.
+`plan` accepts one exact configured epoch, derives every target from canonical
+configuration, performs only passive exact-scope observation, and supplies the
+completed core with explicit evidence. It creates no action job or token,
+resolves no disposition or rollback artifact, starts or stops no process,
+follows no redirect or reparse point, and mutates no cleanup target.
 
 ## Scope
 
-- Add focused RED tests before production code for import purity, canonical
-  compact sorted JSON with `allow_nan=False`, deterministic job-independent
-  hashing, derived plan identity, and observation metadata outside authority.
-- Define only the typed logical records needed for resolved cleanup scope,
-  ordered filesystem/Qdrant inventory evidence, protected-boundary identities,
-  preconditions, and an immutable candidate plan.
-- Add atomic first-writer plan persistence beneath an injected temporary
-  evidence root, including repeated/concurrent convergence, collision refusal,
-  byte preservation when replacement/persistence fails, and rejection of a
-  redirected or reparse-point evidence root.
-- Prove through injected fakes and temporary roots that planning creates no
-  action job or token, resolves no disposition/rollback artifact, starts/stops no
-  process, and performs no target mutation or configured/live access.
+- Reconcile existing configuration and runtime-path loaders, exact epoch and
+  four-collection naming, control-evidence-root ownership, filesystem platform
+  identity and digest helpers, Qdrant configuration/generation or complete
+  point-state fingerprint helpers, and established CLI orchestration patterns.
+- Prove which helpers are import-pure, passive, exact-scope, redirect-safe, and
+  suitable for reuse without weakening `c870a1cb`.
+- Record the no-repeat result, missing contracts, proposed next file/test
+  allowlist, and one smallest coherent implementation seam.
+- Update the roadmap only if the fresh evidence changes dependency order or
+  closes the audit selection.
 
 ## Boundaries
 
-- Touch only `PROJECT.md`, new `steps/common/clean_memory.py`, new
-  `tests/unit/test_clean_memory_authority.py`, the two mechanically generated
-  tracked-file indexes required by documentation authority, and the roadmap
-  checkpoint after verification.
-- Do not add `cli.clean_memory`, production configuration resolution, live
-  filesystem or Qdrant adapters, approval/apply/reconcile/status commands,
-  execution journals, receipts, target deletion, process probes, or leases.
-- Do not reopen `248bbd33`, change MiniAgent/action-job behavior, or alter
-  existing authorization callers.
-- Do not read or mutate configured data, Qdrant, databases, epochs, FAISS,
-  services, models, ingestion, identity, WSL, public checkout, or mixed main.
-- Do not change dependencies, API/UI routes, runtime launchers, documentation
-  replacement surfaces, legacy cleanup scripts, or corpus-retention authority.
+- This mission is read-only except for `PROJECT.md`, one focused clean-memory diagnostic
+  evidence document, and a roadmap checkpoint after independent review.
+- Do not implement `cli.clean_memory`, a production adapter, or any
+  approve/apply/reconcile/status behavior during this audit.
+- Do not read configured data, databases, FAISS content, Qdrant state, services,
+  models, ingestion, identity, WSL, public checkout, or mixed main.
+- Do not create evidence roots, action jobs, tokens, reports, receipts, leases,
+  or temporary production configuration.
+- Do not reopen the candidate-plan, MiniAgent, or action-job checkpoints unless
+  contradictory evidence proves one of their stated invariants false.
 
 ## Completion gate
 
-The focused tests first fail because the candidate-plan authority is absent,
-then pass after the smallest implementation. Importing the module has no I/O;
-canonical authority and digest are stable under repeated and concurrent input;
-observational timestamps and job/approval evidence cannot affect the digest;
-the immutable plan file cannot be silently replaced; and all tests remain
-temporary-only. Checkpoint only after focused tests, compilation, static gates,
-staged-diff inspection, and independent current-byte review are fresh and green.
+A focused diagnostic names every required passive `plan` input, the existing
+authority (or proven gap) for each, the exact next implementation boundary, and
+the tests that will prove no configured/live access. A fresh source/test trace
+and independent read-only review must agree that the selected seam neither
+duplicates completed work nor crosses into authorization, execution, retention,
+or service ownership.

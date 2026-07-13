@@ -292,6 +292,18 @@ the failure is not currently visible.
   temporal summarization.
   Evidence:
   `docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md`.
+- Next-seam selection evidence (2026-07-12): fresh mounted-code comparison chose
+  Summary Console collection create plus soft-delete. The pair shares one JSON
+  overlay, router, UI, and intended store-owner replacement boundary; it can reuse verified
+  exact-scope and audit primitives without the temporal-summary result-job
+  migration or identity persistence/recovery coupling. The repair must fail
+  closed on malformed storage, serialize the full load-modify-replace boundary,
+  preserve authoritative bytes on failure, and use persistent action truth for
+  destructive soft-delete, including an immutable overlay correlation marker
+  for exact crash reconciliation. No runtime or data action was invoked. R-05 remains
+  `IN_PROGRESS`.
+  Evidence:
+  `docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_SELECTION_2026-07-12.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 

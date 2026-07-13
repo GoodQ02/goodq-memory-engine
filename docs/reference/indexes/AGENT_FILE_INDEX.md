@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1210**
+Indexed active tracked paths: **1213**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -258,6 +258,7 @@ Indexed active tracked paths: **1210**
 | `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
@@ -813,6 +814,7 @@ Indexed active tracked paths: **1210**
 | `/steps/common/memory_store.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/memory_stores.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/memory_writer.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/model_cache_inspector.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/model_provisioner.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/non_action_contract.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/platform_config.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1080,6 +1082,7 @@ Indexed active tracked paths: **1210**
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_retrieval_model_cache_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retro_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_artifact_persisted_on_failure_exit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_index.py` | Verification | Test, fixture, or verification asset. |

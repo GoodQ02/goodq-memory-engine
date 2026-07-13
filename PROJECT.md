@@ -4,53 +4,49 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — make retrieval model loading local-only.
+Roadmap item: R-05-F1 — isolate summary SQLite read authority.
 
 ## Outcome
 
-Resolve text and CLIP query encoders only from exact registry-pinned local
-snapshots without downloads, cache writes, environment mutation, directory
-creation, or provisioner logging.
+Make summary dashboard/entity/video projections incapable of creating a missing
+database or executing DDL/DML while preserving truthful visibility of committed
+rows that still reside in a live WAL.
 
 ## Governing evidence
 
-- `docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md`
-- `docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md`
 - `docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md`
+- `docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
+
+## Governing invariant
+
+Live committed WAL truth outranks byte-identical SQLite sidecar purity. A
+read-only projection may participate in SQLite's required WAL coordination, but
+it must not create an absent database or possess DDL/DML capability.
 
 ## Scope
 
-- Add a side-effect-free exact-snapshot inspector module that accepts an
-  explicit models root and registry key without importing or using the
-  download/provisioning path.
-- Use it only in the text and CLIP retrieval loaders.
-- Pass absolute local snapshot paths and `local_files_only=True` to every
-  affected library loader.
-- Preserve exact registry revisions and graceful missing-cache degradation.
-- Add absent-cache and seeded-cache immutability tests before production code.
+- Trace only summary SQLite projections and their mounted summary callers.
+- Add mutation-sensitive temporary SQLite witnesses before production changes.
+- Require absent-path no-create, URI read-only mode, `PRAGMA query_only=ON`,
+  rejected DDL/DML, and visibility of committed uncheckpointed WAL rows.
+- Reuse one narrowly owned summary read primitive only where the focused trace
+  proves the same contract.
 
 ## Boundaries
 
-- Production scope is limited to the pure cache inspector, two retrieval model
-  loaders, and their focused tests.
-- Do not invoke live endpoints, Qdrant, model downloads, ingestion, identity,
-  configured data roots, operator data, WSL, or active services.
-- Use temporary roots, fakes, and monkeypatches only for bounded evidence.
-- Do not modify registry content, download provisioning, audio/ingestion
-  loaders, telemetry, SQLite, route effects, dependencies, or runtime packages.
-- Do not reopen Qdrant query, ingest-status, or summary-status authority without
-  contradictory focused evidence.
+- Do not repeat the completed Windows SQLite comparison or model-cache repair.
+- Do not change retrieval SQLite, retrieval telemetry, Qdrant, action-job
+  lifecycle, route effects, response contracts, dependencies, or runtime
+  packages.
+- Do not invoke configured databases, live endpoints, Qdrant, models, ingestion,
+  identity, WSL, public checkout, or the mixed main checkout.
+- Use temporary SQLite databases and focused tests only.
 
 ## Completion gate
 
-The current remote-ID loaders must fail the focused RED first. Absent cache must
-leave the temporary tree absent and call no library loader. Seeded exact
-snapshots must pass absolute paths with local-only flags while preserving every
-path, byte, size, and timestamp. Provisioner/download/log poisons, existing
-loader behavior, a fresh-import `sys.path` invariant, route census, compilation,
-diff checks, and independent review must pass before the implementation
-checkpoint.
+The current write-capable summary connection must fail the focused RED. The
+corrected reader must prove absent-path no-create, live-WAL visibility, DDL/DML
+rejection, bounded close behavior, unchanged response semantics, focused route
+regressions, diff checks, and independent review before checkpoint.

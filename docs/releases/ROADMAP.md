@@ -447,6 +447,18 @@ the failure is not currently visible.
   tests. Routes remain `automatic_mutation`; dependencies and all other effects
   stay frozen. Evidence:
   `docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md`.
+- Model-cache authority checkpoint evidence (2026-07-13): text and CLIP query
+  encoders now resolve only exact registry-pinned local snapshots before model
+  libraries are imported. Missing, incomplete, unpinned, and redirected
+  snapshot directories degrade without loader calls or cache creation. An
+  independent P1 review found and closed a junction/symlink redirect bypass
+  before checkpoint. Fresh verification passed 165 tests with 8 inherited
+  skips, preserved the unchanged 69-operation route census and frozen
+  provisioner/registry/dependency surfaces, and received a clean independent
+  re-review. R-05-F1 remains `IN_PROGRESS`; the next bounded seam is summary-only
+  SQLite read authority using the already-proven live-WAL contract. Retrieval
+  SQLite and telemetry remain separate. Evidence:
+  `docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1035,6 +1047,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed exact local-only text/CLIP retrieval model loading,
+  including rejection of incomplete, unpinned, and redirected snapshot
+  directories. Advanced R-05-F1 to summary-only live-WAL read authority without
+  reopening telemetry, retrieval SQLite, provisioning, or route classification.
 - 2026-07-13: Checkpointed the first R-05-F1 repair: all Qdrant query paths now
   require existing collections through bounded GET-only inspection, while
   explicit write paths retain creation authority. Advanced the bounded mission

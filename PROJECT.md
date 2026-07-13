@@ -19,6 +19,7 @@ projection, reader, observer, or runtime implementation begins.
 - duplicate canonical-envelope guard checkpoint `4230a910`
 - protected-boundary authority audit checkpoint `f01e03a7`
 - `docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md`
+- `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant

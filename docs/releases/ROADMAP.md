@@ -825,6 +825,26 @@ the failure is not currently visible.
   read or exercised. R-07 remains `IN_PROGRESS`; the next bounded gate is an
   explicit operator decision on one protected-authority source and its
   non-circular authoring/trust bootstrap, not implementation.
+- Protected-authority source decision evidence (2026-07-13): three independent
+  read-only audits found no existing repository source capable of authorizing
+  all eight unresolved protected roles. Tracked defaults, environment or caller
+  injection, runtime state, discovery, producer roots, live ledgers, reports,
+  and self-hashes remain non-authoritative. The stronger candidate is one fixed
+  machine-local canonical manifest beneath `candidate_evidence_root` with its
+  expected SHA-256 held by an independently trusted external pin source. A
+  strict typed full mapping in ignored local configuration is also viable and
+  simpler, but couples content and authorization to the merged loader and a
+  repository-local trust root. Either model uses a separate pure selection
+  projection and leaves the completed v1 projection closed. Exact pin location,
+  pre-normalization local-file provenance, interpolation and override rejection,
+  trusted effective-access-token/owner/access-control policy, bootstrap rewrite
+  preservation, authoring, reader, shared
+  no-follow backend, member semantics, and rotation/recovery remain later
+  decisions or seams. Neither model is approved or implemented. No live
+  configuration, root, service, data, Qdrant, evidence store, job, token,
+  MiniAgent, or cleanup authority was read or exercised. Evidence:
+  `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS` and awaits the explicit operator decision.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

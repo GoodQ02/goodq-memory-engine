@@ -135,6 +135,45 @@ class QdrantClient:
                 time.sleep(0.5)
         return False
 
+    def collection_exists(self) -> bool:
+        """Inspect collection availability without creating it."""
+        if self._collection_ready:
+            return True
+        if not self.cfg.enabled:
+            return False
+        for attempt in range(2):
+            try:
+                response = self.session.get(
+                    f"{self.cfg.host}/collections/{self.cfg.collection}",
+                    timeout=3,
+                )
+                if response.status_code == 200:
+                    self._collection_ready = True
+                    return True
+                body = _truncate_http_body(getattr(response, "text", None))
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                    "collection_exists",
+                    self.cfg.collection,
+                    getattr(response, "status_code", None),
+                    body,
+                    attempt + 1,
+                )
+                if response.status_code == 404:
+                    return False
+            except Exception as e:
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                    "collection_exists",
+                    self.cfg.collection,
+                    type(e).__name__,
+                    e,
+                    attempt + 1,
+                )
+            if attempt == 0:
+                time.sleep(0.5)
+        return False
+
     def upsert(self, points: List[Dict[str, Any]]) -> bool:
         if not self.cfg.enabled:
             return False
@@ -313,7 +352,7 @@ class QdrantClient:
     def query(self, vector: List[float], top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         if not self.cfg.enabled:
             return []
-        if not self.ensure_collection():
+        if not self.collection_exists():
             return []
         try:
             body: Dict[str, Any] = {
@@ -358,7 +397,7 @@ class QdrantClient:
                     self._collection_ready = False
                 if attempt == 0:
                     time.sleep(0.5)
-                    if not self.ensure_collection():
+                    if not self.collection_exists():
                         return []
             if res is None:
                 return []

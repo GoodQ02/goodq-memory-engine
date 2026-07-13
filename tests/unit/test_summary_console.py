@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import threading
@@ -69,6 +71,89 @@ class MockDataLoader:
             return None
         with idx_path.open("r", encoding="utf-8") as f:
             return json.load(f)
+
+
+def _historical_v1_collection() -> dict:
+    """Representative collection persisted by the original v1 writer."""
+    return {
+        "collection_id": "col_20260524_192200_0001",
+        "name": "Historical playlist",
+        "description": None,
+        "status": "active",
+        "collection_type": "manual_playlist",
+        "query_params": {"person": "Joe"},
+        "scene_refs": [{"video_id": "vid1", "scene_id": "scene_001"}],
+        "source_epoch": "epoch_historical_v1",
+        "created_at_utc": "2026-05-24T19:22:00Z",
+        "created_by": "operator",
+        "updated_at_utc": "2026-05-24T19:22:00Z",
+        "deleted_at_utc": None,
+        "history": [
+            {
+                "action": "create",
+                "timestamp_utc": "2026-05-24T19:22:00Z",
+                "operator_note": None,
+            }
+        ],
+    }
+
+
+def _spawn_collection_worker(
+    db_path: str,
+    action: str,
+    value: str,
+    start_event,
+    result_queue,
+) -> None:
+    """Spawn-safe worker for real cross-process collection mutations."""
+    if not start_event.wait(timeout=15):
+        raise RuntimeError("collection worker start gate timed out")
+    if action == "create":
+        result = summary_aggregator.add_collection(
+            Path(db_path),
+            {"name": value},
+        )
+    elif action == "delete":
+        result = summary_aggregator.soft_delete_collection(Path(db_path), value)
+    else:
+        raise ValueError(f"unsupported test action: {action}")
+    result_queue.put((action, result))
+
+
+def _run_spawn_collection_workers(
+    db_path: Path,
+    operations: list[tuple[str, str]],
+) -> list[tuple[str, object]]:
+    try:
+        context = multiprocessing.get_context("spawn")
+    except ValueError as exc:  # pragma: no cover - only on runtimes without spawn
+        pytest.skip(f"multiprocessing spawn is unavailable: {exc}")
+
+    start_event = context.Event()
+    result_queue = context.Queue()
+    processes = [
+        context.Process(
+            target=_spawn_collection_worker,
+            args=(str(db_path), action, value, start_event, result_queue),
+        )
+        for action, value in operations
+    ]
+    try:
+        for process in processes:
+            process.start()
+        start_event.set()
+        for process in processes:
+            process.join(timeout=30)
+            assert not process.is_alive(), "spawned collection worker timed out"
+            assert process.exitcode == 0
+        return [result_queue.get(timeout=5) for _ in processes]
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        result_queue.close()
+        result_queue.join_thread()
 
 
 def test_dashboard_and_profile_schemas(tmp_path: Path, monkeypatch) -> None:
@@ -196,6 +281,121 @@ def test_collections_crud_and_atomic_writes(tmp_path: Path) -> None:
     assert len(active_cols) == 0
 
 
+@pytest.mark.parametrize("omitted_optional_field", [None, "description", "deleted_at_utc"])
+def test_load_accepts_historical_v1_collection_and_optional_nullable_fields(
+    tmp_path: Path,
+    omitted_optional_field: str | None,
+) -> None:
+    collection = _historical_v1_collection()
+    if omitted_optional_field is not None:
+        collection.pop(omitted_optional_field)
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    collections_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert summary_aggregator.load_collections(tmp_path / "knowledge_graph.db") == payload
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "collection_id",
+        "name",
+        "status",
+        "collection_type",
+        "query_params",
+        "scene_refs",
+        "source_epoch",
+        "created_at_utc",
+        "created_by",
+        "updated_at_utc",
+        "history",
+    ],
+)
+def test_load_fails_closed_when_required_v1_collection_field_is_missing(
+    tmp_path: Path,
+    missing_field: str,
+) -> None:
+    collection = _historical_v1_collection()
+    collection.pop(missing_field)
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("collection_id", ""),
+        ("name", ""),
+        ("description", 7),
+        ("status", "unknown"),
+        ("collection_type", ""),
+        ("query_params", []),
+        ("scene_refs", {}),
+        ("scene_refs", ["not-a-reference"]),
+        ("source_epoch", ""),
+        ("created_at_utc", ""),
+        ("created_by", ""),
+        ("updated_at_utc", ""),
+        ("deleted_at_utc", 7),
+        ("history", {}),
+    ],
+)
+def test_load_fails_closed_on_malformed_v1_collection_field(
+    tmp_path: Path,
+    field: str,
+    invalid_value: object,
+) -> None:
+    collection = _historical_v1_collection()
+    collection[field] = invalid_value
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
+@pytest.mark.parametrize(
+    "invalid_history_entry",
+    [
+        "not-an-entry",
+        {},
+        {"timestamp_utc": "2026-05-24T19:22:00Z"},
+        {"action": "create"},
+        {"action": "", "timestamp_utc": "2026-05-24T19:22:00Z"},
+        {"action": "create", "timestamp_utc": ""},
+        {
+            "action": "create",
+            "timestamp_utc": "2026-05-24T19:22:00Z",
+            "operator_note": 7,
+        },
+    ],
+)
+def test_load_fails_closed_on_malformed_v1_history_entry(
+    tmp_path: Path,
+    invalid_history_entry: object,
+) -> None:
+    collection = deepcopy(_historical_v1_collection())
+    collection["history"] = [invalid_history_entry]
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
 @pytest.mark.parametrize(
     "invalid_payload",
     [
@@ -229,6 +429,61 @@ def test_collection_mutations_fail_closed_on_invalid_existing_store(
     assert collections_file.read_bytes() == invalid_payload
 
 
+def test_load_absent_collection_store_creates_no_artifact(tmp_path: Path) -> None:
+    epoch_dir = tmp_path / "absent-epoch"
+    db_path = epoch_dir / "knowledge_graph.db"
+
+    assert summary_aggregator.load_collections(db_path) == {
+        "schema_version": 1,
+        "collections": [],
+    }
+    assert not epoch_dir.exists()
+
+
+def test_load_existing_collection_store_creates_no_artifact(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    collections_file = tmp_path / "saved_collections.json"
+    collections_file.write_text(
+        json.dumps({"schema_version": 1, "collections": []}),
+        encoding="utf-8",
+    )
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+
+    assert summary_aggregator.load_collections(db_path) == {
+        "schema_version": 1,
+        "collections": [],
+    }
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+def test_directory_close_failure_is_reported_as_unsupported_not_raised(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+) -> None:
+    class FailingCloseOS:
+        name = "posix"
+        O_RDONLY = os.O_RDONLY
+        O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+
+        @staticmethod
+        def open(_path, _flags):
+            return 41
+
+        @staticmethod
+        def fsync(_descriptor):
+            return None
+
+        @staticmethod
+        def close(_descriptor):
+            raise OSError("simulated directory descriptor close failure")
+
+    monkeypatch.setattr(summary_aggregator, "os", FailingCloseOS)
+
+    assert summary_aggregator._fsync_directory_if_supported(tmp_path) is False
+    assert "directory descriptor" in caplog.text.lower()
+
+
 class _FlushFailingFile:
     def __init__(self, wrapped):
         self._wrapped = wrapped
@@ -257,6 +512,9 @@ def test_collection_save_failure_preserves_authoritative_bytes_and_cleans_temp(
     summary_aggregator.add_collection(db_path, {"name": "authoritative"})
     collections_file = tmp_path / "saved_collections.json"
     authoritative_bytes = collections_file.read_bytes()
+    foreign_temp = tmp_path / "saved_collections.json.tmp-foreign-owner"
+    foreign_temp_bytes = b"foreign writer artifact"
+    foreign_temp.write_bytes(foreign_temp_bytes)
 
     if failure_stage == "write":
         def fail_dump(_data, handle, **_kwargs):
@@ -294,7 +552,8 @@ def test_collection_save_failure_preserves_authoritative_bytes_and_cleans_temp(
         summary_aggregator.add_collection(db_path, {"name": "must not persist"})
 
     assert collections_file.read_bytes() == authoritative_bytes
-    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == []
+    assert foreign_temp.read_bytes() == foreign_temp_bytes
+    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == [foreign_temp]
 
 
 def test_concurrent_collection_creates_lose_no_updates_and_use_unique_ids(
@@ -358,6 +617,40 @@ def test_concurrent_collection_create_and_delete_lose_no_update(tmp_path: Path) 
         f"survivor-{index}" for index in range(create_count)
     }
     assert len({item["collection_id"] for item in created}) == create_count
+
+
+def test_spawned_collection_creates_lose_no_updates(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    operations = [("create", f"spawn-create-{index}") for index in range(6)]
+
+    results = _run_spawn_collection_workers(db_path, operations)
+
+    loaded = summary_aggregator.load_collections(db_path)["collections"]
+    assert {item["name"] for item in loaded} == {
+        f"spawn-create-{index}" for index in range(6)
+    }
+    created = [result for action, result in results if action == "create"]
+    assert len(created) == 6
+    assert len({item["collection_id"] for item in created}) == 6
+
+
+def test_spawned_collection_create_and_delete_lose_no_update(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    target = summary_aggregator.add_collection(db_path, {"name": "spawn-delete-target"})
+    operations = [
+        *(('create', f"spawn-survivor-{index}") for index in range(5)),
+        ("delete", target["collection_id"]),
+    ]
+
+    results = _run_spawn_collection_workers(db_path, operations)
+
+    loaded = summary_aggregator.load_collections(db_path)["collections"]
+    by_id = {item["collection_id"]: item for item in loaded}
+    assert any(action == "delete" and result is True for action, result in results)
+    assert by_id[target["collection_id"]]["status"] == "deleted"
+    assert {item["name"] for item in loaded if item["status"] == "active"} == {
+        f"spawn-survivor-{index}" for index in range(5)
+    }
 
 
 def test_no_mutation_invariants(tmp_path: Path, monkeypatch) -> None:

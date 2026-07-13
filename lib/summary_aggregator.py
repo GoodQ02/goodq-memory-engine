@@ -471,9 +471,24 @@ def _validate_collections_data(data: Any) -> Dict[str, Any]:
     for collection in collections:
         if not isinstance(collection, dict):
             raise RuntimeError("saved collections store entry is invalid")
-        collection_id = collection.get("collection_id")
-        if not isinstance(collection_id, str) or not collection_id.strip():
-            raise RuntimeError("saved collections store collection ID is invalid")
+
+        required_string_fields = (
+            "collection_id",
+            "name",
+            "collection_type",
+            "source_epoch",
+            "created_at_utc",
+            "created_by",
+            "updated_at_utc",
+        )
+        for field in required_string_fields:
+            value = collection.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise RuntimeError(
+                    f"saved collections store collection {field} is invalid"
+                )
+
+        collection_id = collection["collection_id"]
         if collection_id in collection_ids:
             raise RuntimeError(
                 "saved collections store contains duplicate collection IDs"
@@ -481,8 +496,54 @@ def _validate_collections_data(data: Any) -> Dict[str, Any]:
         collection_ids.add(collection_id)
         if collection.get("status") not in {"active", "deleted"}:
             raise RuntimeError("saved collections store collection status is invalid")
-        if not isinstance(collection.get("history"), list):
+        if "description" in collection and not isinstance(
+            collection["description"],
+            (str, type(None)),
+        ):
+            raise RuntimeError(
+                "saved collections store collection description is invalid"
+            )
+        if not isinstance(collection.get("query_params"), dict):
+            raise RuntimeError(
+                "saved collections store collection query_params is invalid"
+            )
+        scene_refs = collection.get("scene_refs")
+        if not isinstance(scene_refs, list) or not all(
+            isinstance(scene_ref, dict) for scene_ref in scene_refs
+        ):
+            raise RuntimeError(
+                "saved collections store collection scene_refs is invalid"
+            )
+        if "deleted_at_utc" in collection and not isinstance(
+            collection["deleted_at_utc"],
+            (str, type(None)),
+        ):
+            raise RuntimeError(
+                "saved collections store collection deleted_at_utc is invalid"
+            )
+
+        history = collection.get("history")
+        if not isinstance(history, list):
             raise RuntimeError("saved collections store collection history is invalid")
+        for history_entry in history:
+            if not isinstance(history_entry, dict):
+                raise RuntimeError(
+                    "saved collections store collection history entry is invalid"
+                )
+            for field in ("action", "timestamp_utc"):
+                value = history_entry.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    raise RuntimeError(
+                        "saved collections store collection history entry "
+                        f"{field} is invalid"
+                    )
+            if "operator_note" in history_entry and not isinstance(
+                history_entry["operator_note"],
+                (str, type(None)),
+            ):
+                raise RuntimeError(
+                    "saved collections store collection history operator_note is invalid"
+                )
     return data
 
 
@@ -503,17 +564,25 @@ def _fsync_directory_if_supported(directory: Path) -> bool:
     if os.name == "nt":
         return False
     descriptor: int | None = None
+    durable = False
     try:
         flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
         descriptor = os.open(directory, flags)
         os.fsync(descriptor)
-        return True
+        durable = True
     except OSError:
         logger.warning("Directory fsync is unavailable for the saved collections store")
-        return False
     finally:
         if descriptor is not None:
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            except OSError:
+                logger.warning(
+                    "Failed to close saved collections directory descriptor",
+                    exc_info=True,
+                )
+                durable = False
+    return durable
 
 
 def _save_collections_unlocked(collections_file: Path, data: Dict[str, Any]) -> None:
@@ -540,10 +609,8 @@ def _save_collections_unlocked(collections_file: Path, data: Dict[str, Any]) -> 
 
 
 def load_collections(db_path: Path) -> Dict[str, Any]:
-    """Load and strictly validate custom collections under the shared store lock."""
-    collections_file = _collections_file(db_path)
-    with _collections_lock(collections_file):
-        return _load_collections_unlocked(collections_file)
+    """Load a strict coherent snapshot without creating passive-read artifacts."""
+    return _load_collections_unlocked(_collections_file(db_path))
 
 
 def save_collections(db_path: Path, data: Dict[str, Any]) -> None:

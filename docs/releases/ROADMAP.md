@@ -471,6 +471,21 @@ the failure is not currently visible.
   is a fresh selection between retrieval SQLite and intentional retrieval
   telemetry. Evidence:
   `docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Retrieval SQLite selection evidence (2026-07-13): fresh independent route and
+  effect traces selected the four existing-file retrieval projections before
+  intentional telemetry. FTS, KG scoring, shared Qdrant/FAISS hit provenance,
+  and FAISS quantization shadow scoring retain ordinary write-capable SQLite
+  handles despite read-only intent. The repair will promote
+  the proven summary capability into one neutral common existing-file,
+  live-WAL-aware, operation-authorized reader while preserving the completed
+  summary API as a compatibility wrapper. Telemetry remains enabled,
+  best-effort, durable observability and keeps all four retrieval routes
+  `automatic_mutation`. Its later policy checkpoint must address dropped log
+  destination/JSONL policy, process-global context, raw-query INFO logging, and
+  absolute FAISS path detail without deleting the audit effect. R-05-F1 remains
+  `IN_PROGRESS`; the next bounded mission is the mutation-sensitive retrieval
+  SQLite implementation. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1059,6 +1074,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Selected the shared retrieval SQLite read-authority seam after a
+  fresh reconciliation with intentional retrieval telemetry. Recorded the
+  telemetry-policy gaps separately and advanced R-05-F1 to mutation-sensitive
+  implementation without changing route classification or production code.
 - 2026-07-13: Checkpointed summary-only SQLite read authority with existing-file
   URI mode, live-WAL visibility, operation-level authorization, and bounded
   connection ownership. Advanced R-05-F1 to a fresh selection between retrieval

@@ -396,6 +396,112 @@ def test_load_fails_closed_on_malformed_v1_history_entry(
     assert collections_file.read_bytes() == persisted
 
 
+def test_load_preserves_legacy_v1_collection_with_empty_history(tmp_path: Path) -> None:
+    collection = _historical_v1_collection()
+    collection["history"] = []
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    collections_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert summary_aggregator.load_collections(
+        tmp_path / "knowledge_graph.db"
+    ) == payload
+
+
+@pytest.mark.parametrize(
+    "governed_fields",
+    [
+        {"action_id": "action_1234abcd"},
+        {
+            "action_id": "action_1234abcd",
+            "payload_sha256": "a" * 64,
+            "authorization_request_id": "request-create-1",
+            "job_id": "job_1234abcd",
+        },
+        {
+            "action_id": "action_1234abcd",
+            "payload_sha256": "A" * 64,
+            "authorization_request_id": "request-create-1",
+        },
+    ],
+)
+def test_load_fails_closed_on_invalid_governed_history_evidence(
+    tmp_path: Path,
+    governed_fields: dict[str, str],
+) -> None:
+    collection = _historical_v1_collection()
+    collection["history"][0].update(governed_fields)
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="governed history evidence"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
+@pytest.mark.parametrize(
+    ("action", "correlation_field", "digest_field"),
+    [
+        ("create", "action_id", "payload_sha256"),
+        ("delete", "job_id", "expected_record_sha256"),
+    ],
+)
+def test_load_fails_closed_when_governed_correlation_is_rebound(
+    tmp_path: Path,
+    action: str,
+    correlation_field: str,
+    digest_field: str,
+) -> None:
+    first = _historical_v1_collection()
+    second = deepcopy(first)
+    second["collection_id"] = "col_20260524_192200_0002"
+    second["name"] = "Second collection"
+    for index, collection in enumerate((first, second)):
+        governed_entry = {
+            "action": action,
+            "timestamp_utc": "2026-05-24T19:23:00Z",
+            "operator_note": None,
+            correlation_field: f"{correlation_field}_1234abcd",
+            digest_field: ("a" if index == 0 else "b") * 64,
+            "authorization_request_id": f"request-{action}-{index}",
+        }
+        if action == "create":
+            collection["history"] = [governed_entry]
+        else:
+            collection["history"].append(governed_entry)
+    payload = {"schema_version": 1, "collections": [first, second]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="correlation"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
+def test_load_fails_closed_on_duplicate_exact_governed_receipt(tmp_path: Path) -> None:
+    collection = _historical_v1_collection()
+    governed_entry = {
+        "action": "create",
+        "timestamp_utc": "2026-05-24T19:22:00Z",
+        "operator_note": None,
+        "action_id": "action_1234abcd",
+        "payload_sha256": "a" * 64,
+        "authorization_request_id": "request-create-1",
+    }
+    collection["history"] = [governed_entry, deepcopy(governed_entry)]
+    payload = {"schema_version": 1, "collections": [collection]}
+    collections_file = tmp_path / "saved_collections.json"
+    persisted = json.dumps(payload).encode("utf-8")
+    collections_file.write_bytes(persisted)
+
+    with pytest.raises(RuntimeError, match="correlation"):
+        summary_aggregator.load_collections(tmp_path / "knowledge_graph.db")
+    assert collections_file.read_bytes() == persisted
+
+
 @pytest.mark.parametrize(
     "invalid_payload",
     [
@@ -651,6 +757,139 @@ def test_spawned_collection_create_and_delete_lose_no_update(tmp_path: Path) -> 
     assert {item["name"] for item in loaded if item["status"] == "active"} == {
         f"spawn-survivor-{index}" for index in range(5)
     }
+
+
+def test_collection_mutation_evidence_is_persisted_and_recoverable(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    create_evidence = {
+        "action_id": "action_1234abcd",
+        "payload_sha256": "a" * 64,
+        "authorization_request_id": "request-create-1",
+    }
+    created = summary_aggregator.add_collection(
+        db_path,
+        {"name": "Governed collection"},
+        mutation_evidence=create_evidence,
+    )
+
+    assert created["history"][0] == {
+        "action": "create",
+        "timestamp_utc": created["history"][0]["timestamp_utc"],
+        "operator_note": "Initial creation",
+        **create_evidence,
+    }
+    assert summary_aggregator.find_collection_by_create_action(
+        db_path,
+        action_id=create_evidence["action_id"],
+        payload_sha256=create_evidence["payload_sha256"],
+    )["collection_id"] == created["collection_id"]
+
+    expected_digest = summary_aggregator.collection_record_sha256(created)
+    assert expected_digest == summary_aggregator.collection_record_sha256(
+        json.loads(json.dumps(created))
+    )
+    delete_evidence = {
+        "job_id": "job_1234abcd",
+        "expected_record_sha256": expected_digest,
+        "authorization_request_id": "request-delete-1",
+    }
+    assert summary_aggregator.soft_delete_collection(
+        db_path,
+        created["collection_id"],
+        mutation_evidence=delete_evidence,
+    ) is True
+
+    recovered = summary_aggregator.find_collection_by_delete_job(
+        db_path,
+        job_id=delete_evidence["job_id"],
+        expected_record_sha256=expected_digest,
+    )
+    assert recovered["status"] == "deleted"
+    assert recovered["history"][-1] == {
+        "action": "delete",
+        "timestamp_utc": recovered["history"][-1]["timestamp_utc"],
+        "operator_note": "Soft-deleted by operator",
+        **delete_evidence,
+    }
+    assert summary_aggregator.soft_delete_collection(
+        db_path,
+        created["collection_id"],
+        mutation_evidence=delete_evidence,
+    ) is True
+
+
+def test_soft_delete_rejects_changed_record_digest_without_writing(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    created = summary_aggregator.add_collection(db_path, {"name": "Changed target"})
+    collections_file = tmp_path / "saved_collections.json"
+    before = collections_file.read_bytes()
+
+    with pytest.raises(summary_aggregator.CollectionStoreConflict):
+        summary_aggregator.soft_delete_collection(
+            db_path,
+            created["collection_id"],
+            mutation_evidence={
+                "job_id": "job_1234abcd",
+                "expected_record_sha256": "b" * 64,
+                "authorization_request_id": "request-delete-1",
+            },
+        )
+
+    assert collections_file.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "mutation_evidence",
+    [
+        {"action_id": "action_1234abcd"},
+        {
+            "action_id": "../private",
+            "payload_sha256": "a" * 64,
+            "authorization_request_id": "request-create-1",
+        },
+        {
+            "action_id": "action_1234abcd",
+            "payload_sha256": "A" * 64,
+            "authorization_request_id": "request-create-1",
+        },
+    ],
+)
+def test_create_mutation_evidence_fails_closed(
+    tmp_path: Path,
+    mutation_evidence: dict,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+
+    with pytest.raises(ValueError, match="mutation evidence"):
+        summary_aggregator.add_collection(
+            db_path,
+            {"name": "Must not persist"},
+            mutation_evidence=mutation_evidence,
+        )
+
+    assert not (tmp_path / "saved_collections.json").exists()
+
+
+def test_delete_mutation_evidence_fails_closed_without_writing(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    created = summary_aggregator.add_collection(db_path, {"name": "Preserve me"})
+    collections_file = tmp_path / "saved_collections.json"
+    before = collections_file.read_bytes()
+
+    with pytest.raises(ValueError, match="mutation evidence"):
+        summary_aggregator.soft_delete_collection(
+            db_path,
+            created["collection_id"],
+            mutation_evidence={
+                "job_id": "job_1234abcd",
+                "expected_record_sha256": "A" * 64,
+                "authorization_request_id": "request-delete-1",
+            },
+        )
+
+    assert collections_file.read_bytes() == before
 
 
 def test_no_mutation_invariants(tmp_path: Path, monkeypatch) -> None:

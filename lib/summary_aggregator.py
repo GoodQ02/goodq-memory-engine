@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -14,6 +15,27 @@ from filelock import FileLock
 from api.utils.loaders import DataLoader
 
 logger = logging.getLogger(__name__)
+
+_CORRELATION_IDENTIFIER_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+)
+_REQUEST_IDENTIFIER_CHARACTERS = _CORRELATION_IDENTIFIER_CHARACTERS | {":"}
+_CORRELATION_IDENTIFIER_MAX_LENGTH = 102
+_REQUEST_IDENTIFIER_MAX_LENGTH = 128
+_CREATE_MUTATION_EVIDENCE_FIELDS = {
+    "action_id",
+    "payload_sha256",
+    "authorization_request_id",
+}
+_DELETE_MUTATION_EVIDENCE_FIELDS = {
+    "job_id",
+    "expected_record_sha256",
+    "authorization_request_id",
+}
+
+
+class CollectionStoreConflict(RuntimeError):
+    """The exact collection state no longer matches an authorized mutation."""
 
 OCCASION_KEYWORDS = {
     "holiday": ["holiday", "christmas", "santa", "thanksgiving", "easter", "new year", "halloween"],
@@ -458,6 +480,85 @@ def _collections_lock(collections_file: Path) -> FileLock:
     return FileLock(str(lock_path))
 
 
+def _valid_correlation_identifier(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and len(value) <= _CORRELATION_IDENTIFIER_MAX_LENGTH
+        and value[0].isalnum()
+        and all(
+            character in _CORRELATION_IDENTIFIER_CHARACTERS
+            for character in value
+        )
+    )
+
+
+def _valid_request_identifier(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and len(value) <= _REQUEST_IDENTIFIER_MAX_LENGTH
+        and value[0].isalnum()
+        and all(character in _REQUEST_IDENTIFIER_CHARACTERS for character in value)
+    )
+
+
+def _valid_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _validate_mutation_evidence(
+    mutation_evidence: Any,
+    *,
+    action: str,
+) -> Dict[str, str] | None:
+    if mutation_evidence is None:
+        return None
+    if not isinstance(mutation_evidence, dict):
+        raise ValueError("collection mutation evidence must be an object")
+    expected = (
+        _CREATE_MUTATION_EVIDENCE_FIELDS
+        if action == "create"
+        else _DELETE_MUTATION_EVIDENCE_FIELDS
+    )
+    if set(mutation_evidence) != expected:
+        raise ValueError("collection mutation evidence fields are invalid")
+    correlation_field = "action_id" if action == "create" else "job_id"
+    digest_field = (
+        "payload_sha256" if action == "create" else "expected_record_sha256"
+    )
+    if not _valid_correlation_identifier(mutation_evidence.get(correlation_field)):
+        raise ValueError("collection mutation evidence correlation is invalid")
+    if not _valid_sha256(mutation_evidence.get(digest_field)):
+        raise ValueError("collection mutation evidence digest is invalid")
+    if not _valid_request_identifier(
+        mutation_evidence.get("authorization_request_id")
+    ):
+        raise ValueError("collection mutation evidence request is invalid")
+    return dict(mutation_evidence)
+
+
+def collection_record_sha256(collection: Dict[str, Any]) -> str:
+    """Return the canonical digest used to bind one persisted collection record."""
+    try:
+        encoded = json.dumps(
+            collection,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("collection record is not canonical JSON") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _validate_collections_data(data: Any) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise RuntimeError("saved collections store root is invalid")
@@ -468,6 +569,7 @@ def _validate_collections_data(data: Any) -> Dict[str, Any]:
         raise RuntimeError("saved collections store collection list is invalid")
 
     collection_ids: set[str] = set()
+    governed_correlations: set[tuple[str, str]] = set()
     for collection in collections:
         if not isinstance(collection, dict):
             raise RuntimeError("saved collections store entry is invalid")
@@ -544,6 +646,42 @@ def _validate_collections_data(data: Any) -> Dict[str, Any]:
                 raise RuntimeError(
                     "saved collections store collection history operator_note is invalid"
                 )
+            governed_fields = (
+                _CREATE_MUTATION_EVIDENCE_FIELDS
+                | _DELETE_MUTATION_EVIDENCE_FIELDS
+            ) & set(history_entry)
+            if governed_fields:
+                action = history_entry["action"]
+                expected_fields = (
+                    _CREATE_MUTATION_EVIDENCE_FIELDS
+                    if action == "create"
+                    else _DELETE_MUTATION_EVIDENCE_FIELDS
+                    if action == "delete"
+                    else set()
+                )
+                if governed_fields != expected_fields:
+                    raise RuntimeError(
+                        "saved collections store governed history evidence is invalid"
+                    )
+                try:
+                    validated_evidence = _validate_mutation_evidence(
+                        {field: history_entry[field] for field in expected_fields},
+                        action=action,
+                    )
+                except ValueError as exc:
+                    raise RuntimeError(
+                        "saved collections store governed history evidence is invalid"
+                    ) from exc
+                correlation_field = "action_id" if action == "create" else "job_id"
+                correlation_key = (
+                    action,
+                    validated_evidence[correlation_field],
+                )
+                if correlation_key in governed_correlations:
+                    raise RuntimeError(
+                        "saved collections store governed correlation is duplicated"
+                    )
+                governed_correlations.add(correlation_key)
     return data
 
 
@@ -620,8 +758,18 @@ def save_collections(db_path: Path, data: Dict[str, Any]) -> None:
         _save_collections_unlocked(collections_file, data)
 
 
-def add_collection(db_path: Path, col_request: Dict[str, Any], created_by: str = "operator") -> Dict[str, Any]:
+def add_collection(
+    db_path: Path,
+    col_request: Dict[str, Any],
+    created_by: str = "operator",
+    *,
+    mutation_evidence: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """Add a new custom collection atomically."""
+    governed_evidence = _validate_mutation_evidence(
+        mutation_evidence,
+        action="create",
+    )
     collections_file = _collections_file(db_path)
     with _collections_lock(collections_file):
         data = _load_collections_unlocked(collections_file)
@@ -638,6 +786,8 @@ def add_collection(db_path: Path, col_request: Dict[str, Any], created_by: str =
             "timestamp_utc": timestamp,
             "operator_note": col_request.get("operator_note") or "Initial creation"
         }
+        if governed_evidence is not None:
+            history_entry.update(governed_evidence)
 
         new_collection = {
             "collection_id": collection_id,
@@ -660,8 +810,17 @@ def add_collection(db_path: Path, col_request: Dict[str, Any], created_by: str =
         return new_collection
 
 
-def soft_delete_collection(db_path: Path, collection_id: str) -> bool:
+def soft_delete_collection(
+    db_path: Path,
+    collection_id: str,
+    *,
+    mutation_evidence: Optional[Dict[str, str]] = None,
+) -> bool:
     """Soft delete a custom collection atomically by setting status='deleted'."""
+    governed_evidence = _validate_mutation_evidence(
+        mutation_evidence,
+        action="delete",
+    )
     collections_file = _collections_file(db_path)
     with _collections_lock(collections_file):
         data = _load_collections_unlocked(collections_file)
@@ -669,22 +828,120 @@ def soft_delete_collection(db_path: Path, collection_id: str) -> bool:
 
         target = None
         for col in collections:
-            if col.get("collection_id") == collection_id and col.get("status") == "active":
+            if col.get("collection_id") == collection_id:
                 target = col
                 break
 
         if not target:
             return False
+        if target["status"] == "deleted":
+            if governed_evidence is None:
+                return False
+            for history_entry in target["history"]:
+                if (
+                    history_entry.get("action") == "delete"
+                    and history_entry.get("job_id") == governed_evidence["job_id"]
+                    and history_entry.get("expected_record_sha256")
+                    == governed_evidence["expected_record_sha256"]
+                ):
+                    return True
+            raise CollectionStoreConflict(
+                "collection was already deleted by a different authorized action"
+            )
+        if (
+            governed_evidence is not None
+            and collection_record_sha256(target)
+            != governed_evidence["expected_record_sha256"]
+        ):
+            raise CollectionStoreConflict(
+                "collection record changed after delete authorization"
+            )
 
         timestamp = _utc_now_iso()
         target["status"] = "deleted"
         target["deleted_at_utc"] = timestamp
         target["updated_at_utc"] = timestamp
-        target["history"].append({
+        history_entry = {
             "action": "delete",
             "timestamp_utc": timestamp,
             "operator_note": "Soft-deleted by operator"
-        })
+        }
+        if governed_evidence is not None:
+            history_entry.update(governed_evidence)
+        target["history"].append(history_entry)
 
         _save_collections_unlocked(collections_file, data)
         return True
+
+
+def _find_collection_by_mutation_evidence(
+    db_path: Path,
+    *,
+    action: str,
+    correlation_field: str,
+    correlation_value: str,
+    digest_field: str,
+    digest_value: str,
+) -> Dict[str, Any] | None:
+    matches = []
+    for collection in load_collections(db_path)["collections"]:
+        if any(
+            history_entry.get("action") == action
+            and history_entry.get(correlation_field) == correlation_value
+            and history_entry.get(digest_field) == digest_value
+            for history_entry in collection["history"]
+        ):
+            matches.append(collection)
+    if len(matches) > 1:
+        raise RuntimeError("saved collections store mutation evidence is ambiguous")
+    return matches[0] if matches else None
+
+
+def find_collection_by_create_action(
+    db_path: Path,
+    *,
+    action_id: str,
+    payload_sha256: str,
+) -> Dict[str, Any] | None:
+    """Read one collection carrying the exact governed create evidence."""
+    _validate_mutation_evidence(
+        {
+            "action_id": action_id,
+            "payload_sha256": payload_sha256,
+            "authorization_request_id": "lookup",
+        },
+        action="create",
+    )
+    return _find_collection_by_mutation_evidence(
+        db_path,
+        action="create",
+        correlation_field="action_id",
+        correlation_value=action_id,
+        digest_field="payload_sha256",
+        digest_value=payload_sha256,
+    )
+
+
+def find_collection_by_delete_job(
+    db_path: Path,
+    *,
+    job_id: str,
+    expected_record_sha256: str,
+) -> Dict[str, Any] | None:
+    """Read one collection carrying the exact governed delete evidence."""
+    _validate_mutation_evidence(
+        {
+            "job_id": job_id,
+            "expected_record_sha256": expected_record_sha256,
+            "authorization_request_id": "lookup",
+        },
+        action="delete",
+    )
+    return _find_collection_by_mutation_evidence(
+        db_path,
+        action="delete",
+        correlation_field="job_id",
+        correlation_value=job_id,
+        digest_field="expected_record_sha256",
+        digest_value=expected_record_sha256,
+    )

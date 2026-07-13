@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-07-12 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-13 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -304,6 +304,22 @@ the failure is not currently visible.
   `IN_PROGRESS`.
   Evidence:
   `docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_SELECTION_2026-07-12.md`.
+- Summary-collection authority checkpoint evidence (2026-07-13): the selected
+  overlay seam now uses strict locked atomic persistence, collision-safe IDs,
+  exact-scope MiniAgent create/delete confirmation, generic external outcome
+  audit, immutable create/job correlation evidence, persistent soft-delete job
+  truth, deterministic startup reconciliation, and Summary Console
+  prepare/confirm flows with terminal-only success. Independent review findings
+  for correlation rebinding, source-epoch authority, reconciliation request-ID
+  equality, token retention, finalization-pending scope, and post-replace
+  inspection/rollback were closed before checkpointing. Fresh isolated
+  verification passed 505 tests plus Python
+  compilation, JavaScript syntax, documentation, diff, secret-surface,
+  portable-path, and route-effect gates. R-05 remains `IN_PROGRESS`; the next
+  bounded mission is a fresh read-only selection among the remaining mounted
+  curated/process authorities, not automatic continuation into temporal
+  summarization. Evidence:
+  `docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 

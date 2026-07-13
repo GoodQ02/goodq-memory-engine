@@ -10,7 +10,8 @@ Roadmap item: R-05-F1 — make summary video status a lock-free passive read.
 
 Split passive action-job record inspection from the writer-oriented ledger so
 `GET /api/summary/video/{video_hash}/status` cannot acquire or create a lock,
-create its root, or mutate persisted job state.
+create its root, or mutate persisted job state, while preserving concurrent
+Windows writer replacement.
 
 ## Governing evidence
 
@@ -24,6 +25,8 @@ create its root, or mutate persisted job state.
 
 - Add a non-creating, lock-free passive action-job reader.
 - Use it for exact-ID and latest video-summary status projections.
+- Pair Windows share-delete reads with an action-job-only replace-compatible
+  atomic JSON writer; leave the generic atomic writer unchanged.
 - Preserve operation/scope filtering, ordering, response shape, and errors.
 - Prove atomic-replace concurrency returns only complete old/new records.
 - Retain the writer ledger, lock, transitions, reconciliation, and atomic write
@@ -31,13 +34,14 @@ create its root, or mutate persisted job state.
 
 ## Boundaries
 
-- Production changes are limited to the passive action-job reader and summary
-  video-status projection plus their focused tests.
+- Production changes are limited to the passive action-job reader, summary
+  video-status projection, and an opt-in action-job atomic replacement helper
+  plus their focused tests.
 - Do not invoke live endpoints, Qdrant, model downloads, ingestion, identity,
   configured data roots, operator data, WSL, or active services.
 - Use temporary roots, fakes, and monkeypatches only for bounded evidence.
-- Do not modify retrieval, model, SQLite, route-effect, runtime, or writer
-  action-job lifecycle code.
+- Do not modify retrieval, model, SQLite, route-effect, runtime, generic atomic
+  write behavior, or action-job state-transition semantics.
 - Do not reopen Qdrant query or ingest-status authority without contradictory
   focused evidence.
 
@@ -45,6 +49,7 @@ create its root, or mutate persisted job state.
 
 Focused tests must fail first on writer-lock entry, then prove exact/latest
 status reads never enter the lock or change the temp tree. Absent-root,
-scope/operation filtering, atomic-replace concurrency, writer-lock controls,
-route census, compilation, diff, and independent review must pass before the
-implementation checkpoint.
+scope/operation filtering, share-delete read behavior, concurrent atomic
+replacement without `PermissionError`, writer-lock controls, generic atomic
+writer controls, route census, compilation, diff, and independent review must
+pass before the implementation checkpoint.

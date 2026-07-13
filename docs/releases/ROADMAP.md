@@ -415,6 +415,14 @@ the failure is not currently visible.
   status route; writer lifecycle behavior and the route census remain frozen.
   Evidence:
   `docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md`.
+- First-RED scope correction (2026-07-13): a Windows concurrency witness proved
+  that a lock-free Python reader can make the current action-job `os.replace()`
+  writer fail with `PermissionError`. A share-delete read handle alone did not
+  cure that replacement failure, while a bounded `ReplaceFileW` control did.
+  The selected status seam remains correct, but its coherent rollback boundary
+  now includes an opt-in action-job atomic replacement helper. Generic atomic
+  writes, action-job state transitions, and unrelated callers remain frozen;
+  the concurrency oracle must not be weakened to preserve the narrower plan.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 

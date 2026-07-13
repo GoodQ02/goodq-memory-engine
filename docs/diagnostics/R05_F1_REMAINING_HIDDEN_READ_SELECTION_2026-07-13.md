@@ -126,8 +126,10 @@ hidden write.
    ledger or creating a directory.
 4. Preserve response shape, scope filtering, operation filtering, sort order,
    and error behavior.
-5. Keep `ActionJobLedger`, its lock, atomic writes, lifecycle transitions,
-   startup reconciliation, and all process/curated routes unchanged.
+5. Keep `ActionJobLedger` locking, lifecycle transitions, startup
+   reconciliation, and all process/curated routes unchanged. On Windows only,
+   its atomic JSON replacement must opt into a replacement primitive that is
+   compatible with the passive reader's share-delete handle.
 6. Keep the mounted route classified `passive_read`; all route census totals
    remain unchanged.
 
@@ -137,6 +139,8 @@ Expected production scope:
 
 - `api/utils/action_jobs.py`;
 - `api/routes/summary.py`.
+- `steps/common/atomic_io.py`, limited to a new opt-in replacement-compatible
+  helper; existing callers retain their current behavior.
 
 Focused verification scope:
 
@@ -151,7 +155,7 @@ The implementation gate must prove:
 - existing paths, bytes, sizes, and modification times remain unchanged;
 - operation and scope filtering still reject unrelated jobs;
 - an atomic-replace race yields only a complete old or new JSON record, never
-  a partial projection;
+  a partial projection or Windows sharing failure;
 - writer operations still acquire the ledger lock and persist atomically; and
 - the route-effect census remains 69 operations: 41 passive, 1 staging, 10
   automatic mutation, 8 curated mutation, and 9 process execution.
@@ -179,6 +183,28 @@ The repository contained no production-code change during selection. The
 implementation mission begins only after this evidence checkpoint is reviewed
 and committed.
 
+## First-RED Scope Correction
+
+The first implementation RED uncovered a Windows-specific concurrency fact
+that invalidated the narrower writer-unchanged assumption:
+
+- a normal Python read raced against the current `os.replace()` action-job
+  writer and produced `PermissionError` in the writer;
+- even a Win32 read handle opened with
+  `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` could not make the
+  current replacement call succeed while that handle remained open; and
+- a bounded `ReplaceFileW` control succeeded against the same share-delete
+  reader and preserved a complete replacement.
+
+Microsoft documents that `ReplaceFileW` opens the replaced file with read,
+delete, and synchronize access and uses read/write/delete sharing. The repair
+must therefore keep the selected reader seam but widen its exact rollback
+boundary to one opt-in action-job atomic replacement helper. The generic atomic
+JSON writer and every unrelated caller remain unchanged.
+
+This correction was recorded before implementation continued. Weakening or
+deleting the concurrency oracle is not an acceptable workaround.
+
 ## Explicit Exclusions
 
 This seam must not change:
@@ -187,7 +213,7 @@ This seam must not change:
 - model registry, provisioning, cache roots, dependency versions, or model
   loading;
 - SQLite connection policy for summary, FTS, provenance, identity, or runtime;
-- Qdrant, ingestion, identity, temporal-summary, or action-job lifecycle
+- Qdrant, ingestion, identity, temporal-summary, or action-job state-machine
   behavior;
 - configured data, active services, browser code, LAN bindings, or public
   release state.

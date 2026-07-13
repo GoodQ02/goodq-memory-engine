@@ -52,16 +52,37 @@ def _normalized_key(key: str) -> str:
     return re.sub(r"[^a-z0-9]", "", key.lower())
 
 
-def _reject_secret_bearing(value: Any) -> None:
+def _reject_secret_bearing(
+    value: Any,
+    *,
+    allowed_top_level_keys: frozenset[str] = frozenset(),
+    depth: int = 0,
+) -> None:
     if isinstance(value, dict):
         for key, nested in value.items():
             normalized_key = _normalized_key(str(key))
-            if normalized_key in _SECRET_KEY_NAMES or "bearer" in normalized_key:
+            allowed_metadata = (
+                depth == 0 and normalized_key in allowed_top_level_keys
+            )
+            token_like = normalized_key.endswith("token")
+            if not allowed_metadata and (
+                normalized_key in _SECRET_KEY_NAMES
+                or "bearer" in normalized_key
+                or token_like
+            ):
                 raise ValueError("Action job data contains a secret-bearing field")
-            _reject_secret_bearing(nested)
+            _reject_secret_bearing(
+                nested,
+                allowed_top_level_keys=allowed_top_level_keys,
+                depth=depth + 1,
+            )
     elif isinstance(value, list):
         for nested in value:
-            _reject_secret_bearing(nested)
+            _reject_secret_bearing(
+                nested,
+                allowed_top_level_keys=allowed_top_level_keys,
+                depth=depth + 1,
+            )
     elif isinstance(value, str) and re.search(r"\bbearer\s+\S+", value, re.IGNORECASE):
         raise ValueError("Action job data contains bearer token material")
 
@@ -118,7 +139,9 @@ def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
     unknown = set(updates) - _UPDATE_FIELDS
     if unknown:
         raise ValueError(f"Unsupported action job update fields: {sorted(unknown)}")
-    _reject_secret_bearing(updates)
+    _reject_secret_bearing(
+        updates, allowed_top_level_keys=frozenset({"tokenfingerprint"})
+    )
 
     validated: dict[str, Any] = {}
     if "token_fingerprint" in updates:
@@ -311,6 +334,38 @@ class ActionJobLedger:
             updated = dict(record)
             updated.update(validated_updates)
             updated["state"] = new_state
+            updated["updated_at_utc"] = _utc_now_iso()
+            atomic_write_json(self.record_path(job_id), updated)
+            return updated
+
+    def compare_and_update(
+        self,
+        job_id: str,
+        *,
+        expected_state: str,
+        **updates: Any,
+    ) -> dict[str, Any]:
+        if expected_state not in NONTERMINAL_STATES:
+            raise ValueError("Expected action job state must be nonterminal")
+        if not updates:
+            raise ValueError("Action job metadata update must not be empty")
+        validated_updates = _validate_updates(updates)
+
+        with self._lock:
+            record = self.load(job_id)
+            if record is None:
+                raise FileNotFoundError(f"Action job record not found: {job_id}")
+            current_state = record.get("state")
+            if current_state in TERMINAL_STATES:
+                raise TerminalTransitionError(
+                    f"Action job {job_id} is terminal in state {current_state}"
+                )
+            if current_state != expected_state:
+                raise StaleTransitionError(
+                    f"Action job {job_id} expected {expected_state}, found {current_state}"
+                )
+            updated = dict(record)
+            updated.update(validated_updates)
             updated["updated_at_utc"] = _utc_now_iso()
             atomic_write_json(self.record_path(job_id), updated)
             return updated

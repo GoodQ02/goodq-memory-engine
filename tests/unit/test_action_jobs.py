@@ -55,6 +55,15 @@ def test_job_ids_are_opaque_and_invalid_or_traversal_ids_are_rejected(tmp_path):
     [
         {"video_id": "video-7", "bearer_token": "private"},
         {"video_id": "video-7", "nested": {"authorization": "Bearer private"}},
+        {"video_id": "video-7", "access_token": "private"},
+        {"video_id": "video-7", "Access-Token": "private"},
+        {"video_id": "video-7", "refresh_token": "private"},
+        {"video_id": "video-7", "refresh token": "private"},
+        {"video_id": "video-7", "id_token": "private"},
+        {"video_id": "video-7", "id.token": "private"},
+        {"video_id": "video-7", "session_token": "private"},
+        {"video_id": "video-7", "sessionToken": "private"},
+        {"video_id": "video-7", "nested": {"oauth/token": "private"}},
     ],
 )
 def test_create_rejects_secret_bearing_scope(scope, tmp_path):
@@ -359,6 +368,103 @@ def test_transition_persists_only_sanitized_control_and_outcome_fields(tmp_path)
     serialized = ledger.record_path(succeeded["job_id"]).read_text(encoding="utf-8")
     assert "Bearer " not in serialized
     assert "bearer_token" not in serialized
+
+
+def test_compare_and_update_persists_metadata_without_changing_state(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    pending = _record_in_state(ledger, "pending_confirmation")
+
+    updated = ledger.compare_and_update(
+        pending["job_id"],
+        expected_state="pending_confirmation",
+        token_fingerprint="b" * 64,
+        authorization_request_id="auth_req-pending-7",
+    )
+
+    assert updated["state"] == "pending_confirmation"
+    assert updated["created_at_utc"] == pending["created_at_utc"]
+    assert updated["updated_at_utc"] >= pending["updated_at_utc"]
+    assert updated["token_fingerprint"] == "b" * 64
+    assert updated["authorization_request_id"] == "auth_req-pending-7"
+    assert ledger.load(pending["job_id"]) == updated
+
+
+def test_compare_and_update_rejects_stale_state_without_modification(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    authorizing = _record_in_state(ledger, "authorizing")
+
+    with pytest.raises(action_jobs.StaleTransitionError, match="found authorizing"):
+        ledger.compare_and_update(
+            authorizing["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint="c" * 64,
+        )
+
+    assert ledger.load(authorizing["job_id"]) == authorizing
+
+
+def test_compare_and_update_never_modifies_terminal_record(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    pending = _record_in_state(ledger, "pending_confirmation")
+    failed = ledger.transition(
+        pending["job_id"],
+        expected_states="pending_confirmation",
+        new_state="failed",
+    )
+
+    with pytest.raises(action_jobs.TerminalTransitionError):
+        ledger.compare_and_update(
+            failed["job_id"],
+            expected_state="pending_confirmation",
+            audit_status="recorded",
+        )
+
+    assert ledger.load(failed["job_id"]) == failed
+
+
+def test_concurrent_compare_and_update_preserves_distinct_metadata(tmp_path):
+    root = tmp_path / "jobs"
+    pending = _record_in_state(ActionJobLedger(root), "pending_confirmation")
+    updates = [
+        {"token_fingerprint": "d" * 64},
+        {"authorization_request_id": "auth_req-concurrent"},
+    ]
+
+    def update(metadata):
+        return ActionJobLedger(root).compare_and_update(
+            pending["job_id"],
+            expected_state="pending_confirmation",
+            **metadata,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(update, updates))
+
+    final = ActionJobLedger(root).load(pending["job_id"])
+    assert final["state"] == "pending_confirmation"
+    assert final["token_fingerprint"] == "d" * 64
+    assert final["authorization_request_id"] == "auth_req-concurrent"
+
+
+def test_compare_and_update_replace_failure_leaves_prior_record_readable(
+    tmp_path, monkeypatch
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    pending = _record_in_state(ledger, "pending_confirmation")
+
+    def fail_replace(source, destination):
+        raise OSError("simulated metadata replace failure")
+
+    monkeypatch.setattr(atomic_io.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated metadata replace failure"):
+        ledger.compare_and_update(
+            pending["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint="e" * 64,
+        )
+
+    assert ledger.load(pending["job_id"]) == pending
 
 
 @pytest.mark.parametrize(

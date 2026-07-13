@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import hashlib
 import hmac
+import json
 from pathlib import Path
 import re
 import time
@@ -21,7 +22,6 @@ from api.utils.response_models import (
     EntityProfileResponse,
     SavedCollectionItem,
     SaveCollectionRequest,
-    SaveCollectionResponse
 )
 from api.utils.loaders import DataLoader
 from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
@@ -35,7 +35,13 @@ _data_loader = None
 
 _VIDEO_SUMMARY_JOB_OPERATION = "video_summary.generate"
 _VIDEO_SUMMARY_AUTH_OPERATION = "generate_video_summary"
+_COLLECTION_CREATE_AUTH_OPERATION = "create_summary_collection"
 _SUMMARY_OWNER_INSTANCE = f"summary-api-{uuid.uuid4().hex}"
+_COLLECTION_ACTION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,101}")
+_COLLECTION_EPOCH_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_AUTHORIZATION_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_MAX_COLLECTION_REQUEST_BYTES = 1_000_000
 
 
 def get_data_loader() -> DataLoader:
@@ -115,6 +121,142 @@ def _authorization_error_code(envelope: object) -> str:
         if isinstance(error, dict) and isinstance(error.get("code"), str):
             return error["code"]
     return "authorization_failed"
+
+
+def _parse_collection_request(value: object) -> tuple[SaveCollectionRequest, dict]:
+    try:
+        request = SaveCollectionRequest.model_validate(value)
+        normalized = request.model_dump(mode="python")
+        if not request.name.strip() or not request.collection_type.strip():
+            raise ValueError("collection identifiers must contain visible characters")
+        encoded = json.dumps(
+            normalized,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Invalid collection payload") from exc
+    if len(encoded) > _MAX_COLLECTION_REQUEST_BYTES:
+        raise HTTPException(status_code=422, detail="Collection payload is too large")
+    return request, {
+        "normalized": normalized,
+        "payload_sha256": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def _parse_collection_action_body(
+    body: object,
+) -> tuple[str, SaveCollectionRequest, dict]:
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="Invalid collection action body")
+    action = body.get("action")
+    expected_fields = (
+        {"action", "collection"}
+        if action == "prepare"
+        else {
+            "action",
+            "action_id",
+            "epoch_id",
+            "payload_sha256",
+            "confirmation_token",
+            "collection",
+        }
+        if action == "confirm"
+        else set()
+    )
+    if set(body) != expected_fields:
+        raise HTTPException(status_code=422, detail="Invalid collection action body")
+    request, payload = _parse_collection_request(body.get("collection"))
+    if action == "confirm":
+        if (
+            not isinstance(body.get("action_id"), str)
+            or _COLLECTION_ACTION_ID_RE.fullmatch(body["action_id"]) is None
+            or not isinstance(body.get("epoch_id"), str)
+            or _COLLECTION_EPOCH_ID_RE.fullmatch(body["epoch_id"]) is None
+            or not isinstance(body.get("payload_sha256"), str)
+            or _SHA256_RE.fullmatch(body["payload_sha256"]) is None
+            or not isinstance(body.get("confirmation_token"), str)
+            or not body["confirmation_token"]
+            or body["confirmation_token"] != body["confirmation_token"].strip()
+        ):
+            raise HTTPException(status_code=422, detail="Invalid collection action body")
+    return action, request, payload
+
+
+def _collection_create_scope(
+    *,
+    action_id: str,
+    epoch_id: str,
+    payload_sha256: str,
+) -> dict:
+    return {
+        "action_id": action_id,
+        "epoch_id": epoch_id,
+        "payload_sha256": payload_sha256,
+    }
+
+
+def _public_saved_collection(collection: dict) -> dict:
+    """Project durable collection evidence onto the existing public schema."""
+    return SavedCollectionItem.model_validate(collection).model_dump(mode="json")
+
+
+def _collection_create_request_id(
+    collection: dict,
+    *,
+    action_id: str,
+    payload_sha256: str,
+) -> str:
+    for history_entry in collection.get("history", []):
+        if (
+            history_entry.get("action") == "create"
+            and history_entry.get("action_id") == action_id
+            and history_entry.get("payload_sha256") == payload_sha256
+            and isinstance(history_entry.get("authorization_request_id"), str)
+            and _AUTHORIZATION_REQUEST_ID_RE.fullmatch(
+                history_entry["authorization_request_id"]
+            )
+            is not None
+        ):
+            return history_entry["authorization_request_id"]
+    raise RuntimeError("persisted collection authorization evidence is incomplete")
+
+
+def _record_collection_create_outcome(
+    cfg: dict,
+    *,
+    scope: dict,
+    request_id: str,
+    status: str,
+    mutated: bool,
+    duration_ms: int,
+    error_codes: list[str],
+) -> str:
+    try:
+        audit = _get_summary_authority(cfg).record_external_execution_outcome(
+            operation=_COLLECTION_CREATE_AUTH_OPERATION,
+            arguments=scope,
+            request_id=request_id,
+            mode="ops",
+            status=status,
+            return_code=0 if status == "succeeded" else 1,
+            duration_ms=duration_ms,
+            side_effect_report={
+                "mutated": mutated,
+                "targets": [f"summary-collection:create:{scope['action_id']}"],
+            },
+            error_codes=error_codes,
+        )
+        if isinstance(audit, dict) and audit.get("audit_status") == "recorded":
+            return "recorded"
+    except Exception:
+        logger.error(
+            "Summary collection create external audit failed for action %s",
+            scope["action_id"],
+        )
+    return "failed"
 
 
 def _has_complete_summary_authorization(record: dict) -> bool:
@@ -268,23 +410,215 @@ async def list_collections():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/collections", response_model=SaveCollectionResponse)
-async def create_collection(request: SaveCollectionRequest = Body(...)):
-    """
-    Create a new manual playlist highlight collection.
-    """
+@router.post("/collections", response_model=dict)
+async def create_collection(body: dict = Body(...)):
+    """Prepare or confirm one exact governed collection create."""
+    from steps.common.config_loader import load_configs
+
+    action, _request, payload = _parse_collection_action_body(body)
     db_path = _get_kg_db_path()
-    try:
-        req_dict = request.dict()
-        new_col = summary_aggregator.add_collection(db_path, req_dict)
-        return SaveCollectionResponse(
-            success=True,
-            message=f"Collection '{request.name}' successfully created.",
-            collection=new_col
+    if not db_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Collection epoch database not initialized",
         )
-    except Exception as e:
-        logger.error(f"Failed to create collection: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    epoch_id = db_path.parent.name
+    if _COLLECTION_EPOCH_ID_RE.fullmatch(epoch_id) is None:
+        logger.error("Summary collection epoch identifier is invalid")
+        raise HTTPException(status_code=500, detail="Collection epoch is unavailable")
+    try:
+        cfg = load_configs({})
+    except Exception:
+        logger.error("Summary collection configuration could not be loaded")
+        raise HTTPException(status_code=503, detail="Collection authorization unavailable")
+
+    if action == "prepare":
+        action_id = f"action_{uuid.uuid4().hex}"
+        scope = _collection_create_scope(
+            action_id=action_id,
+            epoch_id=epoch_id,
+            payload_sha256=payload["payload_sha256"],
+        )
+        authority = None
+        token = None
+        try:
+            authority = _get_summary_authority(cfg)
+            envelope, return_code = authority.authorize_action(
+                prompt="Prepare one exact summary collection create",
+                mode="ops",
+                tool_name=_COLLECTION_CREATE_AUTH_OPERATION,
+                tool_args=scope,
+            )
+            result = envelope.get("result") if isinstance(envelope, dict) else None
+            token = result.get("confirmation_token") if isinstance(result, dict) else None
+            request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+            if (
+                not isinstance(envelope, dict)
+                or return_code != 3
+                or envelope.get("status") != "needs_confirmation"
+                or not isinstance(token, str)
+                or not token
+                or not isinstance(request_id, str)
+                or _AUTHORIZATION_REQUEST_ID_RE.fullmatch(request_id) is None
+            ):
+                raise RuntimeError("collection authorization was not prepared")
+        except Exception:
+            logger.error("Failed to prepare summary collection authorization")
+            if authority is not None and isinstance(token, str) and token:
+                try:
+                    authority.revoke_action_authorization(
+                        prompt="Revoke unreturned summary collection authorization",
+                        mode="ops",
+                        tool_name=_COLLECTION_CREATE_AUTH_OPERATION,
+                        tool_args=scope,
+                        confirmation_token=token,
+                    )
+                except Exception:
+                    logger.error(
+                        "Failed to revoke unreturned summary collection authorization"
+                    )
+            raise HTTPException(
+                status_code=503,
+                detail="Collection authorization unavailable",
+            )
+        return {
+            "success": True,
+            "action_id": action_id,
+            "epoch_id": epoch_id,
+            "payload_sha256": payload["payload_sha256"],
+            "confirmation_token": token,
+        }
+
+    action_id = body["action_id"]
+    scope = _collection_create_scope(
+        action_id=action_id,
+        epoch_id=body["epoch_id"],
+        payload_sha256=body["payload_sha256"],
+    )
+    if (
+        body["epoch_id"] != epoch_id
+        or body["payload_sha256"] != payload["payload_sha256"]
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Collection confirmation scope mismatch",
+        )
+
+    try:
+        authority = _get_summary_authority(cfg)
+        envelope, return_code = authority.authorize_action(
+            prompt="Confirm one exact summary collection create",
+            mode="ops",
+            tool_name=_COLLECTION_CREATE_AUTH_OPERATION,
+            tool_args=scope,
+            confirm=True,
+            confirmation_token=body["confirmation_token"],
+        )
+    except Exception:
+        logger.error("Summary collection authorization claim failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Collection authorization unavailable",
+        )
+
+    if not isinstance(envelope, dict):
+        raise HTTPException(
+            status_code=503,
+            detail="Collection authorization unavailable",
+        )
+    result = envelope.get("result")
+    authorized = (
+        return_code == 0
+        and envelope.get("status") == "ok"
+        and isinstance(result, dict)
+        and result.get("allowed") is True
+    )
+    error_code = _authorization_error_code(envelope)
+    recovered = False
+    collection = None
+    request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+    if not authorized and error_code == "token_already_used":
+        try:
+            collection = summary_aggregator.find_collection_by_create_action(
+                db_path,
+                action_id=action_id,
+                payload_sha256=payload["payload_sha256"],
+            )
+            if collection is not None and collection.get("source_epoch") == epoch_id:
+                request_id = _collection_create_request_id(
+                    collection,
+                    action_id=action_id,
+                    payload_sha256=payload["payload_sha256"],
+                )
+                recovered = True
+                authorized = True
+        except Exception:
+            logger.error(
+                "Summary collection create recovery evidence is unavailable for action %s",
+                action_id,
+            )
+
+    if not authorized:
+        if error_code == "token_expired":
+            detail = "Collection authorization expired"
+        elif error_code == "token_already_used":
+            detail = "Collection authorization recovery failed"
+        else:
+            detail = "Collection authorization failed"
+        raise HTTPException(status_code=409, detail=detail)
+    if (
+        not isinstance(request_id, str)
+        or _AUTHORIZATION_REQUEST_ID_RE.fullmatch(request_id) is None
+    ):
+        raise HTTPException(status_code=409, detail="Collection authorization failed")
+
+    started = time.monotonic()
+    if not recovered:
+        try:
+            collection = summary_aggregator.add_collection(
+                db_path,
+                payload["normalized"],
+                mutation_evidence={
+                    "action_id": action_id,
+                    "payload_sha256": payload["payload_sha256"],
+                    "authorization_request_id": request_id,
+                },
+            )
+        except Exception:
+            duration_ms = max(0, int((time.monotonic() - started) * 1000))
+            _record_collection_create_outcome(
+                cfg,
+                scope=scope,
+                request_id=request_id,
+                status="failed",
+                mutated=False,
+                duration_ms=duration_ms,
+                error_codes=["collection_mutation_failed"],
+            )
+            logger.error(
+                "Summary collection create failed for action %s",
+                action_id,
+            )
+            raise HTTPException(status_code=500, detail="Collection mutation failed")
+
+    duration_ms = max(0, int((time.monotonic() - started) * 1000))
+    audit_status = _record_collection_create_outcome(
+        cfg,
+        scope=scope,
+        request_id=request_id,
+        status="succeeded",
+        mutated=True,
+        duration_ms=duration_ms,
+        error_codes=[],
+    )
+    return {
+        "success": True,
+        "message": "Collection successfully created.",
+        "collection": _public_saved_collection(collection),
+        "action_id": action_id,
+        "audit_status": audit_status,
+        "recovered": recovered,
+    }
 
 
 @router.delete("/collections/{collection_id}", response_model=dict)

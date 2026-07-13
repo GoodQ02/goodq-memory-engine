@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.routes import summary as summary_route
 from api.utils.action_jobs import ActionJobLedger
+from lib import summary_aggregator
 
 
 VALID_HASH = "1234567890abcdef1234567890abcdef"
@@ -106,6 +107,602 @@ def _mock_existing_video(monkeypatch):
 
 def _job_ledger(tmp_path) -> ActionJobLedger:
     return ActionJobLedger(tmp_path / "GoodQ_Data" / "control" / "action_jobs")
+
+
+def _collection_payload(*, name: str = "Private family highlights") -> dict:
+    return {
+        "name": name,
+        "description": "Private operator description",
+        "collection_type": "manual_playlist",
+        "query_params": {"person": "Joe"},
+        "scene_refs": [{"video_id": "video-1", "scene_id": "scene-1"}],
+        "operator_note": "Private operator note",
+    }
+
+
+def _prepare_collection(client: TestClient, payload: dict) -> dict:
+    response = client.post(
+        "/api/summary/collections",
+        json={"action": "prepare", "collection": payload},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _confirm_collection_body(prepared: dict, payload: dict) -> dict:
+    return {
+        "action": "confirm",
+        "action_id": prepared["action_id"],
+        "epoch_id": prepared["epoch_id"],
+        "payload_sha256": prepared["payload_sha256"],
+        "confirmation_token": prepared["confirmation_token"],
+        "collection": payload,
+    }
+
+
+def test_collection_prepare_is_write_free_and_uses_digest_only_scope(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+
+    response = client.post(
+        "/api/summary/collections",
+        json={"action": "prepare", "collection": payload},
+    )
+
+    assert response.status_code == 200
+    prepared = response.json()
+    assert prepared["success"] is True
+    assert re.fullmatch(r"action_[0-9a-f]{32}", prepared["action_id"])
+    assert prepared["epoch_id"] == mock_db_paths[0].parent.name
+    assert re.fullmatch(r"[0-9a-f]{64}", prepared["payload_sha256"])
+    assert prepared["confirmation_token"] == "confirmation-token-1"
+    assert "Private family highlights" not in response.text
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+    assert authority.authorize_calls == [
+        {
+            "prompt": "Prepare one exact summary collection create",
+            "mode": "ops",
+            "tool_name": "create_summary_collection",
+            "tool_args": {
+                "action_id": prepared["action_id"],
+                "epoch_id": prepared["epoch_id"],
+                "payload_sha256": prepared["payload_sha256"],
+            },
+        }
+    ]
+
+
+def test_collection_prepare_requires_authoritative_epoch_database(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    mock_db_paths[0].unlink()
+
+    response = client.post(
+        "/api/summary/collections",
+        json={"action": "prepare", "collection": _collection_payload()},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Collection epoch database not initialized"
+    assert authority.authorize_calls == []
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"action": "prepare", "collection": _collection_payload(), "extra": True},
+        {
+            "action": "prepare",
+            "collection": {**_collection_payload(), "unsupported": "private"},
+        },
+    ],
+)
+def test_collection_prepare_rejects_extra_fields_before_authority_or_write(
+    body, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    response = client.post("/api/summary/collections", json=body)
+
+    assert response.status_code == 422
+    assert authority.authorize_calls == []
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_payload_canonicalization_equates_omitted_and_explicit_defaults(
+    client, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    minimal = _prepare_collection(client, {"name": "Canonical collection"})
+    explicit = _prepare_collection(
+        client,
+        {
+            "name": "Canonical collection",
+            "description": None,
+            "collection_type": "manual_playlist",
+            "query_params": {},
+            "scene_refs": [],
+            "operator_note": None,
+        },
+    )
+
+    assert minimal["payload_sha256"] == explicit["payload_sha256"]
+
+
+@pytest.mark.parametrize(
+    "collection",
+    [
+        {"name": "   "},
+        {"name": "Noncanonical", "query_params": {"score": float("nan")}},
+    ],
+)
+def test_collection_prepare_rejects_noncanonical_payload_before_authority(
+    collection, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    encoded = json.dumps(
+        {"action": "prepare", "collection": collection},
+        allow_nan=True,
+    )
+
+    response = client.post(
+        "/api/summary/collections",
+        content=encoded,
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert authority.authorize_calls == []
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_prepare_revokes_token_when_authority_evidence_is_invalid(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class InvalidEvidenceAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "private\\invalid-request",
+                    "status": "needs_confirmation",
+                    "result": {"confirmation_token": "confirmation-token-private"},
+                    "errors": [],
+                },
+                3,
+            )
+
+    authority = InvalidEvidenceAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    response = client.post(
+        "/api/summary/collections",
+        json={"action": "prepare", "collection": _collection_payload()},
+    )
+
+    assert response.status_code == 503
+    assert "confirmation-token-private" not in response.text
+    assert authority.revoke_calls == [
+        {
+            "prompt": "Revoke unreturned summary collection authorization",
+            "mode": "ops",
+            "tool_name": "create_summary_collection",
+            "tool_args": authority.authorize_calls[0]["tool_args"],
+            "confirmation_token": "confirmation-token-private",
+        }
+    ]
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_confirm_rederives_scope_persists_receipt_and_audits(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert result["action_id"] == prepared["action_id"]
+    assert result["audit_status"] == "recorded"
+    assert "confirmation-token-1" not in response.text
+    assert "authorization-request-1" not in response.text
+    assert set(result["collection"]["history"][0]) == {
+        "action",
+        "timestamp_utc",
+        "operator_note",
+    }
+    stored = summary_aggregator.load_collections(mock_db_paths[0])["collections"]
+    assert len(stored) == 1
+    assert stored[0]["history"][0] == {
+        "action": "create",
+        "timestamp_utc": stored[0]["history"][0]["timestamp_utc"],
+        "operator_note": payload["operator_note"],
+        "action_id": prepared["action_id"],
+        "payload_sha256": prepared["payload_sha256"],
+        "authorization_request_id": "authorization-request-1",
+    }
+    exact_scope = {
+        "action_id": prepared["action_id"],
+        "epoch_id": prepared["epoch_id"],
+        "payload_sha256": prepared["payload_sha256"],
+    }
+    assert authority.authorize_calls[1] == {
+        "prompt": "Confirm one exact summary collection create",
+        "mode": "ops",
+        "tool_name": "create_summary_collection",
+        "tool_args": exact_scope,
+        "confirm": True,
+        "confirmation_token": "confirmation-token-1",
+    }
+    assert authority.external_calls == [
+        {
+            "operation": "create_summary_collection",
+            "arguments": exact_scope,
+            "request_id": "authorization-request-1",
+            "mode": "ops",
+            "status": "succeeded",
+            "return_code": 0,
+            "duration_ms": authority.external_calls[0]["duration_ms"],
+            "side_effect_report": {
+                "mutated": True,
+                "targets": [f"summary-collection:create:{prepared['action_id']}"],
+            },
+            "error_codes": [],
+        }
+    ]
+
+
+def test_collection_confirm_rechecks_authoritative_epoch_database(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    mock_db_paths[0].unlink()
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Collection epoch database not initialized"
+    assert len(authority.authorize_calls) == 1
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_confirm_rejects_changed_payload_before_authority_or_write(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    changed = _collection_payload(name="Changed after prepare")
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, changed),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Collection confirmation scope mismatch"
+    assert len(authority.authorize_calls) == 1
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "expected_status"),
+    [
+        ("epoch_id", "epoch_other", 409),
+        ("payload_sha256", "b" * 64, 409),
+        ("action_id", "../private", 422),
+    ],
+)
+def test_collection_confirm_rejects_tampered_scope_before_authority(
+    field, replacement, expected_status, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    body = _confirm_collection_body(prepared, payload)
+    body[field] = replacement
+
+    response = client.post("/api/summary/collections", json=body)
+
+    assert response.status_code == expected_status
+    assert len(authority.authorize_calls) == 1
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("error_code", "expected_detail"),
+    [
+        ("token_expired", "Collection authorization expired"),
+        ("wrong_operation", "Collection authorization failed"),
+        ("token_already_used", "Collection authorization recovery failed"),
+    ],
+)
+def test_collection_confirm_authority_failure_is_write_free_and_sanitized(
+    error_code, expected_detail, client, mock_db_paths, monkeypatch
+) -> None:
+    class RejectingAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-2",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [
+                        {
+                            "code": error_code,
+                            "message": "confirmation-token-private private\\path",
+                        }
+                    ],
+                },
+                1,
+            )
+
+    authority = RejectingAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == expected_detail
+    assert "confirmation-token-private" not in response.text
+    assert "private\\path" not in response.text
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_confirm_rejects_malformed_authority_envelope_safely(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class MalformedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return None, 0
+
+    authority = MalformedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Collection authorization unavailable"
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_confirm_recovers_only_from_exact_persisted_receipt(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-retry",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    summary_aggregator.add_collection(
+        mock_db_paths[0],
+        payload,
+        mutation_evidence={
+            "action_id": prepared["action_id"],
+            "payload_sha256": prepared["payload_sha256"],
+            "authorization_request_id": "authorization-request-original",
+        },
+    )
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recovered"] is True
+    assert len(summary_aggregator.load_collections(mock_db_paths[0])["collections"]) == 1
+    assert authority.external_calls[0]["request_id"] == "authorization-request-original"
+
+
+@pytest.mark.parametrize("wrong_evidence", ["action", "digest", "epoch"])
+def test_collection_confirm_recovery_rejects_wrong_persisted_receipt(
+    wrong_evidence, client, mock_db_paths, monkeypatch
+) -> None:
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-retry",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    persisted = summary_aggregator.add_collection(
+        mock_db_paths[0],
+        payload,
+        mutation_evidence={
+            "action_id": (
+                "action_00000000000000000000000000000000"
+                if wrong_evidence == "action"
+                else prepared["action_id"]
+            ),
+            "payload_sha256": (
+                "b" * 64
+                if wrong_evidence == "digest"
+                else prepared["payload_sha256"]
+            ),
+            "authorization_request_id": "authorization-request-original",
+        },
+    )
+    if wrong_evidence == "epoch":
+        collections_file = mock_db_paths[0].parent / "saved_collections.json"
+        data = json.loads(collections_file.read_text(encoding="utf-8"))
+        data["collections"][0]["source_epoch"] = "epoch_other"
+        collections_file.write_text(json.dumps(data), encoding="utf-8")
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Collection authorization recovery failed"
+    loaded = summary_aggregator.load_collections(mock_db_paths[0])["collections"]
+    assert [item["collection_id"] for item in loaded] == [persisted["collection_id"]]
+    assert authority.external_calls == []
+
+
+def test_collection_post_effect_audit_failure_preserves_success(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class FailingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            self.external_calls.append(kwargs)
+            return {"audit_status": "failed", "error_codes": ["audit_log_error"]}
+
+    authority = FailingAuditAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["audit_status"] == "failed"
+    assert len(summary_aggregator.load_collections(mock_db_paths[0])["collections"]) == 1
+
+
+def test_collection_post_effect_audit_exception_preserves_success(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class RaisingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            self.external_calls.append(kwargs)
+            raise RuntimeError("confirmation-token-private private\\audit.json")
+
+    authority = RaisingAuditAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["audit_status"] == "failed"
+    assert "confirmation-token-private" not in response.text
+    assert len(summary_aggregator.load_collections(mock_db_paths[0])["collections"]) == 1
+
+
+def test_concurrent_collection_confirms_create_at_most_one_receipt(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+    body = _confirm_collection_body(prepared, payload)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(
+            pool.map(
+                lambda _unused: client.post("/api/summary/collections", json=body),
+                range(2),
+            )
+        )
+
+    assert sorted(response.status_code for response in responses) == [200, 500]
+    stored = summary_aggregator.load_collections(mock_db_paths[0])["collections"]
+    assert len(stored) == 1
+    assert stored[0]["history"][0]["action_id"] == prepared["action_id"]
+
+
+def test_collection_store_failure_is_sanitized_and_audited_without_mutation(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    payload = _collection_payload()
+    prepared = _prepare_collection(client, payload)
+
+    def fail_store(*_args, **_kwargs):
+        raise RuntimeError("confirmation-token-private private\\saved_collections.json")
+
+    monkeypatch.setattr(summary_aggregator, "add_collection", fail_store)
+    response = client.post(
+        "/api/summary/collections",
+        json=_confirm_collection_body(prepared, payload),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Collection mutation failed"
+    assert "confirmation-token-private" not in response.text
+    assert "saved_collections.json" not in response.text
+    assert authority.external_calls[0]["status"] == "failed"
+    assert authority.external_calls[0]["side_effect_report"]["mutated"] is False
+    assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
 
 
 def _summary_job_in_state(

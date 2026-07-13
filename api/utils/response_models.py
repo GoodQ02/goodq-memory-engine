@@ -547,12 +547,14 @@ class SavedCollectionItem(BaseModel):
 
 class SaveCollectionRequest(BaseModel):
     """Request payload to create/update custom collections."""
-    name: str
-    description: Optional[str] = None
-    collection_type: str = "manual_playlist"
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=256)
+    description: Optional[str] = Field(default=None, max_length=4096)
+    collection_type: str = Field(default="manual_playlist", min_length=1, max_length=64)
     query_params: Dict[str, Any] = Field(default_factory=dict)
     scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
-    operator_note: Optional[str] = None
+    operator_note: Optional[str] = Field(default=None, max_length=2048)
 
 
 class SaveCollectionResponse(BaseModel):

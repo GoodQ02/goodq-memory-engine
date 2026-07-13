@@ -533,6 +533,19 @@ the failure is not currently visible.
   remains `IN_PROGRESS`; the next bounded mission is a fresh read-only selection
   between request-context authority and privacy/detail redaction. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`.
+- Retrieval request-context selection evidence (2026-07-13): two independent
+  read-only traces selected origin-owned context propagation before privacy
+  redaction. Qdrant, ephemeral-memory, and FAISS read one process-global
+  `GOODQ_RETRIEVAL_CONTEXT` value at query time, while the repository has no
+  production setter. A deterministic in-process witness proved one interleaved
+  request can misattribute another on a shared store. The repair is limited to
+  required keyword-only context through API, MiniAgent, CLI, engine, router,
+  store, and Qdrant query interfaces plus removal of the ambient template
+  control. Raw query INFO logs and FAISS path-bearing details remain a separate
+  producer-side privacy seam. R-05-F1 remains `IN_PROGRESS`; the next bounded
+  mission is
+  mutation-sensitive request-context RED and implementation. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1121,6 +1134,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Selected explicit origin-owned retrieval request context after an
+  in-process interleaving witness proved process-global attribution crosses
+  request boundaries. Kept raw-query and FAISS-path privacy as the next
+  separate producer-side seam and froze completed persistence authority.
 - 2026-07-13: Checkpointed canonical retrieval telemetry policy and bounded
   persistence/fallback authority after closing an adversarial SQLite lock-text
   classification gap. Advanced R-05-F1 to a fresh selection between

@@ -4,60 +4,59 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — select the next retrieval telemetry authority seam.
+Roadmap item: R-05-F1 — implement explicit retrieval request-context authority.
 
 ## Outcome
 
-Produce a fresh read-only reconciliation of the two remaining retrieval
-telemetry concerns, then select exactly one coherent implementation seam:
-
-1. origin-owned request-context propagation; or
-2. raw-query and FAISS-detail privacy redaction.
-
-Do not begin production implementation until the owners, callers, rollback
-boundary, mutation/privacy oracle, and no-repeat boundary are explicit.
+Replace process-global `GOODQ_RETRIEVAL_CONTEXT` reads with one explicit,
+origin-owned, keyword-only context propagated through API, MiniAgent, CLI,
+engine, router, Qdrant, ephemeral-memory, and FAISS query interfaces. Preserve
+retrieval and the completed event-persistence authority while making concurrent
+attribution truthful.
 
 ## Governing evidence
 
+- `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_SELECTION_2026-07-13.md`
 - `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Retrieval audit attribution and content must be truthful without ambient
-cross-request leakage, raw query disclosure, or workstation-path disclosure.
-The completed persistence policy remains the sole event-write authority.
+Every telemetry-writing retrieval query receives its context explicitly from
+its origin. Cached clients and shared stores never infer per-request identity
+from process state. Interleaved calls retain distinct normalized attribution.
 
 ## Scope
 
-- Trace every origin and caller of retrieval context through API, CLI, shared
-  search engine, Qdrant, ephemeral-memory, and FAISS paths.
-- Trace raw query text and FAISS index detail through application logs, event
-  detail payloads, fallback JSONL, warnings, and user-facing projections.
-- Identify existing tests and the smallest missing interleaving or canary
-  oracle for each candidate.
-- Select one candidate only when its owners share one authority, rollback
-  boundary, and focused verification gate.
-- Record the selection and no-repeat boundary before production edits.
+- Establish mutation-sensitive RED for required keyword-only context,
+  origin/caller propagation, ambient-conflict rejection, nested fan-out, and
+  concurrent isolation.
+- Add explicit context to the selected engine, memory protocol/router/store,
+  and Qdrant query interfaces.
+- Supply fixed labels from API, MiniAgent, CLI, diagnostic,
+  promotion-witness, and health origins.
+- Remove the ambient context entry from `.env.template` and all production
+  environment reads without touching the user's environment.
+- Preserve normalization vocabulary, hits, ranking, filters, promotion,
+  persistence policy, health no-write behavior, and route census.
 
 ## Boundaries
 
-- Read-only selection only; no production or test implementation yet.
-- Do not reopen retrieval policy resolution, destination authority,
-  existing-database enforcement, schema readiness, or locked/busy fallback.
-- Do not change event schema, retention, rollups, health, responses, route
-  effects, or the 69-operation census.
-- Do not change unrelated configuration, dependencies, active environments,
-  configured data, live endpoints, services, identity, ingestion, WSL, public
-  checkout, or the mixed main checkout.
-- Use source traces and temporary/fake witnesses only if a claim cannot be
-  established statically.
+- Do not change persistence policy, schema readiness, destination authority,
+  fallback, event schema, retention, rollups, or warning behavior.
+- Do not change raw-query logs, FAISS event details, or FAISS path-bearing logs;
+  those remain the next separate privacy seam.
+- Do not change response contracts, route classifications, dependencies,
+  active environments, configured data, live endpoints, services, identity,
+  ingestion, WSL, public checkout, or the mixed main checkout.
+- Use temporary/in-memory stores, fake clients, and monkeypatches only.
 
 ## Completion gate
 
-Two independent traces must reconcile context origins and privacy sinks,
-separate the distinct authority boundaries, identify a mutation-sensitive or
-canary RED for each candidate, and agree on the smallest next seam. The
-selection evidence, `PROJECT.md`, and sole roadmap must be checkpointed before
-implementation begins.
+The current code must first fail exact origin, required-interface,
+conflicting-environment, nested-call, and interleaving oracles. The repair must
+pass focused engine, route, MiniAgent, promotion-witness, memory-router/store,
+Qdrant, health, telemetry persistence, and route-effect regressions; compile
+changed Python; pass documentation/configuration/static gates; preserve the
+69-operation census; and receive independent implementation and adversarial
+review before checkpointing.

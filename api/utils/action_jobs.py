@@ -43,9 +43,14 @@ _SECRET_KEY_NAMES = {
 _UPDATE_FIELDS = {
     "token_fingerprint",
     "authorization_request_id",
+    "authorization_expires_at_utc",
     "outcome",
     "audit_status",
 }
+_INITIAL_AUTHORIZATION_METADATA_FIELDS = frozenset(
+    {"authorization_request_id", "authorization_expires_at_utc"}
+)
+_INITIAL_AUTHORIZATION_REQUIRED_OPERATIONS = frozenset({"clean_memory.apply"})
 
 
 def _utc_now_iso() -> str:
@@ -170,6 +175,21 @@ def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError("Invalid authorization request ID")
         validated["authorization_request_id"] = request_id
+    if "authorization_expires_at_utc" in updates:
+        expires_at = updates["authorization_expires_at_utc"]
+        if not isinstance(expires_at, str):
+            raise ValueError("Invalid authorization expiry")
+        try:
+            parsed_expiry = datetime.fromisoformat(expires_at)
+        except ValueError as exc:
+            raise ValueError("Invalid authorization expiry") from exc
+        if (
+            parsed_expiry.tzinfo is None
+            or parsed_expiry.utcoffset() != timezone.utc.utcoffset(parsed_expiry)
+            or parsed_expiry.isoformat() != expires_at
+        ):
+            raise ValueError("Authorization expiry must be canonical UTC")
+        validated["authorization_expires_at_utc"] = expires_at
     if "outcome" in updates:
         outcome = updates["outcome"]
         if not isinstance(outcome, dict) or set(outcome) != {"code", "message"}:
@@ -190,6 +210,27 @@ def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("Invalid audit status")
         validated["audit_status"] = audit_status
     return validated
+
+
+def _validate_initial_metadata(
+    initial_metadata: dict[str, Any] | None,
+    *,
+    required: bool,
+) -> dict[str, Any]:
+    if initial_metadata is None:
+        if required:
+            raise ValueError(
+                "Operation requires complete initial authorization metadata"
+            )
+        return {}
+    if (
+        not isinstance(initial_metadata, dict)
+        or set(initial_metadata) != _INITIAL_AUTHORIZATION_METADATA_FIELDS
+    ):
+        raise ValueError(
+            "Initial authorization metadata must contain request ID and expiry"
+        )
+    return _validate_updates(initial_metadata)
 
 
 class ActionJobTransitionError(RuntimeError):
@@ -321,6 +362,10 @@ class ActionJobLedger:
         scope: dict[str, Any],
         owner_instance: str,
     ) -> dict[str, Any]:
+        if operation in _INITIAL_AUTHORIZATION_REQUIRED_OPERATIONS:
+            raise ValueError(
+                "Operation requires complete initial authorization metadata"
+            )
         normalized_scope = _normalize_scope(scope)
         with self._lock:
             return self._create_pending_unlocked(
@@ -349,8 +394,13 @@ class ActionJobLedger:
         operation: str,
         scope: dict[str, Any],
         owner_instance: str,
+        initial_metadata: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         normalized_scope = _normalize_scope(scope)
+        validated_initial_metadata = _validate_initial_metadata(
+            initial_metadata,
+            required=operation in _INITIAL_AUTHORIZATION_REQUIRED_OPERATIONS,
+        )
         scope_identity = _scope_identity(normalized_scope)
         with self._lock:
             for record in self._records_unlocked():
@@ -365,6 +415,7 @@ class ActionJobLedger:
                 operation=operation,
                 normalized_scope=normalized_scope,
                 owner_instance=owner_instance,
+                initial_metadata=validated_initial_metadata,
             )
             return created, True
 
@@ -576,6 +627,59 @@ class ActionJobLedger:
             )
             return updated
 
+    def adopt_and_transition(
+        self,
+        job_id: str,
+        *,
+        expected_state: str,
+        expected_owner_instance: str,
+        new_owner_instance: str,
+        new_state: str,
+        **updates: Any,
+    ) -> dict[str, Any]:
+        if expected_state not in ALL_STATES:
+            raise ValueError("Expected action job state must be known")
+        if new_state not in ALL_STATES:
+            raise InvalidTransitionError(f"Unknown action job state: {new_state}")
+        expected_owner = _validate_owner_instance(
+            expected_owner_instance, label="Expected"
+        )
+        new_owner = _validate_owner_instance(new_owner_instance, label="Replacement")
+        validated_updates = _validate_updates(updates)
+
+        with self._lock:
+            record = self.load(job_id)
+            if record is None:
+                raise FileNotFoundError(f"Action job record not found: {job_id}")
+            current_state = record.get("state")
+            if current_state in TERMINAL_STATES:
+                raise TerminalTransitionError(
+                    f"Action job {job_id} is terminal in state {current_state}"
+                )
+            if current_state != expected_state:
+                raise StaleTransitionError(
+                    f"Action job {job_id} expected {expected_state}, found {current_state}"
+                )
+            if record.get("owner_instance") != expected_owner:
+                raise StaleTransitionError(
+                    f"Action job {job_id} owner does not match expected owner"
+                )
+            if new_state not in PERMITTED_TRANSITIONS.get(
+                str(current_state), frozenset()
+            ):
+                raise InvalidTransitionError(
+                    f"Action job transition {current_state} -> {new_state} is not permitted"
+                )
+            updated = dict(record)
+            updated.update(validated_updates)
+            updated["owner_instance"] = new_owner
+            updated["state"] = new_state
+            updated["updated_at_utc"] = _utc_now_iso()
+            atomic_write_json_for_concurrent_readers(
+                self.record_path(job_id), updated
+            )
+            return updated
+
     def reconcile_prior_owner(
         self, current_owner_instance: str
     ) -> list[dict[str, Any]]:
@@ -609,6 +713,7 @@ class ActionJobLedger:
         operation: str,
         normalized_scope: dict[str, Any],
         owner_instance: str,
+        initial_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         job_id = self.allocate_job_id()
         while self.record_path(job_id).exists():
@@ -628,6 +733,8 @@ class ActionJobLedger:
             "outcome": None,
             "audit_status": None,
         }
+        if initial_metadata:
+            record.update(initial_metadata)
         atomic_write_json_for_concurrent_readers(self.record_path(job_id), record)
         return record
 

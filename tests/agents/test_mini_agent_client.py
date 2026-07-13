@@ -1,6 +1,7 @@
 import pytest
 import os
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from agents.mini_agent_client import MiniAgentClient
@@ -292,6 +293,7 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
 
 
 EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_video_summary",
@@ -307,6 +309,7 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 }
 
 EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_video_summary",
@@ -4261,4 +4264,514 @@ def test_summary_collection_actions_are_denied_offline_without_token(
     assert rc == 1
     assert envelope["errors"][0]["code"] == "offline_blocked"
     assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+_CLEAN_MEMORY_SCOPE = {
+    "job_id": "job_" + "1" * 32,
+    "epoch_id": "epoch_2026_07_13_test",
+    "plan_sha256": "a" * 64,
+    "config_scope_sha256": "b" * 64,
+    "disposition_sha256": "c" * 64,
+    "rollback_sha256": "d" * 64,
+}
+
+
+def _clean_memory_binding(*, seconds=300):
+    deadline = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+        seconds=seconds
+    )
+    return {
+        "authorization_request_id": "clean-auth-request-1",
+        "authorization_expires_at_utc": deadline.isoformat(),
+    }
+
+
+def _clean_memory_client(tmp_path, monkeypatch):
+    agent_home = tmp_path / "clean-memory-agent"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    return client, agent_home
+
+
+def test_clean_memory_apply_contract_declares_exact_logical_scope():
+    contract = _tool_contract("clean_memory.apply")
+    schema = contract["input_schema"]
+
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == set(_CLEAN_MEMORY_SCOPE)
+    assert set(schema["required"]) == set(_CLEAN_MEMORY_SCOPE)
+    assert schema["properties"]["job_id"]["pattern"] == "^job_[0-9a-f]{32}$"
+    assert schema["properties"]["epoch_id"]["maxLength"] == 128
+    for field in (
+        "plan_sha256",
+        "config_scope_sha256",
+        "disposition_sha256",
+        "rollback_sha256",
+    ):
+        assert schema["properties"][field]["pattern"] == "^[0-9a-f]{64}$"
+    assert contract["requires_confirmation"] is True
+    assert contract["allowed_in_modes"] == ["execute"]
+    assert contract["mutability_class"] == "destructive"
+    assert contract["retry_policy"]["max_attempts"] == 1
+
+
+def test_clean_memory_apply_registration_matrix_is_authorization_only():
+    import agents.mini_agent_client as mini_agent_client
+
+    operation = "clean_memory.apply"
+    assert operation in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert operation in mini_agent_client.LOCAL_CONFIRMATION_REQUIRED_TOOLS
+    assert operation in mini_agent_client.LOCAL_AUTHORIZATION_ONLY_ACTIONS
+    assert operation in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    assert operation in mini_agent_client.AUTHORIZATION_SCOPE_VALIDATORS
+    assert operation in mini_agent_client.REDACTED_SCOPE_AUTHORIZATION_ACTIONS
+    assert not hasattr(MiniAgentClient, "_execute_clean_memory_apply")
+    assert not hasattr(MiniAgentClient, "_execute_clean_memory")
+
+
+@pytest.mark.parametrize(
+    "invalid_scope",
+    [
+        [],
+        {},
+        {key: value for key, value in _CLEAN_MEMORY_SCOPE.items() if key != "job_id"},
+        {**_CLEAN_MEMORY_SCOPE, "extra": "private"},
+        {**_CLEAN_MEMORY_SCOPE, "job_id": "job_not_lower_hex"},
+        {**_CLEAN_MEMORY_SCOPE, "epoch_id": "../epoch"},
+        {**_CLEAN_MEMORY_SCOPE, "plan_sha256": "A" * 64},
+        {**_CLEAN_MEMORY_SCOPE, "rollback_sha256": "d" * 63},
+    ],
+)
+def test_clean_memory_apply_rejects_invalid_scope_before_token_issue(
+    invalid_scope,
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid cleanup authority scope",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=invalid_scope,
+        **_clean_memory_binding(),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [
+        {},
+        {"authorization_request_id": "clean-auth-request-1"},
+        {
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat()
+        },
+        {
+            "authorization_request_id": "../request",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat(),
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00",
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).replace(microsecond=0).isoformat(),
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(seconds=1200)
+            ).replace(microsecond=0).isoformat(),
+        },
+    ],
+)
+def test_clean_memory_apply_requires_bounded_request_and_deadline_before_issue(
+    binding,
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid cleanup challenge binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_authorization_binding"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_clean_memory_apply_echoes_and_persists_exact_binding(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare exact cleanup authority",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["authorization_request_id"] == binding[
+        "authorization_request_id"
+    ]
+    assert envelope["result"]["authorization_expires_at_utc"] == binding[
+        "authorization_expires_at_utc"
+    ]
+    token = envelope["result"]["confirmation_token"]
+    stored = json.loads(
+        (agent_home / "confirmation_tokens.json").read_text(encoding="utf-8")
+    )[token]
+    assert stored["authorization_request_id"] == binding["authorization_request_id"]
+    assert stored["authorization_expires_at_utc"] == binding[
+        "authorization_expires_at_utc"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("changed_field", "expected_code"),
+    [
+        ("authorization_request_id", "token_request_id_mismatch"),
+        ("authorization_expires_at_utc", "token_deadline_mismatch"),
+    ],
+)
+def test_clean_memory_apply_binding_mismatch_does_not_consume_token(
+    changed_field,
+    expected_code,
+    tmp_path,
+    monkeypatch,
+):
+    client, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare cleanup binding mismatch witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    changed = dict(binding)
+    changed[changed_field] = (
+        "clean-auth-request-2"
+        if changed_field == "authorization_request_id"
+        else (
+            datetime.fromisoformat(binding[changed_field]) + timedelta(seconds=1)
+        ).isoformat()
+    )
+
+    rejected, rejected_rc = client.authorize_action(
+        prompt="Reject changed cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **changed,
+    )
+    assert rejected_rc == 1
+    assert rejected["errors"][0]["code"] == expected_code
+
+    accepted, accepted_rc = client.authorize_action(
+        prompt="Claim exact cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **binding,
+    )
+    assert accepted_rc == 0
+    assert accepted["status"] == "ok"
+
+
+def test_clean_memory_apply_rejects_malformed_stored_binding_without_consuming(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare malformed stored binding witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    del tokens[token]["authorization_request_id"]
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject malformed stored cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **binding,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token_metadata"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_rejects_future_issued_token_metadata_without_consuming(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare future-issued cleanup metadata witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    forged_issued_at = datetime.now(timezone.utc) + timedelta(days=1)
+    forged_deadline = (forged_issued_at + timedelta(seconds=300)).isoformat()
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = forged_issued_at.replace(tzinfo=None).isoformat()
+    tokens[token]["authorization_expires_at_utc"] = forged_deadline
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject future-issued cleanup token metadata",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        authorization_request_id=binding["authorization_request_id"],
+        authorization_expires_at_utc=forged_deadline,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token_metadata"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_bound_token_uses_absolute_deadline(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare absolute cleanup deadline witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    expired_deadline = (
+        datetime.now(timezone.utc) - timedelta(seconds=1)
+    ).replace(microsecond=0).isoformat()
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=301)
+    ).replace(tzinfo=None, microsecond=0).isoformat()
+    tokens[token]["authorization_expires_at_utc"] = expired_deadline
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject cleanup token at its absolute deadline",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        authorization_request_id=binding["authorization_request_id"],
+        authorization_expires_at_utc=expired_deadline,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "token_expired"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_claim_is_atomic_across_clients(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    first, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    second = MiniAgentClient(profile="safe")
+    second.agent_available = True
+    binding = _clean_memory_binding()
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic cleanup claim",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait(timeout=10)
+        return client.authorize_action(
+            prompt="Claim exact cleanup authority",
+            mode="ops",
+            tool_name="clean_memory.apply",
+            tool_args=dict(_CLEAN_MEMORY_SCOPE),
+            confirm=True,
+            confirmation_token=token,
+            **binding,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+def test_clean_memory_apply_revocation_requires_exact_binding(
+    tmp_path,
+    monkeypatch,
+):
+    client, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare cleanup revocation witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.revoke_action_authorization(
+        prompt="Reject changed cleanup revocation",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirmation_token=token,
+        authorization_request_id="clean-auth-request-2",
+        authorization_expires_at_utc=binding["authorization_expires_at_utc"],
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_request_id_mismatch"
+
+    revoked, revoked_rc = client.revoke_action_authorization(
+        prompt="Revoke exact cleanup authority",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirmation_token=token,
+        **binding,
+    )
+    assert revoked_rc == 0
+    assert revoked["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_status"),
+    [
+        ("clean-memory:" + _CLEAN_MEMORY_SCOPE["job_id"], "recorded"),
+        ("clean-memory:job_" + "2" * 32, "failed"),
+    ],
+)
+def test_clean_memory_apply_external_outcome_requires_exact_logical_target(
+    target,
+    expected_status,
+):
+    client = MiniAgentClient(profile="safe")
+
+    result = client.record_external_execution_outcome(
+        operation="clean_memory.apply",
+        arguments=dict(_CLEAN_MEMORY_SCOPE),
+        request_id="clean-auth-request-1",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=25,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result["audit_status"] == expected_status
+    if expected_status == "failed":
+        assert result["error_codes"] == ["invalid_side_effect_report"]
+
+
+def test_legacy_authorization_only_action_keeps_timestamp_token_contract(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "legacy-authorization"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare legacy staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+
+    assert requested_rc == 3
+    assert "authorization_request_id" not in requested["result"]
+    assert "authorization_expires_at_utc" not in requested["result"]
+    token = requested["result"]["confirmation_token"]
+    stored = json.loads(
+        (agent_home / "confirmation_tokens.json").read_text(encoding="utf-8")
+    )[token]
+    assert set(stored) == {"operation", "timestamp", "used", "tool_args"}
+
+    confirmed, confirmed_rc = client.authorize_action(
+        prompt="Claim legacy staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirmed_rc == 0
+    assert confirmed["status"] == "ok"
+
+    import agents.mini_agent_client as mini_agent_client
+
+    assert mini_agent_client.CONFIRMATION_TOKEN_TTL_SECONDS == 600
 

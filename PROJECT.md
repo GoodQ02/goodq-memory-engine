@@ -4,76 +4,66 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit the unsafe clean-memory workflow and select its
-portable replacement boundary.
+Roadmap item: R-07 — establish the governed clean-memory approval authority.
 
 ## Outcome
 
-Determine from fresh read-only evidence which active instructions and utilities
-can delete memory, how their scopes are resolved, and whether an existing safe
-primitive can be reused. Produce one exact replacement selection before any
-cleanup implementation begins.
+Implement only the shared authorization foundation selected and checkpointed at
+`8ed29592`: atomic initial action-job metadata, one-lock owner/state transition,
+and an operation-scoped MiniAgent request-ID/deadline binding for
+`clean_memory.apply`. Prove the intended failures before changing production
+code, then restore the focused suites to green without beginning cleanup CLI or
+target-adapter implementation.
 
 ## Governing evidence
 
-- `docs/agent/workflows/CLEAN_MEMORY_START.md`
-- `docs/guides/CLEAN_MEMORY_START.md`
-- `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
-- `docs/agent/README.md`
-- `README.md`
-- `SUPPORT.md`
-- `docs/archive/guides/install/UNINSTALL.md` (transitive historical hazard only)
-- `AGENTS.md`
-- `docs/bootstrap/doc_authority_map.md`
-- `docs/reference/indexes/AGENT_COMMS_INDEX.md`
-- `docs/reference/indexes/AGENT_FILE_INDEX.md`
-- `docs/codebase_index/README.md`
-- `.agents/skills/goodq4all-operator/SKILL.md`
-- `docs/agent/skills/goodq4all-operator/SKILL.md`
+- `docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md`
+- `api/utils/action_jobs.py`
+- `agents/mini_agent_client.py`
+- the active MiniAgent tool contract consumed by that client
+- `tests/unit/test_action_jobs.py`
+- `tests/agents/test_mini_agent_client.py`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-A replacement is safe only when it starts from an immutable manifest, resolves
-an exact authorized temporary or configured scope, defaults to dry-run, rejects
-boundary escapes immediately before every target, journals intent and result
-around each mutation, stops on failure, and emits post-action evidence. Real
-configured apply remains unavailable until the separate corpus-retention
-authority registers durable disposable and restorable evidence. Existing
-working ingestion and promoted memory remain untouched.
+One cleanup approval may exist for one exact immutable scope. Its initial
+request ID and absolute deadline are born atomically with the pending job; every
+lifecycle claim compares expected owner and state under one ledger lock; and
+MiniAgent binds that request ID/deadline only for `clean_memory.apply` without
+changing existing callers. No authorization value is stored in the action job,
+and no cleanup target can be reached in this seam.
 
 ## Scope
 
-- Inventory every destructive command and target rule in the active clean-memory
-  runbook and both repository operator-skill copies, plus every active redirect
-  or semantic rule that could restore broad cleanup authority and every inbound
-  active/index or transitive active-to-archive reference that could preserve a
-  superseded executor or manual destructive procedure.
-- Search for existing manifest, dry-run, exact-scope, boundary-check, and
-  post-clean verification utilities before proposing new code.
-- Trace configuration and authority inputs statically; use temporary-root
-  fixtures only when a witness is needed.
-- Produce one selection document naming the replacement entry point, manifest,
-  scope, failure, rollback, and test contracts plus the exact alignment of the
-  workflow, both skill copies, active guide, and evidence-first workflow.
+- Add focused RED witnesses for atomic initial metadata, approve/reconcile
+  interleaving, expected-owner/expected-state transition, and legacy ledger
+  callers.
+- Add focused RED witnesses for the exact cleanup authorization registration,
+  bounded absolute expiry, echoed request/deadline equality, mismatch refusal,
+  token claim/reuse/expiry, and unchanged legacy MiniAgent callers.
+- Implement only the generic ledger primitives and cleanup-only MiniAgent
+  contract required to make those witnesses green.
+- Run the focused existing action-job and MiniAgent suites plus static gates.
 
 ## Boundaries
 
-- Read-only selection only; do not delete, move, truncate, reset, recreate, or
-  re-ingest anything in this mission.
-- Do not execute manual cleanup blocks or probe configured data, Qdrant,
-  databases, epochs, FAISS, watchdog state, or processing directories.
-- Do not assume the dated runbook paths or mixed shell examples are current.
-- Do not change production, tests, configuration, dependencies, services,
-  identity, WSL, public checkout, or mixed main checkout.
+- Touch only `PROJECT.md`, the two named production authority modules, the
+  active MiniAgent tool contract if its registration is required, the two named
+  focused test modules, and the roadmap checkpoint line after verification.
+- Do not add `cli.clean_memory`, `steps/common/clean_memory.py`, target adapters,
+  documentation replacements, script retirement, or retention verifiers yet.
+- Do not read or mutate configured data, Qdrant, databases, epochs, FAISS,
+  services, models, ingestion, identity, WSL, public checkout, or mixed main.
+- Do not change dependencies, API/UI routes, runtime launchers, or existing
+  authorization behavior outside the opt-in cleanup operation.
 
 ## Completion gate
 
-The selection must inventory every active destructive block across the workflow
-and both operator-skill copies, prove the no-repeat search for reusable
-primitives, identify one exact implementation and test boundary, close the
-proven owner/state atomicity gap and every approval crash window, require one
-exclusive lease to fence live apply from recovery, name how every active
-workflow, skill, guide, and semantic redirect stops competing with the
-replacement, and receive independent review. No cleanup implementation starts
-until the roadmap and this bounded mission agree on that seam.
+The new tests must first fail for the selected missing authority, then pass after
+the smallest implementation. Existing action-job transitions and MiniAgent
+callers remain green; concurrent preparation exposes no partial pending record;
+only one owner/state claimant wins; cleanup token issuance and claim bind the
+same request ID/deadline; malformed, expired, mismatched, or reused challenges
+fail closed; and no cleanup target, configured runtime, or live service is
+accessed. Checkpoint only after staged-diff and independent review gates pass.

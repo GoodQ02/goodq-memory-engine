@@ -369,6 +369,250 @@ def test_legacy_prepare_returns_record_created_by_status_operation(tmp_path):
     assert legacy == created == ledger.load(created["job_id"])
 
 
+def test_prepare_with_status_persists_complete_initial_metadata_in_first_write(
+    tmp_path,
+    monkeypatch,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    expiry = "2026-07-13T18:05:00+00:00"
+    writes = []
+    original_write = action_jobs.atomic_write_json_for_concurrent_readers
+
+    def capture_write(path, payload):
+        writes.append(dict(payload))
+        return original_write(path, payload)
+
+    monkeypatch.setattr(
+        action_jobs,
+        "atomic_write_json_for_concurrent_readers",
+        capture_write,
+    )
+
+    record, created = ledger.prepare_or_find_active_with_status(
+        operation="clean_memory.apply",
+        scope={"job_id": "job_" + "1" * 32},
+        owner_instance="api-1",
+        initial_metadata={
+            "authorization_request_id": "clean-auth-1",
+            "authorization_expires_at_utc": expiry,
+        },
+    )
+
+    assert created is True
+    assert len(writes) == 1
+    assert writes[0] == record == ledger.load(record["job_id"])
+    assert record["authorization_request_id"] == "clean-auth-1"
+    assert record["authorization_expires_at_utc"] == expiry
+
+
+def test_prepare_creation_blocks_observer_until_complete_record_is_durable(
+    tmp_path,
+    monkeypatch,
+):
+    root = tmp_path / "jobs"
+    writer_entered = Event()
+    observer_started = Event()
+    release_writer = Event()
+    original_write = action_jobs.atomic_write_json_for_concurrent_readers
+
+    def pause_first_write(path, payload):
+        writer_entered.set()
+        assert release_writer.wait(timeout=10)
+        return original_write(path, payload)
+
+    monkeypatch.setattr(
+        action_jobs,
+        "atomic_write_json_for_concurrent_readers",
+        pause_first_write,
+    )
+
+    def create():
+        return ActionJobLedger(root).prepare_or_find_active_with_status(
+            operation="clean_memory.apply",
+            scope={"job_id": "job_" + "1" * 32},
+            owner_instance="api-approve",
+            initial_metadata={
+                "authorization_request_id": "clean-auth-1",
+                "authorization_expires_at_utc": "2026-07-13T18:05:00+00:00",
+            },
+        )
+
+    def observe():
+        observer_started.set()
+        return ActionJobLedger(root).list_records(
+            operation="clean_memory.apply",
+            states="pending_confirmation",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        create_future = executor.submit(create)
+        assert writer_entered.wait(timeout=10)
+        observe_future = executor.submit(observe)
+        assert observer_started.wait(timeout=10)
+        assert not observe_future.done()
+        release_writer.set()
+        created, was_created = create_future.result(timeout=10)
+        observed = observe_future.result(timeout=10)
+
+    assert was_created is True
+    assert observed == [created]
+    assert created["authorization_request_id"] == "clean-auth-1"
+    assert created["authorization_expires_at_utc"] == "2026-07-13T18:05:00+00:00"
+
+
+def test_prepare_with_status_does_not_apply_initial_metadata_to_found_record(
+    tmp_path,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    arguments = {
+        "operation": "clean_memory.apply",
+        "scope": {"job_id": "job_" + "1" * 32},
+        "owner_instance": "api-1",
+    }
+    first, first_created = ledger.prepare_or_find_active_with_status(
+        **arguments,
+        initial_metadata={
+            "authorization_request_id": "clean-auth-first",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00+00:00",
+        },
+    )
+    before = ledger.record_path(first["job_id"]).read_bytes()
+
+    found, found_created = ledger.prepare_or_find_active_with_status(
+        **arguments,
+        initial_metadata={
+            "authorization_request_id": "clean-auth-second",
+            "authorization_expires_at_utc": "2026-07-13T18:06:00+00:00",
+        },
+    )
+
+    assert first_created is True
+    assert found_created is False
+    assert found == first
+    assert ledger.record_path(first["job_id"]).read_bytes() == before
+
+
+def test_concurrent_prepare_with_status_keeps_one_complete_initial_metadata_set(
+    tmp_path,
+):
+    root = tmp_path / "jobs"
+    metadata_options = [
+        {
+            "authorization_request_id": "clean-auth-one",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00+00:00",
+        },
+        {
+            "authorization_request_id": "clean-auth-two",
+            "authorization_expires_at_utc": "2026-07-13T18:06:00+00:00",
+        },
+    ]
+
+    def prepare(initial_metadata):
+        return ActionJobLedger(root).prepare_or_find_active_with_status(
+            operation="clean_memory.apply",
+            scope={"job_id": "job_" + "1" * 32},
+            owner_instance="api-1",
+            initial_metadata=initial_metadata,
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(prepare, metadata_options * 4))
+
+    assert sum(created for _, created in results) == 1
+    assert len({record["job_id"] for record, _ in results}) == 1
+    final = ActionJobLedger(root).load(results[0][0]["job_id"])
+    persisted_metadata = {
+        "authorization_request_id": final["authorization_request_id"],
+        "authorization_expires_at_utc": final["authorization_expires_at_utc"],
+    }
+    assert persisted_metadata in metadata_options
+    assert all(record == final for record, _ in results)
+
+
+def test_legacy_prepare_callers_preserve_record_shape_without_expiry(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+
+    direct = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "video-direct"},
+        owner_instance="api-1",
+    )
+    prepared = ledger.prepare_or_find_active(
+        operation="video_summary.generate",
+        scope={"video_id": "video-prepared"},
+        owner_instance="api-1",
+    )
+
+    assert "authorization_expires_at_utc" not in direct
+    assert "authorization_expires_at_utc" not in prepared
+
+
+@pytest.mark.parametrize("entrypoint", ["create_pending", "prepare", "prepare_status"])
+def test_clean_memory_job_creation_requires_complete_initial_metadata(
+    entrypoint,
+    tmp_path,
+):
+    root = tmp_path / "jobs"
+    ledger = ActionJobLedger(root)
+    arguments = {
+        "operation": "clean_memory.apply",
+        "scope": {"job_id": "job_" + "1" * 32},
+        "owner_instance": "api-1",
+    }
+
+    with pytest.raises(ValueError, match="initial authorization metadata"):
+        if entrypoint == "create_pending":
+            ledger.create_pending(**arguments)
+        elif entrypoint == "prepare":
+            ledger.prepare_or_find_active(**arguments)
+        else:
+            ledger.prepare_or_find_active_with_status(**arguments)
+
+    assert list(root.glob("job_*.json")) == []
+
+
+@pytest.mark.parametrize(
+    "initial_metadata",
+    [
+        {"authorization_request_id": "clean-auth-1"},
+        {"authorization_expires_at_utc": "2026-07-13T18:05:00+00:00"},
+        {
+            "authorization_request_id": "clean-auth-1",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00",
+        },
+        {
+            "authorization_request_id": "clean-auth-1",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00Z",
+        },
+        {
+            "authorization_request_id": "clean-auth-1",
+            "authorization_expires_at_utc": "2026-07-13T13:05:00-05:00",
+        },
+        {
+            "authorization_request_id": "clean-auth-1",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00+00:00",
+            "unexpected": "field",
+        },
+    ],
+)
+def test_prepare_rejects_incomplete_or_noncanonical_initial_metadata_without_creation(
+    initial_metadata,
+    tmp_path,
+):
+    root = tmp_path / "jobs"
+    ledger = ActionJobLedger(root)
+
+    with pytest.raises(ValueError):
+        ledger.prepare_or_find_active_with_status(
+            operation="clean_memory.apply",
+            scope={"job_id": "job_" + "1" * 32},
+            owner_instance="api-1",
+            initial_metadata=initial_metadata,
+        )
+
+    assert list(root.glob("job_*.json")) == []
+
+
 def test_exact_scope_identity_preserves_json_boolean_and_number_types(tmp_path):
     ledger = ActionJobLedger(tmp_path / "jobs")
     boolean_scope = {"video_id": "video-7", "option": True}
@@ -1043,6 +1287,182 @@ def test_adopt_owner_rejects_invalid_owner_values_without_mutation(
             **owner_arguments,
         )
 
+    assert record_path.read_bytes() == serialized_before
+
+
+def test_adopt_and_transition_updates_owner_state_and_metadata_in_one_write(
+    tmp_path,
+    monkeypatch,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(
+        ledger,
+        "pending_confirmation",
+        owner_instance="api-old",
+    )
+    writes = []
+    original_write = action_jobs.atomic_write_json_for_concurrent_readers
+
+    def capture_write(path, payload):
+        writes.append(dict(payload))
+        return original_write(path, payload)
+
+    monkeypatch.setattr(
+        action_jobs,
+        "atomic_write_json_for_concurrent_readers",
+        capture_write,
+    )
+
+    after = ledger.adopt_and_transition(
+        before["job_id"],
+        expected_state="pending_confirmation",
+        expected_owner_instance="api-old",
+        new_owner_instance="api-current",
+        new_state="authorizing",
+        token_fingerprint="a" * 64,
+    )
+
+    assert len(writes) == 1
+    assert writes[0] == after == ledger.load(before["job_id"])
+    assert after["owner_instance"] == "api-current"
+    assert after["state"] == "authorizing"
+    assert after["token_fingerprint"] == "a" * 64
+
+
+@pytest.mark.parametrize(
+    ("expected_state", "expected_owner", "message"),
+    [
+        ("authorizing", "api-old", "found pending_confirmation"),
+        ("pending_confirmation", "api-stale", "owner"),
+    ],
+)
+def test_adopt_and_transition_rejects_stale_state_or_owner_byte_for_byte(
+    expected_state,
+    expected_owner,
+    message,
+    tmp_path,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(
+        ledger,
+        "pending_confirmation",
+        owner_instance="api-old",
+    )
+    record_path = ledger.record_path(before["job_id"])
+    serialized_before = record_path.read_bytes()
+
+    with pytest.raises(action_jobs.StaleTransitionError, match=message):
+        ledger.adopt_and_transition(
+            before["job_id"],
+            expected_state=expected_state,
+            expected_owner_instance=expected_owner,
+            new_owner_instance="api-current",
+            new_state="authorizing",
+        )
+
+    assert record_path.read_bytes() == serialized_before
+
+
+def test_concurrent_adopt_and_transition_has_one_complete_owner_state_winner(
+    tmp_path,
+):
+    root = tmp_path / "jobs"
+    before = _record_in_state(
+        ActionJobLedger(root),
+        "pending_confirmation",
+        owner_instance="api-old",
+    )
+
+    def claim(new_owner):
+        try:
+            record = ActionJobLedger(root).adopt_and_transition(
+                before["job_id"],
+                expected_state="pending_confirmation",
+                expected_owner_instance="api-old",
+                new_owner_instance=new_owner,
+                new_state="authorizing",
+            )
+            return record["owner_instance"], record["state"]
+        except action_jobs.StaleTransitionError:
+            return "stale", "stale"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, ["api-one", "api-two"]))
+
+    assert results.count(("stale", "stale")) == 1
+    winner = next(result for result in results if result != ("stale", "stale"))
+    assert winner[1] == "authorizing"
+    final = ActionJobLedger(root).load(before["job_id"])
+    assert (final["owner_instance"], final["state"]) == winner
+
+
+def test_adopt_and_transition_rejects_invalid_edge_and_terminal_without_mutation(
+    tmp_path,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    queued = _record_in_state(ledger, "queued", owner_instance="api-old")
+    queued_path = ledger.record_path(queued["job_id"])
+    queued_before = queued_path.read_bytes()
+
+    with pytest.raises(action_jobs.InvalidTransitionError):
+        ledger.adopt_and_transition(
+            queued["job_id"],
+            expected_state="queued",
+            expected_owner_instance="api-old",
+            new_owner_instance="api-current",
+            new_state="succeeded",
+        )
+    assert queued_path.read_bytes() == queued_before
+
+    terminal = ledger.transition(
+        queued["job_id"],
+        expected_states="queued",
+        new_state="failed",
+    )
+    terminal_before = queued_path.read_bytes()
+    with pytest.raises(action_jobs.TerminalTransitionError):
+        ledger.adopt_and_transition(
+            terminal["job_id"],
+            expected_state="failed",
+            expected_owner_instance="api-old",
+            new_owner_instance="api-current",
+            new_state="interrupted",
+        )
+    assert queued_path.read_bytes() == terminal_before
+
+
+def test_adopt_and_transition_replace_failure_leaves_prior_record_readable(
+    tmp_path,
+    monkeypatch,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(
+        ledger,
+        "pending_confirmation",
+        owner_instance="api-old",
+    )
+    record_path = ledger.record_path(before["job_id"])
+    serialized_before = record_path.read_bytes()
+
+    def fail_replace(source, destination):
+        raise OSError("simulated owner-state replace failure")
+
+    monkeypatch.setattr(
+        atomic_io,
+        "_replace_file_allowing_open_readers",
+        fail_replace,
+    )
+
+    with pytest.raises(OSError, match="simulated owner-state replace failure"):
+        ledger.adopt_and_transition(
+            before["job_id"],
+            expected_state="pending_confirmation",
+            expected_owner_instance="api-old",
+            new_owner_instance="api-current",
+            new_state="authorizing",
+        )
+
+    assert ledger.load(before["job_id"]) == before
     assert record_path.read_bytes() == serialized_before
 
 

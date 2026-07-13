@@ -12,7 +12,7 @@ import uuid
 import time
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple, Optional
 
 # Setup dynamic home root for the agent trace logs
@@ -118,6 +118,7 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 }
 
 MUTATING_DENY_ON_AGENT_FAILURE = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_temporal_summary",
@@ -142,6 +143,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 }
 
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_temporal_summary",
@@ -160,6 +162,7 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 # intentionally have no native execution handler. The caller owns the governed
 # side effect after ``authorize_action`` succeeds.
 LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_temporal_summary",
@@ -168,6 +171,7 @@ LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
 }
 
 LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
+    "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
     "generate_temporal_summary",
@@ -185,6 +189,7 @@ LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
 
 TOOL_AUDIT_SCHEMA_VERSION = "goodq.tool-audit.v1"
 TOOL_AUDIT_LOG_ENV = "GOODQ_TOOL_AUDIT_LOG"
+CONFIRMATION_TOKEN_TTL_SECONDS = 600
 EXTERNAL_AUDIT_MAX_TARGETS = 32
 EXTERNAL_AUDIT_MAX_TARGET_LENGTH = 128
 EXTERNAL_AUDIT_MAX_ERROR_CODES = 32
@@ -215,7 +220,18 @@ SUMMARY_COLLECTION_ACTIONS = {
     "create_summary_collection",
     "delete_summary_collection",
 }
+CLEAN_MEMORY_APPLY_ACTION = "clean_memory.apply"
+CLEAN_MEMORY_APPLY_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "plan_sha256",
+    "config_scope_sha256",
+    "disposition_sha256",
+    "rollback_sha256",
+)
+CLEAN_MEMORY_AUDIT_TARGET_PREFIX = "clean-memory:"
 REDACTED_SCOPE_AUTHORIZATION_ACTIONS = SUMMARY_COLLECTION_ACTIONS | {
+    CLEAN_MEMORY_APPLY_ACTION,
     "generate_temporal_summary"
 }
 SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH = 128
@@ -395,7 +411,35 @@ def _validate_temporal_summary_scope(tool_args: Any) -> List[str]:
     return violations
 
 
+def _validate_clean_memory_apply_scope(tool_args: Any) -> List[str]:
+    violations = _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=CLEAN_MEMORY_APPLY_SCOPE_FIELDS,
+        identifier_fields=("epoch_id",),
+        digest_fields=(
+            "plan_sha256",
+            "config_scope_sha256",
+            "disposition_sha256",
+            "rollback_sha256",
+        ),
+    )
+    if not isinstance(tool_args, dict) or any(
+        not isinstance(field, str) for field in tool_args
+    ):
+        return violations
+    job_id = tool_args.get("job_id")
+    if "job_id" in tool_args and (
+        not isinstance(job_id, str)
+        or len(job_id) != 36
+        or not job_id.startswith("job_")
+        or any(character not in "0123456789abcdef" for character in job_id[4:])
+    ):
+        violations.append("job_id must be an opaque lowercase action job identifier")
+    return violations
+
+
 AUTHORIZATION_SCOPE_VALIDATORS = {
+    CLEAN_MEMORY_APPLY_ACTION: _validate_clean_memory_apply_scope,
     "generate_video_summary": _validate_video_summary_scope,
     "generate_temporal_summary": _validate_temporal_summary_scope,
     "create_summary_collection": _validate_summary_collection_create_scope,
@@ -421,6 +465,61 @@ def _expected_temporal_summary_audit_target(
     if operation == "generate_temporal_summary":
         return f"{TEMPORAL_SUMMARY_TARGET_PREFIX}{arguments['job_id']}"
     return None
+
+
+def _expected_clean_memory_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == CLEAN_MEMORY_APPLY_ACTION:
+        return f"{CLEAN_MEMORY_AUDIT_TARGET_PREFIX}{arguments['job_id']}"
+    return None
+
+
+def _parse_canonical_utc_deadline(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if (
+        parsed.tzinfo is None
+        or parsed.utcoffset() != timezone.utc.utcoffset(parsed)
+        or parsed.isoformat() != value
+    ):
+        return None
+    return parsed
+
+
+def _validate_cleanup_authorization_binding(
+    authorization_request_id: Optional[str],
+    authorization_expires_at_utc: Optional[str],
+    *,
+    enforce_issue_window: bool,
+) -> List[str]:
+    violations: List[str] = []
+    if (
+        not isinstance(authorization_request_id, str)
+        or not authorization_request_id
+        or len(authorization_request_id) > 128
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-"
+            for character in authorization_request_id
+        )
+    ):
+        violations.append("authorization request ID is invalid")
+    deadline = _parse_canonical_utc_deadline(authorization_expires_at_utc)
+    if deadline is None:
+        violations.append("authorization deadline must be canonical UTC")
+    elif enforce_issue_window:
+        now = datetime.now(timezone.utc)
+        if deadline <= now:
+            violations.append("authorization deadline must be in the future")
+        elif (deadline - now).total_seconds() > CONFIRMATION_TOKEN_TTL_SECONDS:
+            violations.append("authorization deadline exceeds the confirmation TTL")
+    return violations
 
 
 def _decision_audit_arguments(tool_name: str, tool_args: Any) -> Dict[str, Any]:
@@ -753,6 +852,9 @@ class MiniAgentClient:
         confirmation_token: str,
         tool_name: str,
         tool_args: Dict[str, Any],
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Optional[Dict[str, str]]:
         if confirmation_token not in tokens:
             return {
@@ -776,6 +878,57 @@ class MiniAgentClient:
                 "message": "Token has already been used.",
             }
 
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            now_utc = datetime.now(timezone.utc)
+            stored_request_id = token_info.get("authorization_request_id")
+            stored_deadline_text = token_info.get("authorization_expires_at_utc")
+            stored_deadline = _parse_canonical_utc_deadline(stored_deadline_text)
+            stored_issued_at_text = token_info.get("timestamp")
+            stored_issued_at = None
+            if isinstance(stored_issued_at_text, str):
+                try:
+                    stored_issued_at = datetime.fromisoformat(stored_issued_at_text)
+                except ValueError:
+                    stored_issued_at = None
+                if stored_issued_at is not None:
+                    if stored_issued_at.tzinfo is None:
+                        stored_issued_at = stored_issued_at.replace(tzinfo=timezone.utc)
+                    else:
+                        stored_issued_at = stored_issued_at.astimezone(timezone.utc)
+            if (
+                _validate_cleanup_authorization_binding(
+                    stored_request_id,
+                    stored_deadline_text,
+                    enforce_issue_window=False,
+                )
+                or stored_deadline is None
+                or stored_issued_at is None
+                or stored_issued_at > now_utc
+                or stored_deadline <= stored_issued_at
+                or (stored_deadline - stored_issued_at).total_seconds()
+                > CONFIRMATION_TOKEN_TTL_SECONDS
+            ):
+                return {
+                    "code": "invalid_confirmation_token_metadata",
+                    "message": "Confirmation token metadata is invalid.",
+                }
+            if authorization_request_id != stored_request_id:
+                return {
+                    "code": "token_request_id_mismatch",
+                    "message": "Confirmation token request binding does not match.",
+                }
+            if authorization_expires_at_utc != stored_deadline_text:
+                return {
+                    "code": "token_deadline_mismatch",
+                    "message": "Confirmation token deadline binding does not match.",
+                }
+            if stored_deadline <= now_utc:
+                return {
+                    "code": "token_expired",
+                    "message": "Confirmation token expired.",
+                }
+            return None
+
         expired = bool(
             tool_args.get("simulate_expired_token")
             or token_info.get("tool_args", {}).get("simulate_expired_token")
@@ -787,10 +940,10 @@ class MiniAgentClient:
                     normalized = timestamp[:-1] if timestamp.endswith("Z") else timestamp
                     issued_at = datetime.fromisoformat(normalized)
                     if issued_at.tzinfo is not None:
-                        from datetime import timezone
-
                         issued_at = issued_at.astimezone(timezone.utc).replace(tzinfo=None)
-                    expired = (datetime.utcnow() - issued_at).total_seconds() > 600
+                    expired = (
+                        datetime.utcnow() - issued_at
+                    ).total_seconds() > CONFIRMATION_TOKEN_TTL_SECONDS
                 except Exception:
                     expired = False
         if expired:
@@ -820,18 +973,31 @@ class MiniAgentClient:
         confirmation_token: str,
         tool_name: str,
         tool_args: Dict[str, Any],
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Tuple[bool, Optional[Dict[str, str]]]:
         """Atomically mark a locally issued token used before execution."""
         with self._lock_token_store():
             tokens = self._load_tokens()
             if confirmation_token not in tokens:
                 return False, None
-            error = self._confirmation_token_error(
-                tokens,
-                confirmation_token,
-                tool_name,
-                tool_args,
-            )
+            if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                error = self._confirmation_token_error(
+                    tokens,
+                    confirmation_token,
+                    tool_name,
+                    tool_args,
+                    authorization_request_id=authorization_request_id,
+                    authorization_expires_at_utc=authorization_expires_at_utc,
+                )
+            else:
+                error = self._confirmation_token_error(
+                    tokens,
+                    confirmation_token,
+                    tool_name,
+                    tool_args,
+                )
             if error:
                 return True, error
             tokens[confirmation_token]["used"] = True
@@ -1043,6 +1209,9 @@ class MiniAgentClient:
         confirm: bool = False,
         confirmation_token: str = "",
         context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], int]:
         """Authorize one exact-scope action owned by an external caller.
 
@@ -1067,15 +1236,23 @@ class MiniAgentClient:
                 confirm=confirm,
                 confirmation_token=confirmation_token,
             )
-        return self._authorize_action_impl(
-            prompt=prompt,
-            mode=mode,
-            tool_name=tool_name,
-            tool_args=tool_args,
-            confirm=confirm,
-            confirmation_token=confirmation_token,
-            context_overrides=context_overrides,
-        )
+        authorize_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+            "confirm": confirm,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            authorize_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        return self._authorize_action_impl(**authorize_arguments)
 
     def record_external_execution_outcome(
         self,
@@ -1167,6 +1344,15 @@ class MiniAgentClient:
             and targets != [expected_temporal_target]
         ):
             return failed("invalid_side_effect_report")
+        expected_clean_memory_target = _expected_clean_memory_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_clean_memory_target is not None
+            and targets != [expected_clean_memory_target]
+        ):
+            return failed("invalid_side_effect_report")
 
         resolved_error_codes = [] if error_codes is None else error_codes
         if (
@@ -1213,25 +1399,45 @@ class MiniAgentClient:
         confirm: bool = False,
         confirmation_token: str = "",
         context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], int]:
         """Validate and atomically claim without dispatching a handler."""
         resolved_args = tool_args or {}
-        envelope, return_code = self._validate_action_impl(
-            prompt=prompt,
-            mode=mode,
-            tool_name=tool_name,
-            tool_args=resolved_args,
-            confirm=confirm,
-            confirmation_token=confirmation_token,
-            context_overrides=context_overrides,
-        )
+        validation_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": resolved_args,
+            "confirm": confirm,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            validation_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        envelope, return_code = self._validate_action_impl(**validation_arguments)
         if return_code == 0 and confirm and confirmation_token:
             try:
-                claimed, claim_error = self._claim_confirmation_token(
-                    confirmation_token,
-                    tool_name,
-                    resolved_args,
-                )
+                if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                    claimed, claim_error = self._claim_confirmation_token(
+                        confirmation_token,
+                        tool_name,
+                        resolved_args,
+                        authorization_request_id=authorization_request_id,
+                        authorization_expires_at_utc=authorization_expires_at_utc,
+                    )
+                else:
+                    claimed, claim_error = self._claim_confirmation_token(
+                        confirmation_token,
+                        tool_name,
+                        resolved_args,
+                    )
             except Exception:
                 logger.error(
                     "Failed to persist confirmation token claim",
@@ -1282,6 +1488,9 @@ class MiniAgentClient:
         tool_args: Optional[Dict[str, Any]],
         confirmation_token: str,
         context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], int]:
         """Validate exact scope, then atomically revoke an unused local token."""
         if tool_name not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
@@ -1302,25 +1511,43 @@ class MiniAgentClient:
                 confirmation_token=confirmation_token,
             )
         resolved_args = tool_args or {}
-        envelope, return_code = self._validate_action_impl(
-            prompt=prompt,
-            mode=mode,
-            tool_name=tool_name,
-            tool_args=resolved_args,
-            confirm=True,
-            confirmation_token=confirmation_token,
-            context_overrides=context_overrides,
-        )
+        validation_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": resolved_args,
+            "confirm": True,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            validation_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        envelope, return_code = self._validate_action_impl(**validation_arguments)
         if return_code == 0:
             try:
                 with self._lock_token_store():
                     tokens = self._load_tokens()
-                    token_error = self._confirmation_token_error(
-                        tokens,
-                        confirmation_token,
-                        tool_name,
-                        resolved_args,
-                    )
+                    if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            resolved_args,
+                            authorization_request_id=authorization_request_id,
+                            authorization_expires_at_utc=authorization_expires_at_utc,
+                        )
+                    else:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            resolved_args,
+                        )
                     if token_error:
                         envelope, return_code = self._confirmation_error_envelope(
                             str(
@@ -1367,6 +1594,9 @@ class MiniAgentClient:
         confirm: bool = False,
         confirmation_token: str = "",
         context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], int]:
         """
         Runs policy check validations for a prompt and a proposed tool execution.
@@ -1396,6 +1626,31 @@ class MiniAgentClient:
                     }],
                 }
                 return self.sanitize_envelope(envelope), 1
+
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION and self.profile != "offline":
+            binding_violations = _validate_cleanup_authorization_binding(
+                authorization_request_id,
+                authorization_expires_at_utc,
+                enforce_issue_window=not confirm,
+            )
+            if binding_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [
+                        {
+                            "code": "invalid_authorization_binding",
+                            "message": (
+                                "clean_memory.apply requires one bounded request "
+                                "and deadline binding."
+                            ),
+                        }
+                    ],
+                }
+                return self.sanitize_envelope(envelope), 1
         
         # 1. Confirmation token validation if provided
         if confirmation_token:
@@ -1405,12 +1660,22 @@ class MiniAgentClient:
                     # Non-native token for a non-native tool: delegate to subprocess
                     pass
                 else:
-                    token_error = self._confirmation_token_error(
-                        tokens,
-                        confirmation_token,
-                        tool_name,
-                        tool_args,
-                    )
+                    if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            tool_args,
+                            authorization_request_id=authorization_request_id,
+                            authorization_expires_at_utc=authorization_expires_at_utc,
+                        )
+                    else:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            tool_args,
+                        )
                     if token_error:
                         return self._confirmation_error_envelope(request_id, token_error)
 
@@ -1492,6 +1757,17 @@ class MiniAgentClient:
                             "used": False,
                             "tool_args": tool_args or {}
                         }
+                        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                            tokens[token].update(
+                                {
+                                    "authorization_request_id": (
+                                        authorization_request_id
+                                    ),
+                                    "authorization_expires_at_utc": (
+                                        authorization_expires_at_utc
+                                    ),
+                                }
+                            )
                         self._save_tokens(tokens)
                 except Exception:
                     logger.error("Failed to persist confirmation token issuance", exc_info=True)
@@ -1502,12 +1778,22 @@ class MiniAgentClient:
                             "message": "Confirmation token issuance could not be persisted.",
                         },
                     )
+                result = {"allowed": False, "confirmation_token": token}
+                if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                    result.update(
+                        {
+                            "authorization_request_id": authorization_request_id,
+                            "authorization_expires_at_utc": (
+                                authorization_expires_at_utc
+                            ),
+                        }
+                    )
                 envelope = {
                     "request_id": request_id,
                     "profile": self.profile,
                     "status": "needs_confirmation",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
-                    "result": {"allowed": False, "confirmation_token": token},
+                    "result": result,
                     "errors": [{"code": "mutability_requires_confirmation", "message": f"{tool_name} requires human confirmation."}],
                 }
                 return self.sanitize_envelope(envelope), 3

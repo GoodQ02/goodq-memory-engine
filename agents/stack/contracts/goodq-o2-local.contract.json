@@ -868,6 +868,80 @@
       "mutability_class": "mutate_canonical"
     },
     {
+      "name": "clean_memory.apply",
+      "description": "Authorize one externally governed cleanup apply for an exact immutable logical scope.",
+      "category": "custom",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^job_[0-9a-f]{32}$"
+          },
+          "epoch_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "plan_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "config_scope_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "disposition_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "rollback_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "job_id",
+          "epoch_id",
+          "plan_sha256",
+          "config_scope_sha256",
+          "disposition_sha256",
+          "rollback_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allowed"
+        ]
+      },
+      "side_effects": [
+        "reads_files",
+        "writes_files",
+        "network_access",
+        "external_mutation"
+      ],
+      "risk_tier": "high",
+      "idempotency": "conditionally_idempotent",
+      "requires_confirmation": true,
+      "timeout_ms": 120000,
+      "retry_policy": {
+        "max_attempts": 1,
+        "backoff": "none"
+      },
+      "allowed_in_modes": [
+        "execute"
+      ],
+      "mutability_class": "destructive"
+    },
+    {
       "name": "file_delete",
       "description": "Delete a file from the local filesystem.",
       "category": "filesystem",

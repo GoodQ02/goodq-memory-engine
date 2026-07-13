@@ -351,7 +351,7 @@ the failure is not currently visible.
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 
 - Priority: P0
-- Status: OPEN
+- Status: IN_PROGRESS
 - Finding: four retrieval operations can create missing Qdrant collections,
   persist retrieval events, and populate or download model caches, while
   `GET /api/ingest/status/{request_id}` constructs a ledger that creates its
@@ -372,6 +372,15 @@ the failure is not currently visible.
 - Public impact: RELEASE_REQUIRED
 - Boundary: this follow-up does not reopen governed ingest staging, the common
   R-05 route/client guard, R-08 identity recovery, or R-14 status probing.
+- First-seam selection evidence (2026-07-13): independent read-only traces of
+  retrieval, ingest-status, and summary projections selected Qdrant query
+  no-create authority as the first repair. `QdrantClient.query()` currently
+  turns a missing-collection GET into a collection-creating PUT on both initial
+  and retry paths. The repair is limited to the shared query transport;
+  explicit write paths retain creation authority. The four retrieval routes
+  remain `automatic_mutation` while telemetry, model/cache, and SQLite effects
+  remain open. Evidence:
+  `docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -941,6 +950,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Opened R-05-F1 with a three-way hidden-read reconciliation and
+  selected Qdrant query no-create authority as the highest-impact single-owner
+  repair. Ingest-status directory creation and summary/retrieval SQLite,
+  telemetry, model-cache, and ledger effects remain explicitly separate.
 - 2026-07-13: Verified R-05 after governing temporal summarization with exact
   confirmation, immutable runtime policy, private durable result truth,
   deterministic no-replay recovery, passive exact-job projection, and truthful

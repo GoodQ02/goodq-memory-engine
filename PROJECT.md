@@ -4,37 +4,39 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — select the first hidden-read mutation repair seam.
+Roadmap item: R-05-F1 — make Qdrant query transport no-create.
 
 ## Outcome
 
-Produce one evidence-backed selection among nominal retrieval, ingest-status,
-and summary-read operations whose implementation may create or persist state.
-The selection must identify one exact owner and rollback boundary before any
-production change begins.
+Make `QdrantClient.query()` require an existing collection without issuing a
+collection-creating PUT. Preserve explicit collection creation for write paths
+such as `upsert()`.
 
 ## Governing evidence
 
 - `docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md`
 - `docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-13.md`
+- `docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Scope
 
-- Trace each registered nominal-read effect through constructors, filesystem
-  access, SQLite/Qdrant calls, event persistence, and model/cache resolution.
-- Build seeded temporary-root and immutable-store witnesses that distinguish
-  truly passive reads from intentional automatic mutation.
-- Prove each test oracle by showing that a seeded write-capable implementation
-  fails it.
-- Select the smallest coherent implementation seam only after the audit and
-  no-repeat check are complete.
+- Split read-only collection inspection from collection creation inside
+  `steps/common/qdrant_client.py`.
+- Prove initial-missing and retry-missing queries never issue PUT.
+- Preserve existing-collection query behavior and missing-collection upsert
+  creation through focused fake-transport tests.
+- Keep the mounted route-effect census and classifications unchanged.
 
 ## Boundaries
 
-- This mission is read-only until the selection evidence is checkpointed.
+- Production scope is limited to `steps/common/qdrant_client.py` and dedicated
+  focused tests after the selection-evidence checkpoint.
 - Do not invoke live endpoints, Qdrant, model downloads, ingestion, identity,
   configured data roots, operator data, WSL, or active services.
+- Do not change retrieval telemetry, model/cache resolution, SQLite reads,
+  ingest status, summary reads, routes, response models, or route-effect
+  classifications in this seam.
 - Do not reopen governed staging, route/client denial, action-job, summary,
   temporal, or MiniAgent checkpoints without contradictory evidence.
 - Preserve the frozen mixed checkout, public checkout, live runtime, and data
@@ -42,7 +44,8 @@ production change begins.
 
 ## Completion gate
 
-The audit accounts for every named nominal-read side effect, identifies the
-authoritative write owner, demonstrates a failing seeded oracle for retained
-mutation, and records one isolated next seam in the sole roadmap. No production
-file changes are permitted before that checkpoint.
+Fake-transport RED/GREEN evidence proves query-side collection creation is
+impossible on initial and retry paths, existing collections still query
+normally, and missing-collection upsert still creates and writes. Focused
+tests, directly affected regressions, Python compilation, diff checks,
+documentation gates, and independent review must pass before checkpointing.

@@ -36,8 +36,12 @@ _data_loader = None
 _VIDEO_SUMMARY_JOB_OPERATION = "video_summary.generate"
 _VIDEO_SUMMARY_AUTH_OPERATION = "generate_video_summary"
 _COLLECTION_CREATE_AUTH_OPERATION = "create_summary_collection"
+_COLLECTION_DELETE_JOB_OPERATION = "summary_collection.delete"
+_COLLECTION_DELETE_AUTH_OPERATION = "delete_summary_collection"
 _SUMMARY_OWNER_INSTANCE = f"summary-api-{uuid.uuid4().hex}"
 _COLLECTION_ACTION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,101}")
+_COLLECTION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_ACTION_JOB_ID_RE = re.compile(r"job_[0-9a-f]{32}")
 _COLLECTION_EPOCH_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _AUTHORIZATION_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -255,6 +259,147 @@ def _record_collection_create_outcome(
         logger.error(
             "Summary collection create external audit failed for action %s",
             scope["action_id"],
+        )
+    return "failed"
+
+
+def _parse_collection_delete_action_body(body: object) -> str:
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="Invalid collection delete action body")
+    action = body.get("action")
+    if action == "prepare" and set(body) == {"action"}:
+        return action
+    if (
+        action == "confirm"
+        and set(body)
+        == {
+            "action",
+            "job_id",
+            "epoch_id",
+            "expected_record_sha256",
+            "confirmation_token",
+        }
+        and isinstance(body.get("job_id"), str)
+        and _ACTION_JOB_ID_RE.fullmatch(body["job_id"]) is not None
+        and isinstance(body.get("epoch_id"), str)
+        and _COLLECTION_EPOCH_ID_RE.fullmatch(body["epoch_id"]) is not None
+        and isinstance(body.get("expected_record_sha256"), str)
+        and _SHA256_RE.fullmatch(body["expected_record_sha256"]) is not None
+        and isinstance(body.get("confirmation_token"), str)
+        and bool(body["confirmation_token"])
+        and body["confirmation_token"] == body["confirmation_token"].strip()
+    ):
+        return action
+    raise HTTPException(status_code=422, detail="Invalid collection delete action body")
+
+
+def _collection_delete_scope(
+    *,
+    epoch_id: str,
+    collection_id: str,
+    expected_record_sha256: str,
+) -> dict:
+    return {
+        "epoch_id": epoch_id,
+        "collection_id": collection_id,
+        "expected_record_sha256": expected_record_sha256,
+    }
+
+
+def _find_collection_record(
+    db_path: Path,
+    collection_id: str,
+    *,
+    require_active: bool,
+) -> dict | None:
+    data = summary_aggregator.load_collections(db_path)
+    for collection in data["collections"]:
+        if collection.get("collection_id") != collection_id:
+            continue
+        if require_active and collection.get("status") != "active":
+            return None
+        return collection
+    return None
+
+
+def _collection_delete_request_id(
+    collection: dict,
+    *,
+    job_id: str,
+    expected_record_sha256: str,
+) -> str:
+    for history_entry in collection.get("history", []):
+        if (
+            history_entry.get("action") == "delete"
+            and history_entry.get("job_id") == job_id
+            and history_entry.get("expected_record_sha256")
+            == expected_record_sha256
+            and isinstance(history_entry.get("authorization_request_id"), str)
+            and _AUTHORIZATION_REQUEST_ID_RE.fullmatch(
+                history_entry["authorization_request_id"]
+            )
+            is not None
+        ):
+            return history_entry["authorization_request_id"]
+    raise RuntimeError("persisted collection delete evidence is incomplete")
+
+
+def _validated_collection_delete_receipt(
+    db_path: Path,
+    *,
+    job_id: str,
+    scope: dict,
+) -> dict | None:
+    collection = summary_aggregator.find_collection_by_delete_job(
+        db_path,
+        job_id=job_id,
+        expected_record_sha256=scope["expected_record_sha256"],
+    )
+    deleted_at = collection.get("deleted_at_utc") if collection is not None else None
+    if (
+        collection is None
+        or collection.get("collection_id") != scope["collection_id"]
+        or collection.get("source_epoch") != scope["epoch_id"]
+        or collection.get("status") != "deleted"
+        or not isinstance(deleted_at, str)
+        or not deleted_at.strip()
+    ):
+        return None
+    return collection
+
+
+def _record_collection_delete_outcome(
+    cfg: dict,
+    *,
+    job_id: str,
+    scope: dict,
+    request_id: str,
+    status: str,
+    mutated: bool,
+    duration_ms: int,
+    error_codes: list[str],
+) -> str:
+    try:
+        audit = _get_summary_authority(cfg).record_external_execution_outcome(
+            operation=_COLLECTION_DELETE_AUTH_OPERATION,
+            arguments={"job_id": job_id, **scope},
+            request_id=request_id,
+            mode="ops",
+            status=status,
+            return_code=0 if status == "succeeded" else 1,
+            duration_ms=duration_ms,
+            side_effect_report={
+                "mutated": mutated,
+                "targets": [f"summary-collection:delete:{job_id}"],
+            },
+            error_codes=error_codes,
+        )
+        if isinstance(audit, dict) and audit.get("audit_status") == "recorded":
+            return "recorded"
+    except Exception:
+        logger.error(
+            "Summary collection delete external audit failed for job %s",
+            job_id,
         )
     return "failed"
 
@@ -623,22 +768,448 @@ async def create_collection(body: dict = Body(...)):
 
 @router.delete("/collections/{collection_id}", response_model=dict)
 async def delete_collection(
-    collection_id: str = PathParam(..., description="Unique ID of the collection to soft-delete")
+    collection_id: str = PathParam(..., description="Unique ID of the collection to soft-delete"),
+    body: dict = Body(...),
 ):
-    """
-    Soft-delete a custom collection.
-    """
+    """Prepare or confirm one exact governed collection soft-delete."""
+    from steps.common.config_loader import load_configs
+
+    action = _parse_collection_delete_action_body(body)
+    if _COLLECTION_ID_RE.fullmatch(collection_id) is None:
+        raise HTTPException(status_code=422, detail="Invalid collection identifier")
     db_path = _get_kg_db_path()
+    if not db_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Collection epoch database not initialized",
+        )
+    epoch_id = db_path.parent.name
+    if _COLLECTION_EPOCH_ID_RE.fullmatch(epoch_id) is None:
+        logger.error("Summary collection epoch identifier is invalid")
+        raise HTTPException(status_code=500, detail="Collection epoch is unavailable")
     try:
-        success = summary_aggregator.soft_delete_collection(db_path, collection_id)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Active collection not found for ID: {collection_id}")
-        return {"success": True, "message": f"Collection '{collection_id}' was soft-deleted."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to delete collection: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        cfg = load_configs({})
+    except Exception:
+        logger.error("Summary collection delete control ledger is unavailable")
+        raise HTTPException(status_code=503, detail="Collection delete control unavailable")
+
+    if action == "prepare":
+        try:
+            collection = _find_collection_record(
+                db_path,
+                collection_id,
+                require_active=True,
+            )
+        except Exception:
+            logger.error("Summary collection store could not be read for delete prepare")
+            raise HTTPException(status_code=500, detail="Collection store unavailable")
+        if collection is None:
+            raise HTTPException(status_code=404, detail="Active collection not found")
+        if collection.get("source_epoch") != epoch_id:
+            raise HTTPException(status_code=409, detail="Collection epoch mismatch")
+        try:
+            ledger = _get_summary_job_ledger(cfg)
+        except Exception:
+            logger.error("Summary collection delete control ledger is unavailable")
+            raise HTTPException(status_code=503, detail="Collection delete control unavailable")
+        scope = _collection_delete_scope(
+            epoch_id=epoch_id,
+            collection_id=collection_id,
+            expected_record_sha256=summary_aggregator.collection_record_sha256(
+                collection
+            ),
+        )
+        try:
+            record, created = ledger.prepare_or_find_active_with_status(
+                operation=_COLLECTION_DELETE_JOB_OPERATION,
+                scope=scope,
+                owner_instance=_SUMMARY_OWNER_INSTANCE,
+            )
+        except Exception:
+            logger.error("Summary collection delete job preparation failed")
+            raise HTTPException(status_code=500, detail="Collection delete control unavailable")
+        if not created:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "active_job_exists",
+                    "job": _public_summary_job(record),
+                },
+            )
+
+        authority = None
+        token = None
+        evidence_persisted = False
+        tool_args = {"job_id": record["job_id"], **scope}
+        try:
+            authority = _get_summary_authority(cfg)
+            envelope, return_code = authority.authorize_action(
+                prompt="Prepare one exact summary collection delete",
+                mode="ops",
+                tool_name=_COLLECTION_DELETE_AUTH_OPERATION,
+                tool_args=tool_args,
+            )
+            result = envelope.get("result") if isinstance(envelope, dict) else None
+            token = result.get("confirmation_token") if isinstance(result, dict) else None
+            request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+            if (
+                not isinstance(envelope, dict)
+                or return_code != 3
+                or envelope.get("status") != "needs_confirmation"
+                or not isinstance(token, str)
+                or not token
+                or not isinstance(request_id, str)
+                or _AUTHORIZATION_REQUEST_ID_RE.fullmatch(request_id) is None
+            ):
+                raise RuntimeError("collection delete authorization was not prepared")
+            record = ledger.compare_and_update(
+                record["job_id"],
+                expected_state="pending_confirmation",
+                token_fingerprint=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                authorization_request_id=request_id,
+            )
+            evidence_persisted = True
+        except Exception:
+            logger.error("Failed to prepare summary collection delete authorization")
+            if (
+                authority is not None
+                and isinstance(token, str)
+                and token
+                and not evidence_persisted
+            ):
+                try:
+                    authority.revoke_action_authorization(
+                        prompt="Revoke unpersisted summary collection delete authorization",
+                        mode="ops",
+                        tool_name=_COLLECTION_DELETE_AUTH_OPERATION,
+                        tool_args=tool_args,
+                        confirmation_token=token,
+                    )
+                except Exception:
+                    logger.error(
+                        "Failed to revoke unpersisted summary collection delete authorization"
+                    )
+            try:
+                ledger.transition(
+                    record["job_id"],
+                    expected_states="pending_confirmation",
+                    new_state="failed",
+                    outcome={
+                        "code": "authorization_prepare_failed",
+                        "message": "Collection delete authorization could not be prepared",
+                    },
+                )
+            except Exception:
+                logger.error("Failed to persist collection delete preparation failure")
+            raise HTTPException(status_code=503, detail="Collection authorization unavailable")
+        return {
+            "success": True,
+            "confirmation_token": token,
+            "job": _public_summary_job(record),
+        }
+
+    try:
+        ledger = _get_summary_job_ledger(cfg)
+    except Exception:
+        logger.error("Summary collection delete control ledger is unavailable")
+        raise HTTPException(status_code=503, detail="Collection delete control unavailable")
+    job_id = body["job_id"]
+    try:
+        record = ledger.load(job_id)
+    except ValueError:
+        record = None
+    scope = _collection_delete_scope(
+        epoch_id=body["epoch_id"],
+        collection_id=collection_id,
+        expected_record_sha256=body["expected_record_sha256"],
+    )
+    if (
+        record is None
+        or record.get("operation") != _COLLECTION_DELETE_JOB_OPERATION
+        or record.get("scope") != scope
+        or body["epoch_id"] != epoch_id
+    ):
+        raise HTTPException(status_code=404, detail="Collection delete job not found")
+    state = record.get("state")
+    if state not in {"pending_confirmation", "authorizing"}:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "job_not_confirmable", "job": _public_summary_job(record)},
+        )
+    fingerprint = hashlib.sha256(body["confirmation_token"].encode("utf-8")).hexdigest()
+    if not isinstance(record.get("token_fingerprint"), str) or not hmac.compare_digest(
+        record["token_fingerprint"], fingerprint
+    ):
+        raise HTTPException(status_code=403, detail="Confirmation token mismatch")
+
+    owner_instance = record.get("owner_instance")
+    if owner_instance != _SUMMARY_OWNER_INSTANCE:
+        if not _has_complete_summary_authorization(record):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_owner_changed", "job": _public_summary_job(record)},
+            )
+        try:
+            record = ledger.adopt_owner(
+                job_id,
+                expected_state=state,
+                expected_owner_instance=owner_instance,
+                new_owner_instance=_SUMMARY_OWNER_INSTANCE,
+            )
+        except (ActionJobTransitionError, OSError, ValueError):
+            current = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_owner_changed", "job": _public_summary_job(current)},
+            )
+    elif state == "authorizing":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "job_not_confirmable", "job": _public_summary_job(record)},
+        )
+
+    if state == "pending_confirmation":
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="pending_confirmation",
+                new_state="authorizing",
+            )
+        except (ActionJobTransitionError, OSError, ValueError):
+            current = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_confirmable", "job": _public_summary_job(current)},
+            )
+
+    tool_args = {"job_id": job_id, **scope}
+    try:
+        authority = _get_summary_authority(cfg)
+        envelope, return_code = authority.authorize_action(
+            prompt="Confirm one exact summary collection delete",
+            mode="ops",
+            tool_name=_COLLECTION_DELETE_AUTH_OPERATION,
+            tool_args=tool_args,
+            confirm=True,
+            confirmation_token=body["confirmation_token"],
+        )
+    except Exception:
+        logger.error("Summary collection delete authorization claim failed")
+        envelope, return_code = {}, 1
+
+    result = envelope.get("result") if isinstance(envelope, dict) else None
+    authorized = (
+        isinstance(envelope, dict)
+        and return_code == 0
+        and envelope.get("status") == "ok"
+        and isinstance(result, dict)
+        and result.get("allowed") is True
+    )
+    error_code = _authorization_error_code(envelope)
+    request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+    recovered = False
+    if not authorized and error_code == "token_already_used":
+        try:
+            collection = _validated_collection_delete_receipt(
+                db_path,
+                job_id=job_id,
+                scope=scope,
+            )
+            if collection is not None:
+                request_id = _collection_delete_request_id(
+                    collection,
+                    job_id=job_id,
+                    expected_record_sha256=scope["expected_record_sha256"],
+                )
+                recovered = True
+                authorized = True
+        except Exception:
+            logger.error(
+                "Summary collection delete recovery evidence is unavailable for job %s",
+                job_id,
+            )
+
+    if not authorized:
+        expired = error_code == "token_expired"
+        recovery_failed = error_code == "token_already_used"
+        outcome = {
+            "code": (
+                "authorization_expired"
+                if expired
+                else "authorization_recovery_failed"
+                if recovery_failed
+                else "authorization_failed"
+            ),
+            "message": (
+                "Collection delete authorization expired"
+                if expired
+                else "Collection delete authorization recovery failed"
+                if recovery_failed
+                else "Collection delete authorization failed"
+            ),
+        }
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="authorizing",
+                new_state="expired" if expired else "failed",
+                outcome=outcome,
+            )
+        except (ActionJobTransitionError, OSError, ValueError):
+            record = ledger.load(job_id) or record
+        raise HTTPException(
+            status_code=409,
+            detail={"code": outcome["code"], "job": _public_summary_job(record)},
+        )
+    if (
+        not isinstance(request_id, str)
+        or _AUTHORIZATION_REQUEST_ID_RE.fullmatch(request_id) is None
+    ):
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="authorizing",
+                new_state="failed",
+                outcome={
+                    "code": "authorization_failed",
+                    "message": "Collection delete authorization failed",
+                },
+            )
+        except (ActionJobTransitionError, OSError, ValueError):
+            record = ledger.load(job_id) or record
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "authorization_failed", "job": _public_summary_job(record)},
+        )
+
+    try:
+        record = ledger.compare_and_update(
+            job_id,
+            expected_state="authorizing",
+            authorization_request_id=request_id,
+        )
+    except (ActionJobTransitionError, OSError, ValueError):
+        current = ledger.load(job_id) or record
+        logger.error(
+            "Summary collection delete authorization evidence could not be persisted "
+            "for job %s",
+            job_id,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "authorization_evidence_pending",
+                "job": _public_summary_job(current),
+            },
+        )
+
+    try:
+        record = ledger.transition(
+            job_id,
+            expected_states="authorizing",
+            new_state="queued",
+        )
+        record = ledger.transition(
+            job_id,
+            expected_states="queued",
+            new_state="running",
+        )
+    except (ActionJobTransitionError, OSError, ValueError):
+        current = ledger.load(job_id) or record
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "job_not_runnable", "job": _public_summary_job(current)},
+        )
+
+    started = time.monotonic()
+    mutation_error = None
+    if not recovered:
+        try:
+            success = summary_aggregator.soft_delete_collection(
+                db_path,
+                collection_id,
+                mutation_evidence={
+                    "job_id": job_id,
+                    "expected_record_sha256": scope["expected_record_sha256"],
+                    "authorization_request_id": request_id,
+                },
+            )
+            if not success:
+                mutation_error = "collection_not_found"
+        except summary_aggregator.CollectionStoreConflict:
+            mutation_error = "collection_changed"
+        except Exception:
+            logger.error("Summary collection delete mutation failed for job %s", job_id)
+            mutation_error = "collection_mutation_failed"
+
+    duration_ms = max(0, int((time.monotonic() - started) * 1000))
+    if mutation_error is not None:
+        audit_status = _record_collection_delete_outcome(
+            cfg,
+            job_id=job_id,
+            scope=scope,
+            request_id=request_id,
+            status="failed",
+            mutated=False,
+            duration_ms=duration_ms,
+            error_codes=[mutation_error],
+        )
+        messages = {
+            "collection_changed": "Collection changed after delete authorization",
+            "collection_not_found": "Collection no longer exists",
+            "collection_mutation_failed": "Collection delete mutation failed",
+        }
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="running",
+                new_state="failed",
+                outcome={"code": mutation_error, "message": messages[mutation_error]},
+                audit_status=audit_status,
+            )
+        except (ActionJobTransitionError, OSError, ValueError):
+            record = ledger.load(job_id) or record
+        raise HTTPException(
+            status_code=409 if mutation_error == "collection_changed" else 500,
+            detail={"code": mutation_error, "job": _public_summary_job(record)},
+        )
+
+    audit_status = _record_collection_delete_outcome(
+        cfg,
+        job_id=job_id,
+        scope=scope,
+        request_id=request_id,
+        status="succeeded",
+        mutated=True,
+        duration_ms=duration_ms,
+        error_codes=[],
+    )
+    try:
+        record = ledger.transition(
+            job_id,
+            expected_states="running",
+            new_state="succeeded",
+            outcome={
+                "code": "collection_deleted",
+                "message": "Collection was soft-deleted",
+            },
+            audit_status=audit_status,
+        )
+    except (ActionJobTransitionError, OSError, ValueError):
+        current = ledger.load(job_id) or record
+        logger.error("Summary collection delete finalization failed for job %s", job_id)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "collection_finalization_pending",
+                "job": _public_summary_job(current),
+            },
+        )
+    return {
+        "success": True,
+        "recovered": recovered,
+        "job": _public_summary_job(record),
+    }
 
 
 async def _generate_summary_worker(job_id: str, video_hash: str, cfg: dict):

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.routes import summary as summary_route
-from api.utils.action_jobs import ActionJobLedger
+from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
 from lib import summary_aggregator
 
 
@@ -137,6 +137,42 @@ def _confirm_collection_body(prepared: dict, payload: dict) -> dict:
         "payload_sha256": prepared["payload_sha256"],
         "confirmation_token": prepared["confirmation_token"],
         "collection": payload,
+    }
+
+
+def _create_collection_for_delete(db_path: Path) -> dict:
+    return summary_aggregator.add_collection(
+        db_path,
+        {
+            "name": "Delete target",
+            "description": "Preserved after soft delete",
+            "collection_type": "manual_playlist",
+            "query_params": {},
+            "scene_refs": [],
+            "operator_note": "Created for delete test",
+        },
+    )
+
+
+def _prepare_collection_delete(client: TestClient, collection_id: str) -> dict:
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection_id}",
+        json={"action": "prepare"},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _confirm_collection_delete_body(prepared: dict) -> dict:
+    return {
+        "action": "confirm",
+        "job_id": prepared["job"]["job_id"],
+        "epoch_id": prepared["job"]["scope"]["epoch_id"],
+        "expected_record_sha256": prepared["job"]["scope"][
+            "expected_record_sha256"
+        ],
+        "confirmation_token": prepared["confirmation_token"],
     }
 
 
@@ -703,6 +739,756 @@ def test_collection_store_failure_is_sanitized_and_audited_without_mutation(
     assert authority.external_calls[0]["status"] == "failed"
     assert authority.external_calls[0]["side_effect_report"]["mutated"] is False
     assert not (mock_db_paths[0].parent / "saved_collections.json").exists()
+
+
+def test_collection_delete_prepare_is_write_free_and_persists_exact_job_scope(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    collections_file = mock_db_paths[0].parent / "saved_collections.json"
+    before = collections_file.read_bytes()
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json={"action": "prepare"},
+    )
+
+    assert response.status_code == 200
+    prepared = response.json()
+    assert prepared["success"] is True
+    assert prepared["confirmation_token"] == "confirmation-token-1"
+    assert prepared["job"]["state"] == "pending_confirmation"
+    assert prepared["job"]["operation"] == "summary_collection.delete"
+    expected_scope = {
+        "epoch_id": mock_db_paths[0].parent.name,
+        "collection_id": collection["collection_id"],
+        "expected_record_sha256": summary_aggregator.collection_record_sha256(
+            collection
+        ),
+    }
+    assert prepared["job"]["scope"] == expected_scope
+    assert "token_fingerprint" not in prepared["job"]
+    assert "authorization_request_id" not in prepared["job"]
+    assert collections_file.read_bytes() == before
+    assert authority.authorize_calls == [
+        {
+            "prompt": "Prepare one exact summary collection delete",
+            "mode": "ops",
+            "tool_name": "delete_summary_collection",
+            "tool_args": {
+                "job_id": prepared["job"]["job_id"],
+                **expected_scope,
+            },
+        }
+    ]
+    persisted = _job_ledger(mock_db_paths[0].parent).load(
+        prepared["job"]["job_id"]
+    )
+    assert persisted["token_fingerprint"] == hashlib.sha256(
+        b"confirmation-token-1"
+    ).hexdigest()
+    assert persisted["authorization_request_id"] == "authorization-request-1"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"action": "prepare", "extra": True},
+        {"action": "confirm", "job_id": "job_invalid"},
+    ],
+)
+def test_collection_delete_rejects_invalid_body_before_authority_or_job(
+    body, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=body,
+    )
+
+    assert response.status_code == 422
+    assert authority.authorize_calls == []
+    assert not (
+        mock_db_paths[0].parent / "GoodQ_Data" / "control" / "action_jobs"
+    ).exists()
+
+
+def test_collection_delete_prepare_requires_active_collection_without_job(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    response = client.request(
+        "DELETE",
+        "/api/summary/collections/col_missing",
+        json={"action": "prepare"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Active collection not found"
+    assert authority.authorize_calls == []
+    assert not (
+        mock_db_paths[0].parent / "GoodQ_Data" / "control" / "action_jobs"
+    ).exists()
+
+
+def test_collection_delete_prepare_rejects_collection_from_wrong_epoch(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    data = summary_aggregator.load_collections(mock_db_paths[0])
+    data["collections"][0]["source_epoch"] = "epoch_other"
+    summary_aggregator.save_collections(mock_db_paths[0], data)
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json={"action": "prepare"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Collection epoch mismatch"
+    assert authority.authorize_calls == []
+    assert not (
+        mock_db_paths[0].parent / "GoodQ_Data" / "control" / "action_jobs"
+    ).exists()
+
+
+def test_collection_delete_prepare_conflicts_with_active_job_without_new_token(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+
+    first = _prepare_collection_delete(client, collection["collection_id"])
+    second = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json={"action": "prepare"},
+    )
+
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "active_job_exists"
+    assert second.json()["detail"]["job"]["job_id"] == first["job"]["job_id"]
+    assert "confirmation_token" not in second.text
+    assert len(authority.authorize_calls) == 1
+
+
+def test_collection_delete_confirm_claims_exact_scope_and_terminalizes(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert result["recovered"] is False
+    assert result["job"]["state"] == "succeeded"
+    assert result["job"]["outcome"]["code"] == "collection_deleted"
+    assert result["job"]["audit_status"] == "recorded"
+    assert "confirmation-token-1" not in response.text
+    assert "authorization-request-1" not in response.text
+    persisted_collection = summary_aggregator.load_collections(mock_db_paths[0])[
+        "collections"
+    ][0]
+    assert persisted_collection["status"] == "deleted"
+    expected_scope = prepared["job"]["scope"]
+    assert persisted_collection["history"][-1] == {
+        "action": "delete",
+        "timestamp_utc": persisted_collection["history"][-1]["timestamp_utc"],
+        "operator_note": "Soft-deleted by operator",
+        "job_id": prepared["job"]["job_id"],
+        "expected_record_sha256": expected_scope["expected_record_sha256"],
+        "authorization_request_id": "authorization-request-1",
+    }
+    exact_args = {"job_id": prepared["job"]["job_id"], **expected_scope}
+    assert authority.authorize_calls[1] == {
+        "prompt": "Confirm one exact summary collection delete",
+        "mode": "ops",
+        "tool_name": "delete_summary_collection",
+        "tool_args": exact_args,
+        "confirm": True,
+        "confirmation_token": "confirmation-token-1",
+    }
+    assert authority.external_calls == [
+        {
+            "operation": "delete_summary_collection",
+            "arguments": exact_args,
+            "request_id": "authorization-request-1",
+            "mode": "ops",
+            "status": "succeeded",
+            "return_code": 0,
+            "duration_ms": authority.external_calls[0]["duration_ms"],
+            "side_effect_report": {
+                "mutated": True,
+                "targets": [
+                    f"summary-collection:delete:{prepared['job']['job_id']}"
+                ],
+            },
+            "error_codes": [],
+        }
+    ]
+
+
+def test_collection_delete_persists_confirm_request_id_across_all_evidence(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class DistinctRequestAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            envelope, code = super().authorize_action(**kwargs)
+            envelope["request_id"] = (
+                "authorization-confirm-request"
+                if kwargs.get("confirm")
+                else "authorization-prepare-request"
+            )
+            return envelope, code
+
+    authority = DistinctRequestAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 200
+    job = _job_ledger(mock_db_paths[0].parent).load(prepared["job"]["job_id"])
+    assert job["authorization_request_id"] == "authorization-confirm-request"
+    history = summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "history"
+    ]
+    assert history[-1]["authorization_request_id"] == "authorization-confirm-request"
+    assert authority.external_calls[0]["request_id"] == "authorization-confirm-request"
+
+
+def test_collection_delete_wrong_token_preserves_pending_job_and_collection(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    body = _confirm_collection_delete_body(prepared)
+    body["confirmation_token"] = "wrong-token"
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=body,
+    )
+
+    assert response.status_code == 403
+    record = _job_ledger(mock_db_paths[0].parent).load(prepared["job"]["job_id"])
+    assert record["state"] == "pending_confirmation"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+    assert len(authority.authorize_calls) == 1
+
+
+def test_collection_delete_changed_record_fails_without_mutation(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    data = summary_aggregator.load_collections(mock_db_paths[0])
+    data["collections"][0]["description"] = "Changed after authorization"
+    summary_aggregator.save_collections(mock_db_paths[0], data)
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "collection_changed"
+    assert detail["job"]["state"] == "failed"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+    assert authority.external_calls[0]["status"] == "failed"
+    assert authority.external_calls[0]["side_effect_report"]["mutated"] is False
+
+
+def test_collection_delete_token_already_used_recovers_exact_receipt(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-retry",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    scope = prepared["job"]["scope"]
+    summary_aggregator.soft_delete_collection(
+        mock_db_paths[0],
+        collection["collection_id"],
+        mutation_evidence={
+            "job_id": prepared["job"]["job_id"],
+            "expected_record_sha256": scope["expected_record_sha256"],
+            "authorization_request_id": "authorization-request-original",
+        },
+    )
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recovered"] is True
+    assert response.json()["job"]["state"] == "succeeded"
+    assert authority.external_calls[0]["request_id"] == "authorization-request-original"
+    assert len(
+        summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+            "history"
+        ]
+    ) == 2
+
+
+def test_collection_delete_token_already_used_without_receipt_fails_closed(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-retry",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "authorization_recovery_failed"
+    assert response.json()["detail"]["job"]["state"] == "failed"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+
+
+@pytest.mark.parametrize("invalid_receipt", ["wrong_target", "active", "epoch"])
+def test_collection_delete_recovery_rejects_misbound_receipt(
+    invalid_receipt, client, mock_db_paths, monkeypatch
+) -> None:
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-retry",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    target = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, target["collection_id"])
+    data = summary_aggregator.load_collections(mock_db_paths[0])
+    receipt_target = data["collections"][0]
+    if invalid_receipt == "wrong_target":
+        other = summary_aggregator.add_collection(
+            mock_db_paths[0],
+            {"name": "Wrong receipt target"},
+        )
+        data = summary_aggregator.load_collections(mock_db_paths[0])
+        receipt_target = next(
+            item for item in data["collections"] if item["collection_id"] == other["collection_id"]
+        )
+    receipt_target["history"].append(
+        {
+            "action": "delete",
+            "timestamp_utc": "2026-07-12T23:00:00Z",
+            "operator_note": "Injected invalid receipt",
+            "job_id": prepared["job"]["job_id"],
+            "expected_record_sha256": prepared["job"]["scope"][
+                "expected_record_sha256"
+            ],
+            "authorization_request_id": "authorization-request-original",
+        }
+    )
+    if invalid_receipt != "active":
+        receipt_target["status"] = "deleted"
+        receipt_target["deleted_at_utc"] = "2026-07-12T23:00:00Z"
+    if invalid_receipt == "epoch":
+        receipt_target["source_epoch"] = "epoch_other"
+    summary_aggregator.save_collections(mock_db_paths[0], data)
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{target['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "authorization_recovery_failed"
+    assert response.json()["detail"]["job"]["state"] == "failed"
+    assert authority.external_calls == []
+
+
+def test_collection_delete_post_effect_audit_failure_preserves_success(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class FailingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            self.external_calls.append(kwargs)
+            return {"audit_status": "failed", "error_codes": ["audit_log_error"]}
+
+    authority = FailingAuditAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["job"]["state"] == "succeeded"
+    assert response.json()["job"]["audit_status"] == "failed"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "deleted"
+
+
+def test_concurrent_collection_delete_confirms_mutate_once(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    body = _confirm_collection_delete_body(prepared)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(
+            pool.map(
+                lambda _unused: client.request(
+                    "DELETE",
+                    f"/api/summary/collections/{collection['collection_id']}",
+                    json=body,
+                ),
+                range(2),
+            )
+        )
+
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    stored = summary_aggregator.load_collections(mock_db_paths[0])["collections"][0]
+    assert stored["status"] == "deleted"
+    assert len([entry for entry in stored["history"] if entry["action"] == "delete"]) == 1
+
+
+def test_collection_delete_prepare_revokes_unpersisted_authorization(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class InvalidEvidenceAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "private\\invalid-request",
+                    "status": "needs_confirmation",
+                    "result": {"confirmation_token": "confirmation-token-private"},
+                    "errors": [],
+                },
+                3,
+            )
+
+    authority = InvalidEvidenceAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json={"action": "prepare"},
+    )
+
+    assert response.status_code == 503
+    assert "confirmation-token-private" not in response.text
+    assert authority.revoke_calls == [
+        {
+            "prompt": "Revoke unpersisted summary collection delete authorization",
+            "mode": "ops",
+            "tool_name": "delete_summary_collection",
+            "tool_args": authority.authorize_calls[0]["tool_args"],
+            "confirmation_token": "confirmation-token-private",
+        }
+    ]
+    record = _job_ledger(mock_db_paths[0].parent).list_records(
+        operation="summary_collection.delete"
+    )[0]
+    assert record["state"] == "failed"
+    assert record["outcome"]["code"] == "authorization_prepare_failed"
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("epoch_id", "epoch_other"),
+        ("expected_record_sha256", "b" * 64),
+    ],
+)
+def test_collection_delete_confirm_rejects_tampered_scope_before_authority(
+    field, replacement, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    body = _confirm_collection_delete_body(prepared)
+    body[field] = replacement
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=body,
+    )
+
+    assert response.status_code == 404
+    assert len(authority.authorize_calls) == 1
+    assert _job_ledger(mock_db_paths[0].parent).load(prepared["job"]["job_id"])[
+        "state"
+    ] == "pending_confirmation"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+
+
+def test_collection_delete_expired_authorization_is_terminal_and_write_free(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class ExpiredAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            if not kwargs.get("confirm"):
+                return super().authorize_action(**kwargs)
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-2",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_expired", "message": "Expired"}],
+                },
+                1,
+            )
+
+    authority = ExpiredAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "authorization_expired"
+    assert response.json()["detail"]["job"]["state"] == "expired"
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+
+
+def test_collection_delete_audit_exception_preserves_committed_success(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    class RaisingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            self.external_calls.append(kwargs)
+            raise RuntimeError("confirmation-token-private private\\audit.json")
+
+    authority = RaisingAuditAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["job"]["state"] == "succeeded"
+    assert response.json()["job"]["audit_status"] == "failed"
+    assert "confirmation-token-private" not in response.text
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "deleted"
+
+
+def test_collection_delete_store_exception_is_sanitized_and_terminal(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+
+    def fail_store(*_args, **_kwargs):
+        raise RuntimeError("confirmation-token-private private\\saved_collections.json")
+
+    monkeypatch.setattr(summary_aggregator, "soft_delete_collection", fail_store)
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert detail["code"] == "collection_mutation_failed"
+    assert detail["job"]["state"] == "failed"
+    assert "confirmation-token-private" not in response.text
+    assert "saved_collections.json" not in response.text
+    assert summary_aggregator.load_collections(mock_db_paths[0])["collections"][0][
+        "status"
+    ] == "active"
+
+
+@pytest.mark.parametrize(
+    "failure_exception",
+    [
+        ActionJobTransitionError("private\\terminal.json"),
+        OSError("private\\terminal.json"),
+    ],
+)
+def test_collection_delete_terminal_ledger_failure_reports_pending_truth(
+    failure_exception, client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    original_transition = ledger.transition
+
+    def fail_terminal(job_id, *, expected_states, new_state, **updates):
+        if new_state == "succeeded":
+            raise failure_exception
+        return original_transition(
+            job_id,
+            expected_states=expected_states,
+            new_state=new_state,
+            **updates,
+        )
+
+    monkeypatch.setattr(ledger, "transition", fail_terminal)
+    response = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "collection_finalization_pending"
+    assert response.json()["detail"]["job"]["state"] == "running"
+    assert "terminal.json" not in response.text
+    assert ledger.load(prepared["job"]["job_id"])["state"] == "running"
+    persisted = summary_aggregator.find_collection_by_delete_job(
+        mock_db_paths[0],
+        job_id=prepared["job"]["job_id"],
+        expected_record_sha256=prepared["job"]["scope"]["expected_record_sha256"],
+    )
+    assert persisted["status"] == "deleted"
+
+
+def test_collection_delete_prepare_and_confirm_require_epoch_database(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    collection = _create_collection_for_delete(mock_db_paths[0])
+    prepared = _prepare_collection_delete(client, collection["collection_id"])
+    mock_db_paths[0].unlink()
+
+    confirm = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json=_confirm_collection_delete_body(prepared),
+    )
+    new_prepare = client.request(
+        "DELETE",
+        f"/api/summary/collections/{collection['collection_id']}",
+        json={"action": "prepare"},
+    )
+
+    assert confirm.status_code == 404
+    assert new_prepare.status_code == 404
+    assert len(authority.authorize_calls) == 1
+    assert _job_ledger(mock_db_paths[0].parent).load(prepared["job"]["job_id"])[
+        "state"
+    ] == "pending_confirmation"
 
 
 def _summary_job_in_state(

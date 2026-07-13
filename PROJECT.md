@@ -4,60 +4,63 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — select retrieval-event persistence/config authority.
+Roadmap item: R-05-F1 — govern retrieval-event persistence/config authority.
 
 ## Outcome
 
-Reconcile the intentional retrieval-event write path from canonical
-configuration through Qdrant, ephemeral, and FAISS emitters. Select the
-smallest owner, rollback boundary, and mutation-sensitive verification gate
-that makes event enablement, locked-database JSONL fallback, and fallback
-destination explicit without removing durable observability or reclassifying
-the four mounted retrieval routes.
+Replace split retrieval-event enablement, fallback, and destination state with
+one immutable canonical policy propagated through Qdrant, ephemeral, and FAISS
+emitters. Preserve intentional successful-hit observability and best-effort
+retrieval while preventing missing-database creation, ignored JSONL disable,
+database-parent relocation, and event loss after same-path database replacement.
 
 ## Governing evidence
 
+- `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md`
 - `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Intentional retrieval observability may mutate only through one explicit,
-canonical policy. A disabled fallback must stay disabled, an enabled fallback
-must use its exact governed destination, and no emitter may silently recover a
-discarded configuration from unrelated ambient defaults.
+Retrieval observability may mutate only through one explicit policy. Disabled
+telemetry or fallback cannot write. Enabled SQLite telemetry may add its audit
+schema and rows only to an existing primary database. Locked fallback may
+append only under the exact configured log destination. Telemetry failure must
+remain best effort for hits but visible without query text or absolute paths.
 
 ## Scope
 
-- Audit the canonical configuration schema and default configuration for an
-  actual retrieval-event policy owner.
-- Trace policy propagation through every production call to
-  `emit_retrieval_events()` and every builder that constructs Qdrant,
-  ephemeral, or FAISS retrieval stores.
-- Prove the current locked-database fallback behavior using temporary roots and
-  fake/instrumented SQLite connections only.
-- Name one exact implementation boundary and RED suite before production code
-  changes.
+- Add strict/frozen canonical `observability.retrieval_events` configuration
+  and matching defaults; reject and ignore only the competing policy key
+  without globally tightening legacy `memory.*` behavior.
+- Resolve one frozen event policy with exact environment-over-config precedence
+  and canonical log destination.
+- Propagate that policy through the cached search engine, generic Qdrant
+  builder, shared text-store builder, and all Qdrant/ephemeral/FAISS emitters.
+- Require an existing primary database, preserve intentional schema/event
+  writes inside it, and make schema readiness robust to same-path replacement.
+- Restrict JSONL to locked/busy fallback at the exact existing configured log
+  directory and surface sanitized persistence loss without changing hits.
+- Establish mutation-sensitive RED before production implementation.
 
 ## Boundaries
 
-- Do not implement policy propagation during this selection checkpoint.
-- Keep retrieval context propagation separate; process-global context and
-  request concurrency require a different interface and verification gate.
-- Keep raw-query logging and FAISS path redaction separate; they are privacy
-  output contracts, not persistence destination authority.
-- Do not alter event schema, successful-hit semantics, best-effort failure
-  behavior, route responses, route effects, retention, rollups, model/Qdrant
-  authority, configured data, live endpoints, services, or dependencies.
-- Do not reopen the completed Qdrant, ingest-status, summary-status,
-  model-cache, summary SQLite, or retrieval SQLite checkpoints.
+- Do not add request-scoped retrieval context in this seam.
+- Do not change raw-query logs or FAISS path details in this seam.
+- Do not change event row schema, retention, rollups, health, responses, route
+  effects, or the 69-operation census.
+- Do not reopen completed Qdrant, ingest-status, summary-status, model-cache,
+  summary SQLite, or retrieval SQLite behavior.
+- Do not change unrelated configuration, dependencies, active environments,
+  configured data, live endpoints, services, identity, ingestion, WSL, public
+  checkout, or the mixed main checkout.
+- Use temporary databases/directories, fake clients, and monkeypatches only.
 
 ## Completion gate
 
-Two independent read-only traces must reconcile all production emitters,
-builders, canonical schema/defaults, environment precedence, and fallback
-destinations. Temporary-only witnesses must demonstrate the current policy
-loss. The selection evidence must define exact RED oracles, frozen behavior,
-route classification, and a seam-only production/test file set before any
-implementation begins.
+The current implementation must first fail seeded oracles for policy loss,
+fallback relocation, missing-database creation, and same-path replacement event
+loss. The repair must pass focused configuration, emitter, Qdrant, ephemeral,
+FAISS, retrieval, and route-effect regressions; compile changed Python; pass
+documentation/configuration/static gates; preserve the 69-operation census; and
+receive independent implementation and evidence review before checkpointing.

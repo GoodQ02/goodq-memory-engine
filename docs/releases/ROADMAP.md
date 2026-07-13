@@ -501,6 +501,21 @@ the failure is not currently visible.
   read-only selection, and the four retrieval routes remain
   `automatic_mutation`. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Retrieval telemetry persistence selection evidence (2026-07-13): fresh
+  independent traces and temporary-only witnesses selected one canonical
+  immutable event policy before request-context or privacy work. Every
+  production emitter currently drops full configuration; the engine also drops
+  the log destination, so configured JSONL disable is ignored and fallback can
+  relocate beside the database. Canonical validation exposes no retained YAML
+  policy. The same owner creates an absent primary database and loses the first
+  event after same-path replacement because schema readiness is cached only by
+  pathname. The repair is limited to canonical schema/defaults, exact policy
+  propagation, existing-database-only event writes, replacement-safe schema
+  readiness, exact locked/busy fallback destination, and sanitized failure
+  visibility. Context authority and raw-query/FAISS-path redaction remain
+  separate later selections. R-05-F1 remains `IN_PROGRESS`; the next bounded
+  mission is mutation-sensitive persistence/config implementation. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1089,6 +1104,11 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Selected retrieval-event persistence/config authority after
+  proving configuration loss, fallback relocation, missing-primary creation,
+  and same-path replacement event loss in temporary roots. Kept request context
+  and privacy redaction as separate later seams and retained all four retrieval
+  routes as automatic mutations.
 - 2026-07-13: Checkpointed shared retrieval SQLite read authority across FTS,
   KG scoring, Qdrant/FAISS provenance, and FAISS shadow scoring while preserving
   committed live-WAL truth, FTS5 behavior, and intentional telemetry. Advanced

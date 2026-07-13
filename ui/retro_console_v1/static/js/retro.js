@@ -33,6 +33,8 @@
     isSpinning: true,
     isAutoRotating: false,
     activeSearchTab: "multimodal",
+    activeTemporalSummaryJobId: null,
+    temporalSummaryGeneration: 0,
   };
 
   // ─── Text-to-Speech (Web Speech API) ──────────────────────────
@@ -2951,8 +2953,241 @@
     return null;
   }
 
+  const TEMPORAL_SUMMARY_POLL_LIMIT = 150;
+  const TEMPORAL_SUMMARY_POLL_DELAY_MS = 2000;
+
+  function isSafeTemporalSummaryScope(scope) {
+    return !!scope
+      && typeof scope === "object"
+      && Object.keys(scope).length === 3
+      && typeof scope.epoch_id === "string"
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(scope.epoch_id)
+      && typeof scope.request_sha256 === "string"
+      && /^[0-9a-f]{64}$/.test(scope.request_sha256)
+      && typeof scope.execution_policy_sha256 === "string"
+      && /^[0-9a-f]{64}$/.test(scope.execution_policy_sha256);
+  }
+
+  function sameTemporalSummaryScope(left, right) {
+    return isSafeTemporalSummaryScope(left)
+      && isSafeTemporalSummaryScope(right)
+      && left.epoch_id === right.epoch_id
+      && left.request_sha256 === right.request_sha256
+      && left.execution_policy_sha256 === right.execution_policy_sha256;
+  }
+
+  function isSafeTemporalSummaryJob(job, expectedJobId = null, expectedScope = null) {
+    return !!job
+      && typeof job === "object"
+      && typeof job.job_id === "string"
+      && /^job_[0-9a-f]{32}$/.test(job.job_id)
+      && (expectedJobId === null || job.job_id === expectedJobId)
+      && job.operation === "temporal_summary.generate"
+      && isSafeTemporalSummaryScope(job.scope)
+      && (expectedScope === null || sameTemporalSummaryScope(job.scope, expectedScope))
+      && typeof job.state === "string"
+      && [
+        "pending_confirmation",
+        "authorizing",
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "interrupted",
+        "expired"
+      ].includes(job.state);
+  }
+
+  function isSafeTemporalSummaryPrepare(data, confirmationToken) {
+    return !!data
+      && typeof data === "object"
+      && data.success === true
+      && isSafeTemporalSummaryJob(data.job)
+      && data.job.state === "pending_confirmation"
+      && typeof confirmationToken === "string"
+      && confirmationToken.trim().length > 0;
+  }
+
+  function isSafeTemporalSummaryReceipt(receipt, job, terminalState) {
+    if (!receipt || typeof receipt !== "object") return false;
+    const receiptKeys = Object.keys(receipt).sort();
+    const expectedReceiptKeys = [
+      "completed_at_utc",
+      "epoch_id",
+      "error_code",
+      "execution_policy_sha256",
+      "job_id",
+      "model_evidence",
+      "request_sha256",
+      "result",
+      "result_sha256",
+      "schema",
+      "started_at_utc",
+      "terminal_state"
+    ].sort();
+    if (JSON.stringify(receiptKeys) !== JSON.stringify(expectedReceiptKeys)) return false;
+    if (receipt.schema !== "goodq.temporal-summary-result.v1") return false;
+    if (receipt.job_id !== job.job_id || receipt.terminal_state !== terminalState) return false;
+    if (receipt.epoch_id !== job.scope.epoch_id) return false;
+    if (receipt.request_sha256 !== job.scope.request_sha256) return false;
+    if (receipt.execution_policy_sha256 !== job.scope.execution_policy_sha256) return false;
+    if (!/^[0-9a-f]{64}$/.test(receipt.result_sha256 || "")) return false;
+    if (typeof receipt.started_at_utc !== "string" || typeof receipt.completed_at_utc !== "string") return false;
+
+    const modelEvidence = receipt.model_evidence;
+    if (modelEvidence !== null) {
+      if (!modelEvidence || typeof modelEvidence !== "object") return false;
+      if (Object.keys(modelEvidence).sort().join(",") !== "model_id,provider") return false;
+      if (typeof modelEvidence.model_id !== "string" || !modelEvidence.model_id) return false;
+      if (!["ollama", "vllm"].includes(modelEvidence.provider)) return false;
+    }
+
+    if (terminalState === "failed") {
+      return receipt.result === null
+        && typeof receipt.error_code === "string"
+        && /^[a-z0-9][a-z0-9_.-]{0,63}$/.test(receipt.error_code);
+    }
+    if (receipt.error_code !== null || !receipt.result || typeof receipt.result !== "object") return false;
+    const result = receipt.result;
+    if (
+      Object.keys(result).sort().join(",")
+      !== "segments,source_count,source_scene_ids,summary,truncated,warning_codes"
+    ) return false;
+    if (typeof result.summary !== "string" || !result.summary.trim()) return false;
+    if (!Array.isArray(result.source_scene_ids) || !Array.isArray(result.segments)) return false;
+    if (!Number.isInteger(result.source_count) || result.source_count !== result.source_scene_ids.length) return false;
+    if (typeof result.truncated !== "boolean" || !Array.isArray(result.warning_codes)) return false;
+    if (!result.warning_codes.every(code => typeof code === "string" && /^[a-z0-9][a-z0-9_.-]{0,63}$/.test(code))) return false;
+    if (!result.source_scene_ids.every(sceneId => typeof sceneId === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(sceneId))) return false;
+    return result.segments.every(segment => {
+      if (!segment || typeof segment !== "object") return false;
+      if (Object.keys(segment).sort().join(",") !== "end_time,scene_id,scene_index,start_time,text") return false;
+      if (!Number.isInteger(segment.scene_index) || segment.scene_index < 1 || segment.scene_index > result.source_count) return false;
+      if (segment.scene_id !== result.source_scene_ids[segment.scene_index - 1]) return false;
+      return typeof segment.text === "string" && !!segment.text.trim();
+    });
+  }
+
+  function renderTemporalSummaryReceipt(receipt, summaryStyle, summaryBody, summaryModelBadge, auditStatus) {
+    const result = receipt.result;
+    summaryBody.className = "summary-body";
+    if (summaryStyle === "narrative" && result.segments.length > 0) {
+      summaryBody.replaceChildren();
+      result.segments.forEach((segment) => {
+        const span = document.createElement("span");
+        span.textContent = `${segment.text} `;
+        span.className = "narrative-segment clickable";
+        span.setAttribute("data-scene-id", segment.scene_id);
+        span.title = `Click to view Scene ${segment.scene_index}`;
+        span.addEventListener("click", () => selectScene(segment.scene_id));
+        summaryBody.appendChild(span);
+      });
+    } else {
+      summaryBody.textContent = result.summary;
+    }
+    const modelLabel = receipt.model_evidence
+      ? `${receipt.model_evidence.provider.toUpperCase()}: ${receipt.model_evidence.model_id}`
+      : "NO MATCH";
+    summaryModelBadge.textContent = auditStatus === "failed"
+      ? `${modelLabel} / AUDIT WARNING`
+      : modelLabel;
+    summaryModelBadge.style.backgroundColor = auditStatus === "failed"
+      ? "var(--error-color)"
+      : "var(--text-color)";
+  }
+
+  function temporalSummaryDelay() {
+    return new Promise(resolve => setTimeout(resolve, TEMPORAL_SUMMARY_POLL_DELAY_MS));
+  }
+
+  async function pollTemporalSummaryJob(jobId, expectedScope, summaryStyle, summaryBody, summaryModelBadge, generation) {
+    if (state.temporalSummaryGeneration !== generation) return;
+    state.activeTemporalSummaryJobId = jobId;
+    try {
+      for (let attempt = 0; attempt < TEMPORAL_SUMMARY_POLL_LIMIT; attempt += 1) {
+        if (
+          state.temporalSummaryGeneration !== generation
+          || state.activeTemporalSummaryJobId !== jobId
+        ) return;
+        const response = await fetch(
+          `/api/search/temporal/summarize/${encodeURIComponent(jobId)}`,
+          { method: "GET" }
+        );
+        if (!response.ok) throw new Error("temporal_summary_status_failed");
+        const data = await response.json();
+        if (
+          state.temporalSummaryGeneration !== generation
+          || state.activeTemporalSummaryJobId !== jobId
+        ) return;
+        const job = data && data.job;
+        if (
+          !isSafeTemporalSummaryJob(job, jobId, expectedScope)
+          || data.status !== job.state
+        ) {
+          throw new Error("temporal_summary_status_invalid");
+        }
+        if (["authorizing", "queued", "running"].includes(job.state)) {
+          if (data.receipt !== null) throw new Error("temporal_summary_receipt_early");
+          summaryModelBadge.textContent = job.state.toUpperCase();
+          await temporalSummaryDelay();
+          continue;
+        }
+        if (job.state === "succeeded") {
+          if (!isSafeTemporalSummaryReceipt(data.receipt, job, "succeeded")) {
+            throw new Error("temporal_summary_receipt_invalid");
+          }
+          if (!["recorded", "failed"].includes(job.audit_status)) {
+            throw new Error("temporal_summary_audit_invalid");
+          }
+          renderTemporalSummaryReceipt(
+            data.receipt,
+            summaryStyle,
+            summaryBody,
+            summaryModelBadge,
+            job.audit_status
+          );
+          return;
+        }
+        if (job.state === "failed") {
+          if (data.receipt !== null && !isSafeTemporalSummaryReceipt(data.receipt, job, "failed")) {
+            throw new Error("temporal_summary_receipt_invalid");
+          }
+          const code = data.receipt && data.receipt.error_code
+            ? data.receipt.error_code
+            : job.outcome && job.outcome.code
+              ? job.outcome.code
+              : "temporal_summary_failed";
+          summaryBody.className = "summary-body error";
+          summaryBody.textContent = `Summary failed (${code}).`;
+          summaryModelBadge.textContent = job.audit_status === "failed" ? "FAILED / AUDIT WARNING" : "FAILED";
+          summaryModelBadge.style.backgroundColor = "var(--error-color)";
+          return;
+        }
+        if (job.state === "interrupted" || job.state === "expired") {
+          if (data.receipt !== null) throw new Error("temporal_summary_receipt_invalid");
+          summaryBody.className = "summary-body error";
+          summaryBody.textContent = job.state === "interrupted"
+            ? "Summary generation was interrupted. Start a new confirmed request."
+            : "Summary confirmation expired. Start a new confirmed request.";
+          summaryModelBadge.textContent = job.state.toUpperCase();
+          summaryModelBadge.style.backgroundColor = "var(--error-color)";
+          return;
+        }
+        throw new Error("temporal_summary_state_invalid");
+      }
+      throw new Error("temporal_summary_poll_timeout");
+    } finally {
+      if (state.activeTemporalSummaryJobId === jobId) {
+        state.activeTemporalSummaryJobId = null;
+      }
+    }
+  }
+
   // Execute Narrative Explorer (Temporal Reasoning) Queries
   async function executeNarrativeSearch() {
+    const narrativeGeneration = state.temporalSummaryGeneration + 1;
+    state.temporalSummaryGeneration = narrativeGeneration;
+    state.activeTemporalSummaryJobId = null;
     const entitiesInput = document.getElementById("narrative-entities");
     const entities = entitiesInput ? entitiesInput.value.split(",").map(e => e.trim()).filter(Boolean) : [];
 
@@ -3008,6 +3243,7 @@
         max_results: maxResults,
         grouping: "semantic_episode"
       });
+      if (state.temporalSummaryGeneration !== narrativeGeneration) return;
 
       state.searchResults = searchResponse.results || [];
       renderTimelineGrid();
@@ -3029,114 +3265,162 @@
         logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "search response", "No narrative scenes returned.", 0.0, "");
       }
 
-      // If summarization is requested, fire the summarize request
+      // If summarization is requested, use the governed prepare/confirm lifecycle.
       if (enableSummary && summaryContainer && summaryBody && summaryModelBadge) {
         try {
-          const summaryResponse = await apiPost("/api/search/temporal/summarize", {
+          const approved = window.confirm(
+            "Generate this exact temporal summary with the approved local model policy?"
+          );
+          if (!approved) {
+            summaryBody.className = "summary-body";
+            summaryBody.textContent = "Summary generation canceled.";
+            summaryModelBadge.textContent = "CANCELED";
+            summaryModelBadge.style.backgroundColor = "var(--selected-color)";
+            return;
+          }
+
+          const summaryRequest = {
             entities: entities.length > 0 ? entities : null,
+            start_date: null,
+            end_date: null,
             time_hint: timeHint || null,
+            source_file: null,
+            modality: null,
             max_results: maxResults,
             grouping: "semantic_episode",
             summary_style: summaryStyle
+          };
+          summaryBody.className = "summary-body loading";
+          summaryBody.textContent = "Preparing exact temporal summary authority...";
+          summaryModelBadge.textContent = "PREPARING";
+
+          const endpoint = "/api/search/temporal/summarize";
+          const prepareResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "prepare", request: summaryRequest })
           });
-
-          summaryBody.className = "summary-body";
-          if (summaryResponse.status === "success") {
-            const summaryText = summaryResponse.summary || "No summary returned.";
-            const segments = summaryResponse.segments || [];
-            const sourceSceneIds = summaryResponse.source_scene_ids || [];
-
-            if (summaryStyle === "narrative" && segments.length > 0) {
-              summaryBody.innerHTML = "";
-              segments.forEach((seg) => {
-                const span = document.createElement("span");
-                span.textContent = seg.text + " ";
-                if (seg.scene_id) {
-                  span.className = "narrative-segment clickable";
-                  span.setAttribute("data-scene-id", seg.scene_id);
-                  span.title = `Click to view Scene ${seg.scene_index || ''}`;
-                  span.addEventListener("click", () => {
-                    selectScene(seg.scene_id);
-                  });
-                } else {
-                  span.className = "narrative-segment";
-                }
-                summaryBody.appendChild(span);
-              });
-            } else if (summaryStyle === "narrative" && sourceSceneIds.length > 0) {
-              // Legacy/fallback regex parsing of [Scene X] markers inside summaryText
-              const regex = /\[Scene\s+(\d+)\]/gi;
-              let match;
-              let matches = [];
-              while ((match = regex.exec(summaryText)) !== null) {
-                matches.push({
-                  index: match.index,
-                  text: match[0],
-                  sceneNum: parseInt(match[1], 10)
-                });
-              }
-
-              if (matches.length > 0) {
-                summaryBody.innerHTML = "";
-                if (matches[0].index > 0) {
-                  const leadingText = summaryText.substring(0, matches[0].index).trim();
-                  if (leadingText) {
-                    const textNode = document.createTextNode(leadingText + " ");
-                    summaryBody.appendChild(textNode);
-                  }
-                }
-                for (let i = 0; i < matches.length; i++) {
-                  const m = matches[i];
-                  const nextIndex = (i + 1 < matches.length) ? matches[i + 1].index : summaryText.length;
-                  const startOffset = m.index + m.text.length;
-                  let segmentText = summaryText.substring(startOffset, nextIndex).trim();
-
-                  if (segmentText) {
-                    const sceneIdx = m.sceneNum - 1;
-                    const sceneId = (sceneIdx >= 0 && sceneIdx < sourceSceneIds.length) ? sourceSceneIds[sceneIdx] : null;
-
-                    const span = document.createElement("span");
-                    span.textContent = segmentText + " ";
-                    if (sceneId) {
-                      span.className = "narrative-segment clickable";
-                      span.setAttribute("data-scene-id", sceneId);
-                      span.title = `Click to view Scene ${m.sceneNum}`;
-                      span.addEventListener("click", () => {
-                        selectScene(sceneId);
-                      });
-                    } else {
-                      span.className = "narrative-segment";
-                    }
-                    summaryBody.appendChild(span);
-                  }
-                }
-              } else {
-                summaryBody.textContent = summaryText;
-              }
-            } else {
-              summaryBody.textContent = summaryText;
+          if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+          if (prepareResponse.status === 409) {
+            const conflict = await prepareResponse.json();
+            if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+            const activeJob = conflict && conflict.detail && conflict.detail.job;
+            if (!isSafeTemporalSummaryJob(activeJob)) {
+              throw new Error("temporal_summary_conflict_invalid");
             }
-
-            let badgeText = (summaryResponse.model_used || "unknown").toUpperCase();
-            if (summaryResponse.truncated) {
-              badgeText += " [TRUNCATED]";
+            if (["authorizing", "queued", "running"].includes(activeJob.state)) {
+              await pollTemporalSummaryJob(
+                activeJob.job_id,
+                activeJob.scope,
+                summaryStyle,
+                summaryBody,
+                summaryModelBadge,
+                narrativeGeneration
+              );
+              return;
             }
-            summaryModelBadge.textContent = badgeText;
-            summaryModelBadge.style.backgroundColor = "var(--selected-color)";
-          } else if (summaryResponse.status === "llm_unavailable") {
-            summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ LLM OFFLINE</span>: ${summaryResponse.summary}`;
-            summaryModelBadge.textContent = "OFFLINE";
+            summaryBody.className = "summary-body error";
+            summaryBody.textContent = "An exact summary is awaiting confirmation, but its one-time token is unavailable.";
+            summaryModelBadge.textContent = "CONFIRMATION REQUIRED";
             summaryModelBadge.style.backgroundColor = "var(--error-color)";
+            return;
           }
+          if (!prepareResponse.ok || prepareResponse.status !== 200) {
+            throw new Error("temporal_summary_prepare_failed");
+          }
+
+          const prepareData = await prepareResponse.json();
+          if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+          let confirmationToken = prepareData && prepareData.confirmation_token;
+          if (prepareData) prepareData.confirmation_token = null;
+          if (!isSafeTemporalSummaryPrepare(prepareData, confirmationToken)) {
+            throw new Error("temporal_summary_prepare_invalid");
+          }
+          const preparedJob = prepareData.job;
+          const jobId = preparedJob.job_id;
+          const preparedScope = preparedJob.scope;
+
+          let confirmResponse;
+          try {
+            confirmResponse = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "confirm",
+                job_id: jobId,
+                epoch_id: preparedScope.epoch_id,
+                request_sha256: preparedScope.request_sha256,
+                execution_policy_sha256: preparedScope.execution_policy_sha256,
+                confirmation_token: confirmationToken,
+                request: summaryRequest
+              })
+            });
+            if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+          } finally {
+            confirmationToken = null;
+          }
+
+          if (confirmResponse.status === 409) {
+            const conflict = await confirmResponse.json();
+            if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+            const conflictJob = conflict && conflict.detail && conflict.detail.job;
+            if (!isSafeTemporalSummaryJob(conflictJob, jobId, preparedScope)) {
+              throw new Error("temporal_summary_confirm_conflict_invalid");
+            }
+            if (["authorizing", "queued", "running"].includes(conflictJob.state)) {
+              await pollTemporalSummaryJob(
+                jobId,
+                preparedScope,
+                summaryStyle,
+                summaryBody,
+                summaryModelBadge,
+                narrativeGeneration
+              );
+              return;
+            }
+            if (conflictJob.state === "expired" || conflictJob.state === "failed") {
+              summaryBody.className = "summary-body error";
+              summaryBody.textContent = conflictJob.state === "expired"
+                ? "Summary confirmation expired. Start a new confirmed request."
+                : "Summary authorization failed. Start a new confirmed request.";
+              summaryModelBadge.textContent = conflictJob.state.toUpperCase();
+              summaryModelBadge.style.backgroundColor = "var(--error-color)";
+              return;
+            }
+            throw new Error("temporal_summary_confirm_conflict_invalid");
+          }
+          if (!confirmResponse.ok || confirmResponse.status !== 202) {
+            throw new Error("temporal_summary_confirm_failed");
+          }
+          const confirmData = await confirmResponse.json();
+          if (state.temporalSummaryGeneration !== narrativeGeneration) return;
+          if (
+            !confirmData
+            || confirmData.success !== true
+            || !isSafeTemporalSummaryJob(confirmData.job, jobId, preparedScope)
+            || !["authorizing", "queued", "running"].includes(confirmData.job.state)
+          ) {
+            throw new Error("temporal_summary_confirm_invalid");
+          }
+          await pollTemporalSummaryJob(
+            jobId,
+            preparedScope,
+            summaryStyle,
+            summaryBody,
+            summaryModelBadge,
+            narrativeGeneration
+          );
         } catch (sumErr) {
+          if (state.temporalSummaryGeneration !== narrativeGeneration) return;
           console.error("Narrative summarization failed: ", sumErr);
-          summaryBody.className = "summary-body";
-          summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ REQUEST FAILED</span>: ${sumErr.message}`;
+          summaryBody.className = "summary-body error";
+          summaryBody.textContent = "Summary request could not be verified. Try again.";
           summaryModelBadge.textContent = "ERROR";
           summaryModelBadge.style.backgroundColor = "var(--error-color)";
         }
       }
     } catch (err) {
+      if (state.temporalSummaryGeneration !== narrativeGeneration) return;
       console.error("Narrative search failed: ", err);
       logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "network error", err.message, 0.0, "");
       if (summaryBody && summaryModelBadge && enableSummary) {

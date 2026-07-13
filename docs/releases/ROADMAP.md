@@ -599,6 +599,18 @@ the failure is not currently visible.
   remains `IN_PROGRESS`; the next mission is mutation-sensitive FAISS
   store-reference privacy RED. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_SELECTION_2026-07-13.md`.
+- Retrieval FAISS store-reference privacy checkpoint evidence (2026-07-13):
+  new FAISS events and seven selected warnings now expose only the logical index
+  filename, and the legacy-input rollup fallback normalizes Windows/POSIX paths
+  before creating future daily `store_ref` rows. Internal FAISS I/O, lossless
+  event serializers, raw history, aggregation math/state/limits, Qdrant
+  precedence, and the 69-operation route census remain unchanged. Fresh
+  verification passed the 19-test authority suite, a 205-test focused union,
+  static/documentation gates, and two clean independent implementation reviews.
+  R-05-F1 remains `IN_PROGRESS` pending a read-only no-repeat reconciliation of
+  the separately recorded candidates against this item's actual completion
+  gate. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1187,6 +1199,11 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed retrieval FAISS logical-reference privacy across new
+  event/warning output and future legacy-input rollup projection. Preserved
+  internal FAISS I/O, raw history, rollup behavior, central serialization, and
+  route effects, then advanced R-05-F1 to a no-repeat remaining-candidate
+  reconciliation rather than assuming another implementation seam.
 - 2026-07-13: Selected one retrieval FAISS logical-store-reference privacy
   contract across new event/log producers and legacy-input rollup projection.
   Kept historical cleanup, existing derived rows, and ingestion commit-event

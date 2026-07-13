@@ -118,6 +118,7 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 }
 
 MUTATING_DENY_ON_AGENT_FAILURE = {
+    "generate_video_summary",
     "home_assistant_call_service",
     "qdrant_upsert",
     "faiss_write",
@@ -138,6 +139,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 }
 
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
     "file_delete",
@@ -151,13 +153,34 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 # These operations reuse the durable exact-scope confirmation authority but
 # intentionally have no native execution handler. The caller owns the governed
 # side effect after ``authorize_action`` succeeds.
-LOCAL_AUTHORIZATION_ONLY_ACTIONS = {"stage_ingest_request"}
+LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "generate_video_summary",
+    "stage_ingest_request",
+}
+
+LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
+    "generate_video_summary",
+    "stage_ingest_request",
+    "run_ingestion",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+    "file_delete",
+    "validate_ucf_epoch",
+}
 
 TOOL_AUDIT_SCHEMA_VERSION = "goodq.tool-audit.v1"
 TOOL_AUDIT_LOG_ENV = "GOODQ_TOOL_AUDIT_LOG"
+EXTERNAL_AUDIT_MAX_TARGETS = 32
+EXTERNAL_AUDIT_MAX_TARGET_LENGTH = 128
+EXTERNAL_AUDIT_MAX_ERROR_CODES = 32
+EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH = 64
 
 PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
 SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
+VIDEO_SUMMARY_SCOPE_FIELDS = ("job_id", "video_hash")
 
 
 def _validate_promote_ucf_scope(tool_args: Dict[str, Any]) -> List[str]:
@@ -179,6 +202,31 @@ def _validate_promote_ucf_scope(tool_args: Dict[str, Any]) -> List[str]:
             violations.append(f"{field} must be a non-empty string")
 
     return violations
+
+
+def _validate_video_summary_scope(tool_args: Any) -> List[str]:
+    """Validate one exact external video-summary job scope."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+
+    violations: List[str] = []
+    expected = set(VIDEO_SUMMARY_SCOPE_FIELDS)
+    actual = set(tool_args)
+
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    for field in VIDEO_SUMMARY_SCOPE_FIELDS:
+        value = tool_args.get(field)
+        if field in tool_args and (not isinstance(value, str) or not value.strip()):
+            violations.append(f"{field} must be a non-empty string")
+
+    return violations
+
 
 def _load_ucf_ledger() -> Any:
     """Dynamically imports ucf_ledger from the scripts directory."""
@@ -824,6 +872,107 @@ class MiniAgentClient:
             context_overrides=context_overrides,
         )
 
+    def record_external_execution_outcome(
+        self,
+        *,
+        operation: str,
+        arguments: Dict[str, Any],
+        request_id: str,
+        mode: str,
+        status: str,
+        return_code: int,
+        duration_ms: int,
+        side_effect_report: Dict[str, Any],
+        error_codes: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Record the observed outcome of one externally owned side effect."""
+        def failed(code: str) -> Dict[str, Any]:
+            return {"audit_status": "failed", "error_codes": [code]}
+
+        if operation not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+            return failed("authorization_only_action_required")
+
+        if not isinstance(arguments, dict):
+            return failed("invalid_tool_arguments")
+        scope_violations = (
+            _validate_video_summary_scope(arguments)
+            if operation == "generate_video_summary"
+            else ["no exact-scope validator is declared"]
+        )
+        if scope_violations:
+            return failed("invalid_tool_arguments")
+
+        if not isinstance(request_id, str) or not request_id.strip():
+            return failed("invalid_request_id")
+        if status not in {"succeeded", "failed", "interrupted"}:
+            return failed("invalid_execution_status")
+        if (
+            not isinstance(return_code, int)
+            or isinstance(return_code, bool)
+            or (status == "succeeded") != (return_code == 0)
+        ):
+            return failed("invalid_return_code")
+        if (
+            not isinstance(duration_ms, int)
+            or isinstance(duration_ms, bool)
+            or duration_ms < 0
+        ):
+            return failed("invalid_duration_ms")
+
+        if not isinstance(side_effect_report, dict) or set(side_effect_report) != {
+            "mutated",
+            "targets",
+        }:
+            return failed("invalid_side_effect_report")
+        targets = side_effect_report.get("targets")
+        if (
+            not isinstance(side_effect_report.get("mutated"), bool)
+            or not isinstance(targets, list)
+            or len(targets) > EXTERNAL_AUDIT_MAX_TARGETS
+            or any(
+                not isinstance(target, str)
+                or len(target) > EXTERNAL_AUDIT_MAX_TARGET_LENGTH
+                for target in targets
+            )
+        ):
+            return failed("invalid_side_effect_report")
+
+        resolved_error_codes = [] if error_codes is None else error_codes
+        if (
+            not isinstance(resolved_error_codes, list)
+            or len(resolved_error_codes) > EXTERNAL_AUDIT_MAX_ERROR_CODES
+            or any(
+                not isinstance(code, str)
+                or len(code) > EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH
+                for code in resolved_error_codes
+            )
+        ):
+            return failed("invalid_error_codes")
+
+        execution_row = {
+            "event_type": "execution",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "request_id": request_id,
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": operation,
+            "status": status,
+            "return_code": return_code,
+            "arguments": arguments,
+            "error_codes": resolved_error_codes,
+            "duration_ms": duration_ms,
+            "side_effect_report": side_effect_report,
+        }
+        try:
+            self._append_tool_audit(execution_row)
+        except Exception:
+            logger.error(
+                "Failed to persist external execution audit",
+                exc_info=True,
+            )
+            return failed("audit_log_error")
+        return {"audit_status": "recorded", "error_codes": []}
+
     def _authorize_action_impl(
         self,
         prompt: str,
@@ -996,6 +1145,26 @@ class MiniAgentClient:
         """
         request_id = f"task-{uuid.uuid4().hex[:8]}"
         tool_args = tool_args or {}
+
+        if tool_name == "generate_video_summary" and self.profile != "offline":
+            scope_violations = _validate_video_summary_scope(tool_args)
+            if scope_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [{
+                        "code": "invalid_tool_arguments",
+                        "message": (
+                            "generate_video_summary requires an exact job_id "
+                            "and video_hash scope."
+                        ),
+                        "details": {"violations": scope_violations},
+                    }],
+                }
+                return self.sanitize_envelope(envelope), 1
         
         # 1. Confirmation token validation if provided
         if confirmation_token:
@@ -1125,17 +1294,7 @@ class MiniAgentClient:
                     return self.sanitize_envelope(envelope), 1
 
         # 5. Native tool validation bypass
-        if tool_name in (
-            "stage_ingest_request",
-            "run_ingestion",
-            "promote_ucf_to_memory",
-            "reconcile_ucf_qdrant",
-            "validate_ucf_frames",
-            "reject_ucf_frames",
-            "supersede_ucf_frames",
-            "file_delete",
-            "validate_ucf_epoch",
-        ):
+        if tool_name in LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS:
             envelope = {
                 "request_id": request_id,
                 "profile": self.profile,

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from agents.mini_agent_client import MiniAgentClient
 
 
@@ -27,6 +29,231 @@ def _client() -> MiniAgentClient:
     )
     client.agent_available = True
     return client
+
+
+def _external_outcome(**overrides) -> dict:
+    outcome = {
+        "operation": "generate_video_summary",
+        "arguments": {"job_id": "job-one", "video_hash": "video-one"},
+        "request_id": "request-one",
+        "mode": "ops",
+        "status": "succeeded",
+        "return_code": 0,
+        "duration_ms": 25,
+        "side_effect_report": {
+            "mutated": True,
+            "targets": ["video-summary:job-one"],
+        },
+        "error_codes": [],
+    }
+    outcome.update(overrides)
+    return outcome
+
+
+def test_external_outcome_rejects_non_authorization_only_operation():
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(operation="run_ingestion")
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["authorization_only_action_required"],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_code"),
+    [
+        ({"arguments": {"job_id": "job-one"}}, "invalid_tool_arguments"),
+        (
+            {
+                "arguments": {
+                    "job_id": "job-one",
+                    "video_hash": "video-one",
+                    "confirmation_token": "must-not-persist",
+                }
+            },
+            "invalid_tool_arguments",
+        ),
+        ({"request_id": "   "}, "invalid_request_id"),
+        ({"status": "success"}, "invalid_execution_status"),
+        ({"return_code": 1}, "invalid_return_code"),
+        ({"status": "failed", "return_code": 0}, "invalid_return_code"),
+        ({"status": "interrupted", "return_code": 0}, "invalid_return_code"),
+        ({"return_code": True}, "invalid_return_code"),
+        ({"duration_ms": -1}, "invalid_duration_ms"),
+        ({"duration_ms": 1.5}, "invalid_duration_ms"),
+        ({"duration_ms": True}, "invalid_duration_ms"),
+        ({"side_effect_report": []}, "invalid_side_effect_report"),
+        (
+            {"side_effect_report": {"mutated": 1, "targets": []}},
+            "invalid_side_effect_report",
+        ),
+        (
+            {"side_effect_report": {"mutated": True, "targets": "target"}},
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["target"] * 33,
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["t" * 129],
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["target"],
+                    "traceback": "must-not-persist",
+                    "model_output": "must-not-persist",
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        ({"error_codes": ["error"] * 33}, "invalid_error_codes"),
+        ({"error_codes": ["e" * 65]}, "invalid_error_codes"),
+        ({"error_codes": [1]}, "invalid_error_codes"),
+    ],
+)
+def test_external_outcome_rejects_invalid_fields_without_audit(
+    overrides,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(**overrides)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": [expected_code],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize(
+    ("status", "return_code", "mutated", "error_codes"),
+    [
+        ("succeeded", 0, True, []),
+        ("failed", 9, False, ["video_summary_failed"]),
+        ("interrupted", -1, False, ["worker_interrupted"]),
+    ],
+)
+def test_external_outcome_appends_existing_execution_schema(
+    status,
+    return_code,
+    mutated,
+    error_codes,
+):
+    client = _client()
+    outcome = _external_outcome(
+        status=status,
+        return_code=return_code,
+        side_effect_report={
+            "mutated": mutated,
+            "targets": ["video-summary:job-one"],
+        },
+        error_codes=error_codes,
+    )
+
+    result = client.record_external_execution_outcome(**outcome)
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    assert len(_rows()) == 1
+    row = _rows()[0]
+    assert row["schema_version"] == "goodq.tool-audit.v1"
+    assert row["event_type"] == "execution"
+    assert row["timestamp"].endswith("Z")
+    assert row["tool_name"] == outcome["operation"]
+    assert row["arguments"] == outcome["arguments"]
+    assert row["request_id"] == outcome["request_id"]
+    assert row["profile"] == "safe"
+    assert row["mode"] == outcome["mode"]
+    assert row["status"] == status
+    assert row["return_code"] == return_code
+    assert row["duration_ms"] == outcome["duration_ms"]
+    assert row["side_effect_report"] == outcome["side_effect_report"]
+    assert row["error_codes"] == error_codes
+
+
+def test_external_outcome_accepts_controller_resolved_bounds():
+    client = _client()
+    targets = ["t" * 128] * 32
+    error_codes = ["e" * 64] * 32
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(
+            status="failed",
+            return_code=1,
+            side_effect_report={"mutated": True, "targets": targets},
+            error_codes=error_codes,
+        )
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    assert _rows()[0]["side_effect_report"]["targets"] == targets
+    assert _rows()[0]["error_codes"] == error_codes
+
+
+def test_external_outcome_uses_existing_path_sanitization():
+    client = _client()
+    private_job = r"C:\private\job-one"
+    private_target = r"C:\private\summary.mp4"
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(
+            arguments={"job_id": private_job, "video_hash": "video-one"},
+            side_effect_report={"mutated": True, "targets": [private_target]},
+        )
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[0]
+    assert row["arguments"]["job_id"] == "relative/job-one"
+    assert row["side_effect_report"]["targets"] == ["relative/summary.mp4"]
+    serialized = _audit_path().read_text(encoding="utf-8")
+    assert private_job not in serialized
+    assert private_target not in serialized
+    assert "C:\\private" not in serialized
+
+
+def test_external_outcome_audit_failure_preserves_success_truth(
+    monkeypatch,
+    caplog,
+):
+    client = _client()
+    append = MagicMock(side_effect=OSError("audit unavailable"))
+    monkeypatch.setattr(client, "_append_tool_audit", append)
+
+    result = client.record_external_execution_outcome(**_external_outcome())
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["audit_log_error"],
+    }
+    attempted_row = append.call_args.args[0]
+    assert attempted_row["status"] == "succeeded"
+    assert attempted_row["return_code"] == 0
+    assert attempted_row["side_effect_report"]["mutated"] is True
+    assert "status" not in result
+    assert "execution_failed" not in result["error_codes"]
+    assert "Failed to persist external execution audit" in caplog.text
 
 
 def test_decision_audit_is_durable_redacted_and_path_sanitized():

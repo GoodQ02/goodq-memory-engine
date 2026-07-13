@@ -292,6 +292,7 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
 
 
 EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "generate_video_summary",
     "stage_ingest_request",
     "run_ingestion",
     "file_delete",
@@ -302,7 +303,10 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "supersede_ucf_frames",
 }
 
-EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {"stage_ingest_request"}
+EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "generate_video_summary",
+    "stage_ingest_request",
+}
 
 
 def test_local_confirmation_required_tools_have_one_module_level_authority():
@@ -314,6 +318,237 @@ def test_local_confirmation_required_tools_have_one_module_level_authority():
     assert getattr(mini_agent_client, "LOCAL_AUTHORIZATION_ONLY_ACTIONS", None) == (
         EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS
     )
+    assert "generate_video_summary" in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert (
+        "generate_video_summary"
+        in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    )
+
+
+def test_generate_video_summary_accepts_only_exact_nonempty_job_video_scope(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "exact-scope"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-one", "video_hash": "video-one"},
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        ["job-one", "video-one"],
+        {},
+        {"job_id": "job-one"},
+        {"video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": "video-one", "extra": True},
+        {"job_id": "", "video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": "   "},
+        {"job_id": 1, "video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": None},
+    ],
+)
+def test_generate_video_summary_rejects_invalid_scope_before_token_issuance(
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "invalid-scope"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare invalid video summary scope",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_generate_video_summary_rejects_invalid_scope_before_token_claim(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "claim-scope"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare one exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    claim = MagicMock(side_effect=AssertionError("invalid scope reached claim"))
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+
+    envelope, rc = client.authorize_action(
+        prompt="Claim changed video summary scope",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={**scope, "extra": True},
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    claim.assert_not_called()
+
+
+def test_generate_video_summary_preserves_mismatch_expiry_and_single_use(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "token-lifecycle"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare one video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Claim changed video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-two", "video_hash": "video-one"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = "2020-01-01T00:00:00"
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+    expired, expired_rc = client.authorize_action(
+        prompt="Claim expired video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert expired_rc == 1
+    assert expired["errors"][0]["code"] == "token_expired"
+
+    fresh, fresh_rc = client.authorize_action(
+        prompt="Prepare a fresh video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert fresh_rc == 3
+    fresh_token = fresh["result"]["confirmation_token"]
+    claimed, claimed_rc = client.authorize_action(
+        prompt="Claim exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=fresh_token,
+    )
+    assert claimed_rc == 0
+    assert claimed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reuse video summary authority",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=fresh_token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+
+
+def test_generate_video_summary_claim_is_atomic_across_clients(
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "atomic-claim"))
+    first = MiniAgentClient(profile="safe")
+    second = MiniAgentClient(profile="safe")
+    first.agent_available = True
+    second.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait()
+        return client.authorize_action(
+            prompt="Claim atomic video summary",
+            mode="ops",
+            tool_name="generate_video_summary",
+            tool_args=scope,
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+def test_generate_video_summary_is_denied_offline_without_issuing_token(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "offline"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="offline")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare offline video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-one", "video_hash": "video-one"},
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "offline_blocked"
+    assert not (agent_home / "confirmation_tokens.json").exists()
 
 
 @pytest.mark.parametrize("profile", ["safe", "unrestricted"])

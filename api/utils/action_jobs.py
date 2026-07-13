@@ -135,6 +135,14 @@ def _scope_identity(scope: dict[str, Any]) -> str:
     )
 
 
+def _validate_owner_instance(owner_instance: Any, *, label: str) -> str:
+    if not isinstance(owner_instance, str) or not re.fullmatch(
+        r"[A-Za-z0-9_.:-]{1,128}", owner_instance
+    ):
+        raise ValueError(f"{label} owner instance must be a safe non-empty string")
+    return owner_instance
+
+
 def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
     unknown = set(updates) - _UPDATE_FIELDS
     if unknown:
@@ -227,6 +235,20 @@ class ActionJobLedger:
         scope: dict[str, Any],
         owner_instance: str,
     ) -> dict[str, Any]:
+        record, _ = self.prepare_or_find_active_with_status(
+            operation=operation,
+            scope=scope,
+            owner_instance=owner_instance,
+        )
+        return record
+
+    def prepare_or_find_active_with_status(
+        self,
+        *,
+        operation: str,
+        scope: dict[str, Any],
+        owner_instance: str,
+    ) -> tuple[dict[str, Any], bool]:
         normalized_scope = _normalize_scope(scope)
         scope_identity = _scope_identity(normalized_scope)
         with self._lock:
@@ -237,12 +259,13 @@ class ActionJobLedger:
                     and _scope_identity(record["scope"]) == scope_identity
                     and record.get("state") in NONTERMINAL_STATES
                 ):
-                    return record
-            return self._create_pending_unlocked(
+                    return record, False
+            created = self._create_pending_unlocked(
                 operation=operation,
                 normalized_scope=normalized_scope,
                 owner_instance=owner_instance,
             )
+            return created, True
 
     def list_records(
         self,
@@ -366,6 +389,44 @@ class ActionJobLedger:
                 )
             updated = dict(record)
             updated.update(validated_updates)
+            updated["updated_at_utc"] = _utc_now_iso()
+            atomic_write_json(self.record_path(job_id), updated)
+            return updated
+
+    def adopt_owner(
+        self,
+        job_id: str,
+        *,
+        expected_state: str,
+        expected_owner_instance: str,
+        new_owner_instance: str,
+    ) -> dict[str, Any]:
+        if expected_state not in NONTERMINAL_STATES:
+            raise ValueError("Expected action job state must be nonterminal")
+        expected_owner = _validate_owner_instance(
+            expected_owner_instance, label="Expected"
+        )
+        new_owner = _validate_owner_instance(new_owner_instance, label="Replacement")
+
+        with self._lock:
+            record = self.load(job_id)
+            if record is None:
+                raise FileNotFoundError(f"Action job record not found: {job_id}")
+            current_state = record.get("state")
+            if current_state in TERMINAL_STATES:
+                raise TerminalTransitionError(
+                    f"Action job {job_id} is terminal in state {current_state}"
+                )
+            if current_state != expected_state:
+                raise StaleTransitionError(
+                    f"Action job {job_id} expected {expected_state}, found {current_state}"
+                )
+            if record.get("owner_instance") != expected_owner:
+                raise StaleTransitionError(
+                    f"Action job {job_id} owner does not match expected owner"
+                )
+            updated = dict(record)
+            updated["owner_instance"] = new_owner
             updated["updated_at_utc"] = _utc_now_iso()
             atomic_write_json(self.record_path(job_id), updated)
             return updated

@@ -100,6 +100,59 @@ def test_concurrent_prepare_converges_on_exact_normalized_scope(tmp_path):
     assert len(list(root.glob("job_*.json"))) == 1
 
 
+def test_prepare_with_status_reports_created_then_found(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    arguments = {
+        "operation": "video_summary.generate",
+        "scope": {"video_id": "video-7", "options": {"style": "brief"}},
+        "owner_instance": "api-1",
+    }
+
+    first, first_created = ledger.prepare_or_find_active_with_status(**arguments)
+    repeat, repeat_created = ledger.prepare_or_find_active_with_status(**arguments)
+
+    assert first_created is True
+    assert repeat_created is False
+    assert repeat == first == ledger.load(first["job_id"])
+
+
+def test_concurrent_prepare_with_status_has_exactly_one_creator(tmp_path):
+    root = tmp_path / "jobs"
+
+    def prepare(scope):
+        return ActionJobLedger(root).prepare_or_find_active_with_status(
+            operation="video_summary.generate",
+            scope=scope,
+            owner_instance="api-1",
+        )
+
+    scopes = [
+        {"video_id": "video-7", "options": {"style": "brief", "max": 5}},
+        {"options": {"max": 5, "style": "brief"}, "video_id": "video-7"},
+    ] * 6
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(prepare, scopes))
+
+    assert sum(created for _, created in results) == 1
+    assert len({record["job_id"] for record, _ in results}) == 1
+    assert len(list(root.glob("job_*.json"))) == 1
+
+
+def test_legacy_prepare_returns_record_created_by_status_operation(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    arguments = {
+        "operation": "video_summary.generate",
+        "scope": {"video_id": "video-7"},
+        "owner_instance": "api-1",
+    }
+    created, was_created = ledger.prepare_or_find_active_with_status(**arguments)
+
+    legacy = ledger.prepare_or_find_active(**arguments)
+
+    assert was_created is True
+    assert legacy == created == ledger.load(created["job_id"])
+
+
 def test_exact_scope_identity_preserves_json_boolean_and_number_types(tmp_path):
     ledger = ActionJobLedger(tmp_path / "jobs")
     boolean_scope = {"video_id": "video-7", "option": True}
@@ -465,6 +518,143 @@ def test_compare_and_update_replace_failure_leaves_prior_record_readable(
         )
 
     assert ledger.load(pending["job_id"]) == pending
+
+
+def test_adopt_owner_requires_exact_state_and_prior_owner(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(ledger, "authorizing", owner_instance="api-old")
+
+    adopted = ledger.adopt_owner(
+        before["job_id"],
+        expected_state="authorizing",
+        expected_owner_instance="api-old",
+        new_owner_instance="api-current",
+    )
+
+    assert set(adopted) == set(before)
+    for key in set(before) - {"owner_instance", "updated_at_utc"}:
+        assert adopted[key] == before[key]
+    assert adopted["owner_instance"] == "api-current"
+    assert adopted["updated_at_utc"] >= before["updated_at_utc"]
+    assert ledger.load(before["job_id"]) == adopted
+
+
+def test_adopt_owner_rejects_stale_state_byte_for_byte(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(ledger, "authorizing", owner_instance="api-old")
+    record_path = ledger.record_path(before["job_id"])
+    serialized_before = record_path.read_bytes()
+
+    with pytest.raises(action_jobs.StaleTransitionError, match="found authorizing"):
+        ledger.adopt_owner(
+            before["job_id"],
+            expected_state="pending_confirmation",
+            expected_owner_instance="api-old",
+            new_owner_instance="api-current",
+        )
+
+    assert record_path.read_bytes() == serialized_before
+
+
+def test_adopt_owner_rejects_stale_owner_byte_for_byte(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(ledger, "authorizing", owner_instance="api-old")
+    record_path = ledger.record_path(before["job_id"])
+    serialized_before = record_path.read_bytes()
+
+    with pytest.raises(action_jobs.StaleTransitionError, match="owner"):
+        ledger.adopt_owner(
+            before["job_id"],
+            expected_state="authorizing",
+            expected_owner_instance="api-stale",
+            new_owner_instance="api-current",
+        )
+
+    assert record_path.read_bytes() == serialized_before
+
+
+def test_concurrent_owner_adoption_has_exactly_one_winner(tmp_path):
+    root = tmp_path / "jobs"
+    before = _record_in_state(
+        ActionJobLedger(root), "authorizing", owner_instance="api-old"
+    )
+
+    def adopt(new_owner_instance):
+        try:
+            return ActionJobLedger(root).adopt_owner(
+                before["job_id"],
+                expected_state="authorizing",
+                expected_owner_instance="api-old",
+                new_owner_instance=new_owner_instance,
+            )["owner_instance"]
+        except action_jobs.StaleTransitionError:
+            return "stale"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(adopt, ["api-one", "api-two"]))
+
+    assert results.count("stale") == 1
+    winners = set(results) - {"stale"}
+    assert len(winners) == 1
+    assert ActionJobLedger(root).load(before["job_id"])["owner_instance"] in winners
+
+
+def test_adopt_owner_rejects_terminal_record_without_mutation(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    pending = _record_in_state(
+        ledger, "pending_confirmation", owner_instance="api-old"
+    )
+    terminal = ledger.transition(
+        pending["job_id"],
+        expected_states="pending_confirmation",
+        new_state="failed",
+    )
+    record_path = ledger.record_path(terminal["job_id"])
+    serialized_before = record_path.read_bytes()
+
+    with pytest.raises(action_jobs.TerminalTransitionError):
+        ledger.adopt_owner(
+            terminal["job_id"],
+            expected_state="pending_confirmation",
+            expected_owner_instance="api-old",
+            new_owner_instance="api-current",
+        )
+
+    assert record_path.read_bytes() == serialized_before
+
+
+@pytest.mark.parametrize(
+    ("argument", "unsafe_owner"),
+    [
+        ("expected_owner_instance", ""),
+        ("new_owner_instance", "   "),
+        ("expected_owner_instance", None),
+        ("new_owner_instance", 7),
+        ("expected_owner_instance", "../../api-old"),
+        ("new_owner_instance", "Bearer private"),
+    ],
+)
+def test_adopt_owner_rejects_invalid_owner_values_without_mutation(
+    argument, unsafe_owner, tmp_path
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    before = _record_in_state(ledger, "authorizing", owner_instance="api-old")
+    record_path = ledger.record_path(before["job_id"])
+    serialized_before = record_path.read_bytes()
+    owner_arguments = {
+        "expected_owner_instance": "api-old",
+        "new_owner_instance": "api-current",
+    }
+    owner_arguments[argument] = unsafe_owner
+
+    with pytest.raises(ValueError, match="owner instance"):
+        ledger.adopt_owner(
+            before["job_id"],
+            expected_state="authorizing",
+            **owner_arguments,
+        )
+
+    assert record_path.read_bytes() == serialized_before
 
 
 @pytest.mark.parametrize(

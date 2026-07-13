@@ -352,10 +352,11 @@ the failure is not currently visible.
 
 - Priority: P0
 - Status: IN_PROGRESS
-- Finding: four retrieval operations still persist retrieval events and use
-  write-capable SQLite reads. Their query-side Qdrant creation, model-cache
-  resolution, and the ingest-status constructor mutation are checkpointed
-  closed. Summary SQLite projection authority is also checkpointed closed.
+- Finding: four retrieval operations intentionally persist retrieval events and
+  therefore remain automatic mutations. Their incidental query-side Qdrant
+  creation, model-cache resolution, write-capable SQLite projections, and the
+  ingest-status constructor mutation are checkpointed closed. Summary SQLite
+  projection authority is also checkpointed closed.
 - Repair: separate read-only retrieval/status inspection from collection,
   retrieval-event, model-provisioning, and ledger initialization; make every
   intentional write an explicit governed effect; require preseeded offline model
@@ -486,6 +487,20 @@ the failure is not currently visible.
   `IN_PROGRESS`; the next bounded mission is the mutation-sensitive retrieval
   SQLite implementation. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md`.
+- Retrieval SQLite authority checkpoint evidence (2026-07-13): FTS/LIKE, KG
+  scoring, shared Qdrant/FAISS provenance, and FAISS shadow scoring now share
+  one existing-file `mode=ro`, verified-query-only, operation-authorized
+  connection capability. The completed summary API delegates through the same
+  primitive while retaining its unavailable-path, timeout, thread, and caller
+  failure boundaries. Independent review found and closed one
+  missing connect-contract oracle, then returned clean; a separate adversarial
+  review found no actionable capability defect. Fresh verification passed 24
+  focused tests and a 448-test adjacent union, compiled all changed Python,
+  preserved live-WAL and FTS5 reads, and retained the 69-operation route census.
+  R-05-F1 remains `IN_PROGRESS`; intentional retrieval telemetry is the next
+  read-only selection, and the four retrieval routes remain
+  `automatic_mutation`. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1074,6 +1089,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed shared retrieval SQLite read authority across FTS,
+  KG scoring, Qdrant/FAISS provenance, and FAISS shadow scoring while preserving
+  committed live-WAL truth, FTS5 behavior, and intentional telemetry. Advanced
+  R-05-F1 to a fresh telemetry-policy selection without reclassifying routes.
 - 2026-07-13: Selected the shared retrieval SQLite read-authority seam after a
   fresh reconciliation with intentional retrieval telemetry. Recorded the
   telemetry-policy gaps separately and advanced R-05-F1 to mutation-sensitive

@@ -4,60 +4,60 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — bound retrieval SQLite read authority.
+Roadmap item: R-05-F1 — select retrieval-event persistence/config authority.
 
 ## Outcome
 
-Remove write capability from the FTS, knowledge-graph scoring, shared
-hit-provenance, and FAISS shadow-scoring SQLite projections while preserving
-existing-file behavior, committed live-WAL truth, each caller's exact failure
-boundary, and the completed summary read contract. Intentional retrieval
-telemetry remains unchanged and keeps the four retrieval routes classified
-`automatic_mutation`.
+Reconcile the intentional retrieval-event write path from canonical
+configuration through Qdrant, ephemeral, and FAISS emitters. Select the
+smallest owner, rollback boundary, and mutation-sensitive verification gate
+that makes event enablement, locked-database JSONL fallback, and fallback
+destination explicit without removing durable observability or reclassifying
+the four mounted retrieval routes.
 
 ## Governing evidence
 
+- `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md`
-- `docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-A retrieval projection may observe committed live-WAL truth, but it must not
-possess database creation, DML, DDL, ATTACH/DETACH, external vacuum-target, or
-read-policy-downgrade authority. Only the explicit retrieval telemetry owner may
-perform its currently governed durable audit effect.
+Intentional retrieval observability may mutate only through one explicit,
+canonical policy. A disabled fallback must stay disabled, an enabled fallback
+must use its exact governed destination, and no emitter may silently recover a
+discarded configuration from unrelated ambient defaults.
 
 ## Scope
 
-- Add one neutral common existing-file SQLite read connection primitive using
-  URI `mode=ro`, verified `query_only`, and operation-level authorization.
-- Preserve `open_summary_read_connection()` as a behaviorally equivalent
-  compatibility wrapper over the common primitive.
-- Migrate only retrieval FTS, KG scoring, shared Qdrant/FAISS memory-commit
-  provenance, and FAISS quantization shadow-scoring reads.
-- Replace the provenance parameterized PRAGMA with a normal zero-row schema
-  projection compatible with the bounded authorizer.
-- Add mutation-sensitive tests before production implementation.
+- Audit the canonical configuration schema and default configuration for an
+  actual retrieval-event policy owner.
+- Trace policy propagation through every production call to
+  `emit_retrieval_events()` and every builder that constructs Qdrant,
+  ephemeral, or FAISS retrieval stores.
+- Prove the current locked-database fallback behavior using temporary roots and
+  fake/instrumented SQLite connections only.
+- Name one exact implementation boundary and RED suite before production code
+  changes.
 
 ## Boundaries
 
-- Do not change retrieval telemetry, JSONL fallback, context policy, raw-query
-  logging, FAISS details, route effects, or response contracts in this seam.
-- Do not reopen completed Qdrant, ingest-status, summary-status, model-cache, or
-  summary reader behavior.
-- Do not change unrelated SQLite callers, dependencies, runtime packages,
-  configured data, live endpoints, Qdrant, models, ingestion, identity, WSL,
-  public checkout, or the mixed main checkout.
-- Use temporary SQLite databases, fake clients, and monkeypatched loaders only.
+- Do not implement policy propagation during this selection checkpoint.
+- Keep retrieval context propagation separate; process-global context and
+  request concurrency require a different interface and verification gate.
+- Keep raw-query logging and FAISS path redaction separate; they are privacy
+  output contracts, not persistence destination authority.
+- Do not alter event schema, successful-hit semantics, best-effort failure
+  behavior, route responses, route effects, retention, rollups, model/Qdrant
+  authority, configured data, live endpoints, services, or dependencies.
+- Do not reopen the completed Qdrant, ingest-status, summary-status,
+  model-cache, summary SQLite, or retrieval SQLite checkpoints.
 
 ## Completion gate
 
-The current write-capable implementation must first fail the seeded mutation
-oracle. The repaired readers must reject DML, DDL, ATTACH/DETACH, external
-vacuum targets, and query-only downgrade; preserve committed live-WAL reads,
-fallback behavior, connection closure, and the completed summary wrapper; pass
-focused and adjacent regressions, including the FAISS caller, plus
-static/documentation gates; preserve the
-69-operation route census; and receive independent review before checkpointing.
+Two independent read-only traces must reconcile all production emitters,
+builders, canonical schema/defaults, environment precedence, and fallback
+destinations. Temporary-only witnesses must demonstrate the current policy
+loss. The selection evidence must define exact RED oracles, frozen behavior,
+route classification, and a seam-only production/test file set before any
+implementation begins.

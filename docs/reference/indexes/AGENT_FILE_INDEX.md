@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1215**
+Indexed active tracked paths: **1219**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -262,6 +262,8 @@ Indexed active tracked paths: **1215**
 | `/docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -828,6 +830,7 @@ Indexed active tracked paths: **1215**
 | `/steps/common/safe_access.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/scene_summarizer.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/sensitive_staging.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/sqlite_read_authority.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/step_logger.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/tag_utils.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/tool_paths.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1084,6 +1087,7 @@ Indexed active tracked paths: **1215**
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_model_cache_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_retrieval_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retro_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_artifact_persisted_on_failure_exit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_index.py` | Verification | Test, fixture, or verification asset. |

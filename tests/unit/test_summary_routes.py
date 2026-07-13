@@ -2159,10 +2159,16 @@ def test_missing_video_checks(mock_connect, client) -> None:
     mock_cursor = MagicMock()
     mock_connect.return_value = mock_conn
     mock_conn.cursor.return_value = mock_cursor
+
+    def readonly_execute(statement, *_args):
+        result = MagicMock()
+        result.fetchone.return_value = (1,) if statement == "PRAGMA query_only" else None
+        return result
+
+    mock_conn.execute.side_effect = readonly_execute
     
     # Mock scenes check: returns None (video not in KG DB)
     mock_cursor.execute.return_value.fetchone.return_value = None
-    mock_conn.execute.return_value.fetchone.return_value = None
 
     valid_missing_hash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
 
@@ -3185,6 +3191,13 @@ def test_get_video_summary_success(mock_connect, client) -> None:
     mock_cursor = MagicMock()
     mock_connect.return_value = mock_conn
     mock_conn.cursor.return_value = mock_cursor
+
+    def readonly_execute(statement, *_args):
+        result = MagicMock()
+        result.fetchone.return_value = (1,) if statement == "PRAGMA query_only" else None
+        return result
+
+    mock_conn.execute.side_effect = readonly_execute
     
     # Mock master table check: summaries table exists
     mock_cursor.fetchone.side_effect = [("summaries",)]

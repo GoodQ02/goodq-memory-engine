@@ -51,6 +51,51 @@ OCCASION_KEYWORDS = {
     "family_gathering": ["gathering", "reunion", "dinner", "party", "celebration", "anniversary", "family"]
 }
 
+_SUMMARY_DENIED_SQLITE_ACTIONS = frozenset(
+    {
+        sqlite3.SQLITE_ATTACH,
+        sqlite3.SQLITE_DETACH,
+        sqlite3.SQLITE_INSERT,
+        sqlite3.SQLITE_UPDATE,
+        sqlite3.SQLITE_DELETE,
+        sqlite3.SQLITE_CREATE_INDEX,
+        sqlite3.SQLITE_CREATE_TABLE,
+        sqlite3.SQLITE_CREATE_TEMP_INDEX,
+        sqlite3.SQLITE_CREATE_TEMP_TABLE,
+        sqlite3.SQLITE_CREATE_TEMP_TRIGGER,
+        sqlite3.SQLITE_CREATE_TEMP_VIEW,
+        sqlite3.SQLITE_CREATE_TRIGGER,
+        sqlite3.SQLITE_CREATE_VIEW,
+        sqlite3.SQLITE_CREATE_VTABLE,
+        sqlite3.SQLITE_DROP_INDEX,
+        sqlite3.SQLITE_DROP_TABLE,
+        sqlite3.SQLITE_DROP_TEMP_INDEX,
+        sqlite3.SQLITE_DROP_TEMP_TABLE,
+        sqlite3.SQLITE_DROP_TEMP_TRIGGER,
+        sqlite3.SQLITE_DROP_TEMP_VIEW,
+        sqlite3.SQLITE_DROP_TRIGGER,
+        sqlite3.SQLITE_DROP_VIEW,
+        sqlite3.SQLITE_DROP_VTABLE,
+        sqlite3.SQLITE_ALTER_TABLE,
+        sqlite3.SQLITE_REINDEX,
+        sqlite3.SQLITE_ANALYZE,
+    }
+)
+
+
+def _summary_read_authorizer(
+    action_code: int,
+    _first_argument: str | None,
+    second_argument: str | None,
+    _database_name: str | None,
+    _trigger_name: str | None,
+) -> int:
+    if action_code in _SUMMARY_DENIED_SQLITE_ACTIONS:
+        return sqlite3.SQLITE_DENY
+    if action_code == sqlite3.SQLITE_PRAGMA and second_argument is not None:
+        return sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -73,6 +118,36 @@ def _classify_occasion_type(name: str) -> Optional[str]:
         if any(kw in name_lower for kw in keywords):
             return o_type
     return None
+
+
+def open_summary_read_connection(db_path: Path | str) -> sqlite3.Connection:
+    """Open an existing summary database without write capability."""
+
+    path = Path(db_path)
+    try:
+        resolved = path.resolve(strict=True)
+    except (FileNotFoundError, OSError) as exc:
+        raise FileNotFoundError("Summary database is unavailable") from exc
+    if not resolved.is_file():
+        raise FileNotFoundError("Summary database is unavailable")
+
+    connection = sqlite3.connect(
+        f"{resolved.as_uri()}?mode=ro",
+        uri=True,
+        timeout=5.0,
+    )
+    try:
+        connection.execute("PRAGMA query_only=ON")
+        connection.set_authorizer(_summary_read_authorizer)
+        enabled = connection.execute("PRAGMA query_only").fetchone()
+        if enabled != (1,):
+            raise sqlite3.OperationalError(
+                "Summary read connection could not enable query_only"
+            )
+    except Exception:
+        connection.close()
+        raise
+    return connection
 
 
 def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]:
@@ -102,12 +177,27 @@ def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]
 
 
 def get_summary_dashboard(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]:
+    connection = open_summary_read_connection(db_path)
+    try:
+        return _get_summary_dashboard_with_connection(
+            connection,
+            db_path,
+            data_loader,
+        )
+    finally:
+        connection.close()
+
+
+def _get_summary_dashboard_with_connection(
+    conn: sqlite3.Connection,
+    db_path: Path,
+    data_loader: DataLoader,
+) -> Dict[str, Any]:
     """
     Query SQLite and temporal indexes to return cumulative dashboard data.
     """
     scope = get_scope_metadata(db_path, data_loader)
-    
-    conn = sqlite3.connect(str(db_path))
+
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     
@@ -279,8 +369,6 @@ def get_summary_dashboard(db_path: Path, data_loader: DataLoader) -> Dict[str, A
     for emo, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
         top_emotions.append({"emotion": emo, "count": count})
         
-    conn.close()
-    
     return {
         "scope_metadata": scope,
         "people": people,
@@ -297,13 +385,34 @@ def get_summary_dashboard(db_path: Path, data_loader: DataLoader) -> Dict[str, A
 
 
 def get_entity_profile(db_path: Path, data_loader: DataLoader, entity_id: str) -> Dict[str, Any]:
+    node_type, name = _parse_stable_entity_id(entity_id)
+    connection = open_summary_read_connection(db_path)
+    try:
+        return _get_entity_profile_with_connection(
+            connection,
+            db_path,
+            data_loader,
+            entity_id,
+            node_type,
+            name,
+        )
+    finally:
+        connection.close()
+
+
+def _get_entity_profile_with_connection(
+    conn: sqlite3.Connection,
+    db_path: Path,
+    data_loader: DataLoader,
+    entity_id: str,
+    node_type: str,
+    name: str,
+) -> Dict[str, Any]:
     """
     Compile detailed profile response for a major entity.
     """
-    node_type, name = _parse_stable_entity_id(entity_id)
     scope = get_scope_metadata(db_path, data_loader)
-    
-    conn = sqlite3.connect(str(db_path))
+
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     
@@ -312,9 +421,8 @@ def get_entity_profile(db_path: Path, data_loader: DataLoader, entity_id: str) -
         "SELECT id, occurrence_count, first_seen, last_seen FROM nodes WHERE node_type = ? AND name = ?",
         (node_type, name)
     ).fetchone()
-    
+
     if not node_row:
-        conn.close()
         raise ValueError(f"Entity profile node not found: {entity_id}")
         
     node_id = int(node_row["id"])
@@ -458,8 +566,6 @@ def get_entity_profile(db_path: Path, data_loader: DataLoader, entity_id: str) -
     for emo, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
         top_emotions.append({"emotion": emo, "count": count})
         
-    conn.close()
-    
     return {
         "scope_metadata": scope,
         "entity_id": entity_id,

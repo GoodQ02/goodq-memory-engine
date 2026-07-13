@@ -1490,18 +1490,27 @@ async def get_video_summary(
         raise HTTPException(status_code=404, detail="Database file not initialized")
         
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='summaries'")
-        if not cursor.fetchone():
+        conn = summary_aggregator.open_summary_read_connection(db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name='summaries'"
+            )
+            has_summaries = cursor.fetchone() is not None
+            rows = []
+            if has_summaries:
+                cursor.execute(
+                    "SELECT content, created_at FROM summaries "
+                    "WHERE summary_type='video' AND category='video_summary'"
+                )
+                rows = cursor.fetchall()
+        finally:
             conn.close()
+
+        if not has_summaries:
             return _check_kg_existence_fallback(video_hash)
-            
-        cursor.execute("SELECT content, created_at FROM summaries WHERE summary_type='video' AND category='video_summary'")
-        rows = cursor.fetchall()
-        conn.close()
-        
+
         for content_json, created_at in rows:
             try:
                 data = json.loads(content_json)
@@ -1518,7 +1527,7 @@ async def get_video_summary(
                 
         return _check_kg_existence_fallback(video_hash)
         
-    except sqlite3.Error as se:
+    except (sqlite3.Error, OSError) as se:
         logger.error(f"Database query error: {se}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database query failed")
 
@@ -1528,9 +1537,14 @@ def _check_kg_existence_fallback(video_hash: str) -> dict:
     kg_path = _get_kg_db_path()
     if kg_path.exists():
         try:
-            conn_kg = sqlite3.connect(str(kg_path))
-            row_kg = conn_kg.execute("SELECT 1 FROM scenes WHERE video_hash=? LIMIT 1", (video_hash,)).fetchone()
-            conn_kg.close()
+            conn_kg = summary_aggregator.open_summary_read_connection(kg_path)
+            try:
+                row_kg = conn_kg.execute(
+                    "SELECT 1 FROM scenes WHERE video_hash=? LIMIT 1",
+                    (video_hash,),
+                ).fetchone()
+            finally:
+                conn_kg.close()
             if row_kg:
                 return {
                     "video_hash": video_hash,

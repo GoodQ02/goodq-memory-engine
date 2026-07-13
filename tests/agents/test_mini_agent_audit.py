@@ -64,6 +64,36 @@ def test_external_outcome_rejects_non_authorization_only_operation():
     assert _rows() == []
 
 
+@pytest.mark.parametrize("operation", [[], {}])
+def test_external_outcome_rejects_malformed_operation_without_raising(operation):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(operation=operation)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["authorization_only_action_required"],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize("status", [[], {}])
+def test_external_outcome_rejects_malformed_status_without_raising(status):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(status=status)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["invalid_execution_status"],
+    }
+    assert _rows() == []
+
+
 @pytest.mark.parametrize(
     ("overrides", "expected_code"),
     [

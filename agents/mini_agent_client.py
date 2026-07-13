@@ -889,7 +889,10 @@ class MiniAgentClient:
         def failed(code: str) -> Dict[str, Any]:
             return {"audit_status": "failed", "error_codes": [code]}
 
-        if operation not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+        if (
+            not isinstance(operation, str)
+            or operation not in LOCAL_AUTHORIZATION_ONLY_ACTIONS
+        ):
             return failed("authorization_only_action_required")
 
         if not isinstance(arguments, dict):
@@ -904,7 +907,10 @@ class MiniAgentClient:
 
         if not isinstance(request_id, str) or not request_id.strip():
             return failed("invalid_request_id")
-        if status not in {"succeeded", "failed", "interrupted"}:
+        if (
+            not isinstance(status, str)
+            or status not in {"succeeded", "failed", "interrupted"}
+        ):
             return failed("invalid_execution_status")
         if (
             not isinstance(return_code, int)

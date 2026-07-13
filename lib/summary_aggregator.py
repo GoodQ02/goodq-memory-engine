@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import sqlite3
+import uuid
+
+from filelock import FileLock
 
 from api.utils.loaders import DataLoader
 
@@ -445,96 +449,175 @@ def get_entity_profile(db_path: Path, data_loader: DataLoader, entity_id: str) -
     }
 
 
-def load_collections(db_path: Path) -> Dict[str, Any]:
-    """Atomically load custom collections from the JSON file."""
-    collections_file = Path(db_path).parent / "saved_collections.json"
+def _collections_file(db_path: Path) -> Path:
+    return Path(db_path).parent / "saved_collections.json"
+
+
+def _collections_lock(collections_file: Path) -> FileLock:
+    lock_path = collections_file.with_name(f"{collections_file.name}.lock")
+    return FileLock(str(lock_path))
+
+
+def _validate_collections_data(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        raise RuntimeError("saved collections store root is invalid")
+    if data.get("schema_version") != 1:
+        raise RuntimeError("saved collections store schema version is invalid")
+    collections = data.get("collections")
+    if not isinstance(collections, list):
+        raise RuntimeError("saved collections store collection list is invalid")
+
+    collection_ids: set[str] = set()
+    for collection in collections:
+        if not isinstance(collection, dict):
+            raise RuntimeError("saved collections store entry is invalid")
+        collection_id = collection.get("collection_id")
+        if not isinstance(collection_id, str) or not collection_id.strip():
+            raise RuntimeError("saved collections store collection ID is invalid")
+        if collection_id in collection_ids:
+            raise RuntimeError(
+                "saved collections store contains duplicate collection IDs"
+            )
+        collection_ids.add(collection_id)
+        if collection.get("status") not in {"active", "deleted"}:
+            raise RuntimeError("saved collections store collection status is invalid")
+        if not isinstance(collection.get("history"), list):
+            raise RuntimeError("saved collections store collection history is invalid")
+    return data
+
+
+def _load_collections_unlocked(collections_file: Path) -> Dict[str, Any]:
     if not collections_file.is_file():
         return {"schema_version": 1, "collections": []}
     try:
-        with collections_file.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict) and "collections" in data:
-                return data
-    except Exception as e:
-        logger.warning("Failed to load saved collections from %s: %s", collections_file, e)
-    return {"schema_version": 1, "collections": []}
+        with collections_file.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.error("Failed to read saved collections store", exc_info=True)
+        raise RuntimeError("saved collections store is malformed") from exc
+    return _validate_collections_data(data)
+
+
+def _fsync_directory_if_supported(directory: Path) -> bool:
+    """Best-effort directory durability; Windows cannot open directories this way."""
+    if os.name == "nt":
+        return False
+    descriptor: int | None = None
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        descriptor = os.open(directory, flags)
+        os.fsync(descriptor)
+        return True
+    except OSError:
+        logger.warning("Directory fsync is unavailable for the saved collections store")
+        return False
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _save_collections_unlocked(collections_file: Path, data: Dict[str, Any]) -> None:
+    _validate_collections_data(data)
+    collections_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = collections_file.with_name(
+        f"{collections_file.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}"
+    )
+    try:
+        with temp_file.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_file, collections_file)
+        _fsync_directory_if_supported(collections_file.parent)
+    except Exception as exc:
+        logger.error("Failed to save saved collections store", exc_info=True)
+        raise RuntimeError("Failed to save collections") from exc
+    finally:
+        try:
+            temp_file.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to remove saved collections temporary file", exc_info=True)
+
+
+def load_collections(db_path: Path) -> Dict[str, Any]:
+    """Load and strictly validate custom collections under the shared store lock."""
+    collections_file = _collections_file(db_path)
+    with _collections_lock(collections_file):
+        return _load_collections_unlocked(collections_file)
 
 
 def save_collections(db_path: Path, data: Dict[str, Any]) -> None:
-    """Atomically save custom collections to the JSON file using temporary rename."""
-    collections_file = Path(db_path).parent / "saved_collections.json"
-    try:
-        collections_file.parent.mkdir(parents=True, exist_ok=True)
-        temp_file = collections_file.with_suffix(".tmp")
-        with temp_file.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        if temp_file.exists():
-            if collections_file.exists():
-                collections_file.unlink()
-            temp_file.rename(collections_file)
-    except Exception as e:
-        logger.error("Failed to save saved collections to %s: %s", collections_file, e)
-        raise RuntimeError(f"Failed to save collections: {e}")
+    """Durably replace custom collections under the shared store lock."""
+    collections_file = _collections_file(db_path)
+    with _collections_lock(collections_file):
+        _save_collections_unlocked(collections_file, data)
 
 
 def add_collection(db_path: Path, col_request: Dict[str, Any], created_by: str = "operator") -> Dict[str, Any]:
     """Add a new custom collection atomically."""
-    data = load_collections(db_path)
-    collections = data.setdefault("collections", [])
-    
-    timestamp = _utc_now_iso()
-    collection_id = f"col_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{len(collections) + 1:04d}"
-    
-    history_entry = {
-        "action": "create",
-        "timestamp_utc": timestamp,
-        "operator_note": col_request.get("operator_note") or "Initial creation"
-    }
-    
-    new_collection = {
-        "collection_id": collection_id,
-        "name": col_request["name"],
-        "description": col_request.get("description"),
-        "status": "active",
-        "collection_type": col_request.get("collection_type", "manual_playlist"),
-        "query_params": col_request.get("query_params") or {},
-        "scene_refs": col_request.get("scene_refs") or [],
-        "source_epoch": db_path.parent.name,
-        "created_at_utc": timestamp,
-        "created_by": created_by,
-        "updated_at_utc": timestamp,
-        "deleted_at_utc": None,
-        "history": [history_entry]
-    }
-    
-    collections.append(new_collection)
-    save_collections(db_path, data)
-    return new_collection
+    collections_file = _collections_file(db_path)
+    with _collections_lock(collections_file):
+        data = _load_collections_unlocked(collections_file)
+        collections = data["collections"]
+
+        timestamp = _utc_now_iso()
+        collection_id = (
+            f"col_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_"
+            f"{uuid.uuid4().hex[:12]}"
+        )
+
+        history_entry = {
+            "action": "create",
+            "timestamp_utc": timestamp,
+            "operator_note": col_request.get("operator_note") or "Initial creation"
+        }
+
+        new_collection = {
+            "collection_id": collection_id,
+            "name": col_request["name"],
+            "description": col_request.get("description"),
+            "status": "active",
+            "collection_type": col_request.get("collection_type", "manual_playlist"),
+            "query_params": col_request.get("query_params") or {},
+            "scene_refs": col_request.get("scene_refs") or [],
+            "source_epoch": db_path.parent.name,
+            "created_at_utc": timestamp,
+            "created_by": created_by,
+            "updated_at_utc": timestamp,
+            "deleted_at_utc": None,
+            "history": [history_entry]
+        }
+
+        collections.append(new_collection)
+        _save_collections_unlocked(collections_file, data)
+        return new_collection
 
 
 def soft_delete_collection(db_path: Path, collection_id: str) -> bool:
     """Soft delete a custom collection atomically by setting status='deleted'."""
-    data = load_collections(db_path)
-    collections = data.setdefault("collections", [])
-    
-    target = None
-    for col in collections:
-        if col.get("collection_id") == collection_id and col.get("status") == "active":
-            target = col
-            break
-            
-    if not target:
-        return False
-        
-    timestamp = _utc_now_iso()
-    target["status"] = "deleted"
-    target["deleted_at_utc"] = timestamp
-    target["updated_at_utc"] = timestamp
-    target.setdefault("history", []).append({
-        "action": "delete",
-        "timestamp_utc": timestamp,
-        "operator_note": "Soft-deleted by operator"
-    })
-    
-    save_collections(db_path, data)
-    return True
+    collections_file = _collections_file(db_path)
+    with _collections_lock(collections_file):
+        data = _load_collections_unlocked(collections_file)
+        collections = data["collections"]
+
+        target = None
+        for col in collections:
+            if col.get("collection_id") == collection_id and col.get("status") == "active":
+                target = col
+                break
+
+        if not target:
+            return False
+
+        timestamp = _utc_now_iso()
+        target["status"] = "deleted"
+        target["deleted_at_utc"] = timestamp
+        target["updated_at_utc"] = timestamp
+        target["history"].append({
+            "action": "delete",
+            "timestamp_utc": timestamp,
+            "operator_note": "Soft-deleted by operator"
+        })
+
+        _save_collections_unlocked(collections_file, data)
+        return True

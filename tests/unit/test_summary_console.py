@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 import pytest
 import sqlite3
 from lib.knowledge_graph import KnowledgeGraph
@@ -191,6 +194,170 @@ def test_collections_crud_and_atomic_writes(tmp_path: Path) -> None:
     data_list = summary_aggregator.load_collections(db_path)
     active_cols = [c for c in data_list.get("collections", []) if c.get("status") == "active"]
     assert len(active_cols) == 0
+
+
+@pytest.mark.parametrize(
+    "invalid_payload",
+    [
+        b"{not-json",
+        json.dumps({"schema_version": 2, "collections": []}).encode("utf-8"),
+        json.dumps({"schema_version": 1, "collections": {}}).encode("utf-8"),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "collections": [
+                    {"collection_id": "", "status": "active", "history": []}
+                ],
+            }
+        ).encode("utf-8"),
+    ],
+)
+def test_collection_mutations_fail_closed_on_invalid_existing_store(
+    tmp_path: Path,
+    invalid_payload: bytes,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    collections_file = tmp_path / "saved_collections.json"
+    collections_file.write_bytes(invalid_payload)
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_aggregator.add_collection(db_path, {"name": "must not persist"})
+    assert collections_file.read_bytes() == invalid_payload
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_aggregator.soft_delete_collection(db_path, "col_existing")
+    assert collections_file.read_bytes() == invalid_payload
+
+
+class _FlushFailingFile:
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def __enter__(self):
+        self._wrapped.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self._wrapped.__exit__(*args)
+
+    def __getattr__(self, name):
+        return getattr(self._wrapped, name)
+
+    def flush(self):
+        raise OSError("simulated temp flush failure")
+
+
+@pytest.mark.parametrize("failure_stage", ["write", "flush", "fsync", "replace"])
+def test_collection_save_failure_preserves_authoritative_bytes_and_cleans_temp(
+    tmp_path: Path,
+    monkeypatch,
+    failure_stage: str,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    summary_aggregator.add_collection(db_path, {"name": "authoritative"})
+    collections_file = tmp_path / "saved_collections.json"
+    authoritative_bytes = collections_file.read_bytes()
+
+    if failure_stage == "write":
+        def fail_dump(_data, handle, **_kwargs):
+            handle.write("{")
+            raise OSError("simulated temp write failure")
+
+        monkeypatch.setattr(summary_aggregator.json, "dump", fail_dump)
+    elif failure_stage == "flush":
+        real_open = Path.open
+
+        def fail_temp_flush(path, *args, **kwargs):
+            opened = real_open(path, *args, **kwargs)
+            mode = str(args[0] if args else kwargs.get("mode", "r"))
+            if ".tmp-" in path.name and "w" in mode:
+                return _FlushFailingFile(opened)
+            return opened
+
+        monkeypatch.setattr(Path, "open", fail_temp_flush)
+    elif failure_stage == "fsync":
+        monkeypatch.setattr(
+            os,
+            "fsync",
+            lambda _fd: (_ for _ in ()).throw(
+                OSError("simulated temp fsync failure")
+            ),
+        )
+    else:
+        monkeypatch.setattr(
+            os,
+            "replace",
+            lambda *_args: (_ for _ in ()).throw(OSError("simulated replace failure")),
+        )
+
+    with pytest.raises(RuntimeError, match="Failed to save collections"):
+        summary_aggregator.add_collection(db_path, {"name": "must not persist"})
+
+    assert collections_file.read_bytes() == authoritative_bytes
+    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == []
+
+
+def test_concurrent_collection_creates_lose_no_updates_and_use_unique_ids(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    worker_count = 16
+    barrier = threading.Barrier(worker_count)
+
+    def create(index: int) -> dict:
+        barrier.wait(timeout=10)
+        return summary_aggregator.add_collection(
+            db_path,
+            {"name": f"concurrent-{index}"},
+        )
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        created = list(executor.map(create, range(worker_count)))
+
+    loaded = summary_aggregator.load_collections(db_path)["collections"]
+    assert {item["name"] for item in loaded} == {
+        f"concurrent-{index}" for index in range(worker_count)
+    }
+    assert len({item["collection_id"] for item in created}) == worker_count
+    assert len({item["collection_id"] for item in loaded}) == worker_count
+
+
+def test_concurrent_collection_create_and_delete_lose_no_update(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    target = summary_aggregator.add_collection(db_path, {"name": "delete-target"})
+    create_count = 12
+    barrier = threading.Barrier(create_count + 1)
+
+    def create(index: int) -> dict:
+        barrier.wait(timeout=10)
+        return summary_aggregator.add_collection(
+            db_path,
+            {"name": f"survivor-{index}"},
+        )
+
+    def delete() -> bool:
+        barrier.wait(timeout=10)
+        return summary_aggregator.soft_delete_collection(
+            db_path,
+            target["collection_id"],
+        )
+
+    with ThreadPoolExecutor(max_workers=create_count + 1) as executor:
+        create_futures = [
+            executor.submit(create, index) for index in range(create_count)
+        ]
+        delete_future = executor.submit(delete)
+        created = [future.result(timeout=15) for future in create_futures]
+        deleted = delete_future.result(timeout=15)
+
+    loaded = summary_aggregator.load_collections(db_path)["collections"]
+    by_id = {item["collection_id"]: item for item in loaded}
+    assert deleted is True
+    assert by_id[target["collection_id"]]["status"] == "deleted"
+    assert {item["name"] for item in loaded if item["status"] == "active"} == {
+        f"survivor-{index}" for index in range(create_count)
+    }
+    assert len({item["collection_id"] for item in created}) == create_count
 
 
 def test_no_mutation_invariants(tmp_path: Path, monkeypatch) -> None:

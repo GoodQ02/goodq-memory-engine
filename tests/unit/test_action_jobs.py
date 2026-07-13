@@ -240,6 +240,175 @@ def _record_in_state(ledger, state, *, owner_instance="api-1"):
     return record
 
 
+def test_list_prior_owner_records_filters_exact_states_newest_first(
+    tmp_path, monkeypatch
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    timestamps = iter(
+        [
+            "2026-07-12T10:00:00+00:00",
+            "2026-07-12T10:01:00+00:00",
+            "2026-07-12T10:02:00+00:00",
+            "2026-07-12T10:03:00+00:00",
+            "2026-07-12T10:04:00+00:00",
+        ]
+    )
+    monkeypatch.setattr(action_jobs, "_utc_now_iso", lambda: next(timestamps))
+    oldest = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "oldest"},
+        owner_instance="api-old",
+    )
+    unrequested = _record_in_state(
+        ledger, "authorizing", owner_instance="api-old"
+    )
+    current = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "current"},
+        owner_instance="api-current",
+    )
+    newest = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "newest"},
+        owner_instance="api-old",
+    )
+
+    records = ledger.list_prior_owner_records(
+        current_owner_instance="api-current",
+        states={"pending_confirmation"},
+    )
+
+    assert [record["job_id"] for record in records] == [
+        newest["job_id"],
+        oldest["job_id"],
+    ]
+    assert current["job_id"] not in {record["job_id"] for record in records}
+    assert unrequested["job_id"] not in {record["job_id"] for record in records}
+
+
+def test_list_prior_owner_records_breaks_timestamp_ties_by_job_id(
+    tmp_path, monkeypatch
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    lower_job_id = f"job_{'0' * 31}1"
+    higher_job_id = f"job_{'f' * 32}"
+    job_ids = iter([lower_job_id, higher_job_id])
+    monkeypatch.setattr(ledger, "allocate_job_id", lambda: next(job_ids))
+    monkeypatch.setattr(
+        action_jobs, "_utc_now_iso", lambda: "2026-07-12T10:00:00+00:00"
+    )
+    lower = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "lower"},
+        owner_instance="api-old",
+    )
+    higher = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_id": "higher"},
+        owner_instance="api-old",
+    )
+
+    records = ledger.list_prior_owner_records(
+        current_owner_instance="api-current",
+        states={"pending_confirmation"},
+    )
+
+    assert [record["job_id"] for record in records] == [
+        higher["job_id"],
+        lower["job_id"],
+    ]
+
+
+def test_list_prior_owner_records_excludes_current_owner_and_terminal_records(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    prior_queued = _record_in_state(ledger, "queued", owner_instance="api-old")
+    current_queued = _record_in_state(
+        ledger, "queued", owner_instance="api-current"
+    )
+    prior_pending = _record_in_state(
+        ledger, "pending_confirmation", owner_instance="api-old"
+    )
+    terminal = ledger.transition(
+        prior_pending["job_id"],
+        expected_states="pending_confirmation",
+        new_state="failed",
+    )
+
+    records = ledger.list_prior_owner_records(
+        current_owner_instance="api-current",
+        states={"queued"},
+    )
+
+    assert records == [prior_queued]
+    assert current_queued["job_id"] not in {record["job_id"] for record in records}
+    assert terminal["job_id"] not in {record["job_id"] for record in records}
+
+
+def test_list_prior_owner_records_returns_more_than_operator_limit(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    expected_ids = {
+        ledger.create_pending(
+            operation="video_summary.generate",
+            scope={"video_id": f"video-{index}"},
+            owner_instance="api-old",
+        )["job_id"]
+        for index in range(105)
+    }
+
+    records = ledger.list_prior_owner_records(
+        current_owner_instance="api-current",
+        states={"pending_confirmation"},
+    )
+
+    assert len(records) == 105
+    assert {record["job_id"] for record in records} == expected_ids
+
+
+@pytest.mark.parametrize(
+    ("current_owner_instance", "states"),
+    [
+        ("", {"queued"}),
+        ("../../api-current", {"queued"}),
+        ("api-current", set()),
+        ("api-current", {"unknown"}),
+        ("api-current", {"failed"}),
+        ("api-current", {"queued", "interrupted"}),
+    ],
+)
+def test_list_prior_owner_records_rejects_invalid_owner_or_state_filters(
+    current_owner_instance, states, tmp_path
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+
+    with pytest.raises(ValueError):
+        ledger.list_prior_owner_records(
+            current_owner_instance=current_owner_instance,
+            states=states,
+        )
+
+
+def test_list_prior_owner_records_preserves_record_bytes_and_mtimes(tmp_path):
+    root = tmp_path / "jobs"
+    ledger = ActionJobLedger(root)
+    matching = _record_in_state(ledger, "running", owner_instance="api-old")
+    _record_in_state(ledger, "running", owner_instance="api-current")
+    paths = sorted(root.glob("job_*.json"))
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths
+    }
+
+    records = ledger.list_prior_owner_records(
+        current_owner_instance="api-current",
+        states={"running"},
+    )
+
+    after = {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths
+    }
+    assert records == [matching]
+    assert after == before
+
+
 @pytest.mark.parametrize(
     ("current_state", "new_state"),
     [

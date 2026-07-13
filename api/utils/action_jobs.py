@@ -319,6 +319,44 @@ class ActionJobLedger:
         records = self.list_records(operation=operation, scope=scope, limit=1)
         return records[0] if records else None
 
+    def list_prior_owner_records(
+        self,
+        *,
+        current_owner_instance: str,
+        states: set[str] | frozenset[str],
+    ) -> list[dict[str, Any]]:
+        current_owner = _validate_owner_instance(
+            current_owner_instance, label="Current"
+        )
+        if not isinstance(states, (set, frozenset)):
+            raise ValueError(
+                "Prior-owner action job states must be a non-empty set of "
+                "known nonterminal states"
+            )
+        state_filter = set(states)
+        if not state_filter or not state_filter <= NONTERMINAL_STATES:
+            raise ValueError(
+                "Prior-owner action job states must be a non-empty set of "
+                "known nonterminal states"
+            )
+
+        with self._lock:
+            records = [
+                record
+                for record in self._records_unlocked()
+                if record.get("state") in state_filter
+                and record.get("owner_instance") != current_owner
+            ]
+            records.sort(
+                key=lambda record: (
+                    str(record.get("updated_at_utc") or ""),
+                    str(record.get("created_at_utc") or ""),
+                    str(record.get("job_id") or ""),
+                ),
+                reverse=True,
+            )
+            return records
+
     def transition(
         self,
         job_id: str,

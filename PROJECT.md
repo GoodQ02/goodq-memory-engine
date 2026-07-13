@@ -4,87 +4,70 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit the passive filesystem-observer boundary.
+Roadmap item: R-07 — implement the passive target filesystem observer.
 
 ## Outcome
 
-Perform one read-only no-repeat audit that reconciles the completed
-configuration projection with existing filesystem, identity, hashing, and race
-handling helpers. Select one smallest import-pure observer implementation seam,
-its exact test oracle, and its file allowlist before any new production code is
-written.
+Implement one import-pure, fail-closed filesystem observer and its focused test
+oracle. It accepts only a canonical `ResolvedPlanConfiguration` and returns one
+immutable `FilesystemObservation` containing exact epoch-root identity and
+filesystem-target evidence.
 
 ## Governing evidence
 
-- private configuration-projection checkpoint `a12ceb18`
-- `cli/clean_memory.py`
-- `steps/common/clean_memory.py`
-- `tests/unit/test_clean_memory_cli.py`
-- `tests/unit/test_clean_memory_authority.py`
-- `docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md`
+- configuration checkpoint `a12ceb18`
+- candidate-plan checkpoint `c870a1cb`
+- filesystem-observer audit checkpoint `f3ce0920`
+- `docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-The observer is passive evidence collection, not cleanup authority. It may
-eventually accept only already-projected exact logical paths and return exact
-epoch-root identity plus immutable filesystem-target evidence. It must never
-load configuration, guess a path, follow a reparse/symlink boundary, create a
-directory, mutate a target, contact a service, create evidence, build a plan,
-or touch jobs, tokens, MiniAgent, or cleanup execution.
+Observation is passive evidence collection, not configuration, protected-root,
+Qdrant, planning, approval, or cleanup authority. Every present file is
+identified and hashed through the same verified handle. Redirected, irregular,
+unsupported, inaccessible, ambiguous, or changing state fails closed and never
+becomes absence or partial evidence.
 
-## Audit questions
+## Exact implementation seam
 
-1. Which existing helpers, tests, or platform abstractions already prove part
-   of no-follow opening, stable physical identity, SHA-256, reparse rejection,
-   or before/after race detection?
-2. Which helpers follow paths, fail soft, mutate state, import unrelated
-   runtime authority, or omit ancestor/root checks and therefore cannot be
-   reused?
-3. What exact Windows file/volume identity and reparse evidence is required,
-   and what CPU-safe portable fallback is valid for non-Windows tests?
-4. How must absent singleton targets be represented without manufacturing
-   stale metadata or confusing absence with scan failure?
-5. How must every regular file below the exact FAISS root be enumerated,
-   no-follow opened, hashed from the same handle, ordered, and race-checked?
-6. What negative-capability oracle proves import purity and prevents config,
-   environment, network, process, mkdir, or target mutation?
-7. What exact source/test file pair is the smallest coherent next seam, and
-   which focused evidence closes it before Qdrant observation begins?
+Touch only:
 
-## Scope lock
+- `cli/clean_memory_filesystem.py`;
+- `tests/unit/test_clean_memory_filesystem.py`.
 
-This mission is read-only except for its final reviewed documentation
-checkpoint. It may inspect repository source, tests, and active documentation.
-If the audit closes cleanly, it may update only:
+The production module exposes exactly:
 
-- `PROJECT.md`;
-- `docs/releases/ROADMAP.md`;
-- one new filesystem-observer diagnostic for the active roadmap item; and
-- generated documentation indexes only if the repository authority gate
-  requires them.
+- `FILESYSTEM_OBSERVATION_SCHEMA`;
+- `FilesystemObservationError`;
+- `FilesystemObservation`;
+- `observe_filesystem`.
 
-No production observer or new test is authorized until the audit is complete,
-independently reviewed, checkpointed, and this mission is rewritten with an
-exact implementation allowlist.
+Implement the Windows volume-bound held-directory/OpenFileById backend and the
+POSIX descriptor-relative no-follow backend defined by the governing audit.
+Enumerate the six singleton roles and every regular file below the exact FAISS
+root deterministically.
 
 ## Boundaries
 
-- Do not read configured data, databases, FAISS content, services, Qdrant,
-  models, ingestion, identity, WSL, the mixed main checkout, the public
-  checkout, or operator reports.
-- Do not call filesystem helpers on configured paths or use the current working
-  directory as authority.
+- Do not modify `cli/clean_memory.py`, `steps/common/clean_memory.py`, or their
+  completed tests.
 - Do not load configuration or environment values.
-- Do not add a runnable command, Qdrant observer, evidence store write, plan,
-  job, token, approval, apply, reconcile, status, retention, or lease behavior.
-- Do not reopen checkpoints `248bbd33`, `c870a1cb`, or `a12ceb18` without
-  contradictory evidence.
+- Do not read configured/live data during verification; use temporary fixtures.
+- Do not access protected roots, services, Qdrant, evidence stores, jobs,
+  tokens, MiniAgent, cleanup execution, or the current working directory as
+  authority.
+- Do not add a CLI, runnable plan, fallback pathname traversal, or partial-result
+  mode.
+- Do not begin protected-boundary or Qdrant implementation in this seam.
 
 ## Completion gate
 
-The audit names completed work, rejects unsafe reuse with source evidence,
-defines the exact passive observer and test contract, and receives at least two
-independent read-only current-byte reviews. The documentation authority,
-semantic-drift, banned-token, dependency, and diff gates pass. Only then may
-`PROJECT.md` advance to one exact filesystem-observer implementation seam.
+Focused tests prove the full deterministic, absence, no-follow, identity,
+hashing, enumeration, unsupported-platform, race, composition, and negative-
+capability matrix from the governing audit. Compilation, import-purity,
+documentation-authority, semantic-drift, banned-token, dependency, and diff
+gates pass. At least two independent current-byte reviews return clean.
+
+After the implementation checkpoint, advance only to a read-only audit of
+protected-boundary authority. Do not advance directly to Qdrant observation.

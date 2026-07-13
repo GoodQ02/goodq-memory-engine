@@ -754,6 +754,23 @@ the failure is not currently visible.
   evidence creation, job/token work, or cleanup mutation occurred. R-07 remains
   `IN_PROGRESS`; the next bounded mission is a read-only no-repeat audit of the
   filesystem-observer boundary before implementation.
+- Filesystem-observer boundary audit checkpoint (2026-07-13): private
+  checkpoint `f3ce0920` records that repository and platform traces found no
+  reusable helper satisfying exact no-follow, same-handle identity/hash,
+  complete FAISS enumeration, and fail-closed race evidence. The reviewed next
+  seam is exactly `cli/clean_memory_filesystem.py` with focused coverage in
+  `tests/unit/test_clean_memory_filesystem.py`. Windows observation is
+  fixed-volume-bound and uses held-directory restart enumeration plus
+  `OpenFileById`, with no descendant-path fallback; POSIX observation opens only
+  `/` by path and then remains descriptor-relative and no-follow. The audit also
+  corrected the remaining order: target filesystem observation, a separate
+  protected-boundary authority audit/checkpoint, fail-closed Qdrant observation,
+  then runnable planning only when every protected role is exact. No configured
+  data, protected root, service, Qdrant, evidence store, job, token, or cleanup
+  authority was read or exercised. Evidence:
+  `docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the exact
+  filesystem-observer source/test pair.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1316,6 +1333,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Closed the R-07 filesystem-observer boundary audit, selected the
+  exact observer source/test pair, and inserted protected-boundary authority
+  verification ahead of Qdrant observation and runnable planning.
 
 - 2026-07-13: Checkpointed the R-07 import-pure clean-memory configuration
   projection and advanced only to a read-only audit of the filesystem-observer

@@ -789,6 +789,26 @@ the failure is not currently visible.
   cleanup authority was read or exercised. R-07 remains `IN_PROGRESS`; the next
   bounded mission is only a read-only no-repeat audit of protected-boundary
   authority before any implementation.
+- Protected-boundary authority audit checkpoint (2026-07-13): three independent
+  read-only traces confirmed that all eight unresolved roles lack one canonical
+  repository source; producer defaults, environment/CWD discovery, sibling
+  checkout inference, and live-ledger reconstruction are not authority. The
+  strongest candidate for a future source is a versioned machine-local manifest
+  at a fixed location derived from `candidate_evidence_root`, but that new
+  authority/bootstrap architecture is not approved or implemented by this
+  audit. The candidate would supply only the eight unresolved roles and could
+  not override the ten configured roles. A later observer must use deterministic
+  multi-member, path-free physical evidence and may reuse the completed platform
+  backend only after an extraction-only parity checkpoint; it must not import or
+  copy private observer symbols. The audit also proved that candidate-plan
+  construction rejects duplicate protected logical IDs but not byte-identical canonical
+  identity envelopes across roles; full physical-alias rejection remains later
+  observer work. No configured or live root, service, data, Qdrant, evidence
+  store, job, token, MiniAgent, or cleanup authority was read
+  or exercised. Evidence:
+  `docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the focused
+  candidate-plan duplicate canonical-envelope guard and its RED oracle.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

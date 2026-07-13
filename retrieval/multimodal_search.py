@@ -14,6 +14,7 @@ import sqlite3
 from pathlib import Path
 
 from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
+from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
 
@@ -347,8 +348,11 @@ class MultimodalSearchEngine:
             return {}
 
         scene_context: Dict[str, Dict[str, Any]] = {}
+        conn: Optional[sqlite3.Connection] = None
         try:
-            conn = sqlite3.connect(self.kg_db_path)
+            conn = sqlite_read_authority.open_sqlite_read_connection(
+                self.kg_db_path
+            )
             cur = conn.cursor()
             rows = cur.execute(
                 """
@@ -370,10 +374,11 @@ class MultimodalSearchEngine:
             self._kg_scene_context_error = True
             return {}
         finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         for edge_type, raw_props, src_name, src_type, tgt_name, tgt_type in rows:
             props: Dict[str, Any] = {}
@@ -1297,7 +1302,7 @@ class MultimodalSearchEngine:
             return []
 
         results = []
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite_read_authority.open_sqlite_read_connection(self.db_path)
         try:
             is_fts = self._is_fts5_available(conn)
             if is_fts:

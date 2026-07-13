@@ -16,6 +16,7 @@ from steps.common.retrieval_events import (
     retrieval_events_enabled,
     utc_now_iso,
 )
+from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
 
@@ -281,19 +282,22 @@ class FaissMemory(MemoryStore):
                     if shadow_mode:
                         valid_ids = [h["id"] for h in out if h["id"] is not None]
                         if valid_ids:
-                            import sqlite3
-                            conn = sqlite3.connect(self.db_path)
-                            placeholders = ",".join("?" for _ in valid_ids)
-                            cursor = conn.execute(
-                                f"""
-                                SELECT faiss_id, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
-                                FROM embeddings
-                                WHERE faiss_id IN ({placeholders})
-                                """,
-                                valid_ids
+                            conn = sqlite_read_authority.open_sqlite_read_connection(
+                                self.db_path
                             )
-                            rows = cursor.fetchall()
-                            conn.close()
+                            try:
+                                placeholders = ",".join("?" for _ in valid_ids)
+                                cursor = conn.execute(
+                                    f"""
+                                    SELECT faiss_id, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                                    FROM embeddings
+                                    WHERE faiss_id IN ({placeholders})
+                                    """,
+                                    valid_ids
+                                )
+                                rows = cursor.fetchall()
+                            finally:
+                                conn.close()
 
                             sidecars = {}
                             for r_id, tq_idx_b, tq_norm_val, tq_sign_b, tq_res_val in rows:

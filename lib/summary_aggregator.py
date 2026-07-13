@@ -13,6 +13,7 @@ import uuid
 from filelock import FileLock
 
 from api.utils.loaders import DataLoader
+from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
 
@@ -51,52 +52,6 @@ OCCASION_KEYWORDS = {
     "family_gathering": ["gathering", "reunion", "dinner", "party", "celebration", "anniversary", "family"]
 }
 
-_SUMMARY_DENIED_SQLITE_ACTIONS = frozenset(
-    {
-        sqlite3.SQLITE_ATTACH,
-        sqlite3.SQLITE_DETACH,
-        sqlite3.SQLITE_INSERT,
-        sqlite3.SQLITE_UPDATE,
-        sqlite3.SQLITE_DELETE,
-        sqlite3.SQLITE_CREATE_INDEX,
-        sqlite3.SQLITE_CREATE_TABLE,
-        sqlite3.SQLITE_CREATE_TEMP_INDEX,
-        sqlite3.SQLITE_CREATE_TEMP_TABLE,
-        sqlite3.SQLITE_CREATE_TEMP_TRIGGER,
-        sqlite3.SQLITE_CREATE_TEMP_VIEW,
-        sqlite3.SQLITE_CREATE_TRIGGER,
-        sqlite3.SQLITE_CREATE_VIEW,
-        sqlite3.SQLITE_CREATE_VTABLE,
-        sqlite3.SQLITE_DROP_INDEX,
-        sqlite3.SQLITE_DROP_TABLE,
-        sqlite3.SQLITE_DROP_TEMP_INDEX,
-        sqlite3.SQLITE_DROP_TEMP_TABLE,
-        sqlite3.SQLITE_DROP_TEMP_TRIGGER,
-        sqlite3.SQLITE_DROP_TEMP_VIEW,
-        sqlite3.SQLITE_DROP_TRIGGER,
-        sqlite3.SQLITE_DROP_VIEW,
-        sqlite3.SQLITE_DROP_VTABLE,
-        sqlite3.SQLITE_ALTER_TABLE,
-        sqlite3.SQLITE_REINDEX,
-        sqlite3.SQLITE_ANALYZE,
-    }
-)
-
-
-def _summary_read_authorizer(
-    action_code: int,
-    _first_argument: str | None,
-    second_argument: str | None,
-    _database_name: str | None,
-    _trigger_name: str | None,
-) -> int:
-    if action_code in _SUMMARY_DENIED_SQLITE_ACTIONS:
-        return sqlite3.SQLITE_DENY
-    if action_code == sqlite3.SQLITE_PRAGMA and second_argument is not None:
-        return sqlite3.SQLITE_DENY
-    return sqlite3.SQLITE_OK
-
-
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -123,31 +78,12 @@ def _classify_occasion_type(name: str) -> Optional[str]:
 def open_summary_read_connection(db_path: Path | str) -> sqlite3.Connection:
     """Open an existing summary database without write capability."""
 
-    path = Path(db_path)
-    try:
-        resolved = path.resolve(strict=True)
-    except (FileNotFoundError, OSError) as exc:
-        raise FileNotFoundError("Summary database is unavailable") from exc
-    if not resolved.is_file():
-        raise FileNotFoundError("Summary database is unavailable")
-
-    connection = sqlite3.connect(
-        f"{resolved.as_uri()}?mode=ro",
-        uri=True,
+    return sqlite_read_authority.open_sqlite_read_connection(
+        db_path,
+        unavailable_message="Summary database is unavailable",
         timeout=5.0,
+        check_same_thread=True,
     )
-    try:
-        connection.execute("PRAGMA query_only=ON")
-        connection.set_authorizer(_summary_read_authorizer)
-        enabled = connection.execute("PRAGMA query_only").fetchone()
-        if enabled != (1,):
-            raise sqlite3.OperationalError(
-                "Summary read connection could not enable query_only"
-            )
-    except Exception:
-        connection.close()
-        raise
-    return connection
 
 
 def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]:

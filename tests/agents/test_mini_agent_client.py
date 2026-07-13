@@ -3809,6 +3809,10 @@ def test_summary_collection_actions_accept_only_exact_privacy_safe_scope(
         ),
         (
             "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, 7: "non-string field name"},
+        ),
+        (
+            "create_summary_collection",
             {**_CREATE_COLLECTION_SCOPE, "action_id": " ../action "},
         ),
         (
@@ -3817,7 +3821,11 @@ def test_summary_collection_actions_accept_only_exact_privacy_safe_scope(
         ),
         (
             "create_summary_collection",
-            {**_CREATE_COLLECTION_SCOPE, "action_id": "a" * 129},
+            {**_CREATE_COLLECTION_SCOPE, "action_id": "a" * 103},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "epoch_id": "e" * 129},
         ),
         (
             "create_summary_collection",
@@ -3844,6 +3852,10 @@ def test_summary_collection_actions_accept_only_exact_privacy_safe_scope(
         (
             "delete_summary_collection",
             {**_DELETE_COLLECTION_SCOPE, "job_id": "job\\one"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "job_id": "j" * 103},
         ),
         (
             "delete_summary_collection",
@@ -3884,6 +3896,16 @@ def test_summary_collection_actions_reject_invalid_scope_before_token_issue(
     assert rc == 1
     assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
     assert not (agent_home / "confirmation_tokens.json").exists()
+    audit_path = Path(os.environ["GOODQ_TOOL_AUDIT_LOG"])
+    rows = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[-1]["arguments"] == {"scope_valid": False}
+    serialized = audit_path.read_text(encoding="utf-8")
+    assert "private transcript" not in serialized
+    assert "confirmation_token" not in serialized
+    assert "raw_payload" not in serialized
 
 
 @pytest.mark.parametrize(

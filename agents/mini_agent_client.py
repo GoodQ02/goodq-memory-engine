@@ -205,6 +205,12 @@ SUMMARY_COLLECTION_ACTIONS = {
     "delete_summary_collection",
 }
 SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH = 128
+SUMMARY_COLLECTION_CREATE_TARGET_PREFIX = "summary-collection:create:"
+SUMMARY_COLLECTION_DELETE_TARGET_PREFIX = "summary-collection:delete:"
+SUMMARY_COLLECTION_CORRELATION_ID_MAX_LENGTH = min(
+    EXTERNAL_AUDIT_MAX_TARGET_LENGTH - len(SUMMARY_COLLECTION_CREATE_TARGET_PREFIX),
+    EXTERNAL_AUDIT_MAX_TARGET_LENGTH - len(SUMMARY_COLLECTION_DELETE_TARGET_PREFIX),
+)
 SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 )
@@ -260,9 +266,14 @@ def _validate_summary_collection_identifier(field: str, value: Any) -> List[str]
         return [f"{field} must be a non-empty string"]
     if value != value.strip():
         return [f"{field} must not contain surrounding whitespace"]
-    if len(value) > SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH:
+    max_length = (
+        SUMMARY_COLLECTION_CORRELATION_ID_MAX_LENGTH
+        if field in {"action_id", "job_id"}
+        else SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH
+    )
+    if len(value) > max_length:
         return [
-            f"{field} exceeds {SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH} characters"
+            f"{field} exceeds {max_length} characters"
         ]
     if not value[0].isalnum() or any(
         character not in SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS
@@ -291,6 +302,8 @@ def _validate_summary_collection_scope(
 ) -> List[str]:
     if not isinstance(tool_args, dict):
         return ["scope must be a JSON object"]
+    if any(not isinstance(field, str) for field in tool_args):
+        return ["scope field names must be strings"]
 
     violations: List[str] = []
     expected = set(expected_fields)
@@ -344,10 +357,20 @@ def _expected_summary_collection_audit_target(
     arguments: Dict[str, Any],
 ) -> Optional[str]:
     if operation == "create_summary_collection":
-        return f"summary-collection:create:{arguments['action_id']}"
+        return f"{SUMMARY_COLLECTION_CREATE_TARGET_PREFIX}{arguments['action_id']}"
     if operation == "delete_summary_collection":
-        return f"summary-collection:delete:{arguments['job_id']}"
+        return f"{SUMMARY_COLLECTION_DELETE_TARGET_PREFIX}{arguments['job_id']}"
     return None
+
+
+def _decision_audit_arguments(tool_name: str, tool_args: Any) -> Dict[str, Any]:
+    """Persist exact safe scope, never rejected collection request material."""
+    if tool_name not in SUMMARY_COLLECTION_ACTIONS:
+        return tool_args
+    scope_validator = AUTHORIZATION_SCOPE_VALIDATORS[tool_name]
+    if scope_validator(tool_args):
+        return {"scope_valid": False}
+    return tool_args
 
 
 def _load_ucf_ledger() -> Any:
@@ -926,7 +949,7 @@ class MiniAgentClient:
             "tool_name": tool_name,
             "status": envelope.get("status", "unknown"),
             "return_code": return_code,
-            "arguments": tool_args,
+            "arguments": _decision_audit_arguments(tool_name, tool_args),
             "confirmed": bool(confirm and confirmation_token),
             "error_codes": self._audit_error_codes(envelope),
         }

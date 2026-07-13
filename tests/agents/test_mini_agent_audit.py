@@ -775,3 +775,50 @@ def test_summary_collection_external_outcome_surfaces_audit_write_failure(
         "error_codes": ["audit_log_error"],
     }
     append.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "target"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "a" * 102,
+                "epoch_id": "epoch_test",
+                "payload_sha256": "a" * 64,
+            },
+            f"summary-collection:create:{'a' * 102}",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "j" * 102,
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            f"summary-collection:delete:{'j' * 102}",
+        ),
+    ],
+)
+def test_summary_collection_correlation_id_limit_fits_exact_audit_target(
+    operation,
+    arguments,
+    target,
+):
+    assert len(target) == 128
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection-boundary",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}

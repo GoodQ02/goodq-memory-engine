@@ -725,6 +725,18 @@ the failure is not currently visible.
   or exercised. R-07 remains `IN_PROGRESS`; the next bounded seam is a
   read-only no-repeat audit of the passive `plan` orchestration boundary before
   any production adapter or CLI implementation.
+- Passive plan-orchestration audit checkpoint (2026-07-13): three independent
+  read-only source traces and a current Requests documentation check found no
+  reusable exact configuration resolver, no complete no-follow filesystem
+  observer, and no complete fail-closed Qdrant fingerprint observer. The
+  reviewed sequence is strict configuration projection, filesystem observation,
+  Qdrant observation, then runnable `plan` orchestration; each remains a
+  separate checkpoint. The next bounded seam is only a deterministic,
+  secret-free configuration projection in new `cli/clean_memory.py` with RED
+  coverage in new `tests/unit/test_clean_memory_cli.py`. It performs no config
+  load at import, filesystem or service observation, evidence-root creation,
+  plan persistence, job/token work, or cleanup mutation. Evidence:
+  `docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md`.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1287,6 +1299,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Closed the R-07 passive plan-orchestration audit and selected
+  deterministic configuration projection as the next isolated implementation
+  seam, ahead of separate filesystem, Qdrant, and runnable-plan checkpoints.
 
 - 2026-07-13: Checkpointed the R-07 import-pure immutable candidate-plan
   authority and advanced only to a read-only audit of passive `plan`

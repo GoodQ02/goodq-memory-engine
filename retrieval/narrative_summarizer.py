@@ -137,6 +137,7 @@ def synthesize_narrative(
     config: Optional[Dict[str, Any]] = None,
     expected_epoch_id: Optional[str] = None,
     models: Optional[List[ModelConfig]] = None,
+    allow_model_activation: bool = True,
 ) -> Dict[str, Any]:
     """
     Execute chronological narrative search and synthesize results using a local LLM.
@@ -301,6 +302,7 @@ def synthesize_narrative(
             timeout=45,
             cache_ttl=300,
             enable_health_checks=True,
+            allow_auto_activation=allow_model_activation,
         )
     except Exception as e:
         logger.error(f"Failed to initialize LLMClient: {e}", exc_info=True)

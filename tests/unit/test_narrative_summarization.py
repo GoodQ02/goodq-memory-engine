@@ -335,11 +335,13 @@ def test_summarize_uses_verified_models_without_rebuilding_policy(
         config=cfg,
         expected_epoch_id="private-epoch",
         models=verified_models,
+        allow_model_activation=False,
     )
 
     assert result["status"] == "success"
     rebuild_policy.assert_not_called()
     assert module.LLMClient.call_args.kwargs["models"] is verified_models
+    assert module.LLMClient.call_args.kwargs["allow_auto_activation"] is False
 
 
 def test_temporal_search_rejects_epoch_drift_before_database_open(

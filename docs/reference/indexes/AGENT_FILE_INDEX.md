@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1233**
+Indexed active tracked paths: **1235**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -806,6 +806,7 @@ Indexed active tracked paths: **1233**
 | `/steps/common/atomic_io.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/audio_gpu_optimizer.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/canonical_sensitive_events.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/clean_memory.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/conda_runner.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/config_loader.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/config_redaction.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1024,6 +1025,7 @@ Indexed active tracked paths: **1233**
 | `/tests/unit/test_bootstrap_verify_model_cache.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_context_analyzer_llm.py` | Verification | Test, fixture, or verification asset. |

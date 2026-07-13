@@ -42,7 +42,8 @@ authority mismatch fails closed. Planning cannot reach a cleanup target.
   preconditions, and an immutable candidate plan.
 - Add atomic first-writer plan persistence beneath an injected temporary
   evidence root, including repeated/concurrent convergence, collision refusal,
-  and byte preservation when replacement/persistence fails.
+  byte preservation when replacement/persistence fails, and rejection of a
+  redirected or reparse-point evidence root.
 - Prove through injected fakes and temporary roots that planning creates no
   action job or token, resolves no disposition/rollback artifact, starts/stops no
   process, and performs no target mutation or configured/live access.
@@ -50,8 +51,9 @@ authority mismatch fails closed. Planning cannot reach a cleanup target.
 ## Boundaries
 
 - Touch only `PROJECT.md`, new `steps/common/clean_memory.py`, new
-  `tests/unit/test_clean_memory_authority.py`, and the roadmap checkpoint after
-  verification.
+  `tests/unit/test_clean_memory_authority.py`, the two mechanically generated
+  tracked-file indexes required by documentation authority, and the roadmap
+  checkpoint after verification.
 - Do not add `cli.clean_memory`, production configuration resolution, live
   filesystem or Qdrant adapters, approval/apply/reconcile/status commands,
   execution journals, receipts, target deletion, process probes, or leases.

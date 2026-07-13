@@ -24,7 +24,11 @@ from api.utils.response_models import (
     SaveCollectionRequest,
 )
 from api.utils.loaders import DataLoader
-from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
+from api.utils.action_jobs import (
+    ActionJobLedger,
+    ActionJobTransitionError,
+    PassiveActionJobReader,
+)
 from lib import summary_aggregator
 
 logger = logging.getLogger(__name__)
@@ -64,6 +68,10 @@ def _get_kg_db_path() -> Path:
 
 def _get_summary_job_ledger(cfg: dict) -> ActionJobLedger:
     return ActionJobLedger(_get_summary_job_root(cfg))
+
+
+def _get_summary_job_reader(cfg: dict) -> PassiveActionJobReader:
+    return PassiveActionJobReader(_get_summary_job_root(cfg))
 
 
 def _get_summary_job_root(cfg: dict) -> Path:
@@ -1560,11 +1568,11 @@ async def get_summary_status(
             raise HTTPException(status_code=404, detail="Summary job not found")
         return {"status": "not_started", "job": None}
 
-    ledger = _get_summary_job_ledger(cfg)
+    reader = _get_summary_job_reader(cfg)
     scope = _summary_job_scope(video_hash)
     if job_id is not None:
         try:
-            record = ledger.load(job_id)
+            record = reader.load(job_id)
         except ValueError:
             record = None
         if (
@@ -1574,7 +1582,7 @@ async def get_summary_status(
         ):
             raise HTTPException(status_code=404, detail="Summary job not found")
     else:
-        record = ledger.latest(
+        record = reader.latest(
             operation=_VIDEO_SUMMARY_JOB_OPERATION,
             scope=scope,
         )

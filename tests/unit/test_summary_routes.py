@@ -3061,6 +3061,60 @@ def test_summary_status_returns_not_started_without_creating_job(
     assert list(ledger.root_dir.glob("job_*.json")) == before
 
 
+def test_summary_status_absent_root_stays_absent(client, mock_db_paths) -> None:
+    job_root = (
+        mock_db_paths[0].parent / "GoodQ_Data" / "control" / "action_jobs"
+    )
+    job_id = "job_" + "a" * 32
+
+    assert not job_root.exists()
+    latest = client.get(f"/api/summary/video/{VALID_HASH}/status")
+    exact = client.get(
+        f"/api/summary/video/{VALID_HASH}/status", params={"job_id": job_id}
+    )
+
+    assert latest.status_code == 200
+    assert latest.json() == {"status": "not_started", "job": None}
+    assert exact.status_code == 404
+    assert not job_root.exists()
+
+
+def test_summary_status_latest_and_exact_never_enter_writer_lock(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    older = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": VALID_HASH},
+        owner_instance="api-owner",
+    )
+    latest = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": VALID_HASH},
+        owner_instance="api-owner",
+    )
+
+    def forbidden_writer_ledger(_cfg):
+        raise AssertionError("summary status must not construct the writer ledger")
+
+    monkeypatch.setattr(
+        summary_route,
+        "_get_summary_job_ledger",
+        forbidden_writer_ledger,
+    )
+
+    latest_response = client.get(f"/api/summary/video/{VALID_HASH}/status")
+    exact_response = client.get(
+        f"/api/summary/video/{VALID_HASH}/status", params={"job_id": older["job_id"]}
+    )
+
+    assert latest_response.status_code == 200
+    assert latest_response.json()["job"]["job_id"] == latest["job_id"]
+    assert exact_response.status_code == 200
+    assert exact_response.json()["job"]["job_id"] == older["job_id"]
+    assert not (ledger.root_dir / ".action-jobs.lock").exists()
+
+
 def test_summary_status_returns_latest_or_exact_scoped_job_passively(
     client, mock_db_paths, monkeypatch
 ) -> None:

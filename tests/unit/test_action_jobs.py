@@ -4,12 +4,228 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
 import re
+from threading import Event
 
 import pytest
 
 from api.utils.action_jobs import ActionJobLedger
 from api.utils import action_jobs
 from steps.common import atomic_io
+
+
+def test_passive_reader_missing_reads_do_not_create_root(tmp_path):
+    root = tmp_path / "missing-jobs"
+    reader = action_jobs.PassiveActionJobReader(root)
+    job_id = "job_" + "a" * 32
+
+    assert not root.exists()
+    assert reader.load(job_id) is None
+    assert reader.latest(
+        operation="video_summary.generate",
+        scope={"video_hash": "a" * 32},
+    ) is None
+    assert not root.exists()
+
+
+def test_passive_reader_matches_writer_projection_without_constructing_lock(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "jobs"
+    ledger = ActionJobLedger(root)
+    target_scope = {"video_hash": "a" * 32}
+    older = ledger.create_pending(
+        operation="video_summary.generate",
+        scope=target_scope,
+        owner_instance="api-1",
+    )
+    ledger.create_pending(
+        operation="identity.rebuild",
+        scope=target_scope,
+        owner_instance="api-1",
+    )
+    newer = ledger.create_pending(
+        operation="video_summary.generate",
+        scope=target_scope,
+        owner_instance="api-1",
+    )
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_size, path.stat().st_mtime_ns)
+        for path in root.iterdir()
+    }
+
+    class ForbiddenFileLock:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("passive reader must not construct a file lock")
+
+    monkeypatch.setattr(action_jobs, "FileLock", ForbiddenFileLock)
+    reader = action_jobs.PassiveActionJobReader(root)
+
+    assert reader.load(older["job_id"]) == older
+    assert reader.latest(
+        operation="video_summary.generate",
+        scope=target_scope,
+    ) == newer
+    after = {
+        path.name: (path.read_bytes(), path.stat().st_size, path.stat().st_mtime_ns)
+        for path in root.iterdir()
+    }
+    assert after == before
+
+
+def test_passive_reader_observes_only_complete_atomic_replacements(tmp_path):
+    root = tmp_path / "jobs"
+    ledger = ActionJobLedger(root)
+    before = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": "a" * 32},
+        owner_instance="api-1",
+    )
+    after = dict(before)
+    after.update(
+        {
+            "state": "failed",
+            "updated_at_utc": "2099-01-01T00:00:00+00:00",
+            "outcome": {"code": "test_failure", "message": "Test failure"},
+        }
+    )
+    reader = action_jobs.PassiveActionJobReader(root)
+    path = ledger.record_path(before["job_id"])
+    start = Event()
+    observed = []
+
+    def replace_records():
+        start.wait()
+        writer_ledger = ActionJobLedger(root)
+        for index in range(100):
+            with writer_ledger._lock:
+                atomic_io.atomic_write_json_for_concurrent_readers(
+                    path,
+                    before if index % 2 == 0 else after,
+                )
+
+    def read_records():
+        start.wait()
+        for _ in range(300):
+            observed.append(reader.load(before["job_id"]))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        writer = executor.submit(replace_records)
+        reader_task = executor.submit(read_records)
+        start.set()
+        writer.result()
+        reader_task.result()
+
+    assert observed
+    assert all(record in (before, after) for record in observed)
+
+
+def test_passive_latest_observes_only_complete_atomic_replacements(tmp_path):
+    root = tmp_path / "jobs"
+    scope = {"video_hash": "a" * 32}
+    ledger = ActionJobLedger(root)
+    before = ledger.create_pending(
+        operation="video_summary.generate",
+        scope=scope,
+        owner_instance="api-1",
+    )
+    after = dict(before)
+    after.update(
+        {
+            "state": "failed",
+            "updated_at_utc": "2099-01-01T00:00:00+00:00",
+            "outcome": {"code": "test_failure", "message": "Test failure"},
+        }
+    )
+    reader = action_jobs.PassiveActionJobReader(root)
+    path = ledger.record_path(before["job_id"])
+    start = Event()
+    observed = []
+
+    def replace_records():
+        start.wait()
+        writer_ledger = ActionJobLedger(root)
+        for index in range(100):
+            with writer_ledger._lock:
+                atomic_io.atomic_write_json_for_concurrent_readers(
+                    path,
+                    before if index % 2 == 0 else after,
+                )
+
+    def read_records():
+        start.wait()
+        for _ in range(300):
+            observed.append(
+                reader.latest(
+                    operation="video_summary.generate",
+                    scope=scope,
+                )
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        writer = executor.submit(replace_records)
+        reader_task = executor.submit(read_records)
+        start.set()
+        writer.result()
+        reader_task.result()
+
+    assert observed
+    assert all(record in (before, after) for record in observed)
+
+
+def test_writer_ledger_still_enters_lock_for_persistence(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    actual_lock = ledger._lock
+    entered = []
+
+    class LockSpy:
+        def __enter__(self):
+            actual_lock.acquire()
+            entered.append(True)
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            actual_lock.release()
+
+    ledger._lock = LockSpy()
+    ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": "a" * 32},
+        owner_instance="api-1",
+    )
+
+    assert entered == [True]
+
+
+def test_action_job_updates_use_open_reader_compatible_replace(
+    tmp_path, monkeypatch
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    pending = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": "a" * 32},
+        owner_instance="api-1",
+    )
+    replacements = []
+
+    def compatible_replace(source, destination):
+        replacements.append((source, destination))
+        atomic_io.os.replace(source, destination)
+
+    monkeypatch.setattr(
+        atomic_io,
+        "_replace_file_allowing_open_readers",
+        compatible_replace,
+        raising=False,
+    )
+
+    ledger.transition(
+        pending["job_id"],
+        expected_states="pending_confirmation",
+        new_state="failed",
+        outcome={"code": "test_failure", "message": "Test failure"},
+    )
+
+    assert len(replacements) == 1
 
 
 def test_create_pending_record_has_v1_schema_and_normalized_scope(tmp_path):
@@ -677,7 +893,11 @@ def test_compare_and_update_replace_failure_leaves_prior_record_readable(
     def fail_replace(source, destination):
         raise OSError("simulated metadata replace failure")
 
-    monkeypatch.setattr(atomic_io.os, "replace", fail_replace)
+    monkeypatch.setattr(
+        atomic_io,
+        "_replace_file_allowing_open_readers",
+        fail_replace,
+    )
 
     with pytest.raises(OSError, match="simulated metadata replace failure"):
         ledger.compare_and_update(
@@ -944,7 +1164,11 @@ def test_atomic_replace_failure_leaves_prior_record_readable(tmp_path, monkeypat
     def fail_replace(source, destination):
         raise OSError("simulated replace failure")
 
-    monkeypatch.setattr(atomic_io.os, "replace", fail_replace)
+    monkeypatch.setattr(
+        atomic_io,
+        "_replace_file_allowing_open_readers",
+        fail_replace,
+    )
 
     with pytest.raises(OSError, match="simulated replace failure"):
         ledger.transition(

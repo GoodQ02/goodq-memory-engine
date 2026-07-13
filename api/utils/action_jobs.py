@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,10 @@ from typing import Any
 
 from filelock import FileLock
 
-from steps.common.atomic_io import atomic_write_json
+from steps.common.atomic_io import (
+    atomic_write_json_for_concurrent_readers,
+    read_text_during_atomic_replace,
+)
 
 
 SCHEMA_VERSION = "goodq.action-job.v1"
@@ -204,6 +208,103 @@ class TerminalTransitionError(ActionJobTransitionError):
     """A terminal action job cannot be modified."""
 
 
+class PassiveActionJobReader:
+    """Read existing action-job records without creating storage or locks."""
+
+    def __init__(self, root_dir: Path | str):
+        self.root_dir = Path(root_dir)
+
+    def load(self, job_id: str) -> dict[str, Any] | None:
+        path = self.record_path(job_id)
+        try:
+            serialized = read_text_during_atomic_replace(path, encoding="utf-8")
+        except FileNotFoundError:
+            return None
+        loaded = json.loads(serialized)
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Action job record is not a JSON object: {job_id}")
+        return loaded
+
+    def latest(
+        self,
+        *,
+        operation: str,
+        scope: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        normalized_scope = _normalize_scope(scope)
+        scope_identity = _scope_identity(normalized_scope)
+        for attempt in range(50):
+            lock_path = self.root_dir / ".action-jobs.lock"
+            if lock_path.exists():
+                time.sleep(0.001)
+                continue
+            paths_before = tuple(sorted(self.root_dir.glob("job_*.json")))
+            try:
+                records = self._matching_records(
+                    paths_before,
+                    operation=operation,
+                    scope_identity=scope_identity,
+                )
+            except (FileNotFoundError, PermissionError):
+                time.sleep(0.001)
+                continue
+            paths_after = tuple(sorted(self.root_dir.glob("job_*.json")))
+            if lock_path.exists() or paths_after != paths_before:
+                time.sleep(0.001)
+                continue
+            return self._latest_record(records)
+
+        paths = tuple(sorted(self.root_dir.glob("job_*.json")))
+        records = self._matching_records(
+            paths,
+            operation=operation,
+            scope_identity=scope_identity,
+        )
+        return self._latest_record(records)
+
+    def _matching_records(
+        self,
+        paths: tuple[Path, ...],
+        *,
+        operation: str,
+        scope_identity: str,
+    ) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for path in paths:
+            if not JOB_ID_RE.fullmatch(path.stem):
+                continue
+            loaded = json.loads(
+                read_text_during_atomic_replace(path, encoding="utf-8")
+            )
+            if not isinstance(loaded, dict):
+                raise ValueError(
+                    f"Action job record is not a JSON object: {path.name}"
+                )
+            if (
+                loaded.get("operation") == operation
+                and isinstance(loaded.get("scope"), dict)
+                and _scope_identity(loaded["scope"]) == scope_identity
+            ):
+                records.append(loaded)
+        return records
+
+    @staticmethod
+    def _latest_record(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+        records.sort(
+            key=lambda record: (
+                str(record.get("updated_at_utc") or ""),
+                str(record.get("created_at_utc") or ""),
+            ),
+            reverse=True,
+        )
+        return records[0] if records else None
+
+    def record_path(self, job_id: str) -> Path:
+        if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+            raise ValueError("Invalid action job ID")
+        return self.root_dir / f"{job_id}.json"
+
+
 class ActionJobLedger:
     def __init__(self, root_dir: Path | str):
         self.root_dir = Path(root_dir)
@@ -396,7 +497,9 @@ class ActionJobLedger:
             updated.update(validated_updates)
             updated["state"] = new_state
             updated["updated_at_utc"] = _utc_now_iso()
-            atomic_write_json(self.record_path(job_id), updated)
+            atomic_write_json_for_concurrent_readers(
+                self.record_path(job_id), updated
+            )
             return updated
 
     def compare_and_update(
@@ -428,7 +531,9 @@ class ActionJobLedger:
             updated = dict(record)
             updated.update(validated_updates)
             updated["updated_at_utc"] = _utc_now_iso()
-            atomic_write_json(self.record_path(job_id), updated)
+            atomic_write_json_for_concurrent_readers(
+                self.record_path(job_id), updated
+            )
             return updated
 
     def adopt_owner(
@@ -466,7 +571,9 @@ class ActionJobLedger:
             updated = dict(record)
             updated["owner_instance"] = new_owner
             updated["updated_at_utc"] = _utc_now_iso()
-            atomic_write_json(self.record_path(job_id), updated)
+            atomic_write_json_for_concurrent_readers(
+                self.record_path(job_id), updated
+            )
             return updated
 
     def reconcile_prior_owner(
@@ -490,7 +597,9 @@ class ActionJobLedger:
                     "message": "Interrupted after owner instance changed",
                 }
                 job_id = str(updated.get("job_id"))
-                atomic_write_json(self.record_path(job_id), updated)
+                atomic_write_json_for_concurrent_readers(
+                    self.record_path(job_id), updated
+                )
                 interrupted.append(updated)
         return interrupted
 
@@ -519,7 +628,7 @@ class ActionJobLedger:
             "outcome": None,
             "audit_status": None,
         }
-        atomic_write_json(self.record_path(job_id), record)
+        atomic_write_json_for_concurrent_readers(self.record_path(job_id), record)
         return record
 
     def _records_unlocked(self) -> list[dict[str, Any]]:

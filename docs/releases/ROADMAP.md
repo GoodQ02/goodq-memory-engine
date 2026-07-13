@@ -585,6 +585,19 @@ the failure is not currently visible.
   classifications are unchanged. R-05-F1 remains `IN_PROGRESS`; the next
   bounded mission is a fresh FAISS absolute-path privacy selection. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`.
+- Retrieval FAISS store-reference privacy selection evidence (2026-07-13): a
+  temporary producer witness proved the absolute configured index path reaches
+  new FAISS retrieval-event details and seven warning branches, including
+  exception-carried repetition. A temporary SQLite witness proved the legacy
+  rollup fallback newly materializes the same path in
+  `retrieval_events_daily.store_ref`. The selected contract spans these new
+  retrieval-reference outputs while preserving safe basename `store_ref`,
+  lossless central serialization, FAISS behavior, rollup math/state, and route
+  effects. Historical cleanup, already-derived-row migration, and the separately
+  discovered ingestion/MemoryCommitEvent path producers remain outside. R-05-F1
+  remains `IN_PROGRESS`; the next mission is mutation-sensitive FAISS
+  store-reference privacy RED. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1173,6 +1186,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Selected one retrieval FAISS logical-store-reference privacy
+  contract across new event/log producers and legacy-input rollup projection.
+  Kept historical cleanup, existing derived rows, and ingestion commit-event
+  paths under their separate owners.
 - 2026-07-13: Checkpointed retrieval query-log privacy across the four selected
   engine records and Uvicorn access-record boundary. Preserved exact functional
   query propagation, access logging, secret redaction, and route effects, then

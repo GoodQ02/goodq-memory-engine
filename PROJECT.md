@@ -4,43 +4,45 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — select FAISS absolute-path privacy authority.
+Roadmap item: R-05-F1 — define retrieval FAISS store-reference privacy authority.
 
 ## Outcome
 
-Trace where absolute FAISS index paths cross into retrieval event details,
-ordinary warnings, and the legacy observability-rollup fallback. Select one
-producer-owned rollback boundary and mutation-sensitive RED contract before any
-production change.
+Create mutation-sensitive RED for the selected retrieval logical `store_ref`
+contract, then remove absolute FAISS paths from new retrieval events, seven
+warnings, and future legacy-input rollup projections without changing retrieval
+or rollup behavior.
 
 ## Governing evidence
 
-- `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`
+- `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_SELECTION_2026-07-13.md`
 - `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Retrieval telemetry and failure visibility remain useful without persisting or
-logging workstation-specific absolute paths. Redaction belongs at the producer
-that knows the field; central event serialization remains lossless.
+Every newly emitted or compatibility-derived FAISS retrieval reference is the
+portable logical index filename, never an absolute path. Central event
+serialization remains lossless.
 
 ## Scope
 
-- Trace the FAISS event-detail path producer to SQLite and JSONL sinks.
-- Trace every path-bearing FAISS warning and the rollup compatibility fallback.
-- Identify actual consumers that require a basename, logical store identity, or
-  another portable field.
-- Prove current exposure with temporary paths and captured/in-memory outputs.
-- Select one coherent producer-owned boundary and RED oracle.
+- Add one isolated RED suite for FAISS event details, all seven warning branches,
+  and modern/legacy temporary rollup input.
+- Preserve exact FAISS hits, scores, context, failure returns, and safe
+  diagnostic fields.
+- Preserve rollup precedence, aggregation math, state advancement, and
+  idempotency.
+- Prove lossless arbitrary-detail serialization remains unchanged.
+- Implement only after the suite collects cleanly and fails as intended.
 
 ## Boundaries
 
 - Do not change completed query-log, request-context, persistence, SQLite,
   model-cache, Qdrant no-create, status, or summary authorities.
 - Do not redact `RetrievalEvent.to_row()` or `to_dict()` centrally.
-- Do not clean historical logs/events or bundle analytics-question and
-  derived-intent logging candidates.
+- Do not clean historical raw/derived rows or bundle ingestion commit-event,
+  analytics-question, or derived-intent path/logging candidates.
 - Do not change routes, responses, ranking, dependencies, environments,
   configured data, live endpoints, services, identity, ingestion, WSL, public
   checkout, or mixed main checkout.
@@ -48,7 +50,8 @@ that knows the field; central event serialization remains lossless.
 
 ## Completion gate
 
-The selection must enumerate every applicable producer, sink, compatibility
-consumer, and failure branch; distinguish absolute-path exposure from required
-portable diagnostics; define mutation-sensitive canaries; and receive an
-independent read-only review before implementation begins.
+The RED suite must collect without infrastructure and fail only the selected
+path-privacy contract. It must reject explicit and exception-carried path leaks,
+preserve a safe filename reference and every functional edge, protect central
+serializer losslessness, and receive independent oracle review before
+implementation.

@@ -573,6 +573,18 @@ the failure is not currently visible.
   `IN_PROGRESS`; the next mission is mutation-sensitive raw-query privacy RED.
   Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_SELECTION_2026-07-13.md`.
+- Retrieval query-log privacy checkpoint evidence (2026-07-13): the four
+  selected engine records now retain only allowlisted operation, `top_k`, and
+  modality evidence, while the Uvicorn record filter redacts every `q` value
+  without changing ASGI request data or disabling access logs. Exact encoder,
+  FTS, and nested-modality query propagation is preserved, as are all six
+  existing secret-key redactions. Fresh verification passed 9 dedicated tests,
+  a 196-test focused union with 8 inherited live-runtime skips, compilation,
+  documentation/static gates, and two clean independent reviews. The
+  69-operation route census and all four retrieval `automatic_mutation`
+  classifications are unchanged. R-05-F1 remains `IN_PROGRESS`; the next
+  bounded mission is a fresh FAISS absolute-path privacy selection. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1161,6 +1173,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed retrieval query-log privacy across the four selected
+  engine records and Uvicorn access-record boundary. Preserved exact functional
+  query propagation, access logging, secret redaction, and route effects, then
+  advanced R-05-F1 to the separate FAISS absolute-path privacy selection.
 - 2026-07-13: Selected one complete retrieval raw-query log boundary after a
   fresh audit found both four engine INFO producers and Uvicorn GET access-log
   exposure. Kept FAISS path privacy, analytics-question logging, and derived

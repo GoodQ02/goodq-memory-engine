@@ -4,50 +4,51 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — define retrieval raw-query log privacy authority.
+Roadmap item: R-05-F1 — select FAISS absolute-path privacy authority.
 
 ## Outcome
 
-Create mutation-sensitive RED for the selected application-log and Uvicorn
-access-log boundary, then remove exact retrieval queries from shared logs
-without changing the functional query, responses, access logging, telemetry,
-or route effects.
+Trace where absolute FAISS index paths cross into retrieval event details,
+ordinary warnings, and the legacy observability-rollup fallback. Select one
+producer-owned rollback boundary and mutation-sensitive RED contract before any
+production change.
 
 ## Governing evidence
 
-- `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_SELECTION_2026-07-13.md`
-- `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_CHECKPOINT_2026-07-13.md`
+- `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`
+- `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-The exact query remains functional request data but never enters shared
-application or access logs. Operational evidence stays visible through safe
-operation, route, status, context, count, and modality fields.
+Retrieval telemetry and failure visibility remain useful without persisting or
+logging workstation-specific absolute paths. Redaction belongs at the producer
+that knows the field; central event serialization remains lossless.
 
 ## Scope
 
-- Add one isolated RED suite for all four engine log producers and the Uvicorn
-  GET-query access-log producer.
-- Prove the exact query still reaches encoder, FTS, and nested search callers.
-- Preserve safe operational log fields and existing secret-parameter redaction.
-- Reject disabling access logs as a privacy shortcut.
-- Implement only after the RED suite collects cleanly and fails as intended.
+- Trace the FAISS event-detail path producer to SQLite and JSONL sinks.
+- Trace every path-bearing FAISS warning and the rollup compatibility fallback.
+- Identify actual consumers that require a basename, logical store identity, or
+  another portable field.
+- Prove current exposure with temporary paths and captured/in-memory outputs.
+- Select one coherent producer-owned boundary and RED oracle.
 
 ## Boundaries
 
-- Do not change the completed persistence, request-context, SQLite, model-cache,
-  Qdrant no-create, status, or summary authorities.
-- Do not change `RetrievalEvent`, FAISS event details/warnings, or observability
-  rollup fallback; absolute-path privacy is the next separate rollback boundary.
-- Do not change retrieval results, response contracts, route classifications,
-  dependencies, active environments, configured data, live endpoints,
-  services, identity, ingestion, WSL, public checkout, or mixed main checkout.
-- Use captured logs, fake Uvicorn modules, stubs, and in-memory canaries only.
+- Do not change completed query-log, request-context, persistence, SQLite,
+  model-cache, Qdrant no-create, status, or summary authorities.
+- Do not redact `RetrievalEvent.to_row()` or `to_dict()` centrally.
+- Do not clean historical logs/events or bundle analytics-question and
+  derived-intent logging candidates.
+- Do not change routes, responses, ranking, dependencies, environments,
+  configured data, live endpoints, services, identity, ingestion, WSL, public
+  checkout, or mixed main checkout.
+- Use temporary paths, captured emitters/logs, and in-memory values only.
 
 ## Completion gate
 
-The RED suite must collect without infrastructure, fail only the selected
-privacy contract, reject logger references to the local query value, cover
-plain and encoded access-log values, preserve functional query propagation and
-safe audit fields, and receive independent oracle review before implementation.
+The selection must enumerate every applicable producer, sink, compatibility
+consumer, and failure branch; distinguish absolute-path exposure from required
+portable diagnostics; define mutation-sensitive canaries; and receive an
+independent read-only review before implementation begins.

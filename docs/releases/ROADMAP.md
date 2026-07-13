@@ -546,6 +546,19 @@ the failure is not currently visible.
   mission is
   mutation-sensitive request-context RED and implementation. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_SELECTION_2026-07-13.md`.
+- Retrieval request-context authority checkpoint evidence (2026-07-13): all
+  twelve selected query interfaces now require origin-owned keyword-only
+  context, all 22 production calls supply or forward the exact label, and API
+  clients cannot choose their own retrieval origin. Qdrant, ephemeral-memory,
+  and FAISS normalize only the explicit argument; the ambient environment
+  control and production reads are gone. A deterministic overlapping-call
+  oracle proves one shared store preserves distinct contexts. Fresh verification
+  passed 253 tests with 8 inherited live-runtime skips plus 8 MiniAgent dispatch
+  tests, compilation, documentation/static gates, and three clean independent
+  reviews. The 69-operation route census is unchanged and all four retrieval
+  routes remain `automatic_mutation`. R-05-F1 remains `IN_PROGRESS`; the next
+  bounded mission is a fresh producer-side privacy/detail selection. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1134,6 +1147,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed explicit origin-owned retrieval context across API,
+  MiniAgent, CLI, engine, router, Qdrant, ephemeral-memory, and FAISS. Removed
+  ambient attribution, preserved telemetry and route effects, and advanced
+  R-05-F1 to the separate producer-side privacy/detail selection.
 - 2026-07-13: Selected explicit origin-owned retrieval request context after an
   in-process interleaving witness proved process-global attribution crosses
   request boundaries. Kept raw-query and FAISS-path privacy as the next

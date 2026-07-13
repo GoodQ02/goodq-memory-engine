@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1188**
+Indexed active tracked paths: **1194**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -104,6 +104,7 @@ Indexed active tracked paths: **1188**
 | `/api/routes/timeline.py` | API | API or local control-plane implementation. |
 | `/api/server.py` | API | API or local control-plane implementation. |
 | `/api/utils/__init__.py` | API | API or local control-plane implementation. |
+| `/api/utils/action_jobs.py` | API | API or local control-plane implementation. |
 | `/api/utils/ingest_requests.py` | API | API or local control-plane implementation. |
 | `/api/utils/loaders.py` | API | API or local control-plane implementation. |
 | `/api/utils/media_projection.py` | API | API or local control-plane implementation. |
@@ -255,8 +256,10 @@ Indexed active tracked paths: **1188**
 | `/docs/diagnostics/R04_CONFIG_PORTABILITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -975,6 +978,7 @@ Indexed active tracked paths: **1188**
 | `/tests/ui/test_ui_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/__init__.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/api_main_test_harness.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_action_jobs.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_health_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_main_legacy_prune_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_route_effect_authority.py` | Verification | Test, fixture, or verification asset. |
@@ -1096,6 +1100,7 @@ Indexed active tracked paths: **1188**
 | `/tests/unit/test_sidecar_migration.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_step_runner_openmp_guard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_routes.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_engine_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_route_policy.py` | Verification | Test, fixture, or verification asset. |
@@ -1117,6 +1122,7 @@ Indexed active tracked paths: **1188**
 | `/tests/unit/test_video_ingest_semantic_summary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_scene_detect_duration_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_scene_detect_entity_refine_retired.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_video_summarizer.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vision_gpu_import_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vision_step_diagnostics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vram_allocator.py` | Verification | Test, fixture, or verification asset. |

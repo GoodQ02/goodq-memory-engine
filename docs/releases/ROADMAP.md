@@ -279,6 +279,19 @@ the failure is not currently visible.
   different result/recovery boundary.
   Evidence:
   `docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md`.
+- Video-summary authority checkpoint evidence (2026-07-12): the selected
+  process-execution seam now uses one exact-scope MiniAgent confirmation, a
+  locked atomic durable job ledger, generic external execution audit,
+  target-video worker/provenance truth, startup interruption/recovery, passive
+  job status, and Summary Console durable-state polling. Failure-boundary and
+  malformed-status review findings were closed before checkpointing. Fresh
+  integrated verification passed 415 tests plus Python compilation, JavaScript
+  syntax, diff, secret-surface, and route-effect gates. R-05 remains
+  `IN_PROGRESS`; the next bounded mission is a fresh read-only selection among
+  the remaining curated/process authorities, not automatic continuation into
+  temporal summarization.
+  Evidence:
+  `docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 

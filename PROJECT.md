@@ -4,62 +4,46 @@
 
 # Active bounded mission
 
-Roadmap item: R-05 — govern video-summary generation as one durable confirmed
-job.
+Roadmap item: R-05 — select the next remaining local-operator authority seam.
 
 ## Outcome
 
-Replace process-local video-summary dispatch/status with one exact-scope,
-single-use confirmed job whose durable lifecycle and generic audit evidence make
-worker success, failure, duplication, and restart recovery truthful to the API
-and Summary Console.
+Use fresh mounted-code evidence to choose the smallest coherent unfinished
+curated-mutation or process-execution repair after the verified video-summary
+checkpoint. Record the selection and its ownership boundary before any new
+implementation begins.
+
+## Governing evidence
+
+- `docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md`
+- `docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md`
+- `docs/releases/ROADMAP.md`
 
 ## Scope
 
-- Extend the verified MiniAgent authorization-only boundary for one normalized
-  video-summary generation operation; do not create another token store.
-- Add one generic locked, atomic action-job ledger, exercised only by video
-  summary in this seam, and create a pending-confirmation record before token
-  issuance.
-- Record external worker outcomes through the existing generic tool-audit
-  authority; do not create a second audit log.
-- Narrow scene-summary and provenance inputs to the confirmed video and preserve
-  truthful LLM-versus-template outcome metadata.
-- Make generate/status responses use a durable job identifier and explicit
-  lifecycle states.
-- Align Summary Console confirmation, dispatch, polling, success, failure, and
-  recovered/stale copy with the durable record.
-- Add focused route, worker, authority, recovery, redaction, audit, and UI
-  contract tests before broader verification.
-
-## Governing invariants
-
-- Exact operation and complete normalized scope are confirmed once and consumed
-  once before the job enters `queued` or any worker side effect occurs.
-- The pending-confirmation job exists before token issuance and is lifecycle
-  state only; MiniAgent remains the decision/execution audit authority.
-- Confirmed target-video scope bounds every scene-summary and provenance input.
-- Missing process-local state never implies success. Only durable `succeeded`
-  state may be shown as successful.
-- Duplicate dispatch, worker failure, process restart, persistence failure, and
-  audit failure remain visible and deterministic.
-- The mounted route remains `process_execution` and the completed common
-  loopback/client boundary remains fail-closed.
+- Re-probe only the remaining roadmap-owned curated mutations and process
+  executions against current mounted code and verified MiniAgent authority.
+- Name completed work first and exclude the checkpointed video-summary seam.
+- Distinguish common confirmation/audit ownership from the identity
+  persistence/recovery owner and the passive-status repair owner.
+- Compare the remaining candidates by authority boundary, rollback/recovery
+  model, UI caller, and focused verification cost.
+- Update the sole roadmap if fresh evidence changes the expected order.
 
 ## Boundaries
 
-- Do not change temporal summarization, identity routes or storage, passive
-  status probes, ingestion, supervision, LAN/gateway policy, or live data.
-- Do not call the live generation route, start a model or job, or exercise a
-  real media hash.
-- Use isolated temporary roots and injected workers/authorities in tests.
-- Do not reopen completed staging, route-effect, common client-boundary,
-  handler-truth, or documentation-authority seams without contradictory
+- Read-only selection only; no route, UI, ledger, MiniAgent, identity, temporal,
+  service, configuration, or data mutation.
+- Do not invoke live endpoints, models, jobs, WSL, Qdrant, ingestion, or identity
+  actions.
+- Do not reopen governed ingest staging, route-effect/client boundaries,
+  video-summary authority, or other completed checkpoints without contradictory
   evidence.
-- Preserve the frozen mixed checkout, public checkout, services, and data stores.
+- Preserve the frozen mixed checkout, public checkout, active services, and data
+  stores.
 
-## Resume authority
+## Completion gate
 
-Use `docs/releases/ROADMAP.md` as the sole long-running register and
-`docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` as the
-selection evidence for this one implementation seam.
+One evidence-backed next seam is named with exact owner files, authority and
+rollback boundary, tests required before implementation, and explicit excluded
+owners. Only then may `PROJECT.md` move to that implementation mission.

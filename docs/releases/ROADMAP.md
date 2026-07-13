@@ -320,6 +320,19 @@ the failure is not currently visible.
   curated/process authorities, not automatic continuation into temporal
   summarization. Evidence:
   `docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Temporal-summary selection evidence (2026-07-13): fresh mounted-code
+  comparison found the six remaining curated mutations and two identity
+  subprocesses are R-08-owned, while the five nominal status executions are
+  R-14-owned. Temporal summarization is therefore the only currently eligible
+  R-05 process seam. It requires exact request and execution-policy authority,
+  a private atomic exact-job result store, result-before-terminal recovery,
+  passive job/result retrieval, and Retro Console confirmation/polling. The
+  result remains private with its job until R-23 defines retention; inference
+  is never silently rerun or treated as rollback-capable. No endpoint, model,
+  process, service, configured data root, or operator data was exercised. R-05
+  remains `IN_PROGRESS`.
+  Evidence:
+  `docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_SELECTION_2026-07-13.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 

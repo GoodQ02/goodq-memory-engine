@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1196**
+Indexed active tracked paths: **1197**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -261,6 +261,7 @@ Indexed active tracked paths: **1196**
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_SELECTION_2026-07-12.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |

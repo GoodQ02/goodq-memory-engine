@@ -695,6 +695,19 @@ the failure is not currently visible.
   initialization, re-ingestion, broad retention cleanup, API/UI work, and live
   configured-data verification remain outside the seam. Evidence:
   `docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md`.
+- Approval-authority foundation checkpoint (2026-07-13): private checkpoint
+  `248bbd33` adds complete atomic initial metadata and one-lock
+  expected-owner/expected-state transitions to the shared action-job authority,
+  then registers `clean_memory.apply` as authorization-only MiniAgent work with
+  the exact six-field scope, request-ID/absolute-deadline binding, no native
+  executor, and bounded logical audit target. The isolated authority union
+  passed 375 tests plus compilation, JSON, documentation-authority, semantic
+  drift, banned-token, dependency, and diff gates; two independent current-byte
+  reviews returned clean. No cleanup executor, target adapter, configured data,
+  Qdrant, runtime, service, or retention authority was added or exercised.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is the import-pure,
+  job-independent immutable candidate-plan authority using injected temporary
+  inventories only.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1257,6 +1270,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 cleanup approval foundation with atomic
+  initial job metadata, one-lock lifecycle claims, and exact cleanup-only
+  MiniAgent request/deadline authority. Preserved the no-executor/no-target
+  boundary and advanced only to an import-pure immutable candidate-plan seam.
 
 - 2026-07-13: Verified R-05-F1 after a final no-repeat reconciliation found no
   remaining nominal retrieval/status hidden mutation. Routed mounted output

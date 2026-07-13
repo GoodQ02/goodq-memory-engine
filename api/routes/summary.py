@@ -507,9 +507,9 @@ async def generate_video_summary(
                 detail={"code": "job_not_confirmable", "job": _public_summary_job(current)},
             )
 
-        authority = _get_summary_authority(cfg)
         tool_args = {"job_id": job_id, "video_hash": video_hash}
         try:
+            authority = _get_summary_authority(cfg)
             envelope, return_code = authority.authorize_action(
                 prompt="Confirm one exact video summary",
                 mode="ops",
@@ -593,11 +593,12 @@ async def generate_video_summary(
             },
         )
 
-    authority = _get_summary_authority(cfg)
+    authority = None
     tool_args = {"job_id": record["job_id"], "video_hash": video_hash}
     token = None
     authorization_evidence_persisted = False
     try:
+        authority = _get_summary_authority(cfg)
         envelope, return_code = authority.authorize_action(
             prompt="Prepare one exact video summary",
             mode="ops",
@@ -625,7 +626,12 @@ async def generate_video_summary(
         authorization_evidence_persisted = True
     except Exception:
         logger.error("Failed to prepare video summary authorization")
-        if isinstance(token, str) and token and not authorization_evidence_persisted:
+        if (
+            authority is not None
+            and isinstance(token, str)
+            and token
+            and not authorization_evidence_persisted
+        ):
             try:
                 authority.revoke_action_authorization(
                     prompt="Revoke unpersisted video summary authorization",

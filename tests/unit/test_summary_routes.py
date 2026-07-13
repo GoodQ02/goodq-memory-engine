@@ -344,6 +344,44 @@ def test_prepare_authorization_failure_is_terminal(client, mock_db_paths, monkey
     assert records[0]["outcome"]["code"] == "authorization_prepare_failed"
 
 
+def test_prepare_authority_initialization_failure_is_terminal_and_retryable(
+    client, mock_db_paths, monkeypatch, caplog
+) -> None:
+    _mock_existing_video(monkeypatch)
+
+    def fail_authority(_cfg):
+        raise RuntimeError("confirmation-token-private C:\\private\\authority")
+
+    monkeypatch.setattr(summary_route, "_get_summary_authority", fail_authority)
+
+    failed = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={"action": "prepare"},
+    )
+
+    assert failed.status_code == 503
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    failed_record = ledger.latest(
+        operation="video_summary.generate",
+        scope={"video_hash": VALID_HASH},
+    )
+    assert failed_record["state"] == "failed"
+    assert failed_record["outcome"]["code"] == "authorization_prepare_failed"
+    assert "confirmation-token-private" not in caplog.text
+    assert "private\\authority" not in caplog.text
+
+    monkeypatch.setattr(
+        summary_route, "_get_summary_authority", lambda _cfg: StubSummaryAuthority()
+    )
+    retried = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={"action": "prepare"},
+    )
+
+    assert retried.status_code == 200
+    assert retried.json()["job"]["job_id"] != failed_record["job_id"]
+
+
 def test_prepare_evidence_failure_revokes_issued_token(
     client, mock_db_paths, monkeypatch, caplog
 ) -> None:
@@ -569,6 +607,47 @@ def test_expired_confirmation_becomes_terminal(client, mock_db_paths, monkeypatc
         "code": "authorization_expired",
         "message": "Video summary authorization expired",
     }
+
+
+def test_confirm_authority_initialization_failure_is_terminal_without_worker(
+    client, mock_db_paths, monkeypatch, caplog
+) -> None:
+    _mock_existing_video(monkeypatch)
+    monkeypatch.setattr(
+        summary_route, "_get_summary_authority", lambda _cfg: StubSummaryAuthority()
+    )
+    prepared = _prepare_summary(client)
+    worker_calls = []
+
+    async def worker(*args):
+        worker_calls.append(args)
+
+    monkeypatch.setattr(summary_route, "_generate_summary_worker", worker)
+
+    def fail_authority(_cfg):
+        raise RuntimeError("confirmation-token-private C:\\private\\authority")
+
+    monkeypatch.setattr(summary_route, "_get_summary_authority", fail_authority)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": prepared["job"]["job_id"],
+            "confirmation_token": "confirmation-token-1",
+        },
+    )
+
+    assert response.status_code == 409
+    persisted = _job_ledger(mock_db_paths[0].parent).load(prepared["job"]["job_id"])
+    assert persisted["state"] == "failed"
+    assert persisted["outcome"] == {
+        "code": "authorization_failed",
+        "message": "Video summary authorization failed",
+    }
+    assert worker_calls == []
+    assert "confirmation-token-private" not in caplog.text
+    assert "private\\authority" not in caplog.text
 
 
 def _queued_summary_job(ledger: ActionJobLedger):

@@ -427,6 +427,161 @@ def _summary_video_hash_from_record(record: dict) -> str:
     return scope["video_hash"]
 
 
+def _collection_delete_scope_from_record(record: dict) -> dict:
+    scope = record.get("scope")
+    if (
+        not isinstance(scope, dict)
+        or set(scope)
+        != {"epoch_id", "collection_id", "expected_record_sha256"}
+        or not isinstance(scope.get("epoch_id"), str)
+        or _COLLECTION_EPOCH_ID_RE.fullmatch(scope["epoch_id"]) is None
+        or not isinstance(scope.get("collection_id"), str)
+        or _COLLECTION_ID_RE.fullmatch(scope["collection_id"]) is None
+        or not isinstance(scope.get("expected_record_sha256"), str)
+        or _SHA256_RE.fullmatch(scope["expected_record_sha256"]) is None
+    ):
+        raise ValueError("Persisted collection delete job scope is invalid")
+    return scope
+
+
+def _configured_summary_db_path(cfg: dict) -> Path:
+    value = cfg.get("paths", {}).get("knowledge_graph_db")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("GoodQ knowledge graph database is not configured")
+    return Path(value)
+
+
+def _advance_collection_delete_to_running(
+    ledger: ActionJobLedger,
+    record: dict,
+) -> dict:
+    state = record["state"]
+    if state == "authorizing":
+        record = ledger.transition(
+            record["job_id"],
+            expected_states="authorizing",
+            new_state="queued",
+        )
+        state = "queued"
+    if state == "queued":
+        record = ledger.transition(
+            record["job_id"],
+            expected_states="queued",
+            new_state="running",
+        )
+    return record
+
+
+def _reconcile_collection_delete_job(
+    cfg: dict,
+    ledger: ActionJobLedger,
+    record: dict,
+) -> None:
+    state = str(record.get("state") or "")
+    job_id = str(record.get("job_id") or "")
+    scope = _collection_delete_scope_from_record(record)
+
+    if state == "pending_confirmation":
+        if _has_complete_summary_authorization(record):
+            return
+        ledger.transition(
+            job_id,
+            expected_states=state,
+            new_state="failed",
+            outcome={
+                "code": "authorization_interrupted",
+                "message": "Collection delete authorization was interrupted by restart",
+            },
+        )
+        return
+
+    db_path = _configured_summary_db_path(cfg)
+    receipt = None
+    if db_path.is_file() and db_path.parent.name == scope["epoch_id"]:
+        receipt = _validated_collection_delete_receipt(
+            db_path,
+            job_id=job_id,
+            scope=scope,
+        )
+
+    if state == "authorizing" and receipt is None:
+        if _has_complete_summary_authorization(record):
+            return
+        ledger.transition(
+            job_id,
+            expected_states=state,
+            new_state="failed",
+            outcome={
+                "code": "authorization_interrupted",
+                "message": "Collection delete authorization was interrupted by restart",
+            },
+        )
+        return
+
+    if receipt is not None:
+        request_id = _collection_delete_request_id(
+            receipt,
+            job_id=job_id,
+            expected_record_sha256=scope["expected_record_sha256"],
+        )
+        if not _has_complete_summary_authorization(record):
+            raise ValueError(
+                "Persisted collection delete authorization evidence is incomplete"
+            )
+        if not hmac.compare_digest(record["authorization_request_id"], request_id):
+            raise ValueError(
+                "Persisted collection delete authorization request ID is inconsistent"
+            )
+        record = _advance_collection_delete_to_running(ledger, record)
+        audit_status = _record_collection_delete_outcome(
+            cfg,
+            job_id=job_id,
+            scope=scope,
+            request_id=request_id,
+            status="succeeded",
+            mutated=True,
+            duration_ms=0,
+            error_codes=[],
+        )
+        ledger.transition(
+            job_id,
+            expected_states="running",
+            new_state="succeeded",
+            outcome={
+                "code": "collection_deleted",
+                "message": "Collection delete was recovered from durable evidence",
+            },
+            audit_status=audit_status,
+        )
+        return
+
+    if state not in {"queued", "running"}:
+        raise ValueError("Persisted collection delete job state is invalid")
+    if not _has_complete_summary_authorization(record):
+        raise ValueError("Persisted collection delete authorization is incomplete")
+    request_id = record["authorization_request_id"]
+    audit_status = _record_collection_delete_outcome(
+        cfg,
+        job_id=job_id,
+        scope=scope,
+        request_id=request_id,
+        status="interrupted",
+        mutated=False,
+        duration_ms=0,
+        error_codes=["execution_interrupted"],
+    )
+    ledger.transition(
+        job_id,
+        expected_states=state,
+        new_state="interrupted",
+        outcome={
+            "code": "execution_interrupted",
+            "message": "Collection delete was interrupted before durable mutation",
+        },
+        audit_status=audit_status,
+    )
+
+
 def _reconcile_summary_jobs(cfg: dict) -> None:
     root = _get_summary_job_root(cfg)
     if not root.exists():
@@ -437,7 +592,11 @@ def _reconcile_summary_jobs(cfg: dict) -> None:
         states={"pending_confirmation", "authorizing", "queued", "running"},
     )
     for record in records:
-        if record.get("operation") != _VIDEO_SUMMARY_JOB_OPERATION:
+        operation = record.get("operation")
+        if operation == _COLLECTION_DELETE_JOB_OPERATION:
+            _reconcile_collection_delete_job(cfg, ledger, record)
+            continue
+        if operation != _VIDEO_SUMMARY_JOB_OPERATION:
             continue
         state = str(record.get("state") or "")
         job_id = str(record.get("job_id") or "")

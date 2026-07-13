@@ -1527,6 +1527,77 @@ def _summary_job_in_state(
     return record
 
 
+def _delete_job_in_state(
+    tmp_path: Path,
+    state: str,
+    *,
+    owner_instance: str = "summary-api-prior",
+    complete_evidence: bool = True,
+    persist_receipt: bool = False,
+) -> dict:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "knowledge_graph.db"
+    db_path.write_text("", encoding="utf-8")
+    collection = _create_collection_for_delete(db_path)
+    scope = {
+        "epoch_id": tmp_path.name,
+        "collection_id": collection["collection_id"],
+        "expected_record_sha256": summary_aggregator.collection_record_sha256(
+            collection
+        ),
+    }
+    ledger = _job_ledger(tmp_path)
+    record = ledger.create_pending(
+        operation="summary_collection.delete",
+        scope=scope,
+        owner_instance=owner_instance,
+    )
+    if complete_evidence:
+        record = ledger.compare_and_update(
+            record["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint=hashlib.sha256(b"confirmation-token-1").hexdigest(),
+            authorization_request_id="authorization-delete-original",
+        )
+    transitions = {
+        "pending_confirmation": [],
+        "authorizing": ["authorizing"],
+        "queued": ["authorizing", "queued"],
+        "running": ["authorizing", "queued", "running"],
+    }[state]
+    current = "pending_confirmation"
+    for next_state in transitions:
+        record = ledger.transition(
+            record["job_id"],
+            expected_states=current,
+            new_state=next_state,
+        )
+        current = next_state
+    if persist_receipt:
+        summary_aggregator.soft_delete_collection(
+            db_path,
+            collection["collection_id"],
+            mutation_evidence={
+                "job_id": record["job_id"],
+                "expected_record_sha256": scope["expected_record_sha256"],
+                "authorization_request_id": "authorization-delete-original",
+            },
+        )
+    return {
+        "db_path": db_path,
+        "collection": collection,
+        "scope": scope,
+        "ledger": ledger,
+        "record": record,
+        "cfg": {
+            "paths": {
+                "data_root": str(tmp_path / "GoodQ_Data"),
+                "knowledge_graph_db": str(db_path),
+            }
+        },
+    }
+
+
 def test_summary_router_registers_reconciliation_startup_handler() -> None:
     handlers = [
         handler
@@ -1744,6 +1815,313 @@ def test_summary_reconciliation_surfaces_corrupt_ledger(tmp_path) -> None:
         summary_route._reconcile_summary_jobs(
             {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
         )
+
+
+@pytest.mark.parametrize("state", ["pending_confirmation", "authorizing"])
+def test_collection_delete_reconciliation_preserves_complete_authorization(
+    state, tmp_path
+) -> None:
+    job = _delete_job_in_state(tmp_path, state)
+    path = job["ledger"].record_path(job["record"]["job_id"])
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    assert job["ledger"].load(job["record"]["job_id"]) == job["record"]
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("state", ["pending_confirmation", "authorizing"])
+def test_collection_delete_reconciliation_fails_incomplete_authorization(
+    state, tmp_path
+) -> None:
+    job = _delete_job_in_state(
+        tmp_path,
+        state,
+        complete_evidence=False,
+    )
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == "failed"
+    assert persisted["outcome"] == {
+        "code": "authorization_interrupted",
+        "message": "Collection delete authorization was interrupted by restart",
+    }
+
+
+@pytest.mark.parametrize("state", ["authorizing", "queued", "running"])
+def test_collection_delete_reconciliation_completes_exact_receipt_without_replay(
+    state, tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(tmp_path, state, persist_receipt=True)
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(
+        summary_aggregator,
+        "soft_delete_collection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("delete replayed")
+        ),
+    )
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == "succeeded"
+    assert persisted["outcome"] == {
+        "code": "collection_deleted",
+        "message": "Collection delete was recovered from durable evidence",
+    }
+    assert persisted["audit_status"] == "recorded"
+    assert authority.authorize_calls == []
+    assert authority.external_calls == [
+        {
+            "operation": "delete_summary_collection",
+            "arguments": {"job_id": job["record"]["job_id"], **job["scope"]},
+            "request_id": "authorization-delete-original",
+            "mode": "ops",
+            "status": "succeeded",
+            "return_code": 0,
+            "duration_ms": 0,
+            "side_effect_report": {
+                "mutated": True,
+                "targets": [
+                    f"summary-collection:delete:{job['record']['job_id']}"
+                ],
+            },
+            "error_codes": [],
+        }
+    ]
+
+
+@pytest.mark.parametrize("state", ["queued", "running"])
+def test_collection_delete_reconciliation_interrupts_without_receipt_or_replay(
+    state, tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(tmp_path, state)
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(
+        summary_aggregator,
+        "soft_delete_collection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("delete replayed")
+        ),
+    )
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == "interrupted"
+    assert persisted["outcome"] == {
+        "code": "execution_interrupted",
+        "message": "Collection delete was interrupted before durable mutation",
+    }
+    assert persisted["audit_status"] == "recorded"
+    assert authority.authorize_calls == []
+    assert authority.external_calls[0]["status"] == "interrupted"
+    assert authority.external_calls[0]["side_effect_report"]["mutated"] is False
+    assert authority.external_calls[0]["error_codes"] == ["execution_interrupted"]
+    assert summary_aggregator.load_collections(job["db_path"])["collections"][0][
+        "status"
+    ] == "active"
+
+
+@pytest.mark.parametrize("persist_receipt", [False, True])
+def test_collection_delete_reconciliation_audit_failure_keeps_state_truth(
+    persist_receipt, tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(
+        tmp_path,
+        "running",
+        persist_receipt=persist_receipt,
+    )
+
+    class RaisingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            raise RuntimeError("confirmation-token-private private\\audit.json")
+
+    monkeypatch.setattr(
+        summary_route,
+        "_get_summary_authority",
+        lambda _cfg: RaisingAuditAuthority(),
+    )
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == (
+        "succeeded" if persist_receipt else "interrupted"
+    )
+    assert persisted["audit_status"] == "failed"
+
+
+def test_collection_delete_reconciliation_is_idempotent(tmp_path, monkeypatch) -> None:
+    job = _delete_job_in_state(tmp_path, "running", persist_receipt=True)
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+    first = job["ledger"].load(job["record"]["job_id"])
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    assert job["ledger"].load(job["record"]["job_id"]) == first
+    assert len(authority.external_calls) == 1
+
+
+def test_collection_delete_reconciliation_leaves_current_and_terminal_unchanged(
+    tmp_path, monkeypatch
+) -> None:
+    current = _delete_job_in_state(
+        tmp_path / "current",
+        "running",
+        owner_instance=summary_route._SUMMARY_OWNER_INSTANCE,
+    )
+    terminal = _delete_job_in_state(tmp_path / "terminal", "running")
+    terminal_record = terminal["ledger"].transition(
+        terminal["record"]["job_id"],
+        expected_states="running",
+        new_state="interrupted",
+        outcome={"code": "already_terminal", "message": "Already terminal"},
+    )
+    before_current = current["ledger"].record_path(
+        current["record"]["job_id"]
+    ).read_bytes()
+    before_terminal = terminal["ledger"].record_path(
+        terminal_record["job_id"]
+    ).read_bytes()
+    monkeypatch.setattr(
+        summary_route,
+        "_get_summary_authority",
+        lambda _cfg: (_ for _ in ()).throw(AssertionError("unexpected audit")),
+    )
+
+    summary_route._reconcile_summary_jobs(current["cfg"])
+    summary_route._reconcile_summary_jobs(terminal["cfg"])
+
+    assert current["ledger"].record_path(
+        current["record"]["job_id"]
+    ).read_bytes() == before_current
+    assert terminal["ledger"].record_path(
+        terminal_record["job_id"]
+    ).read_bytes() == before_terminal
+
+
+def test_collection_delete_reconciliation_surfaces_corrupt_store(
+    tmp_path
+) -> None:
+    job = _delete_job_in_state(tmp_path, "running")
+    (tmp_path / "saved_collections.json").write_text("{corrupt", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="saved collections store"):
+        summary_route._reconcile_summary_jobs(job["cfg"])
+
+    assert job["ledger"].load(job["record"]["job_id"])["state"] == "running"
+
+
+@pytest.mark.parametrize("invalid_receipt", ["wrong_target", "active", "epoch"])
+def test_collection_delete_reconciliation_never_accepts_misbound_receipt(
+    invalid_receipt, tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(tmp_path, "running")
+    data = summary_aggregator.load_collections(job["db_path"])
+    receipt_target = data["collections"][0]
+    if invalid_receipt == "wrong_target":
+        other = summary_aggregator.add_collection(
+            job["db_path"],
+            {"name": "Wrong restart receipt target"},
+        )
+        data = summary_aggregator.load_collections(job["db_path"])
+        receipt_target = next(
+            item for item in data["collections"] if item["collection_id"] == other["collection_id"]
+        )
+    receipt_target["history"].append(
+        {
+            "action": "delete",
+            "timestamp_utc": "2026-07-12T23:00:00Z",
+            "operator_note": "Injected invalid restart receipt",
+            "job_id": job["record"]["job_id"],
+            "expected_record_sha256": job["scope"]["expected_record_sha256"],
+            "authorization_request_id": "authorization-delete-original",
+        }
+    )
+    if invalid_receipt != "active":
+        receipt_target["status"] = "deleted"
+        receipt_target["deleted_at_utc"] = "2026-07-12T23:00:00Z"
+    if invalid_receipt == "epoch":
+        receipt_target["source_epoch"] = "epoch_other"
+    summary_aggregator.save_collections(job["db_path"], data)
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == "interrupted"
+    assert authority.external_calls[0]["status"] == "interrupted"
+    assert authority.external_calls[0]["side_effect_report"]["mutated"] is False
+
+
+def test_collection_delete_reconciliation_missing_epoch_db_interrupts_without_guess(
+    tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(tmp_path, "running")
+    job["db_path"].unlink()
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    summary_route._reconcile_summary_jobs(job["cfg"])
+
+    persisted = job["ledger"].load(job["record"]["job_id"])
+    assert persisted["state"] == "interrupted"
+    assert persisted["audit_status"] == "recorded"
+
+
+def test_collection_delete_reconciliation_surfaces_invalid_persisted_scope(
+    tmp_path
+) -> None:
+    job = _delete_job_in_state(tmp_path, "running")
+    record_path = job["ledger"].record_path(job["record"]["job_id"])
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["scope"]["unexpected"] = "not-authoritative"
+    record_path.write_text(json.dumps(record), encoding="utf-8")
+    before = record_path.read_bytes()
+
+    with pytest.raises(ValueError, match="scope is invalid"):
+        summary_route._reconcile_summary_jobs(job["cfg"])
+
+    assert record_path.read_bytes() == before
+
+
+def test_collection_delete_reconciliation_surfaces_request_id_mismatch(
+    tmp_path, monkeypatch
+) -> None:
+    job = _delete_job_in_state(tmp_path, "running", persist_receipt=True)
+    data = summary_aggregator.load_collections(job["db_path"])
+    data["collections"][0]["history"][-1][
+        "authorization_request_id"
+    ] = "authorization-delete-conflict"
+    summary_aggregator.save_collections(job["db_path"], data)
+    record_path = job["ledger"].record_path(job["record"]["job_id"])
+    before = record_path.read_bytes()
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(
+        summary_aggregator,
+        "soft_delete_collection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("delete replayed")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="authorization request ID"):
+        summary_route._reconcile_summary_jobs(job["cfg"])
+
+    assert record_path.read_bytes() == before
+    assert authority.authorize_calls == []
+    assert authority.external_calls == []
 
 
 def test_capabilities_endpoint(client) -> None:

@@ -435,6 +435,18 @@ the failure is not currently visible.
   mission is a fresh read-only selection among the remaining retrieval and
   summary SQLite effects. Evidence:
   `docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Model-cache selection evidence (2026-07-13): fresh fake-loader and temporary
+  witnesses selected text/visual local-only cache resolution as the next exact
+  seam. Current text and CLIP retrieval pass remote identifiers without pinned
+  local paths or local-only flags; registry revisions and an existing CLAP
+  pattern supply the target contract. Existing offline provisioning is not a
+  passive substitute because cached hits and misses write the download log.
+  Telemetry remains an intentional policy seam, while summary/retrieval SQLite
+  requires a separate live-WAL contract. The implementation boundary is one
+  pure exact-snapshot inspector plus the two retrieval loaders and focused
+  tests. Routes remain `automatic_mutation`; dependencies and all other effects
+  stay frozen. Evidence:
+  `docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -791,6 +803,20 @@ the failure is not currently visible.
   Evidence:
   `docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md`.
 
+### R-18-F2 — Repair dynamic search-route test loading
+
+- Priority: P1
+- Status: OPEN
+- Finding: three search-route unit modules execute `api.routes.search` through a
+  dynamic loader without registering the module in `sys.modules`; dataclass
+  processing therefore fails during collection before behavioral assertions
+  run.
+- Repair: correct the shared test-loader pattern only; do not change the
+  production dataclass to accommodate a broken harness.
+- Completion gate: audio, enrichment, and sentiment search-route modules collect
+  and execute their original assertions, and a seeded loader regression proves
+  module registration occurs before execution.
+
 ### R-19 — Establish one canonical API and Watchdog supervisor
 
 - Priority: P0
@@ -801,6 +827,11 @@ the failure is not currently visible.
   liveness, and structured logs; install no dependencies during launch.
 - Completion gate: cold start, port collision, child crash, backoff, and restart
   acceptance tests pass before startup shortcuts are replaced.
+- Environment-drift evidence (2026-07-13): live `goodq_core` reports Sentence
+  Transformers `5.6.0` and Transformers `5.12.1`, while both baseline locks pin
+  `5.3.0` and `5.4.0`; Hugging Face Hub matches at `1.8.0`. Reconcile the active
+  environment to an approved lock in a rollback environment before canonical
+  supervisor acceptance. Do not install, downgrade, or rebuild during R-05-F1.
 
 ### R-20 — Enforce LAN, port, and secret boundaries
 

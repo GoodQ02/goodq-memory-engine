@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1236**
+Indexed active tracked paths: **1238**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -117,6 +117,7 @@ Indexed active tracked paths: **1236**
 | `/branding/xfiles_title_card.png` | Repository root | Root-level project or runtime surface. |
 | `/cli/__init__.py` | CLI | Command-line operator surface. |
 | `/cli/auth_models.py` | CLI | Command-line operator surface. |
+| `/cli/clean_memory.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_build.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_kg.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_memory.py` | CLI | Command-line operator surface. |
@@ -1027,6 +1028,7 @@ Indexed active tracked paths: **1236**
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_context_analyzer_llm.py` | Verification | Test, fixture, or verification asset. |

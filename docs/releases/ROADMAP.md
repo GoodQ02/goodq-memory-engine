@@ -520,6 +520,19 @@ the failure is not currently visible.
   R-05-F1 remains `IN_PROGRESS`; the next bounded mission is mutation-sensitive
   persistence/config implementation. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md`.
+- Retrieval telemetry persistence authority checkpoint evidence (2026-07-13):
+  one frozen canonical policy now reaches Qdrant, ephemeral-memory, and FAISS
+  emitters. Event writes require an existing primary database; schema readiness
+  survives same-path replacement; JSONL is limited to exact SQLite locked/busy
+  failure under the exact existing configured log destination; and failure
+  visibility contains no query text or absolute path. Independent adversarial
+  review found and closed a broad lock-substring classifier before returning
+  clean. Fresh verification passed 33 focused tests and 193 adjacent tests with
+  8 inherited live-runtime skips, preserved the 69-operation route
+  census, and left all four retrieval routes as `automatic_mutation`. R-05-F1
+  remains `IN_PROGRESS`; the next bounded mission is a fresh read-only selection
+  between request-context authority and privacy/detail redaction. Evidence:
+  `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -1108,6 +1121,11 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed canonical retrieval telemetry policy and bounded
+  persistence/fallback authority after closing an adversarial SQLite lock-text
+  classification gap. Advanced R-05-F1 to a fresh selection between
+  request-context truth and privacy/detail redaction without reopening event
+  persistence or reclassifying retrieval routes.
 - 2026-07-13: Selected retrieval-event persistence/config authority after
   proving configuration loss, fallback relocation, missing-primary creation,
   and same-path replacement event loss in temporary roots. Kept request context

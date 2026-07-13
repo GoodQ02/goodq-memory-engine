@@ -352,10 +352,10 @@ the failure is not currently visible.
 
 - Priority: P0
 - Status: IN_PROGRESS
-- Finding: four retrieval operations can create missing Qdrant collections,
-  persist retrieval events, and populate or download model caches, while
-  `GET /api/ingest/status/{request_id}` constructs a ledger that creates its
-  request directory. Summary read projections also open writable SQLite
+- Finding: four retrieval operations can still persist retrieval events, may
+  populate or download model caches, and use write-capable SQLite reads. Their
+  query-side Qdrant creation and the ingest-status constructor mutation are
+  checkpointed closed. Summary read projections also open writable SQLite
   connections and require a focused side-effect audit before passive
   classification is trusted.
 - Repair: separate read-only retrieval/status inspection from collection,
@@ -391,6 +391,18 @@ the failure is not currently visible.
   telemetry, model/cache, and SQLite effects remain open. The next bounded seam
   is the already-audited ingest-status constructor no-create repair. Evidence:
   `docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Ingest-status authority checkpoint evidence (2026-07-13): ledger construction
+  is now assignment-only. Valid-missing and invalid status requests leave an
+  absent tree absent; an existing request plus Watchdog projection leaves paths,
+  bytes, sizes, and modification times unchanged. Explicit `create_record()`
+  and cold-start prepare/confirm controls preserve governed storage creation.
+  Fresh verification passed 112 focused regressions, Python compilation, diff
+  checks, and independent review with no findings. Only the status GET changed
+  to `passive_read`; the 69-operation census is now 41 passive, 1 staging, 10
+  automatic mutation, 8 curated mutation, and 9 process execution. R-05-F1
+  remains `IN_PROGRESS`; the next bounded mission is a fresh read-only selection
+  among the remaining summary and retrieval effects. Evidence:
+  `docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 

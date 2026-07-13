@@ -593,6 +593,26 @@ def test_protected_boundary_set_is_exact_and_identities_are_nonempty() -> None:
         )
 
 
+def test_protected_boundaries_reject_duplicate_canonical_identity_envelopes() -> None:
+    scope = _scope()
+    duplicated_boundary = replace(
+        scope.protected_boundaries[1],
+        identity_json=scope.protected_boundaries[0].identity_json,
+    )
+
+    with pytest.raises(ValueError, match="Protected-boundary identity is duplicated"):
+        _plan(
+            replace(
+                scope,
+                protected_boundaries=(
+                    scope.protected_boundaries[0],
+                    duplicated_boundary,
+                    *scope.protected_boundaries[2:],
+                ),
+            )
+        )
+
+
 def test_execution_order_is_canonical_not_input_enumeration_order() -> None:
     scope = _scope()
     expected = _plan(scope).authority["execution_order"]

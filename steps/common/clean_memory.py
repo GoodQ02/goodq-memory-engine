@@ -607,6 +607,15 @@ def _build_authority(scope: ResolvedCleanupScope) -> dict[str, Any]:
         raise ValueError("Protected-boundary evidence set is incomplete or unexpected")
     if len(set(boundary_ids)) != len(boundary_ids):
         raise ValueError("Protected-boundary logical identity is duplicated")
+    boundary_identities = [
+        _canonical_json_bytes(
+            item["identity"],
+            label="protected-boundary identity",
+        )
+        for item in boundary_records
+    ]
+    if len(set(boundary_identities)) != len(boundary_identities):
+        raise ValueError("Protected-boundary identity is duplicated")
     boundary_records.sort(key=lambda item: (item["role"], item["logical_id"]))
 
     execution_order = [item["logical_id"] for item in filesystem_records]

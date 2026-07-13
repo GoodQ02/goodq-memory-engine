@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1197**
+Indexed active tracked paths: **1203**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -109,6 +109,7 @@ Indexed active tracked paths: **1197**
 | `/api/utils/loaders.py` | API | API or local control-plane implementation. |
 | `/api/utils/media_projection.py` | API | API or local control-plane implementation. |
 | `/api/utils/response_models.py` | API | API or local control-plane implementation. |
+| `/api/utils/temporal_summary_results.py` | API | API or local control-plane implementation. |
 | `/branding/README.md` | Repository root | Root-level project or runtime surface. |
 | `/branding/favicon.ico` | Repository root | Root-level project or runtime surface. |
 | `/branding/goodbrand.svg` | Repository root | Root-level project or runtime surface. |
@@ -261,6 +262,7 @@ Indexed active tracked paths: **1197**
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_SELECTION_2026-07-12.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -1041,6 +1043,7 @@ Indexed active tracked paths: **1197**
 | `/tests/unit/test_installer_paths.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_kg_realtime_relationship_enrichment.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_legacy_wsl_audio_bridge_compat.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_llm_client_activation_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_media_containment_hardening.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_embedding_keying.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_ephemeral_truth.py` | Verification | Test, fixture, or verification asset. |
@@ -1070,6 +1073,7 @@ Indexed active tracked paths: **1197**
 | `/tests/unit/test_print_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_retro_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_artifact_persisted_on_failure_exit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_index.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_audio_backend_reducer.py` | Verification | Test, fixture, or verification asset. |
@@ -1112,6 +1116,8 @@ Indexed active tracked paths: **1197**
 | `/tests/unit/test_tagger_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_projection_repair.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_reasoning.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_temporal_summary_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_temporal_summary_results.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_text_embedding_identity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_time_hint_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_paths_piper.py` | Verification | Test, fixture, or verification asset. |

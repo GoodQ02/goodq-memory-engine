@@ -169,7 +169,7 @@ the failure is not currently visible.
 ### R-05 — Define API and Command Center execution authority
 
 - Priority: P0
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: doctrine calls the API and console read-only while the identity
   branch adds roster writes and background process launch.
 - Repair: adopt the loopback-only local-operator API model; classify every
@@ -333,6 +333,20 @@ the failure is not currently visible.
   remains `IN_PROGRESS`.
   Evidence:
   `docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_SELECTION_2026-07-13.md`.
+- Temporal-summary authority checkpoint evidence (2026-07-13): the final
+  directly owned R-05 process seam now uses one exact nine-field request,
+  exact-scope MiniAgent confirmation, one verified epoch/model-policy snapshot,
+  explicit activation and environment-proxy policy, a private locked atomic
+  exact-job result receipt, result-before-terminal recovery, passive exact-job
+  projection, and Retro Console durable polling. Fresh verification passed the
+  full 798-test inherited R-05 regression union plus Python compilation,
+  JavaScript syntax, route census, documentation, diff, secret-surface, and
+  portable-path gates. The mounted surface is now 69 operations: 40 passive,
+  1 staging, 11 automatic mutation, 8 curated mutation, and 9 process
+  execution; 67 are OpenAPI-published. This verifies directly owned
+  local-operator authority without claiming the separately owned hidden-read,
+  identity, status, browser, or retention work complete. Evidence:
+  `docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 
@@ -419,11 +433,14 @@ the failure is not currently visible.
 - Repair: redirect every identity test to a temporary root; make YAML the sole
   roster authority with JSON as a derived read projection; use locked atomic
   writes; correct `GOODQ_IDENTITY_PATH` precedence; persist process identity;
-  recover stale/dead jobs; and redact path, subprocess, and exception detail.
+  recover stale/dead jobs; require exact-operation/full-scope MiniAgent
+  confirmation plus durable generic execution audit for identity mutations and
+  processes; and redact path, subprocess, and exception detail.
 - Completion gate: live roster checksums remain unchanged by tests; read and
   preview operations leave live and temporary identity/graph roots unchanged;
   route uniqueness, exclusion, synchronization failure, concurrent write,
-  crash, restart recovery, and redaction tests pass before the Workbench browser
+  exact confirmation, durable audit, persistent process-job ownership, crash,
+  restart recovery, and redaction tests pass before the Workbench browser
   witness is rerun.
 - Public impact: RELEASE_REQUIRED
 - Route-effect evidence (2026-07-12): six nominal identity reads/previews
@@ -893,9 +910,8 @@ recreated under a new name.
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
 2. Restore truthful evidence: completed R-18, R-09, R-10, and R-13 checkpoints.
-3. Establish one control authority: verified R-11, the current R-05 staging
-   checkpoint, isolated R-11-F1 handler-outcome truth, remaining R-05, then
-   R-07.
+3. Establish one control authority: verified R-11, R-11-F1, and R-05; next
+   isolate R-05-F1 hidden-read mutation, then R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.
 5. Complete identity safely: R-08, then human-curated Phase 5A readiness.
@@ -925,6 +941,12 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Verified R-05 after governing temporal summarization with exact
+  confirmation, immutable runtime policy, private durable result truth,
+  deterministic no-replay recovery, passive exact-job projection, and truthful
+  Retro polling. The full 798-test inherited R-05 union and static/documentation
+  gates passed; residual hidden-read, identity, and status effects remain under
+  their explicit owners.
 - 2026-07-12: Checkpointed the R-05 exhaustive route-effect registry and common
   client boundary after TDD closed duplicate-mount and lifespan route-replacement
   fail-open gaps; retained R-05 as in progress for explicit curated/process

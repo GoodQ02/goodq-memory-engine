@@ -9,10 +9,39 @@ const state = {
   currentPlaylistScenes: [],
   llmSummarizationEnabled: false,
   currentVideoHash: null,
-  summarizationInProgress: false
+  summarizationInProgress: false,
+  activeSummaryJobId: null
 };
 
 let pollInterval = null;
+const MAX_SUMMARY_POLL_FAILURES = 3;
+
+function isSafeSummaryJob(job, videoHash) {
+  return !!job
+    && typeof job === "object"
+    && typeof job.job_id === "string"
+    && /^job_[0-9a-f]{32}$/.test(job.job_id)
+    && job.operation === "video_summary.generate"
+    && !!job.scope
+    && typeof job.scope === "object"
+    && Object.keys(job.scope).length === 1
+    && job.scope.video_hash === videoHash
+    && typeof job.state === "string";
+}
+
+function stopSummaryPolling(regenBtn, message = null, type = "error") {
+  if (pollInterval) {
+    clearTimeout(pollInterval);
+    pollInterval = null;
+  }
+  state.activeSummaryJobId = null;
+  state.summarizationInProgress = false;
+  if (regenBtn) {
+    regenBtn.disabled = false;
+    regenBtn.innerText = "REWRITE SUMMARY 🤖";
+  }
+  if (message) showToast(message, type);
+}
 
 // Toast Notifications
 function showToast(message, type = 'success') {
@@ -664,10 +693,11 @@ async function loadVideoProfile(videoId, videoTitle) {
     state.currentVideoHash = videoId;
     
     if (pollInterval) {
-      clearInterval(pollInterval);
+      clearTimeout(pollInterval);
       pollInterval = null;
     }
     state.summarizationInProgress = false;
+    state.activeSummaryJobId = null;
     
     document.getElementById('profile-name').textContent = videoTitle || videoId;
     
@@ -710,14 +740,9 @@ async function loadVideoProfile(videoId, videoTitle) {
       const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
       if (statusResp.ok) {
         const statusData = await statusResp.json();
-        if (statusData.status === 'running') {
-          regenBtn.disabled = true;
-          regenBtn.innerText = "GENERATING...";
-          startPollingStatus(videoId);
-        } else {
-          regenBtn.disabled = false;
-          regenBtn.innerText = "REWRITE SUMMARY 🤖";
-        }
+        resumeExistingSummaryJobStatus(videoId, statusData, regenBtn);
+      } else {
+        stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
       }
     } else {
       summaryBox.hidden = false;
@@ -759,35 +784,174 @@ async function loadVideoProfile(videoId, videoTitle) {
   }
 }
 
-function startPollingStatus(videoHash) {
-  if (pollInterval) clearInterval(pollInterval);
-  
-  pollInterval = setInterval(async () => {
-    try {
-      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/status`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.status === 'idle') {
-          clearInterval(pollInterval);
-          pollInterval = null;
-          showToast('Narrative summary generated successfully.');
-          
-          const regenBtn = document.getElementById("regen-summary-btn");
-          if (regenBtn) {
-            regenBtn.disabled = false;
-            regenBtn.innerText = "REWRITE SUMMARY 🤖";
-          }
-          state.summarizationInProgress = false;
-          
-          if (state.currentVideoHash === videoHash) {
-            loadVideoProfile(videoHash, document.getElementById('profile-name').textContent);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error polling status:', e);
-    }
+async function handleSucceededSummaryJob(videoHash, regenBtn) {
+  stopSummaryPolling(regenBtn);
+  showToast("Narrative summary generated successfully.");
+  if (state.currentVideoHash === videoHash) {
+    await loadVideoProfile(
+      videoHash,
+      document.getElementById("profile-name").textContent
+    );
+  }
+}
+
+async function handleSummaryJobState(videoHash, jobId, status, regenBtn) {
+  switch (status) {
+    case "pending_confirmation":
+      stopSummaryPolling(
+        regenBtn,
+        "Exact confirmation is still required. Rewrite recovery needs a new one-time token."
+      );
+      return false;
+    case "authorizing":
+      return true;
+    case "queued":
+      return true;
+    case "running":
+      return true;
+    case "succeeded":
+      await handleSucceededSummaryJob(videoHash, regenBtn);
+      return false;
+    case "failed":
+      stopSummaryPolling(regenBtn, "Summary generation failed. Try rewriting again.");
+      return false;
+    case "interrupted":
+      stopSummaryPolling(regenBtn, "Summary generation was interrupted. Rewrite to start a new job.");
+      return false;
+    case "expired":
+      stopSummaryPolling(regenBtn, "Summary confirmation expired. Rewrite to prepare a new job.");
+      return false;
+    case "not_started":
+      stopSummaryPolling(regenBtn);
+      return false;
+    default:
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return false;
+  }
+}
+
+function scheduleSummaryPoll(videoHash, jobId, failureCount) {
+  if (state.activeSummaryJobId !== jobId) return;
+  pollInterval = setTimeout(() => {
+    pollInterval = null;
+    pollSummaryJobStatus(videoHash, jobId, failureCount);
   }, 2000);
+}
+
+async function pollSummaryJobStatus(videoHash, jobId, failureCount = 0) {
+  if (state.activeSummaryJobId !== jobId) return;
+  const regenBtn = document.getElementById("regen-summary-btn");
+  try {
+    const resp = await fetch(
+      `/api/summary/video/${encodeURIComponent(videoHash)}/status?job_id=${encodeURIComponent(jobId)}`
+    );
+    if (!resp.ok) throw new Error("summary_status_request_failed");
+    const data = await resp.json();
+    if (state.activeSummaryJobId !== jobId) return;
+    const status = data && data.status;
+    if (
+      status !== "not_started"
+      && (!isSafeSummaryJob(data && data.job, videoHash) || data.job.job_id !== jobId)
+    ) {
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return;
+    }
+    const keepPolling = await handleSummaryJobState(
+      videoHash,
+      jobId,
+      status,
+      regenBtn
+    );
+    if (keepPolling) scheduleSummaryPoll(videoHash, jobId, 0);
+  } catch (error) {
+    if (state.activeSummaryJobId !== jobId) return;
+    const nextFailureCount = failureCount + 1;
+    if (nextFailureCount >= MAX_SUMMARY_POLL_FAILURES) {
+      stopSummaryPolling(regenBtn, "Unknown summary status after repeated polling failures.");
+      return;
+    }
+    scheduleSummaryPoll(videoHash, jobId, nextFailureCount);
+  }
+}
+
+function startPollingStatus(videoHash, jobId) {
+  const regenBtn = document.getElementById("regen-summary-btn");
+  if (typeof jobId !== "string" || !/^job_[0-9a-f]{32}$/.test(jobId)) {
+    stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+    return;
+  }
+  if (pollInterval) clearTimeout(pollInterval);
+  state.activeSummaryJobId = jobId;
+  state.summarizationInProgress = true;
+  if (regenBtn) {
+    regenBtn.disabled = true;
+    regenBtn.innerText = "GENERATING...";
+  }
+  scheduleSummaryPoll(videoHash, jobId, 0);
+}
+
+function resumeExistingSummaryJobStatus(videoHash, statusData, regenBtn) {
+  const status = statusData && statusData.status;
+  const job = statusData && statusData.job;
+  if (["authorizing", "queued", "running"].includes(status)) {
+    if (!isSafeSummaryJob(job, videoHash)) {
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return;
+    }
+    startPollingStatus(videoHash, job.job_id);
+    return;
+  }
+  if (status === "pending_confirmation") {
+    stopSummaryPolling(
+      regenBtn,
+      "Exact confirmation is still required. The one-time confirmation token is unavailable."
+    );
+    return;
+  }
+  if (status === "failed") {
+    stopSummaryPolling(regenBtn, "The latest summary job failed. Rewrite to try again.");
+    return;
+  }
+  if (status === "interrupted") {
+    stopSummaryPolling(regenBtn, "The latest summary job was interrupted. Rewrite to start again.");
+    return;
+  }
+  if (status === "expired") {
+    stopSummaryPolling(regenBtn, "The latest summary confirmation expired. Rewrite to try again.");
+    return;
+  }
+  if (status === "succeeded" || status === "not_started") {
+    stopSummaryPolling(regenBtn);
+    return;
+  }
+  stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+}
+
+async function handlePrepareConflict(prepareResp, videoHash, regenBtn) {
+  let payload = null;
+  try {
+    payload = await prepareResp.json();
+  } catch (error) {
+    payload = null;
+  }
+  const job = payload && payload.detail && payload.detail.job;
+  if (!isSafeSummaryJob(job, videoHash)) {
+    stopSummaryPolling(regenBtn, "An active summary job could not be verified.");
+    return;
+  }
+  if (["authorizing", "queued", "running"].includes(job.state)) {
+    showToast("Resuming the active durable summary job.", "info");
+    startPollingStatus(videoHash, job.job_id);
+    return;
+  }
+  if (job.state === "pending_confirmation") {
+    stopSummaryPolling(
+      regenBtn,
+      "This job still needs exact confirmation, but its one-time confirmation token is no longer available."
+    );
+    return;
+  }
+  stopSummaryPolling(regenBtn, "The active summary job cannot be resumed.");
 }
 
 function setupRegenListener() {
@@ -799,25 +963,69 @@ function setupRegenListener() {
     if (!videoHash) return;
     
     if (state.summarizationInProgress) return;
+
+    const confirmed = window.confirm(`Rewrite the narrative summary for video ${videoHash}?`);
+    if (!confirmed) return;
     
     state.summarizationInProgress = true;
     regenBtn.disabled = true;
-    regenBtn.innerText = "GENERATING...";
+    regenBtn.innerText = "PREPARING...";
     
     try {
-      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/generate`, { method: 'POST' });
-      if (resp.status === 200) {
-        showToast("Video summarization task successfully started.", "info");
-        startPollingStatus(videoHash);
-      } else {
-        const err = await resp.json();
-        showToast(`Failed to start summarization: ${err.detail || 'unknown error'}`, "error");
-        regenBtn.disabled = false;
-        regenBtn.innerText = "REWRITE SUMMARY 🤖";
-        state.summarizationInProgress = false;
+      const endpoint = `/api/summary/video/${encodeURIComponent(videoHash)}/generate`;
+      const prepareResp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepare" })
+      });
+      if (prepareResp.status === 409) {
+        await handlePrepareConflict(prepareResp, videoHash, regenBtn);
+        return;
       }
+      if (!prepareResp.ok) throw new Error("summary_prepare_failed");
+
+      const prepareData = await prepareResp.json();
+      const preparedJob = prepareData && prepareData.job;
+      const jobId = preparedJob && preparedJob.job_id;
+      let confirmationToken = prepareData && prepareData.confirmation_token;
+      if (
+        !isSafeSummaryJob(preparedJob, videoHash)
+        || preparedJob.state !== "pending_confirmation"
+        || typeof confirmationToken !== "string"
+        || !confirmationToken
+      ) {
+        throw new Error("summary_prepare_invalid");
+      }
+
+      let confirmResp;
+      try {
+        confirmResp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            job_id: jobId,
+            confirmation_token: confirmationToken
+          })
+        });
+      } finally {
+        confirmationToken = null;
+      }
+
+      if (confirmResp.status !== 202) throw new Error("summary_confirm_failed");
+      const confirmData = await confirmResp.json();
+      if (
+        !isSafeSummaryJob(confirmData && confirmData.job, videoHash)
+        || confirmData.job.job_id !== jobId
+        || !["authorizing", "queued", "running"].includes(confirmData.job.state)
+      ) {
+        throw new Error("summary_confirm_invalid");
+      }
+      showToast("Video summarization confirmed.", "info");
+      regenBtn.innerText = "GENERATING...";
+      startPollingStatus(videoHash, jobId);
     } catch (e) {
-      showToast("Network error while triggering summarization.", "error");
+      showToast("Summary rewrite could not be confirmed. Try again.", "error");
       regenBtn.disabled = false;
       regenBtn.innerText = "REWRITE SUMMARY 🤖";
       state.summarizationInProgress = false;

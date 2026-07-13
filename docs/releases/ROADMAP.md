@@ -771,6 +771,24 @@ the failure is not currently visible.
   `docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the exact
   filesystem-observer source/test pair.
+- Filesystem-observer implementation checkpoint (2026-07-13): private
+  checkpoint `e8961889` adds the exact import-pure
+  `goodq.clean-memory-filesystem-observation.v1` authority. Windows uses a fixed
+  local volume handle, held directory handles, restart enumeration, and
+  `OpenFileById` without descendant-path fallback; POSIX opens only `/` by path
+  and remains descriptor-relative and no-follow. Present files bind physical
+  identity, size, modification time, stream/link state, and SHA-256 to one held
+  handle; stable absence is distinguished from inaccessible, redirected,
+  irregular, ambiguous, unsupported, or changing state, and the complete FAISS
+  tree is deterministic. Fresh verification passed 47 focused tests ten
+  consecutive times (470 total), the 232-test configuration/candidate/filesystem
+  authority union, compilation, exact public-API import, documentation authority
+  and semantic-drift, banned-token, dependency, and staged-diff gates. Three
+  independent current-byte reviews returned clean. No configured data,
+  protected root, service, Qdrant, evidence store, job, token, MiniAgent, or
+  cleanup authority was read or exercised. R-07 remains `IN_PROGRESS`; the next
+  bounded mission is only a read-only no-repeat audit of protected-boundary
+  authority before any implementation.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1333,6 +1351,9 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 passive filesystem observer and advanced
+  only to a read-only protected-boundary authority audit.
 
 - 2026-07-13: Closed the R-07 filesystem-observer boundary audit, selected the
   exact observer source/test pair, and inserted protected-boundary authority

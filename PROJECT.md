@@ -4,70 +4,60 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — implement the passive target filesystem observer.
+Roadmap item: R-07 — audit protected-boundary authority before implementation.
 
 ## Outcome
 
-Implement one import-pure, fail-closed filesystem observer and its focused test
-oracle. It accepts only a canonical `ResolvedPlanConfiguration` and returns one
-immutable `FilesystemObservation` containing exact epoch-root identity and
-filesystem-target evidence.
+Produce one read-only, no-repeat authority audit for the eight protected roles
+that remain unresolved in the canonical clean-memory configuration projection.
+Determine which repository authority, if any, can supply each role and how exact
+physical-boundary evidence can reuse the proven platform identity backend
+without guessing a root or reading configured data during the audit.
 
 ## Governing evidence
 
 - configuration checkpoint `a12ceb18`
 - candidate-plan checkpoint `c870a1cb`
 - filesystem-observer audit checkpoint `f3ce0920`
+- filesystem-observer implementation checkpoint `e8961889`
 - `docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Observation is passive evidence collection, not configuration, protected-root,
-Qdrant, planning, approval, or cleanup authority. Every present file is
-identified and hashed through the same verified handle. Redirected, irregular,
-unsupported, inaccessible, ambiguous, or changing state fails closed and never
-becomes absence or partial evidence.
+Every protected role must come from explicit authority and bind one exact
+ordinary physical boundary. Projected path text is not physical-identity
+evidence. Missing, ambiguous, redirected, inaccessible, duplicated, or changing
+authority remains unresolved and prevents runnable planning; it is never guessed
+or converted into partial evidence.
 
-## Exact implementation seam
+## Exact audit scope
 
-Touch only:
-
-- `cli/clean_memory_filesystem.py`;
-- `tests/unit/test_clean_memory_filesystem.py`.
-
-The production module exposes exactly:
-
-- `FILESYSTEM_OBSERVATION_SCHEMA`;
-- `FilesystemObservationError`;
-- `FilesystemObservation`;
-- `observe_filesystem`.
-
-Implement the Windows volume-bound held-directory/OpenFileById backend and the
-POSIX descriptor-relative no-follow backend defined by the governing audit.
-Enumerate the six singleton roles and every regular file below the exact FAISS
-root deterministically.
+- Trace the canonical protected-role census and `ProtectedBoundaryEvidence`
+  contract through current production code and focused tests.
+- Reconcile every projected, configured, externally supplied, and unresolved
+  role source without reading the configured roots themselves.
+- Audit whether the filesystem observer's private Windows/POSIX identity backend
+  can be reused without reversing dependency direction or broadening authority.
+- Define the smallest deterministic public API, finite failure contract, and RED
+  oracle only if repository evidence supports an implementation seam.
+- Checkpoint the audit separately before any production or test implementation.
 
 ## Boundaries
 
-- Do not modify `cli/clean_memory.py`, `steps/common/clean_memory.py`, or their
-  completed tests.
-- Do not load configuration or environment values.
-- Do not read configured/live data during verification; use temporary fixtures.
-- Do not access protected roots, services, Qdrant, evidence stores, jobs,
-  tokens, MiniAgent, cleanup execution, or the current working directory as
-  authority.
-- Do not add a CLI, runnable plan, fallback pathname traversal, or partial-result
-  mode.
-- Do not begin protected-boundary or Qdrant implementation in this seam.
+- Read repository instructions, source, tests, and existing evidence only.
+- Do not inspect configured/live protected roots, data, models, services, WSL,
+  Qdrant, evidence stores, jobs, tokens, MiniAgent, or cleanup execution.
+- Do not modify production source or tests during the audit.
+- Do not absorb protected-boundary authority into the completed target observer.
+- Do not begin Qdrant observation or runnable planning.
+- If any protected role lacks explicit authority, record that fact and preserve
+  the fail-closed gate rather than inventing a default.
 
 ## Completion gate
 
-Focused tests prove the full deterministic, absence, no-follow, identity,
-hashing, enumeration, unsupported-platform, race, composition, and negative-
-capability matrix from the governing audit. Compilation, import-purity,
-documentation-authority, semantic-drift, banned-token, dependency, and diff
-gates pass. At least two independent current-byte reviews return clean.
-
-After the implementation checkpoint, advance only to a read-only audit of
-protected-boundary authority. Do not advance directly to Qdrant observation.
+Fresh source traces and independent read-only reviews agree on role authority,
+placement, API shape, error semantics, reuse boundaries, and the focused RED
+matrix. The diagnostic, sole roadmap, and next bounded mission are checkpointed
+separately. Completion selects at most one implementation seam; it does not
+authorize that implementation.

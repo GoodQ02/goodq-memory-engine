@@ -201,6 +201,20 @@ def test_poller_rechecks_active_job_after_network_await() -> None:
     assert poller.index(guard, catch_started) > catch_started
 
 
+def test_poller_rejects_top_level_and_job_state_disagreement_before_dispatch() -> None:
+    poller = _function_source("pollSummaryJobStatus")
+    disagreement_guard = "data.job.state !== status"
+    dispatch = "handleSummaryJobState("
+
+    assert disagreement_guard in poller
+    guard_start = poller.index(disagreement_guard)
+    dispatch_start = poller.index(dispatch)
+    guarded_block = poller[guard_start:dispatch_start]
+    assert guard_start < dispatch_start
+    assert "Unknown summary status. Try again." in guarded_block
+    assert "return;" in guarded_block
+
+
 def test_existing_profile_resumes_only_active_durable_jobs() -> None:
     resume = _function_source("resumeExistingSummaryJobStatus")
     loader = _function_source("loadVideoProfile")

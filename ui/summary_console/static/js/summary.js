@@ -851,7 +851,11 @@ async function pollSummaryJobStatus(videoHash, jobId, failureCount = 0) {
     const status = data && data.status;
     if (
       status !== "not_started"
-      && (!isSafeSummaryJob(data && data.job, videoHash) || data.job.job_id !== jobId)
+      && (
+        !isSafeSummaryJob(data && data.job, videoHash)
+        || data.job.job_id !== jobId
+        || data.job.state !== status
+      )
     ) {
       stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
       return;

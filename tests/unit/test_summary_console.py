@@ -662,6 +662,111 @@ def test_collection_save_failure_preserves_authoritative_bytes_and_cleans_temp(
     assert list(tmp_path.glob("saved_collections.json.tmp-*")) == [foreign_temp]
 
 
+def test_collection_save_rejects_invalid_flushed_temp_before_atomic_replace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    summary_aggregator.add_collection(db_path, {"name": "authoritative"})
+    collections_file = tmp_path / "saved_collections.json"
+    authoritative_bytes = collections_file.read_bytes()
+    real_dump = summary_aggregator.json.dump
+
+    def write_invalid_store(_data, handle, **kwargs):
+        real_dump(
+            {"schema_version": 1, "collections": "not-a-list"},
+            handle,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(summary_aggregator.json, "dump", write_invalid_store)
+
+    with pytest.raises(RuntimeError, match="Failed to save collections"):
+        summary_aggregator.add_collection(db_path, {"name": "must not replace"})
+
+    assert collections_file.read_bytes() == authoritative_bytes
+    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == []
+
+
+@pytest.mark.parametrize(
+    "corrupt_bytes",
+    [
+        b"{",
+        json.dumps({"schema_version": 1, "collections": []}).encode("utf-8"),
+    ],
+    ids=["malformed", "valid-but-wrong"],
+)
+@pytest.mark.parametrize("existing_store", [False, True], ids=["first-write", "replace"])
+def test_collection_save_rolls_back_failed_post_replace_inspection(
+    tmp_path: Path,
+    monkeypatch,
+    corrupt_bytes: bytes,
+    existing_store: bool,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    collections_file = tmp_path / "saved_collections.json"
+    authoritative_bytes = None
+    if existing_store:
+        summary_aggregator.add_collection(db_path, {"name": "authoritative"})
+        authoritative_bytes = collections_file.read_bytes()
+    real_replace = summary_aggregator.os.replace
+
+    def replace_then_corrupt(source, destination):
+        real_replace(source, destination)
+        if ".tmp-" in Path(source).name:
+            Path(destination).write_bytes(corrupt_bytes)
+
+    monkeypatch.setattr(summary_aggregator.os, "replace", replace_then_corrupt)
+
+    with pytest.raises(RuntimeError, match="Failed to save collections"):
+        summary_aggregator.add_collection(db_path, {"name": "must roll back"})
+
+    if existing_store:
+        assert collections_file.read_bytes() == authoritative_bytes
+    else:
+        assert not collections_file.exists()
+    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == []
+    assert list(tmp_path.glob("saved_collections.json.restore-*")) == []
+    assert list(tmp_path.glob("saved_collections.json.rollback-*")) == []
+
+
+def test_collection_save_retains_rollback_when_post_replace_recovery_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "knowledge_graph.db"
+    summary_aggregator.add_collection(db_path, {"name": "authoritative"})
+    collections_file = tmp_path / "saved_collections.json"
+    authoritative_bytes = collections_file.read_bytes()
+    real_replace = summary_aggregator.os.replace
+
+    def corrupt_candidate_and_fail_restore(source, destination):
+        source_name = Path(source).name
+        if ".restore-" in source_name:
+            raise OSError("simulated rollback replacement failure")
+        real_replace(source, destination)
+        if ".tmp-" in source_name:
+            Path(destination).write_text("{", encoding="utf-8")
+
+    monkeypatch.setattr(
+        summary_aggregator.os,
+        "replace",
+        corrupt_candidate_and_fail_restore,
+    )
+
+    with pytest.raises(
+        summary_aggregator.CollectionStoreRecoveryError,
+        match="manual recovery",
+    ):
+        summary_aggregator.add_collection(db_path, {"name": "must surface"})
+
+    rollback_files = list(tmp_path.glob("saved_collections.json.rollback-*"))
+    assert len(rollback_files) == 1
+    assert rollback_files[0].read_bytes() == authoritative_bytes
+    assert list(tmp_path.glob("saved_collections.json.tmp-*")) == []
+    assert list(tmp_path.glob("saved_collections.json.restore-*")) == []
+
+
 def test_concurrent_collection_creates_lose_no_updates_and_use_unique_ids(
     tmp_path: Path,
 ) -> None:

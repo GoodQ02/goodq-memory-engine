@@ -37,6 +37,10 @@ _DELETE_MUTATION_EVIDENCE_FIELDS = {
 class CollectionStoreConflict(RuntimeError):
     """The exact collection state no longer matches an authorized mutation."""
 
+
+class CollectionStoreRecoveryError(RuntimeError):
+    """A failed replacement could not be restored without operator recovery."""
+
 OCCASION_KEYWORDS = {
     "holiday": ["holiday", "christmas", "santa", "thanksgiving", "easter", "new year", "halloween"],
     "birthday": ["birthday", "birth"],
@@ -723,20 +727,112 @@ def _fsync_directory_if_supported(directory: Path) -> bool:
     return durable
 
 
+def _write_fsynced_bytes(path: Path, payload: bytes) -> None:
+    with path.open("xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _inspect_collections_file(
+    collections_file: Path,
+    expected: Dict[str, Any],
+) -> None:
+    persisted = _load_collections_unlocked(collections_file)
+    if persisted != expected:
+        raise RuntimeError("saved collections store inspection mismatch")
+
+
+def _restore_collections_after_failed_inspection(
+    collections_file: Path,
+    *,
+    previous_bytes: bytes | None,
+    previous_data: Dict[str, Any] | None,
+    rollback_file: Path | None,
+) -> None:
+    if previous_bytes is None:
+        collections_file.unlink(missing_ok=True)
+        _fsync_directory_if_supported(collections_file.parent)
+        if collections_file.exists():
+            raise RuntimeError("new saved collections store could not be removed")
+        return
+
+    if previous_data is None or rollback_file is None:
+        raise RuntimeError("saved collections rollback evidence is incomplete")
+    rollback_bytes = rollback_file.read_bytes()
+    if rollback_bytes != previous_bytes:
+        raise RuntimeError("saved collections rollback evidence changed")
+
+    restore_file = collections_file.with_name(
+        f"{collections_file.name}.restore-{os.getpid()}-{uuid.uuid4().hex}"
+    )
+    try:
+        _write_fsynced_bytes(restore_file, rollback_bytes)
+        os.replace(restore_file, collections_file)
+        _fsync_directory_if_supported(collections_file.parent)
+        if collections_file.read_bytes() != previous_bytes:
+            raise RuntimeError("saved collections byte restoration mismatch")
+        _inspect_collections_file(collections_file, previous_data)
+    finally:
+        try:
+            restore_file.unlink(missing_ok=True)
+        except OSError:
+            logger.warning(
+                "Failed to remove saved collections restore file",
+                exc_info=True,
+            )
+
+
 def _save_collections_unlocked(collections_file: Path, data: Dict[str, Any]) -> None:
     _validate_collections_data(data)
     collections_file.parent.mkdir(parents=True, exist_ok=True)
     temp_file = collections_file.with_name(
         f"{collections_file.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}"
     )
+    previous_bytes: bytes | None = None
+    previous_data: Dict[str, Any] | None = None
+    rollback_file: Path | None = None
+    replacement_completed = False
+    retain_rollback = False
     try:
+        if collections_file.is_file():
+            previous_data = _load_collections_unlocked(collections_file)
+            previous_bytes = collections_file.read_bytes()
+
         with temp_file.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, ensure_ascii=False)
             handle.flush()
             os.fsync(handle.fileno())
+
+        _inspect_collections_file(temp_file, data)
+        if previous_bytes is not None:
+            rollback_file = collections_file.with_name(
+                f"{collections_file.name}.rollback-{os.getpid()}-{uuid.uuid4().hex}"
+            )
+            _write_fsynced_bytes(rollback_file, previous_bytes)
+
         os.replace(temp_file, collections_file)
+        replacement_completed = True
         _fsync_directory_if_supported(collections_file.parent)
+        _inspect_collections_file(collections_file, data)
     except Exception as exc:
+        if replacement_completed:
+            try:
+                _restore_collections_after_failed_inspection(
+                    collections_file,
+                    previous_bytes=previous_bytes,
+                    previous_data=previous_data,
+                    rollback_file=rollback_file,
+                )
+            except Exception as recovery_exc:
+                retain_rollback = rollback_file is not None and rollback_file.exists()
+                logger.critical(
+                    "Saved collections replacement requires manual recovery",
+                    exc_info=True,
+                )
+                raise CollectionStoreRecoveryError(
+                    "Saved collections replacement failed; manual recovery required"
+                ) from recovery_exc
         logger.error("Failed to save saved collections store", exc_info=True)
         raise RuntimeError("Failed to save collections") from exc
     finally:
@@ -744,6 +840,14 @@ def _save_collections_unlocked(collections_file: Path, data: Dict[str, Any]) -> 
             temp_file.unlink(missing_ok=True)
         except OSError:
             logger.warning("Failed to remove saved collections temporary file", exc_info=True)
+        if rollback_file is not None and not retain_rollback:
+            try:
+                rollback_file.unlink(missing_ok=True)
+            except OSError:
+                logger.warning(
+                    "Failed to remove saved collections rollback file",
+                    exc_info=True,
+                )
 
 
 def load_collections(db_path: Path) -> Dict[str, Any]:

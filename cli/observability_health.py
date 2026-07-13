@@ -130,6 +130,7 @@ def _scan_sqlite_lock_warnings(log_dir: Optional[str]) -> Tuple[List[Path], List
 def _provenance_coverage_sample(cfg: Dict[str, Any], *, top_k: int = 5) -> Tuple[Optional[float], Optional[str]]:
     try:
         from steps.common.qdrant_client import build_qdrant_client
+        from steps.common.retrieval_events import RetrievalEventPolicy
     except Exception as exc:
         return None, f"qdrant_client_import_failed: {exc}"
 
@@ -173,22 +174,22 @@ def _provenance_coverage_sample(cfg: Dict[str, Any], *, top_k: int = 5) -> Tuple
     if not isinstance(dim, int) or dim <= 0:
         dim = 512
 
-    client = build_qdrant_client(cfg, dim, "clip")
+    client = build_qdrant_client(
+        cfg,
+        dim,
+        "clip",
+        retrieval_event_policy=RetrievalEventPolicy(
+            enabled=False,
+            jsonl_fallback=False,
+        ),
+    )
     if client is None:
         return None, "qdrant_disabled_or_unavailable"
 
-    # Ensure the sample does not create retrieval_events rows.
-    orig_env = os.environ.get("GOODQ_RETRIEVAL_EVENTS")
-    os.environ["GOODQ_RETRIEVAL_EVENTS"] = "0"
     try:
         hits = client.query([0.001] * int(dim), top_k=top_k, payload_filter=payload_filter)
     except Exception as exc:
         return None, f"sample_query_failed: {exc}"
-    finally:
-        if orig_env is None:
-            os.environ.pop("GOODQ_RETRIEVAL_EVENTS", None)
-        else:
-            os.environ["GOODQ_RETRIEVAL_EVENTS"] = orig_env
 
     if not hits:
         return None, "no_hits"

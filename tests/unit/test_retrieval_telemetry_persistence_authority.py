@@ -698,12 +698,14 @@ def test_partial_schema_is_repaired_before_event_write(tmp_path: Path) -> None:
     assert len(_event_rows(database)) == 1
 
 
+@pytest.mark.parametrize("lock_message", ["database is locked", "database is busy"])
 @pytest.mark.parametrize("jsonl_fallback", [False, True])
 def test_locked_database_fallback_obeys_exact_frozen_policy(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
     jsonl_fallback: bool,
+    lock_message: str,
 ) -> None:
     database = tmp_path / "memory.db"
     _seed_database(database)
@@ -712,7 +714,7 @@ def test_locked_database_fallback_obeys_exact_frozen_policy(
     caplog.set_level(logging.WARNING, logger=retrieval_events.__name__)
 
     def locked_connect(*_args: Any, **_kwargs: Any):
-        raise sqlite3.OperationalError("database is locked secret-query-canary")
+        raise sqlite3.OperationalError(lock_message)
 
     monkeypatch.setattr(retrieval_events.sqlite3, "connect", locked_connect)
     _emit(
@@ -832,6 +834,31 @@ def test_non_sqlite_busy_exception_is_not_misclassified_as_lock(
 
     def failed_connect(*_args: Any, **_kwargs: Any):
         raise OSError("resource busy secret-query-canary")
+
+    monkeypatch.setattr(retrieval_events.sqlite3, "connect", failed_connect)
+    _emit(database, policy=_policy(log_dir=logs))
+
+    assert not (logs / "retrieval_events.jsonl").exists()
+    assert any("reason=sqlite_error" in message for message in caplog.messages)
+    warning_text = "\n".join(caplog.messages)
+    assert "secret-query-canary" not in warning_text
+
+
+def test_unrelated_sqlite_operational_error_text_is_not_misclassified_as_lock(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "memory.db"
+    _seed_database(database)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    caplog.set_level(logging.WARNING, logger=retrieval_events.__name__)
+
+    def failed_connect(*_args: Any, **_kwargs: Any):
+        raise sqlite3.OperationalError(
+            "busywork subsystem could not open locked-file-label secret-query-canary"
+        )
 
     monkeypatch.setattr(retrieval_events.sqlite3, "connect", failed_connect)
     _emit(database, policy=_policy(log_dir=logs))

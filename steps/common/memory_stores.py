@@ -11,9 +11,10 @@ from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 from steps.common.retrieval_events import (
     RetrievalEvent,
+    RetrievalEventPolicy,
     emit_retrieval_events,
     normalize_retrieval_context,
-    retrieval_events_enabled,
+    resolve_retrieval_event_policy,
     utc_now_iso,
 )
 from steps.common import sqlite_read_authority
@@ -31,15 +32,17 @@ class EphemeralMemory(MemoryStore):
         max_items: int = 512,
         *,
         db_path: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        log_retrieval_events: bool = True,
+        retrieval_event_policy: Optional[RetrievalEventPolicy] = None,
     ):
         self.dim = dim
         self.ttl_seconds = ttl_seconds
         self.max_items = max_items
         self.db_path = db_path
-        self.log_dir = log_dir
-        self.log_retrieval_events = log_retrieval_events
+        self.retrieval_event_policy = (
+            retrieval_event_policy
+            if retrieval_event_policy is not None
+            else RetrievalEventPolicy()
+        )
         self._items: List[Dict[str, Any]] = []
         self._hits = 0
         self._misses = 0
@@ -140,7 +143,11 @@ class EphemeralMemory(MemoryStore):
                         },
                     )
                 )
-            emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+            emit_retrieval_events(
+                self.db_path,
+                events,
+                policy=self.retrieval_event_policy,
+            )
         except Exception as e:
             logger.warning(
                 "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
@@ -175,15 +182,17 @@ class FaissMemory(MemoryStore):
         dim: int,
         db_path: Optional[str] = None,
         *,
-        log_dir: Optional[str] = None,
-        log_retrieval_events: bool = True,
+        retrieval_event_policy: Optional[RetrievalEventPolicy] = None,
         cfg: Optional[Dict[str, Any]] = None,
     ):
         self.index_path = index_path
         self.dim = dim
         self.db_path = db_path
-        self.log_dir = log_dir
-        self.log_retrieval_events = log_retrieval_events
+        self.retrieval_event_policy = (
+            retrieval_event_policy
+            if retrieval_event_policy is not None
+            else RetrievalEventPolicy()
+        )
         self.cfg = cfg
 
     def _load_index(self):
@@ -433,7 +442,11 @@ class FaissMemory(MemoryStore):
                             },
                         )
                     )
-                emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+                emit_retrieval_events(
+                    self.db_path,
+                    events,
+                    policy=self.retrieval_event_policy,
+                )
             except Exception as e:
                 logger.warning(
                     "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
@@ -496,25 +509,13 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     ttl_seconds = memory_cfg.get("ttl_seconds", 900)
     max_ephemeral = memory_cfg.get("max_ephemeral_items", 512)
     text_dim = dims_cfg.get("text", 384)
-    log_retrieval = True
-    try:
-        log_retrieval = retrieval_events_enabled(cfg, default=True)
-    except Exception as e:
-        logger.warning(
-            "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
-            "build_text_stores",
-            "retrieval_events_enabled",
-            type(e).__name__,
-            e,
-        )
-        log_retrieval = True
+    retrieval_event_policy = resolve_retrieval_event_policy(cfg)
     stores["ephemeral"] = EphemeralMemory(
         text_dim,
         ttl_seconds=ttl_seconds,
         max_items=max_ephemeral,
         db_path=paths.get("db_path"),
-        log_dir=paths.get("log_dir"),
-        log_retrieval_events=log_retrieval,
+        retrieval_event_policy=retrieval_event_policy,
     )
     faiss_path = paths.get("faiss_index_path") or ""
     if faiss_path:
@@ -522,13 +523,17 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
             faiss_path,
             text_dim,
             db_path=paths.get("db_path"),
-            log_dir=paths.get("log_dir"),
-            log_retrieval_events=log_retrieval,
+            retrieval_event_policy=retrieval_event_policy,
             cfg=cfg,
         )
     q_client = None
     try:
-        q_client = build_qdrant_client(cfg, dim=text_dim, key="text")
+        q_client = build_qdrant_client(
+            cfg,
+            dim=text_dim,
+            key="text",
+            retrieval_event_policy=retrieval_event_policy,
+        )
     except Exception as e:
         logger.warning(
             "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",

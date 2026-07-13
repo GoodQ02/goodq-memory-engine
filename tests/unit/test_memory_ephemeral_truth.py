@@ -79,8 +79,9 @@ def test_memory_router_resolves_legacy_chroma_reads_to_ephemeral_store() -> None
 def test_ephemeral_memory_logs_truthful_store_names(monkeypatch) -> None:
     emitted = {}
 
-    def _capture(db_path, events, *, enabled=None, log_dir=None, cfg=None):
+    def _capture(db_path, events, *, policy):
         emitted["events"] = events
+        emitted["policy"] = policy
 
     monkeypatch.setattr(memory_stores, "emit_retrieval_events", _capture)
 
@@ -101,3 +102,4 @@ def test_ephemeral_memory_logs_truthful_store_names(monkeypatch) -> None:
     assert emitted["events"][0].store == "ephemeral"
     assert emitted["events"][0].details["store_type"] == "ephemeral_cache"
     assert emitted["events"][0].details["store_ref"] == "ephemeral_memory"
+    assert emitted["policy"] is cache.retrieval_event_policy

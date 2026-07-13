@@ -196,6 +196,9 @@ class MultimodalSearchEngine:
             config: GoodQ configuration dict
         """
         self.config = config
+        from steps.common.retrieval_events import resolve_retrieval_event_policy
+
+        self._retrieval_event_policy = resolve_retrieval_event_policy(config)
         qdrant_cfg = (config.get("qdrant") or {}) if isinstance(config, dict) else {}
         paths_cfg = (config.get("paths") or {}) if isinstance(config, dict) else {}
         phase6_cfg = (config.get("phase6") or {}) if isinstance(config, dict) else {}
@@ -1148,16 +1151,6 @@ class MultimodalSearchEngine:
             return self._qdrant_clients[collection]
         
         from steps.common.qdrant_client import QdrantClient, QdrantConfig
-
-        paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
-        db_path = paths.get("db_path") if isinstance(paths, dict) else None
-        log_retrieval = True
-        try:
-            from steps.common.retrieval_events import retrieval_events_enabled
-
-            log_retrieval = retrieval_events_enabled(self.config, default=True)
-        except Exception:
-            log_retrieval = True
         
         # Determine dimension based on collection type
         dim = self.collection_dims.get(collection)
@@ -1177,8 +1170,8 @@ class MultimodalSearchEngine:
             collection=collection,
             dim=dim,
             distance='Cosine',
-            db_path=db_path,
-            log_retrieval_events=log_retrieval,
+            db_path=self.db_path,
+            retrieval_event_policy=self._retrieval_event_policy,
         ))
         
         self._qdrant_clients[collection] = client

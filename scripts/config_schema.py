@@ -3,7 +3,7 @@ GoodQ4All Canonical Configuration Schema
 Pydantic v2 validation layer for the unified config.yaml
 """
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, Dict, List, Any
 
 
@@ -365,6 +365,25 @@ class LoggingConfig(BaseModel):
 
 
 # ============================================================================
+# OBSERVABILITY CONFIGURATION
+# ============================================================================
+class RetrievalEventsObservabilityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = True
+    jsonl_fallback: bool = True
+
+
+class ObservabilityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    retrieval_events: RetrievalEventsObservabilityConfig = Field(
+        default_factory=RetrievalEventsObservabilityConfig
+    )
+    summaries_preview: Optional[bool] = None
+
+
+# ============================================================================
 # MEMORY CONFIGURATION
 # ============================================================================
 class MemoryRoutingConfig(BaseModel):
@@ -404,8 +423,19 @@ class GoodQConfig(BaseModel):
     pipeline: PipelineConfig
     output: OutputConfig
     logging: LoggingConfig
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     memory: Optional[MemoryConfigSection] = None
     ingestion_isolation: Optional[bool] = None
+
+    @field_validator("memory", mode="before")
+    @classmethod
+    def reject_competing_retrieval_event_policy(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "retrieval_events" in value:
+            raise ValueError(
+                "memory.retrieval_events is not allowed; "
+                "use observability.retrieval_events"
+            )
+        return value
 
     class Config:
         extra = "forbid"  # Reject unknown keys

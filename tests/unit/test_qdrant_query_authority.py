@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from steps.common.qdrant_client import QdrantClient, QdrantConfig
+from steps.common.retrieval_events import RetrievalEventPolicy
 
 
 class _Response:
@@ -57,7 +58,7 @@ def _client(session: _RecordingSession) -> QdrantClient:
             host="http://qdrant.invalid",
             collection="goodq_text",
             dim=3,
-            log_retrieval_events=False,
+            retrieval_event_policy=RetrievalEventPolicy(enabled=False),
         )
     )
     client.session = session

@@ -324,7 +324,7 @@ def test_faiss_shadow_reader_does_not_retain_direct_write_capable_connect(
         dim=2,
         db_path=str(database),
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
-        log_retrieval_events=False,
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
     )
     assert len(store.query([0.1, 0.2], top_k=1)) == 1
     assert not _marker_exists(database)
@@ -434,7 +434,7 @@ def test_qdrant_query_preserves_bounded_provenance_annotation(tmp_path: Path) ->
             collection="goodq_text",
             dim=3,
             db_path=str(database),
-            log_retrieval_events=False,
+            retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
         )
     )
     client.session = _QdrantSession(
@@ -550,7 +550,7 @@ def test_faiss_query_preserves_provenance_shadow_scoring_and_telemetry(
         dim=2,
         db_path=str(database),
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
-        log_retrieval_events=True,
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=True),
     )
     hits = store.query([0.1, 0.2], top_k=2)
 
@@ -607,7 +607,7 @@ def test_faiss_shadow_failure_closes_and_preserves_hits_and_telemetry(
         dim=2,
         db_path=str(database),
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
-        log_retrieval_events=True,
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=True),
     )
     hits = store.query([0.1, 0.2], top_k=1)
 
@@ -979,7 +979,7 @@ def test_selected_readers_use_common_authority_and_close_connections(
         dim=2,
         db_path=str(memory_database),
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
-        log_retrieval_events=False,
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
     )
     assert store.query([0.1, 0.2], top_k=1)
 

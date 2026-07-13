@@ -344,3 +344,11 @@ logging:
   save_logs: true
   verbose: true
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# ============================================================================
+# OBSERVABILITY
+# ============================================================================
+observability:
+  retrieval_events:
+    enabled: true
+    jsonl_fallback: true

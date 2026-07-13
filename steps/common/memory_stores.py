@@ -202,6 +202,9 @@ class FaissMemory(MemoryStore):
         )
         self.cfg = cfg
 
+    def _store_ref(self) -> Optional[str]:
+        return os.path.basename(self.index_path) if self.index_path else None
+
     def _load_index(self):
         import faiss  # type: ignore
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
@@ -235,10 +238,10 @@ class FaissMemory(MemoryStore):
                     return False
                 if missing_id_count or len(ids) != len(vecs):
                     logger.warning(
-                        "memory_stores operation failed store=%s operation=%s index_path=%s reason=%s vector_count=%s id_count=%s missing_id_count=%s",
+                        "memory_stores operation failed store=%s operation=%s store_ref=%s reason=%s vector_count=%s id_count=%s missing_id_count=%s",
                         "faiss",
                         "insert",
-                        self.index_path,
+                        self._store_ref(),
                         "explicit_ids_required",
                         len(vecs),
                         len(ids),
@@ -252,12 +255,11 @@ class FaissMemory(MemoryStore):
                 return True
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "insert",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
             return False
 
@@ -289,12 +291,11 @@ class FaissMemory(MemoryStore):
                 attach_provenance_to_hits(self.db_path, out)
             except Exception as e:
                 logger.warning(
-                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                     "faiss",
                     "attach_provenance",
-                    self.index_path,
+                    self._store_ref(),
                     type(e).__name__,
-                    e,
                 )
 
             # Shadow-Mode scoring comparison
@@ -416,12 +417,11 @@ class FaissMemory(MemoryStore):
                         score_f = float(score) if score is not None else None
                     except Exception as e:
                         logger.warning(
-                            "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                            "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                             "faiss",
                             "query.score_parse",
-                            self.index_path,
+                            self._store_ref(),
                             type(e).__name__,
-                            e,
                         )
                         score_f = None
                     payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
@@ -451,8 +451,7 @@ class FaissMemory(MemoryStore):
                             score=score_f,
                             details={
                                 "store_type": "faiss",
-                                "store_ref": os.path.basename(self.index_path) if self.index_path else None,
-                                "index_path": self.index_path,
+                                "store_ref": self._store_ref(),
                             },
                         )
                     )
@@ -463,22 +462,20 @@ class FaissMemory(MemoryStore):
                 )
             except Exception as e:
                 logger.warning(
-                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                     "faiss",
                     "emit_retrieval_events",
-                    self.index_path,
+                    self._store_ref(),
                     type(e).__name__,
-                    e,
                 )
             return out
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "query",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
             return []
 
@@ -490,12 +487,11 @@ class FaissMemory(MemoryStore):
                 return {"available": True, "vectors": int(getattr(idx, "ntotal", 0)), "dim": self.dim}
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "stats",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
         return {"available": False, "vectors": 0, "dim": self.dim}
 

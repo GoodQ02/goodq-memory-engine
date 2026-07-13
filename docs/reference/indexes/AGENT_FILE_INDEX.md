@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1204**
+Indexed active tracked paths: **1206**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -257,6 +257,7 @@ Indexed active tracked paths: **1204**
 | `/docs/diagnostics/R04_CONFIG_PORTABILITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
@@ -1074,6 +1075,7 @@ Indexed active tracked paths: **1204**
 | `/tests/unit/test_print_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retro_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_artifact_persisted_on_failure_exit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_index.py` | Verification | Test, fixture, or verification asset. |

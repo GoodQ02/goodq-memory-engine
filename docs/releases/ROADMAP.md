@@ -381,6 +381,16 @@ the failure is not currently visible.
   remain `automatic_mutation` while telemetry, model/cache, and SQLite effects
   remain open. Evidence:
   `docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md`.
+- Qdrant query authority checkpoint evidence (2026-07-13):
+  `QdrantClient.query()` now performs GET-only collection inspection on both
+  initial and retry paths. A definite missing collection fails read-only;
+  indeterminate inspection receives one bounded GET-only retry. Explicit
+  `ensure_collection()`/`upsert()` creation remains unchanged. Fresh verification
+  passed 283 adjacent tests, Python compilation, diff checks, and independent
+  re-review. The four retrieval routes remain `automatic_mutation` because
+  telemetry, model/cache, and SQLite effects remain open. The next bounded seam
+  is the already-audited ingest-status constructor no-create repair. Evidence:
+  `docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -950,6 +960,10 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-13: Checkpointed the first R-05-F1 repair: all Qdrant query paths now
+  require existing collections through bounded GET-only inspection, while
+  explicit write paths retain creation authority. Advanced the bounded mission
+  to ingest-status constructor no-create without reclassifying retrieval.
 - 2026-07-13: Opened R-05-F1 with a three-way hidden-read reconciliation and
   selected Qdrant query no-create authority as the highest-impact single-owner
   repair. Ingest-status directory creation and summary/retrieval SQLite,

@@ -660,15 +660,41 @@ the failure is not currently visible.
 ### R-07 — Replace the unsafe clean-memory workflow
 
 - Priority: P0
-- Status: OPEN
+- Status: IN_PROGRESS
 - Finding: the runbook mixes incompatible shell syntax, dated locations, broad
-  deletion, and continue-after-failure behavior.
+  deletion, unaudited process stopping, non-binding manifests, and
+  continue-after-failure behavior; the two operator-skill copies disagree, the
+  active guide delegates to the unsafe procedure, and the evidence-first
+  workflow can independently reauthorize prefix-wide collection deletion.
 - Repair: replace manual deletion blocks with one portable, manifest-first,
-  dry-run-capable, exact-scope, stop-on-failure tool; remove old instructions.
+  dry-run-capable, exact-scope, stop-on-failure CLI backed by a pure core; reuse
+  the verified MiniAgent exact-scope authorization and `ActionJobLedger` rather
+  than creating a third gate; retire the competing clean-slate executors and
+  replace old instructions.
 - Completion gate: temporary-root tests prove boundary rejection, idempotency,
-  partial-failure handling, and post-clean evidence; the active workflow and
-  both repository operator-skill copies replace manual deletion guidance with
-  the verified tool and contain no competing destructive procedure.
+  production R-23 verifier default denial, disposition/rollback coverage,
+  stable concurrent plan/job convergence, pre-apply and immediate per-target
+  drift/reparse refusal, passive quiescence-authority default denial, token/job
+  authority, one-lock expected-owner/expected-state transitions, bounded token
+  expiry and approval-crash recovery, live-apply/reconcile lease exclusion,
+  stop-on-first-failure, crash-safe per-target journaling/reconciliation,
+  bounded protected-target evidence, and
+  plan-bound post-clean receipts; the active workflow, guide,
+  evidence-first workflow, both repository operator-skill copies, and their
+  discovered active references and generated indexes agree on the verified
+  tool and contain no manual, competing, legacy-executor, prefix-wide, or
+  active-to-archive destructive procedure. Configured-data apply remains fail-closed until an
+  R-23-governed disposition/rollback artifact authorizes the exact epoch and a
+  canonical supervisor supplies an exclusive lease honored by every writer.
+- Selection evidence (2026-07-13): three independent read-only traces found no
+  reusable safe cleanup executor and selected `cli.clean_memory` plus a pure
+  `steps/common/clean_memory.py` core. Operator input names one exact configured
+  epoch; configuration derives the exact database, sidecar, FAISS, and four
+  collection targets; immutable plan and receipt evidence bind the existing
+  R-05/R-11 authorization and action-job authorities. Process stopping,
+  initialization, re-ingestion, broad retention cleanup, API/UI work, and live
+  configured-data verification remain outside the seam. Evidence:
+  `docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md`.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

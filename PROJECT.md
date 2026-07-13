@@ -17,6 +17,17 @@ cleanup implementation begins.
 ## Governing evidence
 
 - `docs/agent/workflows/CLEAN_MEMORY_START.md`
+- `docs/guides/CLEAN_MEMORY_START.md`
+- `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`
+- `docs/agent/README.md`
+- `README.md`
+- `SUPPORT.md`
+- `docs/archive/guides/install/UNINSTALL.md` (transitive historical hazard only)
+- `AGENTS.md`
+- `docs/bootstrap/doc_authority_map.md`
+- `docs/reference/indexes/AGENT_COMMS_INDEX.md`
+- `docs/reference/indexes/AGENT_FILE_INDEX.md`
+- `docs/codebase_index/README.md`
 - `.agents/skills/goodq4all-operator/SKILL.md`
 - `docs/agent/skills/goodq4all-operator/SKILL.md`
 - `docs/releases/ROADMAP.md`
@@ -25,20 +36,26 @@ cleanup implementation begins.
 
 A replacement is safe only when it starts from an immutable manifest, resolves
 an exact authorized temporary or configured scope, defaults to dry-run, rejects
-boundary escapes, stops on failure, and emits post-action evidence. Existing
+boundary escapes immediately before every target, journals intent and result
+around each mutation, stops on failure, and emits post-action evidence. Real
+configured apply remains unavailable until the separate corpus-retention
+authority registers durable disposable and restorable evidence. Existing
 working ingestion and promoted memory remain untouched.
 
 ## Scope
 
 - Inventory every destructive command and target rule in the active clean-memory
-  runbook and both repository operator-skill copies.
+  runbook and both repository operator-skill copies, plus every active redirect
+  or semantic rule that could restore broad cleanup authority and every inbound
+  active/index or transitive active-to-archive reference that could preserve a
+  superseded executor or manual destructive procedure.
 - Search for existing manifest, dry-run, exact-scope, boundary-check, and
   post-clean verification utilities before proposing new code.
 - Trace configuration and authority inputs statically; use temporary-root
   fixtures only when a witness is needed.
 - Produce one selection document naming the replacement entry point, manifest,
-  scope, failure, rollback, and test contracts plus the exact replacement of all
-  three active instruction surfaces.
+  scope, failure, rollback, and test contracts plus the exact alignment of the
+  workflow, both skill copies, active guide, and evidence-first workflow.
 
 ## Boundaries
 
@@ -54,7 +71,9 @@ working ingestion and promoted memory remain untouched.
 
 The selection must inventory every active destructive block across the workflow
 and both operator-skill copies, prove the no-repeat search for reusable
-primitives, identify one exact implementation and test boundary, name how every
-active instruction copy will stop competing with the replacement, and receive
-independent review. No cleanup implementation starts until the roadmap and this
-bounded mission agree on that seam.
+primitives, identify one exact implementation and test boundary, close the
+proven owner/state atomicity gap and every approval crash window, require one
+exclusive lease to fence live apply from recovery, name how every active
+workflow, skill, guide, and semantic redirect stops competing with the
+replacement, and receive independent review. No cleanup implementation starts
+until the roadmap and this bounded mission agree on that seam.

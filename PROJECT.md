@@ -4,52 +4,56 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — reject duplicate protected identity envelopes.
+Roadmap item: R-07 — decide protected-boundary authority source.
 
 ## Outcome
 
-Close one proven candidate-plan validation gap: two different protected roles
-must not carry byte-identical canonical identity JSON envelopes. Add the smallest
-RED oracle and validation change without resolving paths, observing a
-filesystem, or altering the protected-boundary evidence type.
+Obtain an explicit operator decision on one source of truth for the eight
+unresolved protected roles and on its non-circular authoring and trust
+bootstrap. Record the decision and exact unresolved-member semantics before any
+projection, reader, observer, or runtime implementation begins.
 
 ## Governing evidence
 
 - candidate-plan checkpoint `c870a1cb`
-- protected-boundary audit checkpoint recorded in
-  `docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md`
+- duplicate canonical-envelope guard checkpoint `4230a910`
+- protected-boundary authority audit checkpoint `f01e03a7`
+- `docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Every protected role and logical ID is unique, and distinct roles cannot carry
-the same canonical identity JSON envelope. Candidate-plan construction rejects
-that exact duplicate before producing authority output; later observation still
-owns physical-alias detection across different envelopes.
+Protected-boundary authority is explicit, integrity-bound, and independent of
+environment variables, the current directory, producer defaults, sibling
+checkout inference, live-ledger reconstruction, or historical documentation.
+No candidate architecture becomes authority merely because it is the strongest
+audited option.
 
-## Exact implementation scope
+## Exact decision scope
 
-- Add one focused test that assigns one role's valid canonical identity JSON to
-  a different role while keeping roles and logical IDs distinct.
-- Require `build_candidate_plan()` to reject that scope before returning a plan.
-- Preserve existing valid construction and round-trip behavior.
-- Run the focused authority suite and the established candidate-plan union.
+- Present the audited fixed-location machine-local manifest candidate and any
+  evidence-backed alternative without implementing either.
+- Require the operator to approve or reject one authority source and its
+  authoring/trust bootstrap explicitly.
+- If a source is approved, specify exact configured/unresolved membership,
+  ordering, cardinality, member kinds, logical-ID rules, and structural-absence
+  policy in the next isolated checkpoint before code is written.
+- If no source is approved, keep runnable planning fail closed and update the
+  roadmap with the unresolved decision.
 
 ## Boundaries
 
-- Touch only `steps/common/clean_memory.py`,
-  `tests/unit/test_clean_memory_authority.py`, and checkpoint documentation.
-- Do not change `ProtectedBoundaryEvidence`, public APIs, schemas, configuration,
-  filesystem observers, manifest authority, Qdrant, persistence, jobs, tokens,
-  MiniAgent, or cleanup execution.
-- Do not inspect configured/live roots or services.
-- Do not combine the later protected-authority manifest projection into this
-  seam.
+- Documentation and decision evidence only.
+- Do not load configuration, inspect configured/live roots, contact services,
+  or infer current protected members.
+- Do not implement a manifest, fixed-location reader, shared identity backend,
+  protected observer, Qdrant observer, runnable plan, persistence, approval,
+  job/token, MiniAgent, or cleanup behavior.
+- Do not reopen the completed duplicate-envelope guard.
 
 ## Completion gate
 
-The focused duplicate-envelope RED turns green; existing valid authority and
-round-trip tests remain green; compilation, import-purity, documentation,
-semantic-drift, banned-token, dependency, and diff gates pass; independent
-current-byte review finds no broader change. Checkpoint separately before any
-explicitly approved protected-authority implementation begins.
+The operator's explicit decision and trust-bootstrap choice are recorded
+without invented member semantics. The roadmap and bounded mission agree on the
+next isolated seam, and documentation authority, semantic-drift, banned-token,
+dependency, index, and diff gates pass before a separate checkpoint.

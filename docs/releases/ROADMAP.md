@@ -809,6 +809,22 @@ the failure is not currently visible.
   `docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the focused
   candidate-plan duplicate canonical-envelope guard and its RED oracle.
+- Duplicate protected-envelope guard checkpoint (2026-07-13): private
+  checkpoint `4230a910` adds one candidate-plan validation that rejects
+  byte-identical canonical protected identity envelopes across distinct roles
+  and logical IDs. The focused oracle first failed because no exception was
+  raised, then passed after the minimal guard; fresh verification passed the
+  55-test authority suite, the 233-test configuration/candidate/filesystem
+  authority union, compilation, import purity, documentation authority and
+  semantic drift, banned-token, dependency, and diff gates. Three independent
+  current-byte reviews returned clean. Valid authority bytes, round-trip
+  behavior, schemas, public APIs, configuration, persistence, observers, and
+  runtime behavior remain unchanged. The guard does not claim physical-alias
+  detection across different envelopes. No configured or live root, service,
+  data, Qdrant, evidence store, job, token, MiniAgent, or cleanup authority was
+  read or exercised. R-07 remains `IN_PROGRESS`; the next bounded gate is an
+  explicit operator decision on one protected-authority source and its
+  non-circular authoring/trust bootstrap, not implementation.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1371,6 +1387,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 duplicate canonical protected-identity
+  envelope guard and advanced only to the explicit protected-authority source
+  and trust-bootstrap decision gate.
 
 - 2026-07-13: Checkpointed the R-07 passive filesystem observer and advanced
   only to a read-only protected-boundary authority audit.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -191,20 +192,31 @@ def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
     }
 
 
-def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_visual_query_loader_uses_safetensors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     engine = _engine()
     calls: list[dict[str, object]] = []
+    snapshot = (tmp_path / "pinned-clip-snapshot").resolve()
+    search_module = sys.modules["retrieval.multimodal_search"]
+    monkeypatch.setattr(
+        search_module,
+        "resolve_pinned_model_snapshot",
+        lambda *_args, **_kwargs: snapshot,
+    )
 
     class _FakeProcessor:
         @classmethod
-        def from_pretrained(cls, model_id: str):
-            assert "clip-vit" in model_id
+        def from_pretrained(cls, model_id: str, **kwargs):
+            assert model_id == str(snapshot)
+            assert kwargs == {"local_files_only": True}
             return cls()
 
     class _FakeModel:
         @classmethod
         def from_pretrained(cls, model_id: str, **kwargs):
-            assert "clip-vit" in model_id
+            assert model_id == str(snapshot)
             calls.append(kwargs)
             return cls()
 
@@ -218,7 +230,7 @@ def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -
 
     engine._load_clip_model()
 
-    assert calls == [{"use_safetensors": True}]
+    assert calls == [{"use_safetensors": True, "local_files_only": True}]
 
 
 def test_visual_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.MonkeyPatch) -> None:

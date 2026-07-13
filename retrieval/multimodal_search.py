@@ -13,6 +13,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +27,8 @@ def _default_data_root() -> str:
 
 _CLAP_MODEL_ID = "laion/clap-htsat-unfused"
 _CLAP_INSTALL_HINT = "conda run -n goodq_core python scripts/bootstrap_models.py"
+_CLIP_MODEL_REGISTRY_KEY = "clip_vit"
+_TEXT_MODEL_REGISTRY_KEY = "sentence_transformer"
 
 
 def _classify_audio_text_encoder_error(exc: Exception) -> str:
@@ -1024,43 +1028,62 @@ class MultimodalSearchEngine:
         """Load CLIP model for text encoding."""
         if self._clip_model is not None:
             return
-        
+
+        model_source = resolve_pinned_model_snapshot(
+            self._models_cache_root(),
+            _CLIP_MODEL_REGISTRY_KEY,
+            required_files=("preprocessor_config.json",),
+        )
+        if model_source is None:
+            logger.warning(
+                "Visual search unavailable because pinned CLIP model cache is missing "
+                "registry_key=%s install_hint=\"%s\"",
+                _CLIP_MODEL_REGISTRY_KEY,
+                _CLAP_INSTALL_HINT,
+            )
+            return
+
         try:
-            import torch
             from transformers import CLIPModel, CLIPProcessor
-            from pathlib import Path
-            import yaml
-            
-            repo_root = Path(__file__).resolve().parent.parent
-            registry_path = repo_root / "configs" / "model_registry.yaml"
-            repo_id = "openai/clip-vit-large-patch14"  # Default fallback
-            if registry_path.exists():
-                try:
-                    with open(registry_path, "r", encoding="utf-8") as f:
-                        registry = yaml.safe_load(f) or {}
-                    repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
-                except Exception:
-                    pass
-            
-            processor = CLIPProcessor.from_pretrained(repo_id)
-            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True).eval()
-            
+
+            source = str(model_source)
+            processor = CLIPProcessor.from_pretrained(source, local_files_only=True)
+            model = CLIPModel.from_pretrained(
+                source,
+                use_safetensors=True,
+                local_files_only=True,
+            ).eval()
+
             self._clip_model = {'model': model, 'processor': processor}
-            logger.info(f"[OK] CLIP model ({repo_id}) loaded for text encoding")
+            logger.info("[OK] CLIP model loaded from pinned local cache for text encoding")
         except Exception as e:
             logger.error(f"Failed to load CLIP model: {e}")
-    
+
     def _load_text_model(self):
         """Load sentence transformer for text encoding."""
         if self._text_model is not None:
             return
-        
+
+        model_source = resolve_pinned_model_snapshot(
+            self._models_cache_root(),
+            _TEXT_MODEL_REGISTRY_KEY,
+            required_files=("modules.json",),
+        )
+        if model_source is None:
+            logger.warning(
+                "Text search unavailable because pinned sentence-transformer cache is missing "
+                "registry_key=%s install_hint=\"%s\"",
+                _TEXT_MODEL_REGISTRY_KEY,
+                _CLAP_INSTALL_HINT,
+            )
+            return
+
         try:
             from sentence_transformers import SentenceTransformer
-            
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+
+            model = SentenceTransformer(str(model_source), local_files_only=True)
             self._text_model = model
-            logger.info("[OK] Text embedding model loaded")
+            logger.info("[OK] Text embedding model loaded from pinned local cache")
         except Exception as e:
             logger.error(f"Failed to load text model: {e}")
 

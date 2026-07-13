@@ -154,15 +154,22 @@ def temporal_search(
     modality: Optional[List[str]] = None,
     max_results: int = 25,
     grouping: str = "semantic_episode",
+    config: Optional[Dict[str, Any]] = None,
+    expected_epoch_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute chronological narrative search.
     Enforces read-only URI database access patterns.
     """
-    config = load_configs({})
-    paths = get_runtime_paths(config)
-    db_path = paths["db_path"]
-    kg_path = paths["knowledge_graph_db"]
+    resolved_config = config if config is not None else load_configs({})
+    paths = get_runtime_paths(resolved_config)
+    db_path = Path(paths["db_path"])
+    kg_path = Path(paths["knowledge_graph_db"])
+    if expected_epoch_id is not None and (
+        db_path.parent.name != expected_epoch_id
+        or kg_path.parent.name != expected_epoch_id
+    ):
+        raise RuntimeError("Temporal search epoch scope changed before retrieval")
     
     db_uri = f"{Path(db_path).resolve().as_uri()}?mode=ro"
     kg_uri = f"{Path(kg_path).resolve().as_uri()}?mode=ro"
@@ -425,7 +432,14 @@ def temporal_search(
             else:
                 curr["temporal_distance_from_previous"] = 0.0
                 
-            curr["semantic_similarity_from_previous"] = round(compute_similarity(curr["scene_id"], prev["scene_id"], config), 4)
+            curr["semantic_similarity_from_previous"] = round(
+                compute_similarity(
+                    curr["scene_id"],
+                    prev["scene_id"],
+                    resolved_config,
+                ),
+                4,
+            )
             
     return {
         "query": {

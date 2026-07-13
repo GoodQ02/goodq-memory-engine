@@ -403,6 +403,18 @@ the failure is not currently visible.
   remains `IN_PROGRESS`; the next bounded mission is a fresh read-only selection
   among the remaining summary and retrieval effects. Evidence:
   `docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md`.
+- Remaining-effect selection evidence (2026-07-13): fresh code traces and
+  temporary-root witnesses selected the summary video-status passive reader as
+  the next exact seam. Its ordinary latest-job projection enters the
+  writer-oriented action-job lock and creates `.action-jobs.lock` transiently;
+  a final-tree snapshot therefore misses the mutation. Retrieval telemetry is
+  intentional durable observability, text/visual local-only resolution spans a
+  write-logging provisioner, and summary/retrieval SQLite repair needs an
+  explicit live-WAL policy, so those owners remain separate. The next repair is
+  limited to a non-creating, lock-free action-job reader plus the one summary
+  status route; writer lifecycle behavior and the route census remain frozen.
+  Evidence:
+  `docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 

@@ -351,7 +351,7 @@ the failure is not currently visible.
 ### R-05-F1 — Remove hidden mutation from nominal retrieval and ingest-status reads
 
 - Priority: P0
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Finding: four retrieval operations intentionally persist retrieval events and
   therefore remain automatic mutations. Their incidental query-side Qdrant
   creation, model-cache resolution, write-capable SQLite projections, and the
@@ -607,10 +607,18 @@ the failure is not currently visible.
   precedence, and the 69-operation route census remain unchanged. Fresh
   verification passed the 19-test authority suite, a 205-test focused union,
   static/documentation gates, and two clean independent implementation reviews.
-  R-05-F1 remains `IN_PROGRESS` pending a read-only no-repeat reconciliation of
-  the separately recorded candidates against this item's actual completion
-  gate. Evidence:
+  A final read-only no-repeat reconciliation then traced every separately
+  recorded candidate against its current producer, caller, sink, consumer,
+  retention, and rollback owner. None is a nominal retrieval/status hidden
+  mutation: mounted output redaction belongs to R-20, durable query/path
+  retention and migration belong to R-23, and unsafe diagnostic warning text
+  belongs to R-15. Three independent candidate-family reviews agreed that this
+  item's completion gate is satisfied without further implementation. Fresh
+  closure verification passed a 347-test temporary-only authority union plus
+  documentation, drift, banned-token, dependency, and diff gates. Evidence:
   `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_CHECKPOINT_2026-07-13.md`.
+  Closure evidence:
+  `docs/diagnostics/R05_F1_REMAINING_CANDIDATE_RECONCILIATION_2026-07-13.md`.
 
 ### R-06 — Make isolated-ingestion checkpoints truthful
 
@@ -658,7 +666,9 @@ the failure is not currently visible.
 - Repair: replace manual deletion blocks with one portable, manifest-first,
   dry-run-capable, exact-scope, stop-on-failure tool; remove old instructions.
 - Completion gate: temporary-root tests prove boundary rejection, idempotency,
-  partial-failure handling, and post-clean evidence.
+  partial-failure handling, and post-clean evidence; the active workflow and
+  both repository operator-skill copies replace manual deletion guidance with
+  the verified tool and contain no competing destructive procedure.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -860,6 +870,11 @@ the failure is not currently visible.
 - Completion gate: the regression guard covers the reviewed critical surface
   and every changed fallback has a focused behavior test.
 - Public impact: RELEASE_REQUIRED
+- Recorded diagnostic-privacy evidence (2026-07-13): ingestion and vector
+  warning branches can include full local `source_path`/`index_path` values or
+  raw exception text. These are explicit write-path diagnostics, not R-05-F1
+  hidden mutations. Repair them as bounded logging seams while preserving
+  fallback behavior; producer retention/migration remains R-23.
 
 ### R-16 — Reconcile private development and public release Git state
 
@@ -1007,11 +1022,19 @@ the failure is not currently visible.
   redaction, rate limits, and retention for the 8901 monitor; design one future
   authenticated household gateway instead of exposing raw services.
 - Completion gate: port/listener and firewall witnesses prove raw services are
-  unreachable from LAN devices; key-name parity passes. Destructive plaintext
-  secret-backup removal remains a separate approval gate.
+  unreachable from LAN devices; key-name parity passes; focused API/UI oracles
+  prove mounted household-facing projections expose logical references rather
+  than local paths. Destructive plaintext secret-backup removal remains a
+  separate approval gate.
 - Daily Hermes sub-gate: start/check OpenViking by default, support explicit
   `-SkipMemory` and `-RequireMemory`, check GoodQ without starting ingestion,
   and verify model, memory, MCP, and security canary state before Desktop opens.
+- Mounted output-redaction evidence (2026-07-13): `/api/read/envelope` returns
+  precomputed envelopes verbatim, and passive scene/timeline projections can
+  pass retained `clap_meta.index_path` through while search already redacts
+  local paths. Before any household gateway exposure, add focused API/UI
+  logical-reference and local-path redaction oracles. The dormant generic
+  epistemic `index_path` fallback belongs to the same output-trust contract.
 
 ### R-21 — Converge portable agent contracts
 
@@ -1045,7 +1068,17 @@ the failure is not currently visible.
   logs, backups, and archives; reconcile Qdrant service logs and historical
   storage only after authoritative copies are identified.
 - Completion gate: manifests, ownership, rollback, and explicit approval exist
-  before any bulk deletion, deduplication, or movement.
+  before any bulk deletion, deduplication, or movement; operator-query logging
+  launch/sink behavior and retained path-bearing stores are classified, their
+  producer/reference and retention policies are explicit, and every historical
+  migration has a documented execute-or-retain decision.
+- Recorded retention/privacy evidence (2026-07-13): standalone analytics and
+  natural-language query helpers can emit raw questions or derived personal
+  intent through inherited INFO logging; ingestion commit events, JSONL mirrors,
+  step logs, and scene artifacts can retain full internal paths. First prove
+  active launch/sink/retention behavior, define logical-reference policy and
+  authoritative copies, then repair producers or migrate history only under the
+  existing manifest/rollback/approval gate.
 
 ### R-25 — Private integrated verification gate
 
@@ -1125,7 +1158,7 @@ after references are updated:
 ## Do-Not-Repeat Register
 
 Do not repeat the completed July home-memory ingestion or promotion; R-01,
-R-02, R-03, or R-06 implementation; Command Center milestones M1 through M5;
+R-02, R-03, R-05-F1, or R-06 implementation; Command Center milestones M1 through M5;
 project orientation/instruction alignment; Hermes/Ollama/Gemma setup; the GoodQ
 RAG bridge, governor MCP, daily launcher, or OpenViking learning gate;
 Webwright/Playwright installation; AutoResearch setup, baseline, or recorded
@@ -1168,8 +1201,8 @@ recreated under a new name.
 1. Recover trustworthy history: completed R-02/R-03 checkpoints, R-17 mixed
    tree extraction, then a separate foundational-documentation checkpoint.
 2. Restore truthful evidence: completed R-18, R-09, R-10, and R-13 checkpoints.
-3. Establish one control authority: verified R-11, R-11-F1, and R-05; next
-   isolate R-05-F1 hidden-read mutation, then R-07.
+3. Establish one control authority: verified R-11, R-11-F1, R-05, and R-05-F1;
+   next replace the unsafe clean-memory workflow under R-07.
 4. Stabilize runtime and network ownership: R-19, R-14, R-20, and the daily
    Hermes startup contract.
 5. Complete identity safely: R-08, then human-curated Phase 5A readiness.
@@ -1198,6 +1231,12 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Verified R-05-F1 after a final no-repeat reconciliation found no
+  remaining nominal retrieval/status hidden mutation. Routed mounted output
+  redaction to R-20, durable query/path retention and migration to R-23, and
+  unsafe diagnostic warning text to R-15, then advanced the bounded mission to
+  a read-only R-07 audit.
 
 - 2026-07-13: Checkpointed retrieval FAISS logical-reference privacy across new
   event/warning output and future legacy-input rollup projection. Preserved

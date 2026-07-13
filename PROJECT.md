@@ -4,55 +4,57 @@
 
 # Active bounded mission
 
-Roadmap item: R-05-F1 — reconcile remaining recorded candidates after the
-retrieval-authority checkpoints.
+Roadmap item: R-07 — audit the unsafe clean-memory workflow and select its
+portable replacement boundary.
 
 ## Outcome
 
-Determine from fresh read-only evidence whether this item has another unfinished
-coherent seam or is ready to close. Route unrelated candidates to their actual
-roadmap owners instead of extending this item by inertia.
+Determine from fresh read-only evidence which active instructions and utilities
+can delete memory, how their scopes are resolved, and whether an existing safe
+primitive can be reused. Produce one exact replacement selection before any
+cleanup implementation begins.
 
 ## Governing evidence
 
-- `docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`
-- `docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md`
+- `docs/agent/workflows/CLEAN_MEMORY_START.md`
+- `.agents/skills/goodq4all-operator/SKILL.md`
+- `docs/agent/skills/goodq4all-operator/SKILL.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Completed retrieval and status authorities stay closed. A remaining candidate
-belongs to this item only when its current producer, effect, sink, consumer, and
-completion evidence fit the hidden-read authority item.
+A replacement is safe only when it starts from an immutable manifest, resolves
+an exact authorized temporary or configured scope, defaults to dry-run, rejects
+boundary escapes, stops on failure, and emits post-action evidence. Existing
+working ingestion and promoted memory remain untouched.
 
 ## Scope
 
-- Reconcile this item's completion gate against the current mounted retrieval
-  and ingest-status paths.
-- Trace the separately recorded analytics-question, derived-intent, ingestion
-  path/reference, and read-model compatibility candidates only far enough to
-  classify ownership and current exposure.
-- Name completed work before selecting anything.
-- Produce either one exact selection with a shared rollback/verification gate or
-  an evidence-backed closure decision with routed follow-ups.
+- Inventory every destructive command and target rule in the active clean-memory
+  runbook and both repository operator-skill copies.
+- Search for existing manifest, dry-run, exact-scope, boundary-check, and
+  post-clean verification utilities before proposing new code.
+- Trace configuration and authority inputs statically; use temporary-root
+  fixtures only when a witness is needed.
+- Produce one selection document naming the replacement entry point, manifest,
+  scope, failure, rollback, and test contracts plus the exact replacement of all
+  three active instruction surfaces.
 
 ## Boundaries
 
-- Read-only reconciliation only; do not change production or tests in this
-  mission.
-- Do not reopen completed Qdrant no-create, ingest status, summary status,
-  model-cache, SQLite, telemetry persistence, request-context, raw-query log, or
-  FAISS logical-reference authorities without contradictory focused evidence.
-- Do not clean history, change retention, reclassify routes, or bundle ingestion,
-  commit-event, analytics, and read-model owners merely because all can carry
-  sensitive data.
-- Do not touch configured data, live endpoints, services, identity, ingestion,
-  WSL, dependencies, public checkout, or mixed main checkout.
+- Read-only selection only; do not delete, move, truncate, reset, recreate, or
+  re-ingest anything in this mission.
+- Do not execute manual cleanup blocks or probe configured data, Qdrant,
+  databases, epochs, FAISS, watchdog state, or processing directories.
+- Do not assume the dated runbook paths or mixed shell examples are current.
+- Do not change production, tests, configuration, dependencies, services,
+  identity, WSL, public checkout, or mixed main checkout.
 
 ## Completion gate
 
-The reconciliation must cite current code and sink/consumer evidence, identify
-the exact roadmap owner for every candidate examined, and receive independent
-review. No implementation starts until the roadmap and this bounded mission
-agree on one unfinished seam.
+The selection must inventory every active destructive block across the workflow
+and both operator-skill copies, prove the no-repeat search for reusable
+primitives, identify one exact implementation and test boundary, name how every
+active instruction copy will stop competing with the replacement, and receive
+independent review. No cleanup implementation starts until the roadmap and this
+bounded mission agree on that seam.

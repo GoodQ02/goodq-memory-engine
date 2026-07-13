@@ -1500,7 +1500,7 @@ class MultimodalSearchEngine:
         Returns:
             List of fused search results with normalized RRF scores
         """
-        logger.info(f"Searching text: '{query}'")
+        logger.info("retrieval_search operation=text top_k=%s", top_k)
         
         candidate_k = max(top_k * 3, 20)
         
@@ -1561,7 +1561,7 @@ class MultimodalSearchEngine:
         Returns:
             List of search results with scores
         """
-        logger.info(f"Searching visual scenes: '{query}'")
+        logger.info("retrieval_search operation=visual top_k=%s", top_k)
         
         query_embedding = self.encode_text_for_visual_search(query)
         if not np.any(query_embedding):
@@ -1600,7 +1600,7 @@ class MultimodalSearchEngine:
         Returns:
             List of search results with scores
         """
-        logger.info(f"Searching audio scenes: '{query}'")
+        logger.info("retrieval_search operation=audio top_k=%s", top_k)
 
         query_embedding = self.encode_text_for_audio_search(query)
         if not np.any(query_embedding):
@@ -1662,7 +1662,16 @@ class MultimodalSearchEngine:
             modalities = ['text', 'visual']
         self._reset_search_diagnostics()
         
-        logger.info(f"Multimodal search: '{query}' across {modalities}")
+        safe_modalities = [
+            modality
+            for modality in ("text", "visual", "audio")
+            if modality in modalities
+        ]
+        logger.info(
+            "retrieval_search operation=multimodal top_k=%s modalities=%s",
+            top_k,
+            ",".join(safe_modalities),
+        )
         
         all_results = []
         per_modality_top_k = max(int(top_k), 5) * 2

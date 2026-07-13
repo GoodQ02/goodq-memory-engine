@@ -11,7 +11,54 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def generate_video_summary_llm(cfg: Dict, video_hash: str, db_path: str) -> Optional[str]:
+def _load_target_scene_summary_records(
+    db_path: str,
+    video_hash: str,
+) -> List[Dict[str, Any]]:
+    """Return usable scene-summary rows belonging to the target video."""
+    conn = sqlite3.connect(db_path)
+    try:
+        c = conn.cursor()
+        c.execute("SELECT id FROM scenes WHERE video_hash=?", (video_hash,))
+        target_scene_ids = {row[0] for row in c.fetchall() if row[0] is not None}
+
+        c.execute("""
+            SELECT id, content, created_at FROM summaries
+            WHERE category='scene_summary'
+            ORDER BY id
+        """)
+
+        records = []
+        for summary_id, content_json, created_at in c.fetchall():
+            try:
+                content = json.loads(content_json)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Failed to parse content JSON from summary records: {e}")
+                continue
+
+            if not isinstance(content, dict):
+                continue
+            scene_id = content.get('scene_id')
+            summary = content.get('summary')
+            if scene_id not in target_scene_ids or not isinstance(summary, str) or not summary:
+                continue
+            records.append({
+                "summary_id": summary_id,
+                "scene_id": scene_id,
+                "summary": summary,
+                "created_at": created_at,
+            })
+        return records
+    finally:
+        conn.close()
+
+
+def generate_video_summary_llm(
+    cfg: Dict,
+    video_hash: str,
+    db_path: str,
+    scene_summary_records: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
     """
     Generate video-level summary from all scene summaries using LLM
     
@@ -24,34 +71,20 @@ def generate_video_summary_llm(cfg: Dict, video_hash: str, db_path: str) -> Opti
         Video summary string or None if generation fails
     """
     try:
-        # Fetch all scene summaries for this video
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        
-        # Get scene summaries
-        c.execute("""
-            SELECT content FROM summaries 
-            WHERE category='scene_summary' 
-            ORDER BY id
-        """)
-        
-        scene_summaries = []
-        scene_count = 0
-        for (content_json,) in c.fetchall():
-            try:
-                content = json.loads(content_json)
-                summary = content.get('summary', '')
-                if summary:
-                    scene_summaries.append(summary)
-                    scene_count += 1
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse content JSON from summary records: {e}")
-                continue
+        if scene_summary_records is None:
+            scene_summary_records = _load_target_scene_summary_records(
+                db_path,
+                video_hash,
+            )
+        scene_summaries = [record["summary"] for record in scene_summary_records]
+        scene_count = len(scene_summaries)
         
         if not scene_summaries:
             logger.warning(f"No scene summaries found for video {video_hash}")
-            conn.close()
             return None
+
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
         
         # Get video metadata from first scene
         c.execute("SELECT meta FROM scenes WHERE video_hash=? LIMIT 1", (video_hash,))
@@ -214,35 +247,36 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
     # Check if LLM video summarization is enabled
     use_llm = cfg.get('llm', {}).get('features', {}).get('video_summarization', True)
     
-    # Collect source artifact versions for provenance tracking
-    source_artifact_versions = []
+    # Select prompt inputs and provenance from one exact target-video row set.
+    scene_summary_records = []
     try:
-        conn_prov = sqlite3.connect(db_path)
-        c_prov = conn_prov.cursor()
-        c_prov.execute("""
-            SELECT id, content, created_at FROM summaries 
-            WHERE category='scene_summary' 
-            ORDER BY id
-        """)
-        for rid, content_json, created_at in c_prov.fetchall():
-            try:
-                content = json.loads(content_json)
-                scene_id = content.get('scene_id', 'unknown')
-                source_artifact_versions.append({
-                    "summary_id": rid,
-                    "scene_id": scene_id,
-                    "created_at": created_at
-                })
-            except Exception:
-                continue
-        conn_prov.close()
+        scene_summary_records = _load_target_scene_summary_records(
+            db_path,
+            video_hash,
+        )
     except Exception as pe:
         logger.warning(f"Failed to query scene summaries for provenance: {pe}")
+    source_artifact_versions = [
+        {
+            "summary_id": record["summary_id"],
+            "scene_id": record["scene_id"],
+            "created_at": record["created_at"],
+        }
+        for record in scene_summary_records
+    ]
 
     # Generate video summary
     video_summary = None
+    generation_method = 'template'
     if use_llm:
-        video_summary = generate_video_summary_llm(cfg, video_hash, db_path)
+        video_summary = generate_video_summary_llm(
+            cfg,
+            video_hash,
+            db_path,
+            scene_summary_records,
+        )
+        if video_summary:
+            generation_method = 'llm'
     
     # Fall back to template if LLM failed
     if not video_summary:
@@ -270,7 +304,7 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
             payload = json.dumps({
                 'video_hash': video_hash,
                 'summary': video_summary,
-                'method': 'llm' if use_llm and video_summary else 'template',
+                'method': generation_method,
                 'provenance': provenance
             }, ensure_ascii=False)
             
@@ -294,6 +328,6 @@ def run_step(cfg: Dict, video_hash: str = None) -> Dict[str, Any]:
         'success': True,
         'summary': video_summary,
         'video_hash': video_hash,
-        'method': 'llm' if use_llm and video_summary else 'template',
+        'method': generation_method,
         'provenance': provenance
     }

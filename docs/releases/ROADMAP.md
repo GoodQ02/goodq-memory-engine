@@ -587,9 +587,10 @@ the failure is not currently visible.
   `docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md`.
 - Retrieval FAISS store-reference privacy selection evidence (2026-07-13): a
   temporary producer witness proved the absolute configured index path reaches
-  new FAISS retrieval-event details and seven warning branches, including
-  exception-carried repetition. A temporary SQLite witness proved the legacy
-  rollup fallback newly materializes the same path in
+  new FAISS retrieval-event details plus explicit and exception-carried warning
+  output. Static source tracing identified seven affected warning branches; the
+  selected RED suite will execute each branch dynamically. A temporary SQLite
+  witness proved the legacy rollup fallback newly materializes the same path in
   `retrieval_events_daily.store_ref`. The selected contract spans these new
   retrieval-reference outputs while preserving safe basename `store_ref`,
   lossless central serialization, FAISS behavior, rollup math/state, and route

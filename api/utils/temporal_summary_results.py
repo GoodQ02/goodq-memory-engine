@@ -17,7 +17,10 @@ from filelock import FileLock
 SCHEMA_VERSION = "goodq.temporal-summary-result.v1"
 _JOB_ID_RE = re.compile(r"^job_[0-9a-f]{32}$")
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
-_SAFE_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$")
+_SAFE_MODEL_ID_RE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}"
+    r"(?:/[A-Za-z0-9][A-Za-z0-9._:+-]{0,127})?$"
+)
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 _PATH_DETAIL_RE = re.compile(

@@ -68,3 +68,22 @@ def test_health_check_retains_activation_for_explicitly_allowed_policy(
 
     assert status["local-test"].is_healthy is False
     activation.assert_called_once_with(client.models[0])
+
+
+def test_local_client_can_ignore_hostile_environment_proxies(monkeypatch) -> None:
+    monkeypatch.setenv("HTTP_PROXY", "http://203.0.113.20:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://203.0.113.20:8080")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+
+    client = LLMClient(
+        models=[_model()],
+        health_check_interval=60,
+        max_retries=1,
+        timeout=5,
+        cache_ttl=60,
+        enable_health_checks=False,
+        allow_auto_activation=False,
+        allow_environment_proxies=False,
+    )
+
+    assert client.session.trust_env is False

@@ -39,6 +39,10 @@ ROUTE_EFFECTS: dict[RouteOperation, RouteEffect] = {
     ("GET", "/api/search/visual"): RouteEffect.AUTOMATIC_MUTATION,
     ("POST", "/api/search/temporal"): RouteEffect.PASSIVE_READ,
     ("POST", "/api/search/temporal/summarize"): RouteEffect.PROCESS_EXECUTION,
+    (
+        "GET",
+        "/api/search/temporal/summarize/{job_id}",
+    ): RouteEffect.PASSIVE_READ,
     ("GET", "/api/videos/{video_id}/scenes"): RouteEffect.PASSIVE_READ,
     ("GET", "/api/videos/{video_id}/scenes/{scene_id}"): RouteEffect.PASSIVE_READ,
     (

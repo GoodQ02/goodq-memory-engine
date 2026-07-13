@@ -153,55 +153,21 @@ def test_summarize_llm_exception(mock_temporal_search, mock_llm_client):
     assert "Mock connection lost" not in str(result)
 
 
-def test_summarize_api_endpoint(mock_temporal_search, mock_llm_client):
-    """
-    Verify API request routing and response schema compliance.
-    """
-    mock_temporal_search.return_value = {
-        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
-        "results": generate_mock_scenes(7)
-    }
+def test_summarize_api_endpoint_rejects_legacy_synchronous_body(
+    mock_temporal_search,
+    mock_llm_client,
+):
+    response = client.post(
+        "/api/search/temporal/summarize",
+        json={
+            "entities": ["Jay"],
+            "summary_style": "executive",
+            "max_results": 10,
+        },
+    )
 
-    payload = {
-        "entities": ["Jay"],
-        "summary_style": "executive",
-        "max_results": 10
-    }
-
-    response = client.post("/api/search/temporal/summarize", json=payload)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["status"] == "success"
-    assert data["source_count"] == 7
-    assert data["truncated"] is False
-    assert data["warnings"] == []
-    assert "query" in data
-    assert data["query"]["summary_style"] == "executive"
-
-
-def test_summarize_api_endpoint_llm_unavailable(mock_temporal_search, mock_llm_client):
-    """
-    Verify endpoint returns 200 (with llm_unavailable status) and valid schema when LLM is offline.
-    """
-    mock_temporal_search.return_value = {
-        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
-        "results": generate_mock_scenes(7)
-    }
-    mock_llm_client.available = False
-
-    payload = {
-        "entities": ["Jay"],
-        "summary_style": "executive",
-        "max_results": 10
-    }
-
-    response = client.post("/api/search/temporal/summarize", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "llm_unavailable"
-    assert "query" in data
-    assert data["query"]["summary_style"] == "executive"
+    assert response.status_code == 422
+    mock_temporal_search.assert_not_called()
 
 
 def test_parse_narrative_segments():
@@ -336,12 +302,14 @@ def test_summarize_uses_verified_models_without_rebuilding_policy(
         expected_epoch_id="private-epoch",
         models=verified_models,
         allow_model_activation=False,
+        allow_environment_proxies=False,
     )
 
     assert result["status"] == "success"
     rebuild_policy.assert_not_called()
     assert module.LLMClient.call_args.kwargs["models"] is verified_models
     assert module.LLMClient.call_args.kwargs["allow_auto_activation"] is False
+    assert module.LLMClient.call_args.kwargs["allow_environment_proxies"] is False
 
 
 def test_temporal_search_rejects_epoch_drift_before_database_open(

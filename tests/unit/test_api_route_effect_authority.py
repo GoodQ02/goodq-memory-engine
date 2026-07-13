@@ -28,6 +28,7 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
     ("GET", "/api/search/visual"): "automatic_mutation",
     ("POST", "/api/search/temporal"): "passive_read",
     ("POST", "/api/search/temporal/summarize"): "process_execution",
+    ("GET", "/api/search/temporal/summarize/{job_id}"): "passive_read",
     ("GET", "/api/videos/{video_id}/scenes"): "passive_read",
     ("GET", "/api/videos/{video_id}/scenes/{scene_id}"): "passive_read",
     (
@@ -104,7 +105,7 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
 }
 
 EXPECTED_COUNTS = {
-    "passive_read": 39,
+    "passive_read": 40,
     "request_staging": 1,
     "automatic_mutation": 11,
     "curated_mutation": 8,
@@ -172,6 +173,7 @@ def _sample_path(template: str) -> str:
         "video_hash": "a" * 32,
         "request_id": "ingest_20260712T000000Z_12345678",
         "report_id": "report_001",
+        "job_id": "job_" + "0" * 32,
     }
 
     def replace(match: re.Match[str]) -> str:
@@ -781,7 +783,7 @@ def test_openapi_projects_every_effect_and_preserves_ingest_schema() -> None:
             if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}:
                 operations.append(operation)
 
-    assert len(operations) == 66
+    assert len(operations) == 67
     assert all(operation.get("x-goodq-effect") in EXPECTED_COUNTS for operation in operations)
 
     submit_operation = schema["paths"]["/api/ingest/submit"]["post"]

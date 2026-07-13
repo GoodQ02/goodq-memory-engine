@@ -154,6 +154,7 @@ class LLMClient:
         cache_ttl: int,
         enable_health_checks: bool,
         allow_auto_activation: bool = True,
+        allow_environment_proxies: bool = True,
     ):
         """
         Initialize LLM client
@@ -165,6 +166,7 @@ class LLMClient:
             cache_ttl: Health cache time-to-live in seconds
             enable_health_checks: Enable health monitoring (default: load from config)
             allow_auto_activation: Permit failed health checks to start local services
+            allow_environment_proxies: Permit requests to inherit proxy environment variables
         """
         if not models:
             raise ValueError("LLMClient requires a non-empty models list")
@@ -172,6 +174,8 @@ class LLMClient:
             raise ValueError("LLMClient requires explicit enable_health_checks")
         if not isinstance(allow_auto_activation, bool):
             raise ValueError("LLMClient requires an explicit activation policy")
+        if not isinstance(allow_environment_proxies, bool):
+            raise ValueError("LLMClient requires an explicit proxy policy")
 
         self.MODELS = models
         self.health_check_interval = health_check_interval
@@ -192,6 +196,7 @@ class LLMClient:
         
         # Session for connection pooling
         self.session = requests.Session()
+        self.session.trust_env = allow_environment_proxies
         self.session.headers.update({
             "Content-Type": "application/json",
             "User-Agent": "GoodQ4All-LLM-Client/1.0"

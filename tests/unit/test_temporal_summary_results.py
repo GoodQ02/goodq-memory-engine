@@ -114,6 +114,24 @@ def test_success_record_is_strict_digest_bound_and_exactly_reloadable(
     ]
 
 
+def test_model_evidence_accepts_namespaced_hugging_face_identifier(
+    tmp_path: Path,
+) -> None:
+    store = TemporalSummaryResultStore(tmp_path / "results")
+
+    record = _write_success(
+        store,
+        model_evidence={
+            "model_id": "meta-llama/Llama-3.2-1B-Instruct",
+            "provider": "vllm",
+        },
+    )
+
+    assert record["model_evidence"]["model_id"] == (
+        "meta-llama/Llama-3.2-1B-Instruct"
+    )
+
+
 def test_failure_record_contains_only_sanitized_error_code(tmp_path: Path) -> None:
     store = TemporalSummaryResultStore(tmp_path / "results")
 

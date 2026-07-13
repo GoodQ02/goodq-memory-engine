@@ -4,82 +4,87 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — implement the strict clean-memory configuration
-projection.
+Roadmap item: R-07 — audit the passive filesystem-observer boundary.
 
 ## Outcome
 
-Add RED tests, then implement one import-pure deterministic projection that
-turns an injected already-loaded configuration mapping plus one exact requested
-epoch into the secret-free logical authority required by later passive
-observers. This checkpoint does not add a runnable command or construct a
-candidate plan.
+Perform one read-only no-repeat audit that reconciles the completed
+configuration projection with existing filesystem, identity, hashing, and race
+handling helpers. Select one smallest import-pure observer implementation seam,
+its exact test oracle, and its file allowlist before any new production code is
+written.
 
 ## Governing evidence
 
-- `docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md`
-- `docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md`
-- `docs/releases/ROADMAP.md`
+- private configuration-projection checkpoint `a12ceb18`
+- `cli/clean_memory.py`
 - `steps/common/clean_memory.py`
-- `configs/config.yaml`
-- private candidate-plan checkpoint `c870a1cb`
+- `tests/unit/test_clean_memory_cli.py`
+- `tests/unit/test_clean_memory_authority.py`
+- `docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md`
+- `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Projection is a pure authority operation. It accepts no path override, reads no
-environment or filesystem state, contacts no service, mutates no caller input,
-and creates no evidence. It validates one exact configured epoch, exact logical
-target topology, explicit Qdrant enablement and canonical loopback endpoint,
-optional-port equality, exact four collection names, and the candidate evidence
-root. It emits a versioned secret-free projection, stable SHA-256, configured
-protected mappings, and one deterministic unresolved protected-role set.
+The observer is passive evidence collection, not cleanup authority. It may
+eventually accept only already-projected exact logical paths and return exact
+epoch-root identity plus immutable filesystem-target evidence. It must never
+load configuration, guess a path, follow a reparse/symlink boundary, create a
+directory, mutate a target, contact a service, create evidence, build a plan,
+or touch jobs, tokens, MiniAgent, or cleanup execution.
 
-## Test-first order
+## Audit questions
 
-1. Add focused RED tests in `tests/unit/test_clean_memory_cli.py`.
-2. Prove failures for import effects, config mutation, epoch/path/collection/
-   endpoint ambiguity, Qdrant enabled/port drift, unstable hashing, secret
-   inclusion, and arbitrary non-config protected-path injection.
-3. Add only the minimum pure implementation in `cli/clean_memory.py`.
-4. Run the focused suite, repeated determinism checks, compilation, import
-   purity, documentation, banned-token, dependency, and diff gates.
-5. Obtain independent current-byte code and test reviews before checkpointing.
+1. Which existing helpers, tests, or platform abstractions already prove part
+   of no-follow opening, stable physical identity, SHA-256, reparse rejection,
+   or before/after race detection?
+2. Which helpers follow paths, fail soft, mutate state, import unrelated
+   runtime authority, or omit ancestor/root checks and therefore cannot be
+   reused?
+3. What exact Windows file/volume identity and reparse evidence is required,
+   and what CPU-safe portable fallback is valid for non-Windows tests?
+4. How must absent singleton targets be represented without manufacturing
+   stale metadata or confusing absence with scan failure?
+5. How must every regular file below the exact FAISS root be enumerated,
+   no-follow opened, hashed from the same handle, ordered, and race-checked?
+6. What negative-capability oracle proves import purity and prevents config,
+   environment, network, process, mkdir, or target mutation?
+7. What exact source/test file pair is the smallest coherent next seam, and
+   which focused evidence closes it before Qdrant observation begins?
 
 ## Scope lock
 
-Implementation may touch only:
+This mission is read-only except for its final reviewed documentation
+checkpoint. It may inspect repository source, tests, and active documentation.
+If the audit closes cleanly, it may update only:
 
-- new `cli/clean_memory.py`;
-- new `tests/unit/test_clean_memory_cli.py`;
 - `PROJECT.md`;
-- the reviewed diagnostic and sole roadmap for final checkpoint evidence; and
-- generated documentation indexes only when the repository authority gate
-  proves the new tracked file requires them.
+- `docs/releases/ROADMAP.md`;
+- one new filesystem-observer diagnostic for the active roadmap item; and
+- generated documentation indexes only if the repository authority gate
+  requires them.
+
+No production observer or new test is authorized until the audit is complete,
+independently reviewed, checkpointed, and this mission is rewritten with an
+exact implementation allowlist.
 
 ## Boundaries
 
-- Do not import `load_configs` at module import. This seam accepts an injected
-  mapping; a later runnable CLI may load canonical config once inside `main()`.
-- Do not inspect filesystem existence, physical aliases, symlinks, junctions,
-  reparse points, file or volume identity, hashes, or FAISS contents.
-- Do not contact Qdrant or any service, follow redirects, read proxies, page
-  points, or create a Qdrant client.
-- Do not instantiate `FilesystemTargetEvidence`, `QdrantCollectionEvidence`,
-  `ProtectedBoundaryEvidence`, `ResolvedCleanupScope`, `CandidatePlanStore`, or
-  call `build_candidate_plan()`.
-- Do not add argparse/main execution, plan persistence, a report root, action
-  job, token, MiniAgent, disposition/rollback, lease, receipt, apply,
-  reconcile, or status behavior.
-- Do not read configured data, databases, services, models, ingestion,
-  identity, WSL, mixed main, public checkout, or operator reports.
-- Do not reopen checkpoints `248bbd33` or `c870a1cb` without contradictory
-  evidence.
+- Do not read configured data, databases, FAISS content, services, Qdrant,
+  models, ingestion, identity, WSL, the mixed main checkout, the public
+  checkout, or operator reports.
+- Do not call filesystem helpers on configured paths or use the current working
+  directory as authority.
+- Do not load configuration or environment values.
+- Do not add a runnable command, Qdrant observer, evidence store write, plan,
+  job, token, approval, apply, reconcile, status, retention, or lease behavior.
+- Do not reopen checkpoints `248bbd33`, `c870a1cb`, or `a12ceb18` without
+  contradictory evidence.
 
 ## Completion gate
 
-RED is witnessed before implementation. The focused temporary/injected suite
-then proves deterministic secret-free projection, unchanged caller input,
-exact lexical topology, exact Qdrant authority, deterministic unresolved roles,
-and import purity without configured or live access. Static gates and at least
-two independent current-byte reviews are clean. The checkpoint advances only
-to the separate filesystem-observer seam; it does not claim `plan` is runnable.
+The audit names completed work, rejects unsafe reuse with source evidence,
+defines the exact passive observer and test contract, and receives at least two
+independent read-only current-byte reviews. The documentation authority,
+semantic-drift, banned-token, dependency, and diff gates pass. Only then may
+`PROJECT.md` advance to one exact filesystem-observer implementation seam.

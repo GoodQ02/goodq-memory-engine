@@ -737,6 +737,23 @@ the failure is not currently visible.
   load at import, filesystem or service observation, evidence-root creation,
   plan persistence, job/token work, or cleanup mutation. Evidence:
   `docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md`.
+- Configuration-projection checkpoint (2026-07-13): private checkpoint
+  `a12ceb18` adds the import-pure, explicit three-symbol
+  `goodq.clean-memory-configuration.v1` authority. It binds one exact configured
+  epoch; database, sidecar, FAISS, and evidence-root topology; explicit enabled
+  loopback Qdrant authority; exact four collection names; configured protected
+  roots; deterministic unresolved roles; and a canonical secret-free SHA-256.
+  Valid configured processing/model/Qdrant/archive/watchdog root overrides are
+  bound into the digest, while cleanup/evidence overlap, protected aliases,
+  Windows ambiguity, unknown FAISS authority, and declared FAISS aliases fail
+  closed. Fresh verification passed 131 tests ten consecutive times, the
+  185-test projection/candidate-plan union, compilation, documentation
+  authority/drift, banned-token, dependency, index, and diff gates; three
+  independent current-byte review lanes returned clean after correction. No
+  configuration load, configured data, filesystem observation, Qdrant contact,
+  evidence creation, job/token work, or cleanup mutation occurred. R-07 remains
+  `IN_PROGRESS`; the next bounded mission is a read-only no-repeat audit of the
+  filesystem-observer boundary before implementation.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1299,6 +1316,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 import-pure clean-memory configuration
+  projection and advanced only to a read-only audit of the filesystem-observer
+  boundary.
 
 - 2026-07-13: Closed the R-07 passive plan-orchestration audit and selected
   deterministic configuration projection as the next isolated implementation

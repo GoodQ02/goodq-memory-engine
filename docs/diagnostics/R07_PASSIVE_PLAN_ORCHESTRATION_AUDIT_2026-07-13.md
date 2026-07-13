@@ -19,11 +19,12 @@ Implement the production `plan` path as four ordered seams:
 4. the runnable `plan` orchestration that supplies both observers' evidence to
    `CandidatePlanStore`.
 
-The next bounded implementation seam is **only item 1**. It adds RED tests in
-`tests/unit/test_clean_memory_cli.py`, then implements a pure
-`resolve_plan_configuration()`-style function in `cli/clean_memory.py`. It does
-not add a runnable command, read the filesystem, contact Qdrant, create the
-evidence root, write a plan, construct a job, or invoke MiniAgent.
+Item 1 is complete at private checkpoint `a12ceb18`. The next bounded mission
+is a read-only no-repeat audit of item 2 before any filesystem-observer code is
+selected. It must reconcile the existing no-follow, identity, hashing, and race
+handling helpers against the exact observer contract and name one smallest
+implementation boundary. It does not add a runnable command, contact Qdrant,
+create the evidence root, write a plan, construct a job, or invoke MiniAgent.
 
 This sequence is smaller and safer than introducing a nominal CLI that hides
 three unproven authorities. Configuration projection is a prerequisite for
@@ -172,9 +173,9 @@ The new CLI may copy the injection and output shape, not that authority graph.
 `ActionJobLedger`, MiniAgent, a token, or an action job during `plan` remains a
 contract violation.
 
-## Selected Next Implementation Boundary
+## Completed Configuration Projection Boundary
 
-The next mission may touch only:
+The completed checkpoint touched only:
 
 - new `cli/clean_memory.py`;
 - new `tests/unit/test_clean_memory_cli.py`;
@@ -183,7 +184,7 @@ The next mission may touch only:
 - generated documentation indexes only if a repository gate proves the new
   file requires them.
 
-The first code checkpoint owns only a deterministic configuration projection.
+The checkpoint owns only a deterministic configuration projection.
 A suitable immutable result contains:
 
 - exact epoch ID and logical epoch root;
@@ -203,9 +204,9 @@ It does not instantiate `FilesystemTargetEvidence`,
 observed identities and belong to later observers/composition. It does not call
 `build_candidate_plan()` or `CandidatePlanStore` yet.
 
-### RED contract for the next seam
+### Verified projection contract
 
-Temporary/injected tests must prove:
+Temporary/injected tests prove:
 
 1. importing `cli.clean_memory` performs no config load, environment read,
    filesystem access, network call, process probe, directory creation, output,
@@ -233,6 +234,33 @@ Temporary/injected tests must prove:
    guessing; and
 10. no test resolves configured data, services, models, WSL, identity, the
     mixed main checkout, public checkout, or operator reports.
+
+### Configuration projection checkpoint evidence
+
+Private checkpoint `a12ceb18` adds the explicit three-symbol
+`cli.clean_memory` projection API and its injected temporary-only test suite.
+The implementation binds exact configured epoch, database, sidecar, FAISS,
+Qdrant, evidence-root, and protected-root authority into canonical secret-free
+JSON and SHA-256. Supported configured processing/model/Qdrant/archive/watchdog
+root overrides are bound rather than replaced with defaults; overlap with a
+cleanup/evidence target, protected-role aliases, ambiguous Windows paths,
+unknown FAISS authority, and declared FAISS member aliases fail closed.
+
+Fresh verification on the checkpoint passed:
+
+- 131 projection tests ten consecutive times;
+- the 185-test projection plus candidate-plan authority union;
+- Python compilation and staged-diff checks;
+- documentation authority and semantic-drift checks;
+- banned-token and dependency-drift checks; and
+- three independent current-byte review lanes after every blocker correction.
+
+The negative-capability oracle executes both the shared candidate-plan source
+and the projection source beneath direct and audit-hook guards for environment,
+filesystem read/mutation, process, and socket access. No configuration loader,
+configured data, filesystem target, Qdrant service, evidence root, action job,
+token, MiniAgent, cleanup executor, mixed main checkout, or public checkout was
+read, created, or exercised.
 
 ## Later Seams, Not Yet Authorized
 
@@ -287,6 +315,7 @@ against the selected R-07 contract and production source:
   two-file next code/test allowlist, valid badges, and an unambiguous mission
   transition.
 
-After those corrections, all three returned clean verdicts on the current
-bytes. No reviewer edited, staged, rendered documentation, or contacted live or
-configured state.
+After those corrections, all three returned clean verdicts on the audit
+decision bytes. The later configuration-projection checkpoint received a
+separate three-lane current-byte review recorded above. No reviewer edited,
+staged, rendered documentation, or contacted live or configured state.

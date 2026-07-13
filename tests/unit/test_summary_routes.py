@@ -108,6 +108,261 @@ def _job_ledger(tmp_path) -> ActionJobLedger:
     return ActionJobLedger(tmp_path / "GoodQ_Data" / "control" / "action_jobs")
 
 
+def _summary_job_in_state(
+    ledger: ActionJobLedger,
+    state: str,
+    *,
+    owner_instance: str = "summary-api-prior",
+    complete_evidence: bool = True,
+) -> dict:
+    record = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": VALID_HASH},
+        owner_instance=owner_instance,
+    )
+    if complete_evidence:
+        record = ledger.compare_and_update(
+            record["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint=hashlib.sha256(b"confirmation-token-1").hexdigest(),
+            authorization_request_id="authorization-request-1",
+        )
+    transitions = {
+        "pending_confirmation": [],
+        "authorizing": ["authorizing"],
+        "queued": ["authorizing", "queued"],
+        "running": ["authorizing", "queued", "running"],
+    }[state]
+    current = "pending_confirmation"
+    for next_state in transitions:
+        record = ledger.transition(
+            record["job_id"],
+            expected_states=current,
+            new_state=next_state,
+        )
+        current = next_state
+    return record
+
+
+def test_summary_router_registers_reconciliation_startup_handler() -> None:
+    handlers = [
+        handler
+        for handler in summary_route.router.on_startup
+        if handler is summary_route._reconcile_summary_jobs_on_startup
+    ]
+
+    assert handlers == [summary_route._reconcile_summary_jobs_on_startup]
+
+
+def test_summary_reconciliation_absent_job_root_is_not_created(tmp_path) -> None:
+    data_root = tmp_path / "GoodQ_Data"
+    job_root = data_root / "control" / "action_jobs"
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(data_root)}}
+    )
+
+    assert not job_root.exists()
+
+
+@pytest.mark.parametrize("state", ["pending_confirmation", "authorizing"])
+def test_summary_reconciliation_preserves_complete_authorization_evidence(
+    state, tmp_path
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    record = _summary_job_in_state(ledger, state)
+    path = ledger.record_path(record["job_id"])
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    assert ledger.load(record["job_id"]) == record
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("state", ["pending_confirmation", "authorizing"])
+def test_summary_reconciliation_fails_incomplete_authorization_evidence(
+    state, tmp_path
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    record = _summary_job_in_state(
+        ledger,
+        state,
+        complete_evidence=False,
+    )
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    persisted = ledger.load(record["job_id"])
+    assert persisted["state"] == "failed"
+    assert persisted["outcome"] == {
+        "code": "authorization_interrupted",
+        "message": "Video summary authorization was interrupted by restart",
+    }
+
+
+@pytest.mark.parametrize("state", ["queued", "running"])
+def test_summary_reconciliation_audits_before_interrupting_execution(
+    state, tmp_path, monkeypatch
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    record = _summary_job_in_state(ledger, state)
+
+    class InspectingAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            assert ledger.load(record["job_id"])["state"] == state
+            return super().record_external_execution_outcome(**kwargs)
+
+    authority = InspectingAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    persisted = ledger.load(record["job_id"])
+    assert persisted["state"] == "interrupted"
+    assert persisted["audit_status"] == "recorded"
+    assert persisted["outcome"] == {
+        "code": "execution_interrupted",
+        "message": "Video summary generation was interrupted by restart",
+    }
+    assert authority.external_calls == [
+        {
+            "operation": "generate_video_summary",
+            "arguments": {"job_id": record["job_id"], "video_hash": VALID_HASH},
+            "request_id": "authorization-request-1",
+            "mode": "ops",
+            "status": "interrupted",
+            "return_code": 1,
+            "duration_ms": 0,
+            "side_effect_report": {
+                "mutated": False,
+                "targets": [f"video-summary:{record['job_id']}"],
+            },
+            "error_codes": ["execution_interrupted"],
+        }
+    ]
+
+
+@pytest.mark.parametrize("failure_mode", ["constructor", "write"])
+def test_summary_reconciliation_audit_failure_still_interrupts_safely(
+    failure_mode, tmp_path, monkeypatch, caplog
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    record = _summary_job_in_state(ledger, "running")
+
+    class FailingAuditAuthority(StubSummaryAuthority):
+        def record_external_execution_outcome(self, **kwargs):
+            raise RuntimeError("confirmation-token-private C:\\private\\audit.json")
+
+    if failure_mode == "constructor":
+        def fail_authority(_cfg):
+            raise RuntimeError("confirmation-token-private C:\\private\\authority")
+
+        monkeypatch.setattr(summary_route, "_get_summary_authority", fail_authority)
+    else:
+        monkeypatch.setattr(
+            summary_route,
+            "_get_summary_authority",
+            lambda _cfg: FailingAuditAuthority(),
+        )
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    persisted = ledger.load(record["job_id"])
+    assert persisted["state"] == "interrupted"
+    assert persisted["audit_status"] == "failed"
+    assert "confirmation-token-private" not in caplog.text
+    assert "private\\" not in caplog.text
+
+
+def test_summary_reconciliation_leaves_current_terminal_and_unrelated_jobs_unchanged(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    current = _summary_job_in_state(
+        ledger,
+        "queued",
+        owner_instance=summary_route._SUMMARY_OWNER_INSTANCE,
+    )
+    terminal_source = _summary_job_in_state(ledger, "pending_confirmation")
+    terminal = ledger.transition(
+        terminal_source["job_id"],
+        expected_states="pending_confirmation",
+        new_state="failed",
+    )
+    unrelated = ledger.create_pending(
+        operation="identity.rebuild",
+        scope={"target": "faces"},
+        owner_instance="summary-api-prior",
+    )
+    unrelated = ledger.transition(
+        unrelated["job_id"],
+        expected_states="pending_confirmation",
+        new_state="authorizing",
+    )
+    before = {
+        record["job_id"]: ledger.record_path(record["job_id"]).read_bytes()
+        for record in (current, terminal, unrelated)
+    }
+    monkeypatch.setattr(
+        summary_route,
+        "_get_summary_authority",
+        lambda _cfg: (_ for _ in ()).throw(AssertionError("unexpected audit")),
+    )
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    assert {
+        job_id: ledger.record_path(job_id).read_bytes() for job_id in before
+    } == before
+
+
+def test_summary_reconciliation_never_runs_worker_or_model(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = _job_ledger(tmp_path)
+    _summary_job_in_state(ledger, "queued")
+    authority = StubSummaryAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(
+        summary_route,
+        "_generate_summary_worker",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("worker ran")),
+    )
+    monkeypatch.setattr(
+        "steps.video_summarizer.step.run_step",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("model ran")),
+    )
+
+    summary_route._reconcile_summary_jobs(
+        {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+    )
+
+    assert authority.authorize_calls == []
+    assert len(authority.external_calls) == 1
+
+
+def test_summary_reconciliation_surfaces_corrupt_ledger(tmp_path) -> None:
+    root = tmp_path / "GoodQ_Data" / "control" / "action_jobs"
+    root.mkdir(parents=True)
+    (root / f"job_{'a' * 32}.json").write_text("{corrupt", encoding="utf-8")
+
+    with pytest.raises(json.JSONDecodeError):
+        summary_route._reconcile_summary_jobs(
+            {"paths": {"data_root": str(tmp_path / "GoodQ_Data")}}
+        )
+
+
 def test_capabilities_endpoint(client) -> None:
     """Verify the summary capabilities endpoint returns correct LLM feature flags."""
     resp = client.get("/api/summary/capabilities")
@@ -535,12 +790,19 @@ def test_confirm_claims_exact_scope_and_queues_once(
     }
 
 
-def test_confirm_requires_current_api_owner(client, mock_db_paths, monkeypatch) -> None:
+def test_confirm_recovers_prior_pending_owner_and_queues_once(
+    client, mock_db_paths, monkeypatch
+) -> None:
     _mock_existing_video(monkeypatch)
     authority = StubSummaryAuthority()
     ledger = _job_ledger(mock_db_paths[0].parent)
+    worker_calls = []
     monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
     monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+    async def worker(*args):
+        worker_calls.append(args)
+
+    monkeypatch.setattr(summary_route, "_generate_summary_worker", worker)
     record = ledger.create_pending(
         operation="video_summary.generate",
         scope={"video_hash": VALID_HASH},
@@ -562,9 +824,228 @@ def test_confirm_requires_current_api_owner(client, mock_db_paths, monkeypatch) 
         },
     )
 
+    assert response.status_code == 202
+    persisted = ledger.load(record["job_id"])
+    assert persisted["state"] == "queued"
+    assert persisted["owner_instance"] == summary_route._SUMMARY_OWNER_INSTANCE
+    assert len(worker_calls) == 1
+    assert worker_calls[0][:2] == (record["job_id"], VALID_HASH)
+    assert authority.authorize_calls == [
+        {
+            "prompt": "Confirm one exact video summary",
+            "mode": "ops",
+            "tool_name": "generate_video_summary",
+            "tool_args": {"job_id": record["job_id"], "video_hash": VALID_HASH},
+            "confirm": True,
+            "confirmation_token": "confirmation-token-1",
+        }
+    ]
+
+
+def test_confirm_recovers_prior_authorizing_token_already_used(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(ledger, "authorizing")
+    worker_calls = []
+
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-1",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [
+                        {"code": "token_already_used", "message": "Already used"}
+                    ],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    async def worker(*args):
+        worker_calls.append(args)
+
+    monkeypatch.setattr(summary_route, "_generate_summary_worker", worker)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": record["job_id"],
+            "confirmation_token": "confirmation-token-1",
+        },
+    )
+
+    assert response.status_code == 202
+    persisted = ledger.load(record["job_id"])
+    assert persisted["state"] == "queued"
+    assert persisted["owner_instance"] == summary_route._SUMMARY_OWNER_INSTANCE
+    assert len(worker_calls) == 1
+
+
+def test_confirm_does_not_accept_token_already_used_for_recovered_pending(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(ledger, "pending_confirmation")
+
+    class AlreadyUsedAuthority(StubSummaryAuthority):
+        def authorize_action(self, **kwargs):
+            self.authorize_calls.append(kwargs)
+            return (
+                {
+                    "request_id": "authorization-request-1",
+                    "status": "error",
+                    "result": {"allowed": False},
+                    "errors": [{"code": "token_already_used", "message": "Used"}],
+                },
+                1,
+            )
+
+    authority = AlreadyUsedAuthority()
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": record["job_id"],
+            "confirmation_token": "confirmation-token-1",
+        },
+    )
+
     assert response.status_code == 409
-    assert ledger.load(record["job_id"])["state"] == "pending_confirmation"
+    assert ledger.load(record["job_id"])["state"] == "failed"
+
+
+def test_confirm_same_owner_authorizing_remains_conflict(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(
+        ledger,
+        "authorizing",
+        owner_instance=summary_route._SUMMARY_OWNER_INSTANCE,
+    )
+    authority = StubSummaryAuthority()
+    worker_calls = []
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    async def worker(*args):
+        worker_calls.append(args)
+
+    monkeypatch.setattr(summary_route, "_generate_summary_worker", worker)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": record["job_id"],
+            "confirmation_token": "confirmation-token-1",
+        },
+    )
+
+    assert response.status_code == 409
+    assert ledger.load(record["job_id"]) == record
     assert authority.authorize_calls == []
+    assert worker_calls == []
+
+
+def test_confirm_prior_owner_checks_token_before_adoption(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(ledger, "pending_confirmation")
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": record["job_id"],
+            "confirmation_token": "wrong-token",
+        },
+    )
+
+    assert response.status_code == 403
+    assert ledger.load(record["job_id"])["owner_instance"] == "summary-api-prior"
+
+
+def test_confirm_prior_owner_requires_complete_authorization_evidence(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(
+        ledger,
+        "pending_confirmation",
+        complete_evidence=False,
+    )
+    record = ledger.compare_and_update(
+        record["job_id"],
+        expected_state="pending_confirmation",
+        token_fingerprint=hashlib.sha256(b"confirmation-token-1").hexdigest(),
+    )
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    response = client.post(
+        f"/api/summary/video/{VALID_HASH}/generate",
+        json={
+            "action": "confirm",
+            "job_id": record["job_id"],
+            "confirmation_token": "confirmation-token-1",
+        },
+    )
+
+    assert response.status_code == 409
+    assert ledger.load(record["job_id"])["owner_instance"] == "summary-api-prior"
+
+
+def test_concurrent_prior_owner_confirmation_queues_exactly_once(
+    client, mock_db_paths, monkeypatch
+) -> None:
+    _mock_existing_video(monkeypatch)
+    ledger = _job_ledger(mock_db_paths[0].parent)
+    record = _summary_job_in_state(ledger, "pending_confirmation")
+    authority = StubSummaryAuthority()
+    worker_calls = []
+    monkeypatch.setattr(summary_route, "_get_summary_authority", lambda _cfg: authority)
+    monkeypatch.setattr(summary_route, "_get_summary_job_ledger", lambda _cfg: ledger)
+
+    async def worker(*args):
+        worker_calls.append(args)
+
+    monkeypatch.setattr(summary_route, "_generate_summary_worker", worker)
+
+    def confirm():
+        return client.post(
+            f"/api/summary/video/{VALID_HASH}/generate",
+            json={
+                "action": "confirm",
+                "job_id": record["job_id"],
+                "confirmation_token": "confirmation-token-1",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda _unused: confirm(), range(2)))
+
+    assert sorted(response.status_code for response in responses) == [202, 409]
+    assert ledger.load(record["job_id"])["state"] == "queued"
+    assert len(authority.authorize_calls) == 1
+    assert len(worker_calls) == 1
 
 
 def test_expired_confirmation_becomes_terminal(client, mock_db_paths, monkeypatch) -> None:

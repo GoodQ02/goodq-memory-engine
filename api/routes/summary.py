@@ -8,6 +8,7 @@ import logging
 import hashlib
 import hmac
 from pathlib import Path
+import re
 import time
 from typing import List
 import uuid
@@ -114,6 +115,100 @@ def _authorization_error_code(envelope: object) -> str:
         if isinstance(error, dict) and isinstance(error.get("code"), str):
             return error["code"]
     return "authorization_failed"
+
+
+def _has_complete_summary_authorization(record: dict) -> bool:
+    fingerprint = record.get("token_fingerprint")
+    request_id = record.get("authorization_request_id")
+    return (
+        isinstance(fingerprint, str)
+        and re.fullmatch(r"[0-9a-f]{64}", fingerprint) is not None
+        and isinstance(request_id, str)
+        and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_id) is not None
+    )
+
+
+def _summary_video_hash_from_record(record: dict) -> str:
+    scope = record.get("scope")
+    if (
+        not isinstance(scope, dict)
+        or set(scope) != {"video_hash"}
+        or not isinstance(scope.get("video_hash"), str)
+        or re.fullmatch(r"[a-fA-F0-9]{8,64}", scope["video_hash"]) is None
+    ):
+        raise ValueError("Persisted video summary job scope is invalid")
+    return scope["video_hash"]
+
+
+def _reconcile_summary_jobs(cfg: dict) -> None:
+    root = _get_summary_job_root(cfg)
+    if not root.exists():
+        return
+    ledger = _get_summary_job_ledger(cfg)
+    records = ledger.list_prior_owner_records(
+        current_owner_instance=_SUMMARY_OWNER_INSTANCE,
+        states={"pending_confirmation", "authorizing", "queued", "running"},
+    )
+    for record in records:
+        if record.get("operation") != _VIDEO_SUMMARY_JOB_OPERATION:
+            continue
+        state = str(record.get("state") or "")
+        job_id = str(record.get("job_id") or "")
+        if state in {"pending_confirmation", "authorizing"}:
+            if _has_complete_summary_authorization(record):
+                continue
+            ledger.transition(
+                job_id,
+                expected_states=state,
+                new_state="failed",
+                outcome={
+                    "code": "authorization_interrupted",
+                    "message": "Video summary authorization was interrupted by restart",
+                },
+            )
+            continue
+
+        video_hash = _summary_video_hash_from_record(record)
+        audit_status = "failed"
+        try:
+            audit = _get_summary_authority(cfg).record_external_execution_outcome(
+                operation=_VIDEO_SUMMARY_AUTH_OPERATION,
+                arguments={"job_id": job_id, "video_hash": video_hash},
+                request_id=str(record.get("authorization_request_id") or ""),
+                mode="ops",
+                status="interrupted",
+                return_code=1,
+                duration_ms=0,
+                side_effect_report={
+                    "mutated": False,
+                    "targets": [f"video-summary:{job_id}"],
+                },
+                error_codes=["execution_interrupted"],
+            )
+            if isinstance(audit, dict) and audit.get("audit_status") == "recorded":
+                audit_status = "recorded"
+        except Exception:
+            logger.error("Video summary restart interruption audit failed for job %s", job_id)
+
+        ledger.transition(
+            job_id,
+            expected_states=state,
+            new_state="interrupted",
+            outcome={
+                "code": "execution_interrupted",
+                "message": "Video summary generation was interrupted by restart",
+            },
+            audit_status=audit_status,
+        )
+
+
+async def _reconcile_summary_jobs_on_startup() -> None:
+    from steps.common.config_loader import load_configs
+
+    _reconcile_summary_jobs(load_configs({}))
+
+
+router.add_event_handler("startup", _reconcile_summary_jobs_on_startup)
 
 
 @router.get("/dashboard", response_model=SummaryDashboardResponse)
@@ -478,12 +573,8 @@ async def generate_video_summary(
             or record.get("scope") != _summary_job_scope(video_hash)
         ):
             raise HTTPException(status_code=404, detail="Summary job not found")
-        if record.get("owner_instance") != _SUMMARY_OWNER_INSTANCE:
-            raise HTTPException(
-                status_code=409,
-                detail={"code": "job_owner_changed", "job": _public_summary_job(record)},
-            )
-        if record.get("state") != "pending_confirmation":
+        state = record.get("state")
+        if state not in {"pending_confirmation", "authorizing"}:
             raise HTTPException(
                 status_code=409,
                 detail={"code": "job_not_confirmable", "job": _public_summary_job(record)},
@@ -494,18 +585,56 @@ async def generate_video_summary(
         ):
             raise HTTPException(status_code=403, detail="Confirmation token mismatch")
 
-        try:
-            record = ledger.transition(
-                job_id,
-                expected_states="pending_confirmation",
-                new_state="authorizing",
-            )
-        except ActionJobTransitionError:
-            current = ledger.load(job_id) or record
+        recovered_authorizing = False
+        owner_instance = record.get("owner_instance")
+        if owner_instance != _SUMMARY_OWNER_INSTANCE:
+            if not _has_complete_summary_authorization(record):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "job_owner_changed",
+                        "job": _public_summary_job(record),
+                    },
+                )
+            try:
+                record = ledger.adopt_owner(
+                    job_id,
+                    expected_state=state,
+                    expected_owner_instance=owner_instance,
+                    new_owner_instance=_SUMMARY_OWNER_INSTANCE,
+                )
+            except (ActionJobTransitionError, ValueError):
+                current = ledger.load(job_id) or record
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "job_owner_changed",
+                        "job": _public_summary_job(current),
+                    },
+                )
+            recovered_authorizing = state == "authorizing"
+        elif state == "authorizing":
             raise HTTPException(
                 status_code=409,
-                detail={"code": "job_not_confirmable", "job": _public_summary_job(current)},
+                detail={"code": "job_not_confirmable", "job": _public_summary_job(record)},
             )
+
+        if state == "pending_confirmation":
+            try:
+                record = ledger.transition(
+                    job_id,
+                    expected_states="pending_confirmation",
+                    new_state="authorizing",
+                )
+            except ActionJobTransitionError:
+                current = ledger.load(job_id) or record
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "job_not_confirmable",
+                        "job": _public_summary_job(current),
+                    },
+                )
 
         tool_args = {"job_id": job_id, "video_hash": video_hash}
         try:
@@ -529,8 +658,10 @@ async def generate_video_summary(
             and isinstance(result, dict)
             and result.get("allowed") is True
         )
+        error_code = _authorization_error_code(envelope)
+        if recovered_authorizing and error_code == "token_already_used":
+            authorized = True
         if not authorized:
-            error_code = _authorization_error_code(envelope)
             expired = error_code == "token_expired"
             try:
                 record = ledger.transition(

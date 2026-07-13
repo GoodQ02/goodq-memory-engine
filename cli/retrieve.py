@@ -35,7 +35,11 @@ def _search_qdrant(text: str, topk: int, cfg: Dict[str, Any]) -> List[Dict[str, 
     vec, _np = _embed_query(text)
     if vec is None:
         return []
-    hits = q_client.query(vec[0].tolist(), top_k=topk)
+    hits = q_client.query(
+        vec[0].tolist(),
+        top_k=topk,
+        retrieval_context="human.cli.retrieve",
+    )
     results = []
     for h in hits:
         payload = h.get("payload") or {}

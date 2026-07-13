@@ -75,7 +75,14 @@ class EphemeralMemory(MemoryStore):
         self._purge_expired()
         return True
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         import numpy as np  # type: ignore
 
         self._purge_expired()
@@ -112,7 +119,7 @@ class EphemeralMemory(MemoryStore):
         else:
             self._misses += 1
         try:
-            context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+            context = normalize_retrieval_context(retrieval_context)
             ts = utc_now_iso()
             events: List[RetrievalEvent] = []
             for h in results:
@@ -254,7 +261,14 @@ class FaissMemory(MemoryStore):
             )
             return False
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         if not self.index_path or not os.path.isfile(self.index_path):
             return []
         if not query_vector or len(query_vector) != self.dim:
@@ -391,7 +405,7 @@ class FaissMemory(MemoryStore):
                     utc_now_iso,
                 )
 
-                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                context = normalize_retrieval_context(retrieval_context)
                 ts = utc_now_iso()
                 events: List[RetrievalEvent] = []
                 for h in out:
@@ -494,8 +508,20 @@ class QdrantMemory(MemoryStore):
     def insert(self, vectors: List[Dict[str, Any]]) -> bool:
         return self.client.upsert(vectors)
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        return self.client.query(query_vector, top_k=top_k, payload_filter=filter)
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
+        return self.client.query(
+            query_vector,
+            top_k=top_k,
+            payload_filter=filter,
+            retrieval_context=retrieval_context,
+        )
 
     def stats(self) -> Dict[str, Any]:
         return {"available": True, "collection": getattr(self.client, "cfg", None).collection if getattr(self.client, "cfg", None) else None}

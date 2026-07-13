@@ -129,7 +129,14 @@ class MemoryRouter:
                     print(f"[VECTOR_DEBUG] router.target exception target={canonical_target}")
         return results
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         # Iterate by read priority; return first non-empty result
         for tier in self.config.read_priority:
             canonical_tier = normalize_memory_tier_name(tier) or tier
@@ -140,7 +147,12 @@ class MemoryRouter:
                 store_dim = getattr(store, "dim", None)
                 if store_dim and query_vector and len(query_vector) != store_dim:
                     continue
-                hits = store.query(query_vector, top_k=top_k, filter=filter)
+                hits = store.query(
+                    query_vector,
+                    top_k=top_k,
+                    filter=filter,
+                    retrieval_context=retrieval_context,
+                )
                 if hits:
                     self._hits[canonical_tier] = self._hits.get(canonical_tier, 0) + 1
                     # Promotion: if we hit tier-0, push to higher tiers

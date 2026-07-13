@@ -107,7 +107,11 @@ def test_qdrant_search_payload_invariants(monkeypatch):
 
     cfg = QdrantConfig(host="http://mock_qdrant:6333", collection="test_collection", dim=384, enabled=True)
     client = QdrantClient(cfg)
-    results = client.query([0.1] * 384, top_k=2)
+    results = client.query(
+        [0.1] * 384,
+        top_k=2,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(results) == 2
     assert len(post_called) == 1

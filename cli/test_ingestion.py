@@ -216,7 +216,11 @@ def test_retrieval(cfg: Dict[str, Any]):
         
         for query in test_queries:
             print(f"\n   Query: '{query}'")
-            results = engine.search_multimodal(query, top_k=3)
+            results = engine.search_multimodal(
+                query,
+                top_k=3,
+                retrieval_context="system.healthcheck",
+            )
             
             if results:
                 print(f"   [PASS] Found {len(results)} results")

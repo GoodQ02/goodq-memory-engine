@@ -40,10 +40,17 @@ class _FakeLoader:
 class _FakeSearchEngine:
     def __init__(self, similar_results: list[dict]):
         self.similar_results = similar_results
-        self.calls: list[tuple[str, int | str, int]] = []
+        self.calls: list[tuple[str, int | str, int, str]] = []
 
-    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int):
-        self.calls.append((video_id, scene_id, top_k))
+    def search_similar_scene(
+        self,
+        video_id: str,
+        scene_id: int | str,
+        top_k: int,
+        *,
+        retrieval_context: str,
+    ):
+        self.calls.append((video_id, scene_id, top_k, retrieval_context))
         return self.similar_results[:top_k]
 
 
@@ -628,7 +635,7 @@ def test_similar_scene_route_returns_real_neighbors(monkeypatch: pytest.MonkeyPa
         scenes_module.find_similar_scenes(video_id="video_001", scene_id=101, top_k=5)
     )
 
-    assert engine.calls == [("video_001", 101, 5)]
+    assert engine.calls == [("video_001", 101, 5, "human.ui.search")]
     assert len(result) == 1
     scene = result[0]
     assert scene.video_id == "video_002"
@@ -702,7 +709,9 @@ def test_similar_scene_route_accepts_string_scene_ids(monkeypatch: pytest.Monkey
         scenes_module.find_similar_scenes(video_id="video_001", scene_id="scene_hash_source", top_k=5)
     )
 
-    assert engine.calls == [("video_001", "scene_hash_source", 5)]
+    assert engine.calls == [
+        ("video_001", "scene_hash_source", 5, "human.ui.search")
+    ]
     assert len(result) == 1
     assert result[0].video_id == "video_001"
     assert result[0].scene_id == "scene_hash_neighbor"

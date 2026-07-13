@@ -490,7 +490,11 @@ def test_qdrant_ephemeral_and_faiss_emit_exact_policy_without_changing_hits(
             }
 
     qdrant.session = types.SimpleNamespace(post=lambda *_args, **_kwargs: Response())
-    qdrant_hits = qdrant.query([0.1, 0.2], top_k=1)
+    qdrant_hits = qdrant.query(
+        [0.1, 0.2],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     ephemeral = memory_stores.EphemeralMemory(
         dim=2,
@@ -499,7 +503,11 @@ def test_qdrant_ephemeral_and_faiss_emit_exact_policy_without_changing_hits(
     assert ephemeral.insert(
         [{"id": "e-1", "vector": [1.0, 0.0], "payload": {"scene_id": "s-2"}}]
     )
-    ephemeral_hits = ephemeral.query([1.0, 0.0], top_k=1)
+    ephemeral_hits = ephemeral.query(
+        [1.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     index_path = tmp_path / "text.index"
     index_path.write_bytes(b"fake-index")
@@ -519,7 +527,11 @@ def test_qdrant_ephemeral_and_faiss_emit_exact_policy_without_changing_hits(
         dim=2,
         retrieval_event_policy=policy,
     )
-    faiss_hits = faiss.query([0.1, 0.2], top_k=1)
+    faiss_hits = faiss.query(
+        [0.1, 0.2],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert [hit["id"] for hit in qdrant_hits] == ["q-1"]
     assert [hit["id"] for hit in ephemeral_hits] == ["e-1"]

@@ -66,9 +66,16 @@ def test_search_similar_scene_excludes_source_scene_and_enriches_context(monkeyp
     def fake_retrieve_scene_context(video_id: str, scene_id: int):
         return contexts.get((video_id, scene_id))
 
-    def fake_search_multimodal(query: str, top_k: int, modalities: list[str]):
+    def fake_search_multimodal(
+        query: str,
+        top_k: int,
+        modalities: list[str],
+        *,
+        retrieval_context: str,
+    ):
         assert "business deal" in query.lower()
         assert modalities == ["text", "visual", "audio"]
+        assert retrieval_context == "system.healthcheck"
         return [
             {
                 "id": "video_001:101",
@@ -85,7 +92,12 @@ def test_search_similar_scene_excludes_source_scene_and_enriches_context(monkeyp
     monkeypatch.setattr(engine, "retrieve_scene_context", fake_retrieve_scene_context)
     monkeypatch.setattr(engine, "search_multimodal", fake_search_multimodal)
 
-    results = engine.search_similar_scene(video_id="video_001", scene_id=101, top_k=5)
+    results = engine.search_similar_scene(
+        video_id="video_001",
+        scene_id=101,
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(results) == 1
     assert results[0]["payload"] == {"video_id": "video_002", "scene_id": 202}
@@ -115,9 +127,16 @@ def test_search_similar_scene_accepts_string_scene_ids(monkeypatch) -> None:
     def fake_retrieve_scene_context(video_id: str, scene_id: int | str):
         return contexts.get((video_id, str(scene_id)))
 
-    def fake_search_multimodal(query: str, top_k: int, modalities: list[str]):
+    def fake_search_multimodal(
+        query: str,
+        top_k: int,
+        modalities: list[str],
+        *,
+        retrieval_context: str,
+    ):
         assert "family couch" in query.lower()
         assert modalities == ["text", "visual", "audio"]
+        assert retrieval_context == "system.healthcheck"
         return [
             {
                 "id": "video_hash:scene_hash_source",
@@ -134,7 +153,12 @@ def test_search_similar_scene_accepts_string_scene_ids(monkeypatch) -> None:
     monkeypatch.setattr(engine, "retrieve_scene_context", fake_retrieve_scene_context)
     monkeypatch.setattr(engine, "search_multimodal", fake_search_multimodal)
 
-    results = engine.search_similar_scene(video_id="video_hash", scene_id="scene_hash_source", top_k=5)
+    results = engine.search_similar_scene(
+        video_id="video_hash",
+        scene_id="scene_hash_source",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(results) == 1
     assert results[0]["payload"] == {"video_id": "video_hash", "scene_id": "scene_hash_neighbor"}

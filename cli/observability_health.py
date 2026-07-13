@@ -187,7 +187,12 @@ def _provenance_coverage_sample(cfg: Dict[str, Any], *, top_k: int = 5) -> Tuple
         return None, "qdrant_disabled_or_unavailable"
 
     try:
-        hits = client.query([0.001] * int(dim), top_k=top_k, payload_filter=payload_filter)
+        hits = client.query(
+            [0.001] * int(dim),
+            top_k=top_k,
+            payload_filter=payload_filter,
+            retrieval_context="system.healthcheck",
+        )
     except Exception as exc:
         return None, f"sample_query_failed: {exc}"
 

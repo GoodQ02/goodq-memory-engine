@@ -3929,7 +3929,12 @@ class MiniAgentClient:
         if not q_client:
             raise RuntimeError("Qdrant client could not be built from config")
             
-        hits = q_client.query(vector, top_k=top_k, payload_filter=payload_filter)
+        hits = q_client.query(
+            vector,
+            top_k=top_k,
+            payload_filter=payload_filter,
+            retrieval_context="agent.reasoning",
+        )
         return {"matches": hits}
 
     def _execute_qdrant_upsert(self, args: Dict[str, Any]) -> Dict[str, Any]:

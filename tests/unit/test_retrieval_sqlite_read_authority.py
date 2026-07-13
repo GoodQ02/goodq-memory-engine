@@ -326,7 +326,13 @@ def test_faiss_shadow_reader_does_not_retain_direct_write_capable_connect(
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
         retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
     )
-    assert len(store.query([0.1, 0.2], top_k=1)) == 1
+    assert len(
+        store.query(
+            [0.1, 0.2],
+            top_k=1,
+            retrieval_context="system.healthcheck",
+        )
+    ) == 1
     assert not _marker_exists(database)
 
 
@@ -458,7 +464,11 @@ def test_qdrant_query_preserves_bounded_provenance_annotation(tmp_path: Path) ->
         ]
     )
 
-    hits = client.query([0.0, 0.0, 0.0], top_k=1)
+    hits = client.query(
+        [0.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert hits[0]["provenance"]["scene_id"] == "scene_0007"
     assert hits[0]["confidence"]["intrinsic"] == 0.9
@@ -552,7 +562,11 @@ def test_faiss_query_preserves_provenance_shadow_scoring_and_telemetry(
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
         retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=True),
     )
-    hits = store.query([0.1, 0.2], top_k=2)
+    hits = store.query(
+        [0.1, 0.2],
+        top_k=2,
+        retrieval_context="system.healthcheck",
+    )
 
     assert [hit["id"] for hit in hits] == [7, 8]
     assert [hit["score"] for hit in hits] == pytest.approx([0.1, 0.2])
@@ -609,7 +623,11 @@ def test_faiss_shadow_failure_closes_and_preserves_hits_and_telemetry(
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
         retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=True),
     )
-    hits = store.query([0.1, 0.2], top_k=1)
+    hits = store.query(
+        [0.1, 0.2],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert [hit["id"] for hit in hits] == [7]
     assert failing.closed is True
@@ -981,7 +999,11 @@ def test_selected_readers_use_common_authority_and_close_connections(
         cfg={"memory": {"routing": {"quantization_shadow_mode": True}}},
         retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
     )
-    assert store.query([0.1, 0.2], top_k=1)
+    assert store.query(
+        [0.1, 0.2],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert calls == [
         (memory_database, 5.0, True),

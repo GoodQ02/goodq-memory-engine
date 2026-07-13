@@ -793,7 +793,11 @@ def test_search_visibility_lifecycle():
 
     # Scenario A & B & C & D: Default search visibility (only promoted evidence)
     # search_text
-    engine.search_text("test query", top_k=5)
+    engine.search_text(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -805,7 +809,11 @@ def test_search_visibility_lifecycle():
 
     # search_visual
     mock_client.reset_mock()
-    engine.search_visual("test query", top_k=5)
+    engine.search_visual(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -817,7 +825,11 @@ def test_search_visibility_lifecycle():
 
     # search_audio
     mock_client.reset_mock()
-    engine.search_audio("test query", top_k=5)
+    engine.search_audio(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -830,7 +842,12 @@ def test_search_visibility_lifecycle():
     # Scenario E: Debug/audit search explicitly requested (ucf_include_terminal=True)
     # search_text
     mock_client.reset_mock()
-    engine.search_text("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_text(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -841,7 +858,12 @@ def test_search_visibility_lifecycle():
 
     # search_visual
     mock_client.reset_mock()
-    engine.search_visual("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_visual(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -851,7 +873,12 @@ def test_search_visibility_lifecycle():
 
     # search_audio
     mock_client.reset_mock()
-    engine.search_audio("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_audio(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]

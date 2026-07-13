@@ -261,7 +261,12 @@ async def find_similar_scenes(
             raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
 
         engine = get_search_engine()
-        similar_results = engine.search_similar_scene(video_id=video_id, scene_id=scene_id, top_k=top_k)
+        similar_results = engine.search_similar_scene(
+            video_id=video_id,
+            scene_id=scene_id,
+            top_k=top_k,
+            retrieval_context="human.ui.search",
+        )
 
         scenes = []
         for result in similar_results:

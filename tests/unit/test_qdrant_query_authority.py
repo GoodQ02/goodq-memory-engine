@@ -72,7 +72,11 @@ def test_query_does_not_create_a_missing_collection() -> None:
         post=[_Response(200, {"result": []})],
     )
 
-    assert _client(session).query([0.0, 0.0, 0.0], top_k=1) == []
+    assert _client(session).query(
+        [0.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    ) == []
     assert session.calls == [
         ("GET", "http://qdrant.invalid/collections/goodq_text"),
     ]
@@ -86,7 +90,11 @@ def test_query_retry_does_not_create_a_collection_that_disappeared(monkeypatch) 
         post=[_Response(500), _Response(200, {"result": []})],
     )
 
-    assert _client(session).query([0.0, 0.0, 0.0], top_k=1) == []
+    assert _client(session).query(
+        [0.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    ) == []
     assert session.calls == [
         ("GET", "http://qdrant.invalid/collections/goodq_text"),
         (
@@ -104,7 +112,11 @@ def test_query_retries_indeterminate_collection_check_with_get_only(monkeypatch)
         post=[_Response(200, {"result": []})],
     )
 
-    assert _client(session).query([0.0, 0.0, 0.0], top_k=1) == []
+    assert _client(session).query(
+        [0.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    ) == []
     assert session.calls == [
         ("GET", "http://qdrant.invalid/collections/goodq_text"),
         ("GET", "http://qdrant.invalid/collections/goodq_text"),
@@ -134,7 +146,11 @@ def test_query_existing_collection_preserves_hit_projection() -> None:
         ],
     )
 
-    assert _client(session).query([0.0, 0.0, 0.0], top_k=1) == [
+    assert _client(session).query(
+        [0.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    ) == [
         {
             "id": "point-1",
             "score": 0.75,

@@ -703,7 +703,8 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
         results = engine.search_multimodal(
             query=request.query,
             top_k=request.top_k,
-            modalities=request.modalities
+            modalities=request.modalities,
+            retrieval_context="human.ui.search",
         )
         
         # Convert to response format
@@ -749,7 +750,11 @@ async def search_text(
     try:
         engine = get_search_engine()
         
-        results = engine.search_text(q, top_k=top_k)
+        results = engine.search_text(
+            q,
+            top_k=top_k,
+            retrieval_context="human.ui.search",
+        )
         
         search_results = []
         for result in results:
@@ -785,7 +790,11 @@ async def search_visual(
     try:
         engine = get_search_engine()
         
-        results = engine.search_visual(q, top_k=top_k)
+        results = engine.search_visual(
+            q,
+            top_k=top_k,
+            retrieval_context="human.ui.search",
+        )
         
         search_results = []
         for result in results:

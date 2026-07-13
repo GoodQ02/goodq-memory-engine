@@ -1483,7 +1483,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search text embeddings (transcripts, captions, etc.) with FTS5 hybrid fusion.
@@ -1493,6 +1495,7 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             List of fused search results with normalized RRF scores
@@ -1510,7 +1513,8 @@ class MultimodalSearchEngine:
                 results_semantic = client.query(
                     query_embedding.tolist(),
                     top_k=candidate_k,
-                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+                    retrieval_context=retrieval_context,
                 )
                 for r in results_semantic:
                     r['modality'] = 'text'
@@ -1540,7 +1544,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search visual scene embeddings using text query.
@@ -1550,6 +1556,7 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             List of search results with scores
@@ -1565,7 +1572,8 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+            retrieval_context=retrieval_context,
         )
         
         return results
@@ -1575,7 +1583,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search CLAP audio embeddings using a text query.
@@ -1585,6 +1595,7 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
 
         Returns:
             List of search results with scores
@@ -1606,7 +1617,8 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+            retrieval_context=retrieval_context,
         )
         if results:
             self._set_search_diagnostic(
@@ -1629,7 +1641,9 @@ class MultimodalSearchEngine:
         self,
         query: str,
         top_k: int = 10,
-        modalities: Optional[List[str]] = None
+        modalities: Optional[List[str]] = None,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Unified multimodal search with fusion across modalities.
@@ -1639,6 +1653,7 @@ class MultimodalSearchEngine:
             top_k: Total number of results to return
             modalities: List of modalities to search ['text', 'visual', 'audio']
                        If None, searches all available modalities
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             Fused and ranked search results
@@ -1654,7 +1669,11 @@ class MultimodalSearchEngine:
         
         # Search text modality
         if 'text' in modalities and self.weight_text > 0:
-            text_results = self.search_text(query, top_k=per_modality_top_k)
+            text_results = self.search_text(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in text_results:
                 result['modality'] = 'text'
                 payload = result.get('payload') if isinstance(result.get('payload'), dict) else {}
@@ -1663,7 +1682,11 @@ class MultimodalSearchEngine:
         
         # Search visual modality
         if 'visual' in modalities and self.weight_visual > 0:
-            visual_results = self.search_visual(query, top_k=per_modality_top_k)
+            visual_results = self.search_visual(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in visual_results:
                 result['modality'] = 'visual'
                 result['score'] = result.get('score', 0.0) * self.weight_visual
@@ -1671,7 +1694,11 @@ class MultimodalSearchEngine:
         
         # Search audio modality
         if 'audio' in modalities and self.weight_audio > 0:
-            audio_results = self.search_audio(query, top_k=per_modality_top_k)
+            audio_results = self.search_audio(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in audio_results:
                 result['modality'] = 'audio'
                 result['score'] = result.get('score', 0.0) * self.weight_audio
@@ -1773,7 +1800,14 @@ class MultimodalSearchEngine:
 
         return ". ".join(phrases[:8])
 
-    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_similar_scene(
+        self,
+        video_id: str,
+        scene_id: int | str,
+        top_k: int = 5,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         """Search for semantically similar scenes using persisted scene memory as the query source."""
         source_context = self.retrieve_scene_context(video_id, scene_id)
         if not isinstance(source_context, dict):
@@ -1784,7 +1818,12 @@ class MultimodalSearchEngine:
             return []
 
         candidate_limit = max((top_k * 3), top_k + 4)
-        raw_results = self.search_multimodal(query, top_k=candidate_limit, modalities=["text", "visual", "audio"])
+        raw_results = self.search_multimodal(
+            query,
+            top_k=candidate_limit,
+            modalities=["text", "visual", "audio"],
+            retrieval_context=retrieval_context,
+        )
 
         filtered_results: List[Dict[str, Any]] = []
         seen_scene_keys: set[Tuple[str, str]] = set()
@@ -1821,7 +1860,13 @@ class MultimodalSearchEngine:
         return filtered_results
 
 
-def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> List[Dict[str, Any]]:
+def multimodal_search(
+    query: str,
+    config: Dict[str, Any],
+    top_k: int = 10,
+    *,
+    retrieval_context: str,
+) -> List[Dict[str, Any]]:
     """
     Main entry point for multimodal search.
     
@@ -1829,12 +1874,17 @@ def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> Li
         query: Search query string
         config: GoodQ configuration
         top_k: Number of results to return
+        retrieval_context: Origin-owned retrieval audit label
         
     Returns:
         List of search results across all modalities
     """
     engine = MultimodalSearchEngine(config)
-    results = engine.search_multimodal(query, top_k=top_k)
+    results = engine.search_multimodal(
+        query,
+        top_k=top_k,
+        retrieval_context=retrieval_context,
+    )
     
     # Enrich results with full context
     enriched_results = []
@@ -1889,7 +1939,8 @@ def main():
     results = engine.search_multimodal(
         args.query,
         top_k=args.top_k,
-        modalities=args.modalities
+        modalities=args.modalities,
+        retrieval_context="human.cli.retrieve",
     )
     
     # Display results

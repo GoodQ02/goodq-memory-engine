@@ -355,7 +355,14 @@ class QdrantClient:
             )
             return False
 
-    def query(self, vector: List[float], top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        vector: List[float],
+        top_k: int = 5,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         if not self.cfg.enabled:
             return []
         if not self.collection_exists():
@@ -435,7 +442,7 @@ class QdrantClient:
                     utc_now_iso,
                 )
 
-                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                context = normalize_retrieval_context(retrieval_context)
                 ts = utc_now_iso()
                 events: List[RetrievalEvent] = []
                 for h in hits:

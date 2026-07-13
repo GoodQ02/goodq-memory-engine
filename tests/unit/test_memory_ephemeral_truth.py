@@ -22,6 +22,8 @@ class _DummyStore:
         query_vector: List[float],
         top_k: int = 5,
         filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         return self.hits[:top_k]
 
@@ -69,7 +71,11 @@ def test_memory_router_resolves_legacy_chroma_reads_to_ephemeral_store() -> None
         ),
     )
 
-    hits = router.query([0.1, 0.2, 0.3], top_k=1)
+    hits = router.query(
+        [0.1, 0.2, 0.3],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(hits) == 1
     assert hits[0]["id"] == "scene-1"
@@ -96,7 +102,11 @@ def test_ephemeral_memory_logs_truthful_store_names(monkeypatch) -> None:
         ]
     )
 
-    hits = cache.query([1.0, 0.0, 0.0], top_k=1)
+    hits = cache.query(
+        [1.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(hits) == 1
     assert emitted["events"][0].store == "ephemeral"

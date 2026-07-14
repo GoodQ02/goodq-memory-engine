@@ -912,6 +912,25 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_BOUNDARY_AUDIT_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the four-file
   extraction-parity checkpoint selected by that audit.
+- Windows held-handle extraction-parity checkpoint (2026-07-13): private
+  checkpoint `0f567557` moves the already-proven no-follow Win32 traversal,
+  opaque handle ownership, NTFS/ReFS open-by-ID mechanics, stable physical
+  snapshot, canonical identity renderer, stream contract, and same-handle hash
+  into `steps/common/windows_held_handle.py`. The filesystem observer now uses
+  only the exact shared public boundary while retaining its public API, outward
+  errors/evidence, role traversal, POSIX behavior, and native drive-root-only
+  path rule. Independent current-byte reviews found and closed exact-message,
+  leaked-ABI, missing capability binding, close-chain parity, import-gate,
+  opaque-test-handle, and duplicate sharing-oracle gaps. Fresh verification
+  passed 92 focused tests, two native Windows witnesses, the 376-test approved
+  authority union, compilation, and staged-diff checks; all three final reviews
+  returned clean. No live ProgramData, pin, token, ACL, configured root,
+  service, GoodQ data, Qdrant store, evidence store, job, MiniAgent, or cleanup
+  authority was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_HELD_HANDLE_EXTRACTION_CHECKPOINT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the audited
+  read-only Windows external-pin reader source/test pair, with no enrollment,
+  publication, rotation, authenticated composition, planning, or cleanup.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1474,6 +1493,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 shared Windows held-handle extraction with
+  exact observer parity and advanced only to the audited read-only external-pin
+  reader source/test seam.
 
 - 2026-07-13: Closed the R-07 Windows external-pin boundary audit, selected the
   exact future reader evidence/security contract, and advanced only to a shared

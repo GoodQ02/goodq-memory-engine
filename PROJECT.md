@@ -4,16 +4,18 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — extend only the shared held-handle bounded-read capacity.
+Roadmap item: R-07 — audit only canonical protected-manifest validator
+ownership and extraction parity.
 
 ## Outcome
 
-Widen only the accepted upper bound of the existing
-`WindowsHeldHandleBackend.read_file_bounded()` method from 66 to `4_194_305` so
-a future reader can prove EOF for a maximum-size 4,194,304-byte manifest.
-Preserve the method, signature, return and EOF semantics, public surface,
-adapter parity, lifecycle behavior, and the external-pin reader's exact 66-byte
-request. Do not add a second read API or begin manifest-reader code.
+Select one pure projection-neutral canonical protected-manifest validator so
+the completed structural membership projection and future physical manifest
+reader cannot become competing parsing authorities. Audit only ownership,
+exact API/import direction, extraction/adaptation scope, error parity, and the
+focused RED matrix. Do not modify membership, create the shared validator, or
+begin manifest-reader code until the decision is independently reviewed and
+checkpointed.
 
 ## Completed work — do not repeat
 
@@ -35,6 +37,11 @@ request. Do not add a second read API or begin manifest-reader code.
   proves that the reader is blocked by held-handle capacity, one canonical-
   parser ownership, and an unselected manifest security policy. It selects only
   the transport-capacity extension as the next executable seam.
+- `617cd32a` and
+  `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md`
+  extend only the shared bounded-read ceiling to `4_194_305`, preserve the
+  external-pin reader's exact 66-byte request, and close the transport-capacity
+  blocker with 664 focused regression tests.
 - Candidate-plan authority and immutable storage are complete injected cores;
   they are not production reader or orchestration authority.
 
@@ -46,35 +53,33 @@ request. Do not add a second read API or begin manifest-reader code.
 - `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
+- `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md`;
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-The shared backend may transport bytes and detached platform evidence but must
-not own manifest meaning or policy. Widening its projection-neutral capacity
-must not change the external-pin protocol, and it does not make the future
-manifest reader ready. Canonical-validator and manifest security authorities
-remain separate blockers.
+One exact canonical byte/schema validator must own protected-manifest meaning.
+The structural membership projection and future physical reader may compose
+that authority but may not copy, privately import, or independently reinterpret
+it. Extracting validation must preserve the completed membership public API,
+canonical projection bytes, detached digest, accepted/rejected corpus, and
+stable outward failures.
 
-## Exact implementation seam
+## Exact audit seam
 
-Modify only:
-
-- `steps/common/windows_held_handle.py`; and
-- `tests/unit/test_windows_held_handle.py`.
-
-Change only the maximum accepted exact integer from 66 to `4_194_305`. Preserve
-all existing ownership, rewind, bounded-read, EOF, error, cleanup, export, and
-adapter contracts. Add focused RED coverage for exact maximum acceptance,
-over-maximum pre-I/O refusal, maximum manifest EOF proof, exact-cap no-probe
-behavior, and unchanged 66-byte external-pin use.
+Audit the private canonical JSON and `_manifest_members()` responsibilities in
+`cli/clean_memory_protected_membership.py`, their focused tests, and repository
+import/call sites. Select the smallest shared pure module/API and later source/
+test adaptation set that preserves membership parity while allowing the future
+reader to validate the same authenticated bytes. Prove no equivalent public
+validator already exists. Do not create or move code during this audit.
 
 ## Boundaries
 
-- Do not implement the manifest reader, parser extraction, security policy or
-  mechanics, locator, protected observer, or composition.
+- Do not implement the validator extraction, manifest reader, security policy
+  or mechanics, locator, protected observer, or composition.
 - Do not modify the completed configuration, filesystem observer, membership,
-  pin reader, candidate plan, or their production code/tests.
+  shared held-handle backend, pin reader, candidate plan, or their tests.
 - Do not add enrollment, publication, rotation, recovery, Qdrant observation,
   runnable planning, approval, or cleanup execution.
 - Do not expose or log ProgramData, member paths, physical identities, SIDs,
@@ -86,9 +91,9 @@ behavior, and unchanged 66-byte external-pin use.
 
 ## Completion gate
 
-Focused RED must fail before production change. Then the exact backend suite,
-external-pin and filesystem-adapter regression suites, compilation, exact
-public-surface checks, documentation authority/drift, banned-token, dependency,
-and staged-diff gates must pass. Independent current-byte review must confirm
-that only the accepted ceiling changed and the external-pin caller still asks
-for exactly 66 bytes. Checkpoint before selecting the next prerequisite.
+Produce one reviewed decision selecting exact validator ownership, API, input/
+output/error contracts, import direction, extraction/adaptation files, parity
+oracle, and focused RED matrix. Prove no equivalent shared validator exists and
+that the completed membership projection need not change its public output.
+Update the sole roadmap and checkpoint the audit before code. Keep manifest
+security policy as a separate mandatory blocker before reader implementation.

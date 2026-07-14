@@ -1080,6 +1080,24 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the existing shared
   held-handle method and focused test, widening its accepted ceiling to exact
   `4_194_305` without adding a second API or changing 66-byte pin behavior.
+- Windows bounded-read capacity extension checkpoint (2026-07-14): private
+  checkpoint `617cd32a` widens only the existing shared same-handle reader's
+  accepted exact-integer ceiling from 66 to `4_194_305`. The method/signature,
+  zero-byte EOF witness, exact-cap no-probe behavior, token ownership, rewind,
+  native-error translation, cleanup, module exports, and backend public surface
+  remain unchanged; the external-pin reader still makes exactly one 66-byte
+  request. Focused TDD first produced two expected ceiling failures, then 24
+  bounded-read tests passed. Fresh verification passed 141 held-handle, 477
+  external-pin, and 46 filesystem-adapter tests (664 total), compilation, and
+  diff gates; independent task review returned spec PASS and Approved with no
+  findings, and a second bounded oracle review returned clean. No live
+  ProgramData, pin, manifest, token, ACL, configured or
+  protected root, service, GoodQ data, Qdrant, evidence store, job, MiniAgent,
+  or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
+  repeat audit selecting one pure canonical protected-manifest validator and
+  exact membership extraction/parity seam before any parser or reader code.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1642,6 +1660,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the exact R-07 held-handle bounded-read capacity
+  extension at `617cd32a`, preserving the 66-byte external-pin protocol, and
+  advanced only to a read-only canonical-validator extraction/parity audit.
 
 - 2026-07-14: Closed the R-07 protected-manifest reader boundary audit after
   three independent reviews proved capacity, canonical-parser ownership, and

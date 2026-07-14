@@ -890,6 +890,28 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
   Windows external-pin boundary audit before any reader, enrollment,
   publication, or authenticated-selection implementation.
+- Windows external-pin boundary audit checkpoint (2026-07-13): three
+  independent read-only traces and current official Win32 documentation agree
+  that the completed held-handle observer provides the only viable no-follow,
+  open-by-ID foundation, but its implementation is private and no repository
+  token, owner/DACL, Known Folder, or exact pin-reader authority exists. The
+  reviewed next seam is only an extraction-parity checkpoint adding
+  `steps/common/windows_held_handle.py` and its focused test while adapting the
+  existing filesystem observer/test; no reader or new security capability is
+  included. The audit selects the future no-argument Windows reader API, exact
+  path-free evidence projection/digest, effective-token acceptance and digest
+  preimage, owner/DACL/anchor security preimage, Known Folder flags, exact
+  65-byte read/recheck order, and closed 13-code reader failure taxonomy. POSIX,
+  enrollment, publication, rotation, authenticated composition, protected
+  observation, Qdrant observation, planning, and execution remain closed. Three
+  independent current-byte reviews found and closed shared identity ownership,
+  handle lifecycle, token duplication/restriction, descriptor, ACE-mask, and
+  digest-preimage ambiguities before returning clean. No live ProgramData, pin,
+  token, ACL, configured root, service, data, Qdrant,
+  evidence, job, MiniAgent, or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_BOUNDARY_AUDIT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the four-file
+  extraction-parity checkpoint selected by that audit.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1452,6 +1474,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Closed the R-07 Windows external-pin boundary audit, selected the
+  exact future reader evidence/security contract, and advanced only to a shared
+  held-handle extraction-parity seam before any reader implementation.
 
 - 2026-07-13: Selected the exact R-07 protected membership and Windows external-
   pin trust-root semantics, corrected the authority order to keep pure

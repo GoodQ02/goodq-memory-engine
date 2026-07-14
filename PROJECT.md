@@ -4,19 +4,18 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit the Windows external-pin reader boundary.
+Roadmap item: R-07 — extract the shared Windows held-handle backend with exact
+filesystem-observer parity.
 
 ## Outcome
 
-Perform one read-only no-repeat audit that reconciles the selected external-pin
-semantics with existing Windows held-handle/no-follow capabilities. Determine
-the smallest public extraction seam, exact path-free reader evidence, and exact
-failure taxonomy needed before any reader, enrollment, publication, or
-authenticated-selection implementation is proposed.
+Extract only the already-proven Windows held-handle mechanics from the private
+filesystem-observer implementation into one projection-neutral shared backend,
+then adapt the observer without changing its public contract or behavior.
 
-This mission selects evidence and implementation boundaries only. It does not
-read or create a live pin, mutate ProgramData, change an ACL, or authenticate
-protected membership.
+This mission is extraction parity only. It adds no Known Folder, token, ACL,
+external-pin reader, enrollment, publication, rotation, protected observation,
+authenticated selection, plan orchestration, or cleanup capability.
 
 ## Governing evidence
 
@@ -28,6 +27,7 @@ protected membership.
 - source/trust decision checkpoints `8bfa5d27` and `69f4a91e`
 - semantics checkpoint `9328e89e`
 - membership-projection checkpoint `81aafce1`
+- `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_BOUNDARY_AUDIT_2026-07-13.md`
 - `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`
 - `docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md`
 - `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`
@@ -35,44 +35,49 @@ protected membership.
 
 ## Governing invariant
 
-The external pin is the independent authorization source for exact manifest
-bytes. Configuration and the completed membership projection remain routing and
-structural evidence only. A future production edge may claim authenticated
-membership only after it directly owns approved pin and manifest readers and
-completes every selected physical/security recheck.
+One proven held-handle implementation must own Windows no-follow traversal.
+Extraction must preserve every current observer invariant before any security-
+sensitive reader may consume the shared backend. Private imports, copied ABI
+logic, or simultaneous reader behavior would create competing authority.
 
-## Exact audit scope
+## Exact implementation scope
 
-- Reconcile the Windows pin locator, token, volume/filesystem, DACL/owner,
-  held-handle, open-by-ID, stable-parent, no-replace, and 65-byte payload
-  requirements already selected by the semantics decision.
-- Trace existing Windows filesystem-observer capability as a behavioral oracle;
-  do not import, copy, or modify its private helpers.
-- Identify whether a small public shared backend extraction is coherent, which
-  completed tests prove parity, and which reader-specific checks remain new.
-- Select one path-free pin-reader evidence envelope and a closed failure-code
-  set sufficient for later authenticated composition.
-- Preserve POSIX as unsupported in v1 unless a separate capability audit is
-  explicitly approved.
+- Add `steps/common/windows_held_handle.py` with exactly the four-symbol public
+  API selected by the audit.
+- Add `tests/unit/test_windows_held_handle.py` and move the low-level Windows
+  ABI/handle oracles without duplicating them.
+- Adapt `cli/clean_memory_filesystem.py` to the public shared backend while
+  retaining configuration projection, role traversal, outward identity JSON,
+  evidence, and exact outward errors; the shared snapshot becomes the sole
+  canonical physical-identity renderer.
+- Adapt `tests/unit/test_clean_memory_filesystem.py` so observer-level behavior,
+  import shape, native root-only trace, and public API remain exact.
+- Use witnessed RED for the shared API/import boundary, negative volume gates,
+  post-open reparse rejection, and adapter parity before GREEN.
 
 ## Boundaries
 
-- Read-only audit only. No source implementation, dependency change, service
-  action, configuration load, runtime command, or host mutation.
-- Do not inspect, create, enroll, publish, rotate, recover, or delete the live
+- Touch only the four selected source/test files plus checkpoint documentation
+  and generated indexes.
+- Do not inspect, create, enroll, publish, rotate, recover, or delete a live
   trust-root location or pin.
 - Do not change ProgramData, filesystem permissions, ownership, ACLs, user or
   process tokens, services, manifests, configured roots, Qdrant, or GoodQ data.
 - Do not reopen the completed configuration, membership projection, candidate
-  plan, filesystem observer, action-job, MiniAgent, or approval contracts.
-- Do not design manifest authoring, protected-member observation, Qdrant
-  observation, runnable planning, or execution inside this audit.
+  plan, action-job, MiniAgent, or approval contracts. The filesystem observer's
+  public API, evidence, outward errors, POSIX behavior, and traversal invariants
+  remain closed; only private Windows backend ownership is reopened for this
+  extraction.
+- Do not add Known Folder, token, security-descriptor, reader, manifest
+  authentication, protected-member observation, Qdrant observation, runnable
+  planning, or execution behavior.
 
 ## Completion gate
 
-Three bounded read-only traces agree on existing capability, missing capability,
-public/private ownership, exact reader evidence, exact failure taxonomy, and the
-smallest coherent next implementation seam. A dated diagnostic checkpoint,
-roadmap entry, regenerated indexes, documentation authority/drift, banned-token,
-dependency, diff, and independent current-byte review gates pass. No live trust
-root, member, service, or data surface is touched.
+The exact shared API/import and handle-lifecycle oracles, transferred low-level
+tests including canonical identity rendering, retained observer pre-open/public
+tests, new negative volume/post-open-reparse RED witnesses, native root-only path
+trace, focused pair, full clean-memory authority union,
+compilation, import purity, documentation/index/drift, banned-token, dependency,
+diff, and three independent current-byte reviews pass. No live trust root,
+member, token, ACL, service, or data surface is touched.

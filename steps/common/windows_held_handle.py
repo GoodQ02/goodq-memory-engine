@@ -158,15 +158,22 @@ class WindowsObjectSnapshot:
 
 
 class _WindowsHandleToken:
-    __slots__ = ("_owner", "_raw", "_live", "_security_readable")
+    __slots__ = (
+        "_cleanup_error",
+        "_owner",
+        "_raw",
+        "_live",
+        "_security_readable",
+    )
 
     def __init__(
         self,
         owner: WindowsHeldHandleBackend,
-        raw: int,
+        raw: object | None,
         *,
         security_readable: bool,
     ) -> None:
+        self._cleanup_error = WindowsHeldHandleError("observation_failed")
         self._owner = owner
         self._raw = raw
         self._live = True
@@ -476,6 +483,7 @@ class WindowsHeldHandleBackend:
             _raise("unsupported_platform", exc)
         self._invalid_handle = ctypes.c_void_p(-1).value
         self._handles: list[_WindowsHandleToken] = []
+        self._reservation_error = WindowsHeldHandleError("observation_failed")
         self._exited = False
 
     def _last_error(self) -> int:
@@ -521,21 +529,36 @@ class WindowsHeldHandleBackend:
         value = self._value(handle)
         return value is None or value == self._invalid_handle
 
-    def _register(
+    def _reserve(
         self,
-        raw: int,
         *,
         security_readable: bool = False,
     ) -> _WindowsHandleToken:
         if self._exited:
             _raise("observation_failed")
-        token = _WindowsHandleToken(
-            self,
-            raw,
-            security_readable=security_readable,
-        )
-        self._handles.append(token)
+        token: _WindowsHandleToken | None = None
+        failed = False
+        try:
+            token = _WindowsHandleToken(
+                self,
+                None,
+                security_readable=security_readable,
+            )
+            self._handles.append(token)
+        except Exception:
+            failed = True
+        if failed:
+            self._reservation_error.__cause__ = None
+            self._reservation_error.__context__ = None
+            self._reservation_error.__traceback__ = None
+            self._reservation_error.__suppress_context__ = True
+            raise self._reservation_error from None
+        assert token is not None
         return token
+
+    def _discard_reservation(self, token: _WindowsHandleToken) -> None:
+        token._live = False
+        self._handles.remove(token)
 
     def _raw(self, token: object) -> int:
         if (
@@ -546,27 +569,36 @@ class WindowsHeldHandleBackend:
             or token not in self._handles
         ):
             _raise("observation_failed")
-        return token._raw
+        value = self._value(token._raw)
+        if value is None or value == self._invalid_handle:
+            _raise("observation_failed")
+        return int(value)
 
     def open_root(self, root: str) -> object:
         if self._exited:
             _raise("observation_failed")
         if self._kernel32.GetDriveTypeW(root) != self._DRIVE_FIXED:
             _raise("unsupported_filesystem")
-        handle = self._kernel32.CreateFileW(
-            root,
-            self._FILE_LIST_DIRECTORY | self._FILE_READ_ATTRIBUTES,
-            self._FILE_SHARE_READ,
-            None,
-            self._OPEN_EXISTING,
-            self._FILE_FLAG_OPEN_REPARSE_POINT | self._FILE_FLAG_BACKUP_SEMANTICS,
-            None,
-        )
+        token = self._reserve()
+        try:
+            handle = self._kernel32.CreateFileW(
+                root,
+                self._FILE_LIST_DIRECTORY | self._FILE_READ_ATTRIBUTES,
+                self._FILE_SHARE_READ,
+                None,
+                self._OPEN_EXISTING,
+                self._FILE_FLAG_OPEN_REPARSE_POINT | self._FILE_FLAG_BACKUP_SEMANTICS,
+                None,
+            )
+        except BaseException:
+            self._discard_reservation(token)
+            raise
+        token._raw = handle
         if self._failed_handle(handle):
-            self._raise_call_error(self._last_error())
-        value = self._value(handle)
-        assert value is not None
-        return self._register(int(value))
+            last_error = self._last_error()
+            self._discard_reservation(token)
+            self._raise_call_error(last_error)
+        return token
 
     def volume_filesystem(self, handle: object) -> str:
         raw = self._raw(handle)
@@ -1090,31 +1122,36 @@ class WindowsHeldHandleBackend:
         security_readable = self._access_profile == "security_read"
         if security_readable:
             access |= self._READ_CONTROL
-        handle = self._kernel32.OpenFileById(
-            raw_volume,
-            self._ctypes.byref(descriptor),
-            access,
-            self._FILE_SHARE_READ,
-            None,
-            flags,
-        )
+        token = self._reserve(security_readable=security_readable)
+        try:
+            handle = self._kernel32.OpenFileById(
+                raw_volume,
+                self._ctypes.byref(descriptor),
+                access,
+                self._FILE_SHARE_READ,
+                None,
+                flags,
+            )
+        except BaseException:
+            self._discard_reservation(token)
+            raise
+        token._raw = handle
         if self._failed_handle(handle):
+            last_error = self._last_error()
+            self._discard_reservation(token)
             self._raise_call_error(
-                self._last_error(),
+                last_error,
                 disappeared=True,
                 unsupported_capability=True,
             )
-        value = self._value(handle)
-        assert value is not None
-        return self._register(
-            int(value),
-            security_readable=security_readable,
-        )
+        return token
 
     def _close_registered(self, handle: _WindowsHandleToken) -> None:
         raw = handle._raw
         handle._live = False
         self._handles.remove(handle)
+        if raw is None:
+            return
         if not self._kernel32.CloseHandle(raw):
             _raise("observation_failed", self._cause(self._last_error()))
 
@@ -1128,23 +1165,120 @@ class WindowsHeldHandleBackend:
             _raise("observation_failed")
         return self
 
+    @classmethod
+    def _append_close_error(
+        cls,
+        head: WindowsHeldHandleError | None,
+        later: WindowsHeldHandleError,
+    ) -> WindowsHeldHandleError:
+        if head is None:
+            return later
+        if head is later:
+            return head
+        tail = head
+        while True:
+            if tail is later:
+                return head
+            linked = tail.__cause__
+            if isinstance(linked, WindowsHeldHandleError):
+                tail = linked
+                continue
+            context = tail.__context__
+            if isinstance(context, WindowsHeldHandleError):
+                tail = context
+                continue
+            if linked is None:
+                tail.__cause__ = later
+                tail.__suppress_context__ = True
+            elif context is None:
+                tail.__context__ = later
+            else:
+                preserved = context
+                tail.__context__ = later
+                cls._preserve_context(later, preserved)
+            return head
+
+    @staticmethod
+    def _preserve_context(
+        cleanup: WindowsHeldHandleError,
+        preserved: BaseException,
+    ) -> None:
+        tail: BaseException = cleanup
+        remaining = 256
+        while remaining:
+            remaining -= 1
+            if tail is preserved:
+                return
+            cause = tail.__cause__
+            if isinstance(cause, WindowsHeldHandleError):
+                tail = cause
+                continue
+            context = tail.__context__
+            if isinstance(context, WindowsHeldHandleError):
+                tail = context
+                continue
+            if context is None:
+                tail.__context__ = preserved
+                return
+            tail = context
+        return
+
+    @classmethod
+    def _attach_close_error(
+        cls,
+        primary: BaseException,
+        cleanup: WindowsHeldHandleError,
+    ) -> None:
+        if primary.__cause__ is None:
+            primary.__cause__ = cleanup
+            primary.__suppress_context__ = True
+            return
+        if primary.__context__ is None:
+            primary.__context__ = cleanup
+            return
+        if isinstance(primary.__context__, WindowsHeldHandleError):
+            cls._append_close_error(primary.__context__, cleanup)
+            return
+        if isinstance(primary.__cause__, WindowsHeldHandleError):
+            cls._append_close_error(primary.__cause__, cleanup)
+            return
+        preserved = primary.__context__
+        primary.__context__ = cleanup
+        cls._preserve_context(cleanup, preserved)
+
     def __exit__(self, exc_type, exc, traceback) -> bool:
         first_close_error: WindowsHeldHandleError | None = None
-        for handle in tuple(reversed(self._handles)):
+        while self._handles:
+            handle = self._handles[-1]
             try:
                 self._close_registered(handle)
-            except WindowsHeldHandleError as close_error:
-                if first_close_error is None:
-                    first_close_error = close_error
+            except BaseException as close_error:
+                handle._live = False
+                if self._handles and self._handles[-1] is handle:
+                    self._handles.pop()
+                else:
+                    try:
+                        self._handles.remove(handle)
+                    except ValueError:
+                        pass
+                normalized = (
+                    close_error
+                    if isinstance(close_error, WindowsHeldHandleError)
+                    else handle._cleanup_error
+                )
+                if normalized.__cause__ is exc:
+                    normalized.__cause__ = None
+                    normalized.__suppress_context__ = False
+                if normalized.__context__ is exc:
+                    normalized.__context__ = None
+                first_close_error = self._append_close_error(
+                    first_close_error,
+                    normalized,
+                )
         self._exited = True
         if exc is None and first_close_error is not None:
             raise first_close_error
         if exc is not None and first_close_error is not None:
-            first_close_error.__context__ = exc.__context__
-            if exc.__cause__ is None:
-                exc.__cause__ = first_close_error
-                exc.__suppress_context__ = True
-            else:
-                exc.__context__ = first_close_error
+            self._attach_close_error(exc, first_close_error)
             raise exc.with_traceback(traceback)
         return False

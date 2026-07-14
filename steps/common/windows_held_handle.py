@@ -183,6 +183,7 @@ class _WindowsHandleToken:
 class WindowsHeldHandleBackend:
     """Own Windows file handles for one bounded observation."""
 
+    _SECURITY_READ_PROFILES = ("security_read", "security_read_label")
     _DRIVE_FIXED = 3
     _FILE_LIST_DIRECTORY = 0x0001
     _FILE_READ_DATA = 0x0001
@@ -213,6 +214,7 @@ class WindowsHeldHandleBackend:
     _OWNER_SECURITY_INFORMATION = 0x00000001
     _GROUP_SECURITY_INFORMATION = 0x00000002
     _DACL_SECURITY_INFORMATION = 0x00000004
+    _LABEL_SECURITY_INFORMATION = 0x00000010
     _SECURITY_DESCRIPTOR_REVISION = 1
     _SE_SELF_RELATIVE = 0x8000
     _SECURITY_DESCRIPTOR_MIN_LENGTH = 20
@@ -232,10 +234,10 @@ class WindowsHeldHandleBackend:
     _EXTENDED_FILE_ID_TYPE = 2
 
     def __init__(self, *, access_profile: str = "observation") -> None:
-        if type(access_profile) is not str or access_profile not in {
-            "observation",
-            "security_read",
-        }:
+        if type(access_profile) is not str or (
+            access_profile != "observation"
+            and access_profile not in self._SECURITY_READ_PROFILES
+        ):
             raise ValueError("Unsupported Windows held-handle access profile")
         if os.name != "nt":
             _raise("unsupported_platform")
@@ -452,7 +454,7 @@ class WindowsHeldHandleBackend:
             self._kernel32.ReadFile.restype = ctypes.c_int32
             self._kernel32.CloseHandle.argtypes = [self._HANDLE]
             self._kernel32.CloseHandle.restype = ctypes.c_int32
-            if access_profile == "security_read":
+            if access_profile in self._SECURITY_READ_PROFILES:
                 self._advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
                 void_pointer = ctypes.c_void_p
                 pointer_to_void = ctypes.POINTER(void_pointer)
@@ -970,20 +972,25 @@ class WindowsHeldHandleBackend:
         raw = self._raw(handle)
         assert isinstance(handle, _WindowsHandleToken)
         if (
-            self._access_profile != "security_read"
+            self._access_profile not in self._SECURITY_READ_PROFILES
             or not handle._security_readable
             or self._advapi32 is None
         ):
             _raise("observation_failed")
 
         descriptor = self._ctypes.c_void_p()
+        security_information = (
+            self._OWNER_SECURITY_INFORMATION
+            | self._GROUP_SECURITY_INFORMATION
+            | self._DACL_SECURITY_INFORMATION
+        )
+        if self._access_profile == "security_read_label":
+            security_information |= self._LABEL_SECURITY_INFORMATION
         result = int(
             self._advapi32.GetSecurityInfo(
                 raw,
                 self._SE_FILE_OBJECT,
-                self._OWNER_SECURITY_INFORMATION
-                | self._GROUP_SECURITY_INFORMATION
-                | self._DACL_SECURITY_INFORMATION,
+                security_information,
                 None,
                 None,
                 None,
@@ -1119,7 +1126,7 @@ class WindowsHeldHandleBackend:
         else:
             access = self._FILE_READ_DATA | self._FILE_READ_ATTRIBUTES
             flags |= self._FILE_FLAG_SEQUENTIAL_SCAN
-        security_readable = self._access_profile == "security_read"
+        security_readable = self._access_profile in self._SECURITY_READ_PROFILES
         if security_readable:
             access |= self._READ_CONTROL
         token = self._reserve(security_readable=security_readable)

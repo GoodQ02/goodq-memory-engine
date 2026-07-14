@@ -12,6 +12,9 @@ import sys
 import pytest
 
 
+_SECURITY_READ_PROFILES = ("security_read", "security_read_label")
+
+
 class _NativeCall:
     def __init__(self, implementation):
         self.implementation = implementation
@@ -278,7 +281,17 @@ def test_security_capability_signatures_are_exact() -> None:
 
 @pytest.mark.parametrize(
     "access_profile",
-    (None, "", "security", True, 1, [], object()),
+    (
+        None,
+        "",
+        "security",
+        "security_read_label ",
+        "Security_Read_Label",
+        True,
+        1,
+        [],
+        object(),
+    ),
 )
 def test_access_profile_rejects_every_non_exact_value_before_native_load(
     monkeypatch: pytest.MonkeyPatch,
@@ -318,15 +331,20 @@ def test_observation_profile_does_not_load_security_native_surface(
     assert loaded == ["kernel32"]
 
 
+@pytest.mark.parametrize(
+    "access_profile",
+    _SECURITY_READ_PROFILES,
+)
 def test_security_profile_binds_exact_pointer_width_native_abi(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
     _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
     void_pointer = ctypes.c_void_p
@@ -367,9 +385,14 @@ def test_security_profile_binds_exact_pointer_width_native_abi(
         "LocalFree",
     ),
 )
+@pytest.mark.parametrize(
+    "access_profile",
+    _SECURITY_READ_PROFILES,
+)
 def test_security_profile_rejects_partial_native_surface_before_any_open(
     monkeypatch: pytest.MonkeyPatch,
     missing_export: str,
+    access_profile: str,
 ) -> None:
     module = _load_module()
     kernel32 = _Kernel32()
@@ -391,7 +414,7 @@ def test_security_profile_rejects_partial_native_surface_before_any_open(
 
     monkeypatch.setattr(ctypes, "WinDLL", load_library)
     with pytest.raises(module.WindowsHeldHandleError) as exc_info:
-        module.WindowsHeldHandleBackend(access_profile="security_read")
+        module.WindowsHeldHandleBackend(access_profile=access_profile)
 
     assert exc_info.value.code == "unsupported_platform"
     assert open_calls == 0
@@ -1779,8 +1802,13 @@ def test_bounded_read_and_hash_each_rewind_the_same_held_token(
     assert seek_count == 4
 
 
+@pytest.mark.parametrize(
+    "access_profile",
+    _SECURITY_READ_PROFILES,
+)
 def test_security_profile_adds_read_control_only_to_descendant_opens(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -1801,7 +1829,7 @@ def test_security_profile_adds_read_control_only_to_descendant_opens(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
     directory = module.WindowsDirectoryEntry(
@@ -1858,8 +1886,10 @@ def test_security_profile_adds_read_control_only_to_descendant_opens(
     )
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_descriptor_read_rejects_default_and_volume_root_before_security_call(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     default_kernel = _Kernel32()
     module, default_backend = _backend(monkeypatch, default_kernel)
@@ -1876,7 +1906,7 @@ def test_descriptor_read_rejects_default_and_volume_root_before_security_call(
     module, security_backend = _backend(
         monkeypatch,
         security_kernel,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=security_advapi,
     )
     with security_backend:
@@ -1922,8 +1952,35 @@ def test_security_descriptor_is_exact_detached_same_handle_copy(
     assert script.length_pointers == [script.address]
 
 
+def test_label_security_descriptor_requests_exact_filtered_information(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b"\x01\x00label-aware\x00descriptor\xfe\xff"
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript(payload)
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read_label",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_security_descriptor(member)
+
+    assert result == payload
+    assert len(script.security_calls) == 1
+    assert script.security_calls[0][:3] == (42, 1, 0x00000017)
+    assert script.freed == [script.address]
+
+
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_accepts_inclusive_maximum_length(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     payload = b"\xa5" * 131072
     kernel32 = _Kernel32()
@@ -1933,7 +1990,7 @@ def test_security_descriptor_accepts_inclusive_maximum_length(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -1957,11 +2014,13 @@ def test_security_descriptor_accepts_inclusive_maximum_length(
         ("long_length", (1, 1, 1), 1),
     ),
 )
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_fails_closed_in_selected_validation_order(
     monkeypatch: pytest.MonkeyPatch,
     failure_mode: str,
     expected_stages: tuple[int, int, int],
     expected_frees: int,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -1987,7 +2046,7 @@ def test_security_descriptor_fails_closed_in_selected_validation_order(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -2008,8 +2067,10 @@ def test_security_descriptor_fails_closed_in_selected_validation_order(
         assert exc_info.value.__cause__ is None
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_captures_control_error_before_cleanup(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2028,7 +2089,7 @@ def test_security_descriptor_captures_control_error_before_cleanup(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -2043,8 +2104,10 @@ def test_security_descriptor_captures_control_error_before_cleanup(
     assert script.freed == [script.address]
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_primary_without_cause_attaches_cleanup_failure(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2056,7 +2119,7 @@ def test_security_descriptor_primary_without_cause_attaches_cleanup_failure(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -2072,8 +2135,10 @@ def test_security_descriptor_primary_without_cause_attaches_cleanup_failure(
     assert script.freed == [script.address]
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_rejects_malformed_copy_and_still_frees(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2082,7 +2147,7 @@ def test_security_descriptor_rejects_malformed_copy_and_still_frees(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
     monkeypatch.setattr(ctypes, "string_at", lambda *_args: b"short")
@@ -2096,8 +2161,10 @@ def test_security_descriptor_rejects_malformed_copy_and_still_frees(
     assert script.freed == [script.address]
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_cleanup_failure_prevents_successful_return(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2108,7 +2175,7 @@ def test_security_descriptor_cleanup_failure_prevents_successful_return(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -2123,8 +2190,10 @@ def test_security_descriptor_cleanup_failure_prevents_successful_return(
     assert script.freed == [script.address]
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_primary_failure_survives_cleanup_failure(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2137,7 +2206,7 @@ def test_security_descriptor_primary_failure_survives_cleanup_failure(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
 
@@ -2155,8 +2224,10 @@ def test_security_descriptor_primary_failure_survives_cleanup_failure(
     assert script.freed == [script.address]
 
 
+@pytest.mark.parametrize("access_profile", _SECURITY_READ_PROFILES)
 def test_security_descriptor_rejects_foreign_closed_and_post_context_tokens(
     monkeypatch: pytest.MonkeyPatch,
+    access_profile: str,
 ) -> None:
     kernel32 = _Kernel32()
     advapi32 = _Advapi32()
@@ -2165,7 +2236,7 @@ def test_security_descriptor_rejects_foreign_closed_and_post_context_tokens(
     module, backend = _backend(
         monkeypatch,
         kernel32,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=advapi32,
     )
     other_kernel = _Kernel32()
@@ -2175,7 +2246,7 @@ def test_security_descriptor_rejects_foreign_closed_and_post_context_tokens(
     _, other = _backend(
         monkeypatch,
         other_kernel,
-        access_profile="security_read",
+        access_profile=access_profile,
         advapi32=other_advapi,
     )
 
@@ -2613,14 +2684,19 @@ def test_native_read_file_bounded_proves_eof_and_enforces_cap(
     os.name != "nt",
     reason="native security descriptors are Windows-only",
 )
+@pytest.mark.parametrize(
+    "access_profile",
+    _SECURITY_READ_PROFILES,
+)
 def test_native_read_security_descriptor_is_detached_and_self_relative(
     tmp_path: Path,
+    access_profile: str,
 ) -> None:
     module = _load_module()
     target = tmp_path / "security-descriptor-witness.bin"
     target.write_bytes(b"witness")
 
-    with module.WindowsHeldHandleBackend(access_profile="security_read") as backend:
+    with module.WindowsHeldHandleBackend(access_profile=access_profile) as backend:
         volume = backend.open_root(f"{tmp_path.drive}\\")
         filesystem = backend.volume_filesystem(volume)
         parent = volume

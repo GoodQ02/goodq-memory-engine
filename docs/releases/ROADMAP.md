@@ -999,6 +999,26 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the audited
   two-file, no-argument Windows external-pin reader and its focused tests.
+- Windows external-pin implementation decision (2026-07-13): three independent
+  read-only implementation traces found that the closed boundary audit did not
+  uniquely select token-buffer caps and query fences, SID/descriptor parsing,
+  ACE padding/flags, stable-absence bracketing, enrollment precedence,
+  duplicate-token cadence, privilege-output validation, or the evidence
+  object's construction pattern. The operator selected the safest long-term
+  route: freeze those choices before RED rather than encode them silently. The
+  checkpoint selects one pure bounded parser, one retained baseline token plus
+  short-lived comparison handles, one duplicate per security object, a
+  two-stage token/DACL binding, complete parent/snapshot absence proof, exact
+  ten-key detached evidence, and finite edge-error precedence. Current official
+  Win32 documentation confirms the token ownership, buffer, Known Folder, and
+  `AccessCheck` boundaries but does not promise a canonical successful
+  `PrivilegeSetLength`, so the decision accepts only bounded internally
+  consistent zero-initialized output. No reader/test code or live ProgramData,
+  pin, token, ACL, configured root, service, GoodQ data, Qdrant, evidence, job,
+  MiniAgent, or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_IMPLEMENTATION_DECISION_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the two-file,
+  no-argument reader through RED/GREEN/refactor.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

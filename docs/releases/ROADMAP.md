@@ -1140,6 +1140,29 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only the decision-
   only, read-only manifest security-policy audit. No shared security-mechanics
   extraction or protected-manifest reader code is authorized yet.
+- Protected-manifest security-policy decision (2026-07-14): repository and
+  official-platform evidence select exact policy only for the fixed
+  `candidate_evidence_root` and direct `protected-boundaries.json`; broader data
+  and control ancestors remain writer-compatible held identity/race anchors.
+  The candidate root and manifest use exact administrator-owned protected DACL
+  envelopes with the enrolled ordinary reader, medium mandatory label, and
+  object-specific mutation denials. The existing external pin remains the sole
+  content authority. Owner/group/DACL/label transport (`0x17`) is explicitly a
+  filtered descriptor: detached `AccessCheck` is only a bounded mutation-denial
+  oracle, while real kernel opens and same-handle reads prove positive access.
+  The policy does not claim permanent first-publication provenance; that would
+  require separately pinned physical enrollment identity. Candidate-plan write
+  compatibility and exact native `0xb014` deployment remain later test-owned
+  integration witnesses. Two adversarial current-byte reviews returned `READY`.
+  No live token, ACL, configured/protected root, manifest, pin, service, GoodQ
+  data, Qdrant, evidence store, job, MiniAgent, or cleanup authority was read or
+  changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the two-file TDD
+  addition of opt-in held-handle profile `security_read_label` with request mask
+  `0x17`, existing-profile parity, and a pytest-owned Windows-native temporary-
+  file transport witness. Token, parser, policy, `AccessCheck`, reader,
+  publication, and production ACL work remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1702,6 +1725,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected the exact R-07 protected-manifest security policy after
+  adversarial review narrowed filtered-descriptor authority, positive-access
+  proof, and publication provenance. Advanced only to the two-file opt-in
+  `security_read_label` transport seam; the physical reader remains closed.
 
 - 2026-07-14: Checkpointed the exact R-07 canonical protected-manifest
   validator extraction at `41e56c74` and advanced only to a decision-only,

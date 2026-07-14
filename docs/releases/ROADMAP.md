@@ -1039,6 +1039,26 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
   no-repeat audit of authenticated protected-membership composition before
   Qdrant observation or runnable planning.
+- Authenticated protected-membership composition audit checkpoint
+  (2026-07-14): the production call graph and three independent read-only
+  reviews found no manifest reader, protected-member observer, ProgramData
+  lexical-locator handoff, or authenticated composition authority. The prior
+  next-mission wording incorrectly included cleanup-target
+  `FilesystemObservation`; that evidence belongs only to later
+  `ResolvedCleanupScope` assembly and cannot authenticate manifest bytes or
+  protected members. The future `plan` edge must call the external-pin reader,
+  fixed-child manifest reader, membership projection, and protected observer
+  itself; authenticate the same held manifest bytes before parsing; reject
+  lexical and physical pin/member overlap; and only then observe cleanup targets
+  and Qdrant. No live ProgramData, pin, manifest, token, ACL, configured or
+  protected root, service, GoodQ data, Qdrant, evidence store, job, MiniAgent,
+  or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is a read-only boundary
+  audit selecting only the fixed-child manifest reader, preserving its frozen
+  direct-pin digest comparison and mismatch-before-parser ownership. The
+  ProgramData locator/recheck remains a separate later audit before protected
+  observation or composition.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1601,6 +1621,13 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Corrected the R-07 authenticated-membership sequence after a
+  no-repeat call-graph audit proved target filesystem evidence was not an
+  authentication input. Advanced only to a fixed-child manifest-reader boundary
+  audit with reader-owned direct-pin digest comparison. ProgramData locator,
+  protected observation, composition, Qdrant, planning, enrollment, publication,
+  approval, and cleanup remain separate closed seams.
 
 - 2026-07-14: Checkpointed the audited R-07 Windows external-pin reader and
   lifecycle ownership, then advanced only to a read-only authenticated

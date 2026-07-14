@@ -294,8 +294,14 @@ After focused RED/GREEN/refactor, run sequentially through the explicit
 - `tests/unit/test_clean_memory_protected_membership.py`, preserving the
   existing 98-test baseline before adding adapter oracles;
 - the focused validator-plus-membership pair; and
-- the existing 331-test configuration/candidate/filesystem/membership authority
+- the current 330-test configuration/candidate/filesystem/membership authority
   union, plus all new validator tests.
+
+The earlier membership checkpoint recorded 331 tests in that four-file union.
+The later shared held-handle extraction reorganized Windows filesystem coverage
+into `tests/unit/test_windows_held_handle.py`; a fresh pre-RED collection on
+this checkpoint collects 330 tests across the unchanged four-file union. The
+current live census, not the historical count, governs implementation evidence.
 
 Also require Python compilation, exact import/export and AST ownership checks,
 capability-poisoned isolated execution, staged and unstaged diff checks, and an

@@ -947,6 +947,22 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the shared backend
   bounded-read source/test pair.
+- Windows bounded-read checkpoint (2026-07-13): private checkpoint `73430481`
+  adds the exact 1-through-66-byte same-handle read capability without exposing
+  a raw handle, pointer, pathname reopen, private token field, or new module
+  export. Exact 65-byte EOF, exact/over-cap 66-byte behavior, empty/short reads,
+  strict type/range rejection, token lifecycle, impossible native counts,
+  error translation, and `hash_file()` interoperability are proven. Independent
+  review found and closed an over-specified chunk-schedule oracle before all
+  three final reviewers returned clean. Fresh verification passed 114 focused
+  tests, three native temporary-only witnesses, the 398-test approved authority
+  union, compilation, documentation authority/drift, banned-token, dependency,
+  and staged-diff gates. No live ProgramData, pin, token, ACL, configured root,
+  service, GoodQ data, Qdrant, evidence, job, MiniAgent, or cleanup target was
+  read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CHECKPOINT_2026-07-13.md`. R-07
+  remains `IN_PROGRESS`; the next bounded seam is only a read-only decision on
+  the opaque-token/security-descriptor/process-token/`AccessCheck` boundary.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1509,6 +1525,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 same-handle bounded-read prerequisite and
+  advanced only to the read-only Windows security-capability decision ahead of
+  any external-pin reader implementation.
 
 - 2026-07-13: Corrected the R-07 external-pin reader order after the preflight
   proved the opaque held-handle backend lacks same-handle security inspection

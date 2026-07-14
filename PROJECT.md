@@ -4,87 +4,82 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — add the projection-neutral same-handle bounded-read
-primitive required by the future Windows external-pin reader.
+Roadmap item: R-07 — select the projection-neutral same-handle security
+decision capability required by the future Windows external-pin reader.
 
 ## Outcome
 
-Extend the completed shared Windows held-handle backend with one bounded-read
-method that returns both the exact prefix read and whether synchronous EOF was
-observed, without exposing a raw handle or changing the filesystem observer.
+Perform a read-only authority decision for the remaining opaque-token,
+security-descriptor, process-token, and `AccessCheck` join. Produce one exact,
+testable shared-backend contract before any security capability or external-pin
+reader code is written.
 
-This mission corrects a prerequisite discovered before external-pin reader
-implementation. The reader cannot securely inspect or parse content through
-the current exact seven-method opaque-handle boundary, and no private-handle or
-pathname workaround is permitted.
+## Completed work — do not repeat
+
+- `0f567557` extracted the projection-neutral Windows held-handle backend.
+- `4aa0aaad` corrected the reader prerequisite order after the capability-gap
+  audit.
+- `73430481` added and verified exact 1-through-66-byte bounded reads on the
+  existing opaque held token.
+- The filesystem observer contract, same-handle identity/hash mechanics,
+  four-symbol module export, and bounded-read semantics are closed unless new
+  focused evidence contradicts them.
 
 ## Governing evidence
 
-- held-handle extraction checkpoint `0f567557`;
-- `docs/diagnostics/R07_WINDOWS_HELD_HANDLE_EXTRACTION_CHECKPOINT_2026-07-13.md`;
 - `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_BOUNDARY_AUDIT_2026-07-13.md`;
 - `docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md`;
+- `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CHECKPOINT_2026-07-13.md`;
+- official Microsoft Win32 documentation for file security, access tokens,
+  generic mappings, `GetSecurityInfo`, and `AccessCheck`;
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-Raw Windows handles remain backend-owned and opaque. The future reader may
-consume only explicit shared capabilities operating on the same held token; it
-may never import private symbols, reopen descendants by pathname, duplicate the
-handle, or copy held-handle mechanics.
+The shared backend owns every raw Windows handle, descriptor allocation, token,
+and native cleanup. Consumers may receive only detached immutable evidence or a
+finite path-free decision. They may never receive a raw handle, pointer,
+borrowed native buffer, cleanup callback, private token field, or pathname
+reopen capability.
 
-## Exact implementation scope
+## Questions this decision must close
 
-- Modify only `steps/common/windows_held_handle.py` and
-  `tests/unit/test_windows_held_handle.py` during the source/test seam.
-- Add exactly:
-
-  ```python
-  def read_file_bounded(
-      self,
-      handle: object,
-      *,
-      maximum_bytes: int,
-  ) -> tuple[bytes, bool]:
-      ...
-  ```
-
-- Require an exact integer limit from 1 through 66. Invalid limits fail as the
-  existing path-free `observation_failed` before native I/O.
-- Rewind and read only the existing live backend token. Return
-  `(prefix, True)` only after a successful zero-byte synchronous read proves
-  EOF; reaching the cap first returns `(prefix, False)` without reading beyond
-  the cap.
-- Preserve existing sharing/error/cause translation and token lifecycle.
-- Keep `hash_file()` unchanged and prove both read operations are order-
-  independent because each rewinds first.
-- Preserve the exact four-symbol module `__all__`; the backend public method
-  set gains only `read_file_bounded`.
+1. Whether the shared capability returns detached self-relative descriptor
+   bytes for a reader-owned `AccessCheck`, or keeps `AccessCheck` entirely inside
+   the backend and returns a finite immutable access decision.
+2. Which existing opens require `READ_CONTROL`, whether root and descendant
+   rights differ, and how unsupported or denied descriptor access maps to the
+   existing finite error contract.
+3. How an impersonation token suitable for `AccessCheck` is obtained, owned,
+   duplicated when required, and closed on every success and failure path.
+4. The exact requested file access mask and file-object `GENERIC_MAPPING`,
+   including when `MapGenericMask` is required.
+5. The exact immutable return schema, malformed native-output handling,
+   `AccessCheck` call-success versus access-status distinction, and cleanup-error
+   precedence.
+6. The smallest hermetic fake/native test matrix proving same-handle security,
+   token/descriptor cleanup, denial, malformed output, and no live trust-root
+   access.
 
 ## Boundaries
 
-- Do not modify the filesystem observer, configuration, protected membership,
-  candidate plan, job, approval, MiniAgent, or cleanup contracts.
-- Do not add or select `READ_CONTROL`, token, security-descriptor, ACL,
-  `AccessCheck`, Known Folder, external-pin evidence, or reader behavior in this
-  seam.
-- Do not add enrollment, publication, rotation, recovery, authenticated
-  composition, protected-member observation, Qdrant observation, runnable
-  planning, or execution behavior.
+- Read and document only. Do not modify production source or tests in this
+  decision seam.
+- Do not implement the external-pin reader, enrollment, publication, rotation,
+  recovery, authenticated composition, protected-member observation, Qdrant
+  observation, runnable planning, or cleanup execution.
+- Do not weaken handle opacity, return native pointers, access private token
+  fields, duplicate traversal, or reopen descendants by pathname.
 - Do not inspect or alter live ProgramData, a pin, token, ACL, configured root,
-  service, GoodQ data, Qdrant, evidence store, or cleanup target.
-- A native witness may use only a temporary test-created file reached through
-  root enumeration and `open_by_id`.
+  service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup target.
+- Do not change dependency, service, firewall, environment, or runtime state.
 
 ## Completion gate
 
-Witness RED before production code. Then prove the exact signature, 65-byte EOF,
-66-byte cap, empty/short reads, invalid limits, invalid-token lifecycle,
-impossible native counts, and `hash_file` interoperability. Run the native
-temporary-file witness, focused shared/adapter suite, approved authority union,
-compile/import/documentation/drift/banned-token/dependency/diff gates, and three
-independent current-byte reviews before a private checkpoint.
-
-After that checkpoint, return to a read-only decision on the opaque token,
-security-descriptor, and `AccessCheck` capability boundary. Do not begin the
-external-pin reader until that security prerequisite is selected and verified.
+Create one decision record that selects an exact public capability and rejects
+the alternatives with code traces and current official Win32 evidence. Define
+its signature, rights, native ABI, ownership, cleanup, finite errors, negative
+capabilities, test matrix, and next isolated source/test seam. Run documentation
+authority, generated-index, semantic-drift, banned-token, dependency, and diff
+gates; obtain three independent current-byte reviews; then checkpoint the
+decision before implementation begins.

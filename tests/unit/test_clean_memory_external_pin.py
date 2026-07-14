@@ -1731,6 +1731,20 @@ def _assert_sanitized_chain(module, error: BaseException) -> None:
         assert r"C:\private" not in rendered
 
 
+def _assert_linear_cause_chain(
+    error: BaseException,
+    *,
+    expected_length: int,
+) -> tuple[BaseException, ...]:
+    chain = _walk_exception_chain(error)
+    assert len(chain) == expected_length
+    for index, node in enumerate(chain):
+        assert node.__context__ is None
+        expected_cause = chain[index + 1] if index + 1 < len(chain) else None
+        assert node.__cause__ is expected_cause
+    return chain
+
+
 def _assert_control_primary_has_only_sanitized_cleanup(
     module,
     error: BaseException,
@@ -1774,6 +1788,32 @@ def _assert_original_traceback_tail_is_preserved(
             return
         traceback = traceback.tb_next
     raise AssertionError("control-flow traceback tail was not preserved")
+
+
+def _capture_top_cleanup_nodes(monkeypatch, module, world):
+    backend_cleanup_nodes: list[BaseException] = []
+    baseline_cleanup_nodes: list[BaseException] = []
+    original_sanitize = module._sanitize_error
+    original_close = module._close_native_handle
+
+    def capture_backend_cleanup(error: BaseException):
+        sanitized = original_sanitize(error)
+        if isinstance(error, WindowsHeldHandleError):
+            backend_cleanup_nodes.append(sanitized)
+        return sanitized
+
+    def capture_baseline_cleanup(native, owned):
+        raw = owned.value
+        kind = world._handle_kinds.get(raw, "unknown")
+        cleanup = original_close(native, owned)
+        if kind == "baseline" and cleanup is not None:
+            baseline_cleanup_nodes.append(cleanup)
+        return cleanup
+
+    monkeypatch.setattr(module, "_sanitize_error", capture_backend_cleanup)
+    monkeypatch.setattr(module, "_close_native_handle", capture_baseline_cleanup)
+    return backend_cleanup_nodes, baseline_cleanup_nodes
+
 
 class _FakeHeldHandleBackend(_FakeBackendLifecycle):
     def open_root(self, root: str) -> object:
@@ -2365,6 +2405,37 @@ def test_public_reader_completes_native_preflight_before_backend_construction(
         module.read_external_pin()
 
     assert exc_info.value.code == "unsupported_security"
+
+
+def test_startup_sanitization_allocation_failure_is_contained(monkeypatch) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module.os, "name", "nt")
+    raw_error = module.ExternalPinReaderError("unsupported_security")
+
+    def fail_preflight():
+        raise raw_error
+
+    def fail_sanitization(error: BaseException):
+        assert error is raw_error
+        raise MemoryError(_SECRET_MARKER)
+
+    monkeypatch.setattr(module, "_bind_native", fail_preflight)
+    monkeypatch.setattr(module, "_sanitize_error", fail_sanitization)
+    monkeypatch.setattr(
+        module,
+        "_load_windows_backend",
+        lambda: pytest.fail("backend constructed after failed native preflight"),
+        raising=False,
+    )
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert _SECRET_MARKER not in repr(error)
 
 
 def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None:
@@ -4561,27 +4632,11 @@ def test_control_flow_primary_keeps_identity_and_sanitizes_cleanup_failures(
     world.native_close_failure_kind = "baseline"
     world.native_close_failure_at = 1
     module = _install_reader_world(monkeypatch, world)
-    backend_cleanup_nodes: list[BaseException] = []
-    baseline_cleanup_nodes: list[BaseException] = []
-    original_sanitize = module._sanitize_error
-    original_close = module._close_native_handle
-
-    def capture_backend_cleanup(error: BaseException):
-        sanitized = original_sanitize(error)
-        if isinstance(error, WindowsHeldHandleError):
-            backend_cleanup_nodes.append(sanitized)
-        return sanitized
-
-    def capture_baseline_cleanup(native, owned):
-        raw = owned.value
-        kind = world._handle_kinds.get(raw, "unknown")
-        cleanup = original_close(native, owned)
-        if kind == "baseline" and cleanup is not None:
-            baseline_cleanup_nodes.append(cleanup)
-        return cleanup
-
-    monkeypatch.setattr(module, "_sanitize_error", capture_backend_cleanup)
-    monkeypatch.setattr(module, "_close_native_handle", capture_baseline_cleanup)
+    backend_cleanup_nodes, baseline_cleanup_nodes = _capture_top_cleanup_nodes(
+        monkeypatch,
+        module,
+        world,
+    )
 
     with pytest.raises(KeyboardInterrupt) as exc_info:
         module.read_external_pin()
@@ -4602,6 +4657,577 @@ def test_control_flow_primary_keeps_identity_and_sanitizes_cleanup_failures(
     assert world.backend.handles == []
     assert world._close_counts["baseline"] == 1
     assert _SECRET_MARKER not in repr(primary.__cause__)
+
+
+def test_cleanup_only_keeps_backend_then_baseline_failure_chain(monkeypatch) -> None:
+    world = _ReaderWorld()
+    world.backend_close_failure = True
+    world.native_close_failure_kind = "baseline"
+    world.native_close_failure_at = 1
+    module = _install_reader_world(monkeypatch, world)
+    backend_cleanup_nodes, baseline_cleanup_nodes = _capture_top_cleanup_nodes(
+        monkeypatch,
+        module,
+        world,
+    )
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert len(backend_cleanup_nodes) == 1
+    assert len(baseline_cleanup_nodes) == 1
+    assert error is backend_cleanup_nodes[0]
+    assert error.__cause__ is baseline_cleanup_nodes[0]
+    assert error.__context__ is None
+    assert baseline_cleanup_nodes[0].__cause__ is None
+    assert baseline_cleanup_nodes[0].__context__ is None
+    _assert_sanitized_chain(module, error)
+    assert len(_walk_exception_chain(error)) == 2
+
+
+def test_cleanup_aggregation_does_not_depend_on_dynamic_set_allocation(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    world.backend_close_failure = True
+    world.native_close_failure_kind = "baseline"
+    world.native_close_failure_at = 1
+    module = _install_reader_world(monkeypatch, world)
+    backend_cleanup_nodes, baseline_cleanup_nodes = _capture_top_cleanup_nodes(
+        monkeypatch,
+        module,
+        world,
+    )
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    cleanup_started = False
+    original_set = set
+
+    def arm_cleanup_allocation_fault(self, exc_type, exc, traceback):
+        nonlocal cleanup_started
+        cleanup_started = True
+        return original_exit(self, exc_type, exc, traceback)
+
+    def reject_cleanup_allocation(*_args, **_kwargs):
+        if cleanup_started:
+            raise MemoryError(_SECRET_MARKER)
+        return original_set(*_args, **_kwargs)
+
+    monkeypatch.setattr(backend_type, "__exit__", arm_cleanup_allocation_fault)
+    monkeypatch.setattr(module, "set", reject_cleanup_allocation, raising=False)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    assert len(backend_cleanup_nodes) == 1
+    assert len(baseline_cleanup_nodes) == 1
+    assert error is backend_cleanup_nodes[0]
+    assert error.__cause__ is baseline_cleanup_nodes[0]
+    assert len(_walk_exception_chain(error)) == 2
+    assert _SECRET_MARKER not in repr(_walk_exception_chain(error))
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.closed == [
+        "pin",
+        "clean_memory",
+        "authority",
+        "goodq",
+        "anchor",
+        "root",
+    ]
+    assert world.backend.handles == []
+
+
+def test_operation_primary_sanitization_allocation_failure_is_contained(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    primary = module.ExternalPinReaderError("redirected_boundary")
+    world.backend_exception = ("read_file_bounded", "pin", primary)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    cleanup_started = False
+    original_set = set
+
+    def arm_primary_sanitization_fault(self, exc_type, exc, traceback):
+        nonlocal cleanup_started
+        cleanup_started = True
+        return original_exit(self, exc_type, exc, traceback)
+
+    def reject_post_cleanup_allocation(*args, **kwargs):
+        if cleanup_started:
+            raise MemoryError(_SECRET_MARKER)
+        return original_set(*args, **kwargs)
+
+    monkeypatch.setattr(backend_type, "__exit__", arm_primary_sanitization_fault)
+    monkeypatch.setattr(module, "set", reject_post_cleanup_allocation, raising=False)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    assert len(_walk_exception_chain(error)) == 1
+    assert _SECRET_MARKER not in repr(error)
+    assert world.backend is not None
+    assert world.backend.handles == []
+    assert world._close_counts["baseline"] == 1
+
+
+def test_backend_cleanup_sanitization_failure_cannot_skip_baseline_close(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    first = WindowsHeldHandleError("observation_failed")
+    second = WindowsHeldHandleError("observation_failed")
+    first.__context__ = second
+
+    def chained_exit(self, exc_type, exc, traceback):
+        result = original_exit(self, exc_type, exc, traceback)
+        assert result is False
+        raise first
+
+    monkeypatch.setattr(backend_type, "__exit__", chained_exit)
+    original_sanitize = module._sanitize_error
+    sanitize_calls: list[BaseException] = []
+    later_sanitized_nodes: list[BaseException] = []
+
+    def fail_backend_sanitization(error: BaseException):
+        if isinstance(error, WindowsHeldHandleError):
+            sanitize_calls.append(error)
+            if len(sanitize_calls) == 1:
+                raise MemoryError(_SECRET_MARKER)
+            sanitized = original_sanitize(error)
+            later_sanitized_nodes.append(sanitized)
+            return sanitized
+        return original_sanitize(error)
+
+    monkeypatch.setattr(module, "_sanitize_error", fail_backend_sanitization)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    assert sanitize_calls == [first, second]
+    assert len(later_sanitized_nodes) == 1
+    assert error.__context__ is None
+    assert error.__cause__ is later_sanitized_nodes[0]
+    processing_failure = later_sanitized_nodes[0].__cause__
+    assert type(processing_failure) is module.ExternalPinReaderError
+    assert processing_failure.code == "observation_failed"
+    assert processing_failure.__cause__ is None
+    assert processing_failure.__context__ is None
+    assert len(_walk_exception_chain(error)) == 3
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.handles == []
+
+
+def test_cyclic_backend_cleanup_graph_is_bounded_and_signaled(monkeypatch) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    first = WindowsHeldHandleError("observation_failed")
+    second = WindowsHeldHandleError("observation_failed")
+    first.__cause__ = second
+    first.__suppress_context__ = True
+    second.__cause__ = first
+    second.__suppress_context__ = True
+
+    def cyclic_exit(self, exc_type, exc, traceback):
+        result = original_exit(self, exc_type, exc, traceback)
+        assert result is False
+        raise first
+
+    monkeypatch.setattr(backend_type, "__exit__", cyclic_exit)
+    original_sanitize = module._sanitize_error
+
+    def sanitize_one(error: BaseException):
+        if isinstance(error, WindowsHeldHandleError):
+            return module.ExternalPinReaderError("observation_failed")
+        return original_sanitize(error)
+
+    monkeypatch.setattr(module, "_sanitize_error", sanitize_one)
+    original_append = module._append_cleanup
+    append_calls = 0
+
+    def bounded_append(head, later):
+        nonlocal append_calls
+        append_calls += 1
+        if append_calls > 8:
+            raise AssertionError("cyclic cleanup traversal exceeded fixed bound")
+        return original_append(head, later)
+
+    monkeypatch.setattr(module, "_append_cleanup", bounded_append)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    _assert_linear_cause_chain(error, expected_length=3)
+    assert append_calls <= 4
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.handles == []
+
+
+def test_over_depth_backend_cleanup_graph_is_bounded_and_signaled(monkeypatch) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    raw_nodes = [WindowsHeldHandleError("observation_failed") for _ in range(300)]
+    for current, later in zip(raw_nodes, raw_nodes[1:]):
+        current.__cause__ = later
+        current.__suppress_context__ = True
+
+    def over_depth_exit(self, exc_type, exc, traceback):
+        result = original_exit(self, exc_type, exc, traceback)
+        assert result is False
+        raise raw_nodes[0]
+
+    monkeypatch.setattr(backend_type, "__exit__", over_depth_exit)
+    original_sanitize = module._sanitize_error
+
+    def sanitize_one(error: BaseException):
+        if isinstance(error, WindowsHeldHandleError):
+            return module.ExternalPinReaderError("observation_failed")
+        return original_sanitize(error)
+
+    monkeypatch.setattr(module, "_sanitize_error", sanitize_one)
+    original_append = module._append_cleanup
+    append_calls = 0
+
+    def bounded_append(head, later):
+        nonlocal append_calls
+        append_calls += 1
+        if append_calls > 258:
+            raise AssertionError("cleanup traversal exceeded the fixed hop budget")
+        return original_append(head, later)
+
+    monkeypatch.setattr(module, "_append_cleanup", bounded_append)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    chain = _assert_linear_cause_chain(error, expected_length=257)
+    assert all(node.code == "observation_failed" for node in chain)
+    assert append_calls == 258
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.handles == []
+
+
+def test_exact_cleanup_hop_budget_does_not_add_processing_failure(monkeypatch) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    raw_nodes = [WindowsHeldHandleError("observation_failed") for _ in range(256)]
+    for current, later in zip(raw_nodes, raw_nodes[1:]):
+        current.__cause__ = later
+        current.__suppress_context__ = True
+
+    def exact_budget_exit(self, exc_type, exc, traceback):
+        result = original_exit(self, exc_type, exc, traceback)
+        assert result is False
+        raise raw_nodes[0]
+
+    monkeypatch.setattr(backend_type, "__exit__", exact_budget_exit)
+    original_sanitize = module._sanitize_error
+
+    def sanitize_one(error: BaseException):
+        if isinstance(error, WindowsHeldHandleError):
+            return module.ExternalPinReaderError("observation_failed")
+        return original_sanitize(error)
+
+    monkeypatch.setattr(module, "_sanitize_error", sanitize_one)
+    original_append = module._append_cleanup
+    append_calls = 0
+
+    def bounded_append(head, later):
+        nonlocal append_calls
+        append_calls += 1
+        if append_calls > 257:
+            raise AssertionError("exact cleanup budget added a processing fallback")
+        return original_append(head, later)
+
+    monkeypatch.setattr(module, "_append_cleanup", bounded_append)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    chain = _assert_linear_cause_chain(error, expected_length=256)
+    assert all(node.code == "observation_failed" for node in chain)
+    assert append_calls == 257
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.handles == []
+
+
+def test_reader_preserves_every_backend_cleanup_failure_as_sanitized_nodes(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    backend_type = _FakeHeldHandleBackend
+    original_exit = backend_type.__exit__
+    first = WindowsHeldHandleError("observation_failed")
+    second = WindowsHeldHandleError("observation_failed")
+    first.__context__ = second
+
+    def chained_exit(self, exc_type, exc, traceback):
+        result = original_exit(self, exc_type, exc, traceback)
+        assert result is False
+        raise first
+
+    monkeypatch.setattr(backend_type, "__exit__", chained_exit)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "observation_failed"
+    _assert_sanitized_chain(module, error)
+    assert error.__context__ is None
+    assert type(error.__cause__) is module.ExternalPinReaderError
+    assert error.__cause__.code == "observation_failed"
+    assert error.__cause__.__cause__ is None
+    assert error.__cause__.__context__ is None
+    assert len(_walk_exception_chain(error)) == 2
+    assert world._close_counts["baseline"] == 1
+    assert world.backend is not None
+    assert world.backend.handles == []
+
+
+def test_reader_preserves_nested_backend_cleanup_on_operation_error(monkeypatch) -> None:
+    world = _ReaderWorld()
+    primary = WindowsHeldHandleError("redirected_boundary")
+    cleanup = WindowsHeldHandleError("observation_failed")
+    primary.__context__ = cleanup
+    world.backend_exception = ("read_security_descriptor", "anchor", primary)
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    error = exc_info.value
+    assert error.code == "redirected_boundary"
+    assert error.__context__ is None
+    assert type(error.__cause__) is module.ExternalPinReaderError
+    assert error.__cause__.code == "observation_failed"
+    assert error.__cause__.__cause__ is None
+    assert error.__cause__.__context__ is None
+    _assert_sanitized_chain(module, error)
+    assert len(_walk_exception_chain(error)) == 2
+    assert world.backend is not None
+    assert world.backend.handles == []
+    assert world._close_counts["baseline"] == 1
+
+
+def test_immediate_cleanup_is_not_overwritten_by_later_backend_cleanup(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    primary = module.ExternalPinReaderError("redirected_boundary")
+    original_operation = module.ExternalPinReaderError("unsupported_platform")
+    primary.__cause__ = original_operation
+    primary.__suppress_context__ = True
+    immediate_failure = OSError(_SECRET_MARKER)
+    world.known_folder_call_exception = primary
+    world.known_folder_free_exception = immediate_failure
+    world.backend_close_failure = True
+    immediate_cleanup_nodes: list[BaseException] = []
+    backend_cleanup_nodes: list[BaseException] = []
+    original_sanitize = module._sanitize_error
+
+    def capture_cleanup(error: BaseException):
+        sanitized = original_sanitize(error)
+        if error is immediate_failure:
+            immediate_cleanup_nodes.append(sanitized)
+        if isinstance(error, WindowsHeldHandleError):
+            backend_cleanup_nodes.append(sanitized)
+        return sanitized
+
+    monkeypatch.setattr(module, "_sanitize_error", capture_cleanup)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    assert len(immediate_cleanup_nodes) == 1
+    assert len(backend_cleanup_nodes) == 1
+    assert primary.__cause__ is original_operation
+    assert primary.__context__ is immediate_cleanup_nodes[0]
+    assert immediate_cleanup_nodes[0].__cause__ is backend_cleanup_nodes[0]
+    assert backend_cleanup_nodes[0].__cause__ is None
+    assert backend_cleanup_nodes[0].__context__ is None
+    _assert_sanitized_chain(module, primary)
+
+
+def test_control_primary_preserves_occupied_graph_and_inserts_sanitized_cleanup(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    original_cause = OSError("original cause")
+    original_context = LookupError("original context")
+    primary.__cause__ = original_cause
+    primary.__context__ = original_context
+    primary.__suppress_context__ = True
+    world.known_folder_call_exception = primary
+    world.known_folder_free_exception = OSError(_SECRET_MARKER)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert primary.__cause__ is original_cause
+    cleanup = primary.__context__
+    assert type(cleanup) is module.ExternalPinReaderError
+    assert cleanup.code == "observation_failed"
+    assert cleanup.__cause__ is None
+    assert cleanup.__context__ is original_context
+    assert _SECRET_MARKER not in repr(cleanup)
+    assert len(world.freed_known_folder) == 1
+    assert world._close_counts["baseline"] == 1
+
+
+def test_control_primary_sanitizes_preexisting_backend_cleanup_link(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    backend_cleanup = WindowsHeldHandleError("observation_failed")
+    backend_cleanup.__cause__ = OSError(_SECRET_MARKER)
+    backend_cleanup.__suppress_context__ = True
+    primary.__cause__ = backend_cleanup
+    primary.__suppress_context__ = True
+    world.backend_exception = ("read_security_descriptor", "anchor", primary)
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    cleanup = primary.__cause__
+    assert type(cleanup) is module.ExternalPinReaderError
+    assert cleanup.code == "observation_failed"
+    assert cleanup.__cause__ is None
+    assert cleanup.__context__ is None
+    _assert_sanitized_chain(module, cleanup)
+    assert world.backend is not None
+    assert world.backend.handles == []
+    assert world._close_counts["baseline"] == 1
+
+
+def test_initial_owner_allocation_memory_error_is_sanitized_without_native_acquisition(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+
+    def fail_owner_allocation(_value):
+        raise MemoryError(_SECRET_MARKER)
+
+    monkeypatch.setattr(module, "_OwnedNativeHandle", fail_owner_allocation)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value.code == "observation_failed"
+    _assert_sanitized_chain(module, exc_info.value)
+    backend_enters = [event for event in world.events if event[0] == "backend.enter"]
+    backend_exits = [event for event in world.events if event[0] == "backend.exit"]
+    assert len(backend_enters) == len(backend_exits)
+    assert len(backend_enters) <= 1
+    if backend_enters:
+        assert backend_exits == [("backend.exit", False)]
+    assert not any(event[0].startswith("token.") for event in world.events)
+    assert not any(event[0] == "native.close" for event in world.events)
+    assert world.backend is not None
+    assert world.backend.handles == []
+    assert _SECRET_MARKER not in repr(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("mode", "close_kind", "trigger_at"),
+    [
+        ("initial_thread", "thread", 1),
+        ("comparison_thread", "thread", 2),
+        ("baseline_process", "baseline", 1),
+        ("transient_process", "transient", 2),
+        ("duplicate", "duplicate", 1),
+    ],
+)
+def test_native_output_written_before_control_interrupt_is_closed_once(
+    monkeypatch,
+    mode: str,
+    close_kind: str,
+    trigger_at: int,
+) -> None:
+    world = _ReaderWorld()
+    if mode == "initial_thread":
+        world.thread_case = "success_nonnull"
+    elif mode == "comparison_thread":
+        world.comparison_thread_at = 2
+    module = _install_reader_world(monkeypatch, world)
+    if mode in {"initial_thread", "comparison_thread"}:
+        call = world.native.advapi32.OpenThreadToken
+    elif mode in {"baseline_process", "transient_process"}:
+        call = world.native.advapi32.OpenProcessToken
+    else:
+        call = world.native.advapi32.DuplicateTokenEx
+    original = call.implementation
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    call_count = 0
+
+    def interrupt_after_write(*args):
+        nonlocal call_count
+        call_count += 1
+        result = original(*args)
+        if call_count == trigger_at:
+            raise primary
+        return result
+
+    call.implementation = interrupt_after_write
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert world._close_counts.get(close_kind, 0) == 1
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
 
 
 def test_backend_ledger_closes_handle_when_reader_tracking_allocation_fails(
@@ -4920,6 +5546,47 @@ def test_primary_with_existing_sanitized_cause_precedes_known_folder_free_failur
         id(original_operation),
         id(cleanup),
     }
+
+
+def test_known_folder_cleanup_sanitization_failure_preserves_primary(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    primary = module.ExternalPinReaderError("redirected_boundary")
+    original_operation = module.ExternalPinReaderError("unsupported_platform")
+    primary.__cause__ = original_operation
+    primary.__suppress_context__ = True
+    cleanup_error = OSError(_SECRET_MARKER)
+    world.known_folder_call_exception = primary
+    world.known_folder_free_exception = cleanup_error
+    original_sanitize = module._sanitize_error
+
+    def fail_cleanup_sanitization(error: BaseException):
+        if error is cleanup_error:
+            raise MemoryError(_SECRET_MARKER)
+        return original_sanitize(error)
+
+    monkeypatch.setattr(module, "_sanitize_error", fail_cleanup_sanitization)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    assert primary.__cause__ is original_operation
+    cleanup = primary.__context__
+    assert type(cleanup) is module.ExternalPinReaderError
+    assert cleanup.code == "observation_failed"
+    assert cleanup.__context__ is None
+    processing_failure = cleanup.__cause__
+    assert type(processing_failure) is module.ExternalPinReaderError
+    assert processing_failure.code == "observation_failed"
+    assert processing_failure.__cause__ is None
+    assert processing_failure.__context__ is None
+    _assert_sanitized_chain(module, primary)
+    assert len(_walk_exception_chain(primary)) == 4
+    assert len(world.freed_known_folder) == 1
+    assert world._close_counts["baseline"] == 1
     assert len(world.freed_known_folder) == 1
     assert world.backend is not None
     assert world.backend.read_count == 0
@@ -5121,6 +5788,92 @@ def test_source_has_no_dynamic_import_os_open_or_environment_mapping_escape() ->
                 "run_path",
                 "spec_from_file_location",
             }
+
+
+_CLEANUP_HELPERS = {
+    "_append_cleanup",
+    "_attach_cleanup",
+    "_next_windows_cleanup",
+    "_preserve_context",
+    "_raise_after_cleanup",
+    "_sanitize_cleanup_chain",
+    "_sanitize_windows_error_graph",
+}
+
+
+def _assert_cleanup_helpers_have_no_collection_snapshot_allocation(source: str) -> None:
+    tree = ast.parse(source)
+    helpers = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in _CLEANUP_HELPERS
+    }
+    assert set(helpers) == _CLEANUP_HELPERS
+    forbidden_calls = {"dict", "iter", "list", "reversed", "set", "sorted", "tuple"}
+    forbidden_nodes = (
+        ast.Dict,
+        ast.DictComp,
+        ast.GeneratorExp,
+        ast.List,
+        ast.ListComp,
+        ast.Set,
+        ast.SetComp,
+        ast.Tuple,
+    )
+    violations: list[ast.AST] = []
+    for helper in helpers.values():
+        for node in ast.walk(helper):
+            if isinstance(node, forbidden_nodes):
+                violations.append(node)
+            elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Slice):
+                violations.append(node)
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+                    violations.append(node)
+                elif isinstance(node.func, ast.Attribute) and node.func.attr in {
+                    "copy",
+                    "deepcopy",
+                }:
+                    violations.append(node)
+    assert violations == []
+
+
+def test_cleanup_helpers_have_no_collection_snapshot_allocation_path() -> None:
+    _assert_cleanup_helpers_have_no_collection_snapshot_allocation(
+        MODULE_PATH.read_text(encoding="utf-8")
+    )
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        "list(error)",
+        "tuple(error)",
+        "reversed(error)",
+        "error.copy()",
+        "error[::-1]",
+        "[error]",
+        "{'error': error}",
+        "{error}",
+        "(error,)",
+        "[item for item in error]",
+        "{item for item in error}",
+        "(item for item in error)",
+    ],
+)
+def test_cleanup_allocation_oracle_rejects_snapshot_mutants(snapshot: str) -> None:
+    supporting_helpers = "\n".join(
+        f"def {name}(*args, **kwargs):\n    return None\n"
+        for name in sorted(_CLEANUP_HELPERS - {"_sanitize_cleanup_chain"})
+    )
+    mutant = (
+        supporting_helpers
+        + "\ndef _sanitize_cleanup_chain(error, **kwargs):\n"
+        + f"    return {snapshot}\n"
+    )
+    with pytest.raises(AssertionError):
+        _assert_cleanup_helpers_have_no_collection_snapshot_allocation(mutant)
 
 
 _FORBIDDEN_DIRECT_CTYPES_CAPABILITIES = {

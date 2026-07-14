@@ -178,6 +178,23 @@ def _open_test_member(module, backend):
     return backend.open_by_id(root, entry, directory=False)
 
 
+def _rejecting_token_type(original_type):
+    class _RejectingTokenMeta(type):
+        def __instancecheck__(cls, instance) -> bool:
+            return isinstance(instance, original_type)
+
+    class _RejectingToken(metaclass=_RejectingTokenMeta):
+        def __new__(cls, *_args, **_kwargs):
+            raise MemoryError("owner reservation failed")
+
+    return _RejectingToken
+
+
+class _RejectingAppendList(list):
+    def append(self, _item) -> None:
+        raise MemoryError("owner ledger reservation failed")
+
+
 def _assert_bounded_read_trace(
     trace: list[tuple[int, int]],
     *,
@@ -528,6 +545,148 @@ def test_open_returns_owned_opaque_token_and_explicit_close_is_terminal(
     assert kernel32.closed == [41]
 
 
+@pytest.mark.parametrize("reservation_failure", ["constructor", "ledger"])
+def test_open_root_reserves_owner_before_native_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+    reservation_failure: str,
+) -> None:
+    kernel32 = _Kernel32()
+    native_calls = 0
+
+    def create_file(*_args) -> int:
+        nonlocal native_calls
+        native_calls += 1
+        return 41
+
+    kernel32.CreateFileW.implementation = create_file
+    module, backend = _backend(monkeypatch, kernel32)
+
+    if reservation_failure == "constructor":
+        monkeypatch.setattr(
+            module,
+            "_WindowsHandleToken",
+            _rejecting_token_type(module._WindowsHandleToken),
+        )
+    else:
+        backend._handles = _RejectingAppendList()
+
+    with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+        with backend:
+            backend.open_root("X:\\")
+
+    assert exc_info.value.code == "observation_failed"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert native_calls == 0
+    assert kernel32.closed == []
+    assert backend._handles == []
+
+
+@pytest.mark.parametrize("reservation_failure", ["constructor", "ledger"])
+def test_open_by_id_reserves_owner_before_native_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+    reservation_failure: str,
+) -> None:
+    kernel32 = _Kernel32()
+    native_calls = 0
+
+    def open_by_id(*_args) -> int:
+        nonlocal native_calls
+        native_calls += 1
+        return 42
+
+    kernel32.OpenFileById.implementation = open_by_id
+    module, backend = _backend(monkeypatch, kernel32)
+    entry = module.WindowsDirectoryEntry(
+        "member",
+        0,
+        "ntfs_file_index_64",
+        7,
+    )
+
+    with backend:
+        root = backend.open_root("X:\\")
+
+        if reservation_failure == "constructor":
+            monkeypatch.setattr(
+                module,
+                "_WindowsHandleToken",
+                _rejecting_token_type(module._WindowsHandleToken),
+            )
+        else:
+            backend._handles = _RejectingAppendList(backend._handles)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.open_by_id(root, entry, directory=False)
+
+    assert exc_info.value.code == "observation_failed"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert native_calls == 0
+    assert kernel32.closed == [41]
+    assert backend._handles == []
+
+
+def test_open_root_ledger_owns_reservation_before_native_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    reserved = None
+
+    def create_file(*_args) -> int:
+        nonlocal reserved
+        assert len(backend._handles) == 1
+        reserved = backend._handles[-1]
+        assert isinstance(reserved, module._WindowsHandleToken)
+        assert reserved._owner is backend
+        assert reserved._live is True
+        assert reserved._raw is None
+        return 41
+
+    kernel32.CreateFileW.implementation = create_file
+
+    with backend:
+        token = backend.open_root("X:\\")
+        assert token is reserved
+
+    assert kernel32.closed == [41]
+    assert backend._handles == []
+
+
+def test_open_by_id_ledger_owns_reservation_before_native_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    entry = module.WindowsDirectoryEntry(
+        "member",
+        0,
+        "ntfs_file_index_64",
+        7,
+    )
+    reserved = None
+
+    def open_by_id(*_args) -> int:
+        nonlocal reserved
+        assert len(backend._handles) == 2
+        reserved = backend._handles[-1]
+        assert isinstance(reserved, module._WindowsHandleToken)
+        assert reserved._owner is backend
+        assert reserved._live is True
+        assert reserved._raw is None
+        return 42
+
+    kernel32.OpenFileById.implementation = open_by_id
+
+    with backend:
+        root = backend.open_root("X:\\")
+        token = backend.open_by_id(root, entry, directory=False)
+        assert token is reserved
+
+    assert kernel32.closed == [42, 41]
+    assert backend._handles == []
+
+
 def test_explicit_close_failure_is_terminal_and_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -583,6 +742,140 @@ def test_context_exit_closes_live_tokens_in_reverse_and_attempts_all(
     assert kernel32.closed == [43, 42, 41]
 
 
+def test_context_exit_continues_after_control_flow_close_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CloseControlFlow(BaseException):
+        pass
+
+    kernel32 = _Kernel32()
+    raw_handles = iter((41, 42, 43))
+    kernel32.CreateFileW.implementation = lambda *_args: next(raw_handles)
+
+    def interrupt_first_close(handle) -> int:
+        raw = handle if isinstance(handle, int) else handle.value
+        kernel32.closed.append(raw)
+        if raw == 43:
+            raise CloseControlFlow()
+        return 1
+
+    kernel32.CloseHandle.implementation = interrupt_first_close
+    module, backend = _backend(monkeypatch, kernel32)
+
+    with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+        with backend:
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+
+    assert exc_info.value.code == "observation_failed"
+    assert kernel32.closed == [43, 42, 41]
+
+
+def test_context_exit_reverse_drain_does_not_require_snapshot_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    raw_handles = iter((41, 42, 43))
+    kernel32.CreateFileW.implementation = lambda *_args: next(raw_handles)
+    module, backend = _backend(monkeypatch, kernel32)
+    backend.__enter__()
+    backend.open_root("X:\\")
+    backend.open_root("X:\\")
+    backend.open_root("X:\\")
+
+    def reject_snapshot(*_args, **_kwargs):
+        raise MemoryError("cleanup snapshot allocation is forbidden")
+
+    monkeypatch.setattr(module, "tuple", reject_snapshot, raising=False)
+
+    assert backend.__exit__(None, None, None) is False
+    assert kernel32.closed == [43, 42, 41]
+    with pytest.raises(module.WindowsHeldHandleError) as post_context:
+        backend.open_root("X:\\")
+    assert post_context.value.code == "observation_failed"
+
+
+def test_context_exit_preserves_every_close_failure_in_attempt_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    raw_handles = iter((41, 42, 43))
+    kernel32.CreateFileW.implementation = lambda *_args: next(raw_handles)
+
+    def fail_two_closes(handle) -> int:
+        raw = handle if isinstance(handle, int) else handle.value
+        kernel32.closed.append(raw)
+        if raw in {43, 42}:
+            ctypes.set_last_error(raw)
+            return 0
+        return 1
+
+    kernel32.CloseHandle.implementation = fail_two_closes
+    module, backend = _backend(monkeypatch, kernel32)
+
+    with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+        with backend:
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+
+    first = exc_info.value
+    second = first.__context__
+    assert type(first) is module.WindowsHeldHandleError
+    assert type(second) is module.WindowsHeldHandleError
+    assert first.code == "observation_failed"
+    assert second.code == "observation_failed"
+    assert isinstance(first.__cause__, OSError)
+    assert isinstance(second.__cause__, OSError)
+    assert first.__cause__.winerror == 43
+    assert second.__cause__.winerror == 42
+    assert second.__context__ is None
+    assert kernel32.closed == [43, 42, 41]
+
+
+def test_context_exit_uses_cause_before_context_after_control_flow_close_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CloseControlFlow(BaseException):
+        pass
+
+    kernel32 = _Kernel32()
+    raw_handles = iter((41, 42, 43))
+    kernel32.CreateFileW.implementation = lambda *_args: next(raw_handles)
+
+    def fail_control_then_ordinary(handle) -> int:
+        raw = handle if isinstance(handle, int) else handle.value
+        kernel32.closed.append(raw)
+        if raw == 43:
+            raise CloseControlFlow()
+        if raw == 42:
+            ctypes.set_last_error(raw)
+            return 0
+        return 1
+
+    kernel32.CloseHandle.implementation = fail_control_then_ordinary
+    module, backend = _backend(monkeypatch, kernel32)
+
+    with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+        with backend:
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+            backend.open_root("X:\\")
+
+    first = exc_info.value
+    second = first.__cause__
+    assert type(first) is module.WindowsHeldHandleError
+    assert type(second) is module.WindowsHeldHandleError
+    assert first.code == "observation_failed"
+    assert second.code == "observation_failed"
+    assert first.__context__ is None
+    assert isinstance(second.__cause__, OSError)
+    assert second.__cause__.winerror == 42
+    assert second.__context__ is None
+    assert kernel32.closed == [43, 42, 41]
+
+
 def test_context_exit_preserves_primary_and_attaches_close_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -599,6 +892,8 @@ def test_context_exit_preserves_primary_and_attaches_close_failure(
     assert exc_info.value is primary
     assert isinstance(primary.__cause__, module.WindowsHeldHandleError)
     assert primary.__cause__.code == "observation_failed"
+    assert isinstance(primary.__cause__.__cause__, OSError)
+    assert primary.__cause__.__context__ is None
 
 
 def test_context_exit_preserves_existing_cause_and_uses_close_failure_as_context(
@@ -620,6 +915,35 @@ def test_context_exit_preserves_existing_cause_and_uses_close_failure_as_context
     assert exc_info.value is primary
     assert primary.__cause__ is original_cause
     assert isinstance(primary.__context__, module.WindowsHeldHandleError)
+    assert isinstance(primary.__context__.__cause__, OSError)
+    assert primary.__context__.__context__ is None
+
+
+def test_context_exit_preserves_occupied_primary_graph_and_inserts_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    kernel32.CloseHandle.implementation = lambda _handle: 0
+    module, backend = _backend(monkeypatch, kernel32)
+    original_cause = OSError("original cause")
+    original_context = LookupError("original context")
+    primary = RuntimeError("primary")
+    primary.__cause__ = original_cause
+    primary.__context__ = original_context
+    primary.__suppress_context__ = True
+
+    with pytest.raises(RuntimeError) as exc_info:
+        with backend:
+            backend.open_root("X:\\")
+            raise primary
+
+    assert exc_info.value is primary
+    assert primary.__cause__ is original_cause
+    cleanup = primary.__context__
+    assert type(cleanup) is module.WindowsHeldHandleError
+    assert cleanup.code == "observation_failed"
+    assert isinstance(cleanup.__cause__, OSError)
+    assert cleanup.__context__ is original_context
     assert primary.__context__.code == "observation_failed"
 
 
@@ -2233,9 +2557,8 @@ def test_native_read_security_descriptor_is_detached_and_self_relative(
     )
 
 
-def test_shared_module_imports_only_standard_library_without_dynamic_escape() -> None:
-    module = _load_module()
-    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+def _assert_shared_source_boundary(source: str) -> None:
+    tree = ast.parse(source)
     allowed_roots = {
         "__future__",
         "dataclasses",
@@ -2247,23 +2570,200 @@ def test_shared_module_imports_only_standard_library_without_dynamic_escape() ->
     }
     imported_roots: set[str] = set()
     dynamic_calls: list[str] = []
+    forbidden_names = {
+        "__import__",
+        "compile",
+        "eval",
+        "exec",
+        "globals",
+        "locals",
+        "vars",
+    }
+    forbidden_attributes = {
+        "__import__",
+        "import_module",
+        "module_from_spec",
+        "run_module",
+        "run_path",
+        "spec_from_file_location",
+    }
     for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "__builtins__":
+            dynamic_calls.append("__builtins__")
         if isinstance(node, ast.Import):
             imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_roots.add(node.module.split(".", 1)[0])
         elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id == "__import__":
-                dynamic_calls.append("__import__")
-            if (
+            if isinstance(node.func, ast.Name):
+                if node.func.id in forbidden_names:
+                    dynamic_calls.append(node.func.id)
+                if (
+                    node.func.id == "getattr"
+                    and len(node.args) >= 2
+                    and isinstance(node.args[1], ast.Constant)
+                    and node.args[1].value in forbidden_attributes
+                ):
+                    dynamic_calls.append(str(node.args[1].value))
+            elif (
                 isinstance(node.func, ast.Attribute)
-                and node.func.attr == "import_module"
+                and node.func.attr in forbidden_attributes
             ):
-                dynamic_calls.append("import_module")
+                dynamic_calls.append(node.func.attr)
 
     assert imported_roots <= allowed_roots
     assert imported_roots.isdisjoint({"api", "cli", "steps"})
     assert dynamic_calls == []
+
+
+def test_shared_module_imports_only_standard_library_without_dynamic_escape() -> None:
+    module = _load_module()
+    _assert_shared_source_boundary(Path(module.__file__).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "escape",
+    [
+        "__import__('os')",
+        "compile('pass', '<x>', 'exec')",
+        "eval('1')",
+        "exec('pass')",
+        "globals()",
+        "locals()",
+        "vars(__builtins__)",
+        "getattr(__builtins__, '__import__')('os')",
+        "__builtins__['eval'](\"__import__('os')\")",
+        "__builtins__.__dict__['exec'](\"import os\")",
+        "import importlib as loader\nloader.import_module('os')",
+        "import runpy as runner\nrunner.run_path('x.py')",
+        "import builtins as b\nb.__import__('os')",
+    ],
+)
+def test_shared_source_boundary_rejects_dynamic_escape_mutants(escape: str) -> None:
+    with pytest.raises(AssertionError):
+        _assert_shared_source_boundary(escape + "\n")
+
+
+def _assert_exit_has_no_cleanup_snapshot_allocation(source: str) -> None:
+    tree = ast.parse(source)
+    backend_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "WindowsHeldHandleBackend"
+    )
+    exit_method = next(
+        node
+        for node in backend_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "__exit__"
+    )
+    forbidden_calls = {"dict", "iter", "list", "reversed", "set", "sorted", "tuple"}
+    forbidden_nodes = (
+        ast.Dict,
+        ast.DictComp,
+        ast.GeneratorExp,
+        ast.List,
+        ast.ListComp,
+        ast.Set,
+        ast.SetComp,
+        ast.Tuple,
+    )
+    violations: list[ast.AST] = []
+    drain_loops: list[ast.While] = []
+    for statement in exit_method.body:
+        for node in ast.walk(statement):
+            if isinstance(node, forbidden_nodes):
+                violations.append(node)
+            elif isinstance(node, (ast.For, ast.AsyncFor)):
+                violations.append(node)
+            elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Slice):
+                violations.append(node)
+            elif (
+                isinstance(node, ast.While)
+                and isinstance(node.test, ast.Attribute)
+                and isinstance(node.test.value, ast.Name)
+                and node.test.value.id == "self"
+                and node.test.attr == "_handles"
+            ):
+                drain_loops.append(node)
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+                    violations.append(node)
+                elif isinstance(node.func, ast.Attribute) and node.func.attr in {
+                    "copy",
+                    "deepcopy",
+                }:
+                    violations.append(node)
+    assert violations == []
+    assert len(drain_loops) == 1
+    drain_loop = drain_loops[0]
+    assert drain_loop.body
+    selection = drain_loop.body[0]
+    assert isinstance(selection, ast.Assign)
+    assert len(selection.targets) == 1
+    assert isinstance(selection.targets[0], ast.Name)
+    assert selection.targets[0].id == "handle"
+    assert isinstance(selection.value, ast.Subscript)
+    assert isinstance(selection.value.value, ast.Attribute)
+    assert isinstance(selection.value.value.value, ast.Name)
+    assert selection.value.value.value.id == "self"
+    assert selection.value.value.attr == "_handles"
+    assert isinstance(selection.value.slice, ast.UnaryOp)
+    assert isinstance(selection.value.slice.op, ast.USub)
+    assert isinstance(selection.value.slice.operand, ast.Constant)
+    assert selection.value.slice.operand.value == 1
+    close_calls = [
+        node
+        for node in ast.walk(drain_loop)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "self"
+        and node.func.attr == "_close_registered"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Name)
+        and node.args[0].id == "handle"
+    ]
+    assert len(close_calls) == 1
+
+
+def test_context_exit_has_no_cleanup_snapshot_allocation_path() -> None:
+    module = _load_module()
+    _assert_exit_has_no_cleanup_snapshot_allocation(
+        Path(module.__file__).read_text(encoding="utf-8")
+    )
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        "list(self._handles)",
+        "tuple(self._handles)",
+        "reversed(self._handles)",
+        "self._handles.copy()",
+        "self._handles[::-1]",
+        "self._handles * 1",
+        "[*self._handles]",
+        "{'handles': self._handles}",
+        "{*self._handles}",
+        "(self._handles,)",
+        "[item for item in self._handles]",
+        "{item for item in self._handles}",
+        "(item for item in self._handles)",
+    ],
+)
+def test_cleanup_snapshot_oracle_rejects_allocation_mutants(snapshot: str) -> None:
+    mutant = (
+        "class WindowsHeldHandleBackend:\n"
+        "    def __exit__(self, exc_type, exc, traceback):\n"
+        "        while self._handles:\n"
+        f"            snapshot = {snapshot}\n"
+        "            self._handles.pop()\n"
+        "        return False\n"
+    )
+    with pytest.raises(AssertionError):
+        _assert_exit_has_no_cleanup_snapshot_allocation(mutant)
 
 
 def test_shared_module_import_does_not_load_win32_capabilities(

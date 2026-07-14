@@ -979,6 +979,26 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the two-file shared
   descriptor capability source/test checkpoint.
+- Windows security-descriptor capability checkpoint (2026-07-13): private
+  checkpoint `882dc70` adds the exact opt-in `security_read` profile and one
+  same-handle detached self-relative descriptor-copy method. Observation mode
+  retains its prior rights and native dependency surface; the volume root stays
+  at `0x81`, and only `open_by_id()` descendants add `READ_CONTROL`. Every
+  successful non-null native allocation is validated, copied exactly, and
+  freed once; error-path output remains undefined and untouched, and cleanup
+  failure cannot produce evidence. Independent oracle review found and closed
+  loader-error-state, pointer-provenance, share/security-attribute parity,
+  cleanup-precedence, inclusive-length, native-witness, returned-error-code,
+  causeless-validation, and observation-dependency gaps before all three final
+  current-byte reviews returned clean. Fresh verification passed 101 backend
+  tests, 46 observer tests, the 431-test approved authority union, compilation,
+  documentation authority/drift, banned-token, dependency, and staged-diff
+  gates. No live ProgramData, pin, token, ACL, configured root, service, GoodQ
+  data, Qdrant, evidence, job, MiniAgent, or cleanup authority was read or
+  changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the audited
+  two-file, no-argument Windows external-pin reader and its focused tests.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1541,6 +1561,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Checkpointed the R-07 opt-in same-handle Windows security-
+  descriptor capability and advanced only to the audited no-argument external-
+  pin reader source/test seam.
 
 - 2026-07-13: Checkpointed the R-07 same-handle bounded-read prerequisite and
   advanced only to the read-only Windows security-capability decision ahead of

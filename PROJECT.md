@@ -4,16 +4,16 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — implement the checkpointed projection-neutral same-handle
-security-descriptor capability required by the future Windows external-pin
-reader.
+Roadmap item: R-07 — implement the audited read-only Windows external-pin
+reader after its shared same-handle prerequisites were privately checkpointed.
 
 ## Outcome
 
-Implement only the selected opt-in `security_read` profile and immutable
-self-relative descriptor-copy method in the existing shared Windows
-held-handle backend. Prove the exact access, native allocation, validation,
-cleanup, error, and observer-parity contract through focused TDD.
+Implement only the no-argument Windows external-pin reader and its focused
+tests. It must consume the public held-handle backend, resolve ProgramData
+without creation or fallback, bind one accepted process-token identity to the
+fixed security policy, read exactly one held-handle pin payload, recheck every
+authority, and return only immutable path-free evidence.
 
 ## Completed work — do not repeat
 
@@ -25,9 +25,13 @@ cleanup, error, and observer-parity contract through focused TDD.
 - `docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md`
   selected detached self-relative descriptor bytes, descendant-only
   `READ_CONTROL`, and reader-owned token/`AccessCheck` authority.
+- `882dc70` implemented and verified the opt-in same-handle descriptor-copy
+  capability without changing observer-default rights or dependencies.
+- `docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md`
+  records the closed contract, reviewed hashes, and fresh verification.
 - The filesystem observer contract, same-handle identity/hash mechanics,
-  four-symbol module export, and bounded-read semantics are closed unless new
-  focused evidence contradicts them.
+  four-symbol module export, bounded-read semantics, and descriptor primitive
+  are closed unless new focused evidence contradicts them.
 
 ## Governing evidence
 
@@ -35,56 +39,64 @@ cleanup, error, and observer-parity contract through focused TDD.
 - `docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md`;
 - `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CHECKPOINT_2026-07-13.md`;
 - `docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md`;
+- `docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md`;
 - official Microsoft Win32 documentation for file security, access tokens,
   generic mappings, `GetSecurityInfo`, and `AccessCheck`;
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-The shared backend owns every raw Windows file handle, backend-issued
-held-handle token, descriptor allocation, and corresponding native cleanup.
-The future reader separately owns its access-token handles and their cleanup.
-Consumers may receive only detached immutable evidence or a finite path-free
-decision. They may never receive a raw handle, pointer, borrowed native buffer,
-cleanup callback, private token field, or pathname reopen capability.
+The reader may trust only evidence obtained from one fixed drive root and
+opaque held descendants, one accepted process-token snapshot sequence, and the
+exact audited static security policy. It accepts no path, SID, digest,
+configuration, environment, backend, manifest bytes, or prior evidence.
+Neither raw native state nor sensitive identity/security material may leave the
+reader; only detached canonical evidence and finite path-free errors may cross
+its public boundary.
 
 ## Exact implementation seam
 
-Modify only:
+Create only:
 
-- `steps/common/windows_held_handle.py`; and
-- `tests/unit/test_windows_held_handle.py`.
+- `cli/clean_memory_external_pin.py`; and
+- `tests/unit/test_clean_memory_external_pin.py`.
 
-The exact public changes are:
+The exact public module surface is:
 
-```python
-WindowsHeldHandleBackend(*, access_profile: str = "observation")
-
-def read_security_descriptor(self, handle: object) -> bytes:
-    ...
+```text
+EXTERNAL_PIN_EVIDENCE_SCHEMA
+ExternalPinReaderError
+ExternalPinEvidence
+read_external_pin
 ```
 
-The default observer profile remains byte-for-byte unchanged. The security
-profile adds only `READ_CONTROL` to `open_by_id()` descendants, never the
-volume-root handle. Only those descendant tokens may retrieve a descriptor.
+`read_external_pin()` accepts no arguments. Dependency injection is private and
+test-only. Windows v1 owns Known Folder lookup, effective-token snapshot and
+recheck, descriptor parsing, fixed file-object generic mapping, per-right
+`AccessCheck`, exact 65-byte pin validation through the bounded-read primitive,
+and final descriptor/object/membership rechecks. POSIX returns the fixed
+`unsupported_platform` result.
 
 ## Boundaries
 
 - Do not touch any production or test file outside the exact two-file seam.
-- Do not implement the external-pin reader, enrollment, publication, rotation,
-  recovery, authenticated composition, protected-member observation, Qdrant
-  observation, runnable planning, or cleanup execution.
-- Do not weaken handle opacity, return native pointers, access private token
-  fields, duplicate traversal, or reopen descendants by pathname.
+- Do not modify the completed held-handle backend or observer.
+- Do not add enrollment, publication, rotation, recovery, authenticated
+  composition, protected-member observation, Qdrant observation, runnable
+  planning, or cleanup execution.
+- Do not weaken handle opacity, expose paths/SIDs/token or ACL material, install
+  an impersonation token on a thread, duplicate traversal, or reopen
+  descendants by pathname.
 - Do not inspect or alter live ProgramData, a pin, token, ACL, configured root,
   service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup target.
 - Do not change dependency, service, firewall, environment, or runtime state.
 
 ## Completion gate
 
-Demonstrate RED for the exact surface and behavior before implementation. Then
-pass the focused shared-backend suite, existing observer parity suites, one
-temporary-only native descriptor witness, the approved authority union,
-compilation, import-purity, documentation, banned-token, dependency, and diff
-gates. Obtain three independent current-byte reviews and checkpoint the
-two-file capability before beginning the external-pin reader.
+Demonstrate RED for the exact public surface, no-argument boundary, token and
+security ABI, fixed policy, evidence projection, read/recheck sequence, finite
+errors, and cleanup precedence before implementation. Then pass the focused
+reader suite, completed shared-backend/observer suites, the approved authority
+union, compilation, import-purity, documentation, banned-token, dependency,
+and diff gates. Obtain three independent current-byte reviews and checkpoint
+the two-file reader before any enrollment or authenticated-composition seam.

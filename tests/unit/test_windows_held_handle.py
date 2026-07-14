@@ -33,6 +33,7 @@ class _Kernel32:
         self.OpenFileById = _NativeCall(lambda *_args: 42)
         self.SetFilePointerEx = _NativeCall(lambda *_args: 1)
         self.ReadFile = _NativeCall(lambda *_args: 1)
+        self.LocalFree = _NativeCall(lambda *_args: None)
         self.CloseHandle = _NativeCall(self._close)
 
     def _close(self, handle) -> int:
@@ -45,10 +46,121 @@ class _IntSubclass(int):
     pass
 
 
-def _backend(monkeypatch: pytest.MonkeyPatch, kernel32: _Kernel32):
+class _Advapi32:
+    def __init__(self) -> None:
+        self.GetSecurityInfo = _NativeCall(lambda *_args: 0)
+        self.IsValidSecurityDescriptor = _NativeCall(lambda *_args: 1)
+        self.GetSecurityDescriptorControl = _NativeCall(lambda *_args: 1)
+        self.GetSecurityDescriptorLength = _NativeCall(lambda *_args: 20)
+
+
+class _SecurityScript:
+    def __init__(self, payload: bytes = bytes(range(20))) -> None:
+        self.payload = payload
+        self.buffer = (ctypes.c_ubyte * len(payload)).from_buffer_copy(payload)
+        self.security_result = 0
+        self.security_last_error: int | None = None
+        self.write_descriptor_on_success = True
+        self.write_descriptor_on_error = False
+        self.valid = True
+        self.valid_last_error: int | None = None
+        self.control_success = True
+        self.control_error = 5
+        self.control = 0x8000
+        self.revision = 1
+        self.length = len(payload)
+        self.local_free_result: int | None = None
+        self.local_free_error = 6
+        self.poison_on_free = False
+        self.security_calls: list[tuple[object, ...]] = []
+        self.valid_calls = 0
+        self.valid_pointers: list[int] = []
+        self.control_calls = 0
+        self.control_pointers: list[int] = []
+        self.length_calls = 0
+        self.length_pointers: list[int] = []
+        self.freed: list[int] = []
+
+    @property
+    def address(self) -> int:
+        return ctypes.addressof(self.buffer)
+
+    def bind(self, kernel32: _Kernel32, advapi32: _Advapi32) -> None:
+        advapi32.GetSecurityInfo.implementation = self._get_security_info
+        advapi32.IsValidSecurityDescriptor.implementation = self._is_valid
+        advapi32.GetSecurityDescriptorControl.implementation = self._get_control
+        advapi32.GetSecurityDescriptorLength.implementation = self._get_length
+        kernel32.LocalFree.implementation = self._local_free
+
+    def _get_security_info(self, *args) -> int:
+        self.security_calls.append(args)
+        if self.security_last_error is not None:
+            ctypes.set_last_error(self.security_last_error)
+        should_write = (
+            self.security_result == 0 and self.write_descriptor_on_success
+        ) or (
+            self.security_result != 0 and self.write_descriptor_on_error
+        )
+        if should_write:
+            ctypes.cast(args[-1], ctypes.POINTER(ctypes.c_void_p))[0] = self.address
+        return self.security_result
+
+    def _get_control(self, _descriptor, control, revision) -> int:
+        self.control_calls += 1
+        self.control_pointers.append(self._pointer_value(_descriptor))
+        if not self.control_success:
+            ctypes.set_last_error(self.control_error)
+            return 0
+        ctypes.cast(control, ctypes.POINTER(ctypes.c_uint16))[0] = self.control
+        ctypes.cast(revision, ctypes.POINTER(ctypes.c_uint32))[0] = self.revision
+        return 1
+
+    def _is_valid(self, _descriptor) -> int:
+        self.valid_calls += 1
+        self.valid_pointers.append(self._pointer_value(_descriptor))
+        if self.valid_last_error is not None:
+            ctypes.set_last_error(self.valid_last_error)
+        return int(self.valid)
+
+    def _get_length(self, _descriptor) -> int:
+        self.length_calls += 1
+        self.length_pointers.append(self._pointer_value(_descriptor))
+        return self.length
+
+    @staticmethod
+    def _pointer_value(pointer) -> int:
+        return pointer if isinstance(pointer, int) else pointer.value
+
+    def _local_free(self, descriptor) -> int | None:
+        raw = descriptor if isinstance(descriptor, int) else descriptor.value
+        self.freed.append(raw)
+        if self.poison_on_free:
+            ctypes.memset(raw, 0xEE, len(self.payload))
+        if self.local_free_result is not None:
+            ctypes.set_last_error(self.local_free_error)
+        return self.local_free_result
+
+
+def _backend(
+    monkeypatch: pytest.MonkeyPatch,
+    kernel32: _Kernel32,
+    *,
+    access_profile: str = "observation",
+    advapi32: _Advapi32 | None = None,
+):
     module = _load_module()
-    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: kernel32)
-    return module, module.WindowsHeldHandleBackend()
+    security = advapi32 or _Advapi32()
+
+    def load_library(name: str, **_kwargs):
+        assert _kwargs == {"use_last_error": True}
+        if name.casefold() == "kernel32":
+            return kernel32
+        if name.casefold() == "advapi32":
+            return security
+        raise OSError("unexpected native library")
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library)
+    return module, module.WindowsHeldHandleBackend(access_profile=access_profile)
 
 
 def _load_module():
@@ -116,6 +228,7 @@ def test_backend_public_method_surface_is_exact(
         "open_by_id",
         "open_root",
         "read_file_bounded",
+        "read_security_descriptor",
         "snapshot",
         "volume_filesystem",
     }
@@ -133,6 +246,138 @@ def test_read_file_bounded_signature_is_exact() -> None:
     assert str(
         inspect.signature(module.WindowsHeldHandleBackend.read_file_bounded)
     ) == "(self, handle: 'object', *, maximum_bytes: 'int') -> 'tuple[bytes, bool]'"
+
+
+def test_security_capability_signatures_are_exact() -> None:
+    module = _load_module()
+
+    assert str(inspect.signature(module.WindowsHeldHandleBackend)) == (
+        "(*, access_profile: 'str' = 'observation') -> 'None'"
+    )
+    assert str(
+        inspect.signature(module.WindowsHeldHandleBackend.read_security_descriptor)
+    ) == "(self, handle: 'object') -> 'bytes'"
+
+
+@pytest.mark.parametrize(
+    "access_profile",
+    (None, "", "security", True, 1, [], object()),
+)
+def test_access_profile_rejects_every_non_exact_value_before_native_load(
+    monkeypatch: pytest.MonkeyPatch,
+    access_profile: object,
+) -> None:
+    module = _load_module()
+
+    def forbidden_load(*_args, **_kwargs):
+        raise AssertionError("native load must not occur")
+
+    monkeypatch.setattr(ctypes, "WinDLL", forbidden_load)
+    with pytest.raises(
+        ValueError,
+        match="^Unsupported Windows held-handle access profile$",
+    ):
+        module.WindowsHeldHandleBackend(access_profile=access_profile)
+
+
+def test_observation_profile_does_not_load_security_native_surface(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    kernel32 = _Kernel32()
+    delattr(kernel32, "LocalFree")
+    loaded: list[str] = []
+
+    def load_library(name: str, **_kwargs):
+        assert _kwargs == {"use_last_error": True}
+        loaded.append(name.casefold())
+        if name.casefold() != "kernel32":
+            raise AssertionError("observation profile loaded security DLL")
+        return kernel32
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library)
+    module.WindowsHeldHandleBackend()
+
+    assert loaded == ["kernel32"]
+
+
+def test_security_profile_binds_exact_pointer_width_native_abi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+    void_pointer = ctypes.c_void_p
+    pointer_to_void = ctypes.POINTER(void_pointer)
+
+    assert advapi32.GetSecurityInfo.argtypes == [
+        void_pointer,
+        ctypes.c_int32,
+        ctypes.c_uint32,
+        pointer_to_void,
+        pointer_to_void,
+        pointer_to_void,
+        pointer_to_void,
+        pointer_to_void,
+    ]
+    assert advapi32.GetSecurityInfo.restype is ctypes.c_uint32
+    assert advapi32.IsValidSecurityDescriptor.argtypes == [void_pointer]
+    assert advapi32.IsValidSecurityDescriptor.restype is ctypes.c_int32
+    assert advapi32.GetSecurityDescriptorControl.argtypes == [
+        void_pointer,
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    assert advapi32.GetSecurityDescriptorControl.restype is ctypes.c_int32
+    assert advapi32.GetSecurityDescriptorLength.argtypes == [void_pointer]
+    assert advapi32.GetSecurityDescriptorLength.restype is ctypes.c_uint32
+    assert kernel32.LocalFree.argtypes == [void_pointer]
+    assert kernel32.LocalFree.restype is void_pointer
+
+
+@pytest.mark.parametrize(
+    "missing_export",
+    (
+        "GetSecurityInfo",
+        "IsValidSecurityDescriptor",
+        "GetSecurityDescriptorControl",
+        "GetSecurityDescriptorLength",
+        "LocalFree",
+    ),
+)
+def test_security_profile_rejects_partial_native_surface_before_any_open(
+    monkeypatch: pytest.MonkeyPatch,
+    missing_export: str,
+) -> None:
+    module = _load_module()
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    target = kernel32 if missing_export == "LocalFree" else advapi32
+    delattr(target, missing_export)
+    open_calls = 0
+
+    def create_file(*_args):
+        nonlocal open_calls
+        open_calls += 1
+        return 41
+
+    kernel32.CreateFileW.implementation = create_file
+
+    def load_library(name: str, **_kwargs):
+        assert _kwargs == {"use_last_error": True}
+        return kernel32 if name.casefold() == "kernel32" else advapi32
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library)
+    with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+        module.WindowsHeldHandleBackend(access_profile="security_read")
+
+    assert exc_info.value.code == "unsupported_platform"
+    assert open_calls == 0
 
 
 @pytest.mark.parametrize("failure_mode", ("load", "missing_export"))
@@ -1126,6 +1371,420 @@ def test_bounded_read_and_hash_each_rewind_the_same_held_token(
     assert seek_count == 4
 
 
+def test_security_profile_adds_read_control_only_to_descendant_opens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    root_calls: list[tuple[object, ...]] = []
+    descendant_calls: list[tuple[object, ...]] = []
+    next_handle = iter((42, 43))
+
+    def create_file(*args):
+        root_calls.append(args)
+        return 41
+
+    def open_by_id(*args):
+        descendant_calls.append(args)
+        return next(next_handle)
+
+    kernel32.CreateFileW.implementation = create_file
+    kernel32.OpenFileById.implementation = open_by_id
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+    directory = module.WindowsDirectoryEntry(
+        "directory",
+        backend._FILE_ATTRIBUTE_DIRECTORY,
+        "ntfs_file_index_64",
+        7,
+    )
+    regular = module.WindowsDirectoryEntry(
+        "pin",
+        0,
+        "ntfs_file_index_64",
+        8,
+    )
+
+    with backend:
+        root = backend.open_root("X:\\")
+        backend.open_by_id(root, directory, directory=True)
+        backend.open_by_id(root, regular, directory=False)
+
+    assert root_calls == [
+        (
+            "X:\\",
+            0x00000081,
+            backend._FILE_SHARE_READ,
+            None,
+            backend._OPEN_EXISTING,
+            backend._FILE_FLAG_OPEN_REPARSE_POINT
+            | backend._FILE_FLAG_BACKUP_SEMANTICS,
+            None,
+        )
+    ]
+    assert len(descendant_calls) == 2
+    directory_call, regular_call = descendant_calls
+    assert directory_call[0] == 41
+    assert directory_call[1]._obj.Type == backend._FILE_ID_TYPE
+    assert directory_call[1]._obj.FileId == 7
+    assert directory_call[2:] == (
+        0x00020081,
+        backend._FILE_SHARE_READ,
+        None,
+        backend._FILE_FLAG_OPEN_REPARSE_POINT
+        | backend._FILE_FLAG_BACKUP_SEMANTICS,
+    )
+    assert regular_call[0] == 41
+    assert regular_call[1]._obj.Type == backend._FILE_ID_TYPE
+    assert regular_call[1]._obj.FileId == 8
+    assert regular_call[2:] == (
+        0x00020081,
+        backend._FILE_SHARE_READ,
+        None,
+        backend._FILE_FLAG_OPEN_REPARSE_POINT
+        | backend._FILE_FLAG_SEQUENTIAL_SCAN,
+    )
+
+
+def test_descriptor_read_rejects_default_and_volume_root_before_security_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    default_kernel = _Kernel32()
+    module, default_backend = _backend(monkeypatch, default_kernel)
+    with default_backend:
+        default_member = _open_test_member(module, default_backend)
+        with pytest.raises(module.WindowsHeldHandleError) as default_error:
+            default_backend.read_security_descriptor(default_member)
+    assert default_error.value.code == "observation_failed"
+
+    security_kernel = _Kernel32()
+    security_advapi = _Advapi32()
+    script = _SecurityScript()
+    script.bind(security_kernel, security_advapi)
+    module, security_backend = _backend(
+        monkeypatch,
+        security_kernel,
+        access_profile="security_read",
+        advapi32=security_advapi,
+    )
+    with security_backend:
+        root = security_backend.open_root("X:\\")
+        with pytest.raises(module.WindowsHeldHandleError) as root_error:
+            security_backend.read_security_descriptor(root)
+
+    assert root_error.value.code == "observation_failed"
+    assert script.security_calls == []
+
+
+def test_security_descriptor_is_exact_detached_same_handle_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b"\x01\x00security\x00descriptor\xfe\xff"
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript(payload)
+    script.poison_on_free = True
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_security_descriptor(member)
+
+    assert type(result) is bytes
+    assert result == payload
+    assert bytes(script.buffer) == b"\xee" * len(payload)
+    assert script.freed == [script.address]
+    assert len(script.security_calls) == 1
+    call = script.security_calls[0]
+    assert call[:3] == (42, 1, 0x00000007)
+    assert call[3:7] == (None, None, None, None)
+    assert call[7] is not None
+    assert script.valid_pointers == [script.address]
+    assert script.control_pointers == [script.address]
+    assert script.length_pointers == [script.address]
+
+
+def test_security_descriptor_accepts_inclusive_maximum_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b"\xa5" * 131072
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript(payload)
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_security_descriptor(member)
+
+    assert result == payload
+    assert script.freed == [script.address]
+
+
+@pytest.mark.parametrize(
+    ("failure_mode", "expected_stages", "expected_frees"),
+    (
+        ("native_error_with_output", (0, 0, 0), 0),
+        ("success_null", (0, 0, 0), 0),
+        ("invalid_descriptor", (1, 0, 0), 1),
+        ("bad_revision", (1, 1, 0), 1),
+        ("not_self_relative", (1, 1, 0), 1),
+        ("short_length", (1, 1, 1), 1),
+        ("long_length", (1, 1, 1), 1),
+    ),
+)
+def test_security_descriptor_fails_closed_in_selected_validation_order(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_mode: str,
+    expected_stages: tuple[int, int, int],
+    expected_frees: int,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    if failure_mode == "native_error_with_output":
+        script.security_result = 5
+        script.security_last_error = 87
+        script.write_descriptor_on_error = True
+    elif failure_mode == "success_null":
+        script.write_descriptor_on_success = False
+    elif failure_mode == "invalid_descriptor":
+        script.valid = False
+        script.valid_last_error = 87
+    elif failure_mode == "bad_revision":
+        script.revision = 2
+    elif failure_mode == "not_self_relative":
+        script.control = 0
+    elif failure_mode == "short_length":
+        script.length = 19
+    elif failure_mode == "long_length":
+        script.length = 131073
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert (script.valid_calls, script.control_calls, script.length_calls) == (
+        expected_stages
+    )
+    assert len(script.freed) == expected_frees
+    if failure_mode == "native_error_with_output":
+        assert isinstance(exc_info.value.__cause__, OSError)
+        assert exc_info.value.__cause__.winerror == 5
+    elif failure_mode == "invalid_descriptor":
+        assert exc_info.value.__cause__ is None
+
+
+def test_security_descriptor_captures_control_error_before_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.control_success = False
+    script.control_error = 5
+    script.bind(kernel32, advapi32)
+    original_free = script._local_free
+
+    def free_and_overwrite_error(descriptor):
+        result = original_free(descriptor)
+        ctypes.set_last_error(87)
+        return result
+
+    kernel32.LocalFree.implementation = free_and_overwrite_error
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert exc_info.value.__cause__.winerror == 5
+    assert script.freed == [script.address]
+
+
+def test_security_descriptor_primary_without_cause_attaches_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.valid = False
+    script.local_free_result = script.address
+    script.local_free_error = 6
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert isinstance(exc_info.value.__cause__, module.WindowsHeldHandleError)
+    assert isinstance(exc_info.value.__cause__.__cause__, OSError)
+    assert exc_info.value.__cause__.__cause__.winerror == 6
+    assert script.freed == [script.address]
+
+
+def test_security_descriptor_rejects_malformed_copy_and_still_frees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+    monkeypatch.setattr(ctypes, "string_at", lambda *_args: b"short")
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert script.freed == [script.address]
+
+
+def test_security_descriptor_cleanup_failure_prevents_successful_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.local_free_result = script.address
+    script.local_free_error = 6
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert exc_info.value.__cause__.winerror == 6
+    assert script.freed == [script.address]
+
+
+def test_security_descriptor_primary_failure_survives_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.control_success = False
+    script.control_error = 5
+    script.local_free_result = script.address
+    script.local_free_error = 6
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_security_descriptor(member)
+
+    assert exc_info.value.code == "observation_failed"
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert exc_info.value.__cause__.winerror == 5
+    assert isinstance(exc_info.value.__context__, module.WindowsHeldHandleError)
+    assert isinstance(exc_info.value.__context__.__cause__, OSError)
+    assert exc_info.value.__context__.__cause__.winerror == 6
+    assert script.freed == [script.address]
+
+
+def test_security_descriptor_rejects_foreign_closed_and_post_context_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    advapi32 = _Advapi32()
+    script = _SecurityScript()
+    script.bind(kernel32, advapi32)
+    module, backend = _backend(
+        monkeypatch,
+        kernel32,
+        access_profile="security_read",
+        advapi32=advapi32,
+    )
+    other_kernel = _Kernel32()
+    other_advapi = _Advapi32()
+    other_script = _SecurityScript()
+    other_script.bind(other_kernel, other_advapi)
+    _, other = _backend(
+        monkeypatch,
+        other_kernel,
+        access_profile="security_read",
+        advapi32=other_advapi,
+    )
+
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError):
+            other.read_security_descriptor(member)
+        backend.close(member)
+        with pytest.raises(module.WindowsHeldHandleError):
+            backend.read_security_descriptor(member)
+    with pytest.raises(module.WindowsHeldHandleError):
+        backend.read_security_descriptor(member)
+
+    assert script.security_calls == []
+    assert other_script.security_calls == []
+
+
 def test_windows_filetime_conversion_is_exact_and_bounded() -> None:
     module = _load_module()
     epoch = module.WindowsHeldHandleBackend._FILETIME_UNIX_EPOCH
@@ -1533,6 +2192,45 @@ def test_native_read_file_bounded_proves_eof_and_enforces_cap(
             payload_67[:66],
             False,
         )
+
+
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="native security descriptors are Windows-only",
+)
+def test_native_read_security_descriptor_is_detached_and_self_relative(
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    target = tmp_path / "security-descriptor-witness.bin"
+    target.write_bytes(b"witness")
+
+    with module.WindowsHeldHandleBackend(access_profile="security_read") as backend:
+        volume = backend.open_root(f"{tmp_path.drive}\\")
+        filesystem = backend.volume_filesystem(volume)
+        parent = volume
+        for component in tmp_path.parts[1:]:
+            entries = backend.enumerate_directory(parent, filesystem)
+            entry = next(item for item in entries if item.name == component)
+            parent = backend.open_by_id(volume, entry, directory=True)
+        entries = backend.enumerate_directory(parent, filesystem)
+        target_entry = next(item for item in entries if item.name == target.name)
+        member = backend.open_by_id(volume, target_entry, directory=False)
+
+        descriptor = backend.read_security_descriptor(member)
+
+    assert type(descriptor) is bytes
+    assert len(descriptor) >= 20
+    assert descriptor[0] == 1
+    control = int.from_bytes(descriptor[2:4], "little")
+    assert control & 0x8000
+    descriptor_buffer = ctypes.create_string_buffer(descriptor)
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    advapi32.IsValidSecurityDescriptor.argtypes = [ctypes.c_void_p]
+    advapi32.IsValidSecurityDescriptor.restype = ctypes.c_int32
+    assert advapi32.IsValidSecurityDescriptor(
+        ctypes.cast(descriptor_buffer, ctypes.c_void_p)
+    )
 
 
 def test_shared_module_imports_only_standard_library_without_dynamic_escape() -> None:

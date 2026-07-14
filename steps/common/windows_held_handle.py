@@ -158,12 +158,19 @@ class WindowsObjectSnapshot:
 
 
 class _WindowsHandleToken:
-    __slots__ = ("_owner", "_raw", "_live")
+    __slots__ = ("_owner", "_raw", "_live", "_security_readable")
 
-    def __init__(self, owner: WindowsHeldHandleBackend, raw: int) -> None:
+    def __init__(
+        self,
+        owner: WindowsHeldHandleBackend,
+        raw: int,
+        *,
+        security_readable: bool,
+    ) -> None:
         self._owner = owner
         self._raw = raw
         self._live = True
+        self._security_readable = security_readable
 
 
 class WindowsHeldHandleBackend:
@@ -173,6 +180,7 @@ class WindowsHeldHandleBackend:
     _FILE_LIST_DIRECTORY = 0x0001
     _FILE_READ_DATA = 0x0001
     _FILE_READ_ATTRIBUTES = 0x0080
+    _READ_CONTROL = 0x00020000
     _FILE_SHARE_READ = 0x00000001
     _OPEN_EXISTING = 3
     _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
@@ -194,6 +202,14 @@ class WindowsHeldHandleBackend:
     _ERROR_MORE_DATA = 234
     _FILE_BEGIN = 0
     _FILETIME_UNIX_EPOCH = 116444736000000000
+    _SE_FILE_OBJECT = 1
+    _OWNER_SECURITY_INFORMATION = 0x00000001
+    _GROUP_SECURITY_INFORMATION = 0x00000002
+    _DACL_SECURITY_INFORMATION = 0x00000004
+    _SECURITY_DESCRIPTOR_REVISION = 1
+    _SE_SELF_RELATIVE = 0x8000
+    _SECURITY_DESCRIPTOR_MIN_LENGTH = 20
+    _SECURITY_DESCRIPTOR_MAX_LENGTH = 131072
 
     _FILE_BASIC_INFO = 0
     _FILE_STANDARD_INFO = 1
@@ -208,13 +224,21 @@ class WindowsHeldHandleBackend:
     _FILE_ID_TYPE = 0
     _EXTENDED_FILE_ID_TYPE = 2
 
-    def __init__(self) -> None:
+    def __init__(self, *, access_profile: str = "observation") -> None:
+        if type(access_profile) is not str or access_profile not in {
+            "observation",
+            "security_read",
+        }:
+            raise ValueError("Unsupported Windows held-handle access profile")
         if os.name != "nt":
             _raise("unsupported_platform")
         import ctypes
 
         self._ctypes = ctypes
+        self._access_profile = access_profile
         DWORD = ctypes.c_uint32
+        WORD = ctypes.c_uint16
+        BOOL = ctypes.c_int32
         BYTE = ctypes.c_ubyte
         BOOLEAN = ctypes.c_ubyte
         LARGE_INTEGER = ctypes.c_int64
@@ -327,6 +351,7 @@ class WindowsHeldHandleBackend:
             ]
 
         self._DWORD = DWORD
+        self._WORD = WORD
         self._HANDLE = HANDLE
         self._FILE_ID_128 = FILE_ID_128
         self._FILE_ID_INFO_STRUCT = FILE_ID_INFO_STRUCT
@@ -356,6 +381,7 @@ class WindowsHeldHandleBackend:
         if any(actual != expected for actual, expected in expected_abi.values()):
             _raise("unsupported_platform")
 
+        self._advapi32 = None
         try:
             self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
             self._kernel32.GetDriveTypeW.argtypes = [ctypes.c_wchar_p]
@@ -419,6 +445,33 @@ class WindowsHeldHandleBackend:
             self._kernel32.ReadFile.restype = ctypes.c_int32
             self._kernel32.CloseHandle.argtypes = [self._HANDLE]
             self._kernel32.CloseHandle.restype = ctypes.c_int32
+            if access_profile == "security_read":
+                self._advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+                void_pointer = ctypes.c_void_p
+                pointer_to_void = ctypes.POINTER(void_pointer)
+                self._advapi32.GetSecurityInfo.argtypes = [
+                    void_pointer,
+                    ctypes.c_int32,
+                    DWORD,
+                    pointer_to_void,
+                    pointer_to_void,
+                    pointer_to_void,
+                    pointer_to_void,
+                    pointer_to_void,
+                ]
+                self._advapi32.GetSecurityInfo.restype = DWORD
+                self._advapi32.IsValidSecurityDescriptor.argtypes = [void_pointer]
+                self._advapi32.IsValidSecurityDescriptor.restype = BOOL
+                self._advapi32.GetSecurityDescriptorControl.argtypes = [
+                    void_pointer,
+                    ctypes.POINTER(WORD),
+                    ctypes.POINTER(DWORD),
+                ]
+                self._advapi32.GetSecurityDescriptorControl.restype = BOOL
+                self._advapi32.GetSecurityDescriptorLength.argtypes = [void_pointer]
+                self._advapi32.GetSecurityDescriptorLength.restype = DWORD
+                self._kernel32.LocalFree.argtypes = [void_pointer]
+                self._kernel32.LocalFree.restype = void_pointer
         except (AttributeError, OSError) as exc:
             _raise("unsupported_platform", exc)
         self._invalid_handle = ctypes.c_void_p(-1).value
@@ -468,10 +521,19 @@ class WindowsHeldHandleBackend:
         value = self._value(handle)
         return value is None or value == self._invalid_handle
 
-    def _register(self, raw: int) -> _WindowsHandleToken:
+    def _register(
+        self,
+        raw: int,
+        *,
+        security_readable: bool = False,
+    ) -> _WindowsHandleToken:
         if self._exited:
             _raise("observation_failed")
-        token = _WindowsHandleToken(self, raw)
+        token = _WindowsHandleToken(
+            self,
+            raw,
+            security_readable=security_readable,
+        )
         self._handles.append(token)
         return token
 
@@ -872,6 +934,101 @@ class WindowsHeldHandleBackend:
             prefix.extend(bytes(buffer[:count]))
         return bytes(prefix), False
 
+    def read_security_descriptor(self, handle: object) -> bytes:
+        raw = self._raw(handle)
+        assert isinstance(handle, _WindowsHandleToken)
+        if (
+            self._access_profile != "security_read"
+            or not handle._security_readable
+            or self._advapi32 is None
+        ):
+            _raise("observation_failed")
+
+        descriptor = self._ctypes.c_void_p()
+        result = int(
+            self._advapi32.GetSecurityInfo(
+                raw,
+                self._SE_FILE_OBJECT,
+                self._OWNER_SECURITY_INFORMATION
+                | self._GROUP_SECURITY_INFORMATION
+                | self._DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                None,
+                None,
+                self._ctypes.byref(descriptor),
+            )
+        )
+        if result != 0:
+            _raise("observation_failed", self._cause(result))
+        pointer = descriptor.value
+        if pointer is None:
+            _raise("observation_failed")
+
+        primary_error: BaseException | None = None
+        primary_traceback = None
+        detached: bytes | None = None
+        try:
+            if not self._advapi32.IsValidSecurityDescriptor(pointer):
+                _raise("observation_failed")
+            control = self._WORD()
+            revision = self._DWORD()
+            if not self._advapi32.GetSecurityDescriptorControl(
+                pointer,
+                self._ctypes.byref(control),
+                self._ctypes.byref(revision),
+            ):
+                error = self._last_error()
+                _raise("observation_failed", self._cause(error))
+            if (
+                int(revision.value) != self._SECURITY_DESCRIPTOR_REVISION
+                or not int(control.value) & self._SE_SELF_RELATIVE
+            ):
+                _raise("observation_failed")
+            length = int(self._advapi32.GetSecurityDescriptorLength(pointer))
+            if not (
+                self._SECURITY_DESCRIPTOR_MIN_LENGTH
+                <= length
+                <= self._SECURITY_DESCRIPTOR_MAX_LENGTH
+            ):
+                _raise("observation_failed")
+            try:
+                copied = self._ctypes.string_at(pointer, length)
+            except Exception as exc:
+                _raise("observation_failed", exc)
+            if type(copied) is not bytes or len(copied) != length:
+                _raise("observation_failed")
+            detached = copied
+        except BaseException as exc:
+            primary_error = exc
+            primary_traceback = exc.__traceback__
+
+        cleanup_error: WindowsHeldHandleError | None = None
+        try:
+            free_result = self._kernel32.LocalFree(self._ctypes.c_void_p(pointer))
+            if self._value(free_result) not in {None, 0}:
+                cleanup_error = WindowsHeldHandleError("observation_failed")
+                cleanup_error.__cause__ = self._cause(self._last_error())
+                cleanup_error.__suppress_context__ = True
+        except BaseException as exc:
+            cleanup_error = WindowsHeldHandleError("observation_failed")
+            cleanup_error.__cause__ = exc
+            cleanup_error.__suppress_context__ = True
+
+        if primary_error is not None:
+            if cleanup_error is not None:
+                cleanup_error.__context__ = primary_error.__context__
+                if primary_error.__cause__ is None:
+                    primary_error.__cause__ = cleanup_error
+                    primary_error.__suppress_context__ = True
+                else:
+                    primary_error.__context__ = cleanup_error
+            raise primary_error.with_traceback(primary_traceback)
+        if cleanup_error is not None:
+            raise cleanup_error
+        assert detached is not None
+        return detached
+
     def hash_file(self, handle: object) -> tuple[str, int]:
         raw = self._raw(handle)
         if not self._kernel32.SetFilePointerEx(raw, 0, None, self._FILE_BEGIN):
@@ -930,6 +1087,9 @@ class WindowsHeldHandleBackend:
         else:
             access = self._FILE_READ_DATA | self._FILE_READ_ATTRIBUTES
             flags |= self._FILE_FLAG_SEQUENTIAL_SCAN
+        security_readable = self._access_profile == "security_read"
+        if security_readable:
+            access |= self._READ_CONTROL
         handle = self._kernel32.OpenFileById(
             raw_volume,
             self._ctypes.byref(descriptor),
@@ -946,7 +1106,10 @@ class WindowsHeldHandleBackend:
             )
         value = self._value(handle)
         assert value is not None
-        return self._register(int(value))
+        return self._register(
+            int(value),
+            security_readable=security_readable,
+        )
 
     def _close_registered(self, handle: _WindowsHandleToken) -> None:
         raw = handle._raw

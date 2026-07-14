@@ -963,6 +963,22 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CHECKPOINT_2026-07-13.md`. R-07
   remains `IN_PROGRESS`; the next bounded seam is only a read-only decision on
   the opaque-token/security-descriptor/process-token/`AccessCheck` boundary.
+- Windows same-handle security-capability decision (2026-07-13): selected an
+  opt-in `security_read` backend profile and one immutable detached
+  self-relative descriptor-copy method. The volume-root traversal handle keeps
+  its exact existing rights; only `open_by_id()` descendants add `READ_CONTROL`,
+  and only those opaque tokens may retrieve owner/group/DACL descriptor bytes
+  from the same held handle. The backend always validates and frees the native
+  descriptor allocation before return. Descriptor parsing, effective-token
+  snapshots, `DuplicateTokenEx`, fixed file-object generic mapping, and
+  per-right `AccessCheck` remain reader-owned because they must bind to the
+  already-fixed reader identity and security-policy evidence. Boolean-only and
+  policy-shaped backend alternatives were rejected because they either discard
+  required owner/group/control/ordered-ACE evidence or embed external-pin policy
+  in a projection-neutral filesystem primitive. Evidence:
+  `docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the two-file shared
+  descriptor capability source/test checkpoint.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

@@ -570,9 +570,45 @@ resources—Known Folder buffers, transient comparison tokens, and duplicate
 tokens—are released at their fixed fence. Backend-held descendants and root are
 closed before the retained baseline process token.
 
+The reader enters the already-constructed, handle-free backend context exactly
+once before acquiring the retained baseline token or any backend handle. The
+backend's internal registration ledger is the sole cleanup authority for root
+and descendant handles; the reader's retained-object list is observation state,
+not a second ownership ledger. The reader invokes backend exit exactly once in
+a separate cleanup phase with no raw operation exception passed into it, then
+closes the retained baseline token. This ordering also closes a handle that the
+backend registered immediately before allocation, construction, or reader-side
+bookkeeping failed.
+
+Every resource-owning fence catches `BaseException` only long enough to attempt
+its complete cleanup sequence. An ordinary `Exception`, including
+`MemoryError`, is translated through the closed reader error table. A
+non-`Exception` control-flow primary such as `KeyboardInterrupt`, `SystemExit`,
+or `GeneratorExit` is re-raised as the identical object with its original
+traceback after backend exit, baseline close, and every immediate cleanup have
+been attempted. Cleanup failures are still sanitized fixed
+`ExternalPinReaderError` nodes and follow the same first-failure cause/context
+precedence; no raw cleanup exception is allowed into the caller-visible graph.
+Known Folder buffers, transient comparison tokens, and duplicate tokens use the
+same finally-equivalent rule at their fixed fence.
+
+When more than one cleanup fails, the first cleanup failure remains the cleanup
+head. Each later cleanup failure is linked beneath the preceding cleanup node by
+the same cause-first, context-second rule before that cleanup head is attached
+to the operation primary. No later cleanup failure may be dropped merely
+because an earlier cleanup already failed.
+
+Each native handle owner is allocated before the call that may populate its
+output handle. A successful non-null output populates that existing owner
+immediately; no allocation or reader-side ownership construction is permitted
+between native acquisition and ownership registration.
+
 A primary operation failure remains primary. The first cleanup failure becomes
 its cause only when no cause exists; otherwise it becomes context. Both nodes
-are sanitized `ExternalPinReaderError` values with only fixed codes/messages.
+are sanitized `ExternalPinReaderError` values with only fixed codes/messages
+when the primary is an ordinary `Exception`. For a non-`Exception` control-flow
+primary, the primary remains the identical object and only its linked cleanup
+nodes are sanitized `ExternalPinReaderError` values.
 Additional cleanup attempts still run. Cleanup failure without a primary
 failure becomes `observation_failed` and prevents evidence. No cleanup is
 retried.
@@ -626,6 +662,12 @@ Before GREEN, the two-file seam must demonstrate RED for:
 10. static containment: no membership composition, configuration, manifest
     read, Qdrant, planning, job, token-publication, cleanup, private backend
     symbol, or descendant-path reopen.
+
+The lifecycle RED must additionally prove one backend enter/exit, backend-ledger
+closure of a handle not yet copied into reader observation state, exact
+`KeyboardInterrupt`/`SystemExit`/`GeneratorExit` propagation after complete
+cleanup, and fixed-fence cleanup for Known Folder, transient-token, and
+duplicate-token interruption paths.
 
 Then pass the completed backend/observer suites, approved R-07 authority union,
 compilation, import-purity, documentation, banned-token, dependency, and diff

@@ -591,10 +591,14 @@ class _ReaderWorld:
         self.read_snapshot_role: str | None = None
         self.backend_failure: tuple[str, str] | None = None
         self.backend_failure_code = "observation_failed"
+        self.backend_exception: tuple[str, str, BaseException] | None = None
         self.backend_construction_error: str | None = None
         self.backend_close_failure = False
         self.native_close_failure_kind: str | None = None
         self.native_close_failure_at: int | None = None
+        self.token_snapshot_exception_kind: str | None = None
+        self.token_snapshot_exception: BaseException | None = None
+        self.access_exception: BaseException | None = None
 
         self.reader_sid = self.token.user_sid
         self.descriptors = {
@@ -1109,6 +1113,12 @@ class _ReaderWorld:
                         handle,
                     )
                 )
+                if (
+                    self.token_snapshot_exception is not None
+                    and self.token_snapshot_exception_kind
+                    == self._handle_kinds.get(handle)
+                ):
+                    raise self.token_snapshot_exception
             return 1
         fixed = {
             18: self.token.elevation_type,
@@ -1291,6 +1301,8 @@ class _ReaderWorld:
                 int(ctypes.cast(status, ctypes.POINTER(ctypes.c_int32))[0]),
             )
         )
+        if self.access_exception is not None:
+            raise self.access_exception
         address = privilege_address
         if address is not None:
             ctypes.memset(address, 0, max(8, int(ctypes.cast(privilege_length, ctypes.POINTER(ctypes.c_uint32))[0])))
@@ -1406,6 +1418,11 @@ class _FakeBackendLifecycle:
         return False
 
     def _fail_if_scripted(self, method: str, role: str) -> None:
+        if (
+            self.world.backend_exception is not None
+            and self.world.backend_exception[:2] == (method, role)
+        ):
+            raise self.world.backend_exception[2]
         if self.world.backend_failure == (method, role):
             error = WindowsHeldHandleError(self.world.backend_failure_code)
             error.__cause__ = OSError(_SECRET_MARKER)
@@ -1712,6 +1729,51 @@ def _assert_sanitized_chain(module, error: BaseException) -> None:
         assert _SECRET_MARKER not in rendered
         assert "S-1-5-21-999" not in rendered
         assert r"C:\private" not in rendered
+
+
+def _assert_control_primary_has_only_sanitized_cleanup(
+    module,
+    error: BaseException,
+    *,
+    expected_cleanup_count: int = 1,
+) -> None:
+    cleanup = error.__cause__
+    assert type(cleanup) is module.ExternalPinReaderError
+    assert error.__context__ is None
+    assert cleanup.code == "observation_failed"
+    _assert_sanitized_chain(module, cleanup)
+    cleanup_chain = _walk_exception_chain(cleanup)
+    assert len(cleanup_chain) == expected_cleanup_count
+    for index, node in enumerate(cleanup_chain):
+        assert node.__context__ is None
+        expected_cause = (
+            cleanup_chain[index + 1]
+            if index + 1 < len(cleanup_chain)
+            else None
+        )
+        assert node.__cause__ is expected_cause
+
+
+def _prime_control_primary(error: BaseException):
+    try:
+        raise error
+    except BaseException as caught:
+        assert caught is error
+        traceback = caught.__traceback__
+    assert traceback is not None
+    return traceback
+
+
+def _assert_original_traceback_tail_is_preserved(
+    error: BaseException,
+    expected_tail,
+) -> None:
+    traceback = error.__traceback__
+    while traceback is not None:
+        if traceback is expected_tail:
+            return
+        traceback = traceback.tb_next
+    raise AssertionError("control-flow traceback tail was not preserved")
 
 class _FakeHeldHandleBackend(_FakeBackendLifecycle):
     def open_root(self, root: str) -> object:
@@ -2329,6 +2391,7 @@ def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None
     ]
     assert len(world.freed_known_folder) == 1
     assert world.backend is not None
+    assert world.backend.handles == []
     assert world.backend.read_count == 1
     assert world.backend.closed == [
         "pin",
@@ -4322,6 +4385,28 @@ def test_success_cleanup_ownership_and_release_order_are_exact(monkeypatch) -> N
 
     _read_world(monkeypatch, world)
 
+    assert [event for event in world.events if event[0] == "backend.enter"] == [
+        ("backend.enter",)
+    ]
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
+    enter_index = world.events.index(("backend.enter",))
+    baseline_open_index = next(
+        index
+        for index, event in enumerate(world.events)
+        if event[:2] == ("token.open_process", 1)
+    )
+    exit_index = world.events.index(("backend.exit", False))
+    assert enter_index < baseline_open_index < exit_index
+    backend_close_indices = [
+        index
+        for index, event in enumerate(world.events)
+        if event[0] == "backend.close"
+    ]
+    assert backend_close_indices
+    assert exit_index < min(backend_close_indices)
+
     known_index = next(
         index for index, event in enumerate(world.events) if event[0] == "known_folder"
     )
@@ -4363,6 +4448,250 @@ def test_success_cleanup_ownership_and_release_order_are_exact(monkeypatch) -> N
         index for index, event in enumerate(world.events) if event[0] == "backend.close"
     )
     assert world.events[baseline_close + 1 :] == []
+
+
+@pytest.mark.parametrize(
+    "exception_type",
+    [KeyboardInterrupt, SystemExit, GeneratorExit],
+)
+def test_backend_control_flow_primary_is_re_raised_after_context_cleanup(
+    monkeypatch,
+    exception_type: type[BaseException],
+) -> None:
+    world = _ReaderWorld()
+    primary = exception_type()
+    original_traceback = _prime_control_primary(primary)
+    world.backend_exception = ("snapshot", "anchor", primary)
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(exception_type) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert primary.__cause__ is None
+    assert primary.__context__ is None
+    assert world.backend is not None
+    assert world.backend.closed == ["anchor", "root"]
+    assert world.backend.handles == []
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
+    assert world._close_counts == {"transient": 5, "baseline": 1}
+
+
+def test_transient_token_control_flow_primary_closes_transient_before_propagation(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    world.token_snapshot_exception_kind = "transient"
+    world.token_snapshot_exception = primary
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert world._close_counts == {"transient": 1, "baseline": 1}
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
+
+
+def test_duplicate_token_control_flow_primary_closes_duplicate_before_propagation(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    primary = SystemExit()
+    original_traceback = _prime_control_primary(primary)
+    world.access_exception = primary
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert world._close_counts["duplicate"] == 1
+    assert world._close_counts["baseline"] == 1
+    assert world._live_duplicates == set()
+    assert world._current_access_role is None
+    assert world.backend is not None
+    assert world.backend.closed == [
+        "clean_memory",
+        "authority",
+        "goodq",
+        "anchor",
+        "root",
+    ]
+
+
+def test_known_folder_control_flow_primary_frees_buffer_before_propagation(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    primary = GeneratorExit()
+    original_traceback = _prime_control_primary(primary)
+    world.known_folder_call_exception = primary
+    module = _install_reader_world(monkeypatch, world)
+
+    with pytest.raises(GeneratorExit) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert len(world.freed_known_folder) == 1
+    assert world._close_counts == {"transient": 1, "baseline": 1}
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
+
+
+def test_control_flow_primary_keeps_identity_and_sanitizes_cleanup_failures(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    world.backend_exception = ("snapshot", "anchor", primary)
+    world.backend_close_failure = True
+    world.native_close_failure_kind = "baseline"
+    world.native_close_failure_at = 1
+    module = _install_reader_world(monkeypatch, world)
+    backend_cleanup_nodes: list[BaseException] = []
+    baseline_cleanup_nodes: list[BaseException] = []
+    original_sanitize = module._sanitize_error
+    original_close = module._close_native_handle
+
+    def capture_backend_cleanup(error: BaseException):
+        sanitized = original_sanitize(error)
+        if isinstance(error, WindowsHeldHandleError):
+            backend_cleanup_nodes.append(sanitized)
+        return sanitized
+
+    def capture_baseline_cleanup(native, owned):
+        raw = owned.value
+        kind = world._handle_kinds.get(raw, "unknown")
+        cleanup = original_close(native, owned)
+        if kind == "baseline" and cleanup is not None:
+            baseline_cleanup_nodes.append(cleanup)
+        return cleanup
+
+    monkeypatch.setattr(module, "_sanitize_error", capture_backend_cleanup)
+    monkeypatch.setattr(module, "_close_native_handle", capture_baseline_cleanup)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    _assert_control_primary_has_only_sanitized_cleanup(
+        module,
+        primary,
+        expected_cleanup_count=2,
+    )
+    assert len(backend_cleanup_nodes) == 1
+    assert len(baseline_cleanup_nodes) == 1
+    assert primary.__cause__ is backend_cleanup_nodes[0]
+    assert backend_cleanup_nodes[0].__cause__ is baseline_cleanup_nodes[0]
+    assert world.backend is not None
+    assert world.backend.closed == ["anchor", "root"]
+    assert world.backend.handles == []
+    assert world._close_counts["baseline"] == 1
+    assert _SECRET_MARKER not in repr(primary.__cause__)
+
+
+def test_backend_ledger_closes_handle_when_reader_tracking_allocation_fails(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    original = module._HeldObject
+
+    def fail_reader_tracking(*args, **kwargs):
+        role = kwargs.get("role", args[0] if args else None)
+        if role == "goodq":
+            raise MemoryError(_SECRET_MARKER)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, "_HeldObject", fail_reader_tracking)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
+
+    assert exc_info.value.code == "observation_failed"
+    _assert_sanitized_chain(module, exc_info.value)
+    assert world.backend is not None
+    assert world.backend.closed == ["goodq", "anchor", "root"]
+    assert world.backend.handles == []
+    assert world.backend.read_count == 0
+    assert [event for event in world.events if event[0] == "backend.exit"] == [
+        ("backend.exit", False)
+    ]
+    assert world._close_counts == {"transient": 7, "baseline": 1}
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["normal", "initial_thread", "comparison_thread"],
+)
+def test_native_handle_owner_allocation_always_precedes_handle_producing_calls(
+    monkeypatch,
+    mode: str,
+) -> None:
+    world = _ReaderWorld()
+    if mode == "initial_thread":
+        world.thread_case = "success_nonnull"
+    elif mode == "comparison_thread":
+        world.comparison_thread_at = 2
+    module = _install_reader_world(monkeypatch, world)
+    original = module._OwnedNativeHandle
+    available_owners: list[object] = []
+    claimed_owners: list[object] = []
+
+    def audit_owner_allocation(value):
+        assert value is None
+        owner = original(value)
+        available_owners.append(owner)
+        return owner
+
+    def require_preallocated_owner(implementation):
+        def checked(*args):
+            if not available_owners:
+                raise MemoryError(_SECRET_MARKER)
+            claimed_owners.append(available_owners.pop())
+            return implementation(*args)
+
+        return checked
+
+    monkeypatch.setattr(module, "_OwnedNativeHandle", audit_owner_allocation)
+    for call in (
+        world.native.advapi32.OpenThreadToken,
+        world.native.advapi32.OpenProcessToken,
+        world.native.advapi32.DuplicateTokenEx,
+    ):
+        call.implementation = require_preallocated_owner(call.implementation)
+
+    if mode == "normal":
+        evidence = module.read_external_pin()
+        assert evidence.projection == _expected_world_evidence(world)
+    else:
+        expected = (
+            "untrusted_reader"
+            if mode == "initial_thread"
+            else "observation_raced"
+        )
+        with pytest.raises(module.ExternalPinReaderError) as exc_info:
+            module.read_external_pin()
+        assert exc_info.value.code == expected
+        _assert_sanitized_chain(module, exc_info.value)
+
+    assert claimed_owners
+    assert all(owner.value is None for owner in available_owners)
+    assert len({id(owner) for owner in claimed_owners}) == len(claimed_owners)
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,7 @@ import ast
 import ctypes
 import hashlib
 import importlib
+import inspect
 import os
 from pathlib import Path
 import sys
@@ -40,6 +41,10 @@ class _Kernel32:
         return 1
 
 
+class _IntSubclass(int):
+    pass
+
+
 def _backend(monkeypatch: pytest.MonkeyPatch, kernel32: _Kernel32):
     module = _load_module()
     monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: kernel32)
@@ -48,6 +53,45 @@ def _backend(monkeypatch: pytest.MonkeyPatch, kernel32: _Kernel32):
 
 def _load_module():
     return importlib.import_module("steps.common.windows_held_handle")
+
+
+def _open_test_member(module, backend):
+    root = backend.open_root("X:\\")
+    entry = module.WindowsDirectoryEntry(
+        "member",
+        0,
+        "ntfs_file_index_64",
+        7,
+    )
+    return backend.open_by_id(root, entry, directory=False)
+
+
+def _assert_bounded_read_trace(
+    trace: list[tuple[int, int]],
+    *,
+    maximum_bytes: int,
+    returned_bytes: int,
+    eof_observed: bool,
+) -> None:
+    assert trace
+    remaining = maximum_bytes
+    consumed = 0
+    for index, (requested, count) in enumerate(trace):
+        assert 1 <= requested <= remaining
+        assert 0 <= count <= requested
+        if count == 0:
+            assert eof_observed is True
+            assert index == len(trace) - 1
+            continue
+        consumed += count
+        remaining -= count
+    assert consumed == returned_bytes
+    if eof_observed:
+        assert trace[-1][1] == 0
+        assert remaining > 0
+    else:
+        assert all(count > 0 for _, count in trace)
+        assert remaining == 0
 
 
 def test_public_api_is_exact() -> None:
@@ -71,6 +115,7 @@ def test_backend_public_method_surface_is_exact(
         "hash_file",
         "open_by_id",
         "open_root",
+        "read_file_bounded",
         "snapshot",
         "volume_filesystem",
     }
@@ -80,6 +125,14 @@ def test_backend_public_method_surface_is_exact(
         if not name.startswith("_")
     } == expected
     assert {name for name in dir(backend) if not name.startswith("_")} == expected
+
+
+def test_read_file_bounded_signature_is_exact() -> None:
+    module = _load_module()
+
+    assert str(
+        inspect.signature(module.WindowsHeldHandleBackend.read_file_bounded)
+    ) == "(self, handle: 'object', *, maximum_bytes: 'int') -> 'tuple[bytes, bool]'"
 
 
 @pytest.mark.parametrize("failure_mode", ("load", "missing_export"))
@@ -796,6 +849,283 @@ def test_hash_file_rewinds_and_reads_the_held_token_to_eof(
     assert total == 4
 
 
+def test_read_file_bounded_observes_eof_only_after_zero_byte_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    payload = bytes(range(65))
+    cursor = 0
+    seek_calls: list[tuple[int, int, object, int]] = []
+    read_trace: list[tuple[int, int]] = []
+
+    def seek_impl(handle, distance, new_position, origin) -> int:
+        nonlocal cursor
+        raw = handle if isinstance(handle, int) else handle.value
+        cursor = 0
+        seek_calls.append((raw, int(distance), new_position, origin))
+        return 1
+
+    def read_impl(handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        raw = handle if isinstance(handle, int) else handle.value
+        request = int(buffer_size)
+        assert raw == 42
+        assert request > 0
+        count = min(17, request, len(payload) - cursor)
+        read_trace.append((request, count))
+        chunk = payload[cursor : cursor + count]
+        if chunk:
+            ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        prefix, eof_observed = backend.read_file_bounded(member, maximum_bytes=66)
+
+    assert prefix == payload
+    assert eof_observed is True
+    assert seek_calls == [(42, 0, None, backend._FILE_BEGIN)]
+    _assert_bounded_read_trace(
+        read_trace,
+        maximum_bytes=66,
+        returned_bytes=len(payload),
+        eof_observed=eof_observed,
+    )
+
+
+@pytest.mark.parametrize("payload_length", (66, 67))
+def test_read_file_bounded_stops_at_cap_without_extra_probe(
+    monkeypatch: pytest.MonkeyPatch,
+    payload_length: int,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    payload = bytes(range(payload_length))
+    cursor = 0
+    read_trace: list[tuple[int, int]] = []
+
+    def seek_impl(*_args) -> int:
+        nonlocal cursor
+        cursor = 0
+        return 1
+
+    def read_impl(_handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        request = int(buffer_size)
+        assert request > 0
+        count = min(17, request, len(payload) - cursor)
+        read_trace.append((request, count))
+        chunk = payload[cursor : cursor + count]
+        ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        prefix, eof_observed = backend.read_file_bounded(member, maximum_bytes=66)
+
+    assert prefix == payload[:66]
+    assert eof_observed is False
+    _assert_bounded_read_trace(
+        read_trace,
+        maximum_bytes=66,
+        returned_bytes=len(prefix),
+        eof_observed=eof_observed,
+    )
+
+
+@pytest.mark.parametrize(
+    "maximum_bytes",
+    (True, False, 0, -1, 67, 1.0, "1", None, _IntSubclass(1)),
+)
+def test_read_file_bounded_rejects_invalid_limit_before_native_call(
+    monkeypatch: pytest.MonkeyPatch,
+    maximum_bytes: object,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    with backend:
+        member = _open_test_member(module, backend)
+
+        def forbidden_native_call(*_args) -> int:
+            raise AssertionError("invalid limit reached native I/O")
+
+        kernel32.SetFilePointerEx.implementation = forbidden_native_call
+        kernel32.ReadFile.implementation = forbidden_native_call
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_file_bounded(member, maximum_bytes=maximum_bytes)
+
+    assert exc_info.value.code == "observation_failed"
+    assert exc_info.value.__cause__ is None
+
+
+def test_read_file_bounded_rejects_foreign_token_before_native_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, owner = _backend(monkeypatch, kernel32)
+    observer = module.WindowsHeldHandleBackend()
+    with owner, observer:
+        member = _open_test_member(module, owner)
+
+        def forbidden_native_call(*_args) -> int:
+            raise AssertionError("foreign token reached native I/O")
+
+        kernel32.SetFilePointerEx.implementation = forbidden_native_call
+        kernel32.ReadFile.implementation = forbidden_native_call
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            observer.read_file_bounded(member, maximum_bytes=1)
+
+    assert exc_info.value.code == "observation_failed"
+
+
+@pytest.mark.parametrize(
+    ("payload", "maximum_bytes"),
+    (
+        (b"", 1),
+        (b"xy", 66),
+    ),
+)
+def test_read_file_bounded_observes_empty_and_short_eof(
+    monkeypatch: pytest.MonkeyPatch,
+    payload: bytes,
+    maximum_bytes: int,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    cursor = 0
+    read_trace: list[tuple[int, int]] = []
+
+    def seek_impl(*_args) -> int:
+        nonlocal cursor
+        cursor = 0
+        return 1
+
+    def read_impl(_handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        request = int(buffer_size)
+        count = min(request, len(payload) - cursor)
+        read_trace.append((request, count))
+        chunk = payload[cursor : cursor + count]
+        if chunk:
+            ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_file_bounded(member, maximum_bytes=maximum_bytes)
+
+    prefix, eof_observed = result
+    assert result == (payload, True)
+    _assert_bounded_read_trace(
+        read_trace,
+        maximum_bytes=maximum_bytes,
+        returned_bytes=len(prefix),
+        eof_observed=eof_observed,
+    )
+
+
+def test_read_file_bounded_rejects_closed_and_post_context_tokens_before_native(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, closed_backend = _backend(monkeypatch, kernel32)
+    with closed_backend:
+        closed_member = _open_test_member(module, closed_backend)
+        closed_backend.close(closed_member)
+
+        def forbidden_native_call(*_args) -> int:
+            raise AssertionError("non-live token reached native I/O")
+
+        kernel32.SetFilePointerEx.implementation = forbidden_native_call
+        kernel32.ReadFile.implementation = forbidden_native_call
+        with pytest.raises(module.WindowsHeldHandleError) as closed_exc:
+            closed_backend.read_file_bounded(closed_member, maximum_bytes=1)
+
+    post_context_backend = module.WindowsHeldHandleBackend()
+    kernel32.SetFilePointerEx.implementation = lambda *_args: 1
+    kernel32.ReadFile.implementation = lambda *_args: 1
+    with post_context_backend:
+        post_context_member = _open_test_member(module, post_context_backend)
+    kernel32.SetFilePointerEx.implementation = forbidden_native_call
+    kernel32.ReadFile.implementation = forbidden_native_call
+    with pytest.raises(module.WindowsHeldHandleError) as post_context_exc:
+        post_context_backend.read_file_bounded(post_context_member, maximum_bytes=1)
+
+    assert closed_exc.value.code == "observation_failed"
+    assert post_context_exc.value.code == "observation_failed"
+
+
+def test_read_file_bounded_rejects_impossible_native_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+
+    def read_impl(_handle, _buffer, buffer_size, read_argument, _overlap) -> int:
+        read_argument._obj.value = int(buffer_size) + 1
+        return 1
+
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_file_bounded(member, maximum_bytes=1)
+
+    assert exc_info.value.code == "observation_failed"
+    assert exc_info.value.__cause__ is None
+
+
+def test_bounded_read_and_hash_each_rewind_the_same_held_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    payload = b"abcd"
+    cursor = 0
+    seek_count = 0
+
+    def seek_impl(*_args) -> int:
+        nonlocal cursor, seek_count
+        cursor = 0
+        seek_count += 1
+        return 1
+
+    def read_impl(_handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        request = int(buffer_size)
+        count = min(request, len(payload) - cursor)
+        chunk = payload[cursor : cursor + count]
+        if chunk:
+            ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        assert backend.read_file_bounded(member, maximum_bytes=5) == (payload, True)
+        assert backend.hash_file(member) == (hashlib.sha256(payload).hexdigest(), 4)
+        assert backend.hash_file(member) == (hashlib.sha256(payload).hexdigest(), 4)
+        assert backend.read_file_bounded(member, maximum_bytes=5) == (payload, True)
+
+    assert seek_count == 4
+
+
 def test_windows_filetime_conversion_is_exact_and_bounded() -> None:
     module = _load_module()
     epoch = module.WindowsHeldHandleBackend._FILETIME_UNIX_EPOCH
@@ -1084,6 +1414,40 @@ def test_hash_file_maps_native_sharing_failure_with_internal_cause(
     assert isinstance(exc_info.value.__cause__, OSError)
 
 
+@pytest.mark.parametrize(
+    ("failure_stage", "native_error", "expected_code"),
+    (
+        ("seek", 32, "sharing_conflict"),
+        ("read", 5, "observation_failed"),
+    ),
+)
+def test_read_file_bounded_preserves_native_error_translation(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_stage: str,
+    native_error: int,
+    expected_code: str,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+
+    def fail_native(*_args) -> int:
+        ctypes.set_last_error(native_error)
+        return 0
+
+    if failure_stage == "seek":
+        kernel32.SetFilePointerEx.implementation = fail_native
+    else:
+        kernel32.ReadFile.implementation = fail_native
+    with backend:
+        member = _open_test_member(module, backend)
+        with pytest.raises(module.WindowsHeldHandleError) as exc_info:
+            backend.read_file_bounded(member, maximum_bytes=1)
+
+    assert exc_info.value.code == expected_code
+    assert str(exc_info.value) == module._ERROR_MESSAGES[expected_code]
+    assert isinstance(exc_info.value.__cause__, OSError)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="native share modes are Windows-only")
 def test_native_open_by_id_maps_incompatible_writer_as_sharing_conflict(
     tmp_path: Path,
@@ -1128,6 +1492,47 @@ def test_native_open_by_id_maps_incompatible_writer_as_sharing_conflict(
         assert isinstance(exc_info.value.__cause__, OSError)
     finally:
         assert kernel32.CloseHandle(exclusive)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native held-handle reads are Windows-only")
+def test_native_read_file_bounded_proves_eof_and_enforces_cap(
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    payload_65 = bytes(range(65))
+    payload_67 = bytes(range(67))
+    (tmp_path / "bounded-65.bin").write_bytes(payload_65)
+    (tmp_path / "bounded-67.bin").write_bytes(payload_67)
+
+    with module.WindowsHeldHandleBackend() as backend:
+        volume = backend.open_root(f"{tmp_path.drive}\\")
+        filesystem = backend.volume_filesystem(volume)
+        parent = volume
+        for component in tmp_path.parts[1:]:
+            entries = backend.enumerate_directory(parent, filesystem)
+            entry = next(item for item in entries if item.name == component)
+            parent = backend.open_by_id(volume, entry, directory=True)
+        entries = backend.enumerate_directory(parent, filesystem)
+        entry_by_name = {entry.name: entry for entry in entries}
+        member_65 = backend.open_by_id(
+            volume,
+            entry_by_name["bounded-65.bin"],
+            directory=False,
+        )
+        member_67 = backend.open_by_id(
+            volume,
+            entry_by_name["bounded-67.bin"],
+            directory=False,
+        )
+
+        assert backend.read_file_bounded(member_65, maximum_bytes=66) == (
+            payload_65,
+            True,
+        )
+        assert backend.read_file_bounded(member_67, maximum_bytes=66) == (
+            payload_67[:66],
+            False,
+        )
 
 
 def test_shared_module_imports_only_standard_library_without_dynamic_escape() -> None:

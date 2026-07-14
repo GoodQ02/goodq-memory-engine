@@ -840,6 +840,38 @@ class WindowsHeldHandleBackend:
             streams=streams,
         )
 
+    def read_file_bounded(
+        self,
+        handle: object,
+        *,
+        maximum_bytes: int,
+    ) -> tuple[bytes, bool]:
+        if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= 66:
+            _raise("observation_failed")
+        raw = self._raw(handle)
+        if not self._kernel32.SetFilePointerEx(raw, 0, None, self._FILE_BEGIN):
+            self._raise_call_error(self._last_error())
+        prefix = bytearray()
+        buffer = (self._ctypes.c_ubyte * maximum_bytes)()
+        while len(prefix) < maximum_bytes:
+            remaining = maximum_bytes - len(prefix)
+            read = self._DWORD()
+            if not self._kernel32.ReadFile(
+                raw,
+                self._ctypes.byref(buffer),
+                remaining,
+                self._ctypes.byref(read),
+                None,
+            ):
+                self._raise_call_error(self._last_error())
+            count = int(read.value)
+            if count > remaining:
+                _raise("observation_failed")
+            if count == 0:
+                return bytes(prefix), True
+            prefix.extend(bytes(buffer[:count]))
+        return bytes(prefix), False
+
     def hash_file(self, handle: object) -> tuple[str, int]:
         raw = self._raw(handle)
         if not self._kernel32.SetFilePointerEx(raw, 0, None, self._FILE_BEGIN):

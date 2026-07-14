@@ -141,6 +141,271 @@ def test_module_exists_with_exact_public_api() -> None:
     ].kind is inspect.Parameter.KEYWORD_ONLY
 
 
+@pytest.mark.parametrize(
+    ("data_root", "manifest_root", "expected_flavor"),
+    [
+        ("/authority/GoodQ_Data", "/protected", "posix"),
+        ("R:/GOODCUBE/GoodQ_Data", "S:/Protected", "windows"),
+    ],
+)
+def test_membership_delegates_once_with_original_bytes_and_resolved_flavor(
+    monkeypatch: pytest.MonkeyPatch,
+    data_root: str,
+    manifest_root: str,
+    expected_flavor: str,
+) -> None:
+    module = importlib.import_module("cli.clean_memory_protected_membership")
+    manifest = _manifest(root=manifest_root)
+    manifest_bytes = b"opaque original manifest bytes"
+    sentinel_digest = "a" * 64
+    calls: list[tuple[bytes, str]] = []
+    manifest_accesses = 0
+
+    class FakeValidatedManifest:
+        manifest_sha256 = sentinel_digest
+
+        @property
+        def manifest(self) -> dict[str, object]:
+            nonlocal manifest_accesses
+            manifest_accesses += 1
+            return copy.deepcopy(manifest)
+
+    def audited_validator(candidate: bytes, *, path_flavor: str):
+        calls.append((candidate, path_flavor))
+        return FakeValidatedManifest()
+
+    monkeypatch.setattr(
+        module,
+        "_validate_protected_manifest",
+        audited_validator,
+        raising=False,
+    )
+
+    result = module.project_protected_membership(
+        _resolved_configuration(data_root=data_root),
+        manifest_bytes=manifest_bytes,
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0] is manifest_bytes
+    assert calls[0][1] == expected_flavor
+    assert manifest_accesses == 1
+    assert result.projection["manifest"]["sha256"] == sentinel_digest
+    projected_roles = {
+        record["role"]: record["members"]
+        for record in result.projection["protected_roles"]
+    }
+    assert projected_roles["backup_root"] == manifest["roles"][0]["members"]
+
+
+def test_membership_preserves_bytes_and_configuration_failure_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configuration_module = importlib.import_module("cli.clean_memory")
+    module = importlib.import_module("cli.clean_memory_protected_membership")
+    validator_calls = 0
+
+    def forbidden_validator(*_args: object, **_kwargs: object) -> None:
+        nonlocal validator_calls
+        validator_calls += 1
+        raise AssertionError("manifest validator ran out of order")
+
+    monkeypatch.setattr(
+        module,
+        "_validate_protected_manifest",
+        forbidden_validator,
+        raising=False,
+    )
+    with monkeypatch.context() as role_patch:
+        role_patch.setattr(module, "_PROTECTED_BOUNDARY_ROLES", ())
+        with pytest.raises(TypeError) as bytes_error:
+            module.project_protected_membership(
+                object(),
+                manifest_bytes=bytearray(b"x"),
+            )
+        assert str(bytes_error.value) == "manifest_bytes must be exact bytes"
+        with pytest.raises(ValueError) as size_error:
+            module.project_protected_membership(object(), manifest_bytes=b"")
+        assert str(size_error.value) == (
+            "Manifest bytes exceed the protocol size boundary"
+        )
+        with pytest.raises(ValueError) as oversized_error:
+            module.project_protected_membership(
+                object(),
+                manifest_bytes=b"x" * (4_194_304 + 1),
+            )
+        assert str(oversized_error.value) == (
+            "Manifest bytes exceed the protocol size boundary"
+        )
+        with pytest.raises(ValueError) as role_error:
+            module.project_protected_membership(
+                object(),
+                manifest_bytes=_canonical_bytes(_manifest()),
+            )
+    assert str(role_error.value) == (
+        "Protected role authority does not match the selected contract"
+    )
+
+    projection = _resolved_configuration().projection
+    projection["schema"] = "goodq.clean-memory-configuration.v2"
+    forged = configuration_module.ResolvedPlanConfiguration._from_projection(
+        projection
+    )
+    wrong_manifest = _manifest()
+    wrong_manifest["schema"] = "goodq.clean-memory-protected-authority.v2"
+    with pytest.raises(ValueError) as configuration_error:
+        module.project_protected_membership(
+            forged,
+            manifest_bytes=_canonical_bytes(wrong_manifest),
+        )
+    assert str(configuration_error.value) == "Configuration projection has the wrong schema"
+    assert validator_calls == 0
+
+
+def test_membership_source_has_exact_shared_manifest_ownership_boundary() -> None:
+    tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+    shared_imports = [
+        tuple((alias.name, alias.asname) for alias in node.names)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "steps.common.clean_memory_protected_manifest"
+    ]
+    assert shared_imports == [
+        (
+            (
+                "PROTECTED_MANIFEST_CHILD_NAME",
+                "_PROTECTED_MANIFEST_CHILD_NAME",
+            ),
+            (
+                "PROTECTED_MANIFEST_MAX_BYTES",
+                "_PROTECTED_MANIFEST_MAX_BYTES",
+            ),
+            (
+                "PROTECTED_MANIFEST_ROLE_ORDER",
+                "_PROTECTED_MANIFEST_ROLE_ORDER",
+            ),
+            ("validate_protected_manifest", "_validate_protected_manifest"),
+        )
+    ]
+
+    forbidden_assignments = {
+        "_MANIFEST_SCHEMA",
+        "_MANIFEST_CHILD_NAME",
+        "_MAX_MANIFEST_BYTES",
+        "_MANIFEST_ROLE_ORDER",
+        "_MAX_PATH_BYTES",
+        "_MAX_MEMBERS_PER_ROLE",
+        "_MAX_MEMBERS_TOTAL",
+        "_MEMBER_ID_RE",
+    }
+    assigned_names = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (
+            node.targets if isinstance(node, ast.Assign) else (node.target,)
+        )
+        if isinstance(target, ast.Name)
+    }
+    assert assigned_names.isdisjoint(forbidden_assignments)
+    assert "_manifest_members" not in {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }
+    assert "goodq.clean-memory-protected-authority.v1" not in {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and type(node.value) is str
+    }
+    assert "protected-boundaries.json" not in {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and type(node.value) is str
+    }
+    assert r"^[a-z][a-z0-9_]{0,63}$" not in {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and type(node.value) is str
+    }
+    assert not {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and type(node.value) is int
+    }.intersection({4_194_304, 4_096, 64, 512})
+    assert not [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Tuple)
+        and tuple(
+            item.value
+            for item in node.elts
+            if isinstance(item, ast.Constant) and type(item.value) is str
+        )
+        == MANIFEST_ROLES
+    ]
+    assert tuple(
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+    ) == (
+        "_canonical_json_text",
+        "_pairs_without_duplicates",
+        "_reject_nonfinite",
+        "_strict_json_text",
+        "_validate_json_strings",
+        "_contains_control",
+        "_canonical_absolute_path",
+        "_comparison_key",
+        "_paths_overlap",
+        "_configuration_snapshot",
+        "_configured_members",
+        "_validate_combined_scope",
+        "project_protected_membership",
+    )
+
+    project_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "project_protected_membership"
+    )
+    direct_calls = [
+        node.func.id
+        for node in ast.walk(project_function)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    ]
+    assert tuple(sorted(direct_calls)) == tuple(
+        sorted(
+            (
+                "type",
+                "len",
+                "tuple",
+                "_configuration_snapshot",
+                "_configured_members",
+                "_validate_protected_manifest",
+                "set",
+                "set",
+                "_validate_combined_scope",
+                "TypeError",
+                "ValueError",
+                "ValueError",
+                "ValueError",
+                "ValueError",
+            )
+        )
+    )
+    attribute_calls = [
+        (node.func.value.id, node.func.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node in set(ast.walk(project_function))
+    ]
+    assert attribute_calls == [
+        ("ProtectedMembershipProjection", "_from_projection")
+    ]
+
+
 def test_valid_manifest_projects_exact_detached_membership() -> None:
     configuration_module = importlib.import_module("cli.clean_memory")
     module = importlib.import_module("cli.clean_memory_protected_membership")
@@ -776,6 +1041,25 @@ def test_source_has_exact_project_import_boundary() -> None:
             0,
             (("PROTECTED_BOUNDARY_ROLES", "_PROTECTED_BOUNDARY_ROLES"),),
         ),
+        (
+            "steps.common.clean_memory_protected_manifest",
+            0,
+            (
+                (
+                    "PROTECTED_MANIFEST_CHILD_NAME",
+                    "_PROTECTED_MANIFEST_CHILD_NAME",
+                ),
+                (
+                    "PROTECTED_MANIFEST_MAX_BYTES",
+                    "_PROTECTED_MANIFEST_MAX_BYTES",
+                ),
+                (
+                    "PROTECTED_MANIFEST_ROLE_ORDER",
+                    "_PROTECTED_MANIFEST_ROLE_ORDER",
+                ),
+                ("validate_protected_manifest", "_validate_protected_manifest"),
+            ),
+        ),
         ("typing", 0, (("Any", None),)),
     )
     dynamic_import_calls = {
@@ -936,6 +1220,24 @@ def test_source_has_no_other_project_import_edges() -> None:
         (
             "steps.common.clean_memory",
             (("PROTECTED_BOUNDARY_ROLES", "_PROTECTED_BOUNDARY_ROLES"),),
+        ),
+        (
+            "steps.common.clean_memory_protected_manifest",
+            (
+                (
+                    "PROTECTED_MANIFEST_CHILD_NAME",
+                    "_PROTECTED_MANIFEST_CHILD_NAME",
+                ),
+                (
+                    "PROTECTED_MANIFEST_MAX_BYTES",
+                    "_PROTECTED_MANIFEST_MAX_BYTES",
+                ),
+                (
+                    "PROTECTED_MANIFEST_ROLE_ORDER",
+                    "_PROTECTED_MANIFEST_ROLE_ORDER",
+                ),
+                ("validate_protected_manifest", "_validate_protected_manifest"),
+            ),
         ),
     ]
 

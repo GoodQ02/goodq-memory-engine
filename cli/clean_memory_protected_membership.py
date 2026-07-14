@@ -18,6 +18,12 @@ from cli.clean_memory import CONFIGURATION_SCHEMA, ResolvedPlanConfiguration
 from steps.common.clean_memory import (
     PROTECTED_BOUNDARY_ROLES as _PROTECTED_BOUNDARY_ROLES,
 )
+from steps.common.clean_memory_protected_manifest import (
+    PROTECTED_MANIFEST_CHILD_NAME as _PROTECTED_MANIFEST_CHILD_NAME,
+    PROTECTED_MANIFEST_MAX_BYTES as _PROTECTED_MANIFEST_MAX_BYTES,
+    PROTECTED_MANIFEST_ROLE_ORDER as _PROTECTED_MANIFEST_ROLE_ORDER,
+    validate_protected_manifest as _validate_protected_manifest,
+)
 
 
 PROTECTED_MEMBERSHIP_SCHEMA = "goodq.clean-memory-protected-membership.v1"
@@ -28,14 +34,7 @@ __all__ = (
     "project_protected_membership",
 )
 
-_MANIFEST_SCHEMA = "goodq.clean-memory-protected-authority.v1"
-_MANIFEST_CHILD_NAME = "protected-boundaries.json"
-_MAX_MANIFEST_BYTES = 4_194_304
-_MAX_PATH_BYTES = 4_096
-_MAX_MEMBERS_PER_ROLE = 64
-_MAX_MEMBERS_TOTAL = 512
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_MEMBER_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _WINDOWS_ABSOLUTE_RE = re.compile(r"^([A-Z]):/(.+)$")
 _UNRESOLVED_ENV_RE = re.compile(
     r"(?:\$\{|\$[A-Za-z_][A-Za-z0-9_]*|%[A-Za-z_][A-Za-z0-9_]*%)"
@@ -71,16 +70,6 @@ _FULL_ROLE_ORDER = (
     "repository",
     "source_media",
     "watchdog_state",
-)
-_MANIFEST_ROLE_ORDER = (
-    "backup_root",
-    "download_cache",
-    "public_checkout",
-    "qdrant_service_logs",
-    "recovery_root",
-    "reports_root",
-    "repository",
-    "source_media",
 )
 _CONFIGURED_MEMBER_POLICY = {
     "archive_root": ("directory", "allow_absent", 1),
@@ -307,7 +296,9 @@ def _configured_members(
     flavor = projection.get("path_flavor")
     if flavor not in {"windows", "posix"}:
         raise ValueError("Configuration projection has an invalid path flavor")
-    if projection.get("unresolved_protected_roles") != list(_MANIFEST_ROLE_ORDER):
+    if projection.get("unresolved_protected_roles") != list(
+        _PROTECTED_MANIFEST_ROLE_ORDER
+    ):
         raise ValueError("Configuration projection has an invalid unresolved-role census")
 
     logical_paths = projection.get("logical_paths")
@@ -397,82 +388,6 @@ def _configured_members(
     return flavor, members_by_role, cleanup_scope
 
 
-def _manifest_members(
-    manifest_bytes: bytes,
-    *,
-    flavor: str,
-) -> tuple[dict[str, list[dict[str, str]]], str]:
-    if type(manifest_bytes) is not bytes:
-        raise TypeError("manifest_bytes must be exact bytes")
-    if not 1 <= len(manifest_bytes) <= _MAX_MANIFEST_BYTES:
-        raise ValueError("Manifest bytes exceed the protocol size boundary")
-    try:
-        manifest_text = manifest_bytes.decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        raise ValueError("Manifest bytes are not canonical UTF-8") from None
-    manifest = _strict_json_text(manifest_text, source="Manifest")
-    if manifest_text.encode("utf-8") != manifest_bytes:
-        raise ValueError("Manifest bytes are not canonical UTF-8")
-    if set(manifest) != {"roles", "schema"} or manifest.get("schema") != _MANIFEST_SCHEMA:
-        raise ValueError("Manifest has an invalid schema envelope")
-    roles = manifest.get("roles")
-    if type(roles) is not list or len(roles) != len(_MANIFEST_ROLE_ORDER):
-        raise ValueError("Manifest has an invalid role census")
-    if tuple(record.get("role") if type(record) is dict else None for record in roles) != (
-        _MANIFEST_ROLE_ORDER
-    ):
-        raise ValueError("Manifest has an invalid role order")
-
-    total_members = 0
-    members_by_role: dict[str, list[dict[str, str]]] = {}
-    for record in roles:
-        if type(record) is not dict or set(record) != {"members", "role"}:
-            raise ValueError("Manifest has an invalid role record")
-        role = record["role"]
-        members = record["members"]
-        if type(members) is not list or not 1 <= len(members) <= _MAX_MEMBERS_PER_ROLE:
-            raise ValueError("Manifest has an invalid member count")
-        total_members += len(members)
-        if total_members > _MAX_MEMBERS_TOTAL:
-            raise ValueError("Manifest has too many members")
-        previous_id: str | None = None
-        canonical_members: list[dict[str, str]] = []
-        for member in members:
-            if type(member) is not dict or set(member) != {
-                "absolute_path",
-                "member_id",
-                "object_kind",
-                "presence",
-            }:
-                raise ValueError("Manifest has an invalid member record")
-            member_id = member["member_id"]
-            if type(member_id) is not str or not _MEMBER_ID_RE.fullmatch(member_id):
-                raise ValueError("Manifest has an invalid member identifier")
-            if previous_id is not None and member_id <= previous_id:
-                raise ValueError("Manifest member identifiers are not strictly ordered")
-            previous_id = member_id
-            if member["object_kind"] != "directory" or member["presence"] not in {
-                "required",
-                "allow_absent",
-            }:
-                raise ValueError("Manifest has an invalid member policy")
-            path = _canonical_absolute_path(
-                member["absolute_path"], expected_flavor=flavor
-            )
-            if len(path.encode("utf-8")) > _MAX_PATH_BYTES:
-                raise ValueError("Manifest member path exceeds the protocol boundary")
-            canonical_members.append(
-                {
-                    "absolute_path": path,
-                    "member_id": member_id,
-                    "object_kind": "directory",
-                    "presence": member["presence"],
-                }
-            )
-        members_by_role[role] = canonical_members
-    return members_by_role, hashlib.sha256(manifest_bytes).hexdigest()
-
-
 def _validate_combined_scope(
     members_by_role: dict[str, list[dict[str, str]]],
     *,
@@ -503,7 +418,7 @@ def project_protected_membership(
 
     if type(manifest_bytes) is not bytes:
         raise TypeError("manifest_bytes must be exact bytes")
-    if not 1 <= len(manifest_bytes) <= _MAX_MANIFEST_BYTES:
+    if not 1 <= len(manifest_bytes) <= _PROTECTED_MANIFEST_MAX_BYTES:
         raise ValueError("Manifest bytes exceed the protocol size boundary")
     if tuple(_PROTECTED_BOUNDARY_ROLES) != _FULL_ROLE_ORDER:
         raise ValueError("Protected role authority does not match the selected contract")
@@ -513,9 +428,15 @@ def project_protected_membership(
     flavor, configured_members, cleanup_scope = _configured_members(
         configuration_projection
     )
-    manifest_members, manifest_digest = _manifest_members(
-        manifest_bytes, flavor=flavor
+    validated_manifest = _validate_protected_manifest(
+        manifest_bytes,
+        path_flavor=flavor,
     )
+    manifest_members = {
+        record["role"]: record["members"]
+        for record in validated_manifest.manifest["roles"]
+    }
+    manifest_digest = validated_manifest.manifest_sha256
     members_by_role = {**configured_members, **manifest_members}
     if set(members_by_role) != set(_FULL_ROLE_ORDER):
         raise ValueError("Protected membership has an invalid role census")
@@ -527,7 +448,7 @@ def project_protected_membership(
     projection = {
         "configuration_scope_sha256": configuration_digest,
         "manifest": {
-            "child_name": _MANIFEST_CHILD_NAME,
+            "child_name": _PROTECTED_MANIFEST_CHILD_NAME,
             "sha256": manifest_digest,
         },
         "path_flavor": flavor,

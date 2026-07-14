@@ -940,7 +940,7 @@ class WindowsHeldHandleBackend:
         *,
         maximum_bytes: int,
     ) -> tuple[bytes, bool]:
-        if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= 66:
+        if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= 4_194_305:
             _raise("observation_failed")
         raw = self._raw(handle)
         if not self._kernel32.SetFilePointerEx(raw, 0, None, self._FILE_BEGIN):

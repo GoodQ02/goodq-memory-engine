@@ -1511,9 +1511,93 @@ def test_read_file_bounded_stops_at_cap_without_extra_probe(
     )
 
 
+def test_read_file_bounded_accepts_maximum_and_observes_eof_after_zero_byte_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    maximum_bytes = 4_194_305
+    payload = b"x" * 4_194_304
+    cursor = 0
+    read_trace: list[tuple[int, int]] = []
+
+    def seek_impl(*_args) -> int:
+        nonlocal cursor
+        cursor = 0
+        return 1
+
+    def read_impl(_handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        request = int(buffer_size)
+        count = min(request, len(payload) - cursor)
+        read_trace.append((request, count))
+        chunk = payload[cursor : cursor + count]
+        if chunk:
+            ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_file_bounded(member, maximum_bytes=maximum_bytes)
+
+    assert result == (payload, True)
+    _assert_bounded_read_trace(
+        read_trace,
+        maximum_bytes=maximum_bytes,
+        returned_bytes=len(payload),
+        eof_observed=True,
+    )
+
+
+def test_read_file_bounded_accepts_maximum_and_stops_at_exact_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel32 = _Kernel32()
+    module, backend = _backend(monkeypatch, kernel32)
+    maximum_bytes = 4_194_305
+    payload = b"y" * maximum_bytes
+    cursor = 0
+    read_trace: list[tuple[int, int]] = []
+
+    def seek_impl(*_args) -> int:
+        nonlocal cursor
+        cursor = 0
+        return 1
+
+    def read_impl(_handle, buffer_argument, buffer_size, read_argument, _overlap) -> int:
+        nonlocal cursor
+        request = int(buffer_size)
+        count = min(request, len(payload) - cursor)
+        read_trace.append((request, count))
+        chunk = payload[cursor : cursor + count]
+        if chunk:
+            ctypes.memmove(buffer_argument, chunk, len(chunk))
+        cursor += count
+        read_argument._obj.value = count
+        return 1
+
+    kernel32.SetFilePointerEx.implementation = seek_impl
+    kernel32.ReadFile.implementation = read_impl
+    with backend:
+        member = _open_test_member(module, backend)
+        result = backend.read_file_bounded(member, maximum_bytes=maximum_bytes)
+
+    assert result == (payload, False)
+    _assert_bounded_read_trace(
+        read_trace,
+        maximum_bytes=maximum_bytes,
+        returned_bytes=len(payload),
+        eof_observed=False,
+    )
+
+
 @pytest.mark.parametrize(
     "maximum_bytes",
-    (True, False, 0, -1, 67, 1.0, "1", None, _IntSubclass(1)),
+    (True, False, 0, -1, 4_194_306, 1.0, "1", None, _IntSubclass(1)),
 )
 def test_read_file_bounded_rejects_invalid_limit_before_native_call(
     monkeypatch: pytest.MonkeyPatch,
@@ -2482,10 +2566,11 @@ def test_native_read_file_bounded_proves_eof_and_enforces_cap(
     tmp_path: Path,
 ) -> None:
     module = _load_module()
-    payload_65 = bytes(range(65))
-    payload_67 = bytes(range(67))
-    (tmp_path / "bounded-65.bin").write_bytes(payload_65)
-    (tmp_path / "bounded-67.bin").write_bytes(payload_67)
+    maximum_bytes = 4_194_305
+    payload_before_cap = b"x" * 4_194_304
+    payload_at_cap = b"y" * maximum_bytes
+    (tmp_path / "bounded-before-cap.bin").write_bytes(payload_before_cap)
+    (tmp_path / "bounded-at-cap.bin").write_bytes(payload_at_cap)
 
     with module.WindowsHeldHandleBackend() as backend:
         volume = backend.open_root(f"{tmp_path.drive}\\")
@@ -2497,23 +2582,29 @@ def test_native_read_file_bounded_proves_eof_and_enforces_cap(
             parent = backend.open_by_id(volume, entry, directory=True)
         entries = backend.enumerate_directory(parent, filesystem)
         entry_by_name = {entry.name: entry for entry in entries}
-        member_65 = backend.open_by_id(
+        member_before_cap = backend.open_by_id(
             volume,
-            entry_by_name["bounded-65.bin"],
+            entry_by_name["bounded-before-cap.bin"],
             directory=False,
         )
-        member_67 = backend.open_by_id(
+        member_at_cap = backend.open_by_id(
             volume,
-            entry_by_name["bounded-67.bin"],
+            entry_by_name["bounded-at-cap.bin"],
             directory=False,
         )
 
-        assert backend.read_file_bounded(member_65, maximum_bytes=66) == (
-            payload_65,
+        assert backend.read_file_bounded(
+            member_before_cap,
+            maximum_bytes=maximum_bytes,
+        ) == (
+            payload_before_cap,
             True,
         )
-        assert backend.read_file_bounded(member_67, maximum_bytes=66) == (
-            payload_67[:66],
+        assert backend.read_file_bounded(
+            member_at_cap,
+            maximum_bytes=maximum_bytes,
+        ) == (
+            payload_at_cap,
             False,
         )
 

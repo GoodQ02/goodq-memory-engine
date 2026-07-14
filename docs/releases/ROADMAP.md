@@ -1019,6 +1019,26 @@ the failure is not currently visible.
   `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_IMPLEMENTATION_DECISION_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the two-file,
   no-argument reader through RED/GREEN/refactor.
+- Windows external-pin reader checkpoint (2026-07-14): private test checkpoint
+  `a82cd743` and source checkpoint `017f0f64` implement the audited no-argument,
+  path-free Windows trust-root observer. The reader owns exact Known Folder and
+  open-by-ID traversal, effective-token comparison, enrollment and security-
+  policy validation, one bounded pin read, full authority rechecks, detached
+  ten-key evidence, and complete public-error sanitization. The shared backend
+  now reserves ledger ownership before native acquisition and drains exactly in
+  place across every cleanup failure. Independent review closed startup-
+  allocation, cyclic/over-depth graph, exact-cap, public-cycle, snapshot-
+  allocation, ledger-order, and dynamic-import oracle gaps before all three
+  exact-byte receipts returned clean. Fresh verification passed the 616-test
+  reader/backend pair, the 946-test approved authority union, 35 documentation
+  tests, compilation, exact import/export, documentation authority/drift,
+  banned-token, dependency, and diff gates. No live ProgramData, production pin,
+  token, ACL, configured root, service, GoodQ data, Qdrant, evidence store, job,
+  MiniAgent, or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  no-repeat audit of authenticated protected-membership composition before
+  Qdrant observation or runnable planning.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1581,6 +1601,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the audited R-07 Windows external-pin reader and
+  lifecycle ownership, then advanced only to a read-only authenticated
+  protected-membership composition audit. Enrollment, publication, Qdrant,
+  planning, approval, and cleanup execution remain closed.
 
 - 2026-07-13: Checkpointed the R-07 opt-in same-handle Windows security-
   descriptor capability and advanced only to the audited no-argument external-

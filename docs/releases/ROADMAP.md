@@ -1188,6 +1188,26 @@ the failure is not currently visible.
   filtered-descriptor parsing, fixed generic mapping, and bounded mutation-
   denial mechanics. No mechanics extraction or manifest-reader code is yet
   authorized.
+- Windows security-mechanics extraction decision (2026-07-14): three
+  independent read-only audits reconciled parser-first, token-first, and
+  combined options. The selected smallest coherent rollback boundary is one
+  four-file checkpoint: add `steps/common/windows_security_mechanics.py` and
+  its focused test, then adapt the completed external-pin source/test in the
+  same checkpoint. Token session ownership, the stable descriptor allocation,
+  private duplication, mapping, and bounded `AccessCheck` share one native
+  lifetime; splitting them would expose a pointer or adapt the same cleanup
+  graph twice. The shared layer owns mechanics only. External-pin policy,
+  outward errors/evidence, failure order, base 17-call token profile, and frozen
+  reader-identity v1 projection/digest remain exact. A separate mandatory-
+  policy profile observes class 27 without entering external-pin v1. The held-
+  handle backend and protected-manifest reader remain closed. No live token,
+  configured or production ACL/root, manifest, pin, service, GoodQ data,
+  Qdrant, evidence store, job, MiniAgent, or cleanup authority was read or
+  changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly that four-file
+  extraction through RED/GREEN/refactor and independent current-byte parity
+  review. The frozen reader-identity policy remains a separate later seam.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1750,6 +1770,12 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected the exact R-07 four-file projection-neutral Windows
+  security-mechanics extraction after three independent audits reconciled the
+  token, descriptor-allocation, mapping, and bounded-access lifetime. Advanced
+  only to its RED/GREEN parity checkpoint; the held-handle backend, frozen v1
+  identity policy, and protected-manifest reader remain closed.
 
 - 2026-07-14: Checkpointed R-07 label-aware held-handle descriptor transport at
   `6b40d8e8` with exact `0x7`/`0x17` parity and 644 focused regressions. Advanced

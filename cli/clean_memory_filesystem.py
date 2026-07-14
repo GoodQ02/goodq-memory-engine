@@ -21,6 +21,12 @@ import unicodedata
 
 from cli.clean_memory import ResolvedPlanConfiguration
 from steps.common.clean_memory import FilesystemTargetEvidence
+from steps.common.windows_held_handle import (
+    WindowsDirectoryEntry,
+    WindowsHeldHandleBackend,
+    WindowsHeldHandleError,
+    WindowsObjectSnapshot,
+)
 
 
 FILESYSTEM_OBSERVATION_SCHEMA = "goodq.clean-memory-filesystem-observation.v1"
@@ -804,771 +810,119 @@ def _observe_posix(projection: _Projection) -> tuple[str, tuple[FilesystemTarget
         _close_posix_fds(tuple(open_fds))
 
 
-@dataclass(frozen=True)
-class _WindowsEntry:
-    name: str
-    attributes: int
-    file_id: int | bytes
-
-    @property
-    def is_directory(self) -> bool:
-        return bool(self.attributes & 0x10)
-
-    @property
-    def is_reparse(self) -> bool:
-        return bool(self.attributes & 0x400)
-
-    @property
-    def is_device(self) -> bool:
-        return bool(self.attributes & 0x40)
-
-    @property
-    def membership(self) -> tuple[str, str, str]:
-        kind = "device" if self.is_device else (
-            "reparse" if self.is_reparse else (
-                "directory" if self.is_directory else "regular_file"
-            )
-        )
-        file_id = (
-            f"{self.file_id:016x}"
-            if isinstance(self.file_id, int)
-            else self.file_id.hex()
-        )
-        return (self.name, kind, file_id)
-
-
-@dataclass(frozen=True)
-class _WindowsHandleState:
-    identity_json: str
-    volume_serial: int
-    file_id: int | bytes
-    object_kind: str
-    size_bytes: int
-    mtime_ns: int | None
-    fingerprint: tuple[object, ...]
-
-
 @dataclass
 class _WindowsDirectory:
-    handle: int
+    handle: object
     initial: tuple[tuple[str, str, str], ...]
 
 
-def _windows_filetime_to_ns(filetime_ticks: int) -> int:
-    if (
-        isinstance(filetime_ticks, bool)
-        or not isinstance(filetime_ticks, int)
-        or filetime_ticks < 116444736000000000
-    ):
-        _raise("observation_failed")
-    nanoseconds = (filetime_ticks - 116444736000000000) * 100
-    if nanoseconds > (1 << 63) - 1:
-        _raise("observation_failed")
-    return nanoseconds
+def _filesystem_error_from_windows(
+    exc: WindowsHeldHandleError,
+) -> FilesystemObservationError:
+    error = FilesystemObservationError(exc.code)
+    cause = exc.__cause__
+    if isinstance(cause, WindowsHeldHandleError):
+        cause = _filesystem_error_from_windows(cause)
+    if cause is not None:
+        error.__cause__ = cause
+        error.__suppress_context__ = True
+    context = exc.__context__
+    if isinstance(context, WindowsHeldHandleError):
+        context = _filesystem_error_from_windows(context)
+    if context is not None:
+        error.__context__ = context
+    return error
 
 
-def _validate_windows_streams(
-    streams: tuple[tuple[str, int, int], ...],
-    *,
-    object_kind: str,
-    size_bytes: int,
+def _translate_nested_windows_errors(
+    exc: FilesystemObservationError,
+    seen: set[int] | None = None,
 ) -> None:
-    if any(stream_size < 0 or allocation_size < 0 for _, stream_size, allocation_size in streams):
-        _raise("observation_failed")
-    if object_kind == "directory":
-        if streams:
-            _raise("unexpected_entry_type")
+    if seen is None:
+        seen = set()
+    if id(exc) in seen:
         return
-    if (
-        len(streams) != 1
-        or streams[0][0] != "::$DATA"
-        or streams[0][1] != size_bytes
-    ):
-        _raise("unexpected_entry_type")
+    seen.add(id(exc))
+    if isinstance(exc.__cause__, WindowsHeldHandleError):
+        exc.__cause__ = _filesystem_error_from_windows(exc.__cause__)
+    elif isinstance(exc.__cause__, FilesystemObservationError):
+        _translate_nested_windows_errors(exc.__cause__, seen)
+    if isinstance(exc.__context__, WindowsHeldHandleError):
+        exc.__context__ = _filesystem_error_from_windows(exc.__context__)
+    elif isinstance(exc.__context__, FilesystemObservationError):
+        _translate_nested_windows_errors(exc.__context__, seen)
 
 
-class _WindowsApi:
-    DRIVE_FIXED = 3
-    FILE_LIST_DIRECTORY = 0x0001
-    FILE_READ_DATA = 0x0001
-    FILE_READ_ATTRIBUTES = 0x0080
-    FILE_SHARE_READ = 0x00000001
-    OPEN_EXISTING = 3
-    FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
-    FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
-    FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000
-    FILE_SUPPORTS_OPEN_BY_FILE_ID = 0x01000000
-    FILE_ATTRIBUTE_DEVICE = 0x40
-    FILE_ATTRIBUTE_DIRECTORY = 0x10
-    FILE_ATTRIBUTE_REPARSE_POINT = 0x400
-    ERROR_INVALID_FUNCTION = 1
-    ERROR_FILE_NOT_FOUND = 2
-    ERROR_PATH_NOT_FOUND = 3
-    ERROR_ACCESS_DENIED = 5
-    ERROR_NO_MORE_FILES = 18
-    ERROR_SHARING_VIOLATION = 32
-    ERROR_HANDLE_EOF = 38
-    ERROR_NOT_SUPPORTED = 50
-    ERROR_INVALID_PARAMETER = 87
-    ERROR_INSUFFICIENT_BUFFER = 122
-    ERROR_MORE_DATA = 234
-    FILE_BEGIN = 0
-    FILETIME_UNIX_EPOCH = 116444736000000000
-
-    FILE_BASIC_INFO = 0
-    FILE_STANDARD_INFO = 1
-    FILE_STREAM_INFO = 7
-    FILE_ATTRIBUTE_TAG_INFO = 9
-    FILE_ID_BOTH_DIRECTORY_INFO = 10
-    FILE_ID_BOTH_DIRECTORY_RESTART_INFO = 11
-    FILE_ID_INFO = 18
-    FILE_ID_EXTD_DIRECTORY_INFO = 19
-    FILE_ID_EXTD_DIRECTORY_RESTART_INFO = 20
-
-    FILE_ID_TYPE = 0
-    EXTENDED_FILE_ID_TYPE = 2
-
-    def __init__(self) -> None:
-        import ctypes
-
-        self.ctypes = ctypes
-        DWORD = ctypes.c_uint32
-        WORD = ctypes.c_uint16
-        BYTE = ctypes.c_ubyte
-        BOOLEAN = ctypes.c_ubyte
-        LARGE_INTEGER = ctypes.c_int64
-        ULONGLONG = ctypes.c_uint64
-        HANDLE = ctypes.c_void_p
-
-        class FILETIME(ctypes.Structure):
-            _fields_ = [("dwLowDateTime", DWORD), ("dwHighDateTime", DWORD)]
-
-        class FILE_ID_128(ctypes.Structure):
-            _fields_ = [("Identifier", BYTE * 16)]
-
-        class FILE_ID_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [("VolumeSerialNumber", ULONGLONG), ("FileId", FILE_ID_128)]
-
-        class FILE_BASIC_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("CreationTime", LARGE_INTEGER),
-                ("LastAccessTime", LARGE_INTEGER),
-                ("LastWriteTime", LARGE_INTEGER),
-                ("ChangeTime", LARGE_INTEGER),
-                ("FileAttributes", DWORD),
-            ]
-
-        class FILE_STANDARD_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("AllocationSize", LARGE_INTEGER),
-                ("EndOfFile", LARGE_INTEGER),
-                ("NumberOfLinks", DWORD),
-                ("DeletePending", BOOLEAN),
-                ("Directory", BOOLEAN),
-            ]
-
-        class FILE_ATTRIBUTE_TAG_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [("FileAttributes", DWORD), ("ReparseTag", DWORD)]
-
-        class BY_HANDLE_FILE_INFORMATION_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("dwFileAttributes", DWORD),
-                ("ftCreationTime", FILETIME),
-                ("ftLastAccessTime", FILETIME),
-                ("ftLastWriteTime", FILETIME),
-                ("dwVolumeSerialNumber", DWORD),
-                ("nFileSizeHigh", DWORD),
-                ("nFileSizeLow", DWORD),
-                ("nNumberOfLinks", DWORD),
-                ("nFileIndexHigh", DWORD),
-                ("nFileIndexLow", DWORD),
-            ]
-
-        class FILE_ID_UNION(ctypes.Union):
-            _fields_ = [
-                ("FileId", LARGE_INTEGER),
-                ("ObjectId", BYTE * 16),
-                ("ExtendedFileId", FILE_ID_128),
-            ]
-
-        class FILE_ID_DESCRIPTOR_STRUCT(ctypes.Structure):
-            _anonymous_ = ("Identifier",)
-            _fields_ = [("dwSize", DWORD), ("Type", ctypes.c_int32), ("Identifier", FILE_ID_UNION)]
-
-        class FILE_ID_BOTH_DIR_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("NextEntryOffset", DWORD),
-                ("FileIndex", DWORD),
-                ("CreationTime", LARGE_INTEGER),
-                ("LastAccessTime", LARGE_INTEGER),
-                ("LastWriteTime", LARGE_INTEGER),
-                ("ChangeTime", LARGE_INTEGER),
-                ("EndOfFile", LARGE_INTEGER),
-                ("AllocationSize", LARGE_INTEGER),
-                ("FileAttributes", DWORD),
-                ("FileNameLength", DWORD),
-                ("EaSize", DWORD),
-                ("ShortNameLength", ctypes.c_byte),
-                ("ShortName", ctypes.c_wchar * 12),
-                ("FileId", LARGE_INTEGER),
-                ("FileName", ctypes.c_wchar * 1),
-            ]
-
-        class FILE_ID_EXTD_DIR_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("NextEntryOffset", DWORD),
-                ("FileIndex", DWORD),
-                ("CreationTime", LARGE_INTEGER),
-                ("LastAccessTime", LARGE_INTEGER),
-                ("LastWriteTime", LARGE_INTEGER),
-                ("ChangeTime", LARGE_INTEGER),
-                ("EndOfFile", LARGE_INTEGER),
-                ("AllocationSize", LARGE_INTEGER),
-                ("FileAttributes", DWORD),
-                ("FileNameLength", DWORD),
-                ("EaSize", DWORD),
-                ("ReparsePointTag", DWORD),
-                ("FileId", FILE_ID_128),
-                ("FileName", ctypes.c_wchar * 1),
-            ]
-
-        class FILE_STREAM_INFO_STRUCT(ctypes.Structure):
-            _fields_ = [
-                ("NextEntryOffset", DWORD),
-                ("StreamNameLength", DWORD),
-                ("StreamSize", LARGE_INTEGER),
-                ("StreamAllocationSize", LARGE_INTEGER),
-                ("StreamName", ctypes.c_wchar * 1),
-            ]
-
-        self.DWORD = DWORD
-        self.HANDLE = HANDLE
-        self.FILE_ID_128 = FILE_ID_128
-        self.FILE_ID_INFO_STRUCT = FILE_ID_INFO_STRUCT
-        self.FILE_BASIC_INFO_STRUCT = FILE_BASIC_INFO_STRUCT
-        self.FILE_STANDARD_INFO_STRUCT = FILE_STANDARD_INFO_STRUCT
-        self.FILE_ATTRIBUTE_TAG_INFO_STRUCT = FILE_ATTRIBUTE_TAG_INFO_STRUCT
-        self.BY_HANDLE_FILE_INFORMATION_STRUCT = BY_HANDLE_FILE_INFORMATION_STRUCT
-        self.FILE_ID_DESCRIPTOR_STRUCT = FILE_ID_DESCRIPTOR_STRUCT
-        self.FILE_ID_BOTH_DIR_INFO_STRUCT = FILE_ID_BOTH_DIR_INFO_STRUCT
-        self.FILE_ID_EXTD_DIR_INFO_STRUCT = FILE_ID_EXTD_DIR_INFO_STRUCT
-        self.FILE_STREAM_INFO_STRUCT = FILE_STREAM_INFO_STRUCT
-
-        expected_abi = {
-            "both_name": (FILE_ID_BOTH_DIR_INFO_STRUCT.FileName.offset, 104),
-            "both_size": (ctypes.sizeof(FILE_ID_BOTH_DIR_INFO_STRUCT), 112),
-            "extd_name": (FILE_ID_EXTD_DIR_INFO_STRUCT.FileName.offset, 88),
-            "extd_size": (ctypes.sizeof(FILE_ID_EXTD_DIR_INFO_STRUCT), 96),
-            "stream_name": (FILE_STREAM_INFO_STRUCT.StreamName.offset, 24),
-            "stream_size": (ctypes.sizeof(FILE_STREAM_INFO_STRUCT), 32),
-            "descriptor_size": (ctypes.sizeof(FILE_ID_DESCRIPTOR_STRUCT), 24),
-            "id_info_size": (ctypes.sizeof(FILE_ID_INFO_STRUCT), 24),
-            "basic_size": (ctypes.sizeof(FILE_BASIC_INFO_STRUCT), 40),
-            "standard_size": (ctypes.sizeof(FILE_STANDARD_INFO_STRUCT), 24),
-            "tag_size": (ctypes.sizeof(FILE_ATTRIBUTE_TAG_INFO_STRUCT), 8),
-            "by_handle_size": (ctypes.sizeof(BY_HANDLE_FILE_INFORMATION_STRUCT), 52),
-        }
-        if any(actual != expected for actual, expected in expected_abi.values()):
-            _raise("unsupported_platform")
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self.kernel32 = kernel32
-        kernel32.GetDriveTypeW.argtypes = [ctypes.c_wchar_p]
-        kernel32.GetDriveTypeW.restype = ctypes.c_uint32
-        kernel32.CreateFileW.argtypes = [
-            ctypes.c_wchar_p,
-            DWORD,
-            DWORD,
-            ctypes.c_void_p,
-            DWORD,
-            DWORD,
-            HANDLE,
-        ]
-        kernel32.CreateFileW.restype = HANDLE
-        kernel32.GetVolumeInformationByHandleW.argtypes = [
-            HANDLE,
-            ctypes.c_wchar_p,
-            DWORD,
-            ctypes.POINTER(DWORD),
-            ctypes.POINTER(DWORD),
-            ctypes.POINTER(DWORD),
-            ctypes.c_wchar_p,
-            DWORD,
-        ]
-        kernel32.GetVolumeInformationByHandleW.restype = ctypes.c_int32
-        kernel32.GetFileInformationByHandleEx.argtypes = [
-            HANDLE,
-            ctypes.c_int32,
-            ctypes.c_void_p,
-            DWORD,
-        ]
-        kernel32.GetFileInformationByHandleEx.restype = ctypes.c_int32
-        kernel32.GetFileInformationByHandle.argtypes = [
-            HANDLE,
-            ctypes.POINTER(BY_HANDLE_FILE_INFORMATION_STRUCT),
-        ]
-        kernel32.GetFileInformationByHandle.restype = ctypes.c_int32
-        kernel32.OpenFileById.argtypes = [
-            HANDLE,
-            ctypes.POINTER(FILE_ID_DESCRIPTOR_STRUCT),
-            DWORD,
-            DWORD,
-            ctypes.c_void_p,
-            DWORD,
-        ]
-        kernel32.OpenFileById.restype = HANDLE
-        kernel32.SetFilePointerEx.argtypes = [HANDLE, LARGE_INTEGER, ctypes.c_void_p, DWORD]
-        kernel32.SetFilePointerEx.restype = ctypes.c_int32
-        kernel32.ReadFile.argtypes = [
-            HANDLE,
-            ctypes.c_void_p,
-            DWORD,
-            ctypes.POINTER(DWORD),
-            ctypes.c_void_p,
-        ]
-        kernel32.ReadFile.restype = ctypes.c_int32
-        kernel32.CloseHandle.argtypes = [HANDLE]
-        kernel32.CloseHandle.restype = ctypes.c_int32
-        self.invalid_handle = ctypes.c_void_p(-1).value
-
-    def _value(self, handle: object) -> int | None:
-        if handle is None:
-            return None
-        if isinstance(handle, int):
-            return handle
-        return getattr(handle, "value", None)
-
-    def _failed_handle(self, handle: object) -> bool:
-        value = self._value(handle)
-        return value is None or value == self.invalid_handle
-
-    def _last_error(self) -> int:
-        return int(self.ctypes.get_last_error())
-
-    def _raise_call_error(
-        self,
-        error: int,
-        *,
-        disappeared: bool = False,
-        unsupported_capability: bool = False,
-    ) -> None:
-        try:
-            cause = self.ctypes.WinError(error)
-        except Exception:
-            cause = OSError(error, "Win32 call failed")
-        if error == self.ERROR_SHARING_VIOLATION:
-            _raise("sharing_conflict", cause)
-        if disappeared and error in {
-            self.ERROR_FILE_NOT_FOUND,
-            self.ERROR_PATH_NOT_FOUND,
-        }:
-            _raise("observation_raced", cause)
-        if unsupported_capability and error in {
-            self.ERROR_INVALID_FUNCTION,
-            self.ERROR_NOT_SUPPORTED,
-            self.ERROR_INVALID_PARAMETER,
-        }:
-            _raise("unsupported_filesystem", cause)
-        _raise("observation_failed", cause)
-
-    def close(self, handle: int) -> None:
-        if not self.kernel32.CloseHandle(handle):
-            self._raise_call_error(self._last_error())
-
-    def open_root(self, root: str) -> int:
-        if self.kernel32.GetDriveTypeW(root) != self.DRIVE_FIXED:
-            _raise("unsupported_filesystem")
-        handle = self.kernel32.CreateFileW(
-            root,
-            self.FILE_LIST_DIRECTORY | self.FILE_READ_ATTRIBUTES,
-            self.FILE_SHARE_READ,
-            None,
-            self.OPEN_EXISTING,
-            self.FILE_FLAG_OPEN_REPARSE_POINT | self.FILE_FLAG_BACKUP_SEMANTICS,
-            None,
-        )
-        if self._failed_handle(handle):
-            self._raise_call_error(self._last_error())
-        assert self._value(handle) is not None
-        return int(self._value(handle))
-
-    def volume_filesystem(self, handle: int) -> str:
-        volume_name = self.ctypes.create_unicode_buffer(261)
-        filesystem_name = self.ctypes.create_unicode_buffer(64)
-        serial = self.DWORD()
-        max_component = self.DWORD()
-        flags = self.DWORD()
-        if not self.kernel32.GetVolumeInformationByHandleW(
-            handle,
-            volume_name,
-            len(volume_name),
-            self.ctypes.byref(serial),
-            self.ctypes.byref(max_component),
-            self.ctypes.byref(flags),
-            filesystem_name,
-            len(filesystem_name),
-        ):
-            self._raise_call_error(
-                self._last_error(),
-                unsupported_capability=True,
-            )
-        filesystem = filesystem_name.value
-        if filesystem not in {"NTFS", "ReFS"}:
-            _raise("unsupported_filesystem")
-        if not (flags.value & self.FILE_SUPPORTS_OPEN_BY_FILE_ID):
-            _raise("unsupported_filesystem")
-        return filesystem
-
-    def _query(self, handle: int, info_class: int, structure: type[Any]) -> Any:
-        value = structure()
-        if not self.kernel32.GetFileInformationByHandleEx(
-            handle,
-            info_class,
-            self.ctypes.byref(value),
-            self.ctypes.sizeof(value),
-        ):
-            self._raise_call_error(
-                self._last_error(),
-                unsupported_capability=True,
-            )
-        return value
-
-    def _by_handle(self, handle: int) -> Any:
-        value = self.BY_HANDLE_FILE_INFORMATION_STRUCT()
-        if not self.kernel32.GetFileInformationByHandle(handle, self.ctypes.byref(value)):
-            self._raise_call_error(self._last_error())
-        return value
-
-    def _aligned_buffer(self, size: int) -> tuple[Any, int]:
-        count = (size + 7) // 8
-        value = (self.ctypes.c_uint64 * count)()
-        return value, self.ctypes.sizeof(value)
-
-    def enumerate_directory(self, handle: int, filesystem: str) -> tuple[_WindowsEntry, ...]:
-        if filesystem == "NTFS":
-            structure = self.FILE_ID_BOTH_DIR_INFO_STRUCT
-            restart_class = self.FILE_ID_BOTH_DIRECTORY_RESTART_INFO
-            continuation_class = self.FILE_ID_BOTH_DIRECTORY_INFO
+def _close_windows_handle(
+    api: WindowsHeldHandleBackend,
+    handle: object,
+) -> None:
+    active_type, active_error, active_traceback = sys.exc_info()
+    try:
+        api.close(handle)
+    except WindowsHeldHandleError as exc:
+        close_error = _filesystem_error_from_windows(exc)
+        if active_type is None or active_error is None:
+            raise close_error from close_error.__cause__
+        close_error.__context__ = active_error.__context__
+        if active_error.__cause__ is None:
+            active_error.__cause__ = close_error
+            active_error.__suppress_context__ = True
         else:
-            structure = self.FILE_ID_EXTD_DIR_INFO_STRUCT
-            restart_class = self.FILE_ID_EXTD_DIRECTORY_RESTART_INFO
-            continuation_class = self.FILE_ID_EXTD_DIRECTORY_INFO
-        entries: list[_WindowsEntry] = []
-        first = True
-        while True:
-            buffer, buffer_size = self._aligned_buffer(64 * 1024)
-            info_class = restart_class if first else continuation_class
-            first = False
-            if not self.kernel32.GetFileInformationByHandleEx(
-                handle,
-                info_class,
-                self.ctypes.byref(buffer),
-                buffer_size,
-            ):
-                error = self._last_error()
-                if error == self.ERROR_NO_MORE_FILES:
-                    break
-                self._raise_call_error(error, unsupported_capability=True)
-            offset = 0
-            while True:
-                if (
-                    offset % 8
-                    or offset + self.ctypes.sizeof(structure) > buffer_size
-                ):
-                    _raise("observation_failed")
-                try:
-                    record = structure.from_buffer(buffer, offset)
-                except (TypeError, ValueError) as exc:
-                    _raise("observation_failed", exc)
-                name_length = int(record.FileNameLength)
-                if name_length % 2 or name_length <= 0:
-                    _raise("observation_failed")
-                record_limit = (
-                    offset + int(record.NextEntryOffset)
-                    if record.NextEntryOffset
-                    else buffer_size
-                )
-                name_end = offset + structure.FileName.offset + name_length
-                if name_end > record_limit or name_end > buffer_size:
-                    _raise("observation_failed")
-                try:
-                    name = self.ctypes.string_at(
-                        self.ctypes.addressof(buffer) + offset + structure.FileName.offset,
-                        name_length,
-                    ).decode("utf-16-le", "strict")
-                except UnicodeDecodeError as exc:
-                    _raise("observation_failed", exc)
-                if name not in {".", ".."}:
-                    file_id: int | bytes
-                    if filesystem == "NTFS":
-                        file_id = int(record.FileId) & ((1 << 64) - 1)
-                    else:
-                        file_id = bytes(record.FileId.Identifier)
-                    if file_id == 0 or file_id == b"\x00" * 16:
-                        _raise("duplicate_identity")
-                    entries.append(
-                        _WindowsEntry(
-                            name=name,
-                            attributes=int(record.FileAttributes),
-                            file_id=file_id,
-                        )
-                    )
-                next_offset = int(record.NextEntryOffset)
-                if next_offset == 0:
-                    break
-                if next_offset % 8 or next_offset < structure.FileName.offset + name_length:
-                    _raise("observation_failed")
-                offset += next_offset
-                if offset >= buffer_size:
-                    _raise("observation_failed")
-        entries.sort(key=lambda item: (item.name.casefold(), item.name))
-        return tuple(entries)
-
-    def open_by_id(
-        self,
-        volume_handle: int,
-        entry: _WindowsEntry,
-        *,
-        directory: bool,
-    ) -> int:
-        descriptor = self.FILE_ID_DESCRIPTOR_STRUCT()
-        descriptor.dwSize = self.ctypes.sizeof(descriptor)
-        if isinstance(entry.file_id, int):
-            descriptor.Type = self.FILE_ID_TYPE
-            signed = entry.file_id if entry.file_id < (1 << 63) else entry.file_id - (1 << 64)
-            descriptor.FileId = signed
-        else:
-            descriptor.Type = self.EXTENDED_FILE_ID_TYPE
-            for index, byte in enumerate(entry.file_id):
-                descriptor.ExtendedFileId.Identifier[index] = byte
-        flags = self.FILE_FLAG_OPEN_REPARSE_POINT
-        if directory:
-            access = self.FILE_LIST_DIRECTORY | self.FILE_READ_ATTRIBUTES
-            flags |= self.FILE_FLAG_BACKUP_SEMANTICS
-        else:
-            access = self.FILE_READ_DATA | self.FILE_READ_ATTRIBUTES
-            flags |= self.FILE_FLAG_SEQUENTIAL_SCAN
-        handle = self.kernel32.OpenFileById(
-            volume_handle,
-            self.ctypes.byref(descriptor),
-            access,
-            self.FILE_SHARE_READ,
-            None,
-            flags,
-        )
-        if self._failed_handle(handle):
-            self._raise_call_error(
-                self._last_error(),
-                disappeared=True,
-                unsupported_capability=True,
-            )
-        assert self._value(handle) is not None
-        return int(self._value(handle))
-
-    def stream_inventory(self, handle: int) -> tuple[tuple[str, int, int], ...]:
-        size = 64 * 1024
-        while size <= 16 * 1024 * 1024:
-            buffer, buffer_size = self._aligned_buffer(size)
-            if self.kernel32.GetFileInformationByHandleEx(
-                handle,
-                self.FILE_STREAM_INFO,
-                self.ctypes.byref(buffer),
-                buffer_size,
-            ):
-                break
-            error = self._last_error()
-            if error == self.ERROR_HANDLE_EOF:
-                return ()
-            if error in {self.ERROR_MORE_DATA, self.ERROR_INSUFFICIENT_BUFFER}:
-                size *= 2
-                continue
-            self._raise_call_error(error, unsupported_capability=True)
-        else:
-            _raise("observation_failed")
-        structure = self.FILE_STREAM_INFO_STRUCT
-        streams: list[tuple[str, int, int]] = []
-        offset = 0
-        while True:
-            if (
-                offset % 8
-                or offset + self.ctypes.sizeof(structure) > buffer_size
-            ):
-                _raise("observation_failed")
-            try:
-                record = structure.from_buffer(buffer, offset)
-            except (TypeError, ValueError) as exc:
-                _raise("observation_failed", exc)
-            name_length = int(record.StreamNameLength)
-            if name_length % 2 or name_length <= 0:
-                _raise("observation_failed")
-            record_limit = (
-                offset + int(record.NextEntryOffset)
-                if record.NextEntryOffset
-                else buffer_size
-            )
-            name_end = offset + structure.StreamName.offset + name_length
-            if name_end > record_limit or name_end > buffer_size:
-                _raise("observation_failed")
-            try:
-                name = self.ctypes.string_at(
-                    self.ctypes.addressof(buffer) + offset + structure.StreamName.offset,
-                    name_length,
-                ).decode("utf-16-le", "strict")
-            except UnicodeDecodeError as exc:
-                _raise("observation_failed", exc)
-            streams.append((name, int(record.StreamSize), int(record.StreamAllocationSize)))
-            next_offset = int(record.NextEntryOffset)
-            if next_offset == 0:
-                break
-            if next_offset % 8 or next_offset < structure.StreamName.offset + name_length:
-                _raise("observation_failed")
-            offset += next_offset
-            if offset >= buffer_size:
-                _raise("observation_failed")
-        return tuple(streams)
-
-    def state(
-        self,
-        handle: int,
-        *,
-        filesystem: str,
-        expected: _WindowsEntry | None,
-        object_kind: str,
-        require_stream_contract: bool,
-    ) -> _WindowsHandleState:
-        attribute = self._query(handle, self.FILE_ATTRIBUTE_TAG_INFO, self.FILE_ATTRIBUTE_TAG_INFO_STRUCT)
-        identity = self._query(handle, self.FILE_ID_INFO, self.FILE_ID_INFO_STRUCT)
-        basic = self._query(handle, self.FILE_BASIC_INFO, self.FILE_BASIC_INFO_STRUCT)
-        standard = self._query(handle, self.FILE_STANDARD_INFO, self.FILE_STANDARD_INFO_STRUCT)
-        by_handle = self._by_handle(handle)
-        attributes = int(attribute.FileAttributes)
-        if attributes & self.FILE_ATTRIBUTE_DEVICE:
-            _raise("unexpected_entry_type")
-        if attributes & self.FILE_ATTRIBUTE_REPARSE_POINT or int(attribute.ReparseTag) != 0:
-            _raise("redirected_boundary")
-        is_directory = bool(standard.Directory)
-        if is_directory != (object_kind == "directory"):
-            _raise("observation_raced" if expected is not None else "unexpected_entry_type")
-        if bool(attributes & self.FILE_ATTRIBUTE_DIRECTORY) != is_directory:
-            _raise("observation_raced")
-        if bool(standard.DeletePending):
-            _raise("observation_raced")
-        volume_serial = int(identity.VolumeSerialNumber)
-        if volume_serial == 0:
-            _raise("duplicate_identity")
-        if filesystem == "NTFS":
-            file_id: int | bytes = (
-                int(by_handle.nFileIndexHigh) << 32
-            ) | int(by_handle.nFileIndexLow)
-            file_id_kind = "ntfs_file_index_64"
-            rendered_file_id = f"{file_id:016x}"
-        else:
-            file_id = bytes(identity.FileId.Identifier)
-            file_id_kind = "refs_file_id_128"
-            rendered_file_id = file_id.hex()
-        if file_id == 0 or file_id == b"\x00" * 16:
-            _raise("duplicate_identity")
-        if expected is not None and expected.file_id != file_id:
-            _raise("observation_raced")
-        size_bytes = int(standard.EndOfFile)
-        by_size = (int(by_handle.nFileSizeHigh) << 32) | int(by_handle.nFileSizeLow)
-        allocation_size = int(standard.AllocationSize)
-        links = int(standard.NumberOfLinks)
-        if size_bytes < 0 or allocation_size < 0 or by_size != size_bytes:
-            _raise("observation_failed")
-        if links != int(by_handle.nNumberOfLinks):
-            _raise("observation_raced")
-        if object_kind == "regular_file" and links != 1:
-            _raise("duplicate_identity")
-        last_write_ticks = int(basic.LastWriteTime)
-        change_ticks = int(basic.ChangeTime)
-        mtime_ns: int | None = None
-        if object_kind == "regular_file":
-            if last_write_ticks < self.FILETIME_UNIX_EPOCH:
-                _raise("observation_failed")
-            mtime_ns = _windows_filetime_to_ns(last_write_ticks)
-        streams: tuple[tuple[str, int, int], ...] = ()
-        if require_stream_contract:
-            streams = self.stream_inventory(handle)
-            _validate_windows_streams(
-                streams,
-                object_kind=object_kind,
-                size_bytes=size_bytes,
-            )
-        identity_json = _identity_json(
-            {
-                "file_id": rendered_file_id,
-                "file_id_kind": file_id_kind,
-                "object_kind": object_kind,
-                "schema": "goodq.windows-file-identity.v1",
-                "volume_serial": f"{volume_serial:016x}",
-            }
-        )
-        fingerprint = (
-            attributes,
-            int(attribute.ReparseTag),
-            volume_serial,
-            rendered_file_id,
-            object_kind,
-            size_bytes,
-            allocation_size,
-            last_write_ticks,
-            change_ticks,
-            links,
-            streams,
-        )
-        return _WindowsHandleState(
-            identity_json=identity_json,
-            volume_serial=volume_serial,
-            file_id=file_id,
-            object_kind=object_kind,
-            size_bytes=size_bytes,
-            mtime_ns=mtime_ns,
-            fingerprint=fingerprint,
-        )
-
-    def hash_file(self, handle: int) -> tuple[str, int]:
-        if not self.kernel32.SetFilePointerEx(handle, 0, None, self.FILE_BEGIN):
-            self._raise_call_error(self._last_error())
-        digest = hashlib.sha256()
-        total = 0
-        buffer = (self.ctypes.c_ubyte * (1024 * 1024))()
-        while True:
-            read = self.DWORD()
-            if not self.kernel32.ReadFile(
-                handle,
-                self.ctypes.byref(buffer),
-                self.ctypes.sizeof(buffer),
-                self.ctypes.byref(read),
-                None,
-            ):
-                self._raise_call_error(self._last_error())
-            count = int(read.value)
-            if count == 0:
-                break
-            digest.update(bytes(buffer[:count]))
-            total += count
-        return digest.hexdigest(), total
+            active_error.__context__ = close_error
+        raise active_error.with_traceback(active_traceback)
 
 
-def _load_windows_api() -> _WindowsApi:
+
+
+def _load_windows_backend() -> WindowsHeldHandleBackend:
     if os.name != "nt":
         _raise("unsupported_platform")
     try:
-        return _WindowsApi()
-    except FilesystemObservationError:
-        raise
+        return WindowsHeldHandleBackend()
+    except WindowsHeldHandleError as exc:
+        if exc.__cause__ is None:
+            raise FilesystemObservationError(exc.code) from None
+        _raise(exc.code, exc.__cause__)
     except Exception as exc:
         _raise("unsupported_platform", exc)
 
 
-def _windows_membership(entries: tuple[_WindowsEntry, ...]) -> tuple[tuple[str, str, str], ...]:
+def _windows_membership(
+    entries: tuple[WindowsDirectoryEntry, ...],
+) -> tuple[tuple[str, str, str], ...]:
     if any(entry.is_device for entry in entries):
         _raise("unexpected_entry_type")
-    return tuple(entry.membership for entry in entries)
+    membership: list[tuple[str, str, str]] = []
+    for entry in entries:
+        kind = (
+            "device"
+            if entry.is_device
+            else (
+                "reparse"
+                if entry.is_reparse
+                else ("directory" if entry.is_directory else "regular_file")
+            )
+        )
+        rendered_file_id = (
+            f"{entry.file_id:016x}"
+            if entry.file_id_kind == "ntfs_file_index_64"
+            and isinstance(entry.file_id, int)
+            else entry.file_id.hex()
+            if entry.file_id_kind == "refs_file_id_128"
+            and isinstance(entry.file_id, bytes)
+            else None
+        )
+        if rendered_file_id is None:
+            _raise("observation_failed")
+        membership.append((entry.name, kind, rendered_file_id))
+    return tuple(membership)
 
 
-def _windows_find(entries: tuple[_WindowsEntry, ...], name: str) -> _WindowsEntry | None:
+def _windows_find(
+    entries: tuple[WindowsDirectoryEntry, ...],
+    name: str,
+) -> WindowsDirectoryEntry | None:
     folded = [entry for entry in entries if entry.name.casefold() == name.casefold()]
     exact = [entry for entry in folded if entry.name == name]
     if len(folded) > 1 or (folded and not exact):
@@ -1577,7 +931,7 @@ def _windows_find(entries: tuple[_WindowsEntry, ...], name: str) -> _WindowsEntr
 
 
 def _windows_validate_scope_entries(
-    entries: tuple[_WindowsEntry, ...],
+    entries: tuple[WindowsDirectoryEntry, ...],
     *,
     relative_directory: str,
 ) -> None:
@@ -1590,46 +944,21 @@ def _windows_validate_scope_entries(
         if folded in seen_names:
             _raise("duplicate_identity")
         seen_names.add(folded)
-        identity = (
-            "ntfs" if isinstance(entry.file_id, int) else "refs",
-            entry.file_id,
-        )
+        identity = (entry.file_id_kind, entry.file_id)
         if identity in seen_identities:
             _raise("duplicate_identity")
         seen_identities.add(identity)
 
 
-def _close_windows_handles(api: Any, handles: tuple[int, ...]) -> None:
-    active_type, active_error, active_traceback = sys.exc_info()
-    first_close_error: FilesystemObservationError | None = None
-    for handle in reversed(handles):
-        try:
-            api.close(handle)
-        except FilesystemObservationError as exc:
-            if first_close_error is None:
-                first_close_error = exc
-    if first_close_error is None:
-        return
-    if active_type is None or active_error is None:
-        raise first_close_error
-    first_close_error.__context__ = active_error.__context__
-    if active_error.__cause__ is None:
-        active_error.__cause__ = first_close_error
-        active_error.__suppress_context__ = True
-    else:
-        active_error.__context__ = first_close_error
-    raise active_error.with_traceback(active_traceback)
-
-
 def _windows_observe_file(
-    api: _WindowsApi,
+    api: WindowsHeldHandleBackend,
     *,
-    volume_handle: int,
-    parent_handle: int,
+    volume_handle: object,
+    parent_handle: object,
     parent_initial: tuple[tuple[str, str, str], ...],
     filesystem: str,
     volume_serial: int,
-    entry: _WindowsEntry,
+    entry: WindowsDirectoryEntry,
     role: str,
     relative_path: str,
 ) -> FilesystemTargetEvidence:
@@ -1642,7 +971,7 @@ def _windows_observe_file(
         _raise("unexpected_entry_type")
     handle = api.open_by_id(volume_handle, entry, directory=False)
     try:
-        before = api.state(
+        before = api.snapshot(
             handle,
             filesystem=filesystem,
             expected=entry,
@@ -1652,14 +981,14 @@ def _windows_observe_file(
         if before.volume_serial != volume_serial:
             _raise("observation_raced")
         sha256, total = api.hash_file(handle)
-        after = api.state(
+        after = api.snapshot(
             handle,
             filesystem=filesystem,
             expected=entry,
             object_kind="regular_file",
             require_stream_contract=True,
         )
-        if before.fingerprint != after.fingerprint or total != before.size_bytes:
+        if before != after or total != before.size_bytes:
             _raise("observation_raced")
         if _windows_membership(api.enumerate_directory(parent_handle, filesystem)) != parent_initial:
             _raise("observation_raced")
@@ -1674,22 +1003,22 @@ def _windows_observe_file(
             sha256=sha256,
         )
     finally:
-        _close_windows_handles(api, (handle,))
+        _close_windows_handle(api, handle)
 
 
-def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTargetEvidence, ...]]:
+def _observe_windows_backend(
+    projection: _Projection,
+) -> tuple[str, tuple[FilesystemTargetEvidence, ...]]:
     # OpenFileById is volume-global. Held parents plus before/after membership
     # bind each ID to its projected name, but platform-level ID reuse remains a
     # bounded theoretical race; this backend never degrades to pathname opens.
     components = _absolute_components(projection.epoch_root, flavor="windows")
     root = f"{components[0]}\\"
-    api = _load_windows_api()
-    root_handle = api.open_root(root)
-    open_handles: list[int] = [root_handle]
-    directories: list[_WindowsDirectory] = []
-    try:
+    with _load_windows_backend() as api:
+        root_handle = api.open_root(root)
+        directories: list[_WindowsDirectory] = []
         filesystem = api.volume_filesystem(root_handle)
-        root_state = api.state(
+        root_state = api.snapshot(
             root_handle,
             filesystem=filesystem,
             expected=None,
@@ -1713,8 +1042,7 @@ def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTarg
             if not entry.is_directory:
                 _raise("unexpected_entry_type")
             child_handle = api.open_by_id(root_handle, entry, directory=True)
-            open_handles.append(child_handle)
-            child_state = api.state(
+            child_state = api.snapshot(
                 child_handle,
                 filesystem=filesystem,
                 expected=entry,
@@ -1726,7 +1054,7 @@ def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTarg
             current_handle = child_handle
 
         epoch_handle = current_handle
-        epoch_state = api.state(
+        epoch_state = api.snapshot(
             epoch_handle,
             filesystem=filesystem,
             expected=None,
@@ -1770,8 +1098,7 @@ def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTarg
             if not faiss_entry.is_directory:
                 _raise("unexpected_entry_type")
             faiss_handle = api.open_by_id(root_handle, faiss_entry, directory=True)
-            open_handles.append(faiss_handle)
-            faiss_state = api.state(
+            faiss_state = api.snapshot(
                 faiss_handle,
                 filesystem=filesystem,
                 expected=faiss_entry,
@@ -1788,15 +1115,14 @@ def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTarg
                 _windows_validate_scope_entries(entries, relative_directory=relative_directory)
                 membership = _windows_membership(entries)
                 directories.append(_WindowsDirectory(directory_handle, membership))
-                child_directories: list[tuple[int, str]] = []
+                child_directories: list[tuple[object, str]] = []
                 for entry in entries:
                     relative_path = f"{relative_directory}/{entry.name}"
                     if entry.is_reparse:
                         _raise("redirected_boundary")
                     if entry.is_directory:
                         child_handle = api.open_by_id(root_handle, entry, directory=True)
-                        open_handles.append(child_handle)
-                        child_state = api.state(
+                        child_state = api.snapshot(
                             child_handle,
                             filesystem=filesystem,
                             expected=entry,
@@ -1834,8 +1160,21 @@ def _observe_windows(projection: _Projection) -> tuple[str, tuple[FilesystemTarg
             key=lambda item: (item.relative_path.casefold(), item.relative_path),
         )
         return epoch_state.identity_json, tuple((*singleton_targets, *faiss_targets))
-    finally:
-        _close_windows_handles(api, tuple(open_handles))
+
+
+def _observe_windows(
+    projection: _Projection,
+) -> tuple[str, tuple[FilesystemTargetEvidence, ...]]:
+    translated_error: FilesystemObservationError | None = None
+    try:
+        return _observe_windows_backend(projection)
+    except WindowsHeldHandleError as exc:
+        translated_error = _filesystem_error_from_windows(exc)
+    except FilesystemObservationError as exc:
+        _translate_nested_windows_errors(exc)
+        raise
+    assert translated_error is not None
+    raise translated_error from translated_error.__cause__
 
 
 def observe_filesystem(configuration: ResolvedPlanConfiguration) -> FilesystemObservation:

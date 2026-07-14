@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import builtins
-import ctypes
 from dataclasses import fields, FrozenInstanceError
 import hashlib
 import importlib
@@ -229,16 +228,68 @@ def test_public_result_shape_and_import_authority_are_exact() -> None:
         "filesystem_targets",
     )
     tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
-    project_imports = {
-        node.module: tuple(alias.name for alias in node.names)
+    project_imports = tuple(
+        (
+            node.level,
+            node.module,
+            tuple((alias.name, alias.asname) for alias in node.names),
+        )
         for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-        and node.module in {"cli.clean_memory", "steps.common.clean_memory"}
-    }
-    assert project_imports == {
-        "cli.clean_memory": ("ResolvedPlanConfiguration",),
-        "steps.common.clean_memory": ("FilesystemTargetEvidence",),
-    }
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (
+                node.level != 0
+                or (
+                    node.module
+                    and node.module.split(".", 1)[0] in {"api", "cli", "steps"}
+                )
+            )
+        )
+    )
+    assert sorted(project_imports) == sorted(
+        (
+            (0, "cli.clean_memory", (("ResolvedPlanConfiguration", None),)),
+            (
+                0,
+                "steps.common.clean_memory",
+                (("FilesystemTargetEvidence", None),),
+            ),
+            (
+                0,
+                "steps.common.windows_held_handle",
+                (
+                    ("WindowsDirectoryEntry", None),
+                    ("WindowsHeldHandleBackend", None),
+                    ("WindowsHeldHandleError", None),
+                    ("WindowsObjectSnapshot", None),
+                ),
+            ),
+        ),
+    )
+    assert not any(
+        isinstance(node, ast.Import)
+        and any(
+            alias.name.split(".", 1)[0] in {"api", "cli", "steps"}
+            for alias in node.names
+        )
+        for node in ast.walk(tree)
+    )
+    assert not any(
+        (isinstance(node, ast.Name) and node.id == "__import__")
+        or (
+            isinstance(node, ast.Attribute)
+            and node.attr in {"__import__", "import_module"}
+        )
+        or (
+            isinstance(node, ast.ImportFrom)
+            and node.module in {"builtins", "importlib"}
+            and any(
+                alias.name in {"__import__", "import_module"}
+                for alias in node.names
+            )
+        )
+        for node in ast.walk(tree)
+    )
 
 
 def test_non_projection_and_tampered_projection_fail_before_filesystem_access(
@@ -559,8 +610,12 @@ def test_windows_scope_rejects_case_aliases_and_duplicate_ids() -> None:
     with pytest.raises(module.FilesystemObservationError) as exc_info:
         module._windows_validate_scope_entries(
             (
-                module._WindowsEntry("A.index", 0, 1),
-                module._WindowsEntry("a.index", 0, 2),
+                module.WindowsDirectoryEntry(
+                    "A.index", 0, "ntfs_file_index_64", 1
+                ),
+                module.WindowsDirectoryEntry(
+                    "a.index", 0, "ntfs_file_index_64", 2
+                ),
             ),
             relative_directory="faiss",
         )
@@ -569,8 +624,12 @@ def test_windows_scope_rejects_case_aliases_and_duplicate_ids() -> None:
     with pytest.raises(module.FilesystemObservationError) as exc_info:
         module._windows_validate_scope_entries(
             (
-                module._WindowsEntry("first.index", 0, 9),
-                module._WindowsEntry("second.index", 0, 9),
+                module.WindowsDirectoryEntry(
+                    "first.index", 0, "ntfs_file_index_64", 9
+                ),
+                module.WindowsDirectoryEntry(
+                    "second.index", 0, "ntfs_file_index_64", 9
+                ),
             ),
             relative_directory="faiss",
         )
@@ -592,388 +651,28 @@ def test_windows_reparse_is_rejected_before_open_or_hash() -> None:
             parent_initial=(),
             filesystem="NTFS",
             volume_serial=3,
-            entry=module._WindowsEntry("redirected.index", 0x400, 4),
+            entry=module.WindowsDirectoryEntry(
+                "redirected.index",
+                0x400,
+                "ntfs_file_index_64",
+                4,
+            ),
             role="faiss_file",
             relative_path="faiss/redirected.index",
         )
     assert exc_info.value.code == "redirected_boundary"
 
 
-def test_windows_filetime_and_stream_contract_are_exact() -> None:
+
+
+def test_windows_device_entry_fails_before_open_or_hash() -> None:
     module = _load_module()
-    epoch = 116444736000000000
-    assert module._windows_filetime_to_ns(epoch) == 0
-    assert module._windows_filetime_to_ns(epoch + 1) == 100
-
-    for value in (epoch - 1, epoch + ((2**63 - 1) // 100) + 1):
-        with pytest.raises(module.FilesystemObservationError) as exc_info:
-            module._windows_filetime_to_ns(value)
-        assert exc_info.value.code == "observation_failed"
-
-    module._validate_windows_streams(
-        (("::$DATA", 7, 8),),
-        object_kind="regular_file",
-        size_bytes=7,
+    device_entry = module.WindowsDirectoryEntry(
+        "device.bin",
+        0x40,
+        "ntfs_file_index_64",
+        123,
     )
-    module._validate_windows_streams((), object_kind="directory", size_bytes=0)
-    for streams, object_kind, size_bytes in (
-        (((":secret:$DATA", 7, 8),), "regular_file", 7),
-        ((("::$DATA", 8, 8),), "regular_file", 7),
-        ((("::$DATA", 0, 0),), "directory", 0),
-    ):
-        with pytest.raises(module.FilesystemObservationError) as exc_info:
-            module._validate_windows_streams(
-                streams,
-                object_kind=object_kind,
-                size_bytes=size_bytes,
-            )
-        assert exc_info.value.code == "unexpected_entry_type"
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Win32 ABI is Windows-only")
-def test_windows_abi_and_open_flags_are_exact() -> None:
-    module = _load_module()
-    api = module._WindowsApi()
-    assert api.FILE_ID_BOTH_DIR_INFO_STRUCT.FileName.offset == 104
-    assert ctypes.sizeof(api.FILE_ID_BOTH_DIR_INFO_STRUCT) == 112
-    assert api.FILE_ID_EXTD_DIR_INFO_STRUCT.FileName.offset == 88
-    assert ctypes.sizeof(api.FILE_ID_EXTD_DIR_INFO_STRUCT) == 96
-    assert api.FILE_STREAM_INFO_STRUCT.StreamName.offset == 24
-    assert ctypes.sizeof(api.FILE_STREAM_INFO_STRUCT) == 32
-    assert ctypes.sizeof(api.FILE_ID_DESCRIPTOR_STRUCT) == 24
-    assert ctypes.sizeof(api.FILE_ID_INFO_STRUCT) == 24
-    assert ctypes.sizeof(api.FILE_BASIC_INFO_STRUCT) == 40
-    assert ctypes.sizeof(api.FILE_STANDARD_INFO_STRUCT) == 24
-    assert ctypes.sizeof(api.FILE_ATTRIBUTE_TAG_INFO_STRUCT) == 8
-    assert ctypes.sizeof(api.BY_HANDLE_FILE_INFORMATION_STRUCT) == 52
-
-    class Kernel:
-        def __init__(self) -> None:
-            self.root_calls: list[tuple[object, ...]] = []
-            self.id_calls: list[tuple[object, ...]] = []
-
-        def GetDriveTypeW(self, root: str) -> int:
-            assert root == "L:\\"
-            return api.DRIVE_FIXED
-
-        def CreateFileW(self, *args):
-            self.root_calls.append(args)
-            return 101
-
-        def OpenFileById(self, *args):
-            self.id_calls.append(args)
-            return 202 + len(self.id_calls)
-
-    kernel = Kernel()
-    api.kernel32 = kernel
-    root_handle = api.open_root("L:\\")
-    high_id = (1 << 63) + 7
-    file_handle = api.open_by_id(
-        root_handle,
-        module._WindowsEntry("member.index", 0, high_id),
-        directory=False,
-    )
-    directory_handle = api.open_by_id(
-        root_handle,
-        module._WindowsEntry("faiss", api.FILE_ATTRIBUTE_DIRECTORY, 8),
-        directory=True,
-    )
-    refs_id = bytes(range(16))
-    refs_handle = api.open_by_id(
-        root_handle,
-        module._WindowsEntry("refs.index", 0, refs_id),
-        directory=False,
-    )
-
-    assert root_handle == 101
-    assert file_handle == 203
-    assert directory_handle == 204
-    assert refs_handle == 205
-    assert kernel.root_calls == [
-        (
-            "L:\\",
-            0x81,
-            api.FILE_SHARE_READ,
-            None,
-            api.OPEN_EXISTING,
-            api.FILE_FLAG_OPEN_REPARSE_POINT | api.FILE_FLAG_BACKUP_SEMANTICS,
-            None,
-        )
-    ]
-    assert len(kernel.id_calls) == 3
-    file_call, directory_call, refs_call = kernel.id_calls
-    file_descriptor = file_call[1]._obj
-    assert file_descriptor.Type == api.FILE_ID_TYPE
-    assert file_descriptor.FileId == high_id - (1 << 64)
-    assert file_call[2:] == (
-        0x81,
-        api.FILE_SHARE_READ,
-        None,
-        api.FILE_FLAG_OPEN_REPARSE_POINT | api.FILE_FLAG_SEQUENTIAL_SCAN,
-    )
-    assert directory_call[2:] == (
-        0x81,
-        api.FILE_SHARE_READ,
-        None,
-        api.FILE_FLAG_OPEN_REPARSE_POINT | api.FILE_FLAG_BACKUP_SEMANTICS,
-    )
-    refs_descriptor = refs_call[1]._obj
-    assert refs_descriptor.Type == api.EXTENDED_FILE_ID_TYPE
-    assert bytes(refs_descriptor.ExtendedFileId.Identifier) == refs_id
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Win32 enumeration is Windows-only")
-def test_windows_enumeration_restarts_once_and_consumes_all_buffers() -> None:
-    module = _load_module()
-    api = module._WindowsApi()
-    calls: list[int] = []
-    batches = (
-        ((".", api.FILE_ATTRIBUTE_DIRECTORY, 10), ("first.index", 0, 11)),
-        (("second.index", 0, 12),),
-    )
-
-    def fill_ntfs(buffer_argument, records) -> None:
-        base = ctypes.addressof(buffer_argument._obj)
-        structure = api.FILE_ID_BOTH_DIR_INFO_STRUCT
-        offset = 0
-        for index, (name, attributes, file_id) in enumerate(records):
-            encoded = name.encode("utf-16-le")
-            record_size = structure.FileName.offset + len(encoded)
-            aligned_size = (record_size + 7) & ~7
-            record = structure()
-            record.NextEntryOffset = aligned_size if index + 1 < len(records) else 0
-            record.FileAttributes = attributes
-            record.FileNameLength = len(encoded)
-            record.FileId = file_id
-            ctypes.memmove(base + offset, ctypes.byref(record), structure.FileName.offset)
-            ctypes.memmove(base + offset + structure.FileName.offset, encoded, len(encoded))
-            offset += aligned_size
-
-    class Kernel:
-        def GetFileInformationByHandleEx(
-            self,
-            _handle,
-            info_class,
-            buffer_argument,
-            _buffer_size,
-        ) -> int:
-            calls.append(info_class)
-            index = len(calls) - 1
-            if index < len(batches):
-                fill_ntfs(buffer_argument, batches[index])
-                return 1
-            ctypes.set_last_error(api.ERROR_NO_MORE_FILES)
-            return 0
-
-    api.kernel32 = Kernel()
-    entries = api.enumerate_directory(55, "NTFS")
-
-    assert calls == [
-        api.FILE_ID_BOTH_DIRECTORY_RESTART_INFO,
-        api.FILE_ID_BOTH_DIRECTORY_INFO,
-        api.FILE_ID_BOTH_DIRECTORY_INFO,
-    ]
-    assert tuple((entry.name, entry.file_id) for entry in entries) == (
-        ("first.index", 11),
-        ("second.index", 12),
-    )
-
-
-@pytest.mark.skipif(os.name != "nt", reason="ReFS ABI parsing is Windows-only")
-def test_refs_extended_directory_record_preserves_all_128_id_bits() -> None:
-    module = _load_module()
-    api = module._WindowsApi()
-    calls: list[int] = []
-    expected_id = bytes(range(16))
-
-    class Kernel:
-        def GetFileInformationByHandleEx(
-            self,
-            _handle,
-            info_class,
-            buffer_argument,
-            _buffer_size,
-        ) -> int:
-            calls.append(info_class)
-            if len(calls) == 1:
-                structure = api.FILE_ID_EXTD_DIR_INFO_STRUCT
-                record = structure()
-                encoded = "member.index".encode("utf-16-le")
-                record.FileNameLength = len(encoded)
-                for index, byte in enumerate(expected_id):
-                    record.FileId.Identifier[index] = byte
-                base = ctypes.addressof(buffer_argument._obj)
-                ctypes.memmove(base, ctypes.byref(record), structure.FileName.offset)
-                ctypes.memmove(base + structure.FileName.offset, encoded, len(encoded))
-                return 1
-            ctypes.set_last_error(api.ERROR_NO_MORE_FILES)
-            return 0
-
-    api.kernel32 = Kernel()
-    entries = api.enumerate_directory(55, "ReFS")
-
-    assert calls == [
-        api.FILE_ID_EXTD_DIRECTORY_RESTART_INFO,
-        api.FILE_ID_EXTD_DIRECTORY_INFO,
-    ]
-    assert tuple((entry.name, entry.file_id) for entry in entries) == (
-        ("member.index", expected_id),
-    )
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Win32 buffer parsing is Windows-only")
-def test_truncated_native_buffers_map_to_finite_observation_failure() -> None:
-    module = _load_module()
-    api = module._WindowsApi()
-
-    class DirectoryKernel:
-        def GetFileInformationByHandleEx(
-            self,
-            _handle,
-            _info_class,
-            buffer_argument,
-            buffer_size,
-        ) -> int:
-            structure = api.FILE_ID_BOTH_DIR_INFO_STRUCT
-            record = structure()
-            encoded = "x".encode("utf-16-le")
-            record.NextEntryOffset = buffer_size - structure.FileName.offset
-            record.FileNameLength = len(encoded)
-            record.FileId = 9
-            base = ctypes.addressof(buffer_argument._obj)
-            ctypes.memmove(base, ctypes.byref(record), structure.FileName.offset)
-            ctypes.memmove(base + structure.FileName.offset, encoded, len(encoded))
-            return 1
-
-    api.kernel32 = DirectoryKernel()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api.enumerate_directory(55, "NTFS")
-    assert exc_info.value.code == "observation_failed"
-
-    class StreamKernel:
-        def GetFileInformationByHandleEx(
-            self,
-            _handle,
-            _info_class,
-            buffer_argument,
-            buffer_size,
-        ) -> int:
-            structure = api.FILE_STREAM_INFO_STRUCT
-            record = structure()
-            encoded = "::$DATA".encode("utf-16-le")
-            record.NextEntryOffset = buffer_size - structure.StreamName.offset
-            record.StreamNameLength = len(encoded)
-            base = ctypes.addressof(buffer_argument._obj)
-            ctypes.memmove(base, ctypes.byref(record), structure.StreamName.offset)
-            ctypes.memmove(base + structure.StreamName.offset, encoded, len(encoded))
-            return 1
-
-    api.kernel32 = StreamKernel()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api.stream_inventory(55)
-    assert exc_info.value.code == "observation_failed"
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Win32 errors are Windows-only")
-def test_windows_error_mapping_preserves_internal_cause_and_close_fails_visible() -> None:
-    module = _load_module()
-    api = module._WindowsApi()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api._raise_call_error(api.ERROR_ACCESS_DENIED, disappeared=True)
-    assert exc_info.value.code == "observation_failed"
-    assert isinstance(exc_info.value.__cause__, OSError)
-
-    class UnsupportedOpenByIdKernel:
-        def OpenFileById(self, *_args) -> int:
-            ctypes.set_last_error(api.ERROR_NOT_SUPPORTED)
-            return api.invalid_handle
-
-    api.kernel32 = UnsupportedOpenByIdKernel()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api.open_by_id(
-            10,
-            module._WindowsEntry("member", 0, 123),
-            directory=False,
-        )
-    assert exc_info.value.code == "unsupported_filesystem"
-    assert isinstance(exc_info.value.__cause__, OSError)
-    assert "Clean-memory" not in str(exc_info.value.__cause__)
-
-    for error in (
-        api.ERROR_INVALID_FUNCTION,
-        api.ERROR_NOT_SUPPORTED,
-        api.ERROR_INVALID_PARAMETER,
-    ):
-        with pytest.raises(module.FilesystemObservationError) as exc_info:
-            api._raise_call_error(error)
-        assert exc_info.value.code == "observation_failed"
-        with pytest.raises(module.FilesystemObservationError) as exc_info:
-            api._raise_call_error(error, unsupported_capability=True)
-        assert exc_info.value.code == "unsupported_filesystem"
-
-    class Kernel:
-        def CloseHandle(self, _handle) -> int:
-            ctypes.set_last_error(api.ERROR_ACCESS_DENIED)
-            return 0
-
-    api.kernel32 = Kernel()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api.close(99)
-    assert exc_info.value.code == "observation_failed"
-    assert isinstance(exc_info.value.__cause__, OSError)
-
-
-def test_windows_close_all_preserves_primary_error_and_attempts_every_handle() -> None:
-    module = _load_module()
-
-    class CloseApi:
-        def __init__(self) -> None:
-            self.calls: list[int] = []
-
-        def close(self, handle: int) -> None:
-            self.calls.append(handle)
-            if handle in {2, 1}:
-                raise module.FilesystemObservationError("observation_failed")
-
-    successful_path = CloseApi()
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        module._close_windows_handles(successful_path, (1, 2, 3))
-    assert exc_info.value.code == "observation_failed"
-    assert successful_path.calls == [3, 2, 1]
-
-    failing_path = CloseApi()
-
-    def fail_then_close() -> None:
-        try:
-            raise module.FilesystemObservationError("redirected_boundary")
-        finally:
-            module._close_windows_handles(failing_path, (1, 2, 3))
-
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        fail_then_close()
-    assert exc_info.value.code == "redirected_boundary"
-    assert failing_path.calls == [3, 2, 1]
-    assert isinstance(exc_info.value.__cause__, module.FilesystemObservationError)
-    assert exc_info.value.__cause__.code == "observation_failed"
-
-    primary_cause = OSError(5, "primary read failed")
-    primary = module.FilesystemObservationError("observation_raced")
-
-    def fail_with_cause_then_close() -> None:
-        try:
-            raise primary from primary_cause
-        finally:
-            module._close_windows_handles(failing_path, (1, 2, 3))
-
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        fail_with_cause_then_close()
-    assert exc_info.value is primary
-    assert exc_info.value.__cause__ is primary_cause
-
-
-def test_windows_device_entries_fail_before_open_and_from_handle_state() -> None:
-    module = _load_module()
-    device_entry = module._WindowsEntry("device.bin", 0x40, 123)
 
     class ForbiddenApi:
         def __init__(self) -> None:
@@ -999,71 +698,103 @@ def test_windows_device_entries_fail_before_open_and_from_handle_state() -> None
     assert exc_info.value.code == "unexpected_entry_type"
     assert forbidden.open_calls == 0
 
-    if os.name != "nt":
-        return
-    api = module._WindowsApi()
-    volume_serial = 1
 
-    def query(_handle, info_class, _structure):
-        if info_class == api.FILE_ATTRIBUTE_TAG_INFO:
-            return SimpleNamespace(FileAttributes=api.FILE_ATTRIBUTE_DEVICE, ReparseTag=0)
-        if info_class == api.FILE_ID_INFO:
-            return SimpleNamespace(
-                VolumeSerialNumber=volume_serial,
-                FileId=SimpleNamespace(Identifier=bytes(range(16))),
-            )
-        if info_class == api.FILE_BASIC_INFO:
-            return SimpleNamespace(
-                LastWriteTime=api.FILETIME_UNIX_EPOCH,
-                ChangeTime=api.FILETIME_UNIX_EPOCH,
-            )
-        if info_class == api.FILE_STANDARD_INFO:
-            return SimpleNamespace(
-                Directory=False,
-                DeletePending=False,
-                EndOfFile=0,
-                AllocationSize=0,
-                NumberOfLinks=1,
-            )
-        raise AssertionError(info_class)
-
-    api._query = query
-    api._by_handle = lambda _handle: SimpleNamespace(
-        nFileIndexHigh=0,
-        nFileIndexLow=123,
-        nFileSizeHigh=0,
-        nFileSizeLow=0,
-        nNumberOfLinks=1,
-    )
-    with pytest.raises(module.FilesystemObservationError) as exc_info:
-        api.state(
-            12,
-            filesystem="NTFS",
-            expected=device_entry,
-            object_kind="regular_file",
-            require_stream_contract=False,
-        )
-    assert exc_info.value.code == "unexpected_entry_type"
-
-
-def _windows_state(module, *, file_id: int, kind: str = "directory", size: int = 0):
-    return module._WindowsHandleState(
-        identity_json=_canonical_json(
-            {
-                "file_id": f"{file_id:016x}",
-                "file_id_kind": "ntfs_file_index_64",
-                "object_kind": kind,
-                "schema": "goodq.windows-file-identity.v1",
-                "volume_serial": "0000000000000001",
-            }
-        ),
+def _shared_windows_snapshot(
+    module,
+    *,
+    file_id: int,
+    kind: str = "directory",
+    size: int = 0,
+):
+    return module.WindowsObjectSnapshot(
         volume_serial=1,
+        file_id_kind="ntfs_file_index_64",
         file_id=file_id,
         object_kind=kind,
         size_bytes=size,
         mtime_ns=0 if kind == "regular_file" else None,
-        fingerprint=(file_id, kind, size),
+        allocation_size=size,
+        link_count=1,
+        attributes=0x10 if kind == "directory" else 0,
+        reparse_tag=0,
+        last_write_ticks=116444736000000000,
+        change_ticks=116444736000000000,
+        streams=() if kind == "directory" else (("::$DATA", size, size),),
     )
+
+
+class _ContextManagedBackendDouble:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> bool:
+        return False
+
+
+def test_windows_observer_uses_context_managed_shared_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+
+    class MissingBackend:
+        def __init__(self) -> None:
+            self.entered = False
+            self.exited = False
+            self.enumeration_count = 0
+
+        def __enter__(self):
+            self.entered = True
+            return self
+
+        def __exit__(self, *_args) -> bool:
+            self.exited = True
+            return False
+
+        def open_root(self, root: str) -> object:
+            assert self.entered is True
+            assert root == "L:\\"
+            return object()
+
+        def volume_filesystem(self, _handle: object) -> str:
+            return "NTFS"
+
+        def snapshot(self, *_args, **kwargs):
+            assert kwargs["require_stream_contract"] is True
+            return _shared_windows_snapshot(module, file_id=1)
+
+        def enumerate_directory(self, _handle: object, _filesystem: str):
+            self.enumeration_count += 1
+            return ()
+
+    backend = MissingBackend()
+    monkeypatch.setattr(module, "_load_windows_backend", lambda: backend)
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._observe_windows(_private_windows_projection(module))
+
+    assert exc_info.value.code == "required_root_missing"
+    assert backend.enumeration_count == 2
+    assert backend.entered is True
+    assert backend.exited is True
+
+
+def test_windows_observer_translates_shared_error_and_preserves_os_cause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    cause = OSError(32, "native sharing conflict")
+
+    class FailingBackend(_ContextManagedBackendDouble):
+        def open_root(self, _root: str) -> object:
+            raise module.WindowsHeldHandleError("sharing_conflict") from cause
+
+    monkeypatch.setattr(module, "_load_windows_backend", FailingBackend)
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._observe_windows(_private_windows_projection(module))
+
+    assert exc_info.value.code == "sharing_conflict"
+    assert exc_info.value.__cause__ is cause
 
 
 def test_windows_missing_epoch_component_requires_two_equal_enumerations(
@@ -1071,31 +802,34 @@ def test_windows_missing_epoch_component_requires_two_equal_enumerations(
 ) -> None:
     module = _load_module()
 
-    class MissingApi:
+    class MissingApi(_ContextManagedBackendDouble):
         def __init__(self, snapshots) -> None:
             self.snapshots = iter(snapshots)
             self.enumeration_count = 0
+            self.root_handle = object()
 
-        def open_root(self, root: str) -> int:
+        def open_root(self, root: str) -> object:
             assert root == "L:\\"
-            return 1
+            return self.root_handle
 
-        def volume_filesystem(self, _handle: int) -> str:
+        def volume_filesystem(self, handle: object) -> str:
+            assert handle is self.root_handle
             return "NTFS"
 
-        def state(self, *_args, **kwargs):
+        def snapshot(self, *_args, **kwargs):
             assert kwargs["require_stream_contract"] is True
-            return _windows_state(module, file_id=1)
+            return _shared_windows_snapshot(module, file_id=1)
 
-        def enumerate_directory(self, _handle: int, _filesystem: str):
+        def enumerate_directory(self, handle: object, _filesystem: str):
+            assert handle is self.root_handle
             self.enumeration_count += 1
             return next(self.snapshots)
 
-        def close(self, _handle: int) -> None:
+        def close(self, _handle: object) -> None:
             return None
 
     stable = MissingApi(((), ()))
-    monkeypatch.setattr(module, "_load_windows_api", lambda: stable)
+    monkeypatch.setattr(module, "_load_windows_backend", lambda: stable)
     with pytest.raises(module.FilesystemObservationError) as exc_info:
         module._observe_windows(_private_windows_projection(module))
     assert exc_info.value.code == "required_root_missing"
@@ -1104,10 +838,17 @@ def test_windows_missing_epoch_component_requires_two_equal_enumerations(
     changed = MissingApi(
         (
             (),
-            (module._WindowsEntry("appeared", 0, 2),),
+            (
+                module.WindowsDirectoryEntry(
+                    "appeared",
+                    0,
+                    "ntfs_file_index_64",
+                    2,
+                ),
+            ),
         )
     )
-    monkeypatch.setattr(module, "_load_windows_api", lambda: changed)
+    monkeypatch.setattr(module, "_load_windows_backend", lambda: changed)
     with pytest.raises(module.FilesystemObservationError) as exc_info:
         module._observe_windows(_private_windows_projection(module))
     assert exc_info.value.code == "observation_raced"
@@ -1119,57 +860,80 @@ def test_windows_all_held_directories_require_stream_contract(
 ) -> None:
     module = _load_module()
 
-    class DirectoryApi:
+    class DirectoryApi(_ContextManagedBackendDouble):
         def __init__(self) -> None:
             self.require_stream_values: list[bool] = []
             self.enumeration_count = 0
+            self.root_handle = object()
+            self.epoch_handle = object()
 
-        def open_root(self, _root: str) -> int:
-            return 1
+        def open_root(self, _root: str) -> object:
+            return self.root_handle
 
-        def volume_filesystem(self, _handle: int) -> str:
+        def volume_filesystem(self, handle: object) -> str:
+            assert handle is self.root_handle
             return "NTFS"
 
-        def state(self, handle: int, *_args, **kwargs):
+        def snapshot(self, handle: object, *_args, **kwargs):
             self.require_stream_values.append(kwargs["require_stream_contract"])
-            return _windows_state(module, file_id=handle)
+            file_id = 1 if handle is self.root_handle else 2
+            assert handle in {self.root_handle, self.epoch_handle}
+            return _shared_windows_snapshot(module, file_id=file_id)
 
-        def enumerate_directory(self, handle: int, _filesystem: str):
+        def enumerate_directory(self, handle: object, _filesystem: str):
             self.enumeration_count += 1
-            if handle == 1:
-                return (module._WindowsEntry("epoch", 0x10, 2),)
+            if handle is self.root_handle:
+                return (
+                    module.WindowsDirectoryEntry(
+                        "epoch",
+                        0x10,
+                        "ntfs_file_index_64",
+                        2,
+                    ),
+                )
             return ()
 
-        def open_by_id(self, _volume: int, entry, *, directory: bool) -> int:
+        def open_by_id(self, volume: object, entry, *, directory: bool) -> object:
+            assert volume is self.root_handle
             assert directory is True
             assert entry.name == "epoch"
-            return 2
+            return self.epoch_handle
 
-        def close(self, _handle: int) -> None:
+        def close(self, _handle: object) -> None:
             return None
 
     api = DirectoryApi()
-    monkeypatch.setattr(module, "_load_windows_api", lambda: api)
+    monkeypatch.setattr(module, "_load_windows_backend", lambda: api)
     epoch_identity, targets = module._observe_windows(
         _private_windows_projection(module)
     )
 
-    assert epoch_identity == _windows_state(module, file_id=2).identity_json
+    assert epoch_identity == _shared_windows_snapshot(module, file_id=2).identity_json
     assert len(targets) == 6
     assert api.require_stream_values and all(api.require_stream_values)
 
 
 def test_windows_file_and_parent_drift_return_no_evidence() -> None:
     module = _load_module()
-    entry = module._WindowsEntry("memory.db", 0, 7)
-    initial_membership = (entry.membership,)
+    entry = module.WindowsDirectoryEntry(
+        "memory.db",
+        0,
+        "ntfs_file_index_64",
+        7,
+    )
+    initial_membership = module._windows_membership((entry,))
 
     class DriftApi:
         def __init__(self, *, state_drift: bool, membership_drift: bool) -> None:
             self.states = iter(
                 (
-                    _windows_state(module, file_id=7, kind="regular_file", size=4),
-                    _windows_state(
+                    _shared_windows_snapshot(
+                        module,
+                        file_id=7,
+                        kind="regular_file",
+                        size=4,
+                    ),
+                    _shared_windows_snapshot(
                         module,
                         file_id=7,
                         kind="regular_file",
@@ -1178,22 +942,32 @@ def test_windows_file_and_parent_drift_return_no_evidence() -> None:
                 )
             )
             self.membership_drift = membership_drift
+            self.file_handle = object()
 
-        def open_by_id(self, *_args, **_kwargs) -> int:
-            return 8
+        def open_by_id(self, *_args, **_kwargs) -> object:
+            return self.file_handle
 
-        def state(self, *_args, **_kwargs):
+        def snapshot(self, *_args, **_kwargs):
             return next(self.states)
 
-        def hash_file(self, _handle: int):
+        def hash_file(self, handle: object):
+            assert handle is self.file_handle
             return hashlib.sha256(b"data").hexdigest(), 4
 
         def enumerate_directory(self, *_args):
             if self.membership_drift:
-                return (module._WindowsEntry("renamed.db", 0, 7),)
+                return (
+                    module.WindowsDirectoryEntry(
+                        "renamed.db",
+                        0,
+                        "ntfs_file_index_64",
+                        7,
+                    ),
+                )
             return (entry,)
 
-        def close(self, _handle: int) -> None:
+        def close(self, handle: object) -> None:
+            assert handle is self.file_handle
             return None
 
     for state_drift, membership_drift in ((True, False), (False, True)):
@@ -1203,8 +977,8 @@ def test_windows_file_and_parent_drift_return_no_evidence() -> None:
                     state_drift=state_drift,
                     membership_drift=membership_drift,
                 ),
-                volume_handle=1,
-                parent_handle=2,
+                volume_handle=object(),
+                parent_handle=object(),
                 parent_initial=initial_membership,
                 filesystem="NTFS",
                 volume_serial=1,
@@ -1215,6 +989,150 @@ def test_windows_file_and_parent_drift_return_no_evidence() -> None:
         assert exc_info.value.code == "observation_raced"
 
 
+def test_windows_file_close_failure_preserves_primary_observer_error() -> None:
+    module = _load_module()
+    entry = module.WindowsDirectoryEntry(
+        "memory.db",
+        0,
+        "ntfs_file_index_64",
+        7,
+    )
+    primary = module.FilesystemObservationError("observation_raced")
+    native_close_error = OSError("close failed")
+    file_handle = object()
+
+    class FailingCloseApi:
+        def open_by_id(self, *_args, **_kwargs) -> object:
+            return file_handle
+
+        def snapshot(self, *_args, **_kwargs):
+            raise primary
+
+        def close(self, handle: object) -> None:
+            assert handle is file_handle
+            raise module.WindowsHeldHandleError("observation_failed") from native_close_error
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._windows_observe_file(
+            FailingCloseApi(),
+            volume_handle=object(),
+            parent_handle=object(),
+            parent_initial=module._windows_membership((entry,)),
+            filesystem="NTFS",
+            volume_serial=1,
+            entry=entry,
+            role="memory_database",
+            relative_path="memory.db",
+        )
+
+    assert exc_info.value is primary
+    assert isinstance(primary.__cause__, module.FilesystemObservationError)
+    assert primary.__cause__.code == "observation_failed"
+    assert primary.__cause__.__cause__ is native_close_error
+
+
+def test_windows_context_close_failure_is_translated_inside_primary_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    root_handle = object()
+
+    class ExitFailingApi(_ContextManagedBackendDouble):
+        def __exit__(self, _exc_type, exc, traceback) -> bool:
+            assert isinstance(exc, module.FilesystemObservationError)
+            close_error = module.WindowsHeldHandleError("observation_failed")
+            exc.__cause__ = close_error
+            exc.__suppress_context__ = True
+            raise exc.with_traceback(traceback)
+
+        def open_root(self, _root: str) -> object:
+            return root_handle
+
+        def volume_filesystem(self, handle: object) -> str:
+            assert handle is root_handle
+            return "NTFS"
+
+        def snapshot(self, handle: object, *_args, **_kwargs):
+            assert handle is root_handle
+            return _shared_windows_snapshot(module, file_id=1)
+
+        def enumerate_directory(self, handle: object, _filesystem: str):
+            assert handle is root_handle
+            return ()
+
+    monkeypatch.setattr(module, "_load_windows_backend", ExitFailingApi)
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._observe_windows(_private_windows_projection(module))
+
+    assert exc_info.value.code == "required_root_missing"
+    assert isinstance(exc_info.value.__cause__, module.FilesystemObservationError)
+    assert exc_info.value.__cause__.code == "observation_failed"
+
+
+def test_windows_backend_primary_translates_context_close_failure_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+
+    class BackendPrimaryExitFailingApi(_ContextManagedBackendDouble):
+        def __exit__(self, _exc_type, exc, traceback) -> bool:
+            assert isinstance(exc, module.WindowsHeldHandleError)
+            assert exc.code == "sharing_conflict"
+            close_error = module.WindowsHeldHandleError("observation_failed")
+            exc.__cause__ = close_error
+            exc.__suppress_context__ = True
+            raise exc.with_traceback(traceback)
+
+        def open_root(self, _root: str) -> object:
+            raise module.WindowsHeldHandleError("sharing_conflict")
+
+    monkeypatch.setattr(
+        module,
+        "_load_windows_backend",
+        BackendPrimaryExitFailingApi,
+    )
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._observe_windows(_private_windows_projection(module))
+
+    assert exc_info.value.code == "sharing_conflict"
+    assert isinstance(exc_info.value.__cause__, module.FilesystemObservationError)
+    assert exc_info.value.__cause__.code == "observation_failed"
+
+
+def test_windows_backend_primary_preserves_native_cause_and_translates_close_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    native_primary = OSError("primary native failure")
+
+    class ExistingCauseExitFailingApi(_ContextManagedBackendDouble):
+        def __exit__(self, _exc_type, exc, traceback) -> bool:
+            assert isinstance(exc, module.WindowsHeldHandleError)
+            assert exc.__cause__ is native_primary
+            close_error = module.WindowsHeldHandleError("observation_failed")
+            exc.__context__ = close_error
+            raise exc.with_traceback(traceback)
+
+        def open_root(self, _root: str) -> object:
+            raise module.WindowsHeldHandleError("sharing_conflict") from native_primary
+
+    monkeypatch.setattr(
+        module,
+        "_load_windows_backend",
+        ExistingCauseExitFailingApi,
+    )
+
+    with pytest.raises(module.FilesystemObservationError) as exc_info:
+        module._observe_windows(_private_windows_projection(module))
+
+    assert exc_info.value.code == "sharing_conflict"
+    assert exc_info.value.__cause__ is native_primary
+    assert isinstance(exc_info.value.__context__, module.FilesystemObservationError)
+    assert exc_info.value.__context__.code == "observation_failed"
+
+
 def test_deep_windows_faiss_tree_is_iterative_not_recursion_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1222,44 +1140,81 @@ def test_deep_windows_faiss_tree_is_iterative_not_recursion_bound(
     deepest_directory = 1050
     leaf_id = 5000
 
-    class DeepApi:
-        def open_root(self, _root: str) -> int:
-            return 1
+    class DeepApi(_ContextManagedBackendDouble):
+        def __init__(self) -> None:
+            self.handles_by_file_id = {
+                file_id: object()
+                for file_id in (*range(1, deepest_directory + 1), leaf_id)
+            }
+            self.file_ids_by_handle = {
+                handle: file_id
+                for file_id, handle in self.handles_by_file_id.items()
+            }
 
-        def volume_filesystem(self, _handle: int) -> str:
+        def open_root(self, _root: str) -> object:
+            return self.handles_by_file_id[1]
+
+        def volume_filesystem(self, handle: object) -> str:
+            assert handle is self.handles_by_file_id[1]
             return "NTFS"
 
-        def state(self, handle: int, *_args, **kwargs):
+        def snapshot(self, handle: object, *_args, **kwargs):
             kind = kwargs["object_kind"]
-            return _windows_state(
+            return _shared_windows_snapshot(
                 module,
-                file_id=handle,
+                file_id=self.file_ids_by_handle[handle],
                 kind=kind,
                 size=0,
             )
 
-        def enumerate_directory(self, handle: int, _filesystem: str):
-            if handle == 1:
-                return (module._WindowsEntry("epoch", 0x10, 2),)
-            if handle == 2:
-                return (module._WindowsEntry("faiss", 0x10, 3),)
-            if 3 <= handle < deepest_directory:
-                return (module._WindowsEntry(f"d{handle}", 0x10, handle + 1),)
-            if handle == deepest_directory:
-                return (module._WindowsEntry("leaf.index", 0, leaf_id),)
-            raise AssertionError(f"unexpected directory handle {handle}")
+        def enumerate_directory(self, handle: object, _filesystem: str):
+            file_id = self.file_ids_by_handle[handle]
+            if file_id == 1:
+                return (
+                    module.WindowsDirectoryEntry(
+                        "epoch", 0x10, "ntfs_file_index_64", 2
+                    ),
+                )
+            if file_id == 2:
+                return (
+                    module.WindowsDirectoryEntry(
+                        "faiss", 0x10, "ntfs_file_index_64", 3
+                    ),
+                )
+            if 3 <= file_id < deepest_directory:
+                return (
+                    module.WindowsDirectoryEntry(
+                        f"d{file_id}",
+                        0x10,
+                        "ntfs_file_index_64",
+                        file_id + 1,
+                    ),
+                )
+            if file_id == deepest_directory:
+                return (
+                    module.WindowsDirectoryEntry(
+                        "leaf.index",
+                        0,
+                        "ntfs_file_index_64",
+                        leaf_id,
+                    ),
+                )
+            raise AssertionError(f"unexpected directory file id {file_id}")
 
-        def open_by_id(self, _volume: int, entry, *, directory: bool) -> int:
+        def open_by_id(self, volume: object, entry, *, directory: bool) -> object:
+            assert volume is self.handles_by_file_id[1]
             assert directory is entry.is_directory
-            return int(entry.file_id)
+            return self.handles_by_file_id[int(entry.file_id)]
 
-        def hash_file(self, _handle: int):
+        def hash_file(self, handle: object):
+            assert handle is self.handles_by_file_id[leaf_id]
             return hashlib.sha256(b"").hexdigest(), 0
 
-        def close(self, _handle: int) -> None:
+        def close(self, handle: object) -> None:
+            assert handle in self.file_ids_by_handle
             return None
 
-    monkeypatch.setattr(module, "_load_windows_api", DeepApi)
+    monkeypatch.setattr(module, "_load_windows_backend", DeepApi)
     _identity_json_value, targets = module._observe_windows(
         _private_windows_projection(module)
     )
@@ -1276,14 +1231,21 @@ def test_windows_native_trace_opens_only_drive_root_by_path(
     module = _load_module()
     outer = tmp_path / "outer"
     _write(_epoch_root(outer) / "memory.db", b"trace")
-    native = module._WindowsApi()
+    native = module.WindowsHeldHandleBackend()
 
     class TraceApi:
         def __init__(self) -> None:
             self.root_paths: list[str] = []
             self.opened_ids: list[int | bytes] = []
 
-        def open_root(self, root: str) -> int:
+        def __enter__(self):
+            native.__enter__()
+            return self
+
+        def __exit__(self, *args) -> bool:
+            return native.__exit__(*args)
+
+        def open_root(self, root: str) -> object:
             self.root_paths.append(root)
             return native.open_root(root)
 
@@ -1295,7 +1257,7 @@ def test_windows_native_trace_opens_only_drive_root_by_path(
             return getattr(native, name)
 
     trace = TraceApi()
-    monkeypatch.setattr(module, "_load_windows_api", lambda: trace)
+    monkeypatch.setattr(module, "_load_windows_backend", lambda: trace)
     result = module.observe_filesystem(_projection(outer))
 
     assert result.filesystem_targets[0].exists is True
@@ -1307,104 +1269,86 @@ def test_windows_native_trace_opens_only_drive_root_by_path(
     )
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native share modes are Windows-only")
-def test_windows_incompatible_writer_is_sharing_conflict(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("file_id_kind", "file_id", "expected_identity_json"),
+    (
+        (
+            "ntfs_file_index_64",
+            0xFEDCBA9876543210,
+            '{"file_id":"fedcba9876543210","file_id_kind":"ntfs_file_index_64",'
+            '"object_kind":"regular_file","schema":"goodq.windows-file-identity.v1",'
+            '"volume_serial":"123456789abcdef0"}',
+        ),
+        (
+            "refs_file_id_128",
+            bytes(range(16)),
+            '{"file_id":"000102030405060708090a0b0c0d0e0f",'
+            '"file_id_kind":"refs_file_id_128","object_kind":"regular_file",'
+            '"schema":"goodq.windows-file-identity.v1",'
+            '"volume_serial":"123456789abcdef0"}',
+        ),
+    ),
+)
+def test_windows_outward_evidence_preserves_shared_identity_json(
+    file_id_kind: str,
+    file_id: int | bytes,
+    expected_identity_json: str,
+) -> None:
     module = _load_module()
-    outer = tmp_path / "outer"
-    target = _epoch_root(outer) / "memory.db"
-    _write(target, b"leased")
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateFileW.argtypes = [
-        ctypes.c_wchar_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-    ]
-    kernel32.CreateFileW.restype = ctypes.c_void_p
-    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-    kernel32.CloseHandle.restype = ctypes.c_int32
-    handle = kernel32.CreateFileW(str(target), 0x80000000, 0, None, 3, 0, None)
-    invalid = ctypes.c_void_p(-1).value
-    if handle is None or handle == invalid:
-        pytest.skip(f"exclusive fixture unavailable: {ctypes.get_last_error()}")
-    try:
-        with pytest.raises(module.FilesystemObservationError) as exc_info:
-            module.observe_filesystem(_projection(outer))
-        assert exc_info.value.code == "sharing_conflict"
-    finally:
-        assert kernel32.CloseHandle(handle)
-
-
-def test_exact_windows_identity_json_for_ntfs_and_refs() -> None:
-    module = _load_module()
-    if os.name != "nt":
-        pytest.skip("Win32 state structures are Windows-only")
-    api = module._WindowsApi()
-    volume_serial = 0x123456789ABCDEF0
-    refs_id = bytes(range(16))
-
-    def query(_handle, info_class, _structure):
-        if info_class == api.FILE_ATTRIBUTE_TAG_INFO:
-            return SimpleNamespace(FileAttributes=0, ReparseTag=0)
-        if info_class == api.FILE_ID_INFO:
-            return SimpleNamespace(
-                VolumeSerialNumber=volume_serial,
-                FileId=SimpleNamespace(Identifier=refs_id),
-            )
-        if info_class == api.FILE_BASIC_INFO:
-            return SimpleNamespace(
-                LastWriteTime=api.FILETIME_UNIX_EPOCH + 5,
-                ChangeTime=api.FILETIME_UNIX_EPOCH + 6,
-            )
-        if info_class == api.FILE_STANDARD_INFO:
-            return SimpleNamespace(
-                Directory=False,
-                DeletePending=False,
-                EndOfFile=4,
-                AllocationSize=4096,
-                NumberOfLinks=1,
-            )
-        raise AssertionError(info_class)
-
-    api._query = query
-    api._by_handle = lambda _handle: SimpleNamespace(
-        nFileIndexHigh=0xFEDCBA98,
-        nFileIndexLow=0x76543210,
-        nFileSizeHigh=0,
-        nFileSizeLow=4,
-        nNumberOfLinks=1,
+    entry = module.WindowsDirectoryEntry(
+        "memory.db",
+        0,
+        file_id_kind,
+        file_id,
     )
-    api.stream_inventory = lambda _handle: (("::$DATA", 4, 4096),)
-    ntfs_id = 0xFEDCBA9876543210
-    ntfs = api.state(
-        1,
-        filesystem="NTFS",
-        expected=module._WindowsEntry("member", 0, ntfs_id),
+    snapshot = module.WindowsObjectSnapshot(
+        volume_serial=0x123456789ABCDEF0,
+        file_id_kind=file_id_kind,
+        file_id=file_id,
         object_kind="regular_file",
-        require_stream_contract=True,
+        size_bytes=4,
+        mtime_ns=500,
+        allocation_size=4096,
+        link_count=1,
+        attributes=0,
+        reparse_tag=0,
+        last_write_ticks=116444736000000005,
+        change_ticks=116444736000000006,
+        streams=(("::$DATA", 4, 4096),),
     )
-    refs = api.state(
-        1,
-        filesystem="ReFS",
-        expected=module._WindowsEntry("member", 0, refs_id),
-        object_kind="regular_file",
-        require_stream_contract=True,
+
+    class EvidenceBackend:
+        def open_by_id(self, *_args, **_kwargs) -> object:
+            return object()
+
+        def snapshot(self, *_args, **_kwargs):
+            return snapshot
+
+        def hash_file(self, _handle: object):
+            return hashlib.sha256(b"data").hexdigest(), 4
+
+        def enumerate_directory(self, *_args):
+            return (entry,)
+
+        def close(self, _handle: object) -> None:
+            return None
+
+    target = module._windows_observe_file(
+        EvidenceBackend(),
+        volume_handle=object(),
+        parent_handle=object(),
+        parent_initial=module._windows_membership((entry,)),
+        filesystem="NTFS" if file_id_kind == "ntfs_file_index_64" else "ReFS",
+        volume_serial=0x123456789ABCDEF0,
+        entry=entry,
+        role="memory_database",
+        relative_path="memory.db",
     )
-    assert ntfs.identity_json == (
-        '{"file_id":"fedcba9876543210","file_id_kind":"ntfs_file_index_64",'
-        '"object_kind":"regular_file","schema":"goodq.windows-file-identity.v1",'
-        '"volume_serial":"123456789abcdef0"}'
-    )
-    assert refs.identity_json == (
-        '{"file_id":"000102030405060708090a0b0c0d0e0f",'
-        '"file_id_kind":"refs_file_id_128","object_kind":"regular_file",'
-        '"schema":"goodq.windows-file-identity.v1",'
-        '"volume_serial":"123456789abcdef0"}'
-    )
-    assert ntfs.mtime_ns == refs.mtime_ns == 500
+
+    assert target.file_identity_json == expected_identity_json
+    assert target.file_identity_json == snapshot.identity_json
+
+
 
 
 def test_posix_backend_uses_only_root_path_then_descriptor_relative_calls(

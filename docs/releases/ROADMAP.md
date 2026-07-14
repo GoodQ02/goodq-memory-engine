@@ -1163,6 +1163,31 @@ the failure is not currently visible.
   `0x17`, existing-profile parity, and a pytest-owned Windows-native temporary-
   file transport witness. Token, parser, policy, `AccessCheck`, reader,
   publication, and production ACL work remain closed.
+- Windows label-security transport checkpoint (2026-07-14): private checkpoint
+  `6b40d8e8` adds only exact opt-in held-handle profile
+  `security_read_label`. It preserves the existing `observation` and
+  `security_read` profiles, root access `0x81`, descendant security-read access
+  `0x20081`, public surface, native ABI, validation, bounds, cleanup, and errors.
+  Existing `security_read` remains exact `0x7`; label-aware transport requests
+  exact `0x17`. A pytest-owned Windows temporary-file witness executed the real
+  held-handle native path without ACL mutation. After independent review found
+  a test-oracle gap, the full root/foreign/closed-token, structural, native-
+  failure, malformed-copy, cleanup, and precedence matrix was run against both
+  profiles. Fresh verification passed 167 held-handle tests, 477 external-pin
+  tests, the 644-test combined authority set, two-file compilation, and diff
+  gates. Two current-byte reviews returned `READY`. The checkpoint proves only
+  filtered transport; exact `0xb014` deployment and candidate-plan ACL
+  compatibility remain later test-owned integration witnesses. No live token,
+  configured or production ACL, configured/protected root, manifest, pin,
+  service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup
+  authority was read or changed.
+  Evidence:
+  `docs/diagnostics/R07_WINDOWS_LABEL_SECURITY_TRANSPORT_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
+  repeat ownership/parity audit of projection-neutral token snapshots,
+  filtered-descriptor parsing, fixed generic mapping, and bounded mutation-
+  denial mechanics. No mechanics extraction or manifest-reader code is yet
+  authorized.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1725,6 +1750,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed R-07 label-aware held-handle descriptor transport at
+  `6b40d8e8` with exact `0x7`/`0x17` parity and 644 focused regressions. Advanced
+  only to a read-only security-mechanics ownership/parity audit.
 
 - 2026-07-14: Selected the exact R-07 protected-manifest security policy after
   adversarial review narrowed filtered-descriptor authority, positive-access

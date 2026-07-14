@@ -4,95 +4,101 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — add label-aware held-handle descriptor transport.
+Roadmap item: R-07 — audit projection-neutral Windows security mechanics.
 
 ## Outcome
 
-Use RED/GREEN/refactor to add one opt-in `security_read_label` profile to the
-shared Windows held-handle backend. Preserve the existing `observation` and
-`security_read` profiles exactly. Prove the new profile requests owner, group,
-DACL, and mandatory-label information (`0x17`) from the same held descendant
-handle and returns one detached self-relative descriptor.
+Run only a decision-only, read-only no-repeat audit of the Windows token and
+security mechanics required by the selected protected-manifest policy. Trace
+the completed private implementation in `cli/clean_memory_external_pin.py`, its
+tests, the shared held-handle backend, and official platform contracts. Decide
+which mechanics are genuinely projection-neutral, which remain pin-specific,
+and the smallest isolated extraction/adaptation seam that preserves the
+completed external-pin reader exactly.
 
-This mission changes exactly two files:
-
-- `steps/common/windows_held_handle.py`; and
-- `tests/unit/test_windows_held_handle.py`.
+Do not implement mechanics or the protected-manifest reader during this
+mission.
 
 ## Completed work — do not repeat
 
 - Configuration, filesystem observation, structural membership, held-handle
-  traversal, bounded reads, and owner/group/DACL transport are checkpointed.
-- The no-argument external-pin reader and its lifecycle hardening are
-  checkpointed and remain unchanged.
+  traversal, bounded reads, and external-pin reader authority are checkpointed.
 - `41e56c74` checkpoints the pure canonical protected-manifest validator and
-  membership delegation with 437 approved authority tests.
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`
-  selects the exact manifest policy and received two adversarial `READY`
-  reviews. It explicitly treats `0x17` as filtered transport, detached
-  `AccessCheck` as mutation-denial-only, and native opens/reads as positive
-  access evidence.
-- Candidate-plan authority and storage are completed injected cores. Their
-  positive ACL compatibility is a later test-owned integration witness, not
-  this transport seam.
+  membership delegation.
+- `25ae5b64` selects the exact manifest security policy: filtered descriptor,
+  bounded mutation-denial checking, actual-kernel positive access, frozen v1
+  pin identity digest, and explicit publication-provenance limits.
+- `6b40d8e8` checkpoints exact opt-in `security_read_label` transport with
+  request mask `0x17`, native Windows evidence, 644 focused regressions, and two
+  independent `READY` reviews.
+- Existing `security_read` remains exact owner/group/DACL transport (`0x7`).
+- Candidate-plan authority and storage are completed injected cores and are not
+  part of this mechanics audit.
+
+## Governing evidence
+
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
+- `docs/diagnostics/R07_WINDOWS_LABEL_SECURITY_TRANSPORT_CHECKPOINT_2026-07-14.md`;
+- `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
+- `cli/clean_memory_external_pin.py`;
+- `tests/unit/test_clean_memory_external_pin.py`;
+- `steps/common/windows_held_handle.py`;
+- `tests/unit/test_windows_held_handle.py`; and
+- `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-The new profile may expand only the security-information request carried by the
-existing held-handle descriptor-read capability. It may not reinterpret the
-descriptor, token, route, manifest, pin, or policy. Existing callers must retain
-their exact profile acceptance, open rights, request mask `0x7`, errors,
-cleanup, and public surface.
+The audit may share mechanics, never authority. The external-pin reader's
+private policy, five-object grammar, v1 identity projection/digest, evidence,
+errors, failure order, and no-argument API remain exact. Manifest policy belongs
+only to the future manifest reader. A shared layer may expose bounded native
+mechanics but may not know candidate roles, fixed names, trusted SIDs, accepted
+token policy, DACL sequences, access outcomes, or consumer error schemas.
 
-## Exact TDD seam
+## Exact audit seam
 
-RED must first prove:
+The audit must decide, with code traces and parity oracles:
 
-- `security_read_label` is absent;
-- the selected profile must request exact `GetSecurityInfo` mask `0x17` rather
-  than the existing `0x7`; and
-- the existing Windows-native temporary-file descriptor witness does not yet
-  exercise the label-aware profile.
+- exact ownership and ABI for token opening, duplication, information queries,
+  snapshots, and equality;
+- how the frozen external-pin v1 reader-identity projection remains unchanged
+  while `TokenMandatoryPolicy` is separately observed and rechecked for the
+  manifest reader;
+- which self-relative descriptor, ACL, ACE, SID, and mandatory-label parsing is
+  projection-neutral and bounded;
+- how one immutable filtered descriptor buffer is shared by parsing and bounded
+  denial checking;
+- exact file `GENERIC_MAPPING`, raw-mask preservation, `MapGenericMask`, and
+  zero-privilege `AccessCheck` mechanics;
+- malformed-versus-unsupported internal error ownership and consumer-specific
+  translation;
+- whether extraction or a narrow private adaptation produces the smaller proof
+  obligation; and
+- exact files, public/private API, RED parity matrix, compilation gates, and
+  independent review required for the next implementation checkpoint.
 
-GREEN may then make only these behavioral additions:
-
-- accept exact opt-in profile `security_read_label`;
-- load the same existing security native surface for either security profile;
-- add `READ_CONTROL` only to descendant opens for either security profile;
-- permit `read_security_descriptor()` only on a security-readable descendant
-  handle owned by the same backend;
-- request exact mask `0x17` for `security_read_label` and preserve exact mask
-  `0x7` for `security_read`;
-- retain the existing detached-copy validation, self-relative control check,
-  size bound, allocation cleanup, failure precedence, close behavior, and error
-  vocabulary; and
-- add a Windows-only pytest-owned temporary-file witness that executes the real
-  held-handle `GetSecurityInfo(..., 0x17)` path and proves detached valid
-  self-relative transport without reading or changing configured/production
-  ACLs.
-
-Refactor only after RED and GREEN evidence is captured. Keep the public class,
-method signatures, exception type, and module import surface exact.
+The decision must preserve the rule that `AccessCheck` is only a filtered,
+bounded mutation-denial oracle. Actual kernel opens and same-handle reads remain
+the positive-access proof.
 
 ## Boundaries
 
-- Do not add token inspection, descriptor parsing, DACL policy, generic mapping,
-  `AccessCheck`, manifest-reader logic, or evidence schemas.
-- Do not implement or exercise enrollment, publication, rotation, recovery,
-  candidate-plan persistence, approval, or cleanup.
-- Do not inspect or mutate any live token, ACL, configured/protected root,
+- Do not inspect or mutate a live token, ACL, configured/protected root,
   manifest, pin, service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or
   cleanup target.
 - Do not query a full SACL or request `ACCESS_SYSTEM_SECURITY`.
-- Do not modify the external-pin reader or copy any of its private symbols.
-- Do not change dependencies, services, firewall, environment, or runtime state.
+- Do not copy private external-pin policy into a shared module or manifest
+  reader.
+- Do not modify the external-pin reader, held-handle backend, validator,
+  membership, configuration, candidate plan, or any runtime code/test.
+- Do not add enrollment, publication, rotation, recovery, planning, approval,
+  cleanup, dependency, service, firewall, environment, or runtime changes.
 
 ## Completion gate
 
-Checkpoint only after the focused held-handle suite passes on Windows, including
-the native temporary-file witness; existing `observation` and `security_read`
-behavior is frozen by exact parity tests; the external-pin regression suite and
-shared-source boundary pass; compilation and diff gates are clean; and an
-independent current-byte review returns `READY`. The exact `0xb014` policy form,
-CandidatePlanStore ACL compatibility, security mechanics, and physical manifest
-reader remain closed after this checkpoint.
+Produce one evidence-backed mechanics ownership/parity decision with an exact
+smallest next seam. It must freeze import/public boundaries, native ABI,
+consumer ownership, failure translation, RED parity oracles, and no-repeat
+constraints; preserve every completed external-pin and held-handle behavior;
+and receive independent current-byte review. Checkpoint that decision before
+any mechanics extraction. The protected-manifest reader remains closed.

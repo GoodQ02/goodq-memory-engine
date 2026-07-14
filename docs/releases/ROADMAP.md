@@ -931,6 +931,22 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is only the audited
   read-only Windows external-pin reader source/test pair, with no enrollment,
   publication, rotation, authenticated composition, planning, or cleanup.
+- Windows reader capability-gap audit (2026-07-13): the reader-only preflight
+  found that the exact shared opaque-handle boundary cannot satisfy the audited
+  same-handle security and payload contract. Descendant handles do not request
+  `READ_CONTROL`, raw handles are intentionally private, no public security-
+  descriptor operation exists, and `hash_file()` returns no payload bytes.
+  Implementing the reader now would require a private-handle escape, duplicated
+  Win32 traversal, descendant pathname reopen, or weakened proof; all are
+  rejected. The corrected order first checkpoints one exact same-handle
+  `read_file_bounded(..., maximum_bytes=...) -> (prefix, eof_observed)` method,
+  then separately selects and implements the opaque token/descriptor/
+  `AccessCheck` join, and only then implements the reader. No live ProgramData,
+  pin, token, ACL, configured root, service, GoodQ data, Qdrant, evidence, job,
+  MiniAgent, or cleanup target was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the shared backend
+  bounded-read source/test pair.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1493,6 +1509,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Corrected the R-07 external-pin reader order after the preflight
+  proved the opaque held-handle backend lacks same-handle security inspection
+  and bounded payload access; advanced only to the bounded-read extension seam.
 
 - 2026-07-13: Checkpointed the R-07 shared Windows held-handle extraction with
   exact observer parity and advanced only to the audited read-only external-pin

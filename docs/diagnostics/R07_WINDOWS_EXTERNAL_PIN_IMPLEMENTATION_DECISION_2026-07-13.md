@@ -151,26 +151,31 @@ environment-shaped, relative, root-only, or otherwise invalid lexical form is
 `redirected_boundary`; a failing locator call is `observation_failed`.
 
 Only the drive root is opened by pathname. Every ProgramData and fixed child
-component is selected from a complete held-parent enumeration and opened by
-physical ID. Comparison uses NFC casefold keys. More than one entry with the
-same comparison key, including canonically distinct spellings, is
-`duplicate_identity`. The selected entry retains its complete detached
-`WindowsDirectoryEntry`, parent snapshot, and full entry tuple for final
-recheck.
+component is first sought through one complete held-parent probe enumeration.
+Comparison uses NFC casefold keys. More than one entry with the same comparison
+key, including canonically distinct spellings, is `duplicate_identity`. One
+expected entry is opened by physical ID and immediately snapshotted. The
+selected entry retains its complete detached `WindowsDirectoryEntry`, parent
+snapshot, and full probe tuple for final recheck.
 
-Stable absence is proven, not inferred. When a required component or pin is
-absent, the reader performs this exact bracket on the same held parent:
+Stable absence is proven, not inferred. The probe may discover possible
+absence, but it never authorizes `pin_missing`. When a required component or pin
+is absent from the probe, the reader performs this exact bracket on the same
+held parent:
 
-1. equal transient effective-token snapshot;
-2. parent object snapshot;
-3. first complete entry tuple;
-4. second complete entry tuple;
-5. parent object snapshot; and
-6. equal transient effective-token snapshot.
+1. pre-operation transient effective-token snapshot;
+2. complete probe entry tuple;
+3. parent object snapshot;
+4. first fresh complete proof entry tuple;
+5. second fresh complete proof entry tuple;
+6. parent object snapshot; and
+7. equal post-operation transient effective-token snapshot.
 
-Only identical token snapshots, parent snapshots, and complete entry tuples
-permit `pin_missing`. Any difference is `observation_raced`. No partial or
-name-only membership comparison is sufficient.
+Only identical token snapshots, parent snapshots, and all three complete entry
+tuples, with the expected comparison key absent from every tuple, permit
+`pin_missing`. Any difference or proof-pass appearance is
+`observation_raced`. A proof-pass appearance is never promoted into present
+selection. No partial or name-only membership comparison is sufficient.
 
 ## Pure Security-Descriptor Parser
 
@@ -509,19 +514,20 @@ The implementation and trace oracle use this one order:
    root by path, prove fixed NTFS/ReFS/open-by-ID support, and retain
    `snapshot(root, filesystem=filesystem, expected=None,
    object_kind="directory", require_stream_contract=True)`;
-6. bracket each actual ProgramData component selection; immediately snapshot
-   every successfully opened expected directory with
+6. bracket each actual ProgramData component probe-or-prove selection;
+   immediately snapshot every successfully opened expected directory with
    `snapshot(child, filesystem=filesystem, expected=entry,
    object_kind="directory", require_stream_contract=True)`, prove same-volume
    identity, and retain its complete snapshot plus every held-parent tuple; the
    final component is the anchor;
-7. bracket `GoodQ`, `authority`, and `clean-memory` selection; immediately
-   snapshot each expected directory, prove same-volume identity, and retain the
-   complete snapshots;
+7. bracket `GoodQ`, `authority`, and `clean-memory` probe-or-prove selection;
+   immediately snapshot each expected directory, prove same-volume identity,
+   and retain the complete snapshots;
 8. bracket descriptor/static-policy observation for the anchor and three
    directories, bind the common enrolled reader, and compare `TokenUser`;
 9. run one bracketed effective-access phase for the anchor and each directory;
-10. bracket exact pin-leaf selection without reading content; immediately call
+10. bracket exact pin-leaf probe-or-prove selection without reading content;
+    immediately call
     `snapshot(..., expected=pin_entry, object_kind="regular_file",
     require_stream_contract=True)`, prove same-volume identity, ordinary-file,
     no-reparse/device, link-count-one, exact unnamed-stream, and size-65 state,
@@ -589,7 +595,8 @@ Before GREEN, the two-file seam must demonstrate RED for:
    ten-key evidence;
 2. lazy DLL/export classification and exact pointer-width signatures;
 3. Known Folder ownership, lexical bounds, root-only opening, component
-   collision, stable absence, and no fallback;
+   collision, one probe plus two fresh proof enumerations when absent, stable
+   absence, and no fallback;
 4. every SID/descriptor/ACL/ACE boundary, accepted zero padding, component
    overlap rule, anchor flags, and dedicated inheritance bit;
 5. every token-buffer bound, internal query-order fence, intrinsic acceptance,

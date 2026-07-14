@@ -552,6 +552,7 @@ class _ReaderWorld:
         self.statistics_privilege_count: int | None = None
         self.vary_undefined_impersonation = False
         self.outer_token_drift_at: int | None = None
+        self.absence_post_token_drift_role: str | None = None
         self.thread_case = "no_token_sentinel"
         self.comparison_thread_at: int | None = None
         self.process_case = "success"
@@ -560,6 +561,10 @@ class _ReaderWorld:
         self.missing_role: str | None = None
         self.duplicate_role: str | None = None
         self.membership_mutation_role: str | None = None
+        self.second_proof_membership_mutation_role: str | None = None
+        self.proof_target_appearance_role: str | None = None
+        self.absence_sibling_mutation_role: str | None = None
+        self.absence_sibling_mutation_field: str | None = None
         self.recheck_membership_role: str | None = None
         self.recheck_membership_replace_role: str | None = None
         self.recheck_snapshot_role: str | None = None
@@ -832,6 +837,21 @@ class _ReaderWorld:
         modified_low = 4
         if self.outer_token_drift_at is not None and ordinal >= self.outer_token_drift_at:
             modified_low = 5
+        if (
+            self.absence_post_token_drift_role is not None
+            and self.backend is not None
+        ):
+            parent = next(
+                (
+                    parent_role
+                    for parent_role, (child, _name, _file_id, _attributes)
+                    in self.child_specs.items()
+                    if child == self.absence_post_token_drift_role
+                ),
+                None,
+            )
+            if parent is not None and self.backend.enumeration_counts.get(parent, 0) >= 3:
+                modified_low = 5
         if phase == 1:
             if self.statistics_drift_field == "token_id":
                 token_id = 9
@@ -1332,6 +1352,9 @@ class _FakeBackendLifecycle:
         self.world = world
         self.handles: list[_Held] = []
         self.enumeration_counts: dict[str, int] = {}
+        self.enumeration_results: dict[
+            str, list[tuple[WindowsDirectoryEntry, ...]]
+        ] = {}
         self.snapshot_counts: dict[str, int] = {}
         self.descriptor_counts: dict[str, int] = {}
         self.read_count = 0
@@ -1730,6 +1753,56 @@ class _FakeHeldHandleBackend(_FakeBackendLifecycle):
                     file_id=900,
                 )
             )
+        if (
+            count >= 3
+            and self.world.second_proof_membership_mutation_role == child_role
+            and self.world.missing_role == child_role
+        ):
+            entries.append(
+                WindowsDirectoryEntry(
+                    name="proof-late-entry",
+                    attributes=0,
+                    file_id_kind="ntfs_file_index_64",
+                    file_id=901,
+                )
+            )
+        if (
+            count >= 2
+            and self.world.proof_target_appearance_role == child_role
+            and self.world.missing_role == child_role
+        ):
+            entries.append(
+                WindowsDirectoryEntry(
+                    name=name,
+                    attributes=attributes,
+                    file_id_kind="ntfs_file_index_64",
+                    file_id=file_id,
+                )
+            )
+        if (
+            self.world.absence_sibling_mutation_role == child_role
+            and self.world.missing_role == child_role
+        ):
+            drift = count >= 2
+            field = self.world.absence_sibling_mutation_field
+            entries.append(
+                WindowsDirectoryEntry(
+                    name="unrelated-sibling",
+                    attributes=0x20 if drift and field == "attributes" else 0,
+                    file_id_kind=(
+                        "refs_file_id_128"
+                        if drift and field == "file_id_kind"
+                        else "ntfs_file_index_64"
+                    ),
+                    file_id=(
+                        b"\x01" * 16
+                        if drift and field == "file_id_kind"
+                        else 801
+                        if drift and field == "file_id"
+                        else 800
+                    ),
+                )
+            )
         if count >= 2 and self.world.recheck_membership_role == child_role:
             entries.append(
                 WindowsDirectoryEntry(
@@ -1751,7 +1824,9 @@ class _FakeHeldHandleBackend(_FakeBackendLifecycle):
                 file_id_kind=current.file_id_kind,
                 file_id=current.file_id,
             )
-        return tuple(entries)
+        result = tuple(entries)
+        self.enumeration_results.setdefault(role, []).append(result)
+        return result
 
     def open_by_id(
         self,
@@ -2740,7 +2815,7 @@ def test_known_folder_lexical_boundary_is_closed(monkeypatch, path: str) -> None
 
 
 @pytest.mark.parametrize("role", _ROLE_ORDER)
-def test_stable_absence_is_proven_with_two_complete_enumerations(
+def test_stable_absence_uses_one_probe_and_two_fresh_proof_enumerations(
     monkeypatch, role: str
 ) -> None:
     world = _ReaderWorld()
@@ -2754,24 +2829,32 @@ def test_stable_absence_is_proven_with_two_complete_enumerations(
     _expect_reader_error(monkeypatch, world, "pin_missing")
 
     assert world.backend is not None
-    assert world.backend.enumeration_counts[parent] == 2
+    assert world.backend.enumeration_counts[parent] == 3
     assert world.backend.read_count == 0
-    semantic_events: list[tuple[str, object]] = []
-    for event in world.events:
-        if event[0] == "token.snapshot":
-            semantic_events.append(("token", event[1]))
-        elif event[:2] == ("backend.snapshot", parent):
-            semantic_events.append(("parent_snapshot", event[-1]))
-        elif event[:2] == ("backend.enumerate", parent):
-            semantic_events.append(("parent_enumeration", event[-1]))
-    first_snapshot_count = 1 if parent == "root" else 2
-    assert semantic_events[-6:] == [
-        ("token", "transient"),
-        ("parent_snapshot", first_snapshot_count),
-        ("parent_enumeration", 1),
-        ("parent_enumeration", 2),
-        ("parent_snapshot", first_snapshot_count + 1),
-        ("token", "transient"),
+    probe_index = next(
+        index
+        for index, event in enumerate(world.events)
+        if event == ("backend.enumerate", parent, "NTFS", 1)
+    )
+    parent_file_id = (
+        None
+        if parent == "root"
+        else next(
+            file_id
+            for child, _name, file_id, _attributes in world.child_specs.values()
+            if child == parent
+        )
+    )
+    assert _governed_bracket_semantics(world.events, probe_index) == [
+        ("token.snapshot",),
+        ("token.close",),
+        ("backend.enumerate", parent, "NTFS", 1),
+        ("backend.snapshot", parent, "NTFS", parent_file_id, "directory", True, 2),
+        ("backend.enumerate", parent, "NTFS", 2),
+        ("backend.enumerate", parent, "NTFS", 3),
+        ("backend.snapshot", parent, "NTFS", parent_file_id, "directory", True, 3),
+        ("token.snapshot",),
+        ("token.close",),
     ]
 
 
@@ -2784,24 +2867,41 @@ def test_intermediate_program_data_absence_has_exact_stable_token_bracket(
 
     _expect_reader_error(monkeypatch, world, "pin_missing")
 
-    semantic_events: list[tuple[str, object]] = []
-    for event in world.events:
-        if event[:2] == ("token.snapshot", "transient"):
-            semantic_events.append(("token", "transient"))
-        elif event[:2] == ("backend.snapshot", "pd_corp"):
-            semantic_events.append(("parent_snapshot", event[-1]))
-        elif event[:2] == ("backend.enumerate", "pd_corp"):
-            semantic_events.append(("parent_enumeration", event[-1]))
-    assert semantic_events[-6:] == [
-        ("token", "transient"),
-        ("parent_snapshot", 2),
-        ("parent_enumeration", 1),
-        ("parent_enumeration", 2),
-        ("parent_snapshot", 3),
-        ("token", "transient"),
+    probe_index = next(
+        index
+        for index, event in enumerate(world.events)
+        if event == ("backend.enumerate", "pd_corp", "NTFS", 1)
+    )
+    parent_file_id = world.child_specs["root"][2]
+    assert _governed_bracket_semantics(world.events, probe_index) == [
+        ("token.snapshot",),
+        ("token.close",),
+        ("backend.enumerate", "pd_corp", "NTFS", 1),
+        (
+            "backend.snapshot",
+            "pd_corp",
+            "NTFS",
+            parent_file_id,
+            "directory",
+            True,
+            2,
+        ),
+        ("backend.enumerate", "pd_corp", "NTFS", 2),
+        ("backend.enumerate", "pd_corp", "NTFS", 3),
+        (
+            "backend.snapshot",
+            "pd_corp",
+            "NTFS",
+            parent_file_id,
+            "directory",
+            True,
+            3,
+        ),
+        ("token.snapshot",),
+        ("token.close",),
     ]
     assert world.backend is not None
-    assert world.backend.enumeration_counts["pd_corp"] == 2
+    assert world.backend.enumeration_counts["pd_corp"] == 3
     assert world.backend.read_count == 0
     assert not any(
         event[:3] == ("backend.open_by_id", "root", "pd_shared")
@@ -2809,7 +2909,7 @@ def test_intermediate_program_data_absence_has_exact_stable_token_bracket(
     )
 
 
-def test_absence_membership_change_is_a_race(monkeypatch) -> None:
+def test_absence_probe_to_proof_membership_change_is_a_race(monkeypatch) -> None:
     world = _ReaderWorld()
     world.missing_role = "pin"
     world.membership_mutation_role = "pin"
@@ -2817,8 +2917,102 @@ def test_absence_membership_change_is_a_race(monkeypatch) -> None:
     _expect_reader_error(monkeypatch, world, "observation_raced")
 
     assert world.backend is not None
-    assert world.backend.enumeration_counts["clean_memory"] == 2
+    assert world.backend.enumeration_counts["clean_memory"] == 3
     assert world.backend.read_count == 0
+
+
+def test_absence_first_to_second_proof_membership_change_is_a_race(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    world.missing_role = "pin"
+    world.second_proof_membership_mutation_role = "pin"
+
+    _expect_reader_error(monkeypatch, world, "observation_raced")
+
+    assert world.backend is not None
+    assert world.backend.enumeration_counts["clean_memory"] == 3
+    assert world.backend.read_count == 0
+
+
+def test_absence_proof_target_appearance_is_a_race_and_is_never_promoted(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    world.missing_role = "pin"
+    world.proof_target_appearance_role = "pin"
+
+    _expect_reader_error(monkeypatch, world, "observation_raced")
+
+    assert world.backend is not None
+    assert world.backend.enumeration_counts["clean_memory"] == 3
+    assert world.backend.read_count == 0
+    assert not any(
+        event[:3] == ("backend.open_by_id", "root", "pin")
+        for event in world.events
+    )
+
+
+def test_absence_parent_snapshot_change_is_a_race(monkeypatch) -> None:
+    world = _ReaderWorld()
+    world.missing_role = "pin"
+    world.read_snapshot_role = "clean_memory"
+
+    _expect_reader_error(monkeypatch, world, "observation_raced")
+
+    assert world.backend is not None
+    assert world.backend.enumeration_counts["clean_memory"] == 3
+    assert world.backend.snapshot_counts["clean_memory"] == 3
+    assert world.backend.read_count == 0
+
+
+def test_absence_specific_post_token_projection_change_is_a_race(monkeypatch) -> None:
+    world = _ReaderWorld()
+    world.missing_role = "pin"
+    world.absence_post_token_drift_role = "pin"
+
+    _expect_reader_error(monkeypatch, world, "observation_raced")
+
+    assert world.backend is not None
+    assert world.backend.enumeration_counts["clean_memory"] == 3
+    assert world.backend.read_count == 0
+    probe_index = next(
+        index
+        for index, event in enumerate(world.events)
+        if event == ("backend.enumerate", "clean_memory", "NTFS", 1)
+    )
+    bracket = _governed_bracket_semantics(world.events, probe_index)
+    assert bracket[:2] == [("token.snapshot",), ("token.close",)]
+    assert bracket[-2:] == [("token.snapshot",), ("token.close",)]
+    assert not any(
+        event[:3] == ("backend.open_by_id", "root", "pin")
+        for event in world.events
+    )
+
+
+@pytest.mark.parametrize("field", ("file_id", "attributes", "file_id_kind"))
+def test_absence_complete_tuple_change_is_a_race_even_when_names_are_stable(
+    monkeypatch,
+    field: str,
+) -> None:
+    world = _ReaderWorld()
+    world.missing_role = "pin"
+    world.absence_sibling_mutation_role = "pin"
+    world.absence_sibling_mutation_field = field
+
+    _expect_reader_error(monkeypatch, world, "observation_raced")
+
+    assert world.backend is not None
+    assert world.backend.enumeration_counts["clean_memory"] == 3
+    assert world.backend.read_count == 0
+    results = world.backend.enumeration_results["clean_memory"]
+    assert tuple(tuple(entry.name for entry in result) for result in results) == (
+        ("unrelated-sibling",),
+        ("unrelated-sibling",),
+        ("unrelated-sibling",),
+    )
+    assert results[0] != results[1]
+    assert results[1] == results[2]
 
 
 def test_casefold_collision_is_ambiguous_before_open(monkeypatch) -> None:

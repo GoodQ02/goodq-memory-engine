@@ -1098,6 +1098,28 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
   repeat audit selecting one pure canonical protected-manifest validator and
   exact membership extraction/parity seam before any parser or reader code.
+- Protected-manifest validator extraction decision (2026-07-14): repository
+  census and three independent read-only reviews found no equivalent public
+  validator. The binding completed-membership no-repeat rule resolved an
+  initial four-file/six-file disagreement: do not reopen configuration-v1
+  merely to share private helpers. The selected four-file seam adds one
+  standard-library-only shared validator/test and adapts membership/test. Its
+  exact six-symbol API includes immutable schema, child, maximum-byte, and
+  eight-role constants, a frozen init-disabled path-free-repr result with a
+  detached manifest view and exact-byte SHA-256, and one keyword-only-flavor
+  validator. Membership preserves its public API, outer byte/size ordering
+  fence, configuration validation, combined-scope rules, canonical output,
+  digest, and final mutation recheck while relinquishing all manifest parsing.
+  Exact error-message, accepted/rejected corpus, import-purity, delegation,
+  capability, and output parity are frozen by the selected RED matrix. Manifest
+  security policy remains an independent mandatory blocker before reader RED.
+  No live ProgramData, pin, manifest, token, ACL, configured or protected root,
+  service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup
+  authority was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the reviewed
+  four-file validator extraction through RED/GREEN/refactor and independent
+  current-byte review, with no physical reader or security-policy code.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1660,6 +1682,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected the exact R-07 four-file canonical protected-manifest
+  validator extraction after the completed membership no-repeat rule resolved
+  the generic-helper boundary. Advanced only to its TDD parity checkpoint; the
+  physical reader and manifest security policy remain closed.
 
 - 2026-07-14: Checkpointed the exact R-07 held-handle bounded-read capacity
   extension at `617cd32a`, preserving the 66-byte external-pin protocol, and

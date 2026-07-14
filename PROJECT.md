@@ -4,18 +4,15 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit only canonical protected-manifest validator
-ownership and extraction parity.
+Roadmap item: R-07 — extract one pure canonical protected-manifest validator.
 
 ## Outcome
 
-Select one pure projection-neutral canonical protected-manifest validator so
-the completed structural membership projection and future physical manifest
-reader cannot become competing parsing authorities. Audit only ownership,
-exact API/import direction, extraction/adaptation scope, error parity, and the
-focused RED matrix. Do not modify membership, create the shared validator, or
-begin manifest-reader code until the decision is independently reviewed and
-checkpointed.
+Implement only the reviewed four-file extraction/parity seam selected by the
+validator decision checkpoint. Add one standard-library-only shared manifest
+validator and focused test, adapt structural membership and its existing test,
+and preserve all completed public bytes, digests, failures, import purity, and
+configuration behavior. Do not begin physical reader or security-policy code.
 
 ## Completed work — do not repeat
 
@@ -42,6 +39,9 @@ checkpointed.
   extend only the shared bounded-read ceiling to `4_194_305`, preserve the
   external-pin reader's exact 66-byte request, and close the transport-capacity
   blocker with 664 focused regression tests.
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_DECISION_2026-07-14.md`
+  proves no equivalent shared validator exists, selects the exact public API,
+  preserves membership failure order, and limits implementation to four files.
 - Candidate-plan authority and immutable storage are complete injected cores;
   they are not production reader or orchestration authority.
 
@@ -54,32 +54,38 @@ checkpointed.
 - `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
 - `docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_DECISION_2026-07-14.md`;
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-One exact canonical byte/schema validator must own protected-manifest meaning.
-The structural membership projection and future physical reader may compose
-that authority but may not copy, privately import, or independently reinterpret
-it. Extracting validation must preserve the completed membership public API,
-canonical projection bytes, detached digest, accepted/rejected corpus, and
-stable outward failures.
+One exact canonical byte/schema validator owns protected-manifest meaning. The
+membership adapter may retain only its pre-configuration bytes/size compatibility
+fence and configuration/projection validation; it may not retain or copy
+manifest parsing. Generic configuration helpers stay contract-local under the
+completed membership no-repeat rule.
 
-## Exact audit seam
+## Exact implementation seam
 
-Audit the private canonical JSON and `_manifest_members()` responsibilities in
-`cli/clean_memory_protected_membership.py`, their focused tests, and repository
-import/call sites. Select the smallest shared pure module/API and later source/
-test adaptation set that preserves membership parity while allowing the future
-reader to validate the same authenticated bytes. Prove no equivalent public
-validator already exists. Do not create or move code during this audit.
+Modify only:
+
+- new `steps/common/clean_memory_protected_manifest.py`;
+- new `tests/unit/test_clean_memory_protected_manifest_validator.py`;
+- `cli/clean_memory_protected_membership.py`; and
+- `tests/unit/test_clean_memory_protected_membership.py`.
+
+Use focused RED before production movement. The shared module owns the exact
+six-symbol API, frozen detached result, manifest constants, canonical parser,
+schema/member/path validation, and digest. Membership retains its exact public
+API, configuration validation, combined-scope rules, projection, and final
+mutation fence.
 
 ## Boundaries
 
-- Do not implement the validator extraction, manifest reader, security policy
-  or mechanics, locator, protected observer, or composition.
-- Do not modify the completed configuration, filesystem observer, membership,
-  shared held-handle backend, pin reader, candidate plan, or their tests.
+- Do not implement the manifest reader, security policy or mechanics, locator,
+  protected observer, or composition.
+- Do not add a generic canonical helper module or modify completed configuration,
+  filesystem observer, shared held-handle backend, pin reader, or candidate plan.
 - Do not add enrollment, publication, rotation, recovery, Qdrant observation,
   runnable planning, approval, or cleanup execution.
 - Do not expose or log ProgramData, member paths, physical identities, SIDs,
@@ -91,9 +97,10 @@ validator already exists. Do not create or move code during this audit.
 
 ## Completion gate
 
-Produce one reviewed decision selecting exact validator ownership, API, input/
-output/error contracts, import direction, extraction/adaptation files, parity
-oracle, and focused RED matrix. Prove no equivalent shared validator exists and
-that the completed membership projection need not change its public output.
-Update the sole roadmap and checkpoint the audit before code. Keep manifest
-security policy as a separate mandatory blocker before reader implementation.
+Focused RED must fail for the absent validator/API and then for the unadapted
+membership ownership seam. Direct validator, existing 98-test membership,
+focused pair, and the approved authority union plus new tests must pass through
+`goodq_core`, along with compilation, exact imports/exports, capability-free
+execution, and diff gates. Independent current-byte review must confirm exact
+API/error/output parity. Checkpoint before selecting the next prerequisite;
+manifest security policy remains a separate blocker before reader code.

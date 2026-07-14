@@ -1059,6 +1059,27 @@ the failure is not currently visible.
   direct-pin digest comparison and mismatch-before-parser ownership. The
   ProgramData locator/recheck remains a separate later audit before protected
   observation or composition.
+- Protected-manifest reader capability-gap audit checkpoint (2026-07-14): three
+  independent read-only source/lifecycle/API reviews found no equivalent reader
+  and proved it cannot safely be created yet. The shared same-handle reader
+  rejects every cap above 66 although maximum-size manifest EOF needs
+  `4_194_305`; the one exact canonical manifest validator remains private to
+  structural membership; and the source contract requires manifest-chain owner
+  and effective-write validation although the manifest-specific policy and the
+  shared projection-neutral token, descriptor-parsing, and effective-access
+  mechanics needed beyond the existing detached descriptor read remain
+  unselected or unavailable. The exact first
+  prerequisite is only the two-file shared-backend capacity extension, keeping
+  the existing method/public surface and external-pin caller's exact 66-byte
+  request. Canonical-validator extraction/parity and manifest security-policy
+  selection/mechanics remain separate prerequisites before reader RED. No live
+  ProgramData, pin, manifest, token, ACL, configured or protected root, service,
+  GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup authority was
+  read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is only the existing shared
+  held-handle method and focused test, widening its accepted ceiling to exact
+  `4_194_305` without adding a second API or changing 66-byte pin behavior.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1621,6 +1642,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Closed the R-07 protected-manifest reader boundary audit after
+  three independent reviews proved capacity, canonical-parser ownership, and
+  manifest security-policy blockers. Advanced only to the exact two-file held-
+  handle capacity extension; no manifest reader is authorized yet.
 
 - 2026-07-14: Corrected the R-07 authenticated-membership sequence after a
   no-repeat call-graph audit proved target filesystem evidence was not an

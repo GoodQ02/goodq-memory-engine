@@ -4,18 +4,16 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit only the fixed-child protected-manifest reader
-boundary.
+Roadmap item: R-07 — extend only the shared held-handle bounded-read capacity.
 
 ## Outcome
 
-Select the exact manifest-reader contract before code. The reader must receive
-the direct exact `ExternalPinEvidence` obtained by production orchestration,
-acquire only `protected-boundaries.json` beneath the projected candidate
-evidence root, hash the exact bytes read from the same held handle, compare that
-digest with the direct pin evidence before manifest parsing, and validate those
-same bytes as canonical before returning them. ProgramData locator/recheck
-ownership remains a separate later audit and must not enter this reader seam.
+Widen only the accepted upper bound of the existing
+`WindowsHeldHandleBackend.read_file_bounded()` method from 66 to `4_194_305` so
+a future reader can prove EOF for a maximum-size 4,194,304-byte manifest.
+Preserve the method, signature, return and EOF semantics, public surface,
+adapter parity, lifecycle behavior, and the external-pin reader's exact 66-byte
+request. Do not add a second read API or begin manifest-reader code.
 
 ## Completed work — do not repeat
 
@@ -33,6 +31,10 @@ ownership remains a separate later audit and must not enter this reader seam.
   proves that a manifest reader, protected observer, and locator handoff are
   still absent, and that target filesystem evidence belongs only to later
   cleanup-scope assembly.
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`
+  proves that the reader is blocked by held-handle capacity, one canonical-
+  parser ownership, and an unselected manifest security policy. It selects only
+  the transport-capacity extension as the next executable seam.
 - Candidate-plan authority and immutable storage are complete injected cores;
   they are not production reader or orchestration authority.
 
@@ -43,35 +45,36 @@ ownership remains a separate later audit and must not enter this reader seam.
 - `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`;
 - `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-The external pin authorizes only the exact canonical manifest bytes matching its
-digest. Configuration is routing, not membership authorization. The future
-production plan edge must invoke both readers itself, authenticate those exact
-bytes before parsing, reject lexical and physical pin/member overlap, and accept
-no caller-built evidence. Target filesystem evidence is separate plan pre-state.
+The shared backend may transport bytes and detached platform evidence but must
+not own manifest meaning or policy. Widening its projection-neutral capacity
+must not change the external-pin protocol, and it does not make the future
+manifest reader ready. Canonical-validator and manifest security authorities
+remain separate blockers.
 
-## Exact audit seam
+## Exact implementation seam
 
-Audit only the future pair:
+Modify only:
 
-- `cli/clean_memory_protected_manifest.py`; and
-- `tests/unit/test_clean_memory_protected_manifest.py`.
+- `steps/common/windows_held_handle.py`; and
+- `tests/unit/test_windows_held_handle.py`.
 
-The audit must select exact input/output types, direct exact pin-evidence
-binding, fixed-child traversal, bounded same-handle byte acquisition, canonical
-manifest validation, manifest identity and race fences, reader-owned
-digest-mismatch precedence, and closed path-free errors. Do not create either
-file until those choices are frozen and independently reviewed.
+Change only the maximum accepted exact integer from 66 to `4_194_305`. Preserve
+all existing ownership, rewind, bounded-read, EOF, error, cleanup, export, and
+adapter contracts. Add focused RED coverage for exact maximum acceptance,
+over-maximum pre-I/O refusal, maximum manifest EOF proof, exact-cap no-probe
+behavior, and unchanged 66-byte external-pin use.
 
 ## Boundaries
 
-- Do not implement the manifest reader, locator, protected observer, or
-  composition during this audit.
+- Do not implement the manifest reader, parser extraction, security policy or
+  mechanics, locator, protected observer, or composition.
 - Do not modify the completed configuration, filesystem observer, membership,
-  pin reader, held-handle backend, candidate plan, or their tests.
+  pin reader, candidate plan, or their production code/tests.
 - Do not add enrollment, publication, rotation, recovery, Qdrant observation,
   runnable planning, approval, or cleanup execution.
 - Do not expose or log ProgramData, member paths, physical identities, SIDs,
@@ -83,9 +86,9 @@ file until those choices are frozen and independently reviewed.
 
 ## Completion gate
 
-Produce one reviewed decision that fixes the manifest-reader API, direct-output
-digest bindings, pin-first and reader-owned mismatch-before-parser order, finite
-failure precedence, same-handle race fences, import direction, and focused RED
-matrix. Prove by source search that no equivalent manifest reader already
-exists. Update the sole roadmap and checkpoint the audit before any code. Audit
-the ProgramData locator/recheck as a separate later seam.
+Focused RED must fail before production change. Then the exact backend suite,
+external-pin and filesystem-adapter regression suites, compilation, exact
+public-surface checks, documentation authority/drift, banned-token, dependency,
+and staged-diff gates must pass. Independent current-byte review must confirm
+that only the accepted ceiling changed and the external-pin caller still asks
+for exactly 66 bytes. Checkpoint before selecting the next prerequisite.

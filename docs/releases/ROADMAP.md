@@ -848,6 +848,28 @@ the failure is not currently visible.
   `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`.
   R-07 remains `IN_PROGRESS`; the next bounded gate defines exact path-free
   member semantics and the external-pin trust-root contract before code.
+- Protected-authority semantics decision checkpoint (2026-07-13): the exact
+  canonical eight-role manifest and merged 18-role membership contracts are now
+  selected, including bounded member/path limits, configured positional IDs,
+  explicit kind/presence policy, lexical duplicate/overlap rejection, one
+  path-free composite envelope per role, stable-absence bytes, and volume-scoped
+  physical-alias handoff. The approved external pin is one Windows v1 source
+  beneath the actual ProgramData Known Folder, on fixed NTFS/ReFS with open-by-ID
+  support, a separately enrolled administrator-owned protected DACL, an exact
+  65-byte digest payload, no-replace first publication, and fail-closed
+  unsupported rotation/recovery. POSIX remains unsupported pending its own
+  capability audit. Three independent current-byte reviews closed routing-
+  provenance, injected-evidence, bootstrap, schema, absence-preimage, and
+  physical-disjointness contradictions. The corrected order first implements a
+  non-authoritative pure membership projection; authenticated selection remains
+  closed until production-owned Windows reader/enrollment evidence is separately
+  audited and implemented. No live configuration, protected root/member,
+  manifest, pin, ACL, service, data, Qdrant, evidence store, job, token,
+  MiniAgent, or cleanup authority was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly
+  `cli/clean_memory_protected_membership.py` with RED coverage in
+  `tests/unit/test_clean_memory_protected_membership.py`.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1410,6 +1432,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-13: Selected the exact R-07 protected membership and Windows external-
+  pin trust-root semantics, corrected the authority order to keep pure
+  membership non-authoritative, and advanced only to its isolated import-pure
+  source/test seam.
 
 - 2026-07-13: Checkpointed the R-07 duplicate canonical protected-identity
   envelope guard and advanced only to the explicit protected-authority source

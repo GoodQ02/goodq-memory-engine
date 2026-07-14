@@ -4,18 +4,19 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — implement the non-authoritative protected-membership
-projection.
+Roadmap item: R-07 — audit the Windows external-pin reader boundary.
 
 ## Outcome
 
-Add one import-pure projection that validates canonical manifest structure,
-merges it with the closed v1 configured-role projection, and produces the exact
-detached `goodq.clean-memory-protected-membership.v1` digest selected by the
-completed semantics decision.
+Perform one read-only no-repeat audit that reconciles the selected external-pin
+semantics with existing Windows held-handle/no-follow capabilities. Determine
+the smallest public extraction seam, exact path-free reader evidence, and exact
+failure taxonomy needed before any reader, enrollment, publication, or
+authenticated-selection implementation is proposed.
 
-This seam proves structural consistency only. It does not authenticate the
-manifest, read the external pin, or authorize candidate planning.
+This mission selects evidence and implementation boundaries only. It does not
+read or create a live pin, mutate ProgramData, change an ACL, or authenticate
+protected membership.
 
 ## Governing evidence
 
@@ -25,52 +26,53 @@ manifest, read the external pin, or authorize candidate planning.
 - protected-boundary authority audit checkpoint `f01e03a7`
 - duplicate canonical-envelope guard checkpoint `4230a910`
 - source/trust decision checkpoints `8bfa5d27` and `69f4a91e`
+- semantics checkpoint `9328e89e`
+- membership-projection checkpoint `81aafce1`
 - `docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md`
 - `docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md`
+- `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`
 - `docs/releases/ROADMAP.md`
 
 ## Governing invariant
 
-Resolved configuration is locator/routing scope, not protected-member
-authorization. Canonical membership projection is not trust-root evidence.
-Only later production orchestration that directly owns the approved pin and
-manifest readers may authenticate membership.
+The external pin is the independent authorization source for exact manifest
+bytes. Configuration and the completed membership projection remain routing and
+structural evidence only. A future production edge may claim authenticated
+membership only after it directly owns approved pin and manifest readers and
+completes every selected physical/security recheck.
 
-## Exact code scope
+## Exact audit scope
 
-- `cli/clean_memory_protected_membership.py`
-- `tests/unit/test_clean_memory_protected_membership.py`
-
-Start with RED tests for the selected exact schema, eight manifest roles,
-18-role merged order, configured positional IDs, presence/kind table, canonical
-bytes, limits, lexical aliases/overlap, detached immutability, digest binding,
-input-race rejection, and public API/import purity.
-
-The implementation may accept only:
-
-- the exact completed `ResolvedPlanConfiguration` object; and
-- already-supplied canonical manifest bytes for structural validation.
-
-It must not accept pin evidence, a trust/provenance label, a prebuilt membership
-mapping, configuration/caller overrides, or an alternate manifest location.
+- Reconcile the Windows pin locator, token, volume/filesystem, DACL/owner,
+  held-handle, open-by-ID, stable-parent, no-replace, and 65-byte payload
+  requirements already selected by the semantics decision.
+- Trace existing Windows filesystem-observer capability as a behavioral oracle;
+  do not import, copy, or modify its private helpers.
+- Identify whether a small public shared backend extraction is coherent, which
+  completed tests prove parity, and which reader-specific checks remain new.
+- Select one path-free pin-reader evidence envelope and a closed failure-code
+  set sufficient for later authenticated composition.
+- Preserve POSIX as unsupported in v1 unless a separate capability audit is
+  explicitly approved.
 
 ## Boundaries
 
-- Do not modify the completed v1 configuration projection, candidate plan,
-  filesystem observer, action-job authority, MiniAgent, or approval contracts.
-- Do not load configuration or inspect a manifest path. No filesystem, network,
-  process, persistence, service, Qdrant, job/token, plan, or cleanup operation.
-- Do not create or change a live manifest, external pin, trust-root directory,
-  ACL, service, configured root, or member value.
-- Do not implement the Windows enrollment/reader, pin writer, manifest reader,
-  authenticated selection, shared no-follow backend, protected observer,
-  Qdrant observer, runnable planning, or executor in this seam.
+- Read-only audit only. No source implementation, dependency change, service
+  action, configuration load, runtime command, or host mutation.
+- Do not inspect, create, enroll, publish, rotate, recover, or delete the live
+  trust-root location or pin.
+- Do not change ProgramData, filesystem permissions, ownership, ACLs, user or
+  process tokens, services, manifests, configured roots, Qdrant, or GoodQ data.
+- Do not reopen the completed configuration, membership projection, candidate
+  plan, filesystem observer, action-job, MiniAgent, or approval contracts.
+- Do not design manifest authoring, protected-member observation, Qdrant
+  observation, runnable planning, or execution inside this audit.
 
 ## Completion gate
 
-The focused RED oracle fails for the missing behavior, then the smallest source
-change passes the focused suite and the approved configuration/candidate/
-filesystem authority union. Compilation, import-purity, documentation authority,
-semantic-drift, banned-token, dependency, index, diff, and three independent
-current-byte review gates pass before checkpointing. No live/configured member
-or trust-root source is touched.
+Three bounded read-only traces agree on existing capability, missing capability,
+public/private ownership, exact reader evidence, exact failure taxonomy, and the
+smallest coherent next implementation seam. A dated diagnostic checkpoint,
+roadmap entry, regenerated indexes, documentation authority/drift, banned-token,
+dependency, diff, and independent current-byte review gates pass. No live trust
+root, member, service, or data surface is touched.

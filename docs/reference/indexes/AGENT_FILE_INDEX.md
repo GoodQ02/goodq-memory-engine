@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1244**
+Indexed active tracked paths: **1247**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -119,6 +119,7 @@ Indexed active tracked paths: **1244**
 | `/cli/auth_models.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_filesystem.py` | CLI | Command-line operator surface. |
+| `/cli/clean_memory_protected_membership.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_build.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_kg.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_memory.py` | CLI | Command-line operator surface. |
@@ -293,6 +294,7 @@ Indexed active tracked paths: **1244**
 | `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -1035,6 +1037,7 @@ Indexed active tracked paths: **1244**
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_filesystem.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_protected_membership.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_context_analyzer_llm.py` | Verification | Test, fixture, or verification asset. |

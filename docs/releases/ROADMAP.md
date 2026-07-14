@@ -870,6 +870,26 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is exactly
   `cli/clean_memory_protected_membership.py` with RED coverage in
   `tests/unit/test_clean_memory_protected_membership.py`.
+- Protected-membership projection checkpoint (2026-07-13): private checkpoint
+  `81aafce1` adds the selected import-pure
+  `goodq.clean-memory-protected-membership.v1` structural envelope. It validates
+  exact canonical manifest bytes, the eight-role manifest census, the closed v1
+  configured-role compatibility table, the canonical 18-role merge, lexical
+  duplicates/aliases and destructive-scope overlap, and detached digest
+  binding while retaining no filesystem, reader, pin, trust, planning, or
+  cleanup capability. Mutation-sensitive RED cycles closed forged configured
+  topology, byte-gate ordering, Windows device aliases, recursive JSON, Unicode
+  controls, and parameter-expansion cases. Fresh verification passed 98 focused
+  tests, the 331-test configuration/candidate/filesystem/membership authority
+  union, compilation, staged-diff, documentation authority/index, semantic-
+  drift, banned-token, and dependency gates. Three independent current-byte
+  reviews returned clean. No configured or live root, manifest, pin, ACL,
+  service, data, Qdrant store, evidence store, job, token, MiniAgent, or cleanup
+  authority was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  Windows external-pin boundary audit before any reader, enrollment,
+  publication, or authenticated-selection implementation.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1256**
+Indexed active tracked paths: **1258**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -118,6 +118,7 @@ Indexed active tracked paths: **1256**
 | `/cli/__init__.py` | CLI | Command-line operator surface. |
 | `/cli/auth_models.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory.py` | CLI | Command-line operator surface. |
+| `/cli/clean_memory_external_pin.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_filesystem.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_protected_membership.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_build.py` | CLI | Command-line operator surface. |
@@ -1044,6 +1045,7 @@ Indexed active tracked paths: **1256**
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_filesystem.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_membership.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |

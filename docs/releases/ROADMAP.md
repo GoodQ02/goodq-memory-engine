@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-07-13 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-14 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -1120,6 +1120,26 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the reviewed
   four-file validator extraction through RED/GREEN/refactor and independent
   current-byte review, with no physical reader or security-policy code.
+- Protected-manifest validator extraction checkpoint (2026-07-14): private
+  checkpoint `41e56c74` adds the exact standard-library-only canonical validator
+  and adapts structural membership to consume it once with the original bytes
+  and resolved flavor. Membership preserves its public API, outer byte/size and
+  configuration precedence, combined 18-role alias/overlap authority,
+  projection bytes/digests, and final mutation recheck while relinquishing all
+  manifest parsing. Focused TDD first proved the absent API, deliberate
+  unimplemented behavior, and unadapted membership ownership. Fresh controller
+  verification passed 103 validator tests, 102 membership tests, the 205-test
+  pair, the 437-test approved authority union, exact four-file compilation, and
+  diff gates. Independent current-byte review returned `READY` with no findings
+  after total-count, opaque-delegation, multi-fault precedence, signature/ID,
+  structural-ownership, and capability-audit oracles were strengthened. No live
+  ProgramData, pin, manifest, token, ACL, configured or protected root, service,
+  GoodQ data, Qdrant, evidence store, job, MiniAgent, or cleanup authority was
+  read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only the decision-
+  only, read-only manifest security-policy audit. No shared security-mechanics
+  extraction or protected-manifest reader code is authorized yet.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1682,6 +1702,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the exact R-07 canonical protected-manifest
+  validator extraction at `41e56c74` and advanced only to a decision-only,
+  read-only manifest security-policy audit. Shared security mechanics and the
+  physical reader remain closed.
 
 - 2026-07-14: Selected the exact R-07 four-file canonical protected-manifest
   validator extraction after the completed membership no-repeat rule resolved

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **395**
+Indexed active Python paths: **396**
 
 ## Repository root
 
@@ -345,6 +345,7 @@ Indexed active Python paths: **395**
 - `steps/common/audio_gpu_optimizer.py`
 - `steps/common/canonical_sensitive_events.py`
 - `steps/common/clean_memory.py`
+- `steps/common/clean_memory_protected_manifest.py`
 - `steps/common/conda_runner.py`
 - `steps/common/config_loader.py`
 - `steps/common/config_redaction.py`

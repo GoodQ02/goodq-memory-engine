@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1263**
+Indexed active tracked paths: **1266**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -297,6 +297,7 @@ Indexed active tracked paths: **1263**
 | `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
@@ -829,6 +830,7 @@ Indexed active tracked paths: **1263**
 | `/steps/common/audio_gpu_optimizer.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/canonical_sensitive_events.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/clean_memory.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/clean_memory_protected_manifest.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/conda_runner.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/config_loader.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/config_redaction.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1052,6 +1054,7 @@ Indexed active tracked paths: **1263**
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_filesystem.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_protected_manifest_validator.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_membership.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |

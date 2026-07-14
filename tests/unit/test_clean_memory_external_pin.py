@@ -137,7 +137,25 @@ def _install_fake_windll(monkeypatch, dlls: dict[str, SimpleNamespace]):
 
 
 _PIN_NAME = "protected-boundaries.sha256"
-_TOKEN_QUERY_ORDER = (10, 1, 2, 3, 11, 18, 20, 21, 25, 26, 29, 10)
+_TOKEN_NATIVE_CALL_ORDER = (
+    10,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    11,
+    11,
+    18,
+    20,
+    21,
+    25,
+    25,
+    26,
+    29,
+    10,
+)
 _DIRECTORY_RIGHTS = (
     ("file_delete_child", 0x00000040),
     ("write_dac", 0x00040000),
@@ -2347,7 +2365,10 @@ def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None
         if event[0] == "token.info":
             token_sequences.setdefault(event[1], []).append(event[2])
     assert len(token_sequences) == 39
-    assert all(tuple(sequence) == _TOKEN_QUERY_ORDER for sequence in token_sequences.values())
+    assert all(
+        tuple(sequence) == _TOKEN_NATIVE_CALL_ORDER
+        for sequence in token_sequences.values()
+    )
     assert len([event for event in world.events if event[0] == "token.duplicate"]) == 5
     assert len([event for event in world.events if event[0] == "access.check"]) == 19
     assert world.max_live_duplicates == 1
@@ -3525,7 +3546,7 @@ def test_valid_a5_payload_and_undefined_primary_impersonation_are_accepted(
             for event in world.events
             if event[0] == "token.info" and event[1] == handle
         )
-        == _TOKEN_QUERY_ORDER
+        == _TOKEN_NATIVE_CALL_ORDER
         for handle in {event[1] for event in world.events if event[0] == "token.info"}
     )
 

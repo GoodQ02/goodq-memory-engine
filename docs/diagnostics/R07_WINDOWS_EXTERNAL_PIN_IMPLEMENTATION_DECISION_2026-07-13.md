@@ -361,6 +361,17 @@ Each full token snapshot has an internal statistics fence and this exact order:
 11. `TokenIsAppContainer`; and
 12. `TokenStatistics` after.
 
+This is semantic information-class order. In the native-call trace, each
+variable query (`TokenUser`, `TokenGroups`, `TokenPrivileges`,
+`TokenRestrictedSids`, and `TokenIntegrityLevel`) appears twice in place: first
+for its null/zero sizing call and then for its fill call. The fixed-size and
+statistics queries appear once. Tests preserve all 17 native calls rather than
+compressing the trace.
+
+```text
+(10, 1, 1, 2, 2, 3, 3, 11, 11, 18, 20, 21, 25, 25, 26, 29, 10)
+```
+
 The two statistics records must have equal canonical primary-token projections:
 `TokenId`, `AuthenticationId`, `ExpirationTime`, `TokenType`, `DynamicCharged`,
 `DynamicAvailable`, `GroupCount`, `PrivilegeCount`, and `ModifiedId`.

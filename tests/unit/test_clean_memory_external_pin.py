@@ -24,6 +24,10 @@ from steps.common.windows_held_handle import (
     WindowsHeldHandleError,
     WindowsObjectSnapshot,
 )
+from steps.common.windows_security_mechanics import (
+    WINDOWS_TOKEN_PROFILE_BASE,
+    WindowsSecurityMechanics,
+)
 
 
 MODULE_PATH = (
@@ -386,6 +390,9 @@ def _descriptor_variant(value: bytes, case: str) -> bytes:
         struct.pack_into("<I", data, 16, group_offset)
     elif case == "sacl_present":
         struct.pack_into("<I", data, 12, owner_offset)
+    elif case == "null_sacl_present":
+        control = struct.unpack_from("<H", data, 2)[0]
+        struct.pack_into("<H", data, 2, control | 0x0010)
     elif case == "sid_revision":
         data[owner_offset] = 2
     elif case == "truncated_declared_ace_sid":
@@ -547,11 +554,31 @@ class _ScriptedNativeCall:
         return self.implementation(*args)
 
 
+class _RecordingSecurityMechanics:
+    def __init__(self, world: "_ReaderWorld", delegate: WindowsSecurityMechanics) -> None:
+        self._world = world
+        self._delegate = delegate
+
+    def open_token_session(self, *, profile: str):
+        self._world.security_session_profiles.append(profile)
+        if self._world.security_open_exception is not None:
+            raise self._world.security_open_exception
+        session = self._delegate.open_token_session(profile=profile)
+        self._world.security_baseline_snapshots.append(session.baseline_snapshot)
+        return session
+
+    def __getattr__(self, name: str):
+        return getattr(self._delegate, name)
+
+
 class _ReaderWorld:
     """Complete hermetic external boundary; assertions remain in reader tests."""
 
     def __init__(self, *, token: _TokenSpec | None = None) -> None:
         self.events: list[tuple[Any, ...]] = []
+        self.security_session_profiles: list[str] = []
+        self.security_baseline_snapshots: list[object] = []
+        self.security_open_exception: BaseException | None = None
         self.known_folder_path = r"C:\ProgramData"
         self.known_folder_hresult = 0
         self.known_folder_output = True
@@ -1436,7 +1463,20 @@ def _install_reader_world(
 ):
     module = _load_module()
     monkeypatch.setattr(module.os, "name", "nt")
-    monkeypatch.setattr(module, "_bind_native", world.bind_native)
+
+    def bind_native():
+        native = world.bind_native()
+        security = module.bind_windows_security(
+            kernel32=native.kernel32,
+            advapi32=native.advapi32,
+        )
+        return module._NativeApi(
+            shell32=native.shell32,
+            ole32=native.ole32,
+            security=_RecordingSecurityMechanics(world, security),
+        )
+
+    monkeypatch.setattr(module, "_bind_native", bind_native)
     monkeypatch.setattr(
         module,
         "_load_windows_backend",
@@ -1791,10 +1831,11 @@ def _assert_original_traceback_tail_is_preserved(
 
 
 def _capture_top_cleanup_nodes(monkeypatch, module, world):
+    del world
     backend_cleanup_nodes: list[BaseException] = []
     baseline_cleanup_nodes: list[BaseException] = []
     original_sanitize = module._sanitize_error
-    original_close = module._close_native_handle
+    original_translate = module._translate_security_error_graph
 
     def capture_backend_cleanup(error: BaseException):
         sanitized = original_sanitize(error)
@@ -1802,16 +1843,18 @@ def _capture_top_cleanup_nodes(monkeypatch, module, world):
             backend_cleanup_nodes.append(sanitized)
         return sanitized
 
-    def capture_baseline_cleanup(native, owned):
-        raw = owned.value
-        kind = world._handle_kinds.get(raw, "unknown")
-        cleanup = original_close(native, owned)
-        if kind == "baseline" and cleanup is not None:
+    def capture_baseline_cleanup(error, *, phase: str):
+        cleanup = original_translate(error, phase=phase)
+        if phase == "cleanup":
             baseline_cleanup_nodes.append(cleanup)
         return cleanup
 
     monkeypatch.setattr(module, "_sanitize_error", capture_backend_cleanup)
-    monkeypatch.setattr(module, "_close_native_handle", capture_baseline_cleanup)
+    monkeypatch.setattr(
+        module,
+        "_translate_security_error_graph",
+        capture_baseline_cleanup,
+    )
     return backend_cleanup_nodes, baseline_cleanup_nodes
 
 
@@ -2163,26 +2206,10 @@ def test_non_windows_rejects_before_native_binding(monkeypatch) -> None:
     assert exc_info.value.code == "unsupported_platform"
 
 
-def test_win64_structure_layouts_are_exact() -> None:
+def test_consumer_known_folder_guid_layout_is_exact() -> None:
     module = _load_module()
 
     assert ctypes.sizeof(module._GUID) == 16
-    assert ctypes.sizeof(module._LUID) == 8
-    assert ctypes.sizeof(module._LUID_AND_ATTRIBUTES) == 12
-    assert ctypes.sizeof(module._SID_AND_ATTRIBUTES) == 16
-    assert module._SID_AND_ATTRIBUTES.Attributes.offset == 8
-    assert ctypes.sizeof(module._TOKEN_USER) == 16
-    assert module._TOKEN_GROUPS.Groups.offset == 8
-    assert module._TOKEN_PRIVILEGES.Privileges.offset == 4
-    assert ctypes.sizeof(module._TOKEN_MANDATORY_LABEL) == 16
-    assert ctypes.sizeof(module._TOKEN_ELEVATION) == 4
-    assert ctypes.sizeof(module._TOKEN_STATISTICS) == 56
-    assert module._TOKEN_STATISTICS.GroupCount.offset == 40
-    assert module._TOKEN_STATISTICS.PrivilegeCount.offset == 44
-    assert module._TOKEN_STATISTICS.ModifiedId.offset == 48
-    assert ctypes.sizeof(module._GENERIC_MAPPING) == 16
-    assert module._PRIVILEGE_SET.Privilege.offset == 8
-    assert ctypes.sizeof(module._PRIVILEGE_SET) == 20
 
 
 def test_native_binding_uses_exact_dlls_exports_and_pointer_width(monkeypatch) -> None:
@@ -2198,19 +2225,9 @@ def test_native_binding_uses_exact_dlls_exports_and_pointer_width(monkeypatch) -
         ("ole32", True),
         ("advapi32", True),
     ]
-    assert native.kernel32 is dlls["kernel32"]
     assert native.shell32 is dlls["shell32"]
     assert native.ole32 is dlls["ole32"]
-    assert native.advapi32 is dlls["advapi32"]
-
-    assert dlls["kernel32"].GetCurrentThread.argtypes == []
-    assert dlls["kernel32"].GetCurrentThread.restype is ctypes.c_void_p
-    assert dlls["kernel32"].GetCurrentProcess.argtypes == []
-    assert dlls["kernel32"].GetCurrentProcess.restype is ctypes.c_void_p
-    assert dlls["kernel32"].CloseHandle.argtypes == [ctypes.c_void_p]
-    assert dlls["kernel32"].CloseHandle.restype is ctypes.c_int32
-    assert dlls["kernel32"].LocalFree.argtypes == [ctypes.c_void_p]
-    assert dlls["kernel32"].LocalFree.restype is ctypes.c_void_p
+    assert type(native.security) is WindowsSecurityMechanics
     assert dlls["shell32"].SHGetKnownFolderPath.argtypes == [
         ctypes.POINTER(module._GUID),
         ctypes.c_uint32,
@@ -2220,89 +2237,66 @@ def test_native_binding_uses_exact_dlls_exports_and_pointer_width(monkeypatch) -
     assert dlls["shell32"].SHGetKnownFolderPath.restype is ctypes.c_int32
     assert dlls["ole32"].CoTaskMemFree.argtypes == [ctypes.c_void_p]
     assert dlls["ole32"].CoTaskMemFree.restype is None
-    assert dlls["advapi32"].OpenThreadToken.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_int32,
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
-    assert dlls["advapi32"].OpenThreadToken.restype is ctypes.c_int32
-    assert dlls["advapi32"].OpenProcessToken.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
-    assert dlls["advapi32"].OpenProcessToken.restype is ctypes.c_int32
-    assert dlls["advapi32"].GetTokenInformation.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_int32,
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-    assert dlls["advapi32"].GetTokenInformation.restype is ctypes.c_int32
-    assert dlls["advapi32"].LookupPrivilegeValueW.argtypes == [
-        ctypes.c_wchar_p,
-        ctypes.c_wchar_p,
-        ctypes.POINTER(module._LUID),
-    ]
-    assert dlls["advapi32"].LookupPrivilegeValueW.restype is ctypes.c_int32
-    assert dlls["advapi32"].DuplicateTokenEx.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-        ctypes.c_int32,
-        ctypes.c_int32,
-        ctypes.POINTER(ctypes.c_void_p),
-    ]
-    assert dlls["advapi32"].DuplicateTokenEx.restype is ctypes.c_int32
-    assert dlls["advapi32"].MapGenericMask.argtypes == [
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.POINTER(module._GENERIC_MAPPING),
-    ]
-    assert dlls["advapi32"].MapGenericMask.restype is None
-    assert dlls["advapi32"].AccessCheck.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.POINTER(module._GENERIC_MAPPING),
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.POINTER(ctypes.c_int32),
-    ]
-    assert dlls["advapi32"].AccessCheck.restype is ctypes.c_int32
-    pointer_to_void = ctypes.POINTER(ctypes.c_void_p)
-    assert dlls["advapi32"].GetSecurityInfo.argtypes == [
-        ctypes.c_void_p,
-        ctypes.c_int32,
-        ctypes.c_uint32,
-        pointer_to_void,
-        pointer_to_void,
-        pointer_to_void,
-        pointer_to_void,
-        pointer_to_void,
-    ]
-    assert dlls["advapi32"].GetSecurityInfo.restype is ctypes.c_uint32
-    assert dlls["advapi32"].IsValidSecurityDescriptor.argtypes == [ctypes.c_void_p]
-    assert dlls["advapi32"].IsValidSecurityDescriptor.restype is ctypes.c_int32
-    assert dlls["advapi32"].GetSecurityDescriptorControl.argtypes == [
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint16),
-        ctypes.POINTER(ctypes.c_uint32),
-    ]
-    assert dlls["advapi32"].GetSecurityDescriptorControl.restype is ctypes.c_int32
-    assert dlls["advapi32"].GetSecurityDescriptorLength.argtypes == [ctypes.c_void_p]
-    assert dlls["advapi32"].GetSecurityDescriptorLength.restype is ctypes.c_uint32
 
 
-def test_native_binding_rejects_non_win64_before_loading_dlls(monkeypatch) -> None:
+def test_native_binding_runs_shared_abi_preflight_before_loading_and_delegates(
+    monkeypatch,
+) -> None:
     module = _load_module()
-    monkeypatch.setattr(module, "_pointer_size", lambda: 4)
+    dlls = _native_dlls()
+    events: list[tuple[object, ...]] = []
+    security = object()
+
+    monkeypatch.setattr(
+        module,
+        "verify_windows_security_abi",
+        lambda: events.append(("security.abi",)),
+    )
+
+    def fake_windll(name: str, *, use_last_error: bool):
+        normalized = name.casefold()
+        events.append(("dll", normalized, use_last_error))
+        return dlls[normalized]
+
+    def fake_bind_windows_security(*, kernel32: object, advapi32: object):
+        events.append(("security.bind", kernel32, advapi32))
+        return security
+
+    monkeypatch.setattr(ctypes, "WinDLL", fake_windll)
+    monkeypatch.setattr(
+        module,
+        "bind_windows_security",
+        fake_bind_windows_security,
+    )
+
+    native = module._bind_native()
+
+    assert events == [
+        ("security.abi",),
+        ("dll", "kernel32", True),
+        ("dll", "shell32", True),
+        ("dll", "ole32", True),
+        ("dll", "advapi32", True),
+        ("security.bind", dlls["kernel32"], dlls["advapi32"]),
+    ]
+    assert native.security is security
+
+
+def test_native_binding_translates_shared_abi_failure_before_loading_dlls(
+    monkeypatch,
+) -> None:
+    module = _load_module()
+    monkeypatch.setattr(
+        module,
+        "verify_windows_security_abi",
+        lambda: (_ for _ in ()).throw(
+            module.WindowsSecurityMechanicsError("unsupported_security")
+        ),
+    )
     monkeypatch.setattr(
         ctypes,
         "WinDLL",
-        lambda *_args, **_kwargs: pytest.fail("DLL loaded before pointer guard"),
+        lambda *_args, **_kwargs: pytest.fail("DLL loaded before shared ABI guard"),
     )
 
     with pytest.raises(module.ExternalPinReaderError) as exc_info:
@@ -2438,6 +2432,33 @@ def test_startup_sanitization_allocation_failure_is_contained(monkeypatch) -> No
     assert _SECRET_MARKER not in repr(error)
 
 
+def test_reader_opens_exact_shared_base_token_profile(monkeypatch) -> None:
+    world = _ReaderWorld()
+
+    _read_world(monkeypatch, world)
+
+    assert world.security_session_profiles == [WINDOWS_TOKEN_PROFILE_BASE]
+    assert world.security_baseline_snapshots[0].mandatory_policy is None
+
+
+def test_v1_reader_projection_is_neutral_to_unqueried_mandatory_policy(
+    monkeypatch,
+) -> None:
+    world = _ReaderWorld()
+    module, _evidence = _read_world(monkeypatch, world)
+    baseline = world.security_baseline_snapshots[0]
+    policy_one = dataclasses.replace(baseline, mandatory_policy=1)
+    policy_three = dataclasses.replace(baseline, mandatory_policy=3)
+
+    assert policy_one != policy_three
+    one = module._canonical_json_bytes(module._reader_identity_projection(policy_one))
+    three = module._canonical_json_bytes(
+        module._reader_identity_projection(policy_three)
+    )
+    assert one == three
+    assert hashlib.sha256(one).digest() == hashlib.sha256(three).digest()
+
+
 def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None:
     world = _ReaderWorld()
 
@@ -2503,6 +2524,7 @@ def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None
         tuple(sequence) == _TOKEN_NATIVE_CALL_ORDER
         for sequence in token_sequences.values()
     )
+    assert all(27 not in sequence for sequence in token_sequences.values())
     assert len([event for event in world.events if event[0] == "token.duplicate"]) == 5
     assert len([event for event in world.events if event[0] == "access.check"]) == 19
     assert world.max_live_duplicates == 1
@@ -3235,6 +3257,12 @@ def test_descriptor_zero_padding_and_exact_owner_group_alias_are_accepted(
             id="truncated-declared-ace-sid",
         ),
         pytest.param("anchor", "sacl_present", "unsupported_security", id="sacl"),
+        pytest.param(
+            "anchor",
+            "null_sacl_present",
+            "unsupported_security",
+            id="null-sacl",
+        ),
         pytest.param("anchor", "acl_revision", "unsupported_security", id="acl-revision"),
         pytest.param("anchor", "acl_sbz1", "observation_failed", id="acl-reserved-byte"),
         pytest.param("anchor", "acl_sbz2", "observation_failed", id="acl-reserved-word"),
@@ -5117,6 +5145,175 @@ def test_control_primary_preserves_occupied_graph_and_inserts_sanitized_cleanup(
     assert world._close_counts["baseline"] == 1
 
 
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit, GeneratorExit])
+@pytest.mark.parametrize("route", ["security_failure", "cleanup"])
+def test_control_flow_rethrow_preserves_false_suppression_and_translated_context(
+    route: str,
+    exception_type: type[BaseException],
+) -> None:
+    module = _load_module()
+    primary = exception_type()
+    original_traceback = _prime_control_primary(primary)
+    original_cause = LookupError("preserved-cause")
+    shared_context = module.WindowsSecurityMechanicsError("observation_failed")
+    primary.__cause__ = original_cause
+    primary.__context__ = shared_context
+    primary.__suppress_context__ = False
+
+    def invoke_inside_active_handler() -> None:
+        try:
+            raise RuntimeError("active-handler")
+        except RuntimeError:
+            if route == "security_failure":
+                module._raise_security_failure(primary, phase="recheck")
+            else:
+                module._raise_after_cleanup(primary, None)
+
+    with pytest.raises(exception_type) as exc_info:
+        invoke_inside_active_handler()
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert primary.__cause__ is original_cause
+    assert type(primary.__context__) is module.ExternalPinReaderError
+    assert primary.__context__.code == "observation_failed"
+    assert primary.__context__.__cause__ is None
+    assert primary.__context__.__context__ is None
+    assert primary.__suppress_context__ is False
+
+
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit, GeneratorExit])
+@pytest.mark.parametrize("route", ["security_failure", "cleanup"])
+def test_control_flow_shared_cause_translation_preserves_false_suppression(
+    route: str,
+    exception_type: type[BaseException],
+) -> None:
+    module = _load_module()
+    primary = exception_type()
+    original_traceback = _prime_control_primary(primary)
+    shared_cause = module.WindowsSecurityMechanicsError("observation_failed")
+    original_context = LookupError("preserved-context")
+    primary.__cause__ = shared_cause
+    primary.__context__ = original_context
+    primary.__suppress_context__ = False
+
+    with pytest.raises(exception_type) as exc_info:
+        if route == "security_failure":
+            module._raise_security_failure(primary, phase="recheck")
+        else:
+            module._raise_after_cleanup(primary, None)
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert type(primary.__cause__) is module.ExternalPinReaderError
+    assert primary.__cause__.code == "observation_failed"
+    assert primary.__cause__.__cause__ is None
+    assert primary.__cause__.__context__ is None
+    assert primary.__context__ is original_context
+    assert primary.__suppress_context__ is False
+
+
+@pytest.mark.parametrize("route", ["security_failure", "cleanup"])
+def test_control_flow_shared_cause_context_alias_survives_translation(route: str) -> None:
+    module = _load_module()
+    primary = KeyboardInterrupt()
+    shared_link = module.WindowsSecurityMechanicsError("observation_failed")
+    primary.__cause__ = shared_link
+    primary.__context__ = shared_link
+    primary.__suppress_context__ = False
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        if route == "security_failure":
+            module._raise_security_failure(primary, phase="recheck")
+        else:
+            module._raise_after_cleanup(primary, None)
+
+    assert exc_info.value is primary
+    assert type(primary.__cause__) is module.ExternalPinReaderError
+    assert primary.__cause__ is primary.__context__
+    assert primary.__suppress_context__ is False
+
+
+@pytest.mark.parametrize("route", ["security_failure", "cleanup"])
+def test_control_flow_translation_failure_keeps_primary_and_uses_fallback(
+    monkeypatch,
+    route: str,
+) -> None:
+    module = _load_module()
+    primary = KeyboardInterrupt()
+    original_traceback = _prime_control_primary(primary)
+    primary.__cause__ = module.WindowsSecurityMechanicsError("observation_failed")
+    original_context = LookupError("preserved-context")
+    primary.__context__ = original_context
+    primary.__suppress_context__ = False
+    fallback = module.ExternalPinReaderError("observation_failed")
+
+    def fail_translation(*_args, **_kwargs):
+        raise MemoryError(_SECRET_MARKER)
+
+    monkeypatch.setattr(module, "_translate_security_error_graph", fail_translation)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        if route == "security_failure":
+            module._raise_security_failure(primary, phase="recheck")
+        else:
+            module._raise_after_cleanup(primary, None, fallback=fallback)
+
+    assert exc_info.value is primary
+    _assert_original_traceback_tail_is_preserved(primary, original_traceback)
+    assert type(primary.__cause__) is module.ExternalPinReaderError
+    assert primary.__cause__.code == "observation_failed"
+    if route == "cleanup":
+        assert primary.__cause__ is fallback
+    assert primary.__context__ is original_context
+    assert primary.__suppress_context__ is False
+    assert _SECRET_MARKER not in repr(primary.__cause__)
+
+
+def test_exception_cleanup_rethrow_preserves_context_only_false_suppression() -> None:
+    module = _load_module()
+    primary = module.ExternalPinReaderError("observation_failed")
+    context = module.ExternalPinReaderError("unsupported_security")
+    primary.__context__ = context
+    primary.__suppress_context__ = False
+
+    def invoke_inside_active_handler() -> None:
+        try:
+            raise RuntimeError("active-handler")
+        except RuntimeError:
+            module._raise_after_cleanup(primary, None)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        invoke_inside_active_handler()
+
+    assert exc_info.value is primary
+    assert primary.__cause__ is None
+    assert primary.__context__ is context
+    assert primary.__suppress_context__ is False
+
+
+def test_cleanup_only_rethrow_preserves_context_inside_active_handler() -> None:
+    module = _load_module()
+    cleanup = module.ExternalPinReaderError("observation_failed")
+    context = module.ExternalPinReaderError("unsupported_security")
+    cleanup.__context__ = context
+    cleanup.__suppress_context__ = False
+
+    def invoke_inside_active_handler() -> None:
+        try:
+            raise RuntimeError("active-handler")
+        except RuntimeError:
+            module._raise_after_cleanup(None, cleanup)
+
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        invoke_inside_active_handler()
+
+    assert exc_info.value is cleanup
+    assert cleanup.__cause__ is None
+    assert cleanup.__context__ is context
+    assert cleanup.__suppress_context__ is False
+
+
 def test_control_primary_sanitizes_preexisting_backend_cleanup_link(
     monkeypatch,
 ) -> None:
@@ -5147,16 +5344,12 @@ def test_control_primary_sanitizes_preexisting_backend_cleanup_link(
     assert world._close_counts["baseline"] == 1
 
 
-def test_initial_owner_allocation_memory_error_is_sanitized_without_native_acquisition(
+def test_shared_session_internal_failure_is_sanitized_without_route_acquisition(
     monkeypatch,
 ) -> None:
     world = _ReaderWorld()
+    world.security_open_exception = MemoryError(_SECRET_MARKER)
     module = _install_reader_world(monkeypatch, world)
-
-    def fail_owner_allocation(_value):
-        raise MemoryError(_SECRET_MARKER)
-
-    monkeypatch.setattr(module, "_OwnedNativeHandle", fail_owner_allocation)
 
     with pytest.raises(module.ExternalPinReaderError) as exc_info:
         module.read_external_pin()
@@ -5169,7 +5362,7 @@ def test_initial_owner_allocation_memory_error_is_sanitized_without_native_acqui
     assert len(backend_enters) <= 1
     if backend_enters:
         assert backend_exits == [("backend.exit", False)]
-    assert not any(event[0].startswith("token.") for event in world.events)
+    assert not any(event[0].startswith("backend.open") for event in world.events)
     assert not any(event[0] == "native.close" for event in world.events)
     assert world.backend is not None
     assert world.backend.handles == []
@@ -5261,63 +5454,29 @@ def test_backend_ledger_closes_handle_when_reader_tracking_allocation_fails(
 
 
 @pytest.mark.parametrize(
-    "mode",
-    ["normal", "initial_thread", "comparison_thread"],
+    ("mode", "expected_code"),
+    [
+        ("initial_thread", "untrusted_reader"),
+        ("comparison_thread", "observation_raced"),
+    ],
 )
-def test_native_handle_owner_allocation_always_precedes_handle_producing_calls(
+def test_shared_thread_token_failure_uses_exact_consumer_phase_classification(
     monkeypatch,
     mode: str,
+    expected_code: str,
 ) -> None:
     world = _ReaderWorld()
     if mode == "initial_thread":
         world.thread_case = "success_nonnull"
-    elif mode == "comparison_thread":
+    else:
         world.comparison_thread_at = 2
     module = _install_reader_world(monkeypatch, world)
-    original = module._OwnedNativeHandle
-    available_owners: list[object] = []
-    claimed_owners: list[object] = []
 
-    def audit_owner_allocation(value):
-        assert value is None
-        owner = original(value)
-        available_owners.append(owner)
-        return owner
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module.read_external_pin()
 
-    def require_preallocated_owner(implementation):
-        def checked(*args):
-            if not available_owners:
-                raise MemoryError(_SECRET_MARKER)
-            claimed_owners.append(available_owners.pop())
-            return implementation(*args)
-
-        return checked
-
-    monkeypatch.setattr(module, "_OwnedNativeHandle", audit_owner_allocation)
-    for call in (
-        world.native.advapi32.OpenThreadToken,
-        world.native.advapi32.OpenProcessToken,
-        world.native.advapi32.DuplicateTokenEx,
-    ):
-        call.implementation = require_preallocated_owner(call.implementation)
-
-    if mode == "normal":
-        evidence = module.read_external_pin()
-        assert evidence.projection == _expected_world_evidence(world)
-    else:
-        expected = (
-            "untrusted_reader"
-            if mode == "initial_thread"
-            else "observation_raced"
-        )
-        with pytest.raises(module.ExternalPinReaderError) as exc_info:
-            module.read_external_pin()
-        assert exc_info.value.code == expected
-        _assert_sanitized_chain(module, exc_info.value)
-
-    assert claimed_owners
-    assert all(owner.value is None for owner in available_owners)
-    assert len({id(owner) for owner in claimed_owners}) == len(claimed_owners)
+    assert exc_info.value.code == expected_code
+    _assert_sanitized_chain(module, exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -5610,12 +5769,27 @@ _APPROVED_FROM_IMPORTS = {
         "WindowsHeldHandleError",
         "WindowsObjectSnapshot",
     },
+    "steps.common.windows_security_mechanics": {
+        "WINDOWS_DESCRIPTOR_PROFILE_DACL_ONLY",
+        "WINDOWS_TOKEN_PROFILE_BASE",
+        "WindowsAce",
+        "WindowsPinnedSecurityDescriptor",
+        "WindowsSecurityDescriptor",
+        "WindowsSecurityMechanics",
+        "WindowsSecurityMechanicsError",
+        "WindowsSecuritySession",
+        "WindowsSid",
+        "WindowsTokenSnapshot",
+        "bind_windows_security",
+        "verify_windows_security_abi",
+    },
 }
 
 
 def _assert_approved_source_imports(source: str) -> None:
     tree = ast.parse(source)
-    project_imports: list[ast.ImportFrom] = []
+    held_imports: list[ast.ImportFrom] = []
+    security_imports: list[ast.ImportFrom] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -5633,14 +5807,97 @@ def _assert_approved_source_imports(source: str) -> None:
                 for alias in node.names
             )
             if node.module == "steps.common.windows_held_handle":
-                project_imports.append(node)
+                held_imports.append(node)
+            if node.module == "steps.common.windows_security_mechanics":
+                security_imports.append(node)
 
-    assert len(project_imports) == 1
-    imported_backend_names = {alias.name for alias in project_imports[0].names}
+    assert len(held_imports) == 1
+    assert len(security_imports) == 1
+    imported_backend_names = {alias.name for alias in held_imports[0].names}
     assert {
         "WindowsHeldHandleBackend",
         "WindowsHeldHandleError",
     } <= imported_backend_names
+    imported_security_names = {
+        alias.name for alias in security_imports[0].names
+    }
+    assert imported_security_names == _APPROVED_FROM_IMPORTS[
+        "steps.common.windows_security_mechanics"
+    ]
+
+
+_FORBIDDEN_PRIVATE_SECURITY_DEFINITIONS = {
+    "_LUID",
+    "_LUID_AND_ATTRIBUTES",
+    "_SID_AND_ATTRIBUTES",
+    "_TOKEN_USER",
+    "_TOKEN_GROUPS",
+    "_TOKEN_PRIVILEGES",
+    "_TOKEN_MANDATORY_LABEL",
+    "_TOKEN_ELEVATION",
+    "_TOKEN_STATISTICS",
+    "_GENERIC_MAPPING",
+    "_PRIVILEGE_SET",
+    "_Sid",
+    "_SidRecord",
+    "_Privilege",
+    "_PrimaryStatistics",
+    "_TokenSnapshot",
+    "_Ace",
+    "_SecurityDescriptor",
+    "_OwnedNativeHandle",
+    "_parse_sid",
+    "_sid_from_pointer",
+    "_reject_overlapping_intervals",
+    "_query_variable_token",
+    "_query_statistics",
+    "_query_fixed_value",
+    "_parse_token_user",
+    "_parse_sid_records",
+    "_parse_privileges",
+    "_parse_integrity",
+    "_parse_security_descriptor",
+    "_file_generic_mapping",
+    "_mapped_mask",
+    "_token_snapshot",
+    "_resolve_change_notify_luid",
+    "_open_baseline_token",
+    "_duplicate_access_token",
+    "_validate_privilege_output",
+    "_check_denied_right",
+    "_close_native_handle",
+}
+
+
+def test_source_has_no_private_windows_security_mechanics_authority() -> None:
+    tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+    defined = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    called_attributes = {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+
+    assert defined.isdisjoint(_FORBIDDEN_PRIVATE_SECURITY_DEFINITIONS)
+    assert called_attributes.isdisjoint(
+        {
+            "OpenThreadToken",
+            "OpenProcessToken",
+            "GetTokenInformation",
+            "LookupPrivilegeValueW",
+            "DuplicateTokenEx",
+            "MapGenericMask",
+            "AccessCheck",
+            "GetSecurityInfo",
+            "IsValidSecurityDescriptor",
+            "GetSecurityDescriptorControl",
+            "GetSecurityDescriptorLength",
+        }
+    )
 
 
 def test_source_has_only_the_strict_approved_import_allowlist() -> None:

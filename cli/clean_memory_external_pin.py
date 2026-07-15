@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import os
-import struct
 import unicodedata
 from typing import Any
 
@@ -16,6 +15,20 @@ from steps.common.windows_held_handle import (
     WindowsHeldHandleBackend,
     WindowsHeldHandleError,
     WindowsObjectSnapshot,
+)
+from steps.common.windows_security_mechanics import (
+    WINDOWS_DESCRIPTOR_PROFILE_DACL_ONLY,
+    WINDOWS_TOKEN_PROFILE_BASE,
+    WindowsAce,
+    WindowsPinnedSecurityDescriptor,
+    WindowsSecurityDescriptor,
+    WindowsSecurityMechanics,
+    WindowsSecurityMechanicsError,
+    WindowsSecuritySession,
+    WindowsSid,
+    WindowsTokenSnapshot,
+    bind_windows_security,
+    verify_windows_security_abi,
 )
 
 
@@ -66,38 +79,12 @@ _EVIDENCE_KEYS = {
 }
 
 _DWORD = ctypes.c_uint32
-_BOOL = ctypes.c_int32
-_ENUM = ctypes.c_int32
 _WORD = ctypes.c_uint16
 _BYTE = ctypes.c_ubyte
 _HANDLE = ctypes.c_void_p
 _PVOID = ctypes.c_void_p
-_LARGE_INTEGER = ctypes.c_int64
-
-_TOKEN_QUERY = 0x0008
-_TOKEN_DUPLICATE = 0x0002
-_ERROR_INSUFFICIENT_BUFFER = 122
-_ERROR_NO_TOKEN = 1008
-_MAX_TOKEN_BUFFER = 1_048_576
-_MAX_TOKEN_RECORDS = 4096
-_MAX_SID_SUBAUTHORITIES = 15
-_MAX_SID_BYTES = 68
-
-_TOKEN_USER_CLASS = 1
-_TOKEN_GROUPS_CLASS = 2
-_TOKEN_PRIVILEGES_CLASS = 3
-_TOKEN_STATISTICS_CLASS = 10
-_TOKEN_RESTRICTED_SIDS_CLASS = 11
-_TOKEN_ELEVATION_TYPE_CLASS = 18
-_TOKEN_ELEVATION_CLASS = 20
-_TOKEN_HAS_RESTRICTIONS_CLASS = 21
-_TOKEN_INTEGRITY_LEVEL_CLASS = 25
-_TOKEN_UI_ACCESS_CLASS = 26
-_TOKEN_IS_APP_CONTAINER_CLASS = 29
 
 _TOKEN_PRIMARY = 1
-_TOKEN_IMPERSONATION = 2
-_SECURITY_IMPERSONATION = 2
 
 _SE_GROUP_ENABLED = 0x00000004
 _SE_GROUP_USE_FOR_DENY_ONLY = 0x00000010
@@ -116,12 +103,6 @@ _SYSTEM_SID = bytes.fromhex("010100000000000512000000")
 _ADMIN_SID = bytes.fromhex("01020000000000052000000020020000")
 _MEDIUM_INTEGRITY_SID = bytes.fromhex("010100000000001000200000")
 
-_FILE_GENERIC_MAPPING_VALUES = (
-    0x00120089,
-    0x00120116,
-    0x001200A0,
-    0x001F01FF,
-)
 _DIRECTORY_RIGHTS = (
     ("file_delete_child", 0x00000040),
     ("write_dac", 0x00040000),
@@ -139,17 +120,10 @@ _PIN_RIGHTS = (
 
 _ACCESS_ALLOWED_ACE_TYPE = 0
 _ACCESS_DENIED_ACE_TYPE = 1
-_ORDINARY_ACE_FLAG_MASK = 0x1F
 _INHERIT_ONLY_ACE = 0x08
-_SE_OWNER_DEFAULTED = 0x0001
-_SE_GROUP_DEFAULTED = 0x0002
 _SE_DACL_PRESENT = 0x0004
-_SE_DACL_DEFAULTED = 0x0008
-_SE_DACL_AUTO_INHERIT_REQ = 0x0100
-_SE_DACL_AUTO_INHERITED = 0x0400
 _SE_DACL_PROTECTED = 0x1000
 _SE_SELF_RELATIVE = 0x8000
-_PRIVILEGE_SET_ALL_NECESSARY = 0x00000001
 _DANGEROUS_DIRECTORY_MASK = 0x00000040 | 0x00040000 | 0x00080000
 
 
@@ -162,171 +136,18 @@ class _GUID(ctypes.Structure):
     ]
 
 
-class _LUID(ctypes.Structure):
-    _fields_ = [("LowPart", _DWORD), ("HighPart", ctypes.c_int32)]
-
-
-class _LUID_AND_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [("Luid", _LUID), ("Attributes", _DWORD)]
-
-
-class _SID_AND_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [("Sid", _PVOID), ("Attributes", _DWORD)]
-
-
-class _TOKEN_USER(ctypes.Structure):
-    _fields_ = [("User", _SID_AND_ATTRIBUTES)]
-
-
-class _TOKEN_GROUPS(ctypes.Structure):
-    _fields_ = [("GroupCount", _DWORD), ("Groups", _SID_AND_ATTRIBUTES * 1)]
-
-
-class _TOKEN_PRIVILEGES(ctypes.Structure):
-    _fields_ = [
-        ("PrivilegeCount", _DWORD),
-        ("Privileges", _LUID_AND_ATTRIBUTES * 1),
-    ]
-
-
-class _TOKEN_MANDATORY_LABEL(ctypes.Structure):
-    _fields_ = [("Label", _SID_AND_ATTRIBUTES)]
-
-
-class _TOKEN_ELEVATION(ctypes.Structure):
-    _fields_ = [("TokenIsElevated", _DWORD)]
-
-
-class _TOKEN_STATISTICS(ctypes.Structure):
-    _fields_ = [
-        ("TokenId", _LUID),
-        ("AuthenticationId", _LUID),
-        ("ExpirationTime", _LARGE_INTEGER),
-        ("TokenType", _ENUM),
-        ("ImpersonationLevel", _ENUM),
-        ("DynamicCharged", _DWORD),
-        ("DynamicAvailable", _DWORD),
-        ("GroupCount", _DWORD),
-        ("PrivilegeCount", _DWORD),
-        ("ModifiedId", _LUID),
-    ]
-
-
-class _GENERIC_MAPPING(ctypes.Structure):
-    _fields_ = [
-        ("GenericRead", _DWORD),
-        ("GenericWrite", _DWORD),
-        ("GenericExecute", _DWORD),
-        ("GenericAll", _DWORD),
-    ]
-
-
-class _PRIVILEGE_SET(ctypes.Structure):
-    _fields_ = [
-        ("PrivilegeCount", _DWORD),
-        ("Control", _DWORD),
-        ("Privilege", _LUID_AND_ATTRIBUTES * 1),
-    ]
-
-
 @dataclass(frozen=True)
 class _NativeApi:
-    kernel32: object
     shell32: object
     ole32: object
-    advapi32: object
-
-
-@dataclass(frozen=True)
-class _Sid:
-    binary: bytes
-    numeric: str
-
-
-@dataclass(frozen=True)
-class _SidRecord:
-    sid: _Sid
-    attributes: int
-
-
-@dataclass(frozen=True)
-class _Privilege:
-    luid: int
-    attributes: int
-
-
-@dataclass(frozen=True)
-class _PrimaryStatistics:
-    token_id: int
-    authentication_id: int
-    expiration_time: int
-    token_type: int
-    dynamic_charged: int
-    dynamic_available: int
-    group_count: int
-    privilege_count: int
-    modified_id: int
-
-
-@dataclass(frozen=True)
-class _TokenSnapshot:
-    statistics: _PrimaryStatistics
-    user_sid: _Sid
-    groups: tuple[_SidRecord, ...]
-    privileges: tuple[_Privilege, ...]
-    restricted_sids: tuple[_SidRecord, ...]
-    elevation_type: int
-    is_elevated: bool
-    has_restrictions: bool
-    integrity: _SidRecord
-    ui_access: bool
-    is_app_container: bool
-
-
-@dataclass(frozen=True)
-class _Ace:
-    ace_type: int
-    flags: int
-    mask: int
-    sid: _Sid
-
-
-@dataclass(frozen=True)
-class _SecurityDescriptor:
-    control: int
-    owner: _Sid
-    group: _Sid
-    dacl_revision: int
-    aces: tuple[_Ace, ...]
+    security: WindowsSecurityMechanics
 
 
 @dataclass(frozen=True)
 class _PinnedDescriptor:
     held: _HeldObject
     raw: bytes
-    storage: Any
-    address: int
-    parsed: _SecurityDescriptor
-
-
-class _OwnedNativeHandle:
-    __slots__ = ("_cleanup_error", "_storage")
-
-    def __init__(self, value: int | None) -> None:
-        self._storage = _HANDLE(value)
-        self._cleanup_error = ExternalPinReaderError("observation_failed")
-
-    @property
-    def value(self) -> int | None:
-        value = self._storage.value
-        return None if value is None else int(value)
-
-    @value.setter
-    def value(self, value: int | None) -> None:
-        self._storage.value = value
-
-    def output_pointer(self):
-        return ctypes.byref(self._storage)
+    security: WindowsPinnedSecurityDescriptor
 
 
 @dataclass(frozen=True)
@@ -355,8 +176,8 @@ class _ParentMembership:
 class _ReadState:
     backend: object
     native: _NativeApi
-    baseline: _OwnedNativeHandle
-    baseline_snapshot: _TokenSnapshot
+    session: WindowsSecuritySession
+    baseline_snapshot: WindowsTokenSnapshot
     filesystem: str | None = None
     root: _HeldObject | None = None
     held: list[_HeldObject] = field(default_factory=list)
@@ -461,6 +282,144 @@ def _sanitize_windows_error_graph(
     return head
 
 
+def _security_error_code(
+    error: WindowsSecurityMechanicsError,
+    *,
+    phase: str,
+) -> str:
+    if error.code == "thread_token_present":
+        if phase == "baseline":
+            return "untrusted_reader"
+        if phase == "recheck":
+            return "observation_raced"
+        return "observation_failed"
+    if error.code in {"unsupported_security", "unsupported_descriptor"}:
+        return "unsupported_security"
+    return "observation_failed"
+
+
+def _translate_security_error_graph(
+    error: WindowsSecurityMechanicsError,
+    *,
+    phase: str,
+) -> ExternalPinReaderError:
+    memo: list[tuple[int, ExternalPinReaderError]] = []
+    visiting: list[int] = []
+
+    def clone(node: BaseException, remaining: int) -> ExternalPinReaderError:
+        identity = id(node)
+        if remaining <= 0 or identity in visiting:
+            return ExternalPinReaderError("observation_failed")
+        for known_identity, known_error in memo:
+            if identity == known_identity:
+                return known_error
+        if isinstance(node, WindowsSecurityMechanicsError):
+            code = _security_error_code(node, phase=phase)
+        else:
+            code = "observation_failed"
+        public = ExternalPinReaderError(code)
+        memo.append((identity, public))
+        visiting.append(identity)
+        cause = node.__cause__
+        context = node.__context__
+        if cause is not None:
+            public.__cause__ = clone(cause, remaining - 1)
+        if context is not None:
+            public.__context__ = clone(context, remaining - 1)
+        public.__suppress_context__ = bool(node.__suppress_context__)
+        del visiting[-1]
+        return public
+
+    return clone(error, 256)
+
+
+def _sanitize_control_links(
+    error: BaseException,
+    *,
+    phase: str,
+    fallback: ExternalPinReaderError,
+) -> None:
+    raw_cause = error.__cause__
+    raw_context = error.__context__
+    suppress_context = bool(error.__suppress_context__)
+    public_cause = raw_cause
+    public_context = raw_context
+
+    cause_is_security = isinstance(raw_cause, WindowsSecurityMechanicsError)
+    context_is_security = isinstance(raw_context, WindowsSecurityMechanicsError)
+    if cause_is_security or context_is_security:
+        try:
+            wrapper = WindowsSecurityMechanicsError("observation_failed")
+            if cause_is_security:
+                wrapper.__cause__ = raw_cause
+            if context_is_security:
+                wrapper.__context__ = raw_context
+            wrapper.__suppress_context__ = False
+            translated = _translate_security_error_graph(wrapper, phase=phase)
+            if cause_is_security:
+                candidate = translated.__cause__
+                public_cause = (
+                    candidate
+                    if type(candidate) is ExternalPinReaderError
+                    else fallback
+                )
+            if context_is_security:
+                candidate = translated.__context__
+                public_context = (
+                    candidate
+                    if type(candidate) is ExternalPinReaderError
+                    else fallback
+                )
+        except BaseException:
+            if cause_is_security:
+                public_cause = fallback
+            if context_is_security:
+                public_context = public_cause if raw_context is raw_cause else fallback
+
+    if isinstance(raw_cause, WindowsHeldHandleError):
+        try:
+            public_cause = _sanitize_error(raw_cause)
+        except BaseException:
+            public_cause = fallback
+    if isinstance(raw_context, WindowsHeldHandleError):
+        if raw_context is raw_cause:
+            public_context = public_cause
+        else:
+            try:
+                public_context = _sanitize_error(raw_context)
+            except BaseException:
+                public_context = fallback
+
+    error.__cause__ = public_cause
+    error.__context__ = public_context
+    error.__suppress_context__ = suppress_context
+
+
+def _raise_security_failure(error: BaseException, *, phase: str) -> None:
+    if isinstance(error, WindowsSecurityMechanicsError):
+        public = _translate_security_error_graph(error, phase=phase)
+        _reraise_preserving_graph(public)
+    if isinstance(error, Exception):
+        _raise("observation_failed")
+    fallback = ExternalPinReaderError("observation_failed")
+    _sanitize_control_links(error, phase=phase, fallback=fallback)
+    _reraise_preserving_graph(error)
+
+
+def _reraise_preserving_graph(error: BaseException) -> None:
+    traceback = error.__traceback__
+    cause = error.__cause__
+    context = error.__context__
+    suppress_context = bool(error.__suppress_context__)
+    try:
+        raise error.with_traceback(traceback)
+    except BaseException:
+        error.__cause__ = cause
+        error.__context__ = context
+        error.__suppress_context__ = suppress_context
+        raise
+
+
 def _sanitize_error(error: BaseException) -> ExternalPinReaderError:
     if type(error) is ExternalPinReaderError:
         if _is_sanitized_public_error_graph(error):
@@ -468,6 +427,8 @@ def _sanitize_error(error: BaseException) -> ExternalPinReaderError:
         return _clone_public_error(error)
     if isinstance(error, WindowsHeldHandleError):
         return _sanitize_windows_error_graph(error)
+    if isinstance(error, WindowsSecurityMechanicsError):
+        return _translate_security_error_graph(error, phase="observation")
     return ExternalPinReaderError("observation_failed")
 
 
@@ -477,10 +438,10 @@ def _raise_collected(
 ) -> None:
     if primary is None:
         if cleanup is not None:
-            raise cleanup
+            _reraise_preserving_graph(cleanup)
         return
     _attach_cleanup(primary, cleanup)
-    raise primary from primary.__cause__
+    _reraise_preserving_graph(primary)
 
 
 def _append_cleanup(
@@ -639,25 +600,14 @@ def _raise_after_cleanup(
             sanitized = fallback or ExternalPinReaderError("observation_failed")
         _raise_collected(sanitized, cleanup)
         return
-    traceback = primary.__traceback__
-    if isinstance(primary.__cause__, WindowsHeldHandleError):
-        try:
-            primary.__cause__ = _sanitize_error(primary.__cause__)
-        except BaseException:
-            primary.__cause__ = fallback or ExternalPinReaderError(
-                "observation_failed"
-            )
-    if isinstance(primary.__context__, WindowsHeldHandleError):
-        try:
-            primary.__context__ = _sanitize_error(primary.__context__)
-        except BaseException:
-            primary.__context__ = fallback or ExternalPinReaderError(
-                "observation_failed"
-            )
+    control_fallback = fallback or ExternalPinReaderError("observation_failed")
+    _sanitize_control_links(
+        primary,
+        phase="cleanup",
+        fallback=control_fallback,
+    )
     _attach_cleanup(primary, cleanup)
-    if primary.__cause__ is not None:
-        raise primary.with_traceback(traceback) from primary.__cause__
-    raise primary.with_traceback(traceback)
+    _reraise_preserving_graph(primary)
 
 
 def _load_windows_backend() -> WindowsHeldHandleBackend:
@@ -674,53 +624,12 @@ def _load_windows_backend() -> WindowsHeldHandleBackend:
     return backend
 
 
-def _last_error() -> int:
-    return int(ctypes.get_last_error())
-
-
-def _close_native_handle(
-    native: _NativeApi,
-    owned: _OwnedNativeHandle,
-) -> ExternalPinReaderError | None:
-    value = owned.value
-    if value is None:
-        return None
-    owned.value = None
-    try:
-        closed = native.kernel32.CloseHandle(_HANDLE(value))
-        if not closed:
-            _last_error()
-            return owned._cleanup_error
-    except BaseException:
-        return owned._cleanup_error
-    return None
-
-
-def _pointer_size() -> int:
-    return ctypes.sizeof(ctypes.c_void_p)
-
-
 def _verify_win64_layouts() -> None:
-    expected = (
-        (ctypes.sizeof(_GUID), 16),
-        (ctypes.sizeof(_LUID), 8),
-        (ctypes.sizeof(_LUID_AND_ATTRIBUTES), 12),
-        (ctypes.sizeof(_SID_AND_ATTRIBUTES), 16),
-        (_SID_AND_ATTRIBUTES.Attributes.offset, 8),
-        (ctypes.sizeof(_TOKEN_USER), 16),
-        (_TOKEN_GROUPS.Groups.offset, 8),
-        (_TOKEN_PRIVILEGES.Privileges.offset, 4),
-        (ctypes.sizeof(_TOKEN_MANDATORY_LABEL), 16),
-        (ctypes.sizeof(_TOKEN_ELEVATION), 4),
-        (ctypes.sizeof(_TOKEN_STATISTICS), 56),
-        (_TOKEN_STATISTICS.GroupCount.offset, 40),
-        (_TOKEN_STATISTICS.PrivilegeCount.offset, 44),
-        (_TOKEN_STATISTICS.ModifiedId.offset, 48),
-        (ctypes.sizeof(_GENERIC_MAPPING), 16),
-        (_PRIVILEGE_SET.Privilege.offset, 8),
-        (ctypes.sizeof(_PRIVILEGE_SET), 20),
-    )
-    if _pointer_size() != 8 or any(actual != required for actual, required in expected):
+    if ctypes.sizeof(_GUID) != 16:
+        _raise("unsupported_security")
+    try:
+        verify_windows_security_abi()
+    except WindowsSecurityMechanicsError:
         _raise("unsupported_security")
 
 
@@ -751,463 +660,23 @@ def _bind_native() -> _NativeApi:
         _raise("unsupported_platform")
 
     try:
-        kernel32.GetCurrentThread.argtypes = []
-        kernel32.GetCurrentThread.restype = _HANDLE
-        kernel32.GetCurrentProcess.argtypes = []
-        kernel32.GetCurrentProcess.restype = _HANDLE
-        kernel32.CloseHandle.argtypes = [_HANDLE]
-        kernel32.CloseHandle.restype = _BOOL
-        kernel32.LocalFree.argtypes = [_PVOID]
-        kernel32.LocalFree.restype = _PVOID
-
-        advapi32.OpenThreadToken.argtypes = [
-            _HANDLE,
-            _DWORD,
-            _BOOL,
-            ctypes.POINTER(_HANDLE),
-        ]
-        advapi32.OpenThreadToken.restype = _BOOL
-        advapi32.OpenProcessToken.argtypes = [
-            _HANDLE,
-            _DWORD,
-            ctypes.POINTER(_HANDLE),
-        ]
-        advapi32.OpenProcessToken.restype = _BOOL
-        advapi32.GetTokenInformation.argtypes = [
-            _HANDLE,
-            _ENUM,
-            _PVOID,
-            _DWORD,
-            ctypes.POINTER(_DWORD),
-        ]
-        advapi32.GetTokenInformation.restype = _BOOL
-        advapi32.LookupPrivilegeValueW.argtypes = [
-            ctypes.c_wchar_p,
-            ctypes.c_wchar_p,
-            ctypes.POINTER(_LUID),
-        ]
-        advapi32.LookupPrivilegeValueW.restype = _BOOL
-        advapi32.DuplicateTokenEx.argtypes = [
-            _HANDLE,
-            _DWORD,
-            _PVOID,
-            _ENUM,
-            _ENUM,
-            ctypes.POINTER(_HANDLE),
-        ]
-        advapi32.DuplicateTokenEx.restype = _BOOL
-        advapi32.MapGenericMask.argtypes = [
-            ctypes.POINTER(_DWORD),
-            ctypes.POINTER(_GENERIC_MAPPING),
-        ]
-        advapi32.MapGenericMask.restype = None
-        advapi32.AccessCheck.argtypes = [
-            _PVOID,
-            _HANDLE,
-            _DWORD,
-            ctypes.POINTER(_GENERIC_MAPPING),
-            _PVOID,
-            ctypes.POINTER(_DWORD),
-            ctypes.POINTER(_DWORD),
-            ctypes.POINTER(_BOOL),
-        ]
-        advapi32.AccessCheck.restype = _BOOL
-
-        pointer_to_void = ctypes.POINTER(_PVOID)
-        advapi32.GetSecurityInfo.argtypes = [
-            _PVOID,
-            _ENUM,
-            _DWORD,
-            pointer_to_void,
-            pointer_to_void,
-            pointer_to_void,
-            pointer_to_void,
-            pointer_to_void,
-        ]
-        advapi32.GetSecurityInfo.restype = _DWORD
-        advapi32.IsValidSecurityDescriptor.argtypes = [_PVOID]
-        advapi32.IsValidSecurityDescriptor.restype = _BOOL
-        advapi32.GetSecurityDescriptorControl.argtypes = [
-            _PVOID,
-            ctypes.POINTER(_WORD),
-            ctypes.POINTER(_DWORD),
-        ]
-        advapi32.GetSecurityDescriptorControl.restype = _BOOL
-        advapi32.GetSecurityDescriptorLength.argtypes = [_PVOID]
-        advapi32.GetSecurityDescriptorLength.restype = _DWORD
-    except (AttributeError, OSError):
+        security = bind_windows_security(
+            kernel32=kernel32,
+            advapi32=advapi32,
+        )
+    except WindowsSecurityMechanicsError:
         _raise("unsupported_security")
 
     return _NativeApi(
-        kernel32=kernel32,
         shell32=shell32,
         ole32=ole32,
-        advapi32=advapi32,
+        security=security,
     )
-
-
-def _luid_value(value: _LUID) -> int:
-    return ((int(value.HighPart) & 0xFFFFFFFF) << 32) | int(value.LowPart)
-
-
-def _parse_sid(raw: bytes, offset: int) -> tuple[_Sid, tuple[int, int]]:
-    if offset < 0 or offset + 8 > len(raw):
-        _raise("observation_failed")
-    revision = raw[offset]
-    count = raw[offset + 1]
-    size = 8 + 4 * count
-    if (
-        revision != 1
-        or count > _MAX_SID_SUBAUTHORITIES
-        or size > _MAX_SID_BYTES
-        or offset + size > len(raw)
-    ):
-        _raise("observation_failed")
-    binary = raw[offset : offset + size]
-    authority = int.from_bytes(binary[2:8], "big")
-    subauthorities = tuple(
-        int.from_bytes(binary[8 + index * 4 : 12 + index * 4], "little")
-        for index in range(count)
-    )
-    numeric = "-".join(
-        ("S", "1", str(authority), *(str(value) for value in subauthorities))
-    )
-    return _Sid(binary=binary, numeric=numeric), (offset, offset + size)
-
-
-def _sid_from_pointer(
-    raw: bytes,
-    base: int,
-    pointer: int,
-) -> tuple[_Sid, tuple[int, int]]:
-    if pointer < base or pointer - base >= len(raw):
-        _raise("observation_failed")
-    return _parse_sid(raw, pointer - base)
-
-
-def _reject_overlapping_intervals(intervals: tuple[tuple[int, int], ...]) -> None:
-    ordered = sorted(intervals)
-    for index in range(1, len(ordered)):
-        if ordered[index][0] < ordered[index - 1][1]:
-            _raise("observation_failed")
-
-
-def _query_variable_token(
-    native: _NativeApi,
-    handle: int,
-    info_class: int,
-) -> tuple[bytes, int]:
-    required = _DWORD(0xFFFFFFFF)
-    try:
-        succeeded = native.advapi32.GetTokenInformation(
-            _HANDLE(handle),
-            info_class,
-            None,
-            0,
-            ctypes.byref(required),
-        )
-        if succeeded:
-            _raise("observation_failed")
-        error = _last_error()
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    if error != _ERROR_INSUFFICIENT_BUFFER:
-        _raise("observation_failed")
-    size = int(required.value)
-    if size < 1 or size > _MAX_TOKEN_BUFFER:
-        _raise("observation_failed")
-    storage = (_BYTE * size)()
-    ctypes.memset(ctypes.addressof(storage), 0xA5, size)
-    returned = _DWORD(0xFFFFFFFF)
-    try:
-        succeeded = native.advapi32.GetTokenInformation(
-            _HANDLE(handle),
-            info_class,
-            ctypes.cast(storage, _PVOID),
-            size,
-            ctypes.byref(returned),
-        )
-        if not succeeded:
-            _last_error()
-            _raise("observation_failed")
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    if int(returned.value) != size:
-        _raise("observation_failed")
-    return bytes(storage), ctypes.addressof(storage)
-
-
-def _query_statistics(native: _NativeApi, handle: int) -> _PrimaryStatistics:
-    value = _TOKEN_STATISTICS()
-    ctypes.memset(ctypes.addressof(value), 0, ctypes.sizeof(value))
-    value.TokenType = -1
-    value.GroupCount = 0xFFFFFFFF
-    value.PrivilegeCount = 0xFFFFFFFF
-    returned = _DWORD(0xFFFFFFFF)
-    try:
-        succeeded = native.advapi32.GetTokenInformation(
-            _HANDLE(handle),
-            _TOKEN_STATISTICS_CLASS,
-            ctypes.byref(value),
-            ctypes.sizeof(value),
-            ctypes.byref(returned),
-        )
-        if not succeeded:
-            _last_error()
-            _raise("observation_failed")
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    if int(returned.value) != ctypes.sizeof(value):
-        _raise("observation_failed")
-    token_type = int(value.TokenType)
-    group_count = int(value.GroupCount)
-    privilege_count = int(value.PrivilegeCount)
-    if (
-        token_type not in {_TOKEN_PRIMARY, _TOKEN_IMPERSONATION}
-        or group_count > _MAX_TOKEN_RECORDS
-        or privilege_count > _MAX_TOKEN_RECORDS
-    ):
-        _raise("observation_failed")
-    return _PrimaryStatistics(
-        token_id=_luid_value(value.TokenId),
-        authentication_id=_luid_value(value.AuthenticationId),
-        expiration_time=int(value.ExpirationTime),
-        token_type=token_type,
-        dynamic_charged=int(value.DynamicCharged),
-        dynamic_available=int(value.DynamicAvailable),
-        group_count=group_count,
-        privilege_count=privilege_count,
-        modified_id=_luid_value(value.ModifiedId),
-    )
-
-
-def _query_fixed_value(
-    native: _NativeApi,
-    handle: int,
-    info_class: int,
-    accepted: tuple[int, ...],
-) -> int:
-    value = _ENUM(-1)
-    returned = _DWORD(0xFFFFFFFF)
-    try:
-        succeeded = native.advapi32.GetTokenInformation(
-            _HANDLE(handle),
-            info_class,
-            ctypes.byref(value),
-            4,
-            ctypes.byref(returned),
-        )
-        if not succeeded:
-            _last_error()
-            _raise("observation_failed")
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    result = int(value.value)
-    if int(returned.value) != 4 or result not in accepted:
-        _raise("observation_failed")
-    return result
-
-
-def _parse_token_user(raw: bytes, base: int) -> _Sid:
-    if len(raw) < 16:
-        _raise("observation_failed")
-    pointer = struct.unpack_from("<Q", raw, 0)[0]
-    attributes = struct.unpack_from("<I", raw, 8)[0]
-    if attributes != 0:
-        _raise("observation_failed")
-    sid, _interval = _sid_from_pointer(raw, base, pointer)
-    return sid
-
-
-def _parse_sid_records(
-    raw: bytes,
-    base: int,
-) -> tuple[_SidRecord, ...]:
-    if len(raw) < 8:
-        _raise("observation_failed")
-    count = struct.unpack_from("<I", raw, 0)[0]
-    if count > _MAX_TOKEN_RECORDS or 8 + 16 * count > len(raw):
-        _raise("observation_failed")
-    records: list[_SidRecord] = []
-    intervals: list[tuple[int, int]] = []
-    for index in range(count):
-        offset = 8 + 16 * index
-        pointer = struct.unpack_from("<Q", raw, offset)[0]
-        attributes = struct.unpack_from("<I", raw, offset + 8)[0]
-        sid, interval = _sid_from_pointer(raw, base, pointer)
-        records.append(_SidRecord(sid=sid, attributes=attributes))
-        intervals.append(interval)
-    _reject_overlapping_intervals(tuple(intervals))
-    identities = [record.sid.binary for record in records]
-    if len(set(identities)) != len(identities):
-        _raise("observation_failed")
-    return tuple(sorted(records, key=lambda record: record.sid.binary))
-
-
-def _parse_privileges(raw: bytes) -> tuple[_Privilege, ...]:
-    if len(raw) < 4:
-        _raise("observation_failed")
-    count = struct.unpack_from("<I", raw, 0)[0]
-    if count > _MAX_TOKEN_RECORDS or 4 + 12 * count > len(raw):
-        _raise("observation_failed")
-    records = []
-    for index in range(count):
-        low, high, attributes = struct.unpack_from("<IiI", raw, 4 + 12 * index)
-        luid = ((high & 0xFFFFFFFF) << 32) | low
-        records.append(_Privilege(luid=luid, attributes=attributes))
-    identities = [record.luid for record in records]
-    if len(set(identities)) != len(identities):
-        _raise("observation_failed")
-    return tuple(sorted(records, key=lambda record: record.luid))
-
-
-def _parse_integrity(raw: bytes, base: int) -> _SidRecord:
-    if len(raw) < 16:
-        _raise("observation_failed")
-    pointer = struct.unpack_from("<Q", raw, 0)[0]
-    attributes = struct.unpack_from("<I", raw, 8)[0]
-    sid, _interval = _sid_from_pointer(raw, base, pointer)
-    return _SidRecord(sid=sid, attributes=attributes)
-
-
-def _parse_security_descriptor(raw: bytes) -> _SecurityDescriptor:
-    if len(raw) < 20:
-        _raise("observation_failed")
-    (
-        revision,
-        reserved,
-        control,
-        owner_offset,
-        group_offset,
-        sacl_offset,
-        dacl_offset,
-    ) = struct.unpack_from("<BBHIIII", raw, 0)
-    if revision != 1 or reserved != 0 or not (control & _SE_SELF_RELATIVE):
-        _raise("observation_failed")
-    if sacl_offset != 0:
-        _raise("unsupported_security")
-    if (
-        owner_offset == 0
-        or group_offset == 0
-        or dacl_offset == 0
-        or not (control & _SE_DACL_PRESENT)
-    ):
-        _raise("unsupported_security")
-    for offset in (owner_offset, group_offset, dacl_offset):
-        if offset < 20 or offset % 4 or offset >= len(raw):
-            _raise("observation_failed")
-
-    owner, owner_interval = _parse_sid(raw, owner_offset)
-    group, group_interval = _parse_sid(raw, group_offset)
-    if (
-        owner_interval[0] <= dacl_offset < owner_interval[1]
-        or group_interval[0] <= dacl_offset < group_interval[1]
-    ):
-        _raise("observation_failed")
-
-    if dacl_offset + 8 > len(raw):
-        _raise("observation_failed")
-    acl_revision, acl_reserved, acl_size, ace_count, acl_reserved_word = (
-        struct.unpack_from("<BBHHH", raw, dacl_offset)
-    )
-    if acl_revision not in {2, 4}:
-        _raise("unsupported_security")
-    if acl_reserved != 0 or acl_reserved_word != 0:
-        _raise("observation_failed")
-    if (
-        acl_size < 8
-        or dacl_offset + acl_size > len(raw)
-        or ace_count > _MAX_TOKEN_RECORDS
-    ):
-        _raise("observation_failed")
-    dacl_end = dacl_offset + acl_size
-    cursor = dacl_offset + 8
-    aces: list[_Ace] = []
-    for _index in range(ace_count):
-        if cursor + 8 > dacl_end:
-            _raise("observation_failed")
-        ace_type, flags, ace_size, mask = struct.unpack_from("<BBHI", raw, cursor)
-        if ace_type not in {_ACCESS_ALLOWED_ACE_TYPE, _ACCESS_DENIED_ACE_TYPE}:
-            _raise("unsupported_security")
-        if flags & ~_ORDINARY_ACE_FLAG_MASK:
-            _raise("unsupported_security")
-        if ace_size < 8 or cursor + ace_size > dacl_end:
-            _raise("observation_failed")
-        sid, sid_interval = _parse_sid(raw, cursor + 8)
-        if sid_interval[1] != cursor + ace_size:
-            _raise("observation_failed")
-        aces.append(_Ace(ace_type=ace_type, flags=flags, mask=mask, sid=sid))
-        cursor += ace_size
-    if any(raw[cursor:dacl_end]):
-        _raise("observation_failed")
-    dacl_interval = (dacl_offset, dacl_end)
-
-    components = (
-        ("owner", owner_interval),
-        ("group", group_interval),
-        ("dacl", dacl_interval),
-    )
-    for left_index, (left_name, left_interval) in enumerate(components):
-        for right_name, right_interval in components[left_index + 1 :]:
-            overlaps = (
-                left_interval[0] < right_interval[1]
-                and right_interval[0] < left_interval[1]
-            )
-            if not overlaps:
-                continue
-            owner_group_alias = (
-                {left_name, right_name} == {"owner", "group"}
-                and left_interval == right_interval
-                and owner.binary == group.binary
-            )
-            if not owner_group_alias:
-                _raise("observation_failed")
-
-    intervals = sorted(set((owner_interval, group_interval, dacl_interval)))
-    cursor = 20
-    for start, end in intervals:
-        if start < cursor or any(raw[cursor:start]):
-            _raise("observation_failed")
-        cursor = end
-    if any(raw[cursor:]):
-        _raise("observation_failed")
-    return _SecurityDescriptor(
-        control=control,
-        owner=owner,
-        group=group,
-        dacl_revision=acl_revision,
-        aces=tuple(aces),
-    )
-
-
-def _file_generic_mapping() -> _GENERIC_MAPPING:
-    return _GENERIC_MAPPING(*_FILE_GENERIC_MAPPING_VALUES)
-
-
-def _mapped_mask(native: _NativeApi, raw_mask: int) -> int:
-    value = _DWORD(raw_mask)
-    mapping = _file_generic_mapping()
-    try:
-        native.advapi32.MapGenericMask(
-            ctypes.byref(value),
-            ctypes.byref(mapping),
-        )
-    except Exception:
-        _raise("observation_failed")
-    return int(value.value)
 
 
 def _validate_anchor_policy(
-    native: _NativeApi,
-    descriptor: _SecurityDescriptor,
+    security: WindowsSecurityMechanics,
+    descriptor: WindowsSecurityDescriptor,
 ) -> None:
     if (
         descriptor.control != (_SE_SELF_RELATIVE | _SE_DACL_PRESENT)
@@ -1215,21 +684,21 @@ def _validate_anchor_policy(
         or descriptor.group.binary not in {_SYSTEM_SID, _ADMIN_SID}
     ):
         _raise("security_policy_mismatch")
-    for ace in descriptor.aces:
+    for ace in descriptor.dacl_aces:
         if (
             ace.ace_type == _ACCESS_ALLOWED_ACE_TYPE
             and not (ace.flags & _INHERIT_ONLY_ACE)
             and ace.sid.binary not in {_SYSTEM_SID, _ADMIN_SID}
-            and _mapped_mask(native, ace.mask) & _DANGEROUS_DIRECTORY_MASK
+            and security.map_file_mask(ace.mask) & _DANGEROUS_DIRECTORY_MASK
         ):
             _raise("security_policy_mismatch")
 
 
 def _validate_dedicated_policy(
-    descriptor: _SecurityDescriptor,
+    descriptor: WindowsSecurityDescriptor,
     *,
     pin: bool,
-) -> _Sid:
+) -> WindowsSid:
     reader_mask = 0x00120089 if pin else 0x001200A1
     if (
         descriptor.control
@@ -1237,15 +706,15 @@ def _validate_dedicated_policy(
         or descriptor.owner.binary != _ADMIN_SID
         or descriptor.group.binary != _ADMIN_SID
         or descriptor.dacl_revision != 2
-        or len(descriptor.aces) != 3
+        or len(descriptor.dacl_aces) != 3
     ):
         _raise("security_policy_mismatch")
     expected = (
         (_SYSTEM_SID, 0x001F01FF),
         (_ADMIN_SID, 0x001F01FF),
-        (descriptor.aces[2].sid.binary, reader_mask),
+        (descriptor.dacl_aces[2].sid.binary, reader_mask),
     )
-    for ace, (sid, mask) in zip(descriptor.aces, expected):
+    for ace, (sid, mask) in zip(descriptor.dacl_aces, expected):
         if (
             ace.ace_type != _ACCESS_ALLOWED_ACE_TYPE
             or ace.flags != 0
@@ -1253,84 +722,13 @@ def _validate_dedicated_policy(
             or ace.sid.binary != sid
         ):
             _raise("security_policy_mismatch")
-    if len({ace.sid.binary for ace in descriptor.aces}) != 3:
+    if len({ace.sid.binary for ace in descriptor.dacl_aces}) != 3:
         _raise("security_policy_mismatch")
-    return descriptor.aces[2].sid
-
-
-def _token_snapshot(native: _NativeApi, handle: int) -> _TokenSnapshot:
-    before = _query_statistics(native, handle)
-    user_raw, user_base = _query_variable_token(native, handle, _TOKEN_USER_CLASS)
-    user_sid = _parse_token_user(user_raw, user_base)
-    groups_raw, groups_base = _query_variable_token(native, handle, _TOKEN_GROUPS_CLASS)
-    groups = _parse_sid_records(groups_raw, groups_base)
-    privileges_raw, _privileges_base = _query_variable_token(
-        native, handle, _TOKEN_PRIVILEGES_CLASS
-    )
-    privileges = _parse_privileges(privileges_raw)
-    restricted_raw, restricted_base = _query_variable_token(
-        native, handle, _TOKEN_RESTRICTED_SIDS_CLASS
-    )
-    restricted = _parse_sid_records(restricted_raw, restricted_base)
-    elevation_type = _query_fixed_value(
-        native, handle, _TOKEN_ELEVATION_TYPE_CLASS, (1, 2, 3)
-    )
-    is_elevated = _query_fixed_value(
-        native, handle, _TOKEN_ELEVATION_CLASS, (0, 1)
-    )
-    has_restrictions = _query_fixed_value(
-        native, handle, _TOKEN_HAS_RESTRICTIONS_CLASS, (0, 1)
-    )
-    integrity_raw, integrity_base = _query_variable_token(
-        native, handle, _TOKEN_INTEGRITY_LEVEL_CLASS
-    )
-    integrity = _parse_integrity(integrity_raw, integrity_base)
-    ui_access = _query_fixed_value(native, handle, _TOKEN_UI_ACCESS_CLASS, (0, 1))
-    is_app_container = _query_fixed_value(
-        native, handle, _TOKEN_IS_APP_CONTAINER_CLASS, (0, 1)
-    )
-    after = _query_statistics(native, handle)
-    if (
-        before != after
-        or before.group_count != len(groups)
-        or before.privilege_count != len(privileges)
-    ):
-        _raise("observation_failed")
-    return _TokenSnapshot(
-        statistics=before,
-        user_sid=user_sid,
-        groups=groups,
-        privileges=privileges,
-        restricted_sids=restricted,
-        elevation_type=elevation_type,
-        is_elevated=bool(is_elevated),
-        has_restrictions=bool(has_restrictions),
-        integrity=integrity,
-        ui_access=bool(ui_access),
-        is_app_container=bool(is_app_container),
-    )
-
-
-def _resolve_change_notify_luid(native: _NativeApi) -> int:
-    value = _LUID()
-    try:
-        succeeded = native.advapi32.LookupPrivilegeValueW(
-            None,
-            "SeChangeNotifyPrivilege",
-            ctypes.byref(value),
-        )
-        if not succeeded:
-            _last_error()
-            _raise("observation_failed")
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    return _luid_value(value)
+    return descriptor.dacl_aces[2].sid
 
 
 def _intrinsically_validate_token(
-    snapshot: _TokenSnapshot,
+    snapshot: WindowsTokenSnapshot,
     change_notify_luid: int,
 ) -> None:
     if (
@@ -1358,107 +756,19 @@ def _intrinsically_validate_token(
             _raise("untrusted_reader")
 
 
-def _open_baseline_token(
-    native: _NativeApi,
-    baseline: _OwnedNativeHandle,
-) -> None:
-    thread_owner = _OwnedNativeHandle(None)
-    try:
-        thread_result = native.advapi32.OpenThreadToken(
-            native.kernel32.GetCurrentThread(),
-            _TOKEN_QUERY,
-            1,
-            thread_owner.output_pointer(),
-        )
-        if not thread_result:
-            thread_error = _last_error()
-            thread_owner.value = None
-        else:
-            thread_error = 0
-    except BaseException as error:
-        cleanup = _close_native_handle(native, thread_owner)
-        _raise_after_cleanup(error, cleanup)
-    if thread_result:
-        if thread_owner.value is None:
-            _raise("observation_failed")
-        cleanup = _close_native_handle(native, thread_owner)
-        _raise_after_cleanup(ExternalPinReaderError("untrusted_reader"), cleanup)
-    if thread_error != _ERROR_NO_TOKEN:
-        _raise("observation_failed")
-
-    try:
-        process_result = native.advapi32.OpenProcessToken(
-            native.kernel32.GetCurrentProcess(),
-            _TOKEN_QUERY | _TOKEN_DUPLICATE,
-            baseline.output_pointer(),
-        )
-        if not process_result:
-            _last_error()
-            baseline.value = None
-            _raise("observation_failed")
-    except BaseException as error:
-        cleanup = _close_native_handle(native, baseline)
-        _raise_after_cleanup(error, cleanup)
-    if baseline.value is None:
-        _raise("observation_failed")
-
-
 def _compare_effective_token(
-    native: _NativeApi,
-    baseline: _TokenSnapshot,
+    session: WindowsSecuritySession,
+    baseline: WindowsTokenSnapshot,
 ) -> None:
-    owned_thread = _OwnedNativeHandle(None)
     try:
-        thread_result = native.advapi32.OpenThreadToken(
-            native.kernel32.GetCurrentThread(),
-            _TOKEN_QUERY,
-            1,
-            owned_thread.output_pointer(),
-        )
-        if not thread_result:
-            thread_error = _last_error()
-            owned_thread.value = None
-        else:
-            thread_error = 0
+        current = session.observe_effective()
     except BaseException as error:
-        cleanup = _close_native_handle(native, owned_thread)
-        _raise_after_cleanup(error, cleanup)
-    if thread_result:
-        if owned_thread.value is None:
-            _raise("observation_failed")
-        cleanup = _close_native_handle(native, owned_thread)
-        _raise_after_cleanup(ExternalPinReaderError("observation_raced"), cleanup)
-    if thread_error != _ERROR_NO_TOKEN:
-        _raise("observation_failed")
-
-    owned_process = _OwnedNativeHandle(None)
-    try:
-        process_result = native.advapi32.OpenProcessToken(
-            native.kernel32.GetCurrentProcess(),
-            _TOKEN_QUERY,
-            owned_process.output_pointer(),
-        )
-        if not process_result:
-            _last_error()
-            owned_process.value = None
-            _raise("observation_failed")
-    except BaseException as error:
-        cleanup = _close_native_handle(native, owned_process)
-        _raise_after_cleanup(error, cleanup)
-    if owned_process.value is None:
-        _raise("observation_failed")
-    primary: BaseException | None = None
-    try:
-        current = _token_snapshot(native, owned_process.value)
-        if current != baseline:
-            _raise("observation_raced")
-    except BaseException as error:
-        primary = error
-    cleanup = _close_native_handle(native, owned_process)
-    _raise_after_cleanup(primary, cleanup)
+        _raise_security_failure(error, phase="recheck")
+    if current != baseline:
+        _raise("observation_raced")
 
 
-def _reader_identity_projection(snapshot: _TokenSnapshot) -> dict[str, Any]:
+def _reader_identity_projection(snapshot: WindowsTokenSnapshot) -> dict[str, Any]:
     statistics = snapshot.statistics
     return {
         "elevation": {
@@ -1634,7 +944,7 @@ def _snapshot_object(
 
 
 def _acquire_root(state: _ReadState, root_path: str) -> None:
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     failure: ExternalPinReaderError | None = None
     try:
         handle = state.backend.open_root(root_path)
@@ -1665,7 +975,7 @@ def _acquire_root(state: _ReadState, root_path: str) -> None:
         failure = _sanitize_error(error)
     if failure is not None:
         raise failure from failure.__cause__
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
 
 
 def _matching_entries(
@@ -1690,7 +1000,7 @@ def _select_child(
 ) -> _HeldObject:
     if state.root is None or state.filesystem is None:
         _raise("observation_failed")
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     entries = _enumerate_entries(state.backend, parent.handle, state.filesystem)
     matches = _matching_entries(entries, component)
     if len(matches) > 1:
@@ -1708,7 +1018,7 @@ def _select_child(
             state.filesystem,
         )
         after = _snapshot_object(state.backend, parent, state.filesystem)
-        _compare_effective_token(state.native, state.baseline_snapshot)
+        _compare_effective_token(state.session, state.baseline_snapshot)
         if (
             before != after
             or entries != first_proof
@@ -1757,7 +1067,7 @@ def _select_child(
     state.parents.append(
         _ParentMembership(role=parent.role, handle=parent.handle, entries=entries)
     )
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     return selected
 
 
@@ -1775,15 +1085,19 @@ def _read_and_pin_descriptor(
         raise failure from failure.__cause__
     if type(raw) is not bytes or not raw:
         _raise("observation_failed")
-    storage = (_BYTE * len(raw)).from_buffer_copy(raw)
-    pinned = bytes(storage)
-    parsed = _parse_security_descriptor(pinned)
+    try:
+        security = state.native.security.pin_security_descriptor(
+            raw,
+            profile=WINDOWS_DESCRIPTOR_PROFILE_DACL_ONLY,
+        )
+    except BaseException as error:
+        _raise_security_failure(error, phase="descriptor")
+    if security.observation.sacl_present:
+        _raise("unsupported_security")
     return _PinnedDescriptor(
         held=held,
-        raw=pinned,
-        storage=storage,
-        address=ctypes.addressof(storage),
-        parsed=parsed,
+        raw=raw,
+        security=security,
     )
 
 
@@ -1793,19 +1107,20 @@ def _observe_descriptor(
     *,
     anchor: bool,
     pin: bool = False,
-) -> tuple[_PinnedDescriptor, _Sid | None]:
-    _compare_effective_token(state.native, state.baseline_snapshot)
+) -> tuple[_PinnedDescriptor, WindowsSid | None]:
+    _compare_effective_token(state.session, state.baseline_snapshot)
     pinned = _read_and_pin_descriptor(state, held)
-    reader: _Sid | None = None
+    descriptor = pinned.security.observation
+    reader: WindowsSid | None = None
     if anchor:
-        _validate_anchor_policy(state.native, pinned.parsed)
+        _validate_anchor_policy(state.native.security, descriptor)
     else:
-        reader = _validate_dedicated_policy(pinned.parsed, pin=pin)
-    _compare_effective_token(state.native, state.baseline_snapshot)
+        reader = _validate_dedicated_policy(descriptor, pin=pin)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     return pinned, reader
 
 
-def _ace_projection(ace: _Ace) -> dict[str, str]:
+def _ace_projection(ace: WindowsAce) -> dict[str, str]:
     return {
         "flags": f"{ace.flags:02x}",
         "mask": f"{ace.mask:08x}",
@@ -1833,9 +1148,9 @@ def _descriptor_projection(
     role: str,
     rights: tuple[tuple[str, int], ...],
 ) -> dict[str, object]:
-    descriptor = pinned.parsed
+    descriptor = pinned.security.observation
     return {
-        "dacl": [_ace_projection(ace) for ace in descriptor.aces],
+        "dacl": [_ace_projection(ace) for ace in descriptor.dacl_aces],
         "dacl_revision": descriptor.dacl_revision,
         "denied_access_checks": _denied_access_projection(rights),
         "descriptor_control": f"{descriptor.control:04x}",
@@ -1846,138 +1161,48 @@ def _descriptor_projection(
     }
 
 
-def _duplicate_access_token(
-    state: _ReadState,
-    duplicate: _OwnedNativeHandle,
-) -> None:
-    if state.baseline.value is None:
-        _raise("observation_failed")
-    try:
-        succeeded = state.native.advapi32.DuplicateTokenEx(
-            _HANDLE(state.baseline.value),
-            _TOKEN_QUERY,
-            None,
-            _SECURITY_IMPERSONATION,
-            _TOKEN_IMPERSONATION,
-            duplicate.output_pointer(),
-        )
-        if not succeeded:
-            _last_error()
-            duplicate.value = None
-            _raise("observation_failed")
-    except BaseException as error:
-        cleanup = _close_native_handle(state.native, duplicate)
-        _raise_after_cleanup(error, cleanup)
-    if duplicate.value is None:
-        _raise("observation_failed")
-
-
-def _validate_privilege_output(
-    storage: Any,
-    returned_length: int,
-    capacity: int,
-    accepted_count: int,
-) -> tuple[int, int]:
-    if returned_length < 8 or returned_length > capacity:
-        _raise("observation_failed")
-    raw = bytes(storage[:returned_length])
-    privilege_count, control = struct.unpack_from("<II", raw, 0)
-    if (
-        privilege_count > _MAX_TOKEN_RECORDS
-        or privilege_count > accepted_count
-        or control & ~_PRIVILEGE_SET_ALL_NECESSARY
-    ):
-        _raise("observation_failed")
-    records_end = 8 + 12 * privilege_count
-    if records_end > returned_length or any(raw[records_end:]):
-        _raise("observation_failed")
-    return privilege_count, control
-
-
-def _check_denied_right(
-    state: _ReadState,
-    pinned: _PinnedDescriptor,
-    duplicate: int,
-    raw_mask: int,
-) -> None:
-    desired = _DWORD(raw_mask)
-    mapping = _file_generic_mapping()
-    try:
-        state.native.advapi32.MapGenericMask(
-            ctypes.byref(desired),
-            ctypes.byref(mapping),
-        )
-    except Exception:
-        _raise("observation_failed")
-    mapped = int(desired.value)
-    accepted_count = state.baseline_snapshot.statistics.privilege_count
-    capacity = 8 + 12 * max(1, accepted_count)
-    if capacity > 49_160:
-        _raise("observation_failed")
-    privilege_storage = (_BYTE * capacity)()
-    ctypes.memset(ctypes.addressof(privilege_storage), 0, capacity)
-    privilege_length = _DWORD(capacity)
-    granted = _DWORD(0xFFFFFFFF)
-    access_status = _BOOL(-1)
-    try:
-        succeeded = state.native.advapi32.AccessCheck(
-            _PVOID(pinned.address),
-            _HANDLE(duplicate),
-            mapped,
-            ctypes.byref(mapping),
-            ctypes.cast(privilege_storage, _PVOID),
-            ctypes.byref(privilege_length),
-            ctypes.byref(granted),
-            ctypes.byref(access_status),
-        )
-        if not succeeded:
-            _last_error()
-            _raise("observation_failed")
-    except ExternalPinReaderError:
-        raise
-    except Exception:
-        _raise("observation_failed")
-    status = int(access_status.value)
-    if status not in {0, 1}:
-        _raise("observation_failed")
-    privilege_count, control = _validate_privilege_output(
-        privilege_storage,
-        int(privilege_length.value),
-        capacity,
-        accepted_count,
-    )
-    granted_mask = int(granted.value)
-    if (
-        status == 0
-        and granted_mask == 0
-        and privilege_count == 0
-        and control == 0
-    ):
-        return
-    if status == 1 and granted_mask == mapped:
-        _raise("security_policy_mismatch")
-    _raise("observation_failed")
-
-
 def _check_effective_access(
     state: _ReadState,
     pinned: _PinnedDescriptor,
     rights: tuple[tuple[str, int], ...],
 ) -> None:
-    _compare_effective_token(state.native, state.baseline_snapshot)
-    duplicate = _OwnedNativeHandle(None)
+    _compare_effective_token(state.session, state.baseline_snapshot)
+    scope = None
     primary: BaseException | None = None
     try:
-        _duplicate_access_token(state, duplicate)
-        if duplicate.value is None:
-            _raise("observation_failed")
+        scope = state.session.open_access_check(pinned.security)
         for _name, mask in rights:
-            _check_denied_right(state, pinned, duplicate.value, mask)
+            result = scope.check_denial(raw_mask=mask)
+            if not result.denied:
+                _raise("security_policy_mismatch")
     except BaseException as error:
         primary = error
-    cleanup = _close_native_handle(state.native, duplicate)
+    cleanup: ExternalPinReaderError | None = None
+    cleanup_control: BaseException | None = None
+    if scope is not None:
+        try:
+            scope.close()
+        except BaseException as error:
+            if isinstance(error, WindowsSecurityMechanicsError):
+                cleanup = _translate_security_error_graph(
+                    error,
+                    phase="cleanup",
+                )
+            elif isinstance(error, Exception):
+                cleanup = ExternalPinReaderError("observation_failed")
+            else:
+                _sanitize_control_links(
+                    error,
+                    phase="cleanup",
+                    fallback=ExternalPinReaderError("observation_failed"),
+                )
+                cleanup_control = error
+    if cleanup_control is not None:
+        if primary is not None and cleanup_control.__context__ is None:
+            cleanup_control.__context__ = primary
+        _raise_after_cleanup(cleanup_control, cleanup)
     _raise_after_cleanup(primary, cleanup)
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
 
 
 def _validate_pin_snapshot(snapshot: WindowsObjectSnapshot) -> None:
@@ -1996,7 +1221,7 @@ def _read_pin_payload(
     state: _ReadState,
     pin: _HeldObject,
 ) -> str:
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     result: object | None = None
     failure: ExternalPinReaderError | None = None
     try:
@@ -2017,7 +1242,7 @@ def _read_pin_payload(
         _raise("observation_failed")
     payload, explicit_eof = result
     repeated = _snapshot_object(state.backend, pin, state.filesystem or "")
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     if repeated != pin.snapshot:
         _raise("observation_raced")
     hexadecimal = b"0123456789abcdef"
@@ -2040,7 +1265,7 @@ def _final_authority_recheck(
 ) -> None:
     if state.filesystem is None:
         _raise("observation_failed")
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     raced = False
     for pinned in descriptors:
         current: object | None = None
@@ -2067,7 +1292,7 @@ def _final_authority_recheck(
         )
         if current_entries != parent.entries:
             raced = True
-    _compare_effective_token(state.native, state.baseline_snapshot)
+    _compare_effective_token(state.session, state.baseline_snapshot)
     if raced:
         _raise("observation_raced")
 
@@ -2075,7 +1300,7 @@ def _final_authority_recheck(
 def _security_policy_projection(
     anchor: _PinnedDescriptor,
     dedicated: tuple[_PinnedDescriptor, ...],
-    enrolled_reader: _Sid,
+    enrolled_reader: WindowsSid,
 ) -> dict[str, object]:
     roles = (
         "goodq_directory",
@@ -2189,33 +1414,37 @@ def read_external_pin() -> ExternalPinEvidence:
     cleanup_fallback = ExternalPinReaderError("observation_failed")
     processing_fallback = ExternalPinReaderError("observation_failed")
     primary_fallback = ExternalPinReaderError("observation_failed")
-    baseline: _OwnedNativeHandle | None = None
+    session: WindowsSecuritySession | None = None
     held: list[_HeldObject] | None = None
     backend_entered = False
     primary: BaseException | None = None
     candidate: ExternalPinEvidence | None = None
     try:
-        baseline = _OwnedNativeHandle(None)
         held = []
         entered_backend = backend.__enter__()
         backend_entered = True
         if entered_backend is not backend:
             _raise("observation_failed")
-        change_notify_luid = _resolve_change_notify_luid(native)
-        _open_baseline_token(native, baseline)
-        if baseline.value is None:
-            _raise("observation_failed")
-        baseline_snapshot = _token_snapshot(native, baseline.value)
+        try:
+            change_notify_luid = native.security.resolve_privilege_luid(
+                "SeChangeNotifyPrivilege"
+            )
+            session = native.security.open_token_session(
+                profile=WINDOWS_TOKEN_PROFILE_BASE
+            )
+            baseline_snapshot = session.baseline_snapshot
+        except BaseException as error:
+            _raise_security_failure(error, phase="baseline")
         _intrinsically_validate_token(baseline_snapshot, change_notify_luid)
 
-        _compare_effective_token(native, baseline_snapshot)
+        _compare_effective_token(session, baseline_snapshot)
         known_folder = _resolve_known_folder(native)
-        _compare_effective_token(native, baseline_snapshot)
+        _compare_effective_token(session, baseline_snapshot)
 
         state = _ReadState(
             backend=backend,
             native=native,
-            baseline=baseline,
+            session=session,
             baseline_snapshot=baseline_snapshot,
             held=held,
         )
@@ -2254,7 +1483,7 @@ def read_external_pin() -> ExternalPinEvidence:
             anchor=True,
         )
         dedicated_descriptors: list[_PinnedDescriptor] = []
-        enrolled_candidates: list[_Sid] = []
+        enrolled_candidates: list[WindowsSid] = []
         for role in ("goodq", "authority", "clean_memory"):
             descriptor, enrolled = _observe_descriptor(
                 state,
@@ -2345,9 +1574,26 @@ def read_external_pin() -> ExternalPinEvidence:
             backend.__exit__(None, None, None)
         except BaseException as error:
             backend_cleanup_error = error
-    baseline_cleanup = (
-        _close_native_handle(native, baseline) if baseline is not None else None
-    )
+    session_cleanup: ExternalPinReaderError | None = None
+    session_control_error: BaseException | None = None
+    if session is not None:
+        try:
+            session.close()
+        except BaseException as error:
+            if isinstance(error, WindowsSecurityMechanicsError):
+                session_cleanup = _translate_security_error_graph(
+                    error,
+                    phase="cleanup",
+                )
+            elif isinstance(error, Exception):
+                session_cleanup = ExternalPinReaderError("observation_failed")
+            else:
+                _sanitize_control_links(
+                    error,
+                    phase="cleanup",
+                    fallback=primary_fallback,
+                )
+                session_control_error = error
     cleanup: ExternalPinReaderError | None = None
     if backend_cleanup_error is not None:
         cleanup = _sanitize_cleanup_chain(
@@ -2355,7 +1601,15 @@ def read_external_pin() -> ExternalPinEvidence:
             cleanup_fallback=cleanup_fallback,
             processing_fallback=processing_fallback,
         )
-    cleanup = _append_cleanup(cleanup, baseline_cleanup)
+    cleanup = _append_cleanup(cleanup, session_cleanup)
+    if session_control_error is not None:
+        if primary is not None and session_control_error.__context__ is None:
+            session_control_error.__context__ = primary
+        _raise_after_cleanup(
+            session_control_error,
+            cleanup,
+            fallback=primary_fallback,
+        )
     _raise_after_cleanup(primary, cleanup, fallback=primary_fallback)
     if candidate is None:
         _raise("observation_failed")

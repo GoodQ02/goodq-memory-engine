@@ -10,6 +10,12 @@ import os
 import unicodedata
 from typing import Any
 
+from steps.common.clean_memory_windows_program_data_locator import (
+    CleanMemoryWindowsProgramDataLocator,
+    CleanMemoryWindowsProgramDataLocatorError,
+    bind_clean_memory_windows_program_data_locator,
+    verify_clean_memory_windows_program_data_locator_abi,
+)
 from steps.common.clean_memory_windows_reader_identity import (
     CleanMemoryWindowsReaderIdentityError,
     clean_memory_windows_reader_identity_sha256,
@@ -83,21 +89,6 @@ _EVIDENCE_KEYS = {
     "source_schema",
 }
 
-_DWORD = ctypes.c_uint32
-_WORD = ctypes.c_uint16
-_BYTE = ctypes.c_ubyte
-_HANDLE = ctypes.c_void_p
-_PVOID = ctypes.c_void_p
-
-_PROGRAM_DATA_GUID_FIELDS = (
-    0x62AB5D82,
-    0xFDC1,
-    0x4DC3,
-    (0xA9, 0xDD, 0x07, 0x0D, 0x1D, 0x49, 0x5D, 0x97),
-)
-_PIN_NAME = "protected-boundaries.sha256"
-_FIXED_CHILDREN = ("GoodQ", "authority", "clean-memory")
-
 _SYSTEM_SID = bytes.fromhex("010100000000000512000000")
 _ADMIN_SID = bytes.fromhex("01020000000000052000000020020000")
 _DIRECTORY_RIGHTS = (
@@ -124,19 +115,9 @@ _SE_SELF_RELATIVE = 0x8000
 _DANGEROUS_DIRECTORY_MASK = 0x00000040 | 0x00040000 | 0x00080000
 
 
-class _GUID(ctypes.Structure):
-    _fields_ = [
-        ("Data1", _DWORD),
-        ("Data2", _WORD),
-        ("Data3", _WORD),
-        ("Data4", _BYTE * 8),
-    ]
-
-
 @dataclass(frozen=True)
 class _NativeApi:
-    shell32: object
-    ole32: object
+    locator: CleanMemoryWindowsProgramDataLocator
     security: WindowsSecurityMechanics
 
 
@@ -145,12 +126,6 @@ class _PinnedDescriptor:
     held: _HeldObject
     raw: bytes
     security: WindowsPinnedSecurityDescriptor
-
-
-@dataclass(frozen=True)
-class _KnownFolder:
-    root: str
-    components: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -330,6 +305,67 @@ def _translate_security_error_graph(
     return clone(error, 256)
 
 
+def _locator_error_code(
+    error: CleanMemoryWindowsProgramDataLocatorError,
+) -> str:
+    code = _observed_locator_error_code(error)
+    if code == "unsupported_platform":
+        return "unsupported_platform"
+    if code == "redirected_boundary":
+        return "redirected_boundary"
+    return "observation_failed"
+
+
+def _observed_locator_error_code(
+    error: CleanMemoryWindowsProgramDataLocatorError,
+) -> str | None:
+    try:
+        code = object.__getattribute__(error, "_code")
+    except BaseException:
+        return None
+    if type(code) is not str or code not in {
+        "unsupported_platform",
+        "redirected_boundary",
+        "observation_failed",
+    }:
+        return None
+    return code
+
+
+def _translate_locator_error_graph(
+    error: CleanMemoryWindowsProgramDataLocatorError,
+) -> ExternalPinReaderError:
+    memo: list[tuple[int, ExternalPinReaderError]] = []
+    visiting: list[int] = []
+
+    def clone(node: BaseException, remaining: int) -> ExternalPinReaderError:
+        identity = id(node)
+        if remaining <= 0 or identity in visiting:
+            return ExternalPinReaderError("observation_failed")
+        for known_identity, known_error in memo:
+            if identity == known_identity:
+                return known_error
+        code = (
+            _locator_error_code(node)
+            if isinstance(node, CleanMemoryWindowsProgramDataLocatorError)
+            else "observation_failed"
+        )
+        public = ExternalPinReaderError(code)
+        memo.append((identity, public))
+        visiting.append(identity)
+        cause = node.__cause__
+        context = node.__context__
+        if cause is not None:
+            public.__cause__ = clone(cause, remaining - 1)
+        if context is not None:
+            public.__context__ = clone(context, remaining - 1)
+        public.__suppress_context__ = bool(node.__suppress_context__)
+        del visiting[-1]
+        return public
+
+    return clone(error, 256)
+
+
 def _sanitize_control_links(
     error: BaseException,
     *,
@@ -387,6 +423,20 @@ def _sanitize_control_links(
             except BaseException:
                 public_context = fallback
 
+    if isinstance(raw_cause, CleanMemoryWindowsProgramDataLocatorError):
+        try:
+            public_cause = _translate_locator_error_graph(raw_cause)
+        except BaseException:
+            public_cause = fallback
+    if isinstance(raw_context, CleanMemoryWindowsProgramDataLocatorError):
+        if raw_context is raw_cause:
+            public_context = public_cause
+        else:
+            try:
+                public_context = _translate_locator_error_graph(raw_context)
+            except BaseException:
+                public_context = fallback
+
     error.__cause__ = public_cause
     error.__context__ = public_context
     error.__suppress_context__ = suppress_context
@@ -426,6 +476,8 @@ def _sanitize_error(error: BaseException) -> ExternalPinReaderError:
         return _sanitize_windows_error_graph(error)
     if isinstance(error, WindowsSecurityMechanicsError):
         return _translate_security_error_graph(error, phase="observation")
+    if isinstance(error, CleanMemoryWindowsProgramDataLocatorError):
+        return _translate_locator_error_graph(error)
     return ExternalPinReaderError("observation_failed")
 
 
@@ -622,8 +674,19 @@ def _load_windows_backend() -> WindowsHeldHandleBackend:
 
 
 def _verify_win64_layouts() -> None:
-    if ctypes.sizeof(_GUID) != 16:
-        _raise("unsupported_security")
+    locator_failure: str | None = None
+    try:
+        verify_clean_memory_windows_program_data_locator_abi()
+    except CleanMemoryWindowsProgramDataLocatorError as error:
+        locator_failure = (
+            "unsupported_security"
+            if _observed_locator_error_code(error) == "unsupported_platform"
+            else "observation_failed"
+        )
+    except Exception:
+        locator_failure = "observation_failed"
+    if locator_failure is not None:
+        _raise(locator_failure)
     try:
         verify_windows_security_abi()
     except WindowsSecurityMechanicsError:
@@ -643,18 +706,25 @@ def _bind_native() -> _NativeApi:
     except (AttributeError, OSError):
         _raise("unsupported_security")
 
+    locator: CleanMemoryWindowsProgramDataLocator | None = None
+    locator_failure = None
     try:
-        shell32.SHGetKnownFolderPath.argtypes = [
-            ctypes.POINTER(_GUID),
-            _DWORD,
-            _HANDLE,
-            ctypes.POINTER(_PVOID),
-        ]
-        shell32.SHGetKnownFolderPath.restype = ctypes.c_int32
-        ole32.CoTaskMemFree.argtypes = [_PVOID]
-        ole32.CoTaskMemFree.restype = None
-    except (AttributeError, OSError):
-        _raise("unsupported_platform")
+        locator = bind_clean_memory_windows_program_data_locator(
+            shell32=shell32,
+            ole32=ole32,
+        )
+    except CleanMemoryWindowsProgramDataLocatorError as error:
+        locator_failure = (
+            "unsupported_platform"
+            if _observed_locator_error_code(error) == "unsupported_platform"
+            else "observation_failed"
+        )
+    except Exception:
+        locator_failure = "observation_failed"
+    if locator_failure is not None:
+        _raise(locator_failure)
+    if locator is None:
+        _raise("observation_failed")
 
     try:
         security = bind_windows_security(
@@ -665,8 +735,7 @@ def _bind_native() -> _NativeApi:
         _raise("unsupported_security")
 
     return _NativeApi(
-        shell32=shell32,
-        ole32=ole32,
+        locator=locator,
         security=security,
     )
 
@@ -770,88 +839,6 @@ def _compare_effective_token(
         _raise_security_failure(error, phase="recheck")
     if current != baseline:
         _raise("observation_raced")
-
-
-def _validate_known_folder_text(value: str) -> _KnownFolder:
-    try:
-        utf16_units = len(value.encode("utf-16-le")) // 2
-    except UnicodeError:
-        _raise("redirected_boundary")
-    if (
-        not value
-        or utf16_units > 32767
-        or unicodedata.normalize("NFC", value) != value
-        or len(value) < 4
-        or not ("A" <= value[0] <= "Z")
-        or value[1:3] != ":\\"
-        or value.endswith("\\")
-        or "/" in value
-        or "%" in value
-    ):
-        _raise("redirected_boundary")
-    components = tuple(value[3:].split("\\"))
-    if not components or len(components) > 64:
-        _raise("redirected_boundary")
-    for component in components:
-        if (
-            not component
-            or component in {".", ".."}
-            or component.endswith((".", " "))
-            or ":" in component
-            or any(ord(character) < 32 or ord(character) == 127 for character in component)
-        ):
-            _raise("redirected_boundary")
-    return _KnownFolder(root=value[:3], components=components)
-
-
-def _resolve_known_folder(native: _NativeApi) -> _KnownFolder:
-    cleanup_fallback = ExternalPinReaderError("observation_failed")
-    processing_fallback = ExternalPinReaderError("observation_failed")
-    primary_fallback = ExternalPinReaderError("observation_failed")
-    data4 = (_BYTE * 8)(*_PROGRAM_DATA_GUID_FIELDS[3])
-    guid = _GUID(
-        _PROGRAM_DATA_GUID_FIELDS[0],
-        _PROGRAM_DATA_GUID_FIELDS[1],
-        _PROGRAM_DATA_GUID_FIELDS[2],
-        data4,
-    )
-    output = _PVOID()
-    primary: BaseException | None = None
-    result: _KnownFolder | None = None
-    try:
-        hresult = int(
-            native.shell32.SHGetKnownFolderPath(
-                ctypes.byref(guid),
-                0,
-                None,
-                ctypes.byref(output),
-            )
-        )
-        if hresult < 0 or output.value is None:
-            _raise("observation_failed")
-        text = ctypes.wstring_at(output.value)
-        result = _validate_known_folder_text(text)
-    except BaseException as error:
-        primary = error
-    raw_cleanup: BaseException | None = None
-    if output.value is not None:
-        try:
-            native.ole32.CoTaskMemFree(_PVOID(output.value))
-        except BaseException as error:
-            raw_cleanup = error
-    cleanup = (
-        _sanitize_cleanup_chain(
-            raw_cleanup,
-            cleanup_fallback=cleanup_fallback,
-            processing_fallback=processing_fallback,
-        )
-        if raw_cleanup is not None
-        else None
-    )
-    _raise_after_cleanup(primary, cleanup, fallback=primary_fallback)
-    if result is None:
-        _raise("observation_failed")
-    return result
 
 
 def _enumerate_entries(
@@ -1393,7 +1380,7 @@ def read_external_pin() -> ExternalPinEvidence:
         _validate_reader_identity(baseline_snapshot, change_notify_luid)
 
         _compare_effective_token(session, baseline_snapshot)
-        known_folder = _resolve_known_folder(native)
+        program_data = native.locator.resolve()
         _compare_effective_token(session, baseline_snapshot)
 
         state = _ReadState(
@@ -1403,14 +1390,16 @@ def read_external_pin() -> ExternalPinEvidence:
             baseline_snapshot=baseline_snapshot,
             held=held,
         )
-        _acquire_root(state, known_folder.root)
+        _acquire_root(state, program_data.drive_root)
         if state.root is None:
             _raise("observation_failed")
         parent = state.root
-        for index, component in enumerate(known_folder.components):
+        for index, component in enumerate(
+            program_data.program_data_components
+        ):
             role = (
                 "anchor"
-                if index == len(known_folder.components) - 1
+                if index == len(program_data.program_data_components) - 1
                 else f"program_data_component_{index}"
             )
             parent = _select_child(
@@ -1421,7 +1410,7 @@ def read_external_pin() -> ExternalPinEvidence:
                 directory=True,
             )
         for component, role in zip(
-            _FIXED_CHILDREN,
+            program_data.fixed_directory_components,
             ("goodq", "authority", "clean_memory"),
         ):
             parent = _select_child(
@@ -1464,7 +1453,7 @@ def read_external_pin() -> ExternalPinEvidence:
         pin = _select_child(
             state,
             held_by_role["clean_memory"],
-            _PIN_NAME,
+            program_data.pin_name,
             "pin",
             directory=False,
         )

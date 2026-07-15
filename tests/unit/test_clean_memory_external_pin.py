@@ -1471,9 +1471,12 @@ def _install_reader_world(
             kernel32=native.kernel32,
             advapi32=native.advapi32,
         )
-        return module._NativeApi(
+        locator = module.bind_clean_memory_windows_program_data_locator(
             shell32=native.shell32,
             ole32=native.ole32,
+        )
+        return module._NativeApi(
+            locator=locator,
             security=_RecordingSecurityMechanics(world, security),
         )
 
@@ -2207,10 +2210,133 @@ def test_non_windows_rejects_before_native_binding(monkeypatch) -> None:
     assert exc_info.value.code == "unsupported_platform"
 
 
-def test_consumer_known_folder_guid_layout_is_exact() -> None:
+def test_consumer_shared_locator_phase_mapping_is_exact_and_fail_closed(
+    monkeypatch,
+) -> None:
     module = _load_module()
+    locator_module = importlib.import_module(
+        "steps.common.clean_memory_windows_program_data_locator"
+    )
+    monkeypatch.setattr(
+        ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: pytest.fail(
+            "DLL loaded before shared locator ABI guard"
+        ),
+    )
 
-    assert ctypes.sizeof(module._GUID) == 16
+    for shared_code, expected_code in (
+        ("unsupported_platform", "unsupported_security"),
+        ("redirected_boundary", "observation_failed"),
+        ("observation_failed", "observation_failed"),
+    ):
+        def fail_preflight(code=shared_code):
+            raise locator_module.CleanMemoryWindowsProgramDataLocatorError(
+                code
+            )
+
+        monkeypatch.setattr(
+            module,
+            "verify_clean_memory_windows_program_data_locator_abi",
+            fail_preflight,
+        )
+        with pytest.raises(module.ExternalPinReaderError) as exc_info:
+            module._bind_native()
+        assert exc_info.value.code == expected_code
+
+    monkeypatch.setattr(
+        module,
+        "verify_clean_memory_windows_program_data_locator_abi",
+        lambda: (_ for _ in ()).throw(TypeError("invalid shared call")),
+    )
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module._bind_native()
+    assert exc_info.value.code == "observation_failed"
+
+    malformed = RuntimeError.__new__(
+        locator_module.CleanMemoryWindowsProgramDataLocatorError
+    )
+    monkeypatch.setattr(
+        module,
+        "verify_clean_memory_windows_program_data_locator_abi",
+        lambda: (_ for _ in ()).throw(malformed),
+    )
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module._bind_native()
+    assert exc_info.value.code == "observation_failed"
+
+    monkeypatch.setattr(
+        module,
+        "verify_clean_memory_windows_program_data_locator_abi",
+        lambda: None,
+    )
+    dlls = _native_dlls()
+    calls = _install_fake_windll(monkeypatch, dlls)
+    for shared_code, expected_code in (
+        ("unsupported_platform", "unsupported_platform"),
+        ("redirected_boundary", "observation_failed"),
+        ("observation_failed", "observation_failed"),
+    ):
+        calls.clear()
+
+        def fail_bind(*, shell32: object, ole32: object, code=shared_code):
+            assert shell32 is dlls["shell32"]
+            assert ole32 is dlls["ole32"]
+            raise locator_module.CleanMemoryWindowsProgramDataLocatorError(
+                code
+            )
+
+        monkeypatch.setattr(
+            module,
+            "bind_clean_memory_windows_program_data_locator",
+            fail_bind,
+        )
+        with pytest.raises(module.ExternalPinReaderError) as exc_info:
+            module._bind_native()
+        assert exc_info.value.code == expected_code
+        assert calls == [
+            ("kernel32", True),
+            ("shell32", True),
+            ("ole32", True),
+            ("advapi32", True),
+        ]
+
+    calls.clear()
+    monkeypatch.setattr(
+        module,
+        "bind_clean_memory_windows_program_data_locator",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            TypeError("invalid shared call")
+        ),
+    )
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module._bind_native()
+    assert exc_info.value.code == "observation_failed"
+    assert calls == [
+        ("kernel32", True),
+        ("shell32", True),
+        ("ole32", True),
+        ("advapi32", True),
+    ]
+
+    calls.clear()
+    malformed = RuntimeError.__new__(
+        locator_module.CleanMemoryWindowsProgramDataLocatorError
+    )
+    monkeypatch.setattr(
+        module,
+        "bind_clean_memory_windows_program_data_locator",
+        lambda **_kwargs: (_ for _ in ()).throw(malformed),
+    )
+    with pytest.raises(module.ExternalPinReaderError) as exc_info:
+        module._bind_native()
+    assert exc_info.value.code == "observation_failed"
+    assert calls == [
+        ("kernel32", True),
+        ("shell32", True),
+        ("ole32", True),
+        ("advapi32", True),
+    ]
 
 
 def test_native_binding_uses_exact_dlls_exports_and_pointer_width(monkeypatch) -> None:
@@ -2226,11 +2352,15 @@ def test_native_binding_uses_exact_dlls_exports_and_pointer_width(monkeypatch) -
         ("ole32", True),
         ("advapi32", True),
     ]
-    assert native.shell32 is dlls["shell32"]
-    assert native.ole32 is dlls["ole32"]
+    locator_module = importlib.import_module(
+        "steps.common.clean_memory_windows_program_data_locator"
+    )
+    assert type(native.locator) is (
+        locator_module.CleanMemoryWindowsProgramDataLocator
+    )
     assert type(native.security) is WindowsSecurityMechanics
     assert dlls["shell32"].SHGetKnownFolderPath.argtypes == [
-        ctypes.POINTER(module._GUID),
+        ctypes.POINTER(locator_module._GUID),
         ctypes.c_uint32,
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_void_p),
@@ -2250,6 +2380,11 @@ def test_native_binding_runs_shared_abi_preflight_before_loading_and_delegates(
 
     monkeypatch.setattr(
         module,
+        "verify_clean_memory_windows_program_data_locator_abi",
+        lambda: events.append(("locator.abi",)),
+    )
+    monkeypatch.setattr(
+        module,
         "verify_windows_security_abi",
         lambda: events.append(("security.abi",)),
     )
@@ -2263,23 +2398,37 @@ def test_native_binding_runs_shared_abi_preflight_before_loading_and_delegates(
         events.append(("security.bind", kernel32, advapi32))
         return security
 
+    locator = object()
+
+    def fake_bind_locator(*, shell32: object, ole32: object):
+        events.append(("locator.bind", shell32, ole32))
+        return locator
+
     monkeypatch.setattr(ctypes, "WinDLL", fake_windll)
     monkeypatch.setattr(
         module,
         "bind_windows_security",
         fake_bind_windows_security,
     )
+    monkeypatch.setattr(
+        module,
+        "bind_clean_memory_windows_program_data_locator",
+        fake_bind_locator,
+    )
 
     native = module._bind_native()
 
     assert events == [
+        ("locator.abi",),
         ("security.abi",),
         ("dll", "kernel32", True),
         ("dll", "shell32", True),
         ("dll", "ole32", True),
         ("dll", "advapi32", True),
+        ("locator.bind", dlls["shell32"], dlls["ole32"]),
         ("security.bind", dlls["kernel32"], dlls["advapi32"]),
     ]
+    assert native.locator is locator
     assert native.security is security
 
 
@@ -5193,15 +5342,24 @@ def test_immediate_cleanup_is_not_overwritten_by_later_backend_cleanup(
     with pytest.raises(module.ExternalPinReaderError) as exc_info:
         module.read_external_pin()
 
-    assert exc_info.value is primary
-    assert len(immediate_cleanup_nodes) == 1
+    error = exc_info.value
+    assert error is not primary
+    assert error.code == "observation_failed"
+    assert len(immediate_cleanup_nodes) == 0
     assert len(backend_cleanup_nodes) == 1
-    assert primary.__cause__ is original_operation
-    assert primary.__context__ is immediate_cleanup_nodes[0]
-    assert immediate_cleanup_nodes[0].__cause__ is backend_cleanup_nodes[0]
+    assert type(error.__cause__) is module.ExternalPinReaderError
+    assert error.__cause__.code == "observation_failed"
+    assert error.__cause__.__cause__ is None
+    assert error.__cause__.__context__ is None
+    immediate_cleanup = error.__context__
+    assert type(immediate_cleanup) is module.ExternalPinReaderError
+    assert immediate_cleanup.code == "observation_failed"
+    assert immediate_cleanup.__cause__ is backend_cleanup_nodes[0]
+    assert immediate_cleanup.__context__ is None
     assert backend_cleanup_nodes[0].__cause__ is None
     assert backend_cleanup_nodes[0].__context__ is None
-    _assert_sanitized_chain(module, primary)
+    _assert_sanitized_chain(module, error)
+    assert len(_walk_exception_chain(error)) == 4
 
 
 def test_control_primary_preserves_occupied_graph_and_inserts_sanitized_cleanup(
@@ -5224,13 +5382,24 @@ def test_control_primary_preserves_occupied_graph_and_inserts_sanitized_cleanup(
 
     assert exc_info.value is primary
     _assert_original_traceback_tail_is_preserved(primary, original_traceback)
-    assert primary.__cause__ is original_cause
-    cleanup = primary.__context__
+    sanitized_cause = primary.__cause__
+    assert type(sanitized_cause) is module.ExternalPinReaderError
+    assert sanitized_cause.code == "observation_failed"
+    assert sanitized_cause.__cause__ is None
+    assert sanitized_cause.__context__ is None
+    sanitized_context = primary.__context__
+    assert type(sanitized_context) is module.ExternalPinReaderError
+    assert sanitized_context.code == "observation_failed"
+    cleanup = sanitized_context.__cause__
     assert type(cleanup) is module.ExternalPinReaderError
     assert cleanup.code == "observation_failed"
     assert cleanup.__cause__ is None
-    assert cleanup.__context__ is original_context
-    assert _SECRET_MARKER not in repr(cleanup)
+    assert cleanup.__context__ is None
+    _assert_sanitized_chain(module, sanitized_cause)
+    _assert_sanitized_chain(module, sanitized_context)
+    assert original_cause not in _walk_exception_chain(primary)
+    assert original_context not in _walk_exception_chain(primary)
+    assert _SECRET_MARKER not in repr(_walk_exception_chain(primary))
     assert len(world.freed_known_folder) == 1
     assert world._close_counts["baseline"] == 1
 
@@ -5752,15 +5921,30 @@ def test_known_folder_free_exception_is_a_sanitized_cleanup_only_failure(
     assert world.backend.read_count == 0
 
 
-def test_primary_with_existing_sanitized_cause_precedes_known_folder_free_failure(
+def test_shared_locator_resolve_graph_translates_codes_topology_and_cleanup(
     monkeypatch,
 ) -> None:
     world = _ReaderWorld()
     module = _install_reader_world(monkeypatch, world)
-    primary = module.ExternalPinReaderError("redirected_boundary")
-    original_operation = module.ExternalPinReaderError("unsupported_platform")
-    primary.__cause__ = original_operation
-    primary.__suppress_context__ = True
+    locator_module = importlib.import_module(
+        "steps.common.clean_memory_windows_program_data_locator"
+    )
+    primary = locator_module.CleanMemoryWindowsProgramDataLocatorError(
+        "redirected_boundary"
+    )
+    original_operation = (
+        locator_module.CleanMemoryWindowsProgramDataLocatorError(
+            "unsupported_platform"
+        )
+    )
+    original_context = (
+        locator_module.CleanMemoryWindowsProgramDataLocatorError(
+            "observation_failed"
+        )
+    )
+    object.__setattr__(primary, "__cause__", original_operation)
+    object.__setattr__(primary, "__context__", original_context)
+    object.__setattr__(primary, "__suppress_context__", False)
     world.known_folder_call_exception = primary
     world.known_folder_free_exception = OSError(_SECRET_MARKER)
 
@@ -5768,31 +5952,32 @@ def test_primary_with_existing_sanitized_cause_precedes_known_folder_free_failur
         module.read_external_pin()
 
     error = exc_info.value
-    assert error is primary
+    assert error is not primary
     assert error.code == "redirected_boundary"
     assert str(error) == _ERRORS["redirected_boundary"]
     assert error.args == (_ERRORS["redirected_boundary"],)
-    assert error.__cause__ is original_operation
-    assert original_operation.code == "unsupported_platform"
-    assert str(original_operation) == _ERRORS["unsupported_platform"]
-    assert original_operation.args == (_ERRORS["unsupported_platform"],)
-    assert original_operation.__cause__ is None
-    assert original_operation.__context__ is None
-    cleanup = error.__context__
+    assert error.__suppress_context__ is False
+    operation = error.__cause__
+    assert type(operation) is module.ExternalPinReaderError
+    assert operation.code == "unsupported_platform"
+    assert operation.__cause__ is None
+    assert operation.__context__ is None
+    context = error.__context__
+    assert type(context) is module.ExternalPinReaderError
+    assert context.code == "observation_failed"
+    cleanup = context.__cause__
     assert type(cleanup) is module.ExternalPinReaderError
     assert cleanup.code == "observation_failed"
-    assert str(cleanup) == _ERRORS["observation_failed"]
-    assert cleanup.args == (_ERRORS["observation_failed"],)
     assert cleanup.__cause__ is None
     assert cleanup.__context__ is None
-    assert error.__cause__ is not cleanup
-    assert error.__context__ is not original_operation
+    assert context.__context__ is None
     _assert_sanitized_chain(module, error)
     chain = _walk_exception_chain(error)
-    assert len(chain) == 3
+    assert len(chain) == 4
     assert {id(node) for node in chain} == {
         id(error),
-        id(original_operation),
+        id(operation),
+        id(context),
         id(cleanup),
     }
 
@@ -5810,9 +5995,11 @@ def test_known_folder_cleanup_sanitization_failure_preserves_primary(
     world.known_folder_call_exception = primary
     world.known_folder_free_exception = cleanup_error
     original_sanitize = module._sanitize_error
+    intercepted: list[BaseException] = []
 
     def fail_cleanup_sanitization(error: BaseException):
         if error is cleanup_error:
+            intercepted.append(error)
             raise MemoryError(_SECRET_MARKER)
         return original_sanitize(error)
 
@@ -5821,19 +6008,22 @@ def test_known_folder_cleanup_sanitization_failure_preserves_primary(
     with pytest.raises(module.ExternalPinReaderError) as exc_info:
         module.read_external_pin()
 
-    assert exc_info.value is primary
-    assert primary.__cause__ is original_operation
-    cleanup = primary.__context__
+    error = exc_info.value
+    assert intercepted == []
+    assert error is not primary
+    assert error.code == "observation_failed"
+    operation = error.__cause__
+    assert type(operation) is module.ExternalPinReaderError
+    assert operation.code == "observation_failed"
+    assert operation.__cause__ is None
+    assert operation.__context__ is None
+    cleanup = error.__context__
     assert type(cleanup) is module.ExternalPinReaderError
     assert cleanup.code == "observation_failed"
+    assert cleanup.__cause__ is None
     assert cleanup.__context__ is None
-    processing_failure = cleanup.__cause__
-    assert type(processing_failure) is module.ExternalPinReaderError
-    assert processing_failure.code == "observation_failed"
-    assert processing_failure.__cause__ is None
-    assert processing_failure.__context__ is None
-    _assert_sanitized_chain(module, primary)
-    assert len(_walk_exception_chain(primary)) == 4
+    _assert_sanitized_chain(module, error)
+    assert len(_walk_exception_chain(error)) == 3
     assert len(world.freed_known_folder) == 1
     assert world._close_counts["baseline"] == 1
     assert len(world.freed_known_folder) == 1
@@ -5853,6 +6043,12 @@ _APPROVED_FROM_IMPORTS = {
     "__future__": {"annotations"},
     "dataclasses": {"dataclass", "field"},
     "typing": {"Any"},
+    "steps.common.clean_memory_windows_program_data_locator": {
+        "CleanMemoryWindowsProgramDataLocator",
+        "CleanMemoryWindowsProgramDataLocatorError",
+        "bind_clean_memory_windows_program_data_locator",
+        "verify_clean_memory_windows_program_data_locator_abi",
+    },
     "steps.common.clean_memory_windows_reader_identity": {
         "CleanMemoryWindowsReaderIdentityError",
         "clean_memory_windows_reader_identity_sha256",
@@ -5885,6 +6081,7 @@ def _assert_approved_source_imports(source: str) -> None:
     tree = ast.parse(source)
     held_imports: list[ast.ImportFrom] = []
     identity_imports: list[ast.ImportFrom] = []
+    locator_imports: list[ast.ImportFrom] = []
     security_imports: list[ast.ImportFrom] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -5904,6 +6101,11 @@ def _assert_approved_source_imports(source: str) -> None:
             )
             if node.module == "steps.common.windows_held_handle":
                 held_imports.append(node)
+            if (
+                node.module
+                == "steps.common.clean_memory_windows_program_data_locator"
+            ):
+                locator_imports.append(node)
             if node.module == "steps.common.clean_memory_windows_reader_identity":
                 identity_imports.append(node)
             if node.module == "steps.common.windows_security_mechanics":
@@ -5911,6 +6113,7 @@ def _assert_approved_source_imports(source: str) -> None:
 
     assert len(held_imports) == 1
     assert len(identity_imports) == 1
+    assert len(locator_imports) == 1
     assert len(security_imports) == 1
     imported_backend_names = {alias.name for alias in held_imports[0].names}
     assert {
@@ -5928,6 +6131,12 @@ def _assert_approved_source_imports(source: str) -> None:
     }
     assert imported_identity_names == _APPROVED_FROM_IMPORTS[
         "steps.common.clean_memory_windows_reader_identity"
+    ]
+    imported_locator_names = {
+        alias.name for alias in locator_imports[0].names
+    }
+    assert imported_locator_names == _APPROVED_FROM_IMPORTS[
+        "steps.common.clean_memory_windows_program_data_locator"
     ]
 
 
@@ -6003,6 +6212,48 @@ def _defined_or_assigned_authority_names(source: str) -> set[str]:
     return names
 
 
+def _private_locator_authority_violations(source: str) -> list[object]:
+    tree = ast.parse(source)
+    violations: list[object] = []
+    casefolded = source.casefold()
+    for token in (
+        "SHGetKnownFolderPath",
+        "CoTaskMemFree",
+        "protected-boundaries.sha256",
+        "0x62AB5D82",
+        "0xFDC1",
+        "0x4DC3",
+    ):
+        if token.casefold() in casefolded:
+            violations.append(token)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.ClassDef)
+            and any(
+                isinstance(base, ast.Attribute)
+                and isinstance(base.value, ast.Name)
+                and base.value.id == "ctypes"
+                and base.attr == "Structure"
+                for base in node.bases
+            )
+        ):
+            violations.append(node)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr
+            in {"SHGetKnownFolderPath", "CoTaskMemFree"}
+        ):
+            violations.append(node)
+        if isinstance(node, (ast.Tuple, ast.List)) and tuple(
+            element.value
+            for element in node.elts
+            if isinstance(element, ast.Constant)
+        ) == ("GoodQ", "authority", "clean-memory"):
+            violations.append(node)
+    return violations
+
+
 def test_source_has_no_private_windows_security_or_reader_identity_authority() -> None:
     source = MODULE_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -6015,6 +6266,16 @@ def test_source_has_no_private_windows_security_or_reader_identity_authority() -
 
     assert defined.isdisjoint(_FORBIDDEN_PRIVATE_SECURITY_DEFINITIONS)
     assert defined.isdisjoint(_FORBIDDEN_PRIVATE_READER_IDENTITY_AUTHORITIES)
+    assert defined.isdisjoint(
+        {
+            "_GUID",
+            "_KnownFolder",
+            "_PROGRAM_DATA_GUID_FIELDS",
+            "_validate_known_folder_text",
+            "_resolve_known_folder",
+        }
+    )
+    assert _private_locator_authority_violations(source) == []
     assert "goodq.clean-memory-windows-reader-identity.v1" not in source
     assert called_attributes.isdisjoint(
         {
@@ -6038,6 +6299,15 @@ def test_source_has_no_private_windows_security_or_reader_identity_authority() -
         assert not _defined_or_assigned_authority_names(mutant).isdisjoint(
             _FORBIDDEN_PRIVATE_READER_IDENTITY_AUTHORITIES
         )
+    for mutant in (
+        "import ctypes\nclass RenamedGuid(ctypes.Structure):\n    pass",
+        "shell.Renamed = shell.SHGetKnownFolderPath()",
+        "ole.Renamed = ole.CoTaskMemFree(pointer)",
+        "RENAMED_GUID = (0x62AB5D82, 0xFDC1, 0x4DC3)",
+        "RENAMED_PIN = 'protected-boundaries.sha256'",
+        "RENAMED_COMPONENTS = ('GoodQ', 'authority', 'clean-memory')",
+    ):
+        assert _private_locator_authority_violations(mutant)
 
 
 def test_source_has_only_the_strict_approved_import_allowlist() -> None:

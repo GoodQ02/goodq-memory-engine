@@ -1359,6 +1359,25 @@ the failure is not currently visible.
   two-file observer through RED/GREEN/refactor and independent current-byte
   review. Authenticated composition, Qdrant observation, runnable planning,
   approval, and cleanup remain closed.
+- Protected-boundary observer checkpoint (2026-07-15): private source
+  checkpoints `9e225655` and `636f4bfd` add the exact three-export Windows-only
+  observer and close a final error-code deletion/rebinding bypass. The observer
+  authenticates only direct membership and external-pin evidence, derives all
+  five pin identities internally, traverses descendants only through retained
+  held handles, proves stable absence, rejects aliases and pin collisions, and
+  atomically returns the existing 18-role evidence tuple. Fresh verification
+  passed 184 focused tests, the 1,155-test bounded authority union, and the
+  1,807-test expanded zero-drop gate on an unchanged retry, plus compilation,
+  committed two-file census, diff, and independent current-byte review gates.
+  The first expanded run retained one known fail-closed synthetic temporary-
+  tree `observation_raced` receipt rather than suppressing it. No live
+  ProgramData, pin, manifest, protected/configured root, service, data, Qdrant,
+  job, approval, or cleanup surface was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CHECKPOINT_2026-07-15.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  no-repeat ownership and contract re-audit of authenticated protected-
+  membership composition. Qdrant observation, runnable planning, approval,
+  jobs/tokens, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1686,6 +1705,23 @@ the failure is not currently visible.
   and execute their original assertions, and a seeded loader regression proves
   module registration occurs before execution.
 
+### R-18-F3 — Restore module identity after import-purity tests
+
+- Priority: P1
+- Status: OPEN
+- Finding: the external-pin import-purity test removes and reimports
+  `cli.clean_memory_external_pin` without restoring the original module object.
+  A later protected-manifest exact-type check can therefore bind a replacement
+  `ExternalPinEvidence` class while its test fixture retains the original,
+  making file order change otherwise valid test results.
+- Repair: restore the exact prior `sys.modules` entry after the import-purity
+  assertion and add a seeded cross-module exact-type regression. Do not weaken
+  production exact-type checks or change either production reader to
+  accommodate test-owned module drift.
+- Completion gate: both files pass alone and in both combined orders, the
+  seeded regression fails when restoration is removed, and no production file
+  changes.
+
 ### R-19 — Establish one canonical API and Watchdog supervisor
 
 - Priority: P0
@@ -1921,6 +1957,13 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-15: Checkpointed the R-07 protected-boundary observer at `9e225655`
+  plus immutability fix `636f4bfd` after 184 focused and 1,807 expanded tests
+  and clean independent reviews. Recorded the unrelated external-pin module-
+  reload test isolation defect as R-18-F3, then advanced only to a read-only
+  authenticated-composition re-audit; Qdrant, planning, approval, and cleanup
+  remain closed.
 
 - 2026-07-14: Selected one shared R-07 Windows ProgramData locator authority
   after three ownership/lifecycle/parity audits. Advanced only to the exact

@@ -4,74 +4,68 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — implement the protected-boundary observer and direct
-pin-chain physical-exclusion authority.
+Roadmap item: R-07 — re-audit authenticated protected-membership composition
+after the protected-boundary observer checkpoint.
 
 ## Outcome
 
-Use TDD to add the exact Windows protected-boundary observer selected in
-`docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md`.
-Observe only injected synthetic/temporary membership in tests. Do not implement
-composition, Qdrant observation, runnable planning, approval, or cleanup.
+Run one read-only no-repeat ownership and contract re-audit of authenticated
+protected-membership composition. Reconcile the now-complete direct outputs,
+final rechecks, failure precedence, and exact future implementation allowlist.
+Do not implement composition during this mission.
 
 ## Completed work — do not repeat
 
-- Configuration projection, candidate planning, cleanup-target filesystem
-  observation, protected-manifest validation, protected-membership projection,
-  held-handle traversal and bounded reads, Windows security mechanics, reader
-  identity, external-pin reading, and authenticated protected-manifest reading
-  are checkpointed.
-- `66ee4f47` checkpoints the authenticated protected-manifest reader and its
-  exhaustive two-file regression authority.
-- `f93ae143` checkpoints the shared Windows ProgramData locator and exact
-  external-reader extraction parity.
-- Final locator verification passed 53 direct tests, the frozen 499-test
-  external suite, 148 protected-manifest reader tests, the 737-test adjacent
-  authority gate, the exact 1,422-test frozen union, and the 1,623-test expanded
-  authority gate.
-- Independent contract and extraction-parity reviews returned `PASS`.
-- Locator checkpoint evidence is recorded in
-  `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md`.
-- The earlier composition audit already proved that target filesystem evidence
-  is cleanup-plan pre-state, not protected-membership authentication input.
-- Three independent ownership/lifecycle/contract traces selected the exact
-  protected-boundary observer source/test pair, direct inputs, output carrier,
-  held-handle lifecycle, physical exclusions, error taxonomy, and RED matrix.
+- Configuration projection, immutable candidate planning, cleanup-target
+  filesystem observation, protected-manifest validation, protected-membership
+  projection, shared held-handle traversal, Windows security mechanics, reader
+  identity, external-pin reading, authenticated protected-manifest reading, and
+  the shared ProgramData locator are checkpointed.
+- `9e225655` adds the selected Windows protected-boundary observer and exact
+  synthetic regression authority.
+- `636f4bfd` closes the final observer error-code deletion/rebinding bypass
+  without changing its public API or authority.
+- The final observer source has exactly three exports, accepts only direct
+  membership and external-pin evidence, derives five pin identities internally,
+  retains all physical evidence through one final fence, and returns the
+  existing 18-role `ProtectedBoundaryEvidence` tuple.
+- Fresh verification passed 184 focused tests, a 1,155-test bounded union, and
+  the expanded 1,807-test zero-drop gate on an unchanged retry. Independent
+  final review returned specification compliant with no remaining finding.
+- The pre-existing external-pin module-reload test-isolation defect has a
+  separate roadmap owner. Do not weaken production exact-type checks or repair
+  that test inside this mission.
 
 ## Governing invariant
 
-Authenticated configuration and manifest membership describe logical protected
-authority; neither proves the physical state of protected members. One future
-no-follow observer must retain exact physical evidence for every protected
-parent and member and reject every cross-member alias or collision with any
-direct pin-chain identity before authenticated composition may return.
+Authenticated protected authority must compose only from exact direct outputs
+whose canonical bytes, digests, physical evidence, and final rechecks remain
+mutually consistent through return. Cleanup-target filesystem evidence is later
+candidate-plan pre-state and may not authenticate protected membership.
 
-Lexical overlap checks and physical alias checks are distinct mandatory gates.
-Neither may substitute for the other. Selected canonical path-free identities
-may exist only inside the candidate-plan authority; paths, raw/native identity
-detail, descriptors, names, and member content may not enter public display,
-logs, representations, or errors.
+The composition boundary may bind existing selected evidence; it may not create
+a second locator, reader, observer, identity wrapper, manifest parser, path
+authority, or physical-discovery fallback.
 
-## Exact implementation seam
+## Exact audit seam
 
-1. add `tests/unit/test_clean_memory_protected_boundary.py` and witness the exact
-   public contract and behavior fail before production code;
-2. add `cli/clean_memory_protected_boundary.py` with exactly the selected three
-   exports and direct-input-only signature;
-3. reuse only the public held-handle backend and existing public evidence types;
-4. return exactly 18 atomic canonical `ProtectedBoundaryEvidence` values; and
-5. preserve every completed module and focused test unchanged.
+1. reread the existing authenticated-composition audit against current public
+   source and tests;
+2. trace every proposed direct input and final recheck to one completed owner;
+3. reconcile digest binding, exact-type checks, lifecycle/control precedence,
+   cleanup, privacy, and no-partial-return behavior;
+4. select one exact future source/test allowlist and RED matrix; and
+5. obtain independent current-byte ownership and contract reviews before any
+   implementation is authorized.
 
 ## Governing evidence
 
 - `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CHECKPOINT_2026-07-15.md`;
+- `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md`;
 - `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_HELD_HANDLE_EXTRACTION_CHECKPOINT_2026-07-13.md`;
-- `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`;
-- `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md`;
 - their closed source/tests; and
 - `docs/releases/ROADMAP.md`.
 
@@ -79,22 +73,21 @@ logs, representations, or errors.
 
 - Work only in `.worktrees/r05-api-authority` on
   `codex/r05-api-authority`.
-- Touch only the exact new source/test pair until its source checkpoint passes.
-- Do not modify any completed production module or focused test, including the
-  membership, pin, manifest, locator, held-handle, filesystem, or plan seams.
+- This mission is read-only except for its bounded diagnostic/mission/roadmap
+  documentation checkpoint.
+- Do not modify completed production modules or focused tests.
 - Do not inspect or mutate live ProgramData, a token, ACL, descriptor,
-  configured or protected root, manifest, pin, service, GoodQ data, Qdrant
-  store, evidence store, job, MiniAgent, approval, or cleanup target.
-- Do not change environment, service, firewall, dependency, enrollment,
-  publication, rotation, recovery, or runtime state.
+  configured or protected root, manifest, pin, service, GoodQ data, Qdrant,
+  evidence store, job, MiniAgent, approval, or cleanup target.
+- Do not implement or contact Qdrant, build runnable planning, persist evidence,
+  issue approval, create jobs/tokens, or execute cleanup.
 
 ## Completion gate
 
-1. the focused tests fail for the absent authority before production code;
-2. focused and frozen adjacent/union gates pass through `goodq_core`;
-3. exact API, import purity, direct-input, physical alias, five-pin exclusion,
-   stable-absence, final-fence, no-partial, privacy, and cleanup oracles pass;
-4. the staged source diff contains exactly two new files and no private import
-   or duplicate completed authority;
-5. at least two independent current-byte reviews are clean; and
-6. source and documentation are checkpointed separately.
+1. current source traces name every direct output and owner without duplicate
+   authority;
+2. the selected composition lifecycle is non-circular and closes every input,
+   digest, final-recheck, failure-precedence, privacy, and cleanup seam;
+3. one exact future implementation allowlist and direct RED matrix are frozen;
+4. at least two independent current-byte reviews return clean; and
+5. the audit and roadmap are checkpointed before composition code begins.

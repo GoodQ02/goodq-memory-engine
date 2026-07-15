@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1284**
+Indexed active tracked paths: **1288**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -120,6 +120,7 @@ Indexed active tracked paths: **1284**
 | `/cli/clean_memory.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_external_pin.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_filesystem.py` | CLI | Command-line operator surface. |
+| `/cli/clean_memory_protected_boundary.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_protected_manifest.py` | CLI | Command-line operator surface. |
 | `/cli/clean_memory_protected_membership.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_build.py` | CLI | Command-line operator surface. |
@@ -297,6 +298,8 @@ Indexed active tracked paths: **1284**
 | `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CONTRACT_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
@@ -1068,6 +1071,7 @@ Indexed active tracked paths: **1284**
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_filesystem.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_protected_boundary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_manifest.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_manifest_validator.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_membership.py` | Verification | Test, fixture, or verification asset. |

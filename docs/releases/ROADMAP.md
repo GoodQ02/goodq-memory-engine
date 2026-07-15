@@ -1400,6 +1400,30 @@ the failure is not currently visible.
   two-file TDD implementation. Cleanup-target observation, Qdrant, scope
   assembly, planning/persistence, command parsing, approval, jobs/tokens,
   process control, and cleanup remain closed.
+- Authenticated protected-membership composition checkpoint (2026-07-15):
+  private source commit `d20a74ba` implements the selected private composition
+  authority in exactly the existing source/test pair while preserving the
+  three-symbol public API. Exact Windows configuration and derived paths, four
+  ProgramData locator fences, one-call direct reader/projector/observer order,
+  digest bindings, component-boundary lexical exclusion, immediate and final
+  direct-output authentication, same-object tuple return, upstream-drift
+  precedence, and path-free closed errors are now enforced. Review hardening
+  also rejects detached separators/control characters, equal-value distinct
+  manifest bytes, forged nested location types, dependency-owned raw error
+  graphs and arguments, and unknown/non-string/missing public-error codes. Fresh
+  verification passed 265 focused tests, the exact 1,941-test zero-drop
+  authority union, the 375-test MiniAgent/action-job/shared-authority gate,
+  compilation, public/private API census, documentation authority/drift,
+  banned-token, dependency, diff, and two independent exact-hash review gates.
+  One earlier unrelated passive-latest concurrency receipt passed isolated and
+  on unchanged retry; the current exact source later passed the 375-test gate
+  directly. No live ProgramData, pin, manifest, configured data, Qdrant,
+  service, job, approval, or cleanup surface was read or changed. Evidence:
+  `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_CHECKPOINT_2026-07-15.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
+  repeat ownership and contract audit of fail-closed Qdrant observation before
+  any scope assembly or runnable planning. Planning/persistence, command
+  parsing, approval, jobs/tokens, process control, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1979,6 +2003,13 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-15: Checkpointed the private R-07 authenticated protected-membership
+  composition authority at `d20a74ba` after 265 focused and 1,941 zero-drop
+  tests, the 375-test shared authority gate, static/documentation gates, and two
+  clean independent exact-hash reviews. Advanced only to a read-only Qdrant-
+  observation ownership/contract audit; planning, approval, and cleanup remain
+  closed.
 
 - 2026-07-15: Selected the exact private R-07 authenticated protected-
   membership composition seam after the protected observer checkpoint. Frozen

@@ -1301,6 +1301,25 @@ the failure is not currently visible.
   ownership/parity audit of the composition-owned ProgramData locator and final
   recheck contract. Protected-member observation, authenticated composition,
   Qdrant observation, planning, approval, and cleanup remain closed.
+- Windows ProgramData locator/recheck decision checkpoint (2026-07-14): three
+  bounded read-only ownership, lifecycle, and parity traces selected one shared
+  extraction-parity authority rather than a composition-local duplicate. The
+  exact next source seam adds the five-export import-pure ProgramData locator
+  and direct tests, then adapts only the external-pin reader and its tests while
+  preserving its exact public API, evidence, native order, traversal, and
+  cleanup behavior. Composition retains invocation, direct-output recheck,
+  lexical overlap, and race policy; the shared layer owns only the actual
+  `FOLDERID_ProgramData` acquisition, fixed child spelling, lexical grammar,
+  buffer lifetime, and path-free native failures. Current Microsoft Win32
+  documentation confirms the returned Unicode buffer is caller-owned and must
+  be released with `CoTaskMemFree`. No live ProgramData, pin, manifest, token,
+  ACL, configured/protected root, service, GoodQ data, Qdrant, evidence store,
+  job, MiniAgent, approval, or cleanup target was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the four-file
+  shared locator TDD extraction/adaptation checkpoint. Protected-member
+  observation, composition, Qdrant, planning, approval, and cleanup remain
+  closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1863,6 +1882,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected one shared R-07 Windows ProgramData locator authority
+  after three ownership/lifecycle/parity audits. Advanced only to the exact
+  four-file TDD extraction/adaptation seam; later composition and mutation
+  authorities remain closed.
 
 - 2026-07-14: Checkpointed the authenticated R-07 protected-manifest reader at
   `66ee4f47` after 148 focused, 1,422 frozen-authority, and 1,570 combined tests

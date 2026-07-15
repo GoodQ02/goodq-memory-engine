@@ -4,19 +4,15 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — audit the composition-owned ProgramData locator and final
-recheck boundary.
+Roadmap item: R-07 — implement the shared Windows ProgramData locator authority
+with exact external-reader extraction parity.
 
 ## Outcome
 
-Perform one read-only no-repeat audit before any locator or composition source
-is authorized. Select one exact contract that obtains the fixed pin-chain
-location from the real Windows Known Folder authority, retains it only
-in-process, brackets it with direct reader evidence, and enables later lexical
-and physical exclusion without widening either completed reader.
-
-The audit must decide whether ownership belongs in a shared extraction-parity
-surface or a composition-owned resolver. It must not implement either option.
+Use TDD to add the exact import-pure shared locator module and adapt the existing
+external-pin reader without changing its public behavior. Remove the reader's
+private duplicate locator authority in the same four-file rollback boundary.
+Do not implement later composition or protected-member observation.
 
 ## Completed work — do not repeat
 
@@ -34,32 +30,33 @@ surface or a composition-owned resolver. It must not implement either option.
   `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md`.
 - The earlier composition audit already proved that target filesystem evidence
   is cleanup-plan pre-state, not membership-authentication input.
+- Three locator audits selected shared extraction parity and fixed its exact
+  five-export surface, lifecycle, error, RED, and verification contracts in
+  `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md`.
 
 ## Governing invariant
 
 Ambient environment, configuration, current directory, caller input, or a
-second guessed path cannot locate the ProgramData pin chain. The later
-production edge must invoke the actual fixed Known Folder authority, preserve
-the canonical result only in-process, and compare it with direct reader outputs
-without logging or serializing it.
+second guessed path cannot locate the ProgramData pin chain. One shared native
+authority must invoke the actual fixed Known Folder API and retain its exact
+result only in-process without logging or serialization.
 
 The pin reader and protected-manifest reader remain closed four-export
-authorities. The audit may select no private-symbol import, caller-supplied path,
-or duplicate physical reader.
+authorities. The implementation may add no private-symbol import,
+caller-supplied path, duplicate locator, or duplicate physical reader.
 
-## Audit questions
+## Exact implementation seam
 
-Select and document exactly:
+1. add `steps/common/clean_memory_windows_program_data_locator.py`;
+2. add `tests/unit/test_clean_memory_windows_program_data_locator.py` and watch
+   the exact contract fail before production code;
+3. adapt `cli/clean_memory_external_pin.py`; and
+4. adapt `tests/unit/test_clean_memory_external_pin.py` for zero-drop parity.
 
-1. whether ownership is shared extraction parity or a composition-owned
-   resolver;
-2. the minimal import-pure public or private surface, if any;
-3. the exact `FOLDERID_ProgramData` acquisition and fixed-child append sequence;
-4. path normalization, lexical separation, retention, and final recheck rules;
-5. how direct pin and manifest evidence bracket locator use;
-6. finite path-free failure precedence and race behavior;
-7. the smallest later source/test file census; and
-8. the focused RED and non-regression gates required before implementation.
+The new shared module has exactly the five exports selected in the decision
+document. The external reader must preserve its exact four exports, thirteen
+errors, no-argument API, evidence bytes, native order, token brackets,
+held-handle traversal, and cleanup/control-flow precedence.
 
 ## Governing evidence
 
@@ -67,6 +64,7 @@ Select and document exactly:
 - `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md`;
+- `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md`;
 - `cli/clean_memory_external_pin.py`;
 - `cli/clean_memory_protected_manifest.py`;
 - their focused tests; and
@@ -76,26 +74,22 @@ Select and document exactly:
 
 - Work only in `.worktrees/r05-api-authority` on
   `codex/r05-api-authority`.
-- Read repository source, tests, contracts, and checkpoint evidence only.
-- Do not create locator, protected-observer, composition, Qdrant, planning,
-  approval, or cleanup code during this audit.
-- Do not reopen or modify either completed physical reader or its tests.
+- Touch only the exact four-file implementation seam above until its source
+  checkpoint is complete.
+- Do not create protected-observer, composition, Qdrant, planning, approval, or
+  cleanup code.
+- Do not modify the protected-manifest reader or its tests.
 - Do not inspect or mutate live ProgramData, a token, ACL, descriptor,
   configured or protected root, manifest, pin, service, GoodQ data, Qdrant
   store, evidence store, job, MiniAgent, approval, or cleanup target.
 - Do not change environment, service, firewall, dependency, enrollment,
   publication, rotation, recovery, or runtime state.
 
-## Decision gate
+## Completion gate
 
-Before any locator implementation is authorized:
-
-1. bounded independent read-only traces reconcile ownership, lifecycle/error
-   precedence, and parity with the actual external-pin Known Folder path;
-2. one decision document fixes the exact contract, dependency boundary, file
-   census, RED matrix, and verification gate;
-3. no private reader helper, duplicate locator, or caller path becomes
-   authority;
-4. every unresolved field or failure remains explicitly closed; and
-5. documentation authority, semantic-drift, banned-token, dependency, index,
-   and committed-diff gates pass in a separate checkpoint.
+1. the direct locator tests fail for the absent authority before implementation;
+2. direct tests and all frozen parity gates pass through `goodq_core`;
+3. the staged source diff contains exactly four files and no duplicate/private
+   locator authority;
+4. at least two independent current-byte reviews are clean; and
+5. implementation and documentation are checkpointed separately.

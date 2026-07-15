@@ -1267,6 +1267,23 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
   decision audit of the protected-manifest reader public contract and exact
   input/error fence. Reader source and tests remain closed.
+- Protected-manifest reader contract decision (2026-07-14): three independent
+  read-only API, lifecycle, and parity traces selected the exact four-export
+  reader surface, sixteen path-free errors, direct configuration and external-
+  evidence authentication, same-handle pin-before-parser lifecycle, and
+  immutable nine-key evidence projection. Review corrected endpoint-only
+  evidence to retain the complete held physical route, then corrected an
+  initial fixed-four assumption: if authenticated `storage_root` has `n`
+  components, route evidence has exact per-call cardinality `n + 3`, minimum
+  four, with no invented reader-only maximum. Existing configuration,
+  external-pin, validator, membership, held-handle, security-mechanics, and
+  reader-identity authorities remain closed. No live security or configured-
+  data surface was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CONTRACT_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the new reader
+  source/test pair through RED/GREEN/refactor and independent current-byte
+  review. Composition, observation, Qdrant, planning, approval, and cleanup
+  remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1829,6 +1846,12 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected the exact R-07 protected-manifest reader contract after
+  three independent audits reconciled API, lifecycle, error, evidence, digest,
+  route-cardinality, and no-repeat boundaries. Advanced only to the two-file
+  reader TDD seam; authenticated composition and later authorities remain
+  closed.
 
 - 2026-07-14: Checkpointed the R-07 shared Windows reader-identity policy at
   `02530486` after the 1,422-test authority union and independent

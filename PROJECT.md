@@ -4,111 +4,95 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — select the protected-manifest reader public contract and
-exact input/error fence.
+Roadmap item: R-07 — implement the authenticated Windows protected-manifest
+reader contract.
 
 ## Outcome
 
-Perform one read-only no-repeat audit. Determine the smallest coherent public
-reader boundary before any protected-manifest reader source or test file is
-authorized.
+Implement the reviewed reader through one isolated two-file
+RED/GREEN/refactor checkpoint. The reader must authenticate one fixed canonical
+manifest from exact configuration and direct external-pin evidence, using only
+completed public mechanics and policies.
 
-The audit must reconcile completed authorities instead of redesigning or
-reimplementing them.
+## Exact changed-file census
+
+Only these files may change:
+
+1. add `cli/clean_memory_protected_manifest.py`; and
+2. add `tests/unit/test_clean_memory_protected_manifest.py`.
+
+Existing production and test files are regression gates only. If implementation
+requires another changed file or public surface, stop and return to a decision
+audit instead of widening the seam.
 
 ## Completed work — do not repeat
 
-- Configuration projection, candidate-plan authority, filesystem observation,
-  protected-membership projection, held-handle traversal and bounded reads,
-  canonical protected-manifest validation, external-pin reading, label-aware
-  descriptor transport, projection-neutral security mechanics, and the
-  protected-manifest security policy are checkpointed.
-- `ae4d35bc` and `0827193a` checkpoint the shared Windows security mechanics.
-- `ac5691a6` selects the shared reader-identity ownership and exact public API.
-- `02530486` implements that shared policy and adapts the external reader.
-- Fresh controller verification passed 65 direct policy tests, the zero-drop
-  499-test external baseline, and the 1,422-test clean-memory authority union.
-- Independent current-byte reviews returned `APPROVED` and `READY`.
-- Checkpoint evidence is recorded in
-  `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md`.
+- Configuration projection, external-pin reading, canonical manifest
+  validation, protected-membership projection, held-handle traversal and reads,
+  label-aware descriptor transport, Windows security mechanics, and shared
+  reader identity are checkpointed.
+- `02530486` and `387fdc5b` checkpoint the shared reader-identity implementation
+  and documentation.
+- Three independent read-only audits selected the exact public API, evidence,
+  sixteen errors, lifecycle, route cardinality, dependency graph, file census,
+  RED matrix, and verification gate.
+- The binding decision is recorded in
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CONTRACT_DECISION_2026-07-14.md`.
 
 ## Governing invariant
 
-The future reader may authenticate only the exact complete canonical manifest
-bytes obtained from one held no-follow file handle and authorized by direct
-external-pin evidence. It must use completed shared mechanics, validation, and
-identity policy without copying their private logic or widening their public
-surfaces.
+The reader may return evidence only for the exact complete bytes obtained from
+one held no-follow manifest handle after direct external-pin digest comparison,
+shared canonical validation of those identical bytes, selected reader/security
+policy, complete held-route proof, final race fences, and successful cleanup.
 
-Reader input types do not prove production provenance by themselves. The later
-production planning edge must directly invoke both physical readers. The reader
-may observe and return bounded immutable evidence; it may not enroll, publish,
-rotate, recover, compose, plan, approve, or clean.
+The evidence projection and errors remain path-free. Retained manifest bytes
+are an explicit repr-hidden in-process capability for later membership
+composition, not a log or report surface.
 
-## Audit questions
+## TDD order
 
-Select and document exactly:
-
-1. the module and finite public export set;
-2. the reader function signature and exact-type input fences;
-3. the immutable path-free evidence boundary and digest bindings;
-4. the finite stable path-free error taxonomy;
-5. first-failure precedence across input, platform, capability, token, route,
-   descriptor, content digest, canonical validation, race, and cleanup;
-6. the precise reuse boundary for configuration, external-pin evidence,
-   protected-manifest validation, held handles, security mechanics, and shared
-   reader identity;
-7. the source/test file census for the later RED/GREEN checkpoint; and
-8. the focused parity and lifecycle verification gate required before reader
-   implementation can be authorized.
-
-Do not freeze a convenient surface without tracing every required field and
-failure to existing code and tests.
-
-## Governing evidence
-
-- `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_CHECKPOINT_2026-07-14.md`;
-- `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`;
-- `cli/clean_memory.py`;
-- `cli/clean_memory_external_pin.py`;
-- `cli/clean_memory_protected_membership.py`;
-- `steps/common/clean_memory_protected_manifest.py`;
-- `steps/common/clean_memory_windows_reader_identity.py`;
-- `steps/common/windows_held_handle.py`;
-- `steps/common/windows_security_mechanics.py`;
-- their focused unit tests; and
-- `docs/releases/ROADMAP.md`.
+1. Add focused RED for the exact four-export module and signature.
+2. Add RED for direct input authentication and first-failure precedence.
+3. Add RED for mandatory reader identity and complete held route.
+4. Add RED for candidate/manifest descriptor and denial policy.
+5. Add RED for same-handle size-plus-one reading, pin-before-parser order, and
+   one identical-byte validator call.
+6. Add RED for exact evidence/digest bindings, all sixteen errors, race fences,
+   cleanup, control-flow preservation, and static containment.
+7. Implement only enough GREEN to satisfy the reviewed contract.
+8. Refactor only inside the two-file seam.
+9. Run the focused suite, zero-drop 1,422-test authority union plus all new
+   reader nodes, compilation, diff/census, dependency, semantic-drift, and
+   banned-token gates.
+10. Obtain two independent current-byte reviews before checkpointing.
 
 ## Boundaries
 
 - Work only in `.worktrees/r05-api-authority` on
   `codex/r05-api-authority`.
-- Read repository source, tests, contracts, and checkpoint evidence only.
-- Use bounded independent read-only audits where they improve confidence.
-- Do not create or edit protected-manifest reader source or tests during this
-  decision audit.
+- Use the explicit `goodq_core` Conda runtime sequentially.
+- Use synthetic/fake native surfaces and pytest-owned temporary resources only.
 - Do not inspect or mutate a live token, ACL, descriptor, configured or
   protected root, manifest, pin, service, GoodQ data, Qdrant store, evidence
-  store, job, MiniAgent, or cleanup target.
-- Do not change enrollment, publication, rotation, recovery, composition,
-  Qdrant observation, planning, approval, or cleanup authority.
-- Do not stage unrelated files or reopen completed checkpoints without
-  contradictory focused evidence.
+  store, job, MiniAgent, approval, or cleanup target.
+- Do not change configuration, external-pin, validator, membership, held-
+  handle, security-mechanics, identity, filesystem, planning, storage, Qdrant,
+  approval, or cleanup code.
+- Do not enroll, publish, rotate, recover, compose, observe protected members,
+  build a plan, issue approval, or execute cleanup.
+- Do not claim the separate native `0xb014` enrollment or candidate-store
+  compatibility witness.
 
-## Decision gate
+## Completion gate
 
-Before authorizing reader implementation:
+The seam is checkpointable only when:
 
-1. at least three independent read-only traces reconcile API/ownership,
-   lifecycle/error precedence, and evidence/digest parity;
-2. one decision document names the exact public contract, dependency graph,
-   file census, RED matrix, and verification gate;
-3. no duplicate parser, policy, projection, or native capability is selected;
-4. every unresolved field or failure remains explicitly closed rather than
-   guessed; and
-5. documentation authority, semantic-drift, banned-token, dependency, index,
-   and committed-diff gates pass in a separate checkpoint.
+1. the exact two-file diff implements the decision without copied authority;
+2. the focused reader suite and zero-drop authority union pass;
+3. all public, lifecycle, parity, static-containment, privacy, and cleanup
+   oracles pass;
+4. two independent current-byte reviews return ready with no unresolved
+   critical, major, or minor finding; and
+5. a separate checkpoint document records exact hashes, counts, gates, commit,
+   and remaining closed authorities.

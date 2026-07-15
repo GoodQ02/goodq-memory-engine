@@ -1227,6 +1227,29 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
   repeat reassessment of the separate frozen reader-identity v1 policy seam
   before any protected-manifest reader implementation is authorized.
+- Windows reader-identity policy decision (2026-07-14): three independent
+  read-only audits selected a separate import-pure GoodQ policy authority below
+  `cli`, rather than keeping the v1 digest external-pin-private, moving policy
+  into projection-neutral mechanics, or combining extraction with the physical
+  manifest reader. Two follow-up reviews returned `READY` on the exact
+  three-symbol surface: one fixed path-free policy error, early validation, and
+  late digest. The shared layer accepts only exact mechanics snapshots, exact
+  base/mandatory profiles, and an exact unsigned-64 change-notify LUID; base
+  requires mandatory policy `None`, while mandatory accepts only exact `1` or
+  `3`. It owns common ordinary-reader acceptance and the private frozen v1
+  canonical bytes, but returns only the 64-lowercase-hex digest. The external
+  adapter retains route, enrollment/DACL/access policy, outward errors,
+  evidence, race fencing, and cleanup. The future manifest reader retains
+  mandatory-profile selection, direct external-evidence comparison,
+  descriptor/label/access policy, and its own lifecycle. No live token, ACL,
+  descriptor, configured/protected root, manifest, pin, service, GoodQ data,
+  Qdrant store, evidence store, job, MiniAgent, or cleanup target was read or
+  changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_DECISION_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly the reviewed
+  four-file policy extraction/adaptation through RED/GREEN/refactor and
+  independent current-byte parity review. The protected-manifest reader remains
+  closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1789,6 +1812,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Selected the exact R-07 import-pure Windows reader-identity
+  policy seam after three ownership audits and two final API/timing reviews.
+  Advanced only to its four-file TDD extraction/adaptation checkpoint; the
+  protected-manifest reader remains closed.
 
 - 2026-07-14: Checkpointed the projection-neutral R-07 Windows security
   mechanics at `0827193a` after 1,357 clean-memory authority tests and two

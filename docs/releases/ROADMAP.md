@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-07-14 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-15 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -1338,6 +1338,27 @@ the failure is not currently visible.
   ownership and contract audit of the protected-member observer and direct
   pin-chain physical-exclusion boundary. Authenticated composition, Qdrant
   observation, runnable planning, approval, and cleanup remain closed.
+- Protected-boundary observer contract decision (2026-07-15): three independent
+  read-only ownership, lifecycle, and contract traces found no production
+  protected-member physical observer and selected one exact two-file seam:
+  `cli/clean_memory_protected_boundary.py` plus its focused unit test. The
+  observer accepts only exact direct membership and external-pin evidence,
+  derives the five pin identities internally, uses only the public Windows
+  held-handle backend, retains every parent/member through one global race
+  fence, rejects cross-path aliases and pin collisions, proves stable absence
+  with two equal complete parent-membership snapshots, and atomically returns
+  the existing 18-role `ProtectedBoundaryEvidence` tuple. The decision freezes
+  exactly three exports, twelve path-free errors, Windows-only v1 behavior,
+  cleanup/control precedence, privacy tiers, and the RED/verification matrix.
+  It rejects a second wrapper/digest because every selected composite envelope
+  already binds the membership digest and candidate planning directly consumes
+  the existing type. No live ProgramData, security, configured-data, service,
+  planning, approval, or cleanup surface was read or changed. Evidence:
+  `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly that new
+  two-file observer through RED/GREEN/refactor and independent current-byte
+  review. Authenticated composition, Qdrant observation, runnable planning,
+  approval, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

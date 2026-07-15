@@ -10,6 +10,11 @@ import os
 import unicodedata
 from typing import Any
 
+from steps.common.clean_memory_windows_reader_identity import (
+    CleanMemoryWindowsReaderIdentityError,
+    clean_memory_windows_reader_identity_sha256,
+    validate_clean_memory_windows_reader_identity,
+)
 from steps.common.windows_held_handle import (
     WindowsDirectoryEntry,
     WindowsHeldHandleBackend,
@@ -84,12 +89,6 @@ _BYTE = ctypes.c_ubyte
 _HANDLE = ctypes.c_void_p
 _PVOID = ctypes.c_void_p
 
-_TOKEN_PRIMARY = 1
-
-_SE_GROUP_ENABLED = 0x00000004
-_SE_GROUP_USE_FOR_DENY_ONLY = 0x00000010
-_SE_PRIVILEGE_ENABLED = 0x00000002
-
 _PROGRAM_DATA_GUID_FIELDS = (
     0x62AB5D82,
     0xFDC1,
@@ -101,8 +100,6 @@ _FIXED_CHILDREN = ("GoodQ", "authority", "clean-memory")
 
 _SYSTEM_SID = bytes.fromhex("010100000000000512000000")
 _ADMIN_SID = bytes.fromhex("01020000000000052000000020020000")
-_MEDIUM_INTEGRITY_SID = bytes.fromhex("010100000000001000200000")
-
 _DIRECTORY_RIGHTS = (
     ("file_delete_child", 0x00000040),
     ("write_dac", 0x00040000),
@@ -727,33 +724,40 @@ def _validate_dedicated_policy(
     return descriptor.dacl_aces[2].sid
 
 
-def _intrinsically_validate_token(
+def _validate_reader_identity(
     snapshot: WindowsTokenSnapshot,
     change_notify_luid: int,
 ) -> None:
-    if (
-        snapshot.statistics.token_type != _TOKEN_PRIMARY
-        or snapshot.elevation_type not in {1, 3}
-        or snapshot.is_elevated
-        or snapshot.restricted_sids
-        or snapshot.integrity.sid.binary != _MEDIUM_INTEGRITY_SID
-        or snapshot.ui_access
-        or snapshot.is_app_container
-        or snapshot.has_restrictions != (snapshot.elevation_type == 3)
-    ):
+    try:
+        validate_clean_memory_windows_reader_identity(
+            snapshot,
+            profile=WINDOWS_TOKEN_PROFILE_BASE,
+            change_notify_luid=change_notify_luid,
+        )
+    except CleanMemoryWindowsReaderIdentityError:
         _raise("untrusted_reader")
-    for record in snapshot.groups:
-        if record.sid.binary == _ADMIN_SID and (
-            not (record.attributes & _SE_GROUP_USE_FOR_DENY_ONLY)
-            or (record.attributes & _SE_GROUP_ENABLED)
-        ):
-            _raise("untrusted_reader")
-    for record in snapshot.privileges:
-        if (
-            record.attributes & _SE_PRIVILEGE_ENABLED
-            and record.luid != change_notify_luid
-        ):
-            _raise("untrusted_reader")
+    except (TypeError, ValueError):
+        _raise("observation_failed")
+    except BaseException:
+        _raise("observation_failed")
+
+
+def _reader_identity_sha256(
+    snapshot: WindowsTokenSnapshot,
+    change_notify_luid: int,
+) -> str:
+    try:
+        return clean_memory_windows_reader_identity_sha256(
+            snapshot,
+            profile=WINDOWS_TOKEN_PROFILE_BASE,
+            change_notify_luid=change_notify_luid,
+        )
+    except CleanMemoryWindowsReaderIdentityError:
+        _raise("untrusted_reader")
+    except (TypeError, ValueError):
+        _raise("observation_failed")
+    except BaseException:
+        _raise("observation_failed")
 
 
 def _compare_effective_token(
@@ -766,55 +770,6 @@ def _compare_effective_token(
         _raise_security_failure(error, phase="recheck")
     if current != baseline:
         _raise("observation_raced")
-
-
-def _reader_identity_projection(snapshot: WindowsTokenSnapshot) -> dict[str, Any]:
-    statistics = snapshot.statistics
-    return {
-        "elevation": {
-            "is_elevated": snapshot.is_elevated,
-            "type": "default" if snapshot.elevation_type == 1 else "limited",
-        },
-        "groups": [
-            {
-                "attributes": f"{record.attributes:08x}",
-                "sid": record.sid.numeric,
-            }
-            for record in snapshot.groups
-        ],
-        "has_restrictions": snapshot.has_restrictions,
-        "impersonation_level": None,
-        "integrity_rid": "00002000",
-        "integrity_sid": snapshot.integrity.sid.numeric,
-        "is_app_container": snapshot.is_app_container,
-        "privileges": [
-            {
-                "attributes": f"{record.attributes:08x}",
-                "luid": f"{record.luid:016x}",
-            }
-            for record in snapshot.privileges
-        ],
-        "restricted_sids": [
-            {
-                "attributes": f"{record.attributes:08x}",
-                "sid": record.sid.numeric,
-            }
-            for record in snapshot.restricted_sids
-        ],
-        "schema": "goodq.clean-memory-windows-reader-identity.v1",
-        "token_source": "process",
-        "token_statistics": {
-            "authentication_id": f"{statistics.authentication_id:016x}",
-            "expiration_time": str(statistics.expiration_time),
-            "group_count": str(statistics.group_count),
-            "modified_id": f"{statistics.modified_id:016x}",
-            "privilege_count": str(statistics.privilege_count),
-            "token_id": f"{statistics.token_id:016x}",
-        },
-        "token_type": "primary",
-        "ui_access": snapshot.ui_access,
-        "user_sid": snapshot.user_sid.numeric,
-    }
 
 
 def _validate_known_folder_text(value: str) -> _KnownFolder:
@@ -1435,7 +1390,7 @@ def read_external_pin() -> ExternalPinEvidence:
             baseline_snapshot = session.baseline_snapshot
         except BaseException as error:
             _raise_security_failure(error, phase="baseline")
-        _intrinsically_validate_token(baseline_snapshot, change_notify_luid)
+        _validate_reader_identity(baseline_snapshot, change_notify_luid)
 
         _compare_effective_token(session, baseline_snapshot)
         known_folder = _resolve_known_folder(native)
@@ -1534,9 +1489,10 @@ def read_external_pin() -> ExternalPinEvidence:
         )
         _final_authority_recheck(state, all_descriptors)
 
-        reader_identity_sha256 = hashlib.sha256(
-            _canonical_json_bytes(_reader_identity_projection(baseline_snapshot))
-        ).hexdigest()
+        reader_identity_sha256 = _reader_identity_sha256(
+            baseline_snapshot,
+            change_notify_luid,
+        )
         security_policy_sha256 = hashlib.sha256(
             _canonical_json_bytes(
                 _security_policy_projection(

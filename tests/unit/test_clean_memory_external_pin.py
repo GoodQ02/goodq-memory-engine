@@ -26,6 +26,7 @@ from steps.common.windows_held_handle import (
 )
 from steps.common.windows_security_mechanics import (
     WINDOWS_TOKEN_PROFILE_BASE,
+    WINDOWS_TOKEN_PROFILE_MANDATORY_POLICY,
     WindowsSecurityMechanics,
 )
 
@@ -2435,34 +2436,123 @@ def test_startup_sanitization_allocation_failure_is_contained(monkeypatch) -> No
 def test_reader_opens_exact_shared_base_token_profile(monkeypatch) -> None:
     world = _ReaderWorld()
 
-    _read_world(monkeypatch, world)
+    module, _evidence = _read_world(monkeypatch, world)
 
     assert world.security_session_profiles == [WINDOWS_TOKEN_PROFILE_BASE]
-    assert world.security_baseline_snapshots[0].mandatory_policy is None
-
-
-def test_v1_reader_projection_is_neutral_to_unqueried_mandatory_policy(
-    monkeypatch,
-) -> None:
-    world = _ReaderWorld()
-    module, _evidence = _read_world(monkeypatch, world)
     baseline = world.security_baseline_snapshots[0]
+    assert baseline.mandatory_policy is None
     policy_one = dataclasses.replace(baseline, mandatory_policy=1)
     policy_three = dataclasses.replace(baseline, mandatory_policy=3)
-
     assert policy_one != policy_three
-    one = module._canonical_json_bytes(module._reader_identity_projection(policy_one))
-    three = module._canonical_json_bytes(
-        module._reader_identity_projection(policy_three)
+    assert module.clean_memory_windows_reader_identity_sha256(
+        policy_one,
+        profile=WINDOWS_TOKEN_PROFILE_MANDATORY_POLICY,
+        change_notify_luid=0x17,
+    ) == module.clean_memory_windows_reader_identity_sha256(
+        policy_three,
+        profile=WINDOWS_TOKEN_PROFILE_MANDATORY_POLICY,
+        change_notify_luid=0x17,
     )
-    assert one == three
-    assert hashlib.sha256(one).digest() == hashlib.sha256(three).digest()
+
+
+def test_shared_reader_identity_errors_map_to_closed_external_errors(
+    monkeypatch,
+) -> None:
+    module = _load_module()
+    cases = (
+        ("validate", module.CleanMemoryWindowsReaderIdentityError(), "untrusted_reader"),
+        ("digest", module.CleanMemoryWindowsReaderIdentityError(), "untrusted_reader"),
+        ("validate", TypeError(_SECRET_MARKER), "observation_failed"),
+        ("digest", ValueError(_SECRET_MARKER), "observation_failed"),
+        ("validate", RuntimeError(_SECRET_MARKER), "observation_failed"),
+        ("digest", KeyboardInterrupt(_SECRET_MARKER), "observation_failed"),
+    )
+
+    for phase, failure, expected_code in cases:
+        world = _ReaderWorld()
+
+        def validate(_snapshot, *, profile: str, change_notify_luid: int) -> None:
+            assert profile == WINDOWS_TOKEN_PROFILE_BASE
+            assert change_notify_luid == 0x17
+
+        def digest(_snapshot, *, profile: str, change_notify_luid: int) -> str:
+            assert profile == WINDOWS_TOKEN_PROFILE_BASE
+            assert change_notify_luid == 0x17
+            return hashlib.sha256(
+                _canonical_bytes(_reader_identity_projection(world.token))
+            ).hexdigest()
+
+        def fail(*_args, **_kwargs):
+            raise failure
+
+        monkeypatch.setattr(
+            module,
+            "validate_clean_memory_windows_reader_identity",
+            fail if phase == "validate" else validate,
+        )
+        monkeypatch.setattr(
+            module,
+            "clean_memory_windows_reader_identity_sha256",
+            fail if phase == "digest" else digest,
+        )
+
+        _module, error = _expect_reader_error(
+            monkeypatch,
+            world,
+            expected_code,
+        )
+
+        assert _SECRET_MARKER not in repr(error)
 
 
 def test_happy_path_returns_exact_evidence_and_frozen_trace(monkeypatch) -> None:
     world = _ReaderWorld()
+    module = _install_reader_world(monkeypatch, world)
+    shared_calls: list[tuple[object, ...]] = []
+    original_final_recheck = module._final_authority_recheck
 
-    _module, evidence = _read_world(monkeypatch, world)
+    def validate(snapshot, *, profile: str, change_notify_luid: int) -> None:
+        assert not any(
+            event[0] in {"known_folder", "backend.open_root"}
+            for event in world.events
+        )
+        assert snapshot is world.security_baseline_snapshots[0]
+        shared_calls.append(
+            ("validate", snapshot, profile, change_notify_luid)
+        )
+
+    def final_recheck(*args, **kwargs) -> None:
+        original_final_recheck(*args, **kwargs)
+        shared_calls.append(("final",))
+
+    def digest(snapshot, *, profile: str, change_notify_luid: int) -> str:
+        assert shared_calls[-1] == ("final",)
+        assert snapshot is world.security_baseline_snapshots[0]
+        shared_calls.append(("digest", snapshot, profile, change_notify_luid))
+        return hashlib.sha256(
+            _canonical_bytes(_reader_identity_projection(world.token))
+        ).hexdigest()
+
+    monkeypatch.setattr(
+        module,
+        "validate_clean_memory_windows_reader_identity",
+        validate,
+    )
+    monkeypatch.setattr(module, "_final_authority_recheck", final_recheck)
+    monkeypatch.setattr(
+        module,
+        "clean_memory_windows_reader_identity_sha256",
+        digest,
+    )
+
+    evidence = module.read_external_pin()
+    baseline = world.security_baseline_snapshots[0]
+
+    assert shared_calls == [
+        ("validate", baseline, WINDOWS_TOKEN_PROFILE_BASE, 0x17),
+        ("final",),
+        ("digest", baseline, WINDOWS_TOKEN_PROFILE_BASE, 0x17),
+    ]
 
     assert evidence.projection == _expected_world_evidence(world)
     assert evidence.external_pin_evidence_sha256 == hashlib.sha256(
@@ -5763,6 +5853,11 @@ _APPROVED_FROM_IMPORTS = {
     "__future__": {"annotations"},
     "dataclasses": {"dataclass", "field"},
     "typing": {"Any"},
+    "steps.common.clean_memory_windows_reader_identity": {
+        "CleanMemoryWindowsReaderIdentityError",
+        "clean_memory_windows_reader_identity_sha256",
+        "validate_clean_memory_windows_reader_identity",
+    },
     "steps.common.windows_held_handle": {
         "WindowsDirectoryEntry",
         "WindowsHeldHandleBackend",
@@ -5789,6 +5884,7 @@ _APPROVED_FROM_IMPORTS = {
 def _assert_approved_source_imports(source: str) -> None:
     tree = ast.parse(source)
     held_imports: list[ast.ImportFrom] = []
+    identity_imports: list[ast.ImportFrom] = []
     security_imports: list[ast.ImportFrom] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -5808,10 +5904,13 @@ def _assert_approved_source_imports(source: str) -> None:
             )
             if node.module == "steps.common.windows_held_handle":
                 held_imports.append(node)
+            if node.module == "steps.common.clean_memory_windows_reader_identity":
+                identity_imports.append(node)
             if node.module == "steps.common.windows_security_mechanics":
                 security_imports.append(node)
 
     assert len(held_imports) == 1
+    assert len(identity_imports) == 1
     assert len(security_imports) == 1
     imported_backend_names = {alias.name for alias in held_imports[0].names}
     assert {
@@ -5823,6 +5922,12 @@ def _assert_approved_source_imports(source: str) -> None:
     }
     assert imported_security_names == _APPROVED_FROM_IMPORTS[
         "steps.common.windows_security_mechanics"
+    ]
+    imported_identity_names = {
+        alias.name for alias in identity_imports[0].names
+    }
+    assert imported_identity_names == _APPROVED_FROM_IMPORTS[
+        "steps.common.clean_memory_windows_reader_identity"
     ]
 
 
@@ -5868,14 +5973,40 @@ _FORBIDDEN_PRIVATE_SECURITY_DEFINITIONS = {
     "_close_native_handle",
 }
 
+_FORBIDDEN_PRIVATE_READER_IDENTITY_AUTHORITIES = {
+    "_intrinsically_validate_token",
+    "_reader_identity_projection",
+}
 
-def test_source_has_no_private_windows_security_mechanics_authority() -> None:
-    tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
-    defined = {
+
+def _defined_or_assigned_authority_names(source: str) -> set[str]:
+    tree = ast.parse(source)
+    names = {
         node.name
         for node in ast.walk(tree)
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
     }
+    for node in ast.walk(tree):
+        targets: tuple[ast.AST, ...] = ()
+        if isinstance(node, ast.Assign):
+            targets = tuple(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = (node.target,)
+        elif isinstance(node, ast.NamedExpr):
+            targets = (node.target,)
+        for target in targets:
+            names.update(
+                child.id
+                for child in ast.walk(target)
+                if isinstance(child, ast.Name)
+            )
+    return names
+
+
+def test_source_has_no_private_windows_security_or_reader_identity_authority() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    defined = _defined_or_assigned_authority_names(source)
     called_attributes = {
         node.func.attr
         for node in ast.walk(tree)
@@ -5883,6 +6014,8 @@ def test_source_has_no_private_windows_security_mechanics_authority() -> None:
     }
 
     assert defined.isdisjoint(_FORBIDDEN_PRIVATE_SECURITY_DEFINITIONS)
+    assert defined.isdisjoint(_FORBIDDEN_PRIVATE_READER_IDENTITY_AUTHORITIES)
+    assert "goodq.clean-memory-windows-reader-identity.v1" not in source
     assert called_attributes.isdisjoint(
         {
             "OpenThreadToken",
@@ -5898,6 +6031,13 @@ def test_source_has_no_private_windows_security_mechanics_authority() -> None:
             "GetSecurityDescriptorLength",
         }
     )
+    for mutant in (
+        "_intrinsically_validate_token = validate_clean_memory_windows_reader_identity",
+        "_reader_identity_projection: object = clean_memory_windows_reader_identity_sha256",
+    ):
+        assert not _defined_or_assigned_authority_names(mutant).isdisjoint(
+            _FORBIDDEN_PRIVATE_READER_IDENTITY_AUTHORITIES
+        )
 
 
 def test_source_has_only_the_strict_approved_import_allowlist() -> None:

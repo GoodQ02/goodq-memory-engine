@@ -1320,6 +1320,24 @@ the failure is not currently visible.
   shared locator TDD extraction/adaptation checkpoint. Protected-member
   observation, composition, Qdrant, planning, approval, and cleanup remain
   closed.
+- Windows ProgramData locator checkpoint (2026-07-14): private checkpoint
+  `f93ae143` adds the exact five-export import-pure shared locator and adapts the
+  external-pin reader with zero-drop parity. Binding retains the exact callable
+  Known Folder and free capabilities; resolution validates detached components
+  and frees every native buffer; all public values and failure graphs remain
+  immutable, redacted, and path-free. Fresh verification passed 53 direct
+  locator tests, the frozen 499-test external suite, 148 protected-manifest
+  reader tests, the 737-test adjacent authority gate, the exact 1,422-test
+  frozen union, and the 1,623-test expanded authority gate, plus compilation,
+  documentation, banned-token, dependency, exact four-file staged-census, and
+  diff gates. Independent contract and extraction-parity reviews returned
+  `PASS`. No live ProgramData or runtime authority was read or changed.
+  Evidence:
+  `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  ownership and contract audit of the protected-member observer and direct
+  pin-chain physical-exclusion boundary. Authenticated composition, Qdrant
+  observation, runnable planning, approval, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

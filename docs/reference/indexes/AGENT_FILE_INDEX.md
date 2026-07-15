@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1281**
+Indexed active tracked paths: **1284**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -311,6 +311,7 @@ Indexed active tracked paths: **1281**
 | `/docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_HELD_HANDLE_EXTRACTION_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_LABEL_SECURITY_TRANSPORT_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
@@ -841,6 +842,7 @@ Indexed active tracked paths: **1281**
 | `/steps/common/canonical_sensitive_events.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/clean_memory.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/clean_memory_protected_manifest.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/clean_memory_windows_program_data_locator.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/clean_memory_windows_reader_identity.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/conda_runner.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/config_loader.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1069,6 +1071,7 @@ Indexed active tracked paths: **1281**
 | `/tests/unit/test_clean_memory_protected_manifest.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_manifest_validator.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_protected_membership.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clean_memory_windows_program_data_locator.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_windows_reader_identity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |

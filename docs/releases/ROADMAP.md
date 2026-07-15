@@ -1284,6 +1284,23 @@ the failure is not currently visible.
   source/test pair through RED/GREEN/refactor and independent current-byte
   review. Composition, observation, Qdrant, planning, approval, and cleanup
   remain closed.
+- Protected-manifest reader checkpoint (2026-07-14): private checkpoint
+  `66ee4f47` adds the exact four-export authenticated Windows reader and its
+  two-file regression authority. The reader authenticates direct configuration
+  and external-pin evidence, retains the complete physical route, enforces the
+  selected reader/descriptor/access policy, compares the same-handle manifest
+  digest before one canonical parse, completes final race fences and cleanup,
+  and returns immutable nine-key path-free evidence with repr-hidden retained
+  bytes. Fresh verification passed 148 focused tests, the zero-drop 1,422-test
+  pre-reader authority union, the 1,570-test reader-first combined gate,
+  compilation, documentation, banned-token, dependency, staged-diff, and exact
+  two-file census gates. Three independent current-byte reviews found no
+  critical, major, or minor issue. Evidence:
+  `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  ownership/parity audit of the composition-owned ProgramData locator and final
+  recheck contract. Protected-member observation, authenticated composition,
+  Qdrant observation, planning, approval, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1846,6 +1863,12 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the authenticated R-07 protected-manifest reader at
+  `66ee4f47` after 148 focused, 1,422 frozen-authority, and 1,570 combined tests
+  plus three clean independent reviews. Advanced only to a read-only
+  ProgramData locator/recheck ownership audit; later composition and mutation
+  authorities remain closed.
 
 - 2026-07-14: Selected the exact R-07 protected-manifest reader contract after
   three independent audits reconciled API, lifecycle, error, evidence, digest,

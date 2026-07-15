@@ -4,117 +4,92 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — extract projection-neutral Windows security mechanics.
+Roadmap item: R-07 — reassess the frozen reader-identity v1 policy seam.
 
 ## Outcome
 
-Implement only the four-file extraction/parity seam selected by
-`docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md`.
-Move projection-neutral token, descriptor, generic-mapping, and bounded access-
-check mechanics into one import-pure shared module while adapting the completed
-external-pin reader in the same checkpoint.
+Perform one read-only no-repeat ownership audit before authorizing any
+protected-manifest reader code. Determine whether the frozen reader-identity v1
+projection/digest remains external-pin private or belongs in a separate shared
+clean-memory policy seam, and identify the smallest coherent consumer boundary.
 
-Use RED/GREEN/refactor and preserve the external-pin public API, errors,
-evidence bytes and digests, operation order, cleanup precedence, and base token
-query sequence exactly. Do not create the protected-manifest reader.
+Do not implement the manifest reader or move policy during this audit. End with
+one evidence-backed selection, exact files, RED oracles, rollback boundary, and
+verification gate—or record why no extraction is justified.
 
 ## Completed work — do not repeat
 
 - Configuration, filesystem observation, structural membership, held-handle
-  traversal, bounded reads, and external-pin reader authority are checkpointed.
-- `41e56c74` checkpoints the pure canonical protected-manifest validator and
-  membership delegation.
-- `25ae5b64` selects the exact manifest security policy: filtered descriptor,
-  bounded mutation-denial checking, actual-kernel positive access, frozen v1
-  pin identity digest, and explicit publication-provenance limits.
-- `6b40d8e8` checkpoints exact opt-in `security_read_label` transport with
-  request mask `0x17`, native Windows evidence, 644 focused regressions, and two
-  independent `READY` reviews.
-- `1084f8d8` checkpoints that transport evidence and advances only to the
-  mechanics ownership audit.
-- The read-only mechanics audit selected one four-file shared extraction. It
-  rejected parser-only and token-only staging because both would reopen the
-  same opaque descriptor/token/access lifetime boundary.
-- Existing `security_read` remains exact owner/group/DACL transport (`0x7`).
-- Candidate-plan authority and storage are completed injected cores and are not
-  part of this mechanics audit.
+  traversal, bounded reads, external-pin authority, canonical manifest
+  validation, and protected-manifest security policy are checkpointed.
+- `6b40d8e8` checkpoints label-aware held-handle transport while preserving
+  exact existing profiles.
+- `ae4d35bc` establishes the projection-neutral Windows security ABI.
+- `0827193a` extracts token, descriptor, mapping, duplication, access, and
+  cleanup mechanics into one shared authority while preserving external-pin
+  policy and output exactly.
+- Fresh extraction verification passed 254 shared tests, 499 external tests,
+  the historical 167 held-handle baseline, 46 filesystem tests, and the 1,357-
+  test clean-memory authority union. Two independent final reviews returned
+  `READY`.
+- The held-handle backend, frozen reader-identity v1 policy, and protected-
+  manifest reader were deliberately excluded from the extraction checkpoint.
 
 ## Governing evidence
 
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_LABEL_SECURITY_TRANSPORT_CHECKPOINT_2026-07-14.md`;
+- `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
 - `cli/clean_memory_external_pin.py`;
+- `steps/common/windows_security_mechanics.py`;
+- `cli/clean_memory_protected_manifest_validator.py`;
 - `tests/unit/test_clean_memory_external_pin.py`;
-- `steps/common/windows_held_handle.py`;
-- `tests/unit/test_windows_held_handle.py`; and
+- `tests/unit/test_windows_security_mechanics.py`; and
 - `docs/releases/ROADMAP.md`.
 
 ## Governing invariant
 
-The extraction may share mechanics, never authority. The external-pin reader's
-private policy, five-object grammar, v1 identity projection/digest, evidence,
-errors, failure order, and no-argument API remain exact. Manifest policy belongs
-only to the future manifest reader. The shared layer may own bounded native
-mechanics but may not know candidate roles, fixed names, trusted SIDs, accepted
-token policy, DACL sequences, expected access outcomes, or consumer errors.
+Projection-neutral native mechanics and GoodQ identity policy are separate
+authorities. Reuse must not make the shared mechanics module know consumer
+roles, trusted SIDs, accepted token values, evidence schemas, or outward errors.
+The external-pin v1 bytes/digest remain frozen until a separate policy decision
+proves an exact shared owner and byte-for-byte consumer parity.
 
-## Exact implementation seam
+## Exact audit questions
 
-Touch exactly:
-
-1. add `steps/common/windows_security_mechanics.py`;
-2. add `tests/unit/test_windows_security_mechanics.py`;
-3. adapt `cli/clean_memory_external_pin.py`; and
-4. adapt `tests/unit/test_clean_memory_external_pin.py`.
-
-The shared module owns:
-
-- exact Win64 token/mapping/access ABI and immutable observations;
-- base and mandatory-policy token profiles, with class 27 absent from base;
-- retained process-token and private duplicate ownership;
-- bounded self-relative SID/ACL/ACE/DACL/mandatory-label parsing;
-- one private stable descriptor allocation used for both parsing and access;
-- exact file generic mapping and the closed one-mask mutation-check envelope;
-- one opaque access scope per descriptor and validated denial-only results
-  without accepted-outcome policy; and
-- fixed path-free mechanics errors and cleanup.
-
-The external-pin adapter retains:
-
-- DLL load order, the exact pre-load `_GUID` size guard, Known Folder support,
-  and binder invocation order;
-- token acceptance, enrolled-reader and DACL policies;
-- route, role, rights, expected-denial, race, and failure-order authority;
-- the frozen v1 reader-identity projection and digest; and
-- every outward error, evidence byte, digest, and no-argument contract.
-
-Keep both held-handle files unchanged. Keep the frozen identity projection
-private during this checkpoint; sharing that policy is a later separate seam.
+1. Which current consumers need the reader-identity v1 projection/digest?
+2. Is the projection generic clean-memory policy or external-pin evidence
+   policy?
+3. Which inputs are projection-neutral shared observations and which are
+   consumer acceptance decisions?
+4. Can one import-pure policy surface serve both consumers without reversing
+   dependency direction or exposing private capability owners?
+5. What exact public API, frozen bytes, errors, and precedence would remain?
+6. What RED oracles prove absence, parity, no duplicate authority, and no live
+   capability acquisition?
+7. Does the smallest coherent seam include only policy, or must the manifest
+   reader remain closed until another prerequisite is proven?
 
 ## Boundaries
 
-- Do not inspect or mutate any live token or configured/production ACL or root,
-  manifest, pin, service, GoodQ data, Qdrant, evidence store, job, MiniAgent, or
-  cleanup target.
-- Use fake native adapters only for token, duplication, mapping, and access
-  mechanics. The already-checkpointed pytest-owned temporary-file descriptor-
-  transport witness is sufficient; do not add a live-token witness, query a
-  full SACL, or request `ACCESS_SYSTEM_SECURITY`.
-- Do not copy private external-pin policy into a shared module or manifest
-  reader.
-- Do not modify the held-handle backend, manifest validator, membership,
-  configuration, candidate plan, or any unrelated runtime code/test.
-- Do not add enrollment, publication, rotation, recovery, planning, approval,
-  cleanup, dependency, service, firewall, environment, or runtime changes.
+- Read repository source, tests, and checkpoint evidence only.
+- Do not inspect or mutate any live token, ACL, descriptor, configured or
+  protected root, manifest, pin, service, GoodQ data, Qdrant store, evidence
+  store, job, MiniAgent, or cleanup target.
+- Do not modify the shared mechanics, external-pin reader, manifest validator,
+  held-handle backend, or tests during the audit.
+- Do not create a manifest reader, identity helper, enrollment/publication
+  mechanism, compatibility shim, or second projection authority.
+- Do not broaden into planning, approval, execution, retention, LAN, service,
+  dependency, or release work.
 
 ## Completion gate
 
-Checkpoint only after the exact RED oracles fail for absent shared authority,
-the selected four-file implementation passes the full decision matrix, all
-existing held-handle and external-pin behavior remains exact, class 27 is proven
-absent from the external-pin base profile, source containment and documentation
-gates pass, and at least two independent current-byte reviews return `READY`.
+Checkpoint the audit only when current call graphs and byte-level contracts
+identify one ownership decision, every completed authority is named, rejected
+alternatives are explicit, exact implementation/test files are selected, and
+at least two independent read-only reviews agree that the next seam does not
+repeat completed work or mix mechanics with policy.
 
 The protected-manifest reader remains closed.

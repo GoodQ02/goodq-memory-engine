@@ -1208,6 +1208,25 @@ the failure is not currently visible.
   R-07 remains `IN_PROGRESS`; the next bounded seam is exactly that four-file
   extraction through RED/GREEN/refactor and independent current-byte parity
   review. The frozen reader-identity policy remains a separate later seam.
+- Windows security-mechanics extraction checkpoint (2026-07-14): private
+  checkpoints `ae4d35bc` and `0827193a` establish the exact import-pure ABI and
+  extract token observation/ownership, filtered-descriptor parsing, one stable
+  parse/access allocation, generic mapping, private duplication, and bounded
+  mutation-denial mechanics into one shared module. The external-pin adapter
+  preserves its frozen API, thirteen errors, base 17-call profile, v1 identity
+  projection/digest, security/evidence bytes, five-duplicate/19-check sequence,
+  and failure/cleanup order. Adversarial TDD closed token failure-sentinel and
+  exception-graph lifecycle gaps across all three control-flow types. Fresh
+  verification passed 254 shared tests, 499 external tests, the historical 167
+  held-handle baseline, 46 filesystem tests, the 1,357-test clean-memory
+  authority union, compilation, semantic-drift, banned-token, dependency, and
+  staged-diff gates. Two independent final current-byte reviews returned
+  `READY`. No live security or configured-data surface was read or changed.
+  Evidence:
+  `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only no-
+  repeat reassessment of the separate frozen reader-identity v1 policy seam
+  before any protected-manifest reader implementation is authorized.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1770,6 +1789,12 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the projection-neutral R-07 Windows security
+  mechanics at `0827193a` after 1,357 clean-memory authority tests and two
+  independent `READY` reviews. Advanced only to a read-only reassessment of the
+  frozen reader-identity v1 policy seam; the protected-manifest reader remains
+  closed.
 
 - 2026-07-14: Selected the exact R-07 four-file projection-neutral Windows
   security-mechanics extraction after three independent audits reconciled the

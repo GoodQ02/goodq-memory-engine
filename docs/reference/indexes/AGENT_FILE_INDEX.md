@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1269**
+Indexed active tracked paths: **1272**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -311,6 +311,7 @@ Indexed active tracked paths: **1269**
 | `/docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -875,6 +876,7 @@ Indexed active tracked paths: **1269**
 | `/steps/common/tool_resolver.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/vad_preprocessor.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/windows_held_handle.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/windows_security_mechanics.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/discover_sources/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/discover_sources/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/emotion_classify/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1204,6 +1206,7 @@ Indexed active tracked paths: **1269**
 | `/tests/unit/test_watchdog_registry_deadlock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_safety.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_held_handle.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_windows_security_mechanics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_robustness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_audio_preflight.py` | Verification | Test, fixture, or verification asset. |

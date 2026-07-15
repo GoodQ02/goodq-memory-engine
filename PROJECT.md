@@ -4,170 +4,111 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — extract the frozen Windows reader-identity policy.
+Roadmap item: R-07 — select the protected-manifest reader public contract and
+exact input/error fence.
 
 ## Outcome
 
-Implement one import-pure GoodQ clean-memory Windows reader-identity authority
-and adapt the completed external-pin reader in the same checkpoint.
+Perform one read-only no-repeat audit. Determine the smallest coherent public
+reader boundary before any protected-manifest reader source or test file is
+authorized.
 
-Use strict RED/GREEN/refactor. Preserve exact external behavior and keep the
-protected-manifest reader closed.
-
-## Exact implementation seam
-
-Only these four files may change during implementation:
-
-1. add `steps/common/clean_memory_windows_reader_identity.py`;
-2. add `tests/unit/test_clean_memory_windows_reader_identity.py`;
-3. adapt `cli/clean_memory_external_pin.py`; and
-4. adapt `tests/unit/test_clean_memory_external_pin.py`.
-
-Documentation, ROADMAP, PROJECT, and generated indexes belong in a later
-separate checkpoint after implementation is committed and freshly verified.
+The audit must reconcile completed authorities instead of redesigning or
+reimplementing them.
 
 ## Completed work — do not repeat
 
-- Configuration, filesystem observation, structural membership, held-handle
-  traversal, bounded reads, external-pin authority, canonical manifest
-  validation, and protected-manifest security policy are checkpointed.
-- `6b40d8e8` checkpoints label-aware held-handle transport while preserving
-  exact existing profiles.
-- `ae4d35bc` establishes the projection-neutral Windows security ABI.
-- `0827193a` extracts shared token, descriptor, mapping, duplication, access,
-  and cleanup mechanics while preserving external-pin output and lifecycle.
-- `dc7af74b` checkpoints the extraction evidence and advances only to the
-  reader-identity ownership audit.
-- Three independent read-only audits selected a separate import-pure identity
-  policy. Two follow-up reviews returned `READY` on the exact three-symbol API,
-  profile fences, early-validation/late-digest timing, and digest-only boundary.
-- The frozen v1 preimage/digest, current external acceptance matrix, future
-  mandatory-policy requirements, and exact dependency direction are recorded
-  in
-  `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_DECISION_2026-07-14.md`.
+- Configuration projection, candidate-plan authority, filesystem observation,
+  protected-membership projection, held-handle traversal and bounded reads,
+  canonical protected-manifest validation, external-pin reading, label-aware
+  descriptor transport, projection-neutral security mechanics, and the
+  protected-manifest security policy are checkpointed.
+- `ae4d35bc` and `0827193a` checkpoint the shared Windows security mechanics.
+- `ac5691a6` selects the shared reader-identity ownership and exact public API.
+- `02530486` implements that shared policy and adapts the external reader.
+- Fresh controller verification passed 65 direct policy tests, the zero-drop
+  499-test external baseline, and the 1,422-test clean-memory authority union.
+- Independent current-byte reviews returned `APPROVED` and `READY`.
+- Checkpoint evidence is recorded in
+  `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md`.
 
 ## Governing invariant
 
-Projection-neutral mechanics and GoodQ reader-identity policy are separate
-authorities. The new module may interpret an already-detached exact
-`WindowsTokenSnapshot`; it may not acquire a token, bind native functions,
-inspect a path/DACL/manifest, own a session, grant authorization, or know a
-consumer error/evidence schema.
+The future reader may authenticate only the exact complete canonical manifest
+bytes obtained from one held no-follow file handle and authorized by direct
+external-pin evidence. It must use completed shared mechanics, validation, and
+identity policy without copying their private logic or widening their public
+surfaces.
 
-The raw v1 schema, projection, and canonical preimage remain private. Only the
-lowercase SHA-256 digest leaves the policy module. Every physical reader still
-proves snapshot provenance and race equality through its own retained mechanics
-session.
+Reader input types do not prove production provenance by themselves. The later
+production planning edge must directly invoke both physical readers. The reader
+may observe and return bounded immutable evidence; it may not enroll, publish,
+rotate, recover, compose, plan, approve, or clean.
 
-## Exact public surface
+## Audit questions
 
-The new module exports only:
+Select and document exactly:
 
-```python
-__all__ = (
-    "CleanMemoryWindowsReaderIdentityError",
-    "validate_clean_memory_windows_reader_identity",
-    "clean_memory_windows_reader_identity_sha256",
-)
-```
+1. the module and finite public export set;
+2. the reader function signature and exact-type input fences;
+3. the immutable path-free evidence boundary and digest bindings;
+4. the finite stable path-free error taxonomy;
+5. first-failure precedence across input, platform, capability, token, route,
+   descriptor, content digest, canonical validation, race, and cleanup;
+6. the precise reuse boundary for configuration, external-pin evidence,
+   protected-manifest validation, held handles, security mechanics, and shared
+   reader identity;
+7. the source/test file census for the later RED/GREEN checkpoint; and
+8. the focused parity and lifecycle verification gate required before reader
+   implementation can be authorized.
 
-Both functions accept exact `WindowsTokenSnapshot`, keyword-only exact mechanics
-profile, and keyword-only exact non-boolean unsigned-64
-`change_notify_luid`.
-
-- base profile requires `mandatory_policy is None`;
-- mandatory profile requires exact integer `1` or `3`;
-- validation returns `None`;
-- digest revalidates and returns exactly 64 lowercase hex characters; and
-- mandatory policy and profile remain outside the frozen v1 preimage. The
-  `change_notify_luid` argument is not independently serialized; accepted
-  snapshot privilege LUIDs remain present.
-
-Do not export a schema constant, projection function, canonical bytes, result
-class, native capability, or compatibility alias.
-
-## TDD order
-
-1. Add only direct shared-policy RED tests proving the absent module/API,
-   argument contract, acceptance matrix, profile fences, golden digests,
-   import purity, digest-only boundary, and no native capability.
-2. Run the direct file and record expected RED caused only by absent authority.
-3. Add adapter RED proving the external source still owns private policy,
-   validation is not delegated, and digest timing is not delegated.
-4. Run the adapted external file and record expected RED without changing the
-   499-node baseline.
-5. Implement the smallest shared module.
-6. Adapt external pin in place:
-   - shared validation immediately after baseline acquisition;
-   - all existing storage/race/descriptor/content operations unchanged;
-   - shared digest only after `_final_authority_recheck()`;
-   - exact existing evidence and cleanup afterward.
-7. Remove private production validator/projector/schema ownership from external
-   pin with no compatibility alias.
-8. Run focused GREEN, then the full verification gate.
-
-## Required parity
-
-Preserve exactly:
-
-- external four-symbol public API and thirteen outward errors;
-- base 17-call token profile and absence of class 27;
-- current Default/Limited acceptance and every rejection;
-- no new rejection based on currently ignored, structurally valid token
-  statistics, ordinary SID/group values, integrity attributes, disabled
-  privileges, or change-notify presence/enabled state;
-- enrolled-reader SID correlation and DACL/access policy;
-- v1 canonical fields, ordering, formatting, bytes, and digest;
-- complete external evidence bytes and digest;
-- 39 token snapshots, five descriptor duplications, and 19 access checks;
-- route, descriptor, content, race, failure, and cleanup order; and
-- all projection-neutral mechanics and held-handle APIs.
-
-The external suite remains a 499-node zero-drop integration baseline. Direct
-shared-policy tests are additive.
+Do not freeze a convenient surface without tracing every required field and
+failure to existing code and tests.
 
 ## Governing evidence
 
+- `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md`;
 - `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md`;
-- `docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md`;
-- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
 - `docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_CHECKPOINT_2026-07-14.md`;
+- `docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md`;
+- `cli/clean_memory.py`;
 - `cli/clean_memory_external_pin.py`;
-- `steps/common/windows_security_mechanics.py`;
+- `cli/clean_memory_protected_membership.py`;
 - `steps/common/clean_memory_protected_manifest.py`;
-- `tests/unit/test_clean_memory_external_pin.py`;
-- `tests/unit/test_windows_security_mechanics.py`; and
+- `steps/common/clean_memory_windows_reader_identity.py`;
+- `steps/common/windows_held_handle.py`;
+- `steps/common/windows_security_mechanics.py`;
+- their focused unit tests; and
 - `docs/releases/ROADMAP.md`.
 
 ## Boundaries
 
 - Work only in `.worktrees/r05-api-authority` on
   `codex/r05-api-authority`.
-- Use sequential `conda run --no-capture-output -n goodq_core ...` commands.
-- Do not change Windows security mechanics, held-handle code, manifest
-  validator/membership, configuration, planning, storage, services, or data.
-- Do not inspect or mutate any live token, ACL, descriptor, configured or
+- Read repository source, tests, contracts, and checkpoint evidence only.
+- Use bounded independent read-only audits where they improve confidence.
+- Do not create or edit protected-manifest reader source or tests during this
+  decision audit.
+- Do not inspect or mutate a live token, ACL, descriptor, configured or
   protected root, manifest, pin, service, GoodQ data, Qdrant store, evidence
   store, job, MiniAgent, or cleanup target.
-- Do not create the protected-manifest reader, enrollment/publication,
-  composition, compatibility shim, or second policy authority.
-- Do not stage unrelated files or broaden the rollback boundary.
+- Do not change enrollment, publication, rotation, recovery, composition,
+  Qdrant observation, planning, approval, or cleanup authority.
+- Do not stage unrelated files or reopen completed checkpoints without
+  contradictory focused evidence.
 
-## Verification gate
+## Decision gate
 
-Before implementation checkpoint:
+Before authorizing reader implementation:
 
-1. direct new policy tests pass;
-2. external 499-node baseline remains zero-drop;
-3. mechanics 254, held-handle 167, filesystem, canonical-validator, and
-   membership suites pass;
-4. expanded clean-memory authority union passes;
-5. exact four-file compilation and diff containment pass;
-6. import/dependency/AST containment and semantic-drift gates pass;
-7. at least two independent current-byte reviews return `READY`; and
-8. the implementation and evidence documentation are checkpointed separately.
-
-After that checkpoint, advance only to a read-only protected-manifest reader
-public-contract and error/input-fence decision. The reader remains closed until
-that later audit selects its exact source/test boundary.
+1. at least three independent read-only traces reconcile API/ownership,
+   lifecycle/error precedence, and evidence/digest parity;
+2. one decision document names the exact public contract, dependency graph,
+   file census, RED matrix, and verification gate;
+3. no duplicate parser, policy, projection, or native capability is selected;
+4. every unresolved field or failure remains explicitly closed rather than
+   guessed; and
+5. documentation authority, semantic-drift, banned-token, dependency, index,
+   and committed-diff gates pass in a separate checkpoint.

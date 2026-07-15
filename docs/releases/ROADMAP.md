@@ -1250,6 +1250,23 @@ the failure is not currently visible.
   four-file policy extraction/adaptation through RED/GREEN/refactor and
   independent current-byte parity review. The protected-manifest reader remains
   closed.
+- Windows reader-identity policy checkpoint (2026-07-14): private checkpoint
+  `02530486` adds the exact three-symbol import-pure shared policy and adapts
+  the external-pin reader without changing its public API, thirteen errors,
+  evidence bytes/digests, base token profile, race fences, or cleanup. The
+  shared module preserves the ordinary-reader acceptance domain, base and
+  mandatory profile fences, and private frozen v1 bytes while returning only
+  validation or lowercase SHA-256. Fresh verification passed 65 direct tests,
+  the zero-drop 499-test external baseline, 254 mechanics tests, the historical
+  167 held-handle baseline, 46 filesystem tests, 205 validator/membership
+  tests, the 1,422-test authority union, compilation, semantic-drift,
+  banned-token, dependency, and committed-diff gates. Independent current-byte
+  reviews returned `APPROVED` and `READY`. No live security or configured-data
+  surface was read or changed. Evidence:
+  `docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded mission is only a read-only
+  decision audit of the protected-manifest reader public contract and exact
+  input/error fence. Reader source and tests remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1812,6 +1829,11 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-14: Checkpointed the R-07 shared Windows reader-identity policy at
+  `02530486` after the 1,422-test authority union and independent
+  `APPROVED`/`READY` reviews. Advanced only to the protected-manifest reader
+  public-contract and input/error-fence decision; reader code remains closed.
 
 - 2026-07-14: Selected the exact R-07 import-pure Windows reader-identity
   policy seam after three ownership audits and two final API/timing reviews.

@@ -833,6 +833,27 @@ def test_error_contract_is_closed_path_free_and_immutable(
         error._code = "observation_failed"
 
 
+@pytest.mark.parametrize("mutation", ["delete", "delete_and_rebind"])
+def test_error_private_code_cannot_be_deleted_or_rebound(
+    mutation: str,
+) -> None:
+    module = _module()
+    code = "invalid_protected_membership"
+    error = module.ProtectedBoundaryObservationError(code)
+
+    with pytest.raises(
+        AttributeError,
+        match="Protected-boundary observation error code is immutable",
+    ):
+        delattr(error, "_code")
+        if mutation == "delete_and_rebind":
+            error._code = "observation_failed"
+
+    assert error.code == code
+    assert str(error) == ERRORS[code]
+    assert error.args == (ERRORS[code],)
+
+
 @pytest.mark.parametrize("value", [None, "", "unknown", 1, True])
 def test_error_rejects_unknown_codes(value: object) -> None:
     module = _module()

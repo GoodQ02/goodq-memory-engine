@@ -219,6 +219,13 @@ class ProtectedBoundaryObservationError(RuntimeError):
             )
         object.__setattr__(self, name, value)
 
+    def __delattr__(self, name: str) -> None:
+        if name in {"code", "_code"}:
+            raise AttributeError(
+                "Protected-boundary observation error code is immutable"
+            )
+        object.__delattr__(self, name)
+
 
 def _raise(code: str) -> None:
     raise ProtectedBoundaryObservationError(code) from None

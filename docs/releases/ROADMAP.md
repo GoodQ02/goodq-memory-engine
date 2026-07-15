@@ -1378,6 +1378,28 @@ the failure is not currently visible.
   no-repeat ownership and contract re-audit of authenticated protected-
   membership composition. Qdrant observation, runnable planning, approval,
   jobs/tokens, and cleanup remain closed.
+- Authenticated protected-membership composition recheck decision (2026-07-15):
+  three read-only current-byte traces found one singular acyclic authority graph
+  and no production composition caller. The selected next seam modifies only
+  existing `cli/clean_memory.py` and `tests/unit/test_clean_memory_cli.py`, keeps
+  the three-symbol public API exact, adds one private helper/error, uses only
+  function-local public imports, and returns the observer's same exact 18-role
+  tuple without a wrapper or digest. The decision freezes Windows-only
+  pre-capability configuration authentication, four exact composition-owned
+  ProgramData location acquisitions, one call per direct reader/projector/
+  observer, immediate authentication before forwarding, complete configuration/
+  pin/manifest/membership/boundary digest binding, component-boundary lexical
+  pin/member exclusion before physical observation, five private composition
+  errors, dependency-owned error precedence, upstream-drift precedence, final
+  direct-output rechecks after the fourth location fence, and the RED/negative-
+  mutant matrix. No live ProgramData,
+  configured data, Qdrant, service, job, approval, or cleanup surface was read
+  or changed. Evidence:
+  `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_RECHECK_DECISION_2026-07-15.md`.
+  R-07 remains `IN_PROGRESS`; the next bounded seam is exactly that existing
+  two-file TDD implementation. Cleanup-target observation, Qdrant, scope
+  assembly, planning/persistence, command parsing, approval, jobs/tokens,
+  process control, and cleanup remain closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -1957,6 +1979,14 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-15: Selected the exact private R-07 authenticated protected-
+  membership composition seam after the protected observer checkpoint. Frozen
+  the existing source/test allowlist, Windows-only preflight, four composition-
+  owned locator fences, immediate direct-output authentication, digest chain,
+  lexical/physical separation, private error contract, upstream-drift
+  precedence, and RED matrix; later planning, approval, and cleanup remain
+  closed.
 
 - 2026-07-15: Checkpointed the R-07 protected-boundary observer at `9e225655`
   plus immutability fix `636f4bfd` after 184 focused and 1,807 expanded tests

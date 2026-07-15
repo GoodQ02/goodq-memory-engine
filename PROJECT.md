@@ -4,15 +4,15 @@
 
 # Active bounded mission
 
-Roadmap item: R-07 — re-audit authenticated protected-membership composition
-after the protected-boundary observer checkpoint.
+Roadmap item: R-07 — implement the private authenticated protected-membership
+composition helper selected by the recheck decision.
 
 ## Outcome
 
-Run one read-only no-repeat ownership and contract re-audit of authenticated
-protected-membership composition. Reconcile the now-complete direct outputs,
-final rechecks, failure precedence, and exact future implementation allowlist.
-Do not implement composition during this mission.
+Use TDD to add only the selected private composition helper inside the existing
+configuration module and its existing focused test file. Preserve the exact
+three-symbol public API and return the observer's exact 18-role tuple. Do not
+implement command parsing, Qdrant, planning, approval, or cleanup.
 
 ## Completed work — do not repeat
 
@@ -35,32 +35,39 @@ Do not implement composition during this mission.
 - The pre-existing external-pin module-reload test-isolation defect has a
   separate roadmap owner. Do not weaken production exact-type checks or repair
   that test inside this mission.
+- The composition recheck found one singular acyclic owner graph and selected
+  the exact existing source/test pair, private helper signature, four locator
+  fences, digest chain, lexical exclusion, five private errors, and direct RED
+  matrix. Do not repeat that audit or create a new composition module.
 
 ## Governing invariant
 
 Authenticated protected authority must compose only from exact direct outputs
 whose canonical bytes, digests, physical evidence, and final rechecks remain
-mutually consistent through return. Cleanup-target filesystem evidence is later
-candidate-plan pre-state and may not authenticate protected membership.
+mutually consistent through return. The helper returns the observer's exact
+tuple and adds no wrapper, schema, digest, or second authority.
 
-The composition boundary may bind existing selected evidence; it may not create
-a second locator, reader, observer, identity wrapper, manifest parser, path
-authority, or physical-discovery fallback.
+Cleanup-target filesystem evidence is later candidate-plan pre-state and may
+not authenticate protected membership. Qdrant, scope assembly, planning,
+persistence, approval, jobs/tokens, and cleanup remain later seams.
 
-## Exact audit seam
+## Exact implementation seam
 
-1. reread the existing authenticated-composition audit against current public
-   source and tests;
-2. trace every proposed direct input and final recheck to one completed owner;
-3. reconcile digest binding, exact-type checks, lifecycle/control precedence,
-   cleanup, privacy, and no-partial-return behavior;
-4. select one exact future source/test allowlist and RED matrix; and
-5. obtain independent current-byte ownership and contract reviews before any
-   implementation is authorized.
+1. modify only `cli/clean_memory.py` and
+   `tests/unit/test_clean_memory_cli.py`;
+2. witness the private helper/error and direct lifecycle matrix fail before
+   production code;
+3. use function-local public imports and preserve import/configuration purity;
+4. reject non-Windows configuration before capability construction, invoke each
+   reader/projector/observer once, retain four exact composition-owned locator
+   fences, authenticate every return before forwarding, prove every digest and
+   lexical binding, and return the same exact tuple; and
+5. keep completed modules/tests unchanged and checkpoint source before docs.
 
 ## Governing evidence
 
 - `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md`;
+- `docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_RECHECK_DECISION_2026-07-15.md`;
 - `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CHECKPOINT_2026-07-15.md`;
 - `docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md`;
 - `docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md`;
@@ -73,21 +80,25 @@ authority, or physical-discovery fallback.
 
 - Work only in `.worktrees/r05-api-authority` on
   `codex/r05-api-authority`.
-- This mission is read-only except for its bounded diagnostic/mission/roadmap
-  documentation checkpoint.
-- Do not modify completed production modules or focused tests.
+- Touch only the exact existing source/test pair until the source checkpoint
+  passes. Do not modify any completed dependency module or focused test.
 - Do not inspect or mutate live ProgramData, a token, ACL, descriptor,
   configured or protected root, manifest, pin, service, GoodQ data, Qdrant,
   evidence store, job, MiniAgent, approval, or cleanup target.
-- Do not implement or contact Qdrant, build runnable planning, persist evidence,
-  issue approval, create jobs/tokens, or execute cleanup.
+- Do not contact Qdrant, observe cleanup targets, assemble a resolved scope,
+  build or persist a plan, load configuration, add a command surface, issue
+  approval, create jobs/tokens, control processes, or execute cleanup.
 
 ## Completion gate
 
-1. current source traces name every direct output and owner without duplicate
-   authority;
-2. the selected composition lifecycle is non-circular and closes every input,
-   digest, final-recheck, failure-precedence, privacy, and cleanup seam;
-3. one exact future implementation allowlist and direct RED matrix are frozen;
-4. at least two independent current-byte reviews return clean; and
-5. the audit and roadmap are checkpointed before composition code begins.
+1. focused RED proves the private composition authority is absent;
+2. the selected focused and zero-drop authority gates pass through
+   `goodq_core`;
+3. exact order, immediate direct-return authentication, same-object forwarding,
+   four composition-owned locator fences, digest chain, lexical/physical
+   separation, five private errors, upstream-drift precedence, privacy, final
+   post-location rechecks, and no-partial-return oracles pass;
+4. the committed source diff contains exactly the selected two files and
+   preserves the three-symbol public API;
+5. at least two independent current-byte reviews are clean; and
+6. source and documentation are checkpointed separately.

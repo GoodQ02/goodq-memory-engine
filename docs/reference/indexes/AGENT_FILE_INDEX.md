@@ -15,10 +15,11 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1291**
+Indexed active tracked paths: **1293**
 
 | File Path | Component | Purpose |
 |---|---|---|
+| `/.agents/DEFERRED_FINDINGS.md` | Repository root | Root-level project or runtime surface. |
 | `/.agents/index/corrections.json` | Repository root | Root-level project or runtime surface. |
 | `/.agents/skills/goodq4all-operator/SKILL.md` | Repository root | Root-level project or runtime surface. |
 | `/.env.local.template` | Repository root | Root-level project or runtime surface. |
@@ -281,6 +282,7 @@ Indexed active tracked paths: **1291**
 | `/docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_GATE_REPAIR_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_PRIVATE_BACKUP_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |

@@ -17,6 +17,7 @@ def _load_route_module(module_name: str):
     spec = importlib.util.spec_from_file_location(f"tests.{module_name}_route_enrichment", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module.__name__] = module
     spec.loader.exec_module(module)
     return module
 
@@ -30,7 +31,7 @@ class _FakeSearchEngine:
         self.weight_visual = 0.4
         self.weight_audio = 0.1
 
-    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
+    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None, **kwargs):
         return [
             {
                 "score": 0.51,
@@ -44,7 +45,7 @@ class _FakeSearchEngine:
             }
         ]
 
-    def search_text(self, query: str, top_k: int):
+    def search_text(self, query: str, top_k: int, **kwargs):
         return [
             {
                 "score": 0.72,

@@ -1424,6 +1424,8 @@ the failure is not currently visible.
   repeat ownership and contract audit of fail-closed Qdrant observation before
   any scope assembly or runnable planning. Planning/persistence, command
   parsing, approval, jobs/tokens, process control, and cleanup remain closed.
+- Fail-closed Qdrant observation boundary audit (2026-07-16): three independent read-only traces determined that no existing helper satisfies the passive, fail-closed, four-collection observer contract. The audit defined loopback HTTP REST transport, `qdrant-client` versioning, and the fail-closed `QdrantObservation` shape for the four canonical collections, with no Qdrant service or configured data contacted or changed. Evidence: `docs/diagnostics/R07_QDRANT_OBSERVATION_BOUNDARY_AUDIT_2026-07-16.md`.
+- Fail-closed Qdrant observer seam implementation (2026-07-16): implemented the import-pure, passive, fail-closed Qdrant observer in `cli/clean_memory_qdrant.py` and `tests/unit/test_clean_memory_qdrant.py`. The observer validates configuration digests and limits error codes before querying loopback HTTP REST endpoints for the four collections, mapping unreachable, connection, timeout, 404, or 500 status results to `exists=False` target records. Fingerprints are calculated deterministically by scrolling point payloads and IDs. Passed 7 focused unit tests, 557 clean-memory tests, the full 4018-test private gate, compilation, import purity, and document authority. No live Qdrant, configured data, or cleanup target was modified. Evidence: `docs/diagnostics/R07_QDRANT_OBSERVER_CHECKPOINT_2026-07-16.md`. R-07 remains `IN_PROGRESS`; the next bounded mission is to reconcile identity database tests to temporary roots under R-08.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery
@@ -2004,6 +2006,10 @@ Full ingestion, destructive cleanup, installer rebuild, branch deletion,
 tagging, and public push remain separate approval gates.
 
 ## Change Log
+
+- 2026-07-16: Checkpointed the fail-closed R-07 Qdrant observer seam at `ab3622c9` after 7 focused tests, 557 clean-memory tests, the full 4018-test private gate, compilation, import purity, and doc linting. Advanced next to R-08 identity route reconciliation.
+
+- 2026-07-16: Completed the read-only R-07 Qdrant observation boundary audit checkpoint and committed it in docs commit `docs: R-07 Qdrant observation boundary audit checkpoint` to verify endpoint, transport, and fail-closed collection patterns.
 
 - 2026-07-15: Checkpointed the private R-07 authenticated protected-membership
   composition authority at `d20a74ba` after 265 focused and 1,941 zero-drop

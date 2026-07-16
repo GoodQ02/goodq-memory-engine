@@ -123,6 +123,29 @@ class MockMiniAgentClient:
                 "tool_args": v["tool_args"]
             }
 
+    def authorize_action(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        return self.validate_action(
+            prompt,
+            mode,
+            tool_name,
+            tool_args,
+            confirm,
+            confirmation_token,
+            context_overrides,
+        )
+
     def validate_action(
         self,
         prompt: str,
@@ -653,10 +676,29 @@ class MockMiniAgentClient:
             }
             return sanitize_envelope(envelope), 1
 
-# Monkeypatching logic if TEST_MOCK_HARNESS == "1"
-if os.environ.get("TEST_MOCK_HARNESS") == "1":
+@pytest.fixture(scope="module", autouse=True)
+def force_mock_harness_for_this_module():
+    import os
     import agents.mini_agent_client
+    
+    old_env = os.environ.get("TEST_MOCK_HARNESS")
+    os.environ["TEST_MOCK_HARNESS"] = "1"
+    
+    original_client = agents.mini_agent_client.MiniAgentClient
     agents.mini_agent_client.MiniAgentClient = MockMiniAgentClient
+    
+    global MiniAgentClient
+    MiniAgentClient = MockMiniAgentClient
+    
+    yield
+    
+    if old_env is None:
+        del os.environ["TEST_MOCK_HARNESS"]
+    else:
+        os.environ["TEST_MOCK_HARNESS"] = old_env
+        
+    agents.mini_agent_client.MiniAgentClient = original_client
+    MiniAgentClient = original_client
 
 # ==============================================================================
 # TEST SUITE

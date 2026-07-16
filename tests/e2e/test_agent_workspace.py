@@ -901,7 +901,7 @@ def test_f7_03_agents_md_pointer_uses_correct_format():
     content = open(AGENTS_MD_PATH, "r", encoding="utf-8", errors="ignore").read()
     # Path should not contain hardcoded C: or L: directly in the text body describing the workspace path
     # Check that any references to My Drive include standard path notation
-    assert "My Drive/_AGENT" in content or "My Drive\\_AGENT" in content or "%USERPROFILE%" in content or "%SystemDrive%" in content
+    assert "My Drive/_AGENT" in content or "My Drive\\_AGENT" in content or "%USERPROFILE%" in content or "%SystemDrive%" in content or "%SYSTEMDRIVE%" in content
 
 def test_f7_04_agents_md_pointer_is_prominent():
     """Verify the pointer in AGENTS.md is prominently located."""

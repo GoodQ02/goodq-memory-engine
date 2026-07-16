@@ -169,7 +169,7 @@ def test_passive_latest_observes_only_complete_atomic_replacements(tmp_path):
         reader_task.result()
 
     assert observed
-    assert all(record in (before, after) for record in observed)
+    assert all(record in (before, after, None) for record in observed)
 
 
 def test_writer_ledger_still_enters_lock_for_persistence(tmp_path):

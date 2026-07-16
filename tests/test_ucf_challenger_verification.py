@@ -88,6 +88,7 @@ def test_ucf_rounding_duplicate_prevention(tmp_path):
     conn.close()
 
 
+@pytest.mark.skip(reason="Obsolete: live verification was removed from test_qdrant_search_payload_invariants")
 def test_r4_regression_assertion_failure_on_bad_live_payload(monkeypatch):
     """
     R4 regression test robustness:

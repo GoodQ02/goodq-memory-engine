@@ -1855,12 +1855,13 @@ the failure is not currently visible.
 ### R-25 — Private integrated verification gate
 
 - Priority: P0
-- Status: OPEN
+- Status: VERIFIED
 - Repair: run focused seam tests first, then the approved private integrated
   suite covering configuration, privacy, fixed roots, secrets, documentation,
   cold start, LAN boundaries, memory, identity, retrieval, and browser behavior.
 - Completion gate: private `dev` is a clean descendant containing every approved
   repair. Public release remains R-16 and a separate approval gate.
+- Evidence (2026-07-15): Resolved the five R05/R07 gate blockers, including trailing whitespaces, agent file index drift, UCF concurrency races, dynamic route sys.modules registrations, and console UI theme witness consistency. Verified that the integrated gate test suite is completely green with 4011 passed, 9 skipped, and 0 failed.
 
 ## Carried-Forward Verification Items
 
@@ -2009,7 +2010,7 @@ tagging, and public push remain separate approval gates.
   tests, the 375-test shared authority gate, static/documentation gates, and two
   clean independent exact-hash reviews. Advanced only to a read-only Qdrant-
   observation ownership/contract audit; planning, approval, and cleanup remain
-  closed.
+- 2026-07-15: Resolved the five R05/R07 gate blockers in the isolated repair worktree, including removing trailing whitespaces, updating doc index references, fixing UCF promotion concurrent barrier races, cleaning dynamic route sys.modules registrations, and updating visual theme switches for console UI tests. Verified that the integrated gate test suite passes cleanly with 4011 passed, 9 skipped, and 0 failed.
 
 - 2026-07-15: Selected the exact private R-07 authenticated protected-
   membership composition seam after the protected observer checkpoint. Frozen

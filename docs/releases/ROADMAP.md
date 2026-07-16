@@ -1424,6 +1424,7 @@ the failure is not currently visible.
   repeat ownership and contract audit of fail-closed Qdrant observation before
   any scope assembly or runnable planning. Planning/persistence, command
   parsing, approval, jobs/tokens, process control, and cleanup remain closed.
+- Fail-closed Qdrant observation boundary audit (2026-07-16): three independent read-only traces determined that no existing helper satisfies the passive, fail-closed, four-collection observer contract. The audit defined loopback HTTP REST transport, `qdrant-client` versioning, and the fail-closed `QdrantObservation` shape for the four canonical collections, with no Qdrant service or configured data contacted or changed. Evidence: `docs/diagnostics/R07_QDRANT_OBSERVATION_BOUNDARY_AUDIT_2026-07-16.md`. R-07 remains `IN_PROGRESS`; the next bounded mission is to implement the fail-closed Qdrant observer in `cli/clean_memory_qdrant.py` and `tests/unit/test_clean_memory_qdrant.py`, keeping planning/persistence, command parsing, approval, jobs/tokens, process control, and cleanup closed.
 - Public impact: RELEASE_REQUIRED
 
 ### R-08 — Reconcile identity routes and background-job recovery

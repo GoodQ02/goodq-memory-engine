@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1289**
+Indexed active tracked paths: **1291**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -283,6 +283,7 @@ Indexed active tracked paths: **1289**
 | `/docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_PRIVATE_BACKUP_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
@@ -292,6 +293,7 @@ Indexed active tracked paths: **1289**
 | `/docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_RECHECK_DECISION_2026-07-15.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |

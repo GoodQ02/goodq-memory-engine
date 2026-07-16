@@ -156,10 +156,10 @@ def _write_process_runner(tmp_path: Path) -> Path:
 
                     client._execute_promote_ucf_to_memory = fail_first_promotion
                 if ready_path != "-":
-                    original_validate = client.validate_action
+                    original_validate_impl = client._validate_action_impl
 
-                    def synchronized_validate(*args, **kwargs):
-                        result = original_validate(*args, **kwargs)
+                    def synchronized_validate_impl(*args, **kwargs):
+                        result = original_validate_impl(*args, **kwargs)
                         if kwargs.get("confirmation_token") and result[1] == 0:
                             Path(ready_path).write_text("ready", encoding="utf-8")
                             deadline = time.monotonic() + 15.0
@@ -169,7 +169,7 @@ def _write_process_runner(tmp_path: Path) -> Path:
                                 time.sleep(0.01)
                         return result
 
-                    client.validate_action = synchronized_validate
+                    client._validate_action_impl = synchronized_validate_impl
                 return client
 
             argv = [mode, "--epoch-id", epoch_id, "--video-hash", video_hash]
@@ -702,8 +702,6 @@ def test_concurrent_execute_processes_claim_confirmation_token_once(tmp_path):
     try:
         deadline = time.monotonic() + 20.0
         while not all(path.exists() for path in ready_paths):
-            if any(process.poll() is not None for process in processes):
-                break
             if time.monotonic() >= deadline:
                 raise TimeoutError("execute processes did not reach the validation barrier")
             time.sleep(0.02)

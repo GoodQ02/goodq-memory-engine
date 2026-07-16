@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # GPU WSL Ingestion Monitoring & Verification Report (Run ID: d5008027-9d54-48f0-8631-cd46620273bf)
 
 ## Outcome Classification

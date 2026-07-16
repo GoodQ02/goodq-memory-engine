@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -71,7 +72,11 @@ def test_search_audio_uses_audio_collection_and_clap_text_encoder(
 
     monkeypatch.setattr(engine, "_get_qdrant_client", _fake_get_qdrant_client)
 
-    results = engine.search_audio("crowd laughter", top_k=4)
+    results = engine.search_audio(
+        "crowd laughter",
+        top_k=4,
+        retrieval_context="system.healthcheck",
+    )
 
     assert observed["collection"] == "goodq_audio"
     assert observed["top_k"] == 4
@@ -94,7 +99,7 @@ def test_search_multimodal_includes_audio_results_when_requested(
     monkeypatch.setattr(
         engine,
         "search_text",
-        lambda query, top_k: [
+        lambda query, top_k, *, retrieval_context: [
             {
                 "id": "video_001:101",
                 "score": 0.8,
@@ -105,7 +110,7 @@ def test_search_multimodal_includes_audio_results_when_requested(
     monkeypatch.setattr(
         engine,
         "search_audio",
-        lambda query, top_k: [
+        lambda query, top_k, *, retrieval_context: [
             {
                 "id": "video_001:101",
                 "score": 0.6,
@@ -123,6 +128,7 @@ def test_search_multimodal_includes_audio_results_when_requested(
         "awkward phone call",
         top_k=3,
         modalities=["text", "audio"],
+        retrieval_context="system.healthcheck",
     )
 
     assert [result["payload"]["scene_id"] for result in results] == [101, 202]
@@ -144,20 +150,26 @@ def test_search_multimodal_defaults_stay_text_and_visual_only(
     monkeypatch.setattr(
         engine,
         "search_text",
-        lambda query, top_k: calls.append(("text", top_k)) or [],
+        lambda query, top_k, *, retrieval_context: calls.append(("text", top_k)) or [],
     )
     monkeypatch.setattr(
         engine,
         "search_visual",
-        lambda query, top_k: calls.append(("visual", top_k)) or [],
+        lambda query, top_k, *, retrieval_context: calls.append(("visual", top_k)) or [],
     )
     monkeypatch.setattr(
         engine,
         "search_audio",
-        lambda query, top_k: (_ for _ in ()).throw(AssertionError("audio should not be called")),
+        lambda query, top_k, *, retrieval_context: (_ for _ in ()).throw(
+            AssertionError("audio should not be called")
+        ),
     )
 
-    results = engine.search_multimodal("office banter", top_k=4)
+    results = engine.search_multimodal(
+        "office banter",
+        top_k=4,
+        retrieval_context="system.healthcheck",
+    )
 
     assert results == []
     assert calls == [("text", 10), ("visual", 10)]
@@ -168,8 +180,16 @@ def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
 ) -> None:
     engine = _engine()
 
-    monkeypatch.setattr(engine, "search_text", lambda query, top_k: [])
-    monkeypatch.setattr(engine, "search_visual", lambda query, top_k: [])
+    monkeypatch.setattr(
+        engine,
+        "search_text",
+        lambda query, top_k, *, retrieval_context: [],
+    )
+    monkeypatch.setattr(
+        engine,
+        "search_visual",
+        lambda query, top_k, *, retrieval_context: [],
+    )
     monkeypatch.setattr(
         engine,
         "encode_text_for_audio_search",
@@ -181,6 +201,7 @@ def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
         "couch",
         top_k=3,
         modalities=["audio"],
+        retrieval_context="system.healthcheck",
     )
 
     assert results == []
@@ -191,20 +212,31 @@ def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
     }
 
 
-def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_visual_query_loader_uses_safetensors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     engine = _engine()
     calls: list[dict[str, object]] = []
+    snapshot = (tmp_path / "pinned-clip-snapshot").resolve()
+    search_module = sys.modules["retrieval.multimodal_search"]
+    monkeypatch.setattr(
+        search_module,
+        "resolve_pinned_model_snapshot",
+        lambda *_args, **_kwargs: snapshot,
+    )
 
     class _FakeProcessor:
         @classmethod
-        def from_pretrained(cls, model_id: str):
-            assert "clip-vit" in model_id
+        def from_pretrained(cls, model_id: str, **kwargs):
+            assert model_id == str(snapshot)
+            assert kwargs == {"local_files_only": True}
             return cls()
 
     class _FakeModel:
         @classmethod
         def from_pretrained(cls, model_id: str, **kwargs):
-            assert "clip-vit" in model_id
+            assert model_id == str(snapshot)
             calls.append(kwargs)
             return cls()
 
@@ -218,7 +250,7 @@ def test_visual_query_loader_uses_safetensors(monkeypatch: pytest.MonkeyPatch) -
 
     engine._load_clip_model()
 
-    assert calls == [{"use_safetensors": True}]
+    assert calls == [{"use_safetensors": True, "local_files_only": True}]
 
 
 def test_visual_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.MonkeyPatch) -> None:

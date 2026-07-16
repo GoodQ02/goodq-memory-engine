@@ -1,20 +1,22 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-03 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Control Agent & Self-Healing System
 
-**Status:** ⚠️ CONDITIONAL - Runtime disabled by default unless an `llm_client` is explicitly injected  
-**Last Updated:** May 3, 2026
+**Status:** CONDITIONAL - disabled by default; explicit local activation only
+**Last Updated:** July 11, 2026
 **Version:** 1.0.0
 
 ---
 
 ## Overview
 
-The Control Agent is GoodQ4All's conditional monitoring, diagnosis, and healing subsystem. In the current runtime contract, it requires explicit `llm_client` injection to initialize; default CLI flows persist a deterministic disabled state instead of attempting best-effort auto-init.
+The Control Agent is GoodQ4All's conditional monitoring, diagnosis, and healing subsystem. `cli.run_ingestion` keeps it disabled by default, but an operator may explicitly activate it with `--enable-control-agent`, `control_agent.enabled: true`, or `GOODQ_CONTROL_AGENT_ENABLED=1`. That CLI path may construct the approved local `LLMClient`; `cli.watchdog` remains injection-only.
 
-Current reality: the active control surface is observer-only. It can summarize and trend existing recurrence artifacts, but it cannot heal, mutate configs, trigger ingestion, or take execution authority.
+Current reality has two separate surfaces. The recurrence report/API surface is always read-only and never activates `ControlAgent`. The dormant in-process Control Agent can diagnose and recommend only after explicit activation. Config mutation additionally requires `--enable-auto-healing` and `control_agent.dry_run: false`; absent all three gates, healing remains non-mutating.
+
+The Hermes governor MCP is a separate preflight-only advisor. It may evaluate a proposed action, but it does not execute tools, activate Control Agent, mint confirmations, or substitute for MiniAgent approval/audit evidence.
 
 ---
 
@@ -272,12 +274,12 @@ error_patterns:
 
 ### In Ingestion Pipeline (cli/run_ingestion.py)
 
-Control Agent integration points exist, but default runtime startup records an explicit disabled state when no `llm_client` is injected.
+Control Agent integration points exist, but default runtime startup records an explicit disabled state. Activation is opt-in; missing model configuration is reported separately as `disabled_no_llm_client`.
 
 #### 1. Startup State Persistence
 ```python
-control_agent_status = "disabled_no_llm_client"
-control_agent_reason = "ControlAgent requires injected llm_client"
+control_agent_status = "disabled"
+control_agent_reason = "Control Agent is disabled by default (not activated)"
 ```
 
 #### 2. Step-Level Healing/Learning (Conditional)
@@ -322,8 +324,9 @@ if control_agent:
 ## Usage Examples
 
 These examples describe direct module-level `ControlAgent` APIs after an
-operator has explicitly injected an approved local `llm_client`. They are not
-the canonical CLI/watchdog runtime path.
+operator has explicitly injected an approved local `llm_client`. The canonical
+ingestion CLI can instead construct that client only after an explicit
+activation gate; Watchdog does not.
 
 ### Manual Diagnosis
 
@@ -351,10 +354,10 @@ print(diagnosis)
 # }
 ```
 
-### Conditional Auto-Heal API (Disabled in Canonical Runtime)
+### Explicit Opt-In Auto-Heal API
 
 ```python
-# Only valid after explicit local llm_client injection outside canonical ingest.
+# Requires explicit activation, --enable-auto-healing, and dry_run=false.
 result = agent.auto_heal_failure(
     error=Exception("CUDA OOM during processing"),
     step_name="face_embed",
@@ -400,8 +403,8 @@ agent.generate_report(
 2. Control Agent module availability may be checked
    -> availability is not activation
 
-3. No injected llm_client is present by default
-   -> runtime records disabled_no_llm_client
+3. No activation source is enabled by default
+   -> runtime records disabled without constructing an LLM client
 
 4. Optional failures are persisted in truth surfaces
    -> step_runs.jsonl, run warnings, manifests, temporal index
@@ -409,7 +412,8 @@ agent.generate_report(
 5. Read-only recurrence tools inspect persisted artifacts
    -> summaries, comparisons, recommendations, trends
 
-6. No automatic config mutation, command execution, ingestion trigger, or healing occurs
+6. Explicit activation may enable diagnosis only
+   -> config mutation still requires --enable-auto-healing and dry_run=false
 ```
 
 ---
@@ -419,9 +423,11 @@ agent.generate_report(
 ### Enable/Disable Control Agent
 
 Current default CLI/watchdog startup does not enable the Control Agent just
-because the module imports successfully. Runtime activation requires an
-explicit injected `llm_client`; otherwise ingestion records
-`disabled_no_llm_client` and continues deterministically without auto-healing.
+because the module imports successfully. `cli.run_ingestion` activation requires
+one explicit source: `--enable-control-agent`, `control_agent.enabled: true`, or
+`GOODQ_CONTROL_AGENT_ENABLED=1`. Watchdog still requires an injected
+`llm_client`. Without activation, ingestion records `disabled` and continues
+deterministically without constructing an LLM client.
 
 The import guard in `cli/run_ingestion.py` only records whether the Control
 Agent code is available:
@@ -429,9 +435,11 @@ Agent code is available:
 CONTROL_AGENT_AVAILABLE = True  # module imported, not runtime-enabled
 ```
 
-To enable Control Agent behavior, wire an approved local `llm_client` injection
-path and verify the resulting `control_agent_status` in the run context. Do not
-treat `CONTROL_AGENT_AVAILABLE` as a user-facing feature flag.
+For diagnostic-only CLI activation, use `--enable-control-agent`; the CLI builds
+the approved local client and defaults `control_agent.dry_run` to true. Config
+mutation requires the separate `--enable-auto-healing` flag **and**
+`control_agent.dry_run: false`. Verify `control_agent_status` in the run context.
+Do not treat `CONTROL_AGENT_AVAILABLE` as a user-facing feature flag.
 
 ### Config Healer Settings
 
@@ -489,7 +497,7 @@ ORDER BY timestamp DESC;
 **Overhead:** Low in expected operation; verify per-run timing artifacts for current values.
 
 **Benefits:**
-- Faster diagnosis and triage when initialized with an injected `llm_client`
+- Faster diagnosis and triage after explicit activation with an approved local client
 - Reduced manual intervention when healing rules match known failures
 - Explicit control-plane status persistence even when disabled
 
@@ -501,8 +509,9 @@ ORDER BY timestamp DESC;
 
 ✅ Control Agent module imports and storage schemas are present  
 ✅ Run artifacts persist explicit control-plane state (`control_agent_status`)  
-⚠️ Default CLI/watchdog flows persist `disabled_no_llm_client` unless `llm_client` is injected  
-⚠️ Auto-healing, learning, and report generation are active only when initialization succeeds
+✅ Default ingestion does not construct an LLM client or enable Control Agent
+✅ Watchdog remains injection-only
+⚠️ Diagnostic activation is explicit; mutation additionally requires `--enable-auto-healing` and `dry_run: false`
 
 **Verification guidance:**
 - Trust per-run artifacts (`control_agent_status`, `control_agent_reason`) over static document claims.
@@ -543,8 +552,8 @@ ls <GOODQ_DATA_ROOT>\GoodQ_Data\recovery.db
 
 Check logs for:
 ```
-[CONTROL] Control Agent disabled: no llm_client injection
-control_agent_status=disabled_no_llm_client
+[CONTROL] Control Agent disabled: not activated
+control_agent_status=disabled
 ```
 
 ### Database Locked
@@ -569,6 +578,6 @@ agent.recovery_db.conn.close()
 
 ## Conclusion
 
-The Control Agent subsystem is production code with explicit activation semantics: default CLI/watchdog flows persist a deterministic disabled state until an injected `llm_client` integration is provided.
+The Control Agent subsystem is production code with explicit activation semantics. Default CLI and Watchdog flows stay disabled. The ingestion CLI can build a local client only after an explicit activation source; Watchdog remains injection-only; mutation remains dormant until the separate auto-healing and non-dry-run gates are both present.
 
 GoodQ4All remains unattended-capable through watchdog + artifact-backed observability, with control-plane state declared in run metadata for each run.

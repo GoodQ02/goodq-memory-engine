@@ -8,6 +8,8 @@ import os
 import sqlite3
 import uuid
 
+from steps.common import sqlite_read_authority
+
 
 def _vector_debug_enabled() -> bool:
     val = os.environ.get("GOODQ_VECTOR_DEBUG", "")
@@ -268,7 +270,11 @@ def attach_provenance_to_hits(db_path: Optional[str], hits: List[Dict[str, Any]]
     modality_candidates = _uniq(modality_candidates)
 
     try:
-        conn = sqlite3.connect(db_path, timeout=0.2, check_same_thread=False)
+        conn = sqlite_read_authority.open_sqlite_read_connection(
+            db_path,
+            timeout=0.2,
+            check_same_thread=False,
+        )
         conn.row_factory = sqlite3.Row
     except Exception:
         return
@@ -277,8 +283,8 @@ def attach_provenance_to_hits(db_path: Optional[str], hits: List[Dict[str, Any]]
         if not _table_exists(conn, "memory_commit_events"):
             return
         try:
-            cur = conn.execute("PRAGMA table_info('memory_commit_events')")
-            mce_cols = {row[1] for row in cur.fetchall()}
+            cur = conn.execute("SELECT * FROM memory_commit_events LIMIT 0")
+            mce_cols = {column[0] for column in (cur.description or ())}
         except Exception:
             mce_cols = set()
         mce_select = (

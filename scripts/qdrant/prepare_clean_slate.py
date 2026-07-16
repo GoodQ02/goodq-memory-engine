@@ -34,6 +34,8 @@ HOST_KEYWORDS = [
     "cli\\run_ingestion",
     "run_ingestion",
     "MiniAgentClient",
+    "cli.ucf_promotion",
+    "ucf_promotion",
     "promote_pilot",
     "validate_ucf"
 ]

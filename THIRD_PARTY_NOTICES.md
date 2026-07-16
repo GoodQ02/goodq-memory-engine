@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE_LEGAL_NOTICE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Third-Party Notices
 
 This repository includes, references, or can bootstrap third-party software,
@@ -108,5 +112,5 @@ It is **not** intended to ship:
 
 - [`README.md`](README.md)
 - [`configs/model_registry.yaml`](configs/model_registry.yaml)
-- [`docs/bootstrap/OPEN_SOURCE_READINESS_STATUS.md`](docs/bootstrap/OPEN_SOURCE_READINESS_STATUS.md)
-- [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- [`docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md`](docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
+- [`docs/archive/releases/SHIP_PROFILE.md`](docs/archive/releases/SHIP_PROFILE.md)

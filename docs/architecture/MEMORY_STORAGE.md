@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Memory & Storage Architecture
 
-**Last Updated:** May 21, 2026
+**Last Updated:** 2026-07-11
 **Status:** ✅ Operational, with epoch-scoped SQLite + Qdrant as the active storage contract
 
 ---
@@ -15,7 +15,8 @@ GoodQ4All uses a layered memory architecture:
 - epoch-scoped SQLite for canonical relational storage
 - Qdrant for canonical vector retrieval
 - optional FAISS parity/fallback where configured
-- scene manifests and temporal indexes as durable artifact truth
+- scene manifests and temporal indexes as durable artifact evidence, distinct
+  from active memory under isolation
 
 This document describes the current storage contract, not historical storage experiments.
 
@@ -23,7 +24,7 @@ This document describes the current storage contract, not historical storage exp
 
 ## Canonical Storage Roots
 
-### Unified Data Root
+### Artifact and Epoch Root
 
 ```text
 ${GOODQ_DATA_ROOT}/GoodQ_Data
@@ -105,8 +106,13 @@ http://localhost:6333
 **Storage Root**
 
 ```text
-${GOODQ_DATA_ROOT}/GoodQ_Data/qdrant_storage
+${GOODQ_DATA_ROOT}/qdrant_storage
 ```
+
+For the canonical desktop/config authority, Qdrant storage is a sibling of
+`GoodQ_Data`. This does not equate that root with the packaged installer's
+ProgramData layout; installer/package path reconciliation remains a separate
+release concern.
 
 **Canonical Collections**
 - `goodq_text_epoch_<epoch>`
@@ -163,7 +169,40 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/processing/<video_name>/
 ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/output/scene_ingest_results.json
 ```
 
-These files are part of the memory system, not just debug byproducts.
+These files are durable evidence in the memory system, not just debug
+byproducts. Their presence does not by itself make their contents active or
+promoted memory.
+
+---
+
+## Governed Materialization Lifecycle
+
+With `ingestion_isolation: true`, `scene_manifest.json` is per-video artifact
+evidence. The epoch ledger is `ucf/ucf_ledger.db`. `ucf_ledger.db` is the
+lifecycle and evidence authority. Isolated ingest stages UCF context frames
+there and Qdrant points with exact
+`ucf_promotion_status = staged`. Ingest does not directly populate active
+`memory.db` or `knowledge_graph.db` in this mode.
+
+Promotion is explicit and scope-bound:
+
+1. Explicit `validate_ucf_frames` validation must occur first.
+2. A human-gated `promote_ucf_to_memory` operation then acts on one exact
+   `video_hash` plus `epoch_id` scope.
+3. Promotion materializes active `memory.db` and `knowledge_graph.db` from the
+   governed evidence.
+
+Within `ucf_ledger.db`, the status mutation, transition audit, and durable
+Qdrant outbox enqueue share one immediate SQLite transaction. That transaction
+does not make the active SQLite stores and Qdrant one cross-store ACID unit.
+Active-view cleanup after a materialization failure is compensating and
+recoverable. Post-commit Qdrant status delivery and reconciliation are separate
+durable, recoverable obligations.
+`promotion_committed_sync_pending` therefore means the active materialization
+and UCF commit succeeded while durable Qdrant status delivery is still pending.
+
+Default active retrieval admits only promoted evidence. Explicit raw audit
+queries may inspect other UCF lifecycle states without making them active.
 
 ---
 
@@ -225,7 +264,7 @@ Fresh scene manifests may include:
 - `speaker_voice_signatures`
 - `speaker_voice_signature_meta`
 
-### KG-Level Outputs
+### Separate Identity-Workflow Outputs
 
 The KG may include:
 - `speaker_pattern` nodes
@@ -234,7 +273,11 @@ The KG may include:
 - `identity_supported` edges
 - `identity_evidence` edges
 
-Those are now part of memory truth. They should not be treated as optional commentary.
+Governed UCF promotion materializes active video, scene, segment, and evidence
+KG projections. It does not by itself prove or materialize the speaker-pattern
+or identity edges listed above. Manifest identity fields remain inputs to the
+separate governed identity-ledger and stitching workflows; their outputs become
+active identity truth only when those workflows execute and persist them.
 
 ---
 
@@ -273,10 +316,10 @@ Current retrieval should treat Qdrant as the canonical vector surface, with opti
 
 ### Write Targets
 
-Ingestion writes to:
-- SQLite scene/KG surfaces
-- Qdrant vector collections
-- FAISS only when configured as an additional target
+Non-isolated ingestion may write active SQLite scene/KG surfaces directly.
+Under `ingestion_isolation: true`, ingestion instead stages UCF and Qdrant
+evidence; the governed promotion operation owns active SQLite materialization.
+FAISS remains an additional target only when configured.
 
 For audio retrieval health, count Qdrant audio payloads by matching `run_id`,
 not by `scene_id` alone. The supported CLAP audio provenance marker includes
@@ -291,13 +334,15 @@ Storage docs must not describe a FAISS-first world or a root-level DB world as i
 
 ## Backup And Recovery
 
-Backups should be taken from the epoch-scoped roots:
+Backups should cover the configured canonical roots:
 
 - `memory.db`
 - `knowledge_graph.db`
 - Qdrant snapshots
 
-The backup target itself is operationally configurable, but the source of truth is the epoch tree.
+The backup target itself is operationally configurable. Epoch SQLite/artifact
+truth lives under `GoodQ_Data`, while canonical desktop/config Qdrant storage
+lives at the sibling root defined above.
 
 ---
 

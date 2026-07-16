@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
-from api.routes import control_recurrence, ingest, media, meta, runtime, scenes, search, system, timeline, summary
+from api.route_effects import install_route_effect_authority
+from api.routes import control_recurrence, identity, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
 
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +36,7 @@ _RETRO_CONSOLE_DIR = _REPO_ROOT / _UI_SUBDIR / "retro_console_v1"
 _STITCHING_WORKBENCH_DIR = _REPO_ROOT / _UI_SUBDIR / "stitching_workbench"
 _SUMMARY_CONSOLE_DIR = _REPO_ROOT / _UI_SUBDIR / "summary_console"
 _JUSTIFICATION_DIR = _REPO_ROOT / _UI_SUBDIR / "justification_v1"
+_IDENTITY_WORKBENCH_DIR = _REPO_ROOT / _UI_SUBDIR / "identity_workbench"
 
 
 def _resolve_allowed_origins() -> List[str]:
@@ -83,6 +85,7 @@ app.include_router(summary.router)
 app.include_router(ingest.router)
 app.include_router(runtime.router)
 app.include_router(control_recurrence.router)
+app.include_router(identity.router)
 
 if _OPERATOR_CONSOLE_DIR.exists():
     app.mount(
@@ -103,6 +106,13 @@ if _STITCHING_WORKBENCH_DIR.exists():
         "/ui/stitching_workbench",
         StaticFiles(directory=str(_STITCHING_WORKBENCH_DIR), html=True),
         name="stitching_workbench",
+    )
+
+if _IDENTITY_WORKBENCH_DIR.exists():
+    app.mount(
+        "/ui/identity_workbench",
+        StaticFiles(directory=str(_IDENTITY_WORKBENCH_DIR), html=True),
+        name="identity_workbench",
     )
 
 if _SUMMARY_CONSOLE_DIR.exists():
@@ -168,6 +178,9 @@ try:
     api_loaders.configure_from_cfg(_CFG)
 except Exception as e:
     logger.warning(f"DataLoader config injection failed: {e}")
+
+
+install_route_effect_authority(app, static_root=_REPO_ROOT / _UI_SUBDIR)
 
 
 # Legacy UI/log static mounts intentionally disabled.

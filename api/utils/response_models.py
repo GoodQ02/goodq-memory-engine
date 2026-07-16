@@ -3,10 +3,11 @@ Pydantic response models for GoodQ4All API.
 Provides type-safe, validated response schemas for all endpoints.
 """
 from __future__ import annotations
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Literal, Optional, Union
+from pydantic import BaseModel, ConfigDict, Field
 
 SceneId = int | str
+INGEST_REQUEST_ID_PATTERN = r"^ingest_\d{8}T\d{6}Z_[0-9a-f]{8}$"
 
 
 def default_confidence_payload() -> Dict[str, Any]:
@@ -285,28 +286,57 @@ class IngestResponse(SystemMutationResponse):
     job_id: Optional[str] = None
 
 
-class IngestSubmitRequest(BaseModel):
-    """Truthful ingest facade submit request."""
+class _StrictIngestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class IngestPrepareRequest(_StrictIngestRequest):
+    """Prepare a local file copy for an exact-scope operator decision."""
+
+    action: Literal["prepare"]
     file_path: str
-    confirmation_token: str
     policy_profile: str
-    priority: int = 0
-    options: Dict[str, Any] = Field(default_factory=dict)
+
+
+class IngestConfirmRequest(_StrictIngestRequest):
+    """Confirm one previously prepared request."""
+
+    action: Literal["confirm"]
+    request_id: str = Field(pattern=INGEST_REQUEST_ID_PATTERN)
+    confirmation_token: str
+
+
+class IngestCancelRequest(_StrictIngestRequest):
+    """Cancel one previously prepared request."""
+
+    action: Literal["cancel"]
+    request_id: str = Field(pattern=INGEST_REQUEST_ID_PATTERN)
+    confirmation_token: str
+
+
+IngestSubmitRequest = Union[
+    IngestPrepareRequest,
+    IngestConfirmRequest,
+    IngestCancelRequest,
+]
 
 
 class IngestSubmitResponse(BaseModel):
     """Truthful ingest facade submit response."""
     request_id: str
     status: str
-    source_path: str
-    original_name: str
-    staged_path: Optional[str] = None
-    policy_profile: str
-    queue_depth_snapshot: int
-    watchdog_detection_window_seconds: int
-    pickup_estimate: str
-    budget_scope: str
-    budget_status: str
+    original_name: Optional[str] = None
+    file_sha256: Optional[str] = None
+    size_bytes: Optional[int] = None
+    policy_profile: Optional[str] = None
+    confirmation_required: bool = False
+    confirmation_token: Optional[str] = None
+    confirmation_expires_at: Optional[str] = None
+    queue_depth_snapshot: Optional[int] = None
+    watchdog_detection_window_seconds: Optional[int] = None
+    pickup_estimate: Optional[str] = None
+    budget_scope: Optional[str] = None
+    budget_status: Optional[str] = None
     duplicate_of_run_id: Optional[str] = None
 
 
@@ -314,15 +344,16 @@ class IngestStatusResponse(BaseModel):
     """Truthful ingest facade status response."""
     request_id: str
     status: str
-    source_path: str
-    original_name: str
-    staged_path: Optional[str] = None
-    policy_profile: str
-    queue_depth_snapshot: int
-    watchdog_detection_window_seconds: int
-    pickup_estimate: str
-    budget_scope: str
-    budget_status: str
+    original_name: Optional[str] = None
+    file_sha256: Optional[str] = None
+    size_bytes: Optional[int] = None
+    policy_profile: Optional[str] = None
+    confirmation_required: bool = False
+    queue_depth_snapshot: Optional[int] = None
+    watchdog_detection_window_seconds: Optional[int] = None
+    pickup_estimate: Optional[str] = None
+    budget_scope: Optional[str] = None
+    budget_status: Optional[str] = None
     duplicate_of_run_id: Optional[str] = None
     run_id: Optional[str] = None
     error: Optional[str] = None
@@ -516,12 +547,14 @@ class SavedCollectionItem(BaseModel):
 
 class SaveCollectionRequest(BaseModel):
     """Request payload to create/update custom collections."""
-    name: str
-    description: Optional[str] = None
-    collection_type: str = "manual_playlist"
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=256)
+    description: Optional[str] = Field(default=None, max_length=4096)
+    collection_type: str = Field(default="manual_playlist", min_length=1, max_length=64)
     query_params: Dict[str, Any] = Field(default_factory=dict)
     scene_refs: List[Dict[str, Any]] = Field(default_factory=list)
-    operator_note: Optional[str] = None
+    operator_note: Optional[str] = Field(default=None, max_length=2048)
 
 
 class SaveCollectionResponse(BaseModel):

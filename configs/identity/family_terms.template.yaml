@@ -1,0 +1,29 @@
+# GoodQ Family Terms — Name Extraction Guide Template
+# =====================================================
+# PRIVATE — copy this file to the identity data path and populate it.
+# This file is gitignored and never committed.
+#
+# Default data path: ${GOODQ_DATA_ROOT}/GoodQ_Data/identity/family_terms.yaml
+# Override with env var: GOODQ_IDENTITY_PATH
+#
+# If this file is absent, the name extractor runs a frequency-only pass
+# and surfaces the top 50 capitalized terms as candidates — no names are
+# assumed. Populate this file to enable targeted mention extraction.
+
+# First names, nicknames, and given names to search for in transcripts.
+# Case-insensitive matching is applied.
+names: []
+# Example: [Joe, Joey, Sophia, Ben, Jack]
+
+# Alias map: canonical name -> list of alternate forms.
+# These are used for roster linking and display normalization.
+aliases: {}
+# Example:
+#   Dad: [Daddy, Father, Pop]
+#   Mom: [Mommy, Mother]
+#   Joe: [Joey, Little Joe]
+
+# Generic family role terms to count as name signals when no given name
+# is spoken. These are lower-confidence than given names.
+roles: []
+# Example: [Dad, Mom, Grandma, Grandpa, Uncle, Aunt]

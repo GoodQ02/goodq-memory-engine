@@ -32,11 +32,27 @@ Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu.
   ```
 
 ### 2. Ingest a Media File
-Once the Retro Memory Explorer UI loads, locate the **Upload Pad** in the header. Drag-and-drop a small audio (`.mp3`/`.wav`) or video (`.mp4`) file directly onto the yellow-dotted helipad area (or click to browse your computer).
-* **What happens behind the scenes**: The UI streams the file directly to the local sandbox import inbox drop zone, triggering the watchdog ingestion sequence automatically.
+Once the Retro Memory Explorer UI loads, locate **Stage Media** in the header.
+Drag-and-drop a small audio (`.mp3`/`.wav`) or video (`.mp4`) file onto the
+yellow-dotted area (or click to browse your computer). The UI first prepares a
+private pending copy and shows its name, size, hash prefix, and request ID. Read
+that summary, then choose **OK** to confirm or **Cancel** to remove the pending
+copy.
+
+* **What happens behind the scenes**: Preparation writes a durable request
+  record and keeps the file outside the watched inbox. The mutation route is
+  loopback-only, bounds multipart parsing and aggregate pending storage, and
+  expires abandoned requests. Interrupted staging/cancellation transitions are
+  reconciled from their durable record on the next preparation. Confirmation
+  consumes a single-use authorization
+  bound to the exact request metadata, moves the pending copy through a hidden
+  re-verification path, and atomically stages it only if its byte count and hash
+  are unchanged. Ingestion begins only when Watchdog later picks up the
+  confirmed request. Canceling removes the pending copy without exposing it to
+  Watchdog.
 
 ### 3. Observe Ingestion
-The background watchdog service detects the uploaded file and starts processing immediately. You can:
+The background watchdog service detects the staged request and begins processing when capacity is available. You can:
 * Inspect real-time status/logs in the UI, or check the **Classic Operator Console** served at `http://127.0.0.1:30000/ui/operator_console_v1/`.
 * Watch the **Retro Memory Explorer** automatically update its timeline checklist, co-occurrence graph, and keyframe inspector once ingestion completes.
 

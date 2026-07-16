@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # GoodQ CLI Reference
 
-**Last Updated:** May 1, 2026
+**Last Updated:** July 11, 2026
 **Status:** Runtime-conditional; verify behavior from current config, artifacts, and health checks
 
 This document is the active command-surface reference for the `cli/` package. It describes the current supported CLI layer, not historical launch paths.
@@ -37,18 +37,31 @@ python -m cli.run_ingestion --input-dir <path> [OPTIONS]
 - `--step-timeout`
 - `--chunk-size` (default `300.0` seconds)
 - `--chunk-overlap` (default `10.0` seconds)
+- `--enable-control-agent` (explicit diagnostic activation; default off)
+- `--enable-auto-healing` (separate mutation opt-in; inert unless Control Agent is activated)
+
+Control Agent activation may also come from `control_agent.enabled: true` or
+`GOODQ_CONTROL_AGENT_ENABLED=1`. Activation alone remains diagnostic because
+`control_agent.dry_run` defaults to true. Config mutation requires activation,
+`--enable-auto-healing`, and `control_agent.dry_run: false` together. Watchdog
+does not use these CLI gates and remains injection-only.
 
 **Progressive Ingestion & Interruption Resumption**
 - **Sliding Windows**: Video files are partitioned into timeline-sliced progressive analysis windows.
-- **Durable Checkpoints**: A state checkpoint `progressive_ingestion_state.json` tracks committed windows.
-- **Interruption Recovery**: If interrupted, the orchestrator resumes from the first uncompleted window index, skipping already-processed segments.
-- **Deduplication Scene Guard**: Bypasses SQLite database scene list rehydration on recovery, loading complete scene boundaries from the scene detection cache instead.
+- **Durable Checkpoints**: Schema-v2 `progressive_ingestion_state.json` retains each window and records `committed`, `not_applicable`, or `failed` for memory DB, knowledge graph, Phase 6 vectors, scene manifest, and temporal index.
+- **Evidence Gate**: SQLite/graph scenes and parseable artifacts are probed; the vector target requires persisted successful Phase 6/Qdrant evidence in the scene manifest.
+- **Interruption Recovery**: Resume re-probes current persistence before skipping an exact window. Failed or stale windows are retried even when later windows committed.
+- **Cleanup Gate**: The checkpoint is removed only after every current window re-probes as committed across all five targets; Qdrant completion alone does not clear recovery evidence.
+- **Isolation Safety**: With `ingestion_isolation: true`, memory DB and knowledge graph are `not_applicable`; resume reads the scene manifest without opening or creating `memory.db`.
+- **Legacy Replacement**: Old boolean checkpoints are not trusted or layered into v2. Their windows are re-evaluated and the checkpoint is replaced.
 
 **Current Truth**
 - owns orchestration
 - writes epoch-scoped artifacts
-- updates the KG in realtime
+- updates active SQLite/KG only when ingestion isolation is disabled
 - invokes Phase 6
+- leaves Control Agent disabled unless an explicit activation source is present
+- leaves config mutation disabled unless both auto-healing and non-dry-run gates are explicit
 
 **Primary Outputs**
 
@@ -76,6 +89,71 @@ python -m cli.watchdog
 - resolves inbox and processing paths from config/runtime paths
 - runs deterministically without implicitly enabling Control Agent
 - persists explicit control-plane state when no injected LLM client is present
+
+---
+
+### `python -m cli.ucf_promotion`
+
+**Purpose**
+- inspect promotion readiness without mutation
+- request a scope-bound confirmation token
+- execute promotion only in a later, explicit command
+- surface a locally committed promotion whose Qdrant projection is still pending
+- reconcile only that durable pending projection through a fresh approval token
+
+The configured `paths.db_dir` is authoritative. The requested `--epoch-id`
+must match that configured epoch, and both approval and execution require one
+exact `video_hash` plus `epoch_id` scope.
+
+**Inspect (read-only)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion inspect --epoch-id <epoch_id>
+```
+
+Add `--video-hash <video_hash>` to inspect one scope. A scope is promotable only
+when it contains validated frames and no staged frames.
+
+**Approve (issues a token; does not promote)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion approve --epoch-id <epoch_id> --video-hash <video_hash>
+```
+
+**Execute (consumes the separately issued token)**
+
+```powershell
+$env:GOODQ_CONFIRMATION_TOKEN = '<confirmation_token>'
+conda run -n goodq_core python -m cli.ucf_promotion execute --epoch-id <epoch_id> --video-hash <video_hash>
+Remove-Item Env:GOODQ_CONFIRMATION_TOKEN
+```
+
+`--confirmation-token` is also supported, but the environment variable avoids
+placing the short-lived token directly in the process command line. Tokens are
+single-use, expire after ten minutes, and are bound to the exact approved scope.
+No command both issues and consumes a token.
+
+If local promotion commits but verified Qdrant payload delivery does not, execute
+returns nonzero with `promotion_committed_sync_pending`. The local ledger retains
+an exact-scope pending outbox row; rerunning promotion is not the recovery path.
+
+**Approve Qdrant reconciliation (issues a fresh token)**
+
+```powershell
+conda run -n goodq_core python -m cli.ucf_promotion reconcile-approve --epoch-id <epoch_id> --video-hash <video_hash>
+```
+
+**Execute Qdrant reconciliation**
+
+```powershell
+$env:GOODQ_CONFIRMATION_TOKEN = '<reconciliation_token>'
+conda run -n goodq_core python -m cli.ucf_promotion reconcile-execute --epoch-id <epoch_id> --video-hash <video_hash>
+Remove-Item Env:GOODQ_CONFIRMATION_TOKEN
+```
+
+Reconciliation retries only the exact pending Qdrant projection. It does not
+repeat the lifecycle transition or materialization. The pending state clears
+only after exact-video payloads are read back with the promoted status.
 
 ---
 
@@ -375,6 +453,11 @@ The CLI truth is healthy when:
 4. `cli.print_config` reflects the effective resolved profile/path truth.
 5. `cli.memory` subcommands operate against the configured epoch database paths.
 6. `cli.control_recurrence_report` reads existing run artifacts without activating healing or mutating runtime state.
+7. `cli.ucf_promotion inspect`, `approve`, and `execute` remain separate and
+   reject a requested epoch that differs from the configured runtime epoch.
+8. `cli.ucf_promotion reconcile-approve` and `reconcile-execute` remain separate,
+   require a fresh exact-scope token, and operate only on a durable pending
+   Qdrant projection.
 
 ---
 
@@ -391,6 +474,7 @@ The CLI truth is healthy when:
 
 The CLI layer is now centered on:
 - one canonical ingest owner
+- one separated, scope-bound UCF promotion and projection-recovery path
 - deterministic monitoring/status helpers
 - read-only control recurrence reporting
 - query/retrieval helpers

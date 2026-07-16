@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: RELEASE_LEDGER -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Changelog
 
 This changelog tracks public-facing GoodQ4All milestones and release-readiness
@@ -208,17 +212,17 @@ and related canonical docs.
   with `control-recurrence-v0.4.2` plus retry attribution/coalescing
   tightening.
 - Published the `control-recurrence-v0.4.2` operator release note:
-  [`docs/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/releases/CONTROL_RECURRENCE_v0.4.2.md).
+  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.2.md).
 - Hardened direct canonical recurrence mapping for multi-video direct run roots,
   operator metadata output/workspace fallbacks, stderr-only recovered native
   retry visibility, and explicit markdown-only index warnings.
 - Published the `control-recurrence-v0.4.1` operator release note:
-  [`docs/releases/CONTROL_RECURRENCE_v0.4.1.md`](docs/releases/CONTROL_RECURRENCE_v0.4.1.md).
+  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.1.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.1.md).
 - Extended read-only control recurrence reporting to direct canonical
   `cli.run_ingestion` run roots that do not have wrapper `experiment_log.json`
   ledgers, using existing output/workspace/operator-log artifacts only.
 - Published the `control-recurrence-v0.4.0` operator release note:
-  [`docs/releases/CONTROL_RECURRENCE_v0.4.0.md`](docs/releases/CONTROL_RECURRENCE_v0.4.0.md).
+  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.0.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.0.md).
 - Added the read-only deterministic control recurrence recommendation draft
   surface for existing durable recurrence JSON reports. This includes
   `--recommendations-for <report_id>` and
@@ -241,7 +245,7 @@ and related canonical docs.
 ## [0.1.1] - 2026-04-17
 
 Reference checkpoint:
-[`docs/releases/RELEASE_0.1.1.md`](docs/releases/RELEASE_0.1.1.md)
+[`docs/archive/releases/RELEASE_0.1.1.md`](docs/archive/releases/RELEASE_0.1.1.md)
 
 ### Changed
 - Published the scene-context interpretation hardening batch after the proving witness on `03x10` and `03x11` closed cleanly at `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`.
@@ -325,7 +329,7 @@ Reference checkpoint:
 ## [0.1.0] - 2026-03-20
 
 Reference checkpoint:
-[`docs/releases/RELEASE_0.1.0.md`](docs/releases/RELEASE_0.1.0.md)
+[`docs/archive/releases/RELEASE_0.1.0.md`](docs/archive/releases/RELEASE_0.1.0.md)
 
 ### Release Highlights
 
@@ -396,7 +400,7 @@ Tag: `season1-witness-run-2026-03-09`
 
 - Formal witness-run publication bundle for the five-episode control set
 - Clean-release experiment summary in
-  [`docs/experiments/SEINFELD_EXPERIMENT_SUMMARY.md`](docs/experiments/SEINFELD_EXPERIMENT_SUMMARY.md)
+  historical `docs/experiments/SEINFELD_EXPERIMENT_SUMMARY.md` surface (retired from the active tree)
 
 ### Validated
 

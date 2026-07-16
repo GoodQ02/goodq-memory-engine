@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-22 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Ingest Orchestration Contract
 
@@ -113,6 +113,86 @@ The canonical runner must remain responsible for:
 Steps may produce data, but they do not decide whether a scene is canonical,
 materialized, or persisted as a bundle.
 
+### 4a. Progressive checkpoint truth
+
+`progressive_ingestion_state.json` is a schema-v2 recovery record. Its
+`windows` map retains one record per window index. Every window names exactly
+these persistence targets:
+
+- `memory_db`
+- `knowledge_graph`
+- `vectors`
+- `scene_manifest`
+- `temporal_index`
+
+Each target has one status: `committed`, `not_applicable`, or `failed`. A window
+is resumable only when its own `window_status` is `committed`, all five targets
+are present, and none is `failed`.
+
+Target status must come from persistence evidence, not from reaching the end of
+the window loop:
+
+- `memory_db` and `knowledge_graph` use read-only scene-presence probes when
+  those stores are enabled for the run.
+- `vectors` means the canonical Phase 6 Qdrant scene-vector target. It requires
+  persisted successful Phase 6 commit evidence for every window scene in
+  `scene_manifest.json`. It is `not_applicable` when Phase 6 retrieval is
+  disabled.
+- `scene_manifest` requires every window scene in the parseable manifest.
+- `temporal_index` requires a parseable artifact when Phase 6b is applicable.
+
+Under `ingestion_isolation: true`, active `memory.db` and knowledge-graph writes
+are deliberately suppressed, so those targets are `not_applicable`. Recovery
+must rehydrate skipped scenes from `scene_manifest.json` and must not open or
+create `memory.db` merely to resume.
+
+Resume re-runs the applicable read-only persistence and artifact probes before
+trusting a schema-v2 record. It is per exact verified window index: a failed or
+now-stale window is re-evaluated even if a later window committed, and
+rehydrated plus newly processed scene outputs are restored to timeline order
+before the manifest is written. Legacy boolean checkpoints have insufficient
+persistence evidence and are ignored; their windows are re-evaluated and
+replaced by schema v2 rather than migrated by assumption.
+
+Final cleanup uses the same evidence gate. The checkpoint may be deleted only
+when Phase 6 is complete and a fresh re-probe verifies every current window as
+committed with exactly the five targets above and no failed target. Qdrant
+completion alone is not sufficient to discard recovery evidence.
+
+### 4b. Governed isolated materialization lifecycle
+
+When `ingestion_isolation: true`, `scene_manifest.json` is durable per-video
+artifact evidence, not active or promoted memory. The epoch ledger is
+`ucf/ucf_ledger.db`. `ucf_ledger.db` is the lifecycle and evidence authority.
+Isolated ingest stages UCF context frames there and Qdrant points with
+`ucf_promotion_status = staged`; it suppresses direct writes to active
+`memory.db` and `knowledge_graph.db`.
+
+The governed lifecycle is:
+
+1. Isolated ingest produces artifact evidence and staged UCF/Qdrant records.
+2. `validate_ucf_frames` explicitly moves the exact staged scope to `validated`.
+3. After separate human approval, the human-gated `promote_ucf_to_memory`
+   operation consumes only the exact `video_hash` plus `epoch_id` scope and
+   materializes active `memory.db` and `knowledge_graph.db`.
+
+The atomicity boundary is deliberately narrower than the whole lifecycle:
+
+- The staged gate, exact validated-frame capture, UCF status mutation,
+  transition audit, and durable Qdrant outbox enqueue occur in one immediate
+  SQLite transaction in `ucf_ledger.db`.
+- The active SQLite views, the UCF ledger, and Qdrant do not share cross-store
+  ACID. If materialization fails after active-view writes begin, active-view
+  cleanup is a compensating, recoverable operation.
+- Post-commit Qdrant status delivery and reconciliation are separate durable,
+  recoverable obligations. `promotion_committed_sync_pending` means the active materialization
+  and UCF commit succeeded, but durable Qdrant status delivery remains pending;
+  a fresh human-gated reconciliation retries that obligation without replaying
+  materialization.
+- Default active retrieval exposes only evidence whose Qdrant payload is
+  `promoted`. Explicit raw audit queries may inspect staged, validated,
+  rejected, superseded, or otherwise non-active lifecycle states.
+
 ## Config Loading Contract
 
 Runtime configuration is loaded once near process start and passed downward.
@@ -174,7 +254,7 @@ The current canonical runner owns this high-level order:
 2. identify candidate video inputs
 3. detect or materialize scene boundaries
 4. run per-scene step execution
-5. persist scene bundles
+5. persist scene bundles, or stage artifact/UCF evidence under isolation
 6. trigger Phase 6a visual embeddings
 7. trigger Phase 6b cross-modal harmonization
 
@@ -331,7 +411,8 @@ In plain terms:
 - `run_ingestion.py` owns decisions
 - `step_runner.py` owns isolated execution
 - steps are passive
-- memory persistence is authoritative
+- active memory persistence is authoritative only after governed promotion when
+  isolation is enabled
 - Phase 6 is a consumer of scene/audio artifacts, not a cutover authority
 - alternate engines may only enter through explicit `off` / `shadow` / `authoritative`
   orchestration modes

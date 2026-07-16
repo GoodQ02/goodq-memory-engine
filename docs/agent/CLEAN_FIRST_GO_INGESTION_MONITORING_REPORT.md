@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Clean First-Go Ingestion Monitoring Report (Run ID: 0cb0f3f4-854a-4ba9-ad45-75011b706ecc)
 
 ## Outcome Classification

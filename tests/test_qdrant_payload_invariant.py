@@ -57,14 +57,11 @@ def test_qdrant_payload_invariant():
 def test_qdrant_search_payload_invariants(monkeypatch):
     """
     Verify that Qdrant query results return points containing 'video_id', 'scene_id',
-    and 'ucf_promotion_status' in their payloads.
-    Both mocks the query response and checks the live system if Qdrant is running.
+    and 'ucf_promotion_status' in their payloads using a deterministic transport.
     """
-    import os
     import requests
     from steps.common.qdrant_client import QdrantClient, QdrantConfig
 
-    # 1. Mocked verification (ensuring logic works and runs deterministically)
     mock_payloads = [
         {
             "video_id": "test_video",
@@ -106,11 +103,15 @@ def test_qdrant_search_payload_invariants(monkeypatch):
         return original_session_post(self, url, json=json, **kwargs)
 
     monkeypatch.setattr(requests.Session, "post", mock_session_post)
-    monkeypatch.setattr(QdrantClient, "ensure_collection", lambda self: True)
+    monkeypatch.setattr(QdrantClient, "collection_exists", lambda self: True)
 
     cfg = QdrantConfig(host="http://mock_qdrant:6333", collection="test_collection", dim=384, enabled=True)
     client = QdrantClient(cfg)
-    results = client.query([0.1] * 384, top_k=2)
+    results = client.query(
+        [0.1] * 384,
+        top_k=2,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(results) == 2
     assert len(post_called) == 1
@@ -120,26 +121,3 @@ def test_qdrant_search_payload_invariants(monkeypatch):
         assert "video_id" in payload, f"Missing video_id in payload: {payload}"
         assert "scene_id" in payload, f"Missing scene_id in payload: {payload}"
         assert "ucf_promotion_status" in payload, f"Missing ucf_promotion_status in payload: {payload}"
-
-    # 2. Live verification (if Qdrant is actually running on default host)
-    qdrant_host = os.environ.get("GOODQ_QDRANT_HOST", "http://127.0.0.1:6333")
-    try:
-        resp = requests.get(f"{qdrant_host}/collections", timeout=2)
-        if resp.status_code == 200:
-            collections = resp.json().get("result", {}).get("collections", [])
-            for coll in collections:
-                coll_name = coll["name"]
-                scroll_resp = requests.post(
-                    f"{qdrant_host}/collections/{coll_name}/points/scroll",
-                    json={"limit": 5, "with_payload": True},
-                    timeout=2
-                )
-                if scroll_resp.status_code == 200:
-                    points = scroll_resp.json().get("result", {}).get("points", [])
-                    for pt in points:
-                        payload = pt.get("payload") or {}
-                        assert "video_id" in payload, f"Live point {pt['id']} in collection {coll_name} missing video_id"
-                        assert "scene_id" in payload, f"Live point {pt['id']} in collection {coll_name} missing scene_id"
-                        assert "ucf_promotion_status" in payload, f"Live point {pt['id']} in collection {coll_name} missing ucf_promotion_status"
-    except (requests.exceptions.RequestException, ConnectionError):
-        pass

@@ -87,9 +87,13 @@ class PythonPathConfig:
             common_paths = [
                 user_home / 'miniconda3',
                 user_home / 'anaconda3',
-                Path('C:/ProgramData/miniconda3'),
-                Path('C:/ProgramData/anaconda3'),
             ]
+            program_data = os.environ.get('PROGRAMDATA')
+            if program_data:
+                common_paths.extend([
+                    Path(program_data) / 'miniconda3',
+                    Path(program_data) / 'anaconda3',
+                ])
         else:
             common_paths = [
                 Path.home() / 'miniconda3',

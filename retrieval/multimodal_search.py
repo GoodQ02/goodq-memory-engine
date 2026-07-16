@@ -13,6 +13,9 @@ import re
 import sqlite3
 from pathlib import Path
 
+from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
+from steps.common import sqlite_read_authority
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +28,8 @@ def _default_data_root() -> str:
 
 _CLAP_MODEL_ID = "laion/clap-htsat-unfused"
 _CLAP_INSTALL_HINT = "conda run -n goodq_core python scripts/bootstrap_models.py"
+_CLIP_MODEL_REGISTRY_KEY = "clip_vit"
+_TEXT_MODEL_REGISTRY_KEY = "sentence_transformer"
 
 
 def _classify_audio_text_encoder_error(exc: Exception) -> str:
@@ -191,6 +196,9 @@ class MultimodalSearchEngine:
             config: GoodQ configuration dict
         """
         self.config = config
+        from steps.common.retrieval_events import resolve_retrieval_event_policy
+
+        self._retrieval_event_policy = resolve_retrieval_event_policy(config)
         qdrant_cfg = (config.get("qdrant") or {}) if isinstance(config, dict) else {}
         paths_cfg = (config.get("paths") or {}) if isinstance(config, dict) else {}
         phase6_cfg = (config.get("phase6") or {}) if isinstance(config, dict) else {}
@@ -343,8 +351,11 @@ class MultimodalSearchEngine:
             return {}
 
         scene_context: Dict[str, Dict[str, Any]] = {}
+        conn: Optional[sqlite3.Connection] = None
         try:
-            conn = sqlite3.connect(self.kg_db_path)
+            conn = sqlite_read_authority.open_sqlite_read_connection(
+                self.kg_db_path
+            )
             cur = conn.cursor()
             rows = cur.execute(
                 """
@@ -366,10 +377,11 @@ class MultimodalSearchEngine:
             self._kg_scene_context_error = True
             return {}
         finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         for edge_type, raw_props, src_name, src_type, tgt_name, tgt_type in rows:
             props: Dict[str, Any] = {}
@@ -1024,43 +1036,62 @@ class MultimodalSearchEngine:
         """Load CLIP model for text encoding."""
         if self._clip_model is not None:
             return
-        
+
+        model_source = resolve_pinned_model_snapshot(
+            self._models_cache_root(),
+            _CLIP_MODEL_REGISTRY_KEY,
+            required_files=("preprocessor_config.json",),
+        )
+        if model_source is None:
+            logger.warning(
+                "Visual search unavailable because pinned CLIP model cache is missing "
+                "registry_key=%s install_hint=\"%s\"",
+                _CLIP_MODEL_REGISTRY_KEY,
+                _CLAP_INSTALL_HINT,
+            )
+            return
+
         try:
-            import torch
             from transformers import CLIPModel, CLIPProcessor
-            from pathlib import Path
-            import yaml
-            
-            repo_root = Path(__file__).resolve().parent.parent
-            registry_path = repo_root / "configs" / "model_registry.yaml"
-            repo_id = "openai/clip-vit-large-patch14"  # Default fallback
-            if registry_path.exists():
-                try:
-                    with open(registry_path, "r", encoding="utf-8") as f:
-                        registry = yaml.safe_load(f) or {}
-                    repo_id = registry.get("huggingface_models", {}).get("clip_vit", {}).get("repo_id") or repo_id
-                except Exception:
-                    pass
-            
-            processor = CLIPProcessor.from_pretrained(repo_id)
-            model = CLIPModel.from_pretrained(repo_id, use_safetensors=True).eval()
-            
+
+            source = str(model_source)
+            processor = CLIPProcessor.from_pretrained(source, local_files_only=True)
+            model = CLIPModel.from_pretrained(
+                source,
+                use_safetensors=True,
+                local_files_only=True,
+            ).eval()
+
             self._clip_model = {'model': model, 'processor': processor}
-            logger.info(f"[OK] CLIP model ({repo_id}) loaded for text encoding")
+            logger.info("[OK] CLIP model loaded from pinned local cache for text encoding")
         except Exception as e:
             logger.error(f"Failed to load CLIP model: {e}")
-    
+
     def _load_text_model(self):
         """Load sentence transformer for text encoding."""
         if self._text_model is not None:
             return
-        
+
+        model_source = resolve_pinned_model_snapshot(
+            self._models_cache_root(),
+            _TEXT_MODEL_REGISTRY_KEY,
+            required_files=("modules.json",),
+        )
+        if model_source is None:
+            logger.warning(
+                "Text search unavailable because pinned sentence-transformer cache is missing "
+                "registry_key=%s install_hint=\"%s\"",
+                _TEXT_MODEL_REGISTRY_KEY,
+                _CLAP_INSTALL_HINT,
+            )
+            return
+
         try:
             from sentence_transformers import SentenceTransformer
-            
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+
+            model = SentenceTransformer(str(model_source), local_files_only=True)
             self._text_model = model
-            logger.info("[OK] Text embedding model loaded")
+            logger.info("[OK] Text embedding model loaded from pinned local cache")
         except Exception as e:
             logger.error(f"Failed to load text model: {e}")
 
@@ -1120,16 +1151,6 @@ class MultimodalSearchEngine:
             return self._qdrant_clients[collection]
         
         from steps.common.qdrant_client import QdrantClient, QdrantConfig
-
-        paths = (self.config.get("paths") or {}) if isinstance(self.config, dict) else {}
-        db_path = paths.get("db_path") if isinstance(paths, dict) else None
-        log_retrieval = True
-        try:
-            from steps.common.retrieval_events import retrieval_events_enabled
-
-            log_retrieval = retrieval_events_enabled(self.config, default=True)
-        except Exception:
-            log_retrieval = True
         
         # Determine dimension based on collection type
         dim = self.collection_dims.get(collection)
@@ -1149,8 +1170,8 @@ class MultimodalSearchEngine:
             collection=collection,
             dim=dim,
             distance='Cosine',
-            db_path=db_path,
-            log_retrieval_events=log_retrieval,
+            db_path=self.db_path,
+            retrieval_event_policy=self._retrieval_event_policy,
         ))
         
         self._qdrant_clients[collection] = client
@@ -1274,7 +1295,7 @@ class MultimodalSearchEngine:
             return []
 
         results = []
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite_read_authority.open_sqlite_read_connection(self.db_path)
         try:
             is_fts = self._is_fts5_available(conn)
             if is_fts:
@@ -1462,7 +1483,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search text embeddings (transcripts, captions, etc.) with FTS5 hybrid fusion.
@@ -1472,11 +1495,12 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             List of fused search results with normalized RRF scores
         """
-        logger.info(f"Searching text: '{query}'")
+        logger.info("retrieval_search operation=text top_k=%s", top_k)
         
         candidate_k = max(top_k * 3, 20)
         
@@ -1489,7 +1513,8 @@ class MultimodalSearchEngine:
                 results_semantic = client.query(
                     query_embedding.tolist(),
                     top_k=candidate_k,
-                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+                    retrieval_context=retrieval_context,
                 )
                 for r in results_semantic:
                     r['modality'] = 'text'
@@ -1519,7 +1544,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search visual scene embeddings using text query.
@@ -1529,11 +1556,12 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             List of search results with scores
         """
-        logger.info(f"Searching visual scenes: '{query}'")
+        logger.info("retrieval_search operation=visual top_k=%s", top_k)
         
         query_embedding = self.encode_text_for_visual_search(query)
         if not np.any(query_embedding):
@@ -1544,7 +1572,8 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+            retrieval_context=retrieval_context,
         )
         
         return results
@@ -1554,7 +1583,9 @@ class MultimodalSearchEngine:
         query: str,
         top_k: int = 5,
         payload_filter: Optional[Dict[str, Any]] = None,
-        ucf_include_terminal: bool = False
+        ucf_include_terminal: bool = False,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Search CLAP audio embeddings using a text query.
@@ -1564,11 +1595,12 @@ class MultimodalSearchEngine:
             top_k: Number of results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
+            retrieval_context: Origin-owned retrieval audit label
 
         Returns:
             List of search results with scores
         """
-        logger.info(f"Searching audio scenes: '{query}'")
+        logger.info("retrieval_search operation=audio top_k=%s", top_k)
 
         query_embedding = self.encode_text_for_audio_search(query)
         if not np.any(query_embedding):
@@ -1585,7 +1617,8 @@ class MultimodalSearchEngine:
         results = client.query(
             query_embedding.tolist(),
             top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+            retrieval_context=retrieval_context,
         )
         if results:
             self._set_search_diagnostic(
@@ -1608,7 +1641,9 @@ class MultimodalSearchEngine:
         self,
         query: str,
         top_k: int = 10,
-        modalities: Optional[List[str]] = None
+        modalities: Optional[List[str]] = None,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         """
         Unified multimodal search with fusion across modalities.
@@ -1618,6 +1653,7 @@ class MultimodalSearchEngine:
             top_k: Total number of results to return
             modalities: List of modalities to search ['text', 'visual', 'audio']
                        If None, searches all available modalities
+            retrieval_context: Origin-owned retrieval audit label
             
         Returns:
             Fused and ranked search results
@@ -1626,14 +1662,27 @@ class MultimodalSearchEngine:
             modalities = ['text', 'visual']
         self._reset_search_diagnostics()
         
-        logger.info(f"Multimodal search: '{query}' across {modalities}")
+        safe_modalities = [
+            modality
+            for modality in ("text", "visual", "audio")
+            if modality in modalities
+        ]
+        logger.info(
+            "retrieval_search operation=multimodal top_k=%s modalities=%s",
+            top_k,
+            ",".join(safe_modalities),
+        )
         
         all_results = []
         per_modality_top_k = max(int(top_k), 5) * 2
         
         # Search text modality
         if 'text' in modalities and self.weight_text > 0:
-            text_results = self.search_text(query, top_k=per_modality_top_k)
+            text_results = self.search_text(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in text_results:
                 result['modality'] = 'text'
                 payload = result.get('payload') if isinstance(result.get('payload'), dict) else {}
@@ -1642,7 +1691,11 @@ class MultimodalSearchEngine:
         
         # Search visual modality
         if 'visual' in modalities and self.weight_visual > 0:
-            visual_results = self.search_visual(query, top_k=per_modality_top_k)
+            visual_results = self.search_visual(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in visual_results:
                 result['modality'] = 'visual'
                 result['score'] = result.get('score', 0.0) * self.weight_visual
@@ -1650,7 +1703,11 @@ class MultimodalSearchEngine:
         
         # Search audio modality
         if 'audio' in modalities and self.weight_audio > 0:
-            audio_results = self.search_audio(query, top_k=per_modality_top_k)
+            audio_results = self.search_audio(
+                query,
+                top_k=per_modality_top_k,
+                retrieval_context=retrieval_context,
+            )
             for result in audio_results:
                 result['modality'] = 'audio'
                 result['score'] = result.get('score', 0.0) * self.weight_audio
@@ -1752,7 +1809,14 @@ class MultimodalSearchEngine:
 
         return ". ".join(phrases[:8])
 
-    def search_similar_scene(self, video_id: str, scene_id: int | str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_similar_scene(
+        self,
+        video_id: str,
+        scene_id: int | str,
+        top_k: int = 5,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         """Search for semantically similar scenes using persisted scene memory as the query source."""
         source_context = self.retrieve_scene_context(video_id, scene_id)
         if not isinstance(source_context, dict):
@@ -1763,7 +1827,12 @@ class MultimodalSearchEngine:
             return []
 
         candidate_limit = max((top_k * 3), top_k + 4)
-        raw_results = self.search_multimodal(query, top_k=candidate_limit, modalities=["text", "visual", "audio"])
+        raw_results = self.search_multimodal(
+            query,
+            top_k=candidate_limit,
+            modalities=["text", "visual", "audio"],
+            retrieval_context=retrieval_context,
+        )
 
         filtered_results: List[Dict[str, Any]] = []
         seen_scene_keys: set[Tuple[str, str]] = set()
@@ -1800,7 +1869,13 @@ class MultimodalSearchEngine:
         return filtered_results
 
 
-def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> List[Dict[str, Any]]:
+def multimodal_search(
+    query: str,
+    config: Dict[str, Any],
+    top_k: int = 10,
+    *,
+    retrieval_context: str,
+) -> List[Dict[str, Any]]:
     """
     Main entry point for multimodal search.
     
@@ -1808,12 +1883,17 @@ def multimodal_search(query: str, config: Dict[str, Any], top_k: int = 10) -> Li
         query: Search query string
         config: GoodQ configuration
         top_k: Number of results to return
+        retrieval_context: Origin-owned retrieval audit label
         
     Returns:
         List of search results across all modalities
     """
     engine = MultimodalSearchEngine(config)
-    results = engine.search_multimodal(query, top_k=top_k)
+    results = engine.search_multimodal(
+        query,
+        top_k=top_k,
+        retrieval_context=retrieval_context,
+    )
     
     # Enrich results with full context
     enriched_results = []
@@ -1868,7 +1948,8 @@ def main():
     results = engine.search_multimodal(
         args.query,
         top_k=args.top_k,
-        modalities=args.modalities
+        modalities=args.modalities,
+        retrieval_context="human.cli.retrieve",
     )
     
     # Display results

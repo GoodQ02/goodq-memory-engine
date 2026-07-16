@@ -16,6 +16,7 @@ def _load_route_module(module_name: str):
     spec = importlib.util.spec_from_file_location(f"tests.{module_name}_route", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module.__name__] = module
     spec.loader.exec_module(module)
     return module
 
@@ -37,7 +38,7 @@ class _FakeSearchEngine:
             }
         }
 
-    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
+    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None, **kwargs):
         self.calls.append((query, top_k, modalities))
         return [
             {

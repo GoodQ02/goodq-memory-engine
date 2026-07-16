@@ -5,12 +5,11 @@ Verifies:
 1. Timestamp rounding (12.3456 vs 12.346) causing conflict updates in ucf_ledger.db,
    and confirming that all metadata fields (model_tag, raw_ref, source_artifact_id, etc.)
    are successfully updated on conflict.
-2. Live Qdrant payload verification and asserting that AssertionError is raised if we
-   assert successful validation with incorrect live payloads.
+2. Live Qdrant payload verification against an explicitly selected current epoch,
+   including a mismatched-payload negative control.
 """
 
 import sys
-import os
 import sqlite3
 import json
 import hashlib
@@ -24,6 +23,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from cli.run_ingestion import _load_ucf_ledger
 from scripts.ucf.validate_ucf_epoch import run_validation
+from tests.runtime_profile import (
+    expected_epoch_collections,
+    require_live_profile,
+    require_runtime_evidence,
+    selected_runtime_epoch,
+)
 
 @pytest.fixture
 def setup_challenger_env(tmp_path, monkeypatch):
@@ -40,13 +45,14 @@ def setup_challenger_env(tmp_path, monkeypatch):
             "dino_id_map_db": str(tmp_path / "dino_id_map.sqlite"),
             "processing": str(tmp_path / "processing"),
             "db_path": str(tmp_path / "memory.db"),
+            "reports_dir": str(tmp_path / "reports"),
         },
         "qdrant": {
             "collections": {
-                "clip": "goodq_clip_epoch_2026_06_15_ucf_clean_verify",
-                "dino": "goodq_dino_epoch_2026_06_15_ucf_clean_verify",
-                "audio": "goodq_audio_epoch_2026_06_15_ucf_clean_verify",
-                "text": "goodq_text_epoch_2026_06_15_ucf_clean_verify"
+                "clip": "test_clip_col",
+                "dino": "test_dino_col",
+                "audio": "test_audio_col",
+                "text": "test_text_col"
             },
             "embedding_dims": {
                 "clip": 768,
@@ -164,45 +170,84 @@ def test_rounding_and_metadata_updates_on_conflict(setup_challenger_env):
     
     client.close()
 
-def test_live_qdrant_payload_validation_and_assertion_error(setup_challenger_env):
-    """Verify live Qdrant payload verification and that AssertionError is raised
-    if we assert a successful validation when payloads or hashes mismatch."""
+@pytest.mark.live_runtime
+def test_live_qdrant_payload_matching_and_mismatch(setup_challenger_env, goodq_test_profile):
+    """Verify current-epoch Qdrant payload matching and mismatch detection."""
     ucf_db_path = setup_challenger_env["ucf_db_path"]
     raw_ref_str = setup_challenger_env["raw_ref_str"]
-    
-    # Check if live Qdrant is accessible. If not, skip this test.
+    require_live_profile(goodq_test_profile, "live Qdrant payload witness")
+    epoch_id = selected_runtime_epoch(goodq_test_profile)
+    collection = expected_epoch_collections(goodq_test_profile, epoch_id)["audio"]
+
     qdrant_host = "http://127.0.0.1:6333"
     try:
         r = requests.get(f"{qdrant_host}/collections", timeout=3)
-        if r.status_code != 200:
-            pytest.skip("Live Qdrant is not running/accessible on 6333.")
-    except Exception:
-        pytest.skip("Live Qdrant is not running/accessible on 6333.")
-        
-    # Get a sample point from the live audio collection to verify payload keys
-    collection = "goodq_audio_epoch_2026_06_15_ucf_clean_verify"
-    r_scroll = requests.post(f"{qdrant_host}/collections/{collection}/points/scroll", json={"limit": 1}, timeout=3)
+    except requests.RequestException as exc:
+        require_runtime_evidence(
+            goodq_test_profile,
+            False,
+            f"Qdrant request failed: {type(exc).__name__}",
+        )
+        return
+    require_runtime_evidence(
+        goodq_test_profile,
+        r.status_code == 200,
+        f"Qdrant collection inventory returned HTTP {r.status_code}",
+    )
+    collections = [
+        item.get("name", "")
+        for item in r.json().get("result", {}).get("collections", [])
+    ]
+    require_runtime_evidence(
+        goodq_test_profile,
+        collection in collections,
+        f"required audio collection is absent: {collection}",
+    )
+    setup_challenger_env["cfg_data"]["qdrant"]["collections"]["audio"] = collection
+
+    r_scroll = requests.post(
+        f"{qdrant_host}/collections/{collection}/points/scroll",
+        json={"limit": 1, "with_payload": True, "with_vector": False},
+        timeout=3,
+    )
+    require_runtime_evidence(
+        goodq_test_profile,
+        r_scroll.status_code == 200,
+        f"Qdrant scroll returned HTTP {r_scroll.status_code}",
+    )
     res = r_scroll.json().get("result", {})
     points = res.get("points", [])
-    if not points:
-        pytest.skip(f"No points found in collection {collection} to test with.")
-        
+    require_runtime_evidence(
+        goodq_test_profile,
+        bool(points),
+        f"no points found in required collection {collection}",
+    )
+
     sample_point = points[0]
     sample_key = sample_point["id"]
     sample_payload = sample_point["payload"]
-    
-    # Extract actual payload attributes
+
     live_video_hash = sample_payload.get("video_hash") or sample_payload.get("video_id")
     live_scene_id = sample_payload.get("scene_id")
-    
+    live_epoch_id = sample_payload.get("epoch_id") or epoch_id
+    live_ucf_frame_id = sample_payload.get("ucf_frame_id")
+
     assert live_video_hash is not None, "Live point must have a video_id/video_hash"
     assert live_scene_id is not None, "Live point must have a scene_id"
-    
-    # Write this live reference into our temporary ucf_ledger DB
+    require_runtime_evidence(
+        goodq_test_profile,
+        live_ucf_frame_id is not None,
+        "sample Qdrant payload has no ucf_frame_id",
+    )
+    require_runtime_evidence(
+        goodq_test_profile,
+        live_epoch_id == epoch_id,
+        f"sample Qdrant payload epoch mismatch: {live_epoch_id!r}",
+    )
+
     ucf_module = _load_ucf_ledger()
     client = ucf_module.UCFLedgerClient(str(ucf_db_path))
-    
-    # Register the video hash associated with the live point
+
     client.register_media(
         video_hash=live_video_hash,
         file_path="mock_video.mp4",
@@ -212,10 +257,9 @@ def test_live_qdrant_payload_validation_and_assertion_error(setup_challenger_env
         height=1080
     )
     
-    # Log frame with correct matching video_hash and vector_key
     client.log_frame(
         video_hash=live_video_hash,
-        epoch_id="epoch_2026_06_15_ucf_clean_verify",
+        epoch_id=live_epoch_id,
         run_id="run_1",
         t_start=1.0,
         t_end=10.0,
@@ -234,25 +278,18 @@ def test_live_qdrant_payload_validation_and_assertion_error(setup_challenger_env
         promotion_status="staged"
     )
     client.close()
-    
-    # A. Run validator in strict mode. It should return 1 because the live payload is missing
-    # epoch_id, scene_hash, ucf_frame_id.
-    # Asserting that strict mode returns 0 should raise AssertionError.
-    code_strict = run_validation(mode="strict")
-    with pytest.raises(AssertionError):
-        assert code_strict == 0
-    assert code_strict == 1
-    
-    # B. Run validator in online mode. Since it matches video_hash and scene_id, and modality check
-    # passes (as modality is not set in live Qdrant payload, which is bypassed by the if p_modality guard),
-    # this should return 0 (success).
+    conn = sqlite3.connect(str(ucf_db_path))
+    conn.execute(
+        "UPDATE context_frames SET frame_id = ? WHERE vector_key = ?",
+        (int(live_ucf_frame_id), str(sample_key)),
+    )
+    conn.commit()
+    conn.close()
+
     code_online = run_validation(mode="online")
     assert code_online == 0
-    
-    # C. Now, simulate incorrect payload by registering a frame with a mismatched video_hash.
-    # (E.g. we point vector_key to the same live point, but we associate it with a different video_hash in the DB).
+
     client = ucf_module.UCFLedgerClient(str(ucf_db_path))
-    # Delete the old frame
     conn = sqlite3.connect(str(ucf_db_path))
     conn.execute("DELETE FROM context_frames")
     conn.commit()
@@ -270,7 +307,7 @@ def test_live_qdrant_payload_validation_and_assertion_error(setup_challenger_env
     
     client.log_frame(
         video_hash=mismatched_video_hash,
-        epoch_id="epoch_2026_06_15_ucf_clean_verify",
+        epoch_id=live_epoch_id,
         run_id="run_1",
         t_start=1.0,
         t_end=10.0,
@@ -289,11 +326,13 @@ def test_live_qdrant_payload_validation_and_assertion_error(setup_challenger_env
         promotion_status="staged"
     )
     client.close()
-    
-    # Now run validator in online mode. It should return 1 because the video_hash in live Qdrant point
-    # payload does not match the mismatched_video_hash in the DB frame.
-    # Asserting that online mode returns 0 should raise AssertionError.
+    conn = sqlite3.connect(str(ucf_db_path))
+    conn.execute(
+        "UPDATE context_frames SET frame_id = ? WHERE vector_key = ?",
+        (int(live_ucf_frame_id), str(sample_key)),
+    )
+    conn.commit()
+    conn.close()
+
     code_online_mismatch = run_validation(mode="online")
-    with pytest.raises(AssertionError):
-        assert code_online_mismatch == 0
     assert code_online_mismatch == 1

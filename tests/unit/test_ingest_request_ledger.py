@@ -57,6 +57,29 @@ def test_request_ledger_persists_round_trip_record(tmp_path: Path) -> None:
     assert loaded["budget_status"] == "accepted"
 
 
+def test_create_record_creates_missing_requests_directory(tmp_path: Path) -> None:
+    requests_dir = tmp_path / "runtime" / "ingest_requests"
+    ledger = IngestRequestLedger(requests_dir)
+    assert not requests_dir.exists()
+
+    source_path = tmp_path / "sample.mp4"
+    source_path.write_bytes(b"video-bytes")
+    record = ledger.create_record(
+        source_path=source_path,
+        staged_path=tmp_path / "import_inbox" / "req__sample.mp4",
+        file_hash=hashlib.sha256(source_path.read_bytes()).hexdigest(),
+        confirmation_token_present=True,
+        policy_profile="local_ingest_facade_v1",
+        queue_depth_snapshot=0,
+        watchdog_detection_window_seconds=5,
+        budget_scope="single_local_file_handoff",
+        budget_status="accepted",
+    )
+
+    assert requests_dir.is_dir()
+    assert ledger.record_path(record["request_id"]).is_file()
+
+
 def test_resolve_request_status_tracks_waiting_processing_and_completed(tmp_path: Path) -> None:
     runtime_paths = _runtime_paths(tmp_path)
     ledger = IngestRequestLedger(runtime_paths["ingest_requests"])
@@ -102,4 +125,59 @@ def test_resolve_request_status_tracks_waiting_processing_and_completed(tmp_path
     completed = resolve_ingest_request_status(record, runtime_paths)
     assert completed["status"] == "completed"
     assert completed["run_id"] == "run-123"
+
+
+def test_unconfirmed_and_canceled_requests_ignore_same_hash_registry_results(
+    tmp_path: Path,
+) -> None:
+    runtime_paths = _runtime_paths(tmp_path)
+    ledger = IngestRequestLedger(runtime_paths["ingest_requests"])
+    source_path = tmp_path / "same.mp4"
+    source_path.write_bytes(b"same-content")
+    file_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    staged_path = runtime_paths["import_inbox"] / "other-request__same.mp4"
+    runtime_paths["watchdog_state_file"].write_text(
+        json.dumps(
+            {
+                file_hash: {
+                    "original_name": staged_path.name,
+                    "status": "success",
+                    "run_id": "run-other-request",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    pending = ledger.create_record(
+        source_path=source_path,
+        staged_path=staged_path,
+        file_hash=file_hash,
+        confirmation_token_present=True,
+        policy_profile="local_ingest_facade_v1",
+        queue_depth_snapshot=0,
+        watchdog_detection_window_seconds=5,
+        budget_scope="single_local_file_handoff",
+        budget_status="accepted",
+        status="pending_confirmation",
+    )
+    canceled = ledger.create_record(
+        source_path=source_path,
+        staged_path=staged_path,
+        file_hash=file_hash,
+        confirmation_token_present=False,
+        policy_profile="local_ingest_facade_v1",
+        queue_depth_snapshot=0,
+        watchdog_detection_window_seconds=5,
+        budget_scope="single_local_file_handoff",
+        budget_status="accepted",
+        status="canceled",
+    )
+
+    assert resolve_ingest_request_status(pending, runtime_paths)["status"] == (
+        "pending_confirmation"
+    )
+    assert resolve_ingest_request_status(canceled, runtime_paths)["status"] == (
+        "canceled"
+    )
 

@@ -3,21 +3,43 @@ Search API routes for GoodQ4All.
 Provides multimodal search endpoints.
 """
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+import asyncio
+import copy
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import hashlib
+import hmac
+import ipaddress
+import json
 import logging
-from fastapi import APIRouter, Query, HTTPException, Body
-from pydantic import BaseModel
+from pathlib import Path
+import re
+import time
+from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import urlparse
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Query, HTTPException, Body
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from api.utils.response_models import SearchResponse, SearchResult, default_confidence_payload
 from api.utils.loaders import DataLoader
 from api.utils.media_projection import representative_frame_projection
+from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
+from api.utils.temporal_summary_results import (
+    TemporalSummaryResultConflict,
+    TemporalSummaryResultStore,
+)
 from api.routes.runtime import (
     _audio_qdrant_collection_candidates,
     _evaluate_qdrant_audio_payloads,
     _scroll_qdrant_audio_payloads,
 )
 from retrieval.multimodal_search import MultimodalSearchEngine
+from lib.llm_client import ModelConfig
 from steps.common.config_loader import load_configs
+from steps.common.llm_model_factory import build_llm_models
 
 logger = logging.getLogger(__name__)
 
@@ -681,7 +703,8 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
         results = engine.search_multimodal(
             query=request.query,
             top_k=request.top_k,
-            modalities=request.modalities
+            modalities=request.modalities,
+            retrieval_context="human.ui.search",
         )
         
         # Convert to response format
@@ -727,7 +750,11 @@ async def search_text(
     try:
         engine = get_search_engine()
         
-        results = engine.search_text(q, top_k=top_k)
+        results = engine.search_text(
+            q,
+            top_k=top_k,
+            retrieval_context="human.ui.search",
+        )
         
         search_results = []
         for result in results:
@@ -763,7 +790,11 @@ async def search_visual(
     try:
         engine = get_search_engine()
         
-        results = engine.search_visual(q, top_k=top_k)
+        results = engine.search_visual(
+            q,
+            top_k=top_k,
+            retrieval_context="human.ui.search",
+        )
         
         search_results = []
         for result in results:
@@ -845,59 +876,1098 @@ async def search_temporal(request: TemporalSearchRequest = Body(...)):
         raise HTTPException(status_code=500, detail=f"Temporal search failed: {str(e)}")
 
 
-class TemporalSummarizeRequest(TemporalSearchRequest):
-    summary_style: str = "narrative"
+_TEMPORAL_SUMMARY_JOB_OPERATION = "temporal_summary.generate"
+_TEMPORAL_SUMMARY_AUTH_OPERATION = "generate_temporal_summary"
+_TEMPORAL_SUMMARY_OWNER_INSTANCE = f"temporal-summary-api-{uuid.uuid4().hex}"
+_TEMPORAL_JOB_ID_RE = re.compile(r"job_[0-9a-f]{32}")
+_TEMPORAL_EPOCH_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
+_TEMPORAL_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_TEMPORAL_AUTH_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
+_TEMPORAL_WARNING_CODE_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,63}")
+_TEMPORAL_PREEXECUTION_FAILURE_CODES = frozenset(
+    {
+        "authorization_evidence_invalid",
+        "authorization_failed",
+        "authorization_interrupted",
+        "authorization_prepare_failed",
+        "job_scope_invalid",
+    }
+)
 
 
-class TemporalSummarizeQueryInfo(BaseModel):
-    entities: Optional[List[str]] = None
-    time_hint: Optional[str] = None
-    summary_style: str
+class TemporalSummarizeRequest(BaseModel):
+    """One deterministic private request, never persisted in an action job."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    entities: Optional[List[str]] = Field(default=None, max_length=64)
+    start_date: Optional[str] = Field(default=None, max_length=10)
+    end_date: Optional[str] = Field(default=None, max_length=10)
+    time_hint: Optional[str] = Field(default=None, max_length=512)
+    source_file: Optional[str] = Field(default=None, max_length=255)
+    modality: Optional[List[str]] = Field(default=None, max_length=3)
+    max_results: int = Field(default=25, ge=1, le=100)
+    grouping: Literal["semantic_episode"] = "semantic_episode"
+    summary_style: Literal["narrative", "bullets", "executive"] = "narrative"
+
+    @field_validator("entities")
+    @classmethod
+    def _validate_entities(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("Temporal summary entities must be strings")
+            cleaned = item.strip()
+            identity = cleaned.casefold()
+            if not cleaned or len(cleaned) > 128 or identity in seen:
+                raise ValueError("Temporal summary entities are invalid")
+            normalized.append(cleaned)
+            seen.add(identity)
+        return normalized or None
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def _validate_date_hint(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if re.fullmatch(r"\d{4}(?:-\d{2}(?:-\d{2})?)?", cleaned) is None:
+            raise ValueError("Temporal summary date is invalid")
+        try:
+            year = int(cleaned[:4])
+            if len(cleaned) == 7:
+                datetime.fromisoformat(f"{cleaned}-01")
+            elif len(cleaned) == 10:
+                datetime.fromisoformat(cleaned)
+        except ValueError as exc:
+            raise ValueError("Temporal summary date is invalid") from exc
+        if not 1800 <= year <= 2200:
+            raise ValueError("Temporal summary date is outside the supported range")
+        return cleaned
+
+    @field_validator("time_hint")
+    @classmethod
+    def _validate_time_hint(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("source_file")
+    @classmethod
+    def _validate_source_file(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if (
+            not cleaned
+            or cleaned in {".", ".."}
+            or "/" in cleaned
+            or "\\" in cleaned
+            or ":" in cleaned
+        ):
+            raise ValueError("Temporal summary source file must be a basename")
+        return cleaned
+
+    @field_validator("modality")
+    @classmethod
+    def _validate_modality(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        allowed = {"audio", "text", "visual"}
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str) or item not in allowed or item in normalized:
+                raise ValueError("Temporal summary modality is invalid")
+            normalized.append(item)
+        return normalized or None
 
 
-class TemporalSummarizeSegment(BaseModel):
-    scene_index: Optional[int] = None
-    scene_id: Optional[str] = None
-    text: str
-    source_file: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+@dataclass
+class _FixedEndpointModelConfig(ModelConfig):
+    fixed_endpoint: str = ""
+
+    @property
+    def endpoint(self) -> str:
+        return self.fixed_endpoint
 
 
-class TemporalSummarizeResponse(BaseModel):
-    query: TemporalSummarizeQueryInfo
-    summary: str
-    segments: Optional[List[TemporalSummarizeSegment]] = None
-    model_used: str
-    status: str
-    source_scene_ids: List[str]
-    source_count: int
-    truncated: bool
-    warnings: List[str]
+@dataclass(frozen=True)
+class _TemporalExecutionSnapshot:
+    epoch_id: str
+    execution_policy_sha256: str
+    models: tuple[_FixedEndpointModelConfig, ...]
+    allow_service_activation: bool
+    allow_environment_proxies: bool
 
 
-@router.post("/temporal/summarize", response_model=TemporalSummarizeResponse)
-async def summarize_temporal(request: TemporalSummarizeRequest = Body(...)):
-    """
-    Synthesize chronological narrative summary using local LLMs.
-    """
+def _canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _canonical_sha256(value: Any) -> str:
+    return hashlib.sha256(_canonical_json_bytes(value)).hexdigest()
+
+
+def _parse_temporal_summary_action_body(
+    body: object,
+) -> tuple[str, dict[str, Any], bytes, str]:
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="Invalid temporal summary action body")
+    action = body.get("action")
+    expected_fields = (
+        {"action", "request"}
+        if action == "prepare"
+        else {
+            "action",
+            "job_id",
+            "epoch_id",
+            "request_sha256",
+            "execution_policy_sha256",
+            "confirmation_token",
+            "request",
+        }
+        if action == "confirm"
+        else set()
+    )
+    if set(body) != expected_fields:
+        raise HTTPException(status_code=422, detail="Invalid temporal summary action body")
     try:
-        from retrieval.narrative_summarizer import synthesize_narrative
-        
-        result_dict = synthesize_narrative(
-            entities=request.entities,
-            start_date=request.start_date,
-            end_date=request.end_date,
-            time_hint=request.time_hint,
-            source_file=request.source_file,
-            modality=request.modality,
-            max_results=request.max_results,
-            grouping=request.grouping,
-            summary_style=request.summary_style,
+        request = TemporalSummarizeRequest.model_validate(body.get("request"))
+        normalized = request.model_dump(mode="json", exclude_none=False)
+        if (
+            normalized["start_date"] is not None
+            and normalized["end_date"] is not None
+            and normalized["start_date"] > normalized["end_date"]
+        ):
+            raise ValueError("Temporal summary date range is invalid")
+        request_bytes = _canonical_json_bytes(normalized)
+    except (ValidationError, TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid temporal summary request")
+
+    if action == "confirm" and (
+        not isinstance(body.get("job_id"), str)
+        or _TEMPORAL_JOB_ID_RE.fullmatch(body["job_id"]) is None
+        or not isinstance(body.get("epoch_id"), str)
+        or _TEMPORAL_EPOCH_ID_RE.fullmatch(body["epoch_id"]) is None
+        or not isinstance(body.get("request_sha256"), str)
+        or _TEMPORAL_SHA256_RE.fullmatch(body["request_sha256"]) is None
+        or not isinstance(body.get("execution_policy_sha256"), str)
+        or _TEMPORAL_SHA256_RE.fullmatch(body["execution_policy_sha256"]) is None
+        or not isinstance(body.get("confirmation_token"), str)
+        or not body["confirmation_token"]
+        or body["confirmation_token"] != body["confirmation_token"].strip()
+    ):
+        raise HTTPException(status_code=422, detail="Invalid temporal summary action body")
+    return action, normalized, request_bytes, hashlib.sha256(request_bytes).hexdigest()
+
+
+def _temporal_summary_job_root(cfg: dict[str, Any]) -> Path:
+    data_root = cfg.get("paths", {}).get("data_root")
+    if not isinstance(data_root, str) or not data_root.strip():
+        raise ValueError("GoodQ data root is not configured")
+    return Path(data_root) / "control" / "action_jobs"
+
+
+def _temporal_summary_result_root(cfg: dict[str, Any]) -> Path:
+    data_root = cfg.get("paths", {}).get("data_root")
+    if not isinstance(data_root, str) or not data_root.strip():
+        raise ValueError("GoodQ data root is not configured")
+    return Path(data_root) / "control" / "temporal_summary_results"
+
+
+def _temporal_summary_result_root_from_job_root(job_root: Path) -> Path:
+    if job_root.name != "action_jobs" or job_root.parent.name != "control":
+        raise ValueError("Temporal summary job root is invalid")
+    return job_root.parent / "temporal_summary_results"
+
+
+def _temporal_summary_scope(
+    *,
+    epoch_id: str,
+    request_sha256: str,
+    execution_policy_sha256: str,
+) -> dict[str, str]:
+    return {
+        "epoch_id": epoch_id,
+        "request_sha256": request_sha256,
+        "execution_policy_sha256": execution_policy_sha256,
+    }
+
+
+def _temporal_scope_from_record(record: dict[str, Any]) -> dict[str, str]:
+    scope = record.get("scope")
+    if (
+        not isinstance(scope, dict)
+        or set(scope)
+        != {"epoch_id", "request_sha256", "execution_policy_sha256"}
+        or not isinstance(scope.get("epoch_id"), str)
+        or _TEMPORAL_EPOCH_ID_RE.fullmatch(scope["epoch_id"]) is None
+        or not isinstance(scope.get("request_sha256"), str)
+        or _TEMPORAL_SHA256_RE.fullmatch(scope["request_sha256"]) is None
+        or not isinstance(scope.get("execution_policy_sha256"), str)
+        or _TEMPORAL_SHA256_RE.fullmatch(scope["execution_policy_sha256"]) is None
+    ):
+        raise ValueError("Persisted temporal summary job scope is invalid")
+    return scope
+
+
+def _local_fixed_endpoint(model: ModelConfig) -> str:
+    parsed = urlparse(str(model.base_url))
+    host = parsed.hostname
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise ValueError("Temporal summary model endpoint is invalid")
+    try:
+        local = host.casefold() == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        local = False
+    if not local or not isinstance(model.port, int) or not 1 <= model.port <= 65535:
+        raise ValueError("Temporal summary model endpoint must be loopback-only")
+    display_host = f"[{host}]" if ":" in host else host
+    return f"{parsed.scheme}://{display_host}:{model.port}/v1"
+
+
+def _resolve_temporal_execution_snapshot(
+    cfg: dict[str, Any],
+) -> _TemporalExecutionSnapshot:
+    paths = cfg.get("paths")
+    if not isinstance(paths, dict):
+        raise ValueError("Temporal summary paths are not configured")
+    db_path = paths.get("db_path")
+    kg_path = paths.get("knowledge_graph_db")
+    if (
+        not isinstance(db_path, str)
+        or not db_path.strip()
+        or not isinstance(kg_path, str)
+        or not kg_path.strip()
+    ):
+        raise ValueError("Temporal summary epoch paths are not configured")
+    db_epoch = Path(db_path).parent.name
+    kg_epoch = Path(kg_path).parent.name
+    if (
+        db_epoch != kg_epoch
+        or _TEMPORAL_EPOCH_ID_RE.fullmatch(db_epoch) is None
+    ):
+        raise ValueError("Temporal summary epoch paths are inconsistent")
+
+    llm_cfg = cfg.get("llm")
+    if not isinstance(llm_cfg, dict):
+        raise ValueError("Temporal summary model policy is not configured")
+    temporal_cfg = llm_cfg.get("temporal_summary", {})
+    if not isinstance(temporal_cfg, dict):
+        raise ValueError("Temporal summary model policy is invalid")
+    allow_activation = temporal_cfg.get("allow_service_activation", False)
+    if not isinstance(allow_activation, bool):
+        raise ValueError("Temporal summary activation policy is invalid")
+
+    resolved_models: list[_FixedEndpointModelConfig] = []
+    policy_models: list[dict[str, Any]] = []
+    for model in build_llm_models(cfg):
+        if model.backend not in {"ollama", "vllm"}:
+            raise ValueError("Temporal summary model backend is invalid")
+        endpoint = _local_fixed_endpoint(model)
+        capabilities = sorted(set(str(item) for item in model.capabilities))
+        fixed = _FixedEndpointModelConfig(
+            name=str(model.name),
+            base_url=str(model.base_url),
+            port=int(model.port),
+            model_id=str(model.model_id),
+            backend=model.backend,
+            vram_gb=float(model.vram_gb),
+            tokens_per_sec=int(model.tokens_per_sec),
+            context_length=int(model.context_length),
+            capabilities=capabilities,
+            priority=int(model.priority),
+            fixed_endpoint=endpoint,
         )
-        return result_dict
-    except Exception as e:
-        logger.error(f"Narrative summarization failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Narrative summarization failed: {str(e)}")
+        resolved_models.append(fixed)
+        policy_models.append(
+            {
+                "name": fixed.name,
+                "model_id": fixed.model_id,
+                "backend": fixed.backend,
+                "endpoint": fixed.endpoint,
+                "vram_gb": fixed.vram_gb,
+                "tokens_per_sec": fixed.tokens_per_sec,
+                "context_length": fixed.context_length,
+                "capabilities": capabilities,
+                "priority": fixed.priority,
+            }
+        )
+    if not resolved_models:
+        raise ValueError("Temporal summary model policy has no candidates")
+    policy_sha256 = _canonical_sha256(
+        {
+            "models": policy_models,
+            "allow_service_activation": allow_activation,
+            "allow_environment_proxies": False,
+        }
+    )
+    return _TemporalExecutionSnapshot(
+        epoch_id=db_epoch,
+        execution_policy_sha256=policy_sha256,
+        models=tuple(resolved_models),
+        allow_service_activation=allow_activation,
+        allow_environment_proxies=False,
+    )
+
+
+def _get_temporal_summary_authority(_cfg: dict[str, Any]):
+    from agents.mini_agent_client import MiniAgentClient
+
+    return MiniAgentClient(profile="safe")
+
+
+def _public_temporal_summary_job(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: record.get(key)
+        for key in (
+            "job_id",
+            "operation",
+            "scope",
+            "state",
+            "created_at_utc",
+            "updated_at_utc",
+            "outcome",
+            "audit_status",
+        )
+    }
+
+
+def _temporal_authorization_error_code(envelope: object) -> str:
+    if isinstance(envelope, dict) and isinstance(envelope.get("errors"), list):
+        for error in envelope["errors"]:
+            if isinstance(error, dict) and isinstance(error.get("code"), str):
+                return error["code"]
+    return "authorization_failed"
+
+
+def _has_complete_temporal_authorization(record: dict[str, Any]) -> bool:
+    return (
+        isinstance(record.get("token_fingerprint"), str)
+        and _TEMPORAL_SHA256_RE.fullmatch(record["token_fingerprint"]) is not None
+        and isinstance(record.get("authorization_request_id"), str)
+        and _TEMPORAL_AUTH_REQUEST_ID_RE.fullmatch(
+            record["authorization_request_id"]
+        )
+        is not None
+    )
+
+
+def _record_temporal_summary_outcome(
+    cfg: dict[str, Any],
+    *,
+    record: dict[str, Any],
+    status: Literal["succeeded", "failed", "interrupted"],
+    mutated: bool,
+    duration_ms: int,
+    error_codes: list[str],
+) -> str:
+    scope = _temporal_scope_from_record(record)
+    try:
+        audit = _get_temporal_summary_authority(cfg).record_external_execution_outcome(
+            operation=_TEMPORAL_SUMMARY_AUTH_OPERATION,
+            arguments={"job_id": record["job_id"], **scope},
+            request_id=str(record.get("authorization_request_id") or ""),
+            mode="ops",
+            status=status,
+            return_code=0 if status == "succeeded" else 1,
+            duration_ms=duration_ms,
+            side_effect_report={
+                "mutated": mutated,
+                "targets": [f"temporal-summary:{record['job_id']}"],
+            },
+            error_codes=error_codes,
+        )
+        if isinstance(audit, dict) and audit.get("audit_status") == "recorded":
+            return "recorded"
+    except Exception:
+        logger.error(
+            "Temporal summary external audit failed for job %s",
+            record.get("job_id"),
+        )
+    return "failed"
+
+
+def _temporal_model_evidence(
+    result: dict[str, Any],
+    models: tuple[_FixedEndpointModelConfig, ...],
+) -> dict[str, str] | None:
+    if result.get("source_count") == 0:
+        return None
+    used = result.get("model_used")
+    for model in models:
+        if used == model.name:
+            return {"model_id": model.model_id, "provider": model.backend}
+    raise ValueError("Temporal summary model evidence is invalid")
+
+
+def _temporal_success_projection(result: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(result, dict) or result.get("status") != "success":
+        raise ValueError("Temporal summary result did not succeed")
+    source_ids = result.get("source_scene_ids")
+    if not isinstance(source_ids, list):
+        raise ValueError("Temporal summary source evidence is invalid")
+    segments = result.get("segments") or []
+    if not isinstance(segments, list):
+        raise ValueError("Temporal summary segments are invalid")
+    projected_segments: list[dict[str, Any]] = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            raise ValueError("Temporal summary segment is invalid")
+        projected_segments.append(
+            {
+                "scene_index": segment.get("scene_index"),
+                "scene_id": segment.get("scene_id"),
+                "text": segment.get("text"),
+                "start_time": segment.get("start_time"),
+                "end_time": segment.get("end_time"),
+            }
+        )
+    warnings = result.get("warnings")
+    if (
+        not isinstance(warnings, list)
+        or any(
+            not isinstance(code, str)
+            or _TEMPORAL_WARNING_CODE_RE.fullmatch(code) is None
+            for code in warnings
+        )
+    ):
+        raise ValueError("Temporal summary warning codes are invalid")
+    return {
+        "summary": result.get("summary"),
+        "segments": projected_segments,
+        "source_scene_ids": source_ids,
+        "source_count": result.get("source_count"),
+        "truncated": result.get("truncated"),
+        "warning_codes": warnings,
+    }
+
+
+def _temporal_failure_code(result: object) -> str:
+    if isinstance(result, dict) and isinstance(result.get("warnings"), list):
+        for code in result["warnings"]:
+            if isinstance(code, str) and _TEMPORAL_WARNING_CODE_RE.fullmatch(code):
+                return code
+    return "temporal_summary_failed"
+
+
+async def _temporal_summary_worker(
+    job_id: str,
+    request_bytes: bytes,
+    job_root: Path,
+) -> None:
+    ledger = ActionJobLedger(job_root)
+    try:
+        candidate = ledger.load(job_id)
+    except (OSError, ValueError, json.JSONDecodeError):
+        logger.error("Temporal summary worker could not inspect job %s", job_id)
+        return
+    if candidate is None or candidate.get("operation") != _TEMPORAL_SUMMARY_JOB_OPERATION:
+        logger.error("Temporal summary worker rejected unrelated job %s", job_id)
+        return
+    try:
+        scope = _temporal_scope_from_record(candidate)
+    except ValueError:
+        logger.error("Temporal summary worker rejected invalid job scope %s", job_id)
+        try:
+            ledger.transition(
+                job_id,
+                expected_states="queued",
+                new_state="failed",
+                outcome={
+                    "code": "job_scope_invalid",
+                    "message": "Temporal summary job scope is invalid",
+                },
+                audit_status="failed",
+            )
+        except Exception:
+            logger.error("Temporal summary invalid scope state was not recorded for job %s", job_id)
+        return
+    if not _has_complete_temporal_authorization(candidate):
+        logger.error("Temporal summary worker rejected incomplete authorization for job %s", job_id)
+        try:
+            ledger.transition(
+                job_id,
+                expected_states="queued",
+                new_state="failed",
+                outcome={
+                    "code": "authorization_evidence_invalid",
+                    "message": "Temporal summary authorization evidence is invalid",
+                },
+                audit_status="failed",
+            )
+        except Exception:
+            logger.error("Temporal summary invalid authorization state was not recorded for job %s", job_id)
+        return
+    try:
+        record = ledger.transition(
+            job_id,
+            expected_states="queued",
+            new_state="running",
+        )
+    except (ActionJobTransitionError, FileNotFoundError, ValueError):
+        logger.warning("Temporal summary worker could not claim queued job %s", job_id)
+        return
+
+    started_at_utc = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
+    result_store = TemporalSummaryResultStore(
+        _temporal_summary_result_root_from_job_root(job_root)
+    )
+
+    snapshot: _TemporalExecutionSnapshot | None = None
+    cfg: dict[str, Any] | None = None
+    failure_code: str | None = None
+    narrative_result: dict[str, Any] | None = None
+    normalized_request: dict[str, Any] | None = None
+    try:
+        normalized_request = json.loads(request_bytes.decode("utf-8"))
+        if not isinstance(normalized_request, dict):
+            raise ValueError("Temporal summary request is not an object")
+        if hashlib.sha256(request_bytes).hexdigest() != scope["request_sha256"]:
+            raise ValueError("Temporal summary request digest changed")
+        cfg = copy.deepcopy(load_configs({}))
+        if _temporal_summary_job_root(cfg).resolve() != job_root.resolve():
+            raise ValueError("Temporal summary runtime root changed")
+        snapshot = _resolve_temporal_execution_snapshot(cfg)
+        if (
+            snapshot.epoch_id != scope["epoch_id"]
+            or snapshot.execution_policy_sha256
+            != scope["execution_policy_sha256"]
+        ):
+            raise ValueError("Temporal summary execution scope changed")
+
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        logger.error("Temporal summary execution scope failed for job %s", job_id)
+        failure_code = "execution_scope_changed"
+    except Exception:
+        logger.error("Temporal summary execution snapshot failed for job %s", job_id)
+        failure_code = "execution_snapshot_unavailable"
+
+    if failure_code is None and normalized_request is not None and cfg is not None and snapshot is not None:
+        try:
+            from functools import partial
+            from retrieval.narrative_summarizer import synthesize_narrative
+
+            call = partial(
+                synthesize_narrative,
+                **normalized_request,
+                config=cfg,
+                expected_epoch_id=snapshot.epoch_id,
+                models=list(snapshot.models),
+                allow_model_activation=snapshot.allow_service_activation,
+                allow_environment_proxies=snapshot.allow_environment_proxies,
+            )
+            narrative_result = await asyncio.get_running_loop().run_in_executor(None, call)
+            if not isinstance(narrative_result, dict) or narrative_result.get("status") != "success":
+                failure_code = _temporal_failure_code(narrative_result)
+        except Exception:
+            logger.error("Temporal summary execution failed for job %s", job_id)
+            failure_code = "temporal_summary_error"
+
+    receipt: dict[str, Any]
+    try:
+        if failure_code is None and narrative_result is not None and snapshot is not None:
+            receipt = result_store.write_success(
+                job_id=job_id,
+                epoch_id=scope["epoch_id"],
+                request_sha256=scope["request_sha256"],
+                execution_policy_sha256=scope["execution_policy_sha256"],
+                started_at_utc=started_at_utc,
+                result=_temporal_success_projection(narrative_result),
+                model_evidence=_temporal_model_evidence(
+                    narrative_result,
+                    snapshot.models,
+                ),
+            )
+        else:
+            receipt = result_store.write_failure(
+                job_id=job_id,
+                epoch_id=scope["epoch_id"],
+                request_sha256=scope["request_sha256"],
+                execution_policy_sha256=scope["execution_policy_sha256"],
+                started_at_utc=started_at_utc,
+                error_code=failure_code or "temporal_summary_failed",
+            )
+    except ValueError:
+        logger.error("Temporal summary result projection was rejected for job %s", job_id)
+        try:
+            receipt = result_store.write_failure(
+                job_id=job_id,
+                epoch_id=scope["epoch_id"],
+                request_sha256=scope["request_sha256"],
+                execution_policy_sha256=scope["execution_policy_sha256"],
+                started_at_utc=started_at_utc,
+                error_code="result_projection_invalid",
+            )
+        except Exception:
+            logger.error("Temporal summary projection failure could not be persisted for job %s", job_id)
+            return
+    except Exception:
+        logger.error("Temporal summary result could not be persisted for job %s", job_id)
+        return
+
+    succeeded = receipt["terminal_state"] == "succeeded"
+    duration_ms = max(0, int((time.monotonic() - started) * 1000))
+    error_codes = [] if succeeded else [str(receipt["error_code"])]
+    audit_status = _record_temporal_summary_outcome(
+        cfg or {},
+        record=record,
+        status="succeeded" if succeeded else "failed",
+        mutated=True,
+        duration_ms=duration_ms,
+        error_codes=error_codes,
+    )
+    try:
+        ledger.transition(
+            job_id,
+            expected_states="running",
+            new_state="succeeded" if succeeded else "failed",
+            outcome={
+                "code": "temporal_summary_generated" if succeeded else str(receipt["error_code"]),
+                "message": (
+                    "Temporal summary generation succeeded"
+                    if succeeded
+                    else "Temporal summary generation failed"
+                ),
+            },
+            audit_status=audit_status,
+        )
+    except (ActionJobTransitionError, FileNotFoundError, ValueError):
+        logger.error("Temporal summary terminal state could not be persisted for job %s", job_id)
+
+
+def _reconcile_temporal_summary_jobs(cfg: dict[str, Any]) -> None:
+    job_root = _temporal_summary_job_root(cfg)
+    if not job_root.exists():
+        return
+    ledger = ActionJobLedger(job_root)
+    result_store = TemporalSummaryResultStore(_temporal_summary_result_root(cfg))
+    records = ledger.list_prior_owner_records(
+        current_owner_instance=_TEMPORAL_SUMMARY_OWNER_INSTANCE,
+        states={"pending_confirmation", "authorizing", "queued", "running"},
+    )
+    for record in records:
+        if record.get("operation") != _TEMPORAL_SUMMARY_JOB_OPERATION:
+            continue
+        job_id = str(record.get("job_id") or "")
+        state = str(record.get("state") or "")
+        scope = _temporal_scope_from_record(record)
+        receipt_path_exists = result_store.record_path(job_id).is_file()
+        if state in {"pending_confirmation", "authorizing"}:
+            if receipt_path_exists:
+                raise RuntimeError("Temporal summary receipt precedes authorization claim")
+            if _has_complete_temporal_authorization(record):
+                continue
+            ledger.transition(
+                job_id,
+                expected_states=state,
+                new_state="failed",
+                outcome={
+                    "code": "authorization_interrupted",
+                    "message": "Temporal summary authorization was interrupted by restart",
+                },
+            )
+            continue
+
+        if not _has_complete_temporal_authorization(record):
+            raise RuntimeError("Temporal summary authorization evidence is incomplete")
+        receipt = result_store.load_exact(job_id=job_id, **scope)
+        if receipt is not None:
+            if not _has_complete_temporal_authorization(record):
+                raise RuntimeError("Temporal summary authorization evidence is incomplete")
+            if state == "queued":
+                record = ledger.transition(
+                    job_id,
+                    expected_states="queued",
+                    new_state="running",
+                )
+            succeeded = receipt["terminal_state"] == "succeeded"
+            audit_status = _record_temporal_summary_outcome(
+                cfg,
+                record=record,
+                status="succeeded" if succeeded else "failed",
+                mutated=True,
+                duration_ms=0,
+                error_codes=[] if succeeded else [str(receipt["error_code"])],
+            )
+            ledger.transition(
+                job_id,
+                expected_states="running",
+                new_state="succeeded" if succeeded else "failed",
+                outcome={
+                    "code": "temporal_summary_recovered" if succeeded else str(receipt["error_code"]),
+                    "message": (
+                        "Temporal summary result was recovered from durable evidence"
+                        if succeeded
+                        else "Temporal summary failure was recovered from durable evidence"
+                    ),
+                },
+                audit_status=audit_status,
+            )
+            continue
+
+        audit_status = _record_temporal_summary_outcome(
+            cfg,
+            record=record,
+            status="interrupted",
+            mutated=False,
+            duration_ms=0,
+            error_codes=["execution_interrupted"],
+        )
+        ledger.transition(
+            job_id,
+            expected_states=state,
+            new_state="interrupted",
+            outcome={
+                "code": "execution_interrupted",
+                "message": "Temporal summary execution was interrupted before durable result",
+            },
+            audit_status=audit_status,
+        )
+
+
+async def _reconcile_temporal_summary_jobs_on_startup() -> None:
+    _reconcile_temporal_summary_jobs(copy.deepcopy(load_configs({})))
+
+
+router.add_event_handler("startup", _reconcile_temporal_summary_jobs_on_startup)
+
+
+@router.get("/temporal/summarize/{job_id}", response_model=dict)
+async def get_temporal_summary_job(job_id: str) -> dict[str, Any]:
+    if _TEMPORAL_JOB_ID_RE.fullmatch(job_id) is None:
+        raise HTTPException(status_code=404, detail="Temporal summary job not found")
+    cfg = copy.deepcopy(load_configs({}))
+    job_root = _temporal_summary_job_root(cfg)
+    if not job_root.exists():
+        raise HTTPException(status_code=404, detail="Temporal summary job not found")
+    try:
+        record = ActionJobLedger(job_root).load(job_id)
+    except ValueError:
+        record = None
+    if record is None or record.get("operation") != _TEMPORAL_SUMMARY_JOB_OPERATION:
+        raise HTTPException(status_code=404, detail="Temporal summary job not found")
+    try:
+        scope = _temporal_scope_from_record(record)
+        receipt = TemporalSummaryResultStore(
+            _temporal_summary_result_root(cfg)
+        ).load_exact(job_id=job_id, **scope)
+    except (RuntimeError, ValueError, TemporalSummaryResultConflict):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "result_invalid", "job": _public_temporal_summary_job(record)},
+        )
+    state = record.get("state")
+    if state == "succeeded":
+        if receipt is None or receipt.get("terminal_state") != "succeeded":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "result_invalid", "job": _public_temporal_summary_job(record)},
+            )
+    elif state == "failed":
+        outcome = record.get("outcome")
+        preexecution_failure = (
+            receipt is None
+            and isinstance(outcome, dict)
+            and outcome.get("code") in _TEMPORAL_PREEXECUTION_FAILURE_CODES
+        )
+        if not preexecution_failure and (
+            receipt is None or receipt.get("terminal_state") != "failed"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "result_invalid", "job": _public_temporal_summary_job(record)},
+            )
+    elif receipt is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "result_invalid", "job": _public_temporal_summary_job(record)},
+        )
+    return {
+        "status": state,
+        "job": _public_temporal_summary_job(record),
+        "receipt": receipt,
+    }
+
+
+@router.post("/temporal/summarize", response_model=dict)
+async def summarize_temporal(
+    background_tasks: BackgroundTasks,
+    body: object = Body(...),
+):
+    """Prepare or confirm one exact asynchronous temporal-summary execution."""
+    action, _normalized, request_bytes, request_sha256 = (
+        _parse_temporal_summary_action_body(body)
+    )
+    try:
+        cfg = copy.deepcopy(load_configs({}))
+        snapshot = _resolve_temporal_execution_snapshot(cfg)
+        job_root = _temporal_summary_job_root(cfg)
+        ledger = ActionJobLedger(job_root)
+    except Exception:
+        logger.error("Temporal summary authority configuration is unavailable")
+        raise HTTPException(status_code=503, detail="Temporal summary authority unavailable")
+    scope = _temporal_summary_scope(
+        epoch_id=snapshot.epoch_id,
+        request_sha256=request_sha256,
+        execution_policy_sha256=snapshot.execution_policy_sha256,
+    )
+
+    if action == "confirm":
+        assert isinstance(body, dict)
+        job_id = body["job_id"]
+        declared_scope = _temporal_summary_scope(
+            epoch_id=body["epoch_id"],
+            request_sha256=body["request_sha256"],
+            execution_policy_sha256=body["execution_policy_sha256"],
+        )
+        if declared_scope != scope:
+            raise HTTPException(status_code=409, detail="Temporal summary scope changed")
+        record = ledger.load(job_id)
+        if (
+            record is None
+            or record.get("operation") != _TEMPORAL_SUMMARY_JOB_OPERATION
+            or record.get("scope") != scope
+        ):
+            raise HTTPException(status_code=404, detail="Temporal summary job not found")
+        state = record.get("state")
+        if state not in {"pending_confirmation", "authorizing"}:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_confirmable", "job": _public_temporal_summary_job(record)},
+            )
+        token = body["confirmation_token"]
+        fingerprint = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        if not isinstance(record.get("token_fingerprint"), str) or not hmac.compare_digest(
+            record["token_fingerprint"], fingerprint
+        ):
+            raise HTTPException(status_code=403, detail="Confirmation token mismatch")
+
+        recovered_authorizing = False
+        owner = record.get("owner_instance")
+        if owner != _TEMPORAL_SUMMARY_OWNER_INSTANCE:
+            if not _has_complete_temporal_authorization(record):
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "job_owner_changed", "job": _public_temporal_summary_job(record)},
+                )
+            try:
+                record = ledger.adopt_owner(
+                    job_id,
+                    expected_state=state,
+                    expected_owner_instance=owner,
+                    new_owner_instance=_TEMPORAL_SUMMARY_OWNER_INSTANCE,
+                )
+            except (ActionJobTransitionError, ValueError):
+                current = ledger.load(job_id) or record
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "job_owner_changed", "job": _public_temporal_summary_job(current)},
+                )
+            recovered_authorizing = state == "authorizing"
+        elif state == "authorizing":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_confirmable", "job": _public_temporal_summary_job(record)},
+            )
+
+        if state == "pending_confirmation":
+            try:
+                record = ledger.transition(
+                    job_id,
+                    expected_states="pending_confirmation",
+                    new_state="authorizing",
+                )
+            except ActionJobTransitionError:
+                current = ledger.load(job_id) or record
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "job_not_confirmable", "job": _public_temporal_summary_job(current)},
+                )
+
+        tool_args = {"job_id": job_id, **scope}
+        try:
+            envelope, return_code = _get_temporal_summary_authority(cfg).authorize_action(
+                prompt="Confirm one exact temporal summary",
+                mode="ops",
+                tool_name=_TEMPORAL_SUMMARY_AUTH_OPERATION,
+                tool_args=tool_args,
+                confirm=True,
+                confirmation_token=token,
+            )
+        except Exception:
+            logger.error("Temporal summary authorization claim failed")
+            envelope, return_code = {}, 1
+        result = envelope.get("result") if isinstance(envelope, dict) else None
+        response_request_id = (
+            envelope.get("request_id") if isinstance(envelope, dict) else None
+        )
+        request_id_matches = (
+            isinstance(response_request_id, str)
+            and isinstance(record.get("authorization_request_id"), str)
+            and hmac.compare_digest(
+                record["authorization_request_id"], response_request_id
+            )
+        )
+        authorized = (
+            return_code == 0
+            and envelope.get("status") == "ok"
+            and isinstance(result, dict)
+            and result.get("allowed") is True
+            and request_id_matches
+        )
+        error_code = _temporal_authorization_error_code(envelope)
+        if (
+            return_code == 0
+            and isinstance(result, dict)
+            and result.get("allowed") is True
+            and not request_id_matches
+        ):
+            error_code = "authorization_request_mismatch"
+        if (
+            recovered_authorizing
+            and error_code == "token_already_used"
+            and request_id_matches
+        ):
+            authorized = True
+        if not authorized:
+            expired = error_code == "token_expired"
+            try:
+                record = ledger.transition(
+                    job_id,
+                    expected_states="authorizing",
+                    new_state="expired" if expired else "failed",
+                    outcome={
+                        "code": "authorization_expired" if expired else "authorization_failed",
+                        "message": (
+                            "Temporal summary authorization expired"
+                            if expired
+                            else "Temporal summary authorization failed"
+                        ),
+                    },
+                )
+            except ActionJobTransitionError:
+                record = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "authorization_expired" if expired else "authorization_failed",
+                    "job": _public_temporal_summary_job(record),
+                },
+            )
+        try:
+            record = ledger.transition(
+                job_id,
+                expected_states="authorizing",
+                new_state="queued",
+            )
+        except ActionJobTransitionError:
+            current = ledger.load(job_id) or record
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "job_not_queueable", "job": _public_temporal_summary_job(current)},
+            )
+        background_tasks.add_task(
+            _temporal_summary_worker,
+            job_id,
+            bytes(request_bytes),
+            job_root,
+        )
+        return JSONResponse(
+            status_code=202,
+            content={"success": True, "job": _public_temporal_summary_job(record)},
+        )
+
+    try:
+        record, created = ledger.prepare_or_find_active_with_status(
+            operation=_TEMPORAL_SUMMARY_JOB_OPERATION,
+            scope=scope,
+            owner_instance=_TEMPORAL_SUMMARY_OWNER_INSTANCE,
+        )
+    except ValueError:
+        logger.error("Temporal summary job preparation failed")
+        raise HTTPException(status_code=500, detail="Temporal summary job ledger unavailable")
+    if not created:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "active_job_exists", "job": _public_temporal_summary_job(record)},
+        )
+
+    authority = None
+    token = None
+    evidence_persisted = False
+    tool_args = {"job_id": record["job_id"], **scope}
+    try:
+        authority = _get_temporal_summary_authority(cfg)
+        envelope, return_code = authority.authorize_action(
+            prompt="Prepare one exact temporal summary",
+            mode="ops",
+            tool_name=_TEMPORAL_SUMMARY_AUTH_OPERATION,
+            tool_args=tool_args,
+        )
+        result = envelope.get("result") if isinstance(envelope, dict) else None
+        token = result.get("confirmation_token") if isinstance(result, dict) else None
+        request_id = envelope.get("request_id") if isinstance(envelope, dict) else None
+        if (
+            return_code != 3
+            or envelope.get("status") != "needs_confirmation"
+            or not isinstance(token, str)
+            or not token
+            or not isinstance(request_id, str)
+            or _TEMPORAL_AUTH_REQUEST_ID_RE.fullmatch(request_id) is None
+        ):
+            raise RuntimeError("authorization_not_prepared")
+        record = ledger.compare_and_update(
+            record["job_id"],
+            expected_state="pending_confirmation",
+            token_fingerprint=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            authorization_request_id=request_id,
+        )
+        evidence_persisted = True
+    except Exception:
+        logger.error("Failed to prepare temporal summary authorization")
+        if authority is not None and isinstance(token, str) and token and not evidence_persisted:
+            try:
+                authority.revoke_action_authorization(
+                    prompt="Revoke unpersisted temporal summary authorization",
+                    mode="ops",
+                    tool_name=_TEMPORAL_SUMMARY_AUTH_OPERATION,
+                    tool_args=tool_args,
+                    confirmation_token=token,
+                )
+            except Exception:
+                logger.error("Failed to revoke unpersisted temporal summary authorization")
+        try:
+            ledger.transition(
+                record["job_id"],
+                expected_states="pending_confirmation",
+                new_state="failed",
+                outcome={
+                    "code": "authorization_prepare_failed",
+                    "message": "Temporal summary authorization could not be prepared",
+                },
+            )
+        except Exception:
+            logger.error("Failed to persist temporal summary preparation failure")
+        raise HTTPException(status_code=503, detail="Temporal summary authorization unavailable")
+
+    return {
+        "success": True,
+        "confirmation_token": token,
+        "job": _public_temporal_summary_job(record),
+    }
 
 

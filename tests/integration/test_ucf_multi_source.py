@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ucf.validate_ucf_epoch import run_validation, is_overlapping, make_scene_hash
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 def test_ucf_multi_source_happy_path(tmp_path, monkeypatch):
     """
@@ -29,7 +30,8 @@ def test_ucf_multi_source_happy_path(tmp_path, monkeypatch):
     test_cfg = {
         "paths": {
             "db_dir": str(db_dir),
-            "data_root": str(tmp_path)
+            "data_root": str(tmp_path),
+            "reports_dir": str(tmp_path / "reports"),
         }
     }
     
@@ -40,14 +42,6 @@ def test_ucf_multi_source_happy_path(tmp_path, monkeypatch):
     expected_db_dir = db_dir / "ucf"
     expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
-    
-    # Import ucf_ledger dynamically from skill scripts
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    ucf_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ucf_module)
-    UCFLedgerClient = ucf_module.UCFLedgerClient
     
     client = UCFLedgerClient(str(db_path))
     client.init_schema()
@@ -176,7 +170,8 @@ def test_ucf_multi_source_unregistered_video_hash_poison_pill(tmp_path, monkeypa
     test_cfg = {
         "paths": {
             "db_dir": str(db_dir),
-            "data_root": str(tmp_path)
+            "data_root": str(tmp_path),
+            "reports_dir": str(tmp_path / "reports"),
         }
     }
     
@@ -187,13 +182,6 @@ def test_ucf_multi_source_unregistered_video_hash_poison_pill(tmp_path, monkeypa
     expected_db_dir = db_dir / "ucf"
     expected_db_dir.mkdir(parents=True, exist_ok=True)
     db_path = expected_db_dir / "ucf_ledger.db"
-    
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    ucf_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ucf_module)
-    UCFLedgerClient = ucf_module.UCFLedgerClient
     
     client = UCFLedgerClient(str(db_path))
     client.init_schema()
@@ -237,7 +225,8 @@ def test_ucf_multi_source_dirty_duplicate_db_fail(tmp_path, monkeypatch):
     test_cfg = {
         "paths": {
             "db_dir": str(db_dir),
-            "data_root": str(tmp_path)
+            "data_root": str(tmp_path),
+            "reports_dir": str(tmp_path / "reports"),
         }
     }
     

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_POINTER -->
-<!-- DOC_LAST_VERIFIED: 2026-05-17 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Documentation Forensics Index
 
@@ -130,7 +130,7 @@ current canonical doc restates the claim:
 - `docs/architecture/RUNTIME_AUTHORITY_MEMO.md`
 - `docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md`
 - `docs/architecture/AGENT_SYSTEM.md`
-- `docs/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md`
+- `docs/archive/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md`
 - `docs/guides/llm/LLM_INTEGRATION_COMPLETE.md`
 - `docs/technical/SESSION_SUMMARY_2025-12-05.md`
 - `docs/diagnostics/WSL2_SCRIPTS_ADDED.md`

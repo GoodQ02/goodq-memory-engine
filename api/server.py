@@ -2,6 +2,58 @@ from __future__ import annotations
 import os
 import sys
 import pathlib
+import re
+from urllib.parse import unquote_plus
+
+
+_SENSITIVE_QUERY_KEYS = frozenset(
+    {
+        "q",
+        "token",
+        "session_token",
+        "api_key",
+        "auth_token",
+        "password",
+        "secret",
+    }
+)
+_SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
+    r"\b(token|session_token|api_key|auth_token|password|secret)"
+    r"\s*=\s*[a-zA-Z0-9_\-\%\.\+\/\~\@]+",
+    flags=re.IGNORECASE,
+)
+
+
+def _redact_query_parameters(value: str) -> str:
+    """Redact sensitive URL-query values without rewriting safe parameters."""
+    if "?" not in value:
+        return value
+
+    prefix, _, query_with_fragment = value.partition("?")
+    query, fragment_marker, fragment = query_with_fragment.partition("#")
+    redacted_fields: list[str] = []
+
+    for field in query.split("&"):
+        raw_key, separator, _raw_value = field.partition("=")
+        normalized_key = unquote_plus(raw_key).strip().lower()
+        if normalized_key in _SENSITIVE_QUERY_KEYS:
+            field = f"{raw_key}=REDACTED"
+        elif not separator:
+            field = raw_key
+        redacted_fields.append(field)
+
+    redacted = f"{prefix}?{'&'.join(redacted_fields)}"
+    if fragment_marker:
+        redacted = f"{redacted}#{fragment}"
+    return redacted
+
+
+def _redact_log_value(value: str) -> str:
+    redacted = _redact_query_parameters(value)
+    return _SENSITIVE_ASSIGNMENT_PATTERN.sub(
+        lambda match: f"{match.group(1)}=REDACTED",
+        redacted,
+    )
 
 
 def _resolve_api_bind_defaults() -> tuple[str, int]:
@@ -59,18 +111,13 @@ def main() -> None:
     import logging
     class TokenRedactingFilter(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
-            import re
-            pattern = r'\b(token|session_token|api_key|auth_token|password|secret)\s*=\s*[a-zA-Z0-9_\-\%\.\+\/\~\@]+'
-            def redact(val: str) -> str:
-                return re.sub(pattern, lambda m: f"{m.group(1)}=REDACTED", val, flags=re.IGNORECASE)
-
             if isinstance(record.msg, str):
-                record.msg = redact(record.msg)
+                record.msg = _redact_log_value(record.msg)
             if record.args:
                 new_args = []
                 for arg in record.args:
                     if isinstance(arg, str):
-                        new_args.append(redact(arg))
+                        new_args.append(_redact_log_value(arg))
                     else:
                         new_args.append(arg)
                 record.args = tuple(new_args)
@@ -91,7 +138,7 @@ def main() -> None:
     from uvicorn import run  # type: ignore
     from api.main import app
     print(f"[api] Starting FastAPI on http://{host}:{port}")
-    run(app, host=host, port=port, log_level="info")
+    run(app, host=host, port=port, log_level="info", proxy_headers=False)
 
 
 if __name__ == "__main__":

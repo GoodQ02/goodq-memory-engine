@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Documentation Authority Map
 
@@ -42,6 +42,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 - [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md)
 - [IDENTITY_STITCHING_CONTRACT.md](../architecture/IDENTITY_STITCHING_CONTRACT.md)
+- [HITL_STITCHING_CONTRACT.md](../architecture/HITL_STITCHING_CONTRACT.md)
 - [SYSTEM_ARCHITECTURE.md](../architecture/SYSTEM_ARCHITECTURE.md)
 - [ARCHITECTURE_REFERENCE.md](../architecture/ARCHITECTURE_REFERENCE.md)
 - [MEMORY_STORAGE.md](../architecture/MEMORY_STORAGE.md)
@@ -50,6 +51,8 @@ These documents define current runtime, architecture, identity, and operator tru
 - [VISION_PIPELINE.md](../architecture/components/VISION_PIPELINE.md)
 - [LIB_COMPONENTS.md](../technical/LIB_COMPONENTS.md)
 - [CONFIG_LOADING_CONTRACT.md](../architecture/CONFIG_LOADING_CONTRACT.md)
+- [SUMMARY_CONSOLE_CONTRACT.md](../architecture/SUMMARY_CONSOLE_CONTRACT.md)
+- [TURBOQUANT_HYBRID_CACHING.md](../architecture/TURBOQUANT_HYBRID_CACHING.md)
 
 ### Read Model, Restraint, And Sensitive Source Contracts
 
@@ -60,18 +63,12 @@ These documents define current runtime, architecture, identity, and operator tru
 - [VAULT_TOKEN_RESOLVER_CONTRACT.md](../architecture/VAULT_TOKEN_RESOLVER_CONTRACT.md)
 - [LLM_CLIENT_INJECTION_CONTRACT.md](../architecture/LLM_CLIENT_INJECTION_CONTRACT.md)
 
-### Runtime Operator Authority
+### Runtime And Operator Contracts
 
-- [Agent current state](../agent/CURRENT_STATE.md)
-- [Agent current state JSON](../agent/current_state.json)
-- [Agent office index](../agent/README.md)
-- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
 - [WSL_AUDIO_RUNTIME.md](../reference/WSL_AUDIO_RUNTIME.md)
 - [WATCHDOG_SYSTEM.md](../systems/WATCHDOG_SYSTEM.md)
 - [CONTROL_AGENT.md](../agent/CONTROL_AGENT.md)
 - [CLI-REFERENCE.md](../reference/CLI-REFERENCE.md)
-- [goodq4all_agent_status.md](../goodq4all_agent_status.md)
-- [SYSTEM_SNAPSHOT.md](../SYSTEM_SNAPSHOT.md)
 
 ### Documentation Governance Authority
 
@@ -85,8 +82,22 @@ These documents define current runtime, architecture, identity, and operator tru
 
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
+- [PROJECT_ORIENTATION.md](../agent/PROJECT_ORIENTATION.md) - timeless project
+  topology, evidence hierarchy, component boundaries, and no-repeat preflight.
+- [Agent office index](../agent/README.md)
+- [Agent current state](../agent/CURRENT_STATE.md) - transient restart snapshot;
+  verify time-sensitive claims against live evidence.
+- [Agent current state JSON](../agent/current_state.json) - machine-readable
+  transient state mirror.
+- [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
+- [goodq4all_agent_status.md](../goodq4all_agent_status.md) - compatibility
+  redirect; it carries no independent status claims.
+- [SYSTEM_SNAPSHOT.md](../SYSTEM_SNAPSHOT.md) - generated system snapshot, not
+  timeless authority.
+- [ROADMAP.md](../releases/ROADMAP.md)
 - [USER_INTERFACE_WALKTHROUGH.md](../guides/ui/USER_INTERFACE_WALKTHROUGH.md)
 - [AGENT_FILE_INDEX.md](../reference/indexes/AGENT_FILE_INDEX.md)
+- [Codebase Python-module index](../codebase_index/README.md)
 - [CORPUS_PACK_INVENTORY_LEDGER.md](./CORPUS_PACK_INVENTORY_LEDGER.md)
 - [REFERENCE_PACK_V0_SELECTION_PROPOSAL.md](./REFERENCE_PACK_V0_SELECTION_PROPOSAL.md)
 - [REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md](./REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
@@ -105,6 +116,15 @@ These docs remain in the repo because they are useful historical records, but th
 - [PIPELINE_RESTORATION_BACKLOG.md](../archive/technical/PIPELINE_RESTORATION_BACKLOG.md)
 - [PHASE5_FINAL_ACTIVATION_SUMMARY.md](../archive/technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md)
 - [PIPELINES.md](../archive/architecture/PIPELINES.md)
+- [UCF_REMAINING_WORK.md](../archive/agent/UCF_REMAINING_WORK.md)
+- [UCF_SEARCH_LOOP_PLAN.md](../archive/agent/UCF_SEARCH_LOOP_PLAN.md)
+- [UCF_QDRANT_STATUS_BACKFILL_PLAN.md](../archive/agent/UCF_QDRANT_STATUS_BACKFILL_PLAN.md)
+- [NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md](../archive/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md)
+- [LLM_IMPLEMENTATION_PLAN_PHASE1.md](../archive/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md)
+- [AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md](../archive/technical/AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md)
+- [DOCS_AUDIT_AND_REORGANIZATION_REPORT.md](../archive/reports/DOCS_AUDIT_AND_REORGANIZATION_REPORT.md)
+- [POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md](../archive/reports/POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md)
+- [UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md](../archive/agent/UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md)
 
 ## Delete-Safe Registry
 
@@ -120,6 +140,7 @@ If a future cleanup approves deletion, record the file here before removal.
 These tools support documentation verification, but they do not define authority by themselves.
 
 - [doc_drift_lint.py](../../scripts/docs/doc_drift_lint.py)
+- [doc_authority_lint.py](../../scripts/docs/doc_authority_lint.py)
 - [runtime_path_authority_audit.py](../../scripts/docs/runtime_path_authority_audit.py)
 
 ## Non-Action Rules

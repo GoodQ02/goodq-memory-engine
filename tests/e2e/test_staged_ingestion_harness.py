@@ -29,6 +29,17 @@ class MockState:
         cls.qdrant_points.clear()
         cls.faiss_points.clear()
 
+
+MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
 def sanitize_envelope(data: Any) -> Any:
     """Recursively redacts absolute Windows/UNC local file paths (C:\\ or L:\\) in the envelope."""
     import re
@@ -112,6 +123,29 @@ class MockMiniAgentClient:
                 "tool_args": v["tool_args"]
             }
 
+    def authorize_action(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        return self.validate_action(
+            prompt,
+            mode,
+            tool_name,
+            tool_args,
+            confirm,
+            confirmation_token,
+            context_overrides,
+        )
+
     def validate_action(
         self,
         prompt: str,
@@ -165,6 +199,10 @@ class MockMiniAgentClient:
                 "process_start",
                 "process_stop",
                 "promote_ucf_to_memory",
+                "reconcile_ucf_qdrant",
+                "validate_ucf_frames",
+                "reject_ucf_frames",
+                "supersede_ucf_frames",
             }
             if tool_name in mutating_ops:
                 envelope = {
@@ -202,8 +240,22 @@ class MockMiniAgentClient:
                 }
                 return sanitize_envelope(envelope), 1
 
+        if tool_name == "file_delete" and os.environ.get("GOODQ_BREAK_GLASS") != "1":
+            envelope = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [{
+                    "code": "break_glass_required",
+                    "message": "Destructive operation 'file_delete' requires break-glass override.",
+                }],
+            }
+            return sanitize_envelope(envelope), 1
+
         # 3. Human-in-the-Loop Gating Validation
-        if tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
+        if tool_name in MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS:
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
                 MockState.tokens[token] = {
@@ -241,6 +293,19 @@ class MockMiniAgentClient:
                         "timestamp": datetime.utcnow().isoformat() + "Z",
                         "result": {"allowed": False},
                         "errors": [{"code": "token_already_used", "message": "Token has already been used."}],
+                    }
+                    return sanitize_envelope(envelope), 1
+                if tok_info.get("tool_args") != tool_args:
+                    envelope = {
+                        "request_id": request_id,
+                        "profile": self.profile,
+                        "status": "error",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "result": {"allowed": False},
+                        "errors": [{
+                            "code": "token_scope_mismatch",
+                            "message": "Confirmation token was not issued for this exact UCF scope.",
+                        }],
                     }
                     return sanitize_envelope(envelope), 1
                 
@@ -304,6 +369,9 @@ class MockMiniAgentClient:
         )
         if val_rc != 0:
             return val_envelope, val_rc
+
+        if tool_name in MOCK_LOCAL_CONFIRMATION_REQUIRED_TOOLS:
+            MockState.tokens[confirmation_token]["used"] = True
 
         started_at = datetime.utcnow().isoformat() + "Z"
 
@@ -414,8 +482,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0 if not validation_errors else 1
 
         elif tool_name == "promote_ucf_to_memory":
-            MockState.tokens[confirmation_token]["used"] = True
-            
             # Orphan vector check
             attempted_vectors = tool_args.get("vectors", [])
             staged_vector_keys = {rec["ucf_data"].get("vector_key") for rec in MockState.staged_records.values() if rec["ucf_data"].get("vector_key")}
@@ -486,7 +552,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "validate_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
             epoch_id = tool_args.get("epoch_id")
             
@@ -514,7 +579,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "reject_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             reason = tool_args.get("reason", "").strip()
             if not reason:
                 envelope = {
@@ -558,7 +622,6 @@ class MockMiniAgentClient:
             return sanitize_envelope(envelope), 0
 
         elif tool_name == "supersede_ucf_frames":
-            MockState.tokens[confirmation_token]["used"] = True
             video_hash = tool_args.get("video_hash") or tool_args.get("video_id")
             epoch_id = tool_args.get("epoch_id")
             
@@ -613,10 +676,29 @@ class MockMiniAgentClient:
             }
             return sanitize_envelope(envelope), 1
 
-# Monkeypatching logic if TEST_MOCK_HARNESS == "1"
-if os.environ.get("TEST_MOCK_HARNESS") == "1":
+@pytest.fixture(scope="module", autouse=True)
+def force_mock_harness_for_this_module():
+    import os
     import agents.mini_agent_client
+    
+    old_env = os.environ.get("TEST_MOCK_HARNESS")
+    os.environ["TEST_MOCK_HARNESS"] = "1"
+    
+    original_client = agents.mini_agent_client.MiniAgentClient
     agents.mini_agent_client.MiniAgentClient = MockMiniAgentClient
+    
+    global MiniAgentClient
+    MiniAgentClient = MockMiniAgentClient
+    
+    yield
+    
+    if old_env is None:
+        del os.environ["TEST_MOCK_HARNESS"]
+    else:
+        os.environ["TEST_MOCK_HARNESS"] = old_env
+        
+    agents.mini_agent_client.MiniAgentClient = original_client
+    MiniAgentClient = original_client
 
 # ==============================================================================
 # TEST SUITE
@@ -648,6 +730,9 @@ def mock_config_paths_for_real_client(tmp_path, monkeypatch):
         cfg_data["paths"]["db_dir"] = str(db_dir)
         cfg_data["paths"]["data_root"] = str(tmp_path)
         cfg_data["paths"]["reports_dir"] = str(reports_dir)
+        cfg_data["paths"]["db_path"] = str(tmp_path / "memory.db")
+        cfg_data["paths"]["knowledge_graph_db"] = str(tmp_path / "knowledge_graph.db")
+        cfg_data["paths"]["processing"] = str(tmp_path / "processing")
         cfg_data["paths"]["faiss_clip_path"] = str(tmp_path / "faiss_clip.index")
         cfg_data["paths"]["faiss_dino_path"] = str(tmp_path / "faiss_dino.index")
         cfg_data["paths"]["clip_id_map_db"] = str(tmp_path / "clip_id_map.sqlite")
@@ -699,23 +784,111 @@ def register_media(video_hash="test_vid_123", duration=120.0):
 def mock_harness_active() -> bool:
     return os.environ.get("TEST_MOCK_HARNESS") == "1"
 
+
+def execute_locally_confirmed(client, *, tool_name: str, tool_args: Dict[str, Any]):
+    """Exercise the explicit request -> confirm -> execute flow."""
+    confirmation, confirmation_rc = client.validate_action(
+        prompt=f"Confirm {tool_name}",
+        mode="ops",
+        tool_name=tool_name,
+        tool_args=tool_args,
+    )
+    assert confirmation_rc == 3, confirmation
+    return client.execute_tool(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+
+def seed_validated_scope(client, monkeypatch, *, video_hash: str, epoch_id: str):
+    """Creates one exact, validated UCF scope using only temporary stores."""
+    scope = {"video_hash": video_hash, "epoch_id": epoch_id}
+    register_media(video_hash, 20.0)
+
+    if not mock_harness_active():
+        monkeypatch.setattr(
+            client,
+            "_execute_validate_ucf_epoch",
+            lambda _args: {"success": True, "errors": []},
+        )
+        monkeypatch.setattr(
+            client,
+            "_sync_qdrant_by_scope",
+            lambda **_kwargs: {
+                "status": "ok",
+                "points_verified": 1,
+                "failed_collections": [],
+            },
+        )
+
+    frame_id = f"{video_hash}-{epoch_id}-frame"
+    ingest_args = {
+        "ucf_records": [{
+            "frame_id": frame_id,
+            "video_hash": video_hash,
+            "ucf_schema_version": "ucf.v0.1",
+            "epoch_id": epoch_id,
+            "run_id": f"run-{epoch_id}",
+            "t_start": 0.0,
+            "t_end": 10.0,
+            "modality": "video",
+            "worker_name": "worker1",
+            "model_tag": "tag1",
+            "source_artifact_id": "scene_0000",
+            "payload": {},
+        }]
+    }
+    ingest_envelope, ingest_rc = execute_locally_confirmed(
+        client,
+        tool_name="run_ingestion",
+        tool_args=ingest_args,
+    )
+    assert ingest_rc == 0, ingest_envelope
+
+    token_envelope, token_rc = client.validate_action(
+        prompt="Validate exact UCF scope",
+        tool_name="validate_ucf_frames",
+        tool_args=scope,
+        confirm=False,
+    )
+    assert token_rc == 3, token_envelope
+    validate_envelope, validate_rc = client.execute_tool(
+        tool_name="validate_ucf_frames",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token_envelope["result"]["confirmation_token"],
+    )
+    assert validate_rc == 0, validate_envelope
+    assert validate_envelope["output"]["status"] == "validated_complete"
+    return scope
+
 # ------------------------------------------------------------------------------
 # TIER 1: FEATURE COVERAGE (Tests 1 to 20)
 # ------------------------------------------------------------------------------
 
 # Feature 1: Gated Execution (F1.01-05)
 
-def test_f1_01_ingestion_allowed_in_safe_profile():
+def test_f1_01_ingestion_requires_confirmation_in_safe_profile():
     client = MiniAgentClient(profile="safe")
-    envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    envelope, rc = client.validate_action(
+        prompt="Ingest video",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
 
-def test_f1_02_ingestion_allowed_in_unrestricted_profile():
+def test_f1_02_ingestion_requires_confirmation_in_unrestricted_profile():
     client = MiniAgentClient(profile="unrestricted")
-    envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    envelope, rc = client.validate_action(
+        prompt="Ingest video",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
 
 def test_f1_03_ingestion_blocked_in_offline_profile():
     client = MiniAgentClient(profile="offline")
@@ -748,7 +921,9 @@ def test_f2_01_ingestion_triggers_post_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 5.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     # Ingestion successfully ran and completed post-validation check
     assert envelope["status"] == "success"
@@ -760,7 +935,9 @@ def test_f2_02_ingestion_success_with_valid_ucf():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {"text": "hello"}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     assert envelope["status"] == "success"
     assert envelope["output"]["status"] == "staged_complete"
@@ -772,7 +949,9 @@ def test_f2_03_ingestion_aborts_on_validation_failure():
     args = {
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert envelope["status"] == "fatal_error"
     assert "ucf_validation_failed" in envelope["errors"][0]["code"]
@@ -784,7 +963,9 @@ def test_f2_04_validation_failure_prevents_subsequent_steps():
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
     # Should fail validation during run_ingestion
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     # No staged records should exist
     if mock_harness_active():
@@ -802,7 +983,9 @@ def test_f2_05_validation_error_surfaced_in_envelope():
     args = {
         "ucf_records": [{"video_hash": "unregistered_vid", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert "details" in envelope["errors"][0]
     assert len(envelope["errors"][0]["details"]) > 0
@@ -816,7 +999,7 @@ def test_f3_01_ingested_records_remain_staged():
     args = {
         "ucf_records": [{"frame_id": "rec1", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    execute_locally_confirmed(client, tool_name="run_ingestion", tool_args=args)
     if mock_harness_active():
         assert MockState.staged_records["rec1"]["status"] == "staged"
     else:
@@ -873,7 +1056,9 @@ def test_f3_05_promotion_succeeds_with_confirm_and_token():
     args_ingest = {
         "ucf_records": [{"frame_id": "rec1", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     
     # 2. Get confirmation token
     envelope_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False)
@@ -916,7 +1101,9 @@ def test_f4_01_redacts_absolute_paths_in_output():
         args = {
             "path": "L:\\GOODCUBE\\projects\\goodq4all\\file_to_delete.txt",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         # Absolute path should be redacted/sanitized
         assert "L:\\GOODCUBE" not in str(envelope)
@@ -935,7 +1122,9 @@ def test_f4_02_redacts_absolute_paths_in_artifacts():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["C:\\Users\\jdben\\mock_report.json"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     assert "C:\\Users" not in str(envelope)
     assert "relative/mock_report.json" in envelope["artifacts"]
@@ -948,7 +1137,9 @@ def test_f4_03_redacts_absolute_paths_in_errors():
         "simulate_validation_fail": True,
         "absolute_path_artifacts": ["L:\\projects\\error_log.txt"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc != 0
     assert "L:\\projects" not in str(envelope)
     assert "relative/error_log.txt" in envelope["artifacts"]
@@ -961,7 +1152,9 @@ def test_f4_04_preserves_path_agnostic_relative_references():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     # Break-glass required: testing path sanitization, not security gate
     _prev = os.environ.get("GOODQ_BREAK_GLASS")
@@ -973,7 +1166,9 @@ def test_f4_04_preserves_path_agnostic_relative_references():
             "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
             "absolute_path_artifacts": ["db/ucf/ucf_ledger.db"] # already relative
         }
-        envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="run_ingestion", tool_args=args
+        )
         assert rc == 0
         # Relative path should remain unchanged
         assert "db/ucf/ucf_ledger.db" in envelope["artifacts"]
@@ -996,7 +1191,9 @@ def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
         args = {
             "path": "\\\\server\\share\\subfolder\\file.txt",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "\\\\server" not in str(envelope)
         assert "relative/file.txt" in envelope["output"]["deleted"]
@@ -1015,13 +1212,13 @@ def test_f4_05_sanitizes_mixed_slashes_and_unc_paths():
 def test_f1_06_profile_case_insensitivity():
     client = MiniAgentClient(profile="Safe")
     envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     assert envelope["profile"] == "safe"
 
 def test_f1_07_invalid_profile_fallback_to_safe():
     client = MiniAgentClient(profile="invalid-profile-name")
     envelope, rc = client.validate_action(prompt="Ingest video", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     assert envelope["profile"] == "safe"
 
 def test_f1_08_custom_operation_unrecognized_blocked():
@@ -1041,9 +1238,9 @@ def test_f1_09_file_delete_blocked_under_agent_failure():
 def test_f1_10_multiple_operations_gating_consistency():
     pass
     client = MiniAgentClient(profile="safe")
-    # Safe allows ingestion
+    # Safe requires confirmation for ingestion.
     _, rc1 = client.validate_action(prompt="Ingest", tool_name="run_ingestion")
-    assert rc1 == 0
+    assert rc1 == 3
     # Offline blocks ingestion
     client_off = MiniAgentClient(profile="offline")
     _, rc2 = client_off.validate_action(prompt="Ingest", tool_name="run_ingestion")
@@ -1058,7 +1255,9 @@ def test_f2_06_missing_media_sources_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v_missing", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Unregistered media source" in envelope["errors"][0]["details"][0]
 
@@ -1070,7 +1269,9 @@ def test_f2_07_temporal_bounds_out_of_range_fails():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 15.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "t_end exceeds duration" in envelope["errors"][0]["details"][0]
 
@@ -1082,7 +1283,9 @@ def test_f2_08_non_flat_payload_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {"nested": {"key": "val"}}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Non-flat payload" in envelope["errors"][0]["details"][0]
 
@@ -1094,7 +1297,9 @@ def test_f2_09_schema_version_mismatch_fails_validation():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.2", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "Schema version mismatch" in envelope["errors"][0]["details"][0]
 
@@ -1106,7 +1311,9 @@ def test_f2_10_invalid_spatial_coordinates_fails():
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "spatial_region": [0.1, 0.2, 1.5, 0.4], "payload": {}}]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     assert "not normalized" in envelope["errors"][0]["details"][0]
 
@@ -1115,32 +1322,66 @@ def test_f2_10_invalid_spatial_coordinates_fails():
 def test_f3_06_expired_confirmation_token():
     pass
     client = MiniAgentClient(profile="safe")
-    # Request promotion token with simulation parameter for expired token
-    envelope_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False, tool_args={"simulate_expired_token": True})
+    expired_args = {"video_hash": "expired-token-video", "epoch_id": "expired-token-epoch"}
+    envelope_val, rc_val = client.validate_action(
+        prompt="Promotion",
+        tool_name="promote_ucf_to_memory",
+        confirm=False,
+        tool_args=expired_args,
+    )
+    assert rc_val == 3
     token = envelope_val["result"]["confirmation_token"]
+    expired_at = datetime.utcnow() - timedelta(seconds=3600)
+    if mock_harness_active():
+        MockState.tokens[token]["timestamp"] = expired_at
+    else:
+        tokens = client._load_tokens()
+        tokens[token]["timestamp"] = expired_at.isoformat() + "Z"
+        client._save_tokens(tokens)
     
     # Try promoting with expired token
-    envelope_prom, rc_prom = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
+    envelope_prom, rc_prom = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=expired_args,
+        confirm=True,
+        confirmation_token=token,
+    )
     assert rc_prom == 1
     assert "token_expired" in envelope_prom["errors"][0]["code"]
 
-@pytest.mark.xfail(
-    reason="UCF lifecycle gap: promote_ucf_to_memory requires register_media + "
-           "validate_ucf_frames before promotion; test skips both prerequisites",
-    strict=False,
-)
-def test_f3_07_token_reuse_blocked():
-    pass
+def test_f3_07_token_reuse_blocked(monkeypatch):
     client = MiniAgentClient(profile="safe")
-    envelope_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False)
+    scope = seed_validated_scope(
+        client,
+        monkeypatch,
+        video_hash="token-reuse-video",
+        epoch_id="token-reuse-epoch",
+    )
+    envelope_val, rc_val = client.validate_action(
+        prompt="Promotion",
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=False,
+    )
+    assert rc_val == 3
     token = envelope_val["result"]["confirmation_token"]
     
     # Use token first time
-    envelope_prom1, rc_prom1 = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
+    envelope_prom1, rc_prom1 = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
     assert rc_prom1 == 0
     
     # Use token second time
-    envelope_prom2, rc_prom2 = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=token)
+    envelope_prom2, rc_prom2 = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
     assert rc_prom2 == 1
     assert "token_already_used" in envelope_prom2["errors"][0]["code"]
 
@@ -1190,7 +1431,9 @@ def test_f4_06_nested_json_path_sanitization():
             "path": "C:\\some\\path\\file.txt",
             "absolute_path_artifacts": [{"nested_list": ["L:\\subfolder\\another_file.json", "relative.txt"]}]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "C:\\some" not in str(envelope)
         assert "L:\\subfolder" not in str(envelope)
@@ -1212,7 +1455,9 @@ def test_f4_07_empty_paths_and_none_handled_gracefully():
             "path": "",
             "absolute_path_artifacts": [None, ""]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert envelope["artifacts"] == [None, ""]
     finally:
@@ -1232,7 +1477,9 @@ def test_f4_08_already_relative_paths_untouched():
             "path": "subfolder/file.txt",
             "absolute_path_artifacts": ["another_sub/data.json"]
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert envelope["output"]["deleted"] == "subfolder/file.txt"
         assert envelope["artifacts"] == ["another_sub/data.json"]
@@ -1255,7 +1502,9 @@ def test_f4_09_lowercase_drive_letters_sanitized():
         args = {
             "path": "c:\\lowercase\\drive\\file.mp4",
         }
-        envelope, rc = client.execute_tool(tool_name="file_delete", tool_args=args)
+        envelope, rc = execute_locally_confirmed(
+            client, tool_name="file_delete", tool_args=args
+        )
         assert rc == 0
         assert "c:\\lowercase" not in str(envelope)
         assert "relative/file.mp4" in envelope["output"]["deleted"]
@@ -1273,7 +1522,7 @@ def test_f4_10_path_like_strings_in_text_prompts_not_redacted():
     # "JSON results/envelopes/reports sanitized to redact absolute local file paths"
     # Prompt is in the task/envelope. Let's verify prompt contains absolute path but results/outputs are sanitized.
     envelope, rc = client.validate_action(prompt="Ingest L:\\test.mp4", tool_name="run_ingestion")
-    assert rc == 0
+    assert rc == 3
     # The result envelope is sanitized, so any drive letters inside the envelope string are redacted.
     assert "L:\\test" not in str(envelope)
 
@@ -1329,7 +1578,9 @@ def test_f3_tier3_02_qdrant_faiss_backfilling_sync(tmp_path):
         ]
     }
     # Ingest should synchronize vector backfill points
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     if mock_harness_active():
         assert dino_key in MockState.qdrant_points["dino"]
@@ -1346,15 +1597,26 @@ def test_f3_tier3_02_qdrant_faiss_backfilling_sync(tmp_path):
 def test_f3_tier3_03_orphan_vector_injection_blocking():
     pass
     client = MiniAgentClient(profile="safe")
-    
-    # 1. Get confirmation token for promotion
-    envelope_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False)
-    token = envelope_val["result"]["confirmation_token"]
-    
-    # 2. Try promoting and inject an orphan vector that doesn't correspond to any staged record
     args = {
         "vectors": ["orphan-vector-uuid-999"]
     }
+
+    # Production promotion accepts only an exact video_hash/epoch_id scope. The
+    # legacy mock keeps the historical orphan-vector behavior as a compatibility
+    # witness, but the real client must reject the unsupported field before it
+    # can mint a confirmation token.
+    envelope_val, rc_val = client.validate_action(
+        prompt="Promotion",
+        tool_name="promote_ucf_to_memory",
+        tool_args=args,
+        confirm=False,
+    )
+    if not mock_harness_active():
+        assert rc_val == 1
+        assert envelope_val["errors"][0]["code"] == "invalid_tool_arguments"
+        return
+
+    token = envelope_val["result"]["confirmation_token"]
     envelope_prom, rc_prom = client.execute_tool(tool_name="promote_ucf_to_memory", tool_args=args, confirm=True, confirmation_token=token)
     assert rc_prom == 1
     assert "orphan_vector_blocked" in envelope_prom["errors"][0]["code"]
@@ -1368,7 +1630,9 @@ def test_f3_tier3_04_sanitization_applied_to_validation_failure_report():
         "simulate_validation_fail": True,
         "absolute_path_artifacts": ["C:\\Windows\\System32\\cmd.exe"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 1
     # Check that paths inside error report are sanitized
     assert "C:\\Windows" not in str(envelope)
@@ -1382,7 +1646,9 @@ def test_f3_tier3_05_promotion_validation_handshake_loop():
     args_invalid = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": -1.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    env_fail, rc_fail = client.execute_tool(tool_name="run_ingestion", tool_args=args_invalid)
+    env_fail, rc_fail = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_invalid
+    )
     assert rc_fail != 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 0
@@ -1398,7 +1664,9 @@ def test_f3_tier3_05_promotion_validation_handshake_loop():
     args_valid = {
         "ucf_records": [{"frame_id": "rec_fixed", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 1.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}]
     }
-    env_ok, rc_ok = client.execute_tool(tool_name="run_ingestion", tool_args=args_valid)
+    env_ok, rc_ok = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_valid
+    )
     assert rc_ok == 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 1
@@ -1443,7 +1711,9 @@ def test_f4_tier4_01_complete_happy_path_loop():
         "ucf_records": [{"frame_id": "frame001", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["C:\\Users\\jdben\\My Drive\\_AGENT\\scene_001.json"]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     assert rc_ingest == 0
     assert envelope_ingest["status"] == "success"
     assert "C:\\Users" not in str(envelope_ingest)
@@ -1492,7 +1762,9 @@ def test_f4_tier4_02_validation_failure_aborts_pipeline():
     args_ingest = {
         "ucf_records": [{"frame_id": "frame002", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "spatial_region": [0.8, 0.1, 0.2, 0.4], "payload": {}}]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(tool_name="run_ingestion", tool_args=args_ingest)
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args_ingest
+    )
     assert rc_ingest != 0
     if mock_harness_active():
         assert len(MockState.staged_records) == 0
@@ -1517,36 +1789,67 @@ def test_f4_tier4_03_path_audit_scenario():
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
         "absolute_path_artifacts": ["L:\\_DATA\\GoodQ_Data\\db\\ucf\\ucf_ledger.db"]
     }
-    envelope, rc = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope, rc = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc == 0
     envelope_str = str(envelope)
     assert "L:\\_DATA" not in envelope_str
     assert "C:\\" not in envelope_str
     assert "relative/ucf_ledger.db" in envelope["artifacts"]
 
-@pytest.mark.xfail(
-    reason="UCF lifecycle gap: promote_ucf_to_memory requires register_media + "
-           "validate_ucf_frames before promotion; test skips both prerequisites",
-    strict=False,
-)
-def test_f4_tier4_04_concurrency_isolation():
-    pass
+def test_f4_tier4_04_concurrency_isolation(monkeypatch):
     client1 = MiniAgentClient(profile="safe")
     client2 = MiniAgentClient(profile="safe")
+    scope1 = seed_validated_scope(
+        client1,
+        monkeypatch,
+        video_hash="concurrency-video-1",
+        epoch_id="concurrency-epoch-1",
+    )
+    scope2 = seed_validated_scope(
+        client2,
+        monkeypatch,
+        video_hash="concurrency-video-2",
+        epoch_id="concurrency-epoch-2",
+    )
     
     # Concurrent token requests generate unique isolated tokens
-    envelope_val1, _ = client1.validate_action(prompt="Promotion 1", tool_name="promote_ucf_to_memory", confirm=False)
-    envelope_val2, _ = client2.validate_action(prompt="Promotion 2", tool_name="promote_ucf_to_memory", confirm=False)
+    envelope_val1, _ = client1.validate_action(
+        prompt="Promotion 1", tool_name="promote_ucf_to_memory", tool_args=scope1, confirm=False
+    )
+    envelope_val2, _ = client2.validate_action(
+        prompt="Promotion 2", tool_name="promote_ucf_to_memory", tool_args=scope2, confirm=False
+    )
     
     t1 = envelope_val1["result"]["confirmation_token"]
     t2 = envelope_val2["result"]["confirmation_token"]
     
     assert t1 != t2
-    # Check that they cannot cross-validate
-    envelope_p1, rc_p1 = client1.execute_tool(tool_name="promote_ucf_to_memory", tool_args={}, confirm=True, confirmation_token=t2)
-    assert rc_p1 == 0 # The mock implementation allows any valid token from MockState to be used if not yet used, but let's check:
-    # If we want stricter separation:
-    # Let's ensure token matches token validation.
+    # A token is isolated by exact operation scope, not by Python object identity.
+    crossed, crossed_rc = client1.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope1,
+        confirm=True,
+        confirmation_token=t2,
+    )
+    assert crossed_rc == 1
+    assert crossed["errors"][0]["code"] == "token_scope_mismatch"
+
+    own1, own1_rc = client1.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope1,
+        confirm=True,
+        confirmation_token=t1,
+    )
+    own2, own2_rc = client2.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope2,
+        confirm=True,
+        confirmation_token=t2,
+    )
+    assert own1_rc == 0, own1
+    assert own2_rc == 0, own2
 
 def test_f4_tier4_05_agent_failure_recovery_scenario():
     """Verify agent failure recovery: after recovery, promote_ucf_to_memory correctly blocks
@@ -1573,7 +1876,9 @@ def test_f4_tier4_05_agent_failure_recovery_scenario():
     
     # 2. Agent recovers
     client.agent_available = True
-    envelope_ok, rc_ok = client.execute_tool(tool_name="run_ingestion", tool_args=args)
+    envelope_ok, rc_ok = execute_locally_confirmed(
+        client, tool_name="run_ingestion", tool_args=args
+    )
     assert rc_ok == 0 # Allowed
     
     # 3. Attempt promotion without prior validate_ucf_frames
@@ -1679,30 +1984,38 @@ def test_adv_timezone_aware_token_expiration():
     assert "token_expired" in envelope["errors"][0]["code"]
 
 
-@pytest.mark.xfail(
-    reason="UCF lifecycle gap: promote_ucf_to_memory requires register_media + "
-           "validate_ucf_frames before promotion; test skips both prerequisites",
-    strict=False,
-)
-def test_adv_premature_token_consumption():
+def test_adv_premature_token_consumption(monkeypatch):
     """Verify that tokens are not consumed during validate_action if they are to be executed later."""
     client = MiniAgentClient(profile="safe")
+    scope = seed_validated_scope(
+        client,
+        monkeypatch,
+        video_hash="premature-token-video",
+        epoch_id="premature-token-epoch",
+    )
     
-    env_val, rc_val = client.validate_action(prompt="Promotion", tool_name="promote_ucf_to_memory", confirm=False)
+    env_val, rc_val = client.validate_action(
+        prompt="Promotion",
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=False,
+    )
+    assert rc_val == 3
     token = env_val["result"]["confirmation_token"]
     
     env_check, rc_check = client.validate_action(
         prompt="Promotion Check", 
         tool_name="promote_ucf_to_memory", 
+        tool_args=scope,
         confirm=True, 
         confirmation_token=token
     )
     assert rc_check == 0
     
     env_exec, rc_exec = client.execute_tool(
-        tool_name="promote_ucf_to_memory", 
-        tool_args={}, 
-        confirm=True, 
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=True,
         confirmation_token=token
     )
     assert rc_exec == 0
@@ -1713,7 +2026,7 @@ def test_adv_premature_token_consumption():
 # FULL LIFECYCLE TEST: staged -> validated -> promoted
 # ==============================================================================
 
-def test_full_lifecycle_staged_validated_promoted():
+def test_full_lifecycle_staged_validated_promoted(monkeypatch):
     """Exercise the complete, doctrine-correct UCF promotion lifecycle.
 
     Doctrine:
@@ -1732,6 +2045,22 @@ def test_full_lifecycle_staged_validated_promoted():
         5. DB final state: staged == 0, validated == 0, promoted >= 2.
     """
     client = MiniAgentClient(profile="safe")
+    scope = {"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"}
+    if not mock_harness_active():
+        monkeypatch.setattr(
+            client,
+            "_execute_validate_ucf_epoch",
+            lambda _args: {"success": True, "errors": []},
+        )
+        monkeypatch.setattr(
+            client,
+            "_sync_qdrant_by_scope",
+            lambda **_kwargs: {
+                "status": "ok",
+                "points_verified": 1,
+                "failed_collections": [],
+            },
+        )
     register_media("lifecycle_vid", 60.0)
 
     # ---- Step 1: Ingest -> staged ----
@@ -1763,7 +2092,8 @@ def test_full_lifecycle_staged_validated_promoted():
             },
         ]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client,
         tool_name="run_ingestion", tool_args=args_ingest
     )
     assert rc_ingest == 0
@@ -1787,6 +2117,7 @@ def test_full_lifecycle_staged_validated_promoted():
     early_prom_token_env, rc_early = client.validate_action(
         prompt="Premature promotion attempt",
         tool_name="promote_ucf_to_memory",
+        tool_args=scope,
         confirm=False,
     )
     assert rc_early == 3
@@ -1794,7 +2125,7 @@ def test_full_lifecycle_staged_validated_promoted():
 
     envelope_early_prom, rc_early_prom = client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=early_prom_token,
     )
@@ -1820,6 +2151,7 @@ def test_full_lifecycle_staged_validated_promoted():
     envelope_val_token, rc_val_token = client.validate_action(
         prompt="Validate lifecycle frames",
         tool_name="validate_ucf_frames",
+        tool_args=scope,
         confirm=False,
     )
     assert rc_val_token == 3
@@ -1828,7 +2160,7 @@ def test_full_lifecycle_staged_validated_promoted():
 
     envelope_validate, rc_validate = client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=val_token,
     )
@@ -1862,6 +2194,7 @@ def test_full_lifecycle_staged_validated_promoted():
     envelope_prom_token, rc_prom_token = client.validate_action(
         prompt="Promote lifecycle frames",
         tool_name="promote_ucf_to_memory",
+        tool_args=scope,
         confirm=False,
     )
     assert rc_prom_token == 3
@@ -1870,7 +2203,7 @@ def test_full_lifecycle_staged_validated_promoted():
 
     envelope_promote, rc_promote = client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "lifecycle_vid", "epoch_id": "lifecycle_ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=prom_token,
     )
@@ -1944,7 +2277,8 @@ def helper_ingest_two_records(client, video_hash, epoch_id, run_id):
             },
         ]
     }
-    envelope_ingest, rc_ingest = client.execute_tool(
+    envelope_ingest, rc_ingest = execute_locally_confirmed(
+        client,
         tool_name="run_ingestion", tool_args=args_ingest
     )
     assert rc_ingest == 0
@@ -1956,10 +2290,17 @@ def test_reject_staged_frames():
     register_media("reject_staged_vid", 60.0)
     helper_ingest_two_records(client, "reject_staged_vid", "ep1", "run1")
 
+    reject_args = {
+        "video_hash": "reject_staged_vid",
+        "epoch_id": "ep1",
+        "reason": "Bad quality",
+    }
+
     # Get confirmation token for rejection
     env_token, rc_token = client.validate_action(
         prompt="Reject staged frames",
         tool_name="reject_ucf_frames",
+        tool_args=reject_args,
         confirm=False,
     )
     assert rc_token == 3
@@ -1968,7 +2309,7 @@ def test_reject_staged_frames():
     # Reject
     env_reject, rc_reject = client.execute_tool(
         tool_name="reject_ucf_frames",
-        tool_args={"video_hash": "reject_staged_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        tool_args=reject_args,
         confirm=True,
         confirmation_token=token,
     )
@@ -1998,16 +2339,26 @@ def test_reject_validated_frames():
     register_media("reject_validated_vid", 60.0)
     helper_ingest_two_records(client, "reject_validated_vid", "ep1", "run1")
 
+    validate_args = {"video_hash": "reject_validated_vid", "epoch_id": "ep1"}
+    reject_args = {
+        "video_hash": "reject_validated_vid",
+        "epoch_id": "ep1",
+        "reason": "No longer needed",
+    }
+
     # Validate
     env_token_val, rc_token_val = client.validate_action(
-        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+        prompt="Validate",
+        tool_name="validate_ucf_frames",
+        tool_args=validate_args,
+        confirm=False,
     )
     assert rc_token_val == 3
     token_val = env_token_val["result"]["confirmation_token"]
 
     env_val, rc_val = client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "reject_validated_vid", "epoch_id": "ep1"},
+        tool_args=validate_args,
         confirm=True,
         confirmation_token=token_val,
     )
@@ -2015,14 +2366,17 @@ def test_reject_validated_frames():
 
     # Reject
     env_token_rej, rc_token_rej = client.validate_action(
-        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+        prompt="Reject",
+        tool_name="reject_ucf_frames",
+        tool_args=reject_args,
+        confirm=False,
     )
     assert rc_token_rej == 3
     token_rej = env_token_rej["result"]["confirmation_token"]
 
     env_rej, rc_rej = client.execute_tool(
         tool_name="reject_ucf_frames",
-        tool_args={"video_hash": "reject_validated_vid", "epoch_id": "ep1", "reason": "No longer needed"},
+        tool_args=reject_args,
         confirm=True,
         confirmation_token=token_rej,
     )
@@ -2050,30 +2404,43 @@ def test_promote_rejected_frames_blocked():
     register_media("promote_rejected_vid", 60.0)
     helper_ingest_two_records(client, "promote_rejected_vid", "ep1", "run1")
 
+    reject_args = {
+        "video_hash": "promote_rejected_vid",
+        "epoch_id": "ep1",
+        "reason": "Bad quality",
+    }
+    promote_args = {"video_hash": "promote_rejected_vid", "epoch_id": "ep1"}
+
     # Reject
     env_token_rej, rc_token_rej = client.validate_action(
-        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+        prompt="Reject",
+        tool_name="reject_ucf_frames",
+        tool_args=reject_args,
+        confirm=False,
     )
     assert rc_token_rej == 3
     token_rej = env_token_rej["result"]["confirmation_token"]
 
     client.execute_tool(
         tool_name="reject_ucf_frames",
-        tool_args={"video_hash": "promote_rejected_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        tool_args=reject_args,
         confirm=True,
         confirmation_token=token_rej,
     )
 
     # Attempt promote
     env_token_prom, rc_token_prom = client.validate_action(
-        prompt="Promote", tool_name="promote_ucf_to_memory", confirm=False
+        prompt="Promote",
+        tool_name="promote_ucf_to_memory",
+        tool_args=promote_args,
+        confirm=False,
     )
     assert rc_token_prom == 3
     token_prom = env_token_prom["result"]["confirmation_token"]
 
     env_prom, rc_prom = client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "promote_rejected_vid", "epoch_id": "ep1"},
+        tool_args=promote_args,
         confirm=True,
         confirmation_token=token_prom,
     )
@@ -2101,28 +2468,36 @@ def test_supersede_validated_frames():
     register_media("supersede_val_vid", 60.0)
     helper_ingest_two_records(client, "supersede_val_vid", "ep1", "run1")
 
+    scope = {"video_hash": "supersede_val_vid", "epoch_id": "ep1"}
+
     # Validate
     env_token_val, rc_token_val = client.validate_action(
-        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+        prompt="Validate",
+        tool_name="validate_ucf_frames",
+        tool_args=scope,
+        confirm=False,
     )
     token_val = env_token_val["result"]["confirmation_token"]
     client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "supersede_val_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_val,
     )
 
     # Supersede
     env_token_sup, rc_token_sup = client.validate_action(
-        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+        prompt="Supersede",
+        tool_name="supersede_ucf_frames",
+        tool_args=scope,
+        confirm=False,
     )
     assert rc_token_sup == 3
     token_sup = env_token_sup["result"]["confirmation_token"]
 
     env_sup, rc_sup = client.execute_tool(
         tool_name="supersede_ucf_frames",
-        tool_args={"video_hash": "supersede_val_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_sup,
     )
@@ -2146,40 +2521,51 @@ def test_supersede_promoted_frames():
     register_media("supersede_prom_vid", 60.0)
     helper_ingest_two_records(client, "supersede_prom_vid", "ep1", "run1")
 
+    scope = {"video_hash": "supersede_prom_vid", "epoch_id": "ep1"}
+
     # Validate
     env_token_val, rc_token_val = client.validate_action(
-        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+        prompt="Validate",
+        tool_name="validate_ucf_frames",
+        tool_args=scope,
+        confirm=False,
     )
     token_val = env_token_val["result"]["confirmation_token"]
     client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_val,
     )
 
     # Promote
     env_token_prom, rc_token_prom = client.validate_action(
-        prompt="Promote", tool_name="promote_ucf_to_memory", confirm=False
+        prompt="Promote",
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=False,
     )
     token_prom = env_token_prom["result"]["confirmation_token"]
     client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_prom,
     )
 
     # Supersede
     env_token_sup, rc_token_sup = client.validate_action(
-        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+        prompt="Supersede",
+        tool_name="supersede_ucf_frames",
+        tool_args=scope,
+        confirm=False,
     )
     assert rc_token_sup == 3
     token_sup = env_token_sup["result"]["confirmation_token"]
 
     env_sup, rc_sup = client.execute_tool(
         tool_name="supersede_ucf_frames",
-        tool_args={"video_hash": "supersede_prom_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_sup,
     )
@@ -2207,15 +2593,20 @@ def test_supersede_staged_blocked():
     register_media("supersede_staged_vid", 60.0)
     helper_ingest_two_records(client, "supersede_staged_vid", "ep1", "run1")
 
+    scope = {"video_hash": "supersede_staged_vid", "epoch_id": "ep1"}
+
     # Attempt supersede
     env_token_sup, rc_token_sup = client.validate_action(
-        prompt="Supersede", tool_name="supersede_ucf_frames", confirm=False
+        prompt="Supersede",
+        tool_name="supersede_ucf_frames",
+        tool_args=scope,
+        confirm=False,
     )
     token_sup = env_token_sup["result"]["confirmation_token"]
 
     env_sup, rc_sup = client.execute_tool(
         tool_name="supersede_ucf_frames",
-        tool_args={"video_hash": "supersede_staged_vid", "epoch_id": "ep1"},
+        tool_args=scope,
         confirm=True,
         confirmation_token=token_sup,
     )
@@ -2243,26 +2634,39 @@ def test_revalidate_rejected_or_superseded_noop():
     register_media("revalidate_vid", 60.0)
     helper_ingest_two_records(client, "revalidate_vid", "ep1", "run1")
 
+    reject_args = {
+        "video_hash": "revalidate_vid",
+        "epoch_id": "ep1",
+        "reason": "Bad quality",
+    }
+    validate_args = {"video_hash": "revalidate_vid", "epoch_id": "ep1"}
+
     # Reject
     env_token_rej, rc_token_rej = client.validate_action(
-        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+        prompt="Reject",
+        tool_name="reject_ucf_frames",
+        tool_args=reject_args,
+        confirm=False,
     )
     token_rej = env_token_rej["result"]["confirmation_token"]
     client.execute_tool(
         tool_name="reject_ucf_frames",
-        tool_args={"video_hash": "revalidate_vid", "epoch_id": "ep1", "reason": "Bad quality"},
+        tool_args=reject_args,
         confirm=True,
         confirmation_token=token_rej,
     )
 
     # Attempt Validate
     env_token_val, rc_token_val = client.validate_action(
-        prompt="Validate", tool_name="validate_ucf_frames", confirm=False
+        prompt="Validate",
+        tool_name="validate_ucf_frames",
+        tool_args=validate_args,
+        confirm=False,
     )
     token_val = env_token_val["result"]["confirmation_token"]
     env_val, rc_val = client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "revalidate_vid", "epoch_id": "ep1"},
+        tool_args=validate_args,
         confirm=True,
         confirmation_token=token_val,
     )
@@ -2288,48 +2692,75 @@ def test_full_ingestion_supersede_lifecycle():
     """Test 8: Full pipeline run: Run 1 promoted -> Run 2 staged -> validate Run 2 -> supersede Run 1 -> promote Run 2."""
     client = MiniAgentClient(profile="safe")
     register_media("lifecycle_supersede_vid", 60.0)
+    ep1_scope = {"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"}
+    ep2_scope = {"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep2"}
 
     # Run 1 (ep1)
     helper_ingest_two_records(client, "lifecycle_supersede_vid", "ep1", "run1")
-    env_t_v1, _ = client.validate_action(prompt="Validate ep1", tool_name="validate_ucf_frames", confirm=False)
+    env_t_v1, _ = client.validate_action(
+        prompt="Validate ep1",
+        tool_name="validate_ucf_frames",
+        tool_args=ep1_scope,
+        confirm=False,
+    )
     client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        tool_args=ep1_scope,
         confirm=True,
         confirmation_token=env_t_v1["result"]["confirmation_token"],
     )
-    env_t_p1, _ = client.validate_action(prompt="Promote ep1", tool_name="promote_ucf_to_memory", confirm=False)
+    env_t_p1, _ = client.validate_action(
+        prompt="Promote ep1",
+        tool_name="promote_ucf_to_memory",
+        tool_args=ep1_scope,
+        confirm=False,
+    )
     client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        tool_args=ep1_scope,
         confirm=True,
         confirmation_token=env_t_p1["result"]["confirmation_token"],
     )
 
     # Run 2 (ep2)
     helper_ingest_two_records(client, "lifecycle_supersede_vid", "ep2", "run2")
-    env_t_v2, _ = client.validate_action(prompt="Validate ep2", tool_name="validate_ucf_frames", confirm=False)
+    env_t_v2, _ = client.validate_action(
+        prompt="Validate ep2",
+        tool_name="validate_ucf_frames",
+        tool_args=ep2_scope,
+        confirm=False,
+    )
     client.execute_tool(
         tool_name="validate_ucf_frames",
-        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep2"},
+        tool_args=ep2_scope,
         confirm=True,
         confirmation_token=env_t_v2["result"]["confirmation_token"],
     )
 
     # Supersede Run 1 (ep1)
-    env_t_s1, _ = client.validate_action(prompt="Supersede ep1", tool_name="supersede_ucf_frames", confirm=False)
+    env_t_s1, _ = client.validate_action(
+        prompt="Supersede ep1",
+        tool_name="supersede_ucf_frames",
+        tool_args=ep1_scope,
+        confirm=False,
+    )
     client.execute_tool(
         tool_name="supersede_ucf_frames",
-        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep1"},
+        tool_args=ep1_scope,
         confirm=True,
         confirmation_token=env_t_s1["result"]["confirmation_token"],
     )
 
     # Promote Run 2 (ep2)
-    env_t_p2, _ = client.validate_action(prompt="Promote ep2", tool_name="promote_ucf_to_memory", confirm=False)
+    env_t_p2, _ = client.validate_action(
+        prompt="Promote ep2",
+        tool_name="promote_ucf_to_memory",
+        tool_args=ep2_scope,
+        confirm=False,
+    )
     client.execute_tool(
         tool_name="promote_ucf_to_memory",
-        tool_args={"video_hash": "lifecycle_supersede_vid", "epoch_id": "ep2"},
+        tool_args=ep2_scope,
         confirm=True,
         confirmation_token=env_t_p2["result"]["confirmation_token"],
     )
@@ -2355,17 +2786,21 @@ def test_reject_supersede_token_validation():
     client = MiniAgentClient(profile="safe")
     register_media("token_val_vid", 60.0)
     helper_ingest_two_records(client, "token_val_vid", "ep1", "run1")
+    cross_operation_args = {"video_hash": "token_val_vid", "epoch_id": "ep1"}
 
     # Request reject token
     env_token_rej, rc_token_rej = client.validate_action(
-        prompt="Reject", tool_name="reject_ucf_frames", confirm=False
+        prompt="Reject",
+        tool_name="reject_ucf_frames",
+        tool_args=cross_operation_args,
+        confirm=False,
     )
     token_rej = env_token_rej["result"]["confirmation_token"]
 
     # 1. Try to use reject token on supersede_ucf_frames -> should fail with token_operation_mismatch
     env_fail1, rc_fail1 = client.execute_tool(
         tool_name="supersede_ucf_frames",
-        tool_args={"video_hash": "token_val_vid", "epoch_id": "ep1"},
+        tool_args=cross_operation_args,
         confirm=True,
         confirmation_token=token_rej,
     )
@@ -2383,18 +2818,30 @@ def test_reject_supersede_token_validation():
     assert "invalid_confirmation_token" in env_fail2["errors"][0]["code"]
 
     # 3. Try to reject with simulated expired token
+    expired_reject_args = {
+        "video_hash": "token_val_vid",
+        "epoch_id": "ep1",
+        "reason": "test",
+    }
     env_token_exp, rc_token_exp = client.validate_action(
         prompt="Reject Expired",
         tool_name="reject_ucf_frames",
         confirm=False,
-        tool_args={"simulate_expired_token": True}
+        tool_args=expired_reject_args,
     )
     assert rc_token_exp == 3
     token_exp = env_token_exp["result"]["confirmation_token"]
+    expired_at = datetime.utcnow() - timedelta(seconds=3600)
+    if mock_harness_active():
+        MockState.tokens[token_exp]["timestamp"] = expired_at
+    else:
+        tokens = client._load_tokens()
+        tokens[token_exp]["timestamp"] = expired_at.isoformat() + "Z"
+        client._save_tokens(tokens)
 
     env_fail3, rc_fail3 = client.execute_tool(
         tool_name="reject_ucf_frames",
-        tool_args={"video_hash": "token_val_vid", "epoch_id": "ep1", "reason": "test", "simulate_expired_token": True},
+        tool_args=expired_reject_args,
         confirm=True,
         confirmation_token=token_exp,
     )

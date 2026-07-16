@@ -15,32 +15,17 @@ import threading
 import pytest
 from pathlib import Path
 from steps.common.config_loader import load_configs
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-def _load_ucf_ledger():
-    import importlib.util
-    ucf_ledger_path = REPO_ROOT / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    if not ucf_ledger_path.exists():
-        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
-    
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
-    
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ucf_ledger"] = module
-    spec.loader.exec_module(module)
-    return module
-
 @pytest.fixture
 def temp_ucf_ledger(tmp_path):
     """Creates a temporary ucf_ledger.db for testing."""
-    ucf_module = _load_ucf_ledger()
     db_path = tmp_path / "test_ucf_ledger.db"
-    client = ucf_module.UCFLedgerClient(str(db_path))
+    client = UCFLedgerClient(str(db_path))
     client.init_schema()
     
     # Register dummy media

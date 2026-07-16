@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_CONTRIBUTOR_GUIDE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Contributing to GoodQ4All
 
 Thank you for your interest in contributing to GoodQ4All! We're excited to build this local-first, privacy-preserving multimodal intelligence system together.
@@ -28,7 +32,7 @@ Preferred Windows path:
 python scripts/bootstrap_install.py
 ```
 
-For manual environment control, follow the [Installation Guide](docs/guides/install/INSTALL.md) and the
+For manual environment control, follow the [installation bootstrap](docs/bootstrap/INSTALL_BOOTSTRAP.md) and the
 [bootstrap installer guide](docs/bootstrap/INSTALL_BOOTSTRAP.md) to set up:
 - the baseline Conda environment from `environment.yml`
 - optional WSL2 audio acceleration

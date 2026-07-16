@@ -10,9 +10,10 @@ Use this skill when operating the GoodQ4All repo locally.
 ## First Reads
 
 1. `AGENTS.md`
-2. `docs/agent/CURRENT_STATE.md`
-3. `docs/agent/current_state.json`
-4. The canonical contract for the subsystem you are touching
+2. `docs/agent/PROJECT_ORIENTATION.md`
+3. `docs/agent/CURRENT_STATE.md`
+4. `docs/agent/current_state.json`
+5. The canonical contract for the subsystem you are touching
 
 ## Operating Rules
 

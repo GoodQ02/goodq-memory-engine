@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from retrieval.narrative_summarizer import synthesize_narrative
 
-client = TestClient(app)
+client = TestClient(app, client=("127.0.0.1", 50000))
 
 
 @pytest.fixture
@@ -94,8 +94,7 @@ def test_summarize_more_than_20_scenes(mock_temporal_search, mock_llm_client):
     assert result["status"] == "success"
     assert result["source_count"] == 20
     assert result["truncated"] is True
-    assert len(result["warnings"]) == 1
-    assert "Only the top 20" in result["warnings"][0]
+    assert result["warnings"] == ["source_results_truncated"]
 
 
 def test_summarize_empty_scenes(mock_temporal_search, mock_llm_client):
@@ -111,7 +110,7 @@ def test_summarize_empty_scenes(mock_temporal_search, mock_llm_client):
     assert result["status"] == "success"
     assert result["source_count"] == 0
     assert result["truncated"] is False
-    assert result["warnings"] == []
+    assert result["warnings"] == ["no_matching_scenes"]
     assert "No matching scenes" in result["summary"]
 
 
@@ -132,7 +131,7 @@ def test_summarize_llm_unavailable(mock_temporal_search, mock_llm_client):
     assert result["query"]["entities"] == ["Jay"]
     assert result["source_count"] == 5
     assert result["truncated"] is False
-    assert "vLLM and Ollama are offline." in result["warnings"]
+    assert result["warnings"] == ["model_unavailable"]
 
 
 def test_summarize_llm_exception(mock_temporal_search, mock_llm_client):
@@ -150,58 +149,25 @@ def test_summarize_llm_exception(mock_temporal_search, mock_llm_client):
     assert "query" in result
     assert result["source_count"] == 5
     assert result["truncated"] is False
-    assert any("Mock connection lost" in w for w in result["warnings"])
+    assert result["warnings"] == ["llm_inference_error"]
+    assert "Mock connection lost" not in str(result)
 
 
-def test_summarize_api_endpoint(mock_temporal_search, mock_llm_client):
-    """
-    Verify API request routing and response schema compliance.
-    """
-    mock_temporal_search.return_value = {
-        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
-        "results": generate_mock_scenes(7)
-    }
+def test_summarize_api_endpoint_rejects_legacy_synchronous_body(
+    mock_temporal_search,
+    mock_llm_client,
+):
+    response = client.post(
+        "/api/search/temporal/summarize",
+        json={
+            "entities": ["Jay"],
+            "summary_style": "executive",
+            "max_results": 10,
+        },
+    )
 
-    payload = {
-        "entities": ["Jay"],
-        "summary_style": "executive",
-        "max_results": 10
-    }
-
-    response = client.post("/api/search/temporal/summarize", json=payload)
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["status"] == "success"
-    assert data["source_count"] == 7
-    assert data["truncated"] is False
-    assert data["warnings"] == []
-    assert "query" in data
-    assert data["query"]["summary_style"] == "executive"
-
-
-def test_summarize_api_endpoint_llm_unavailable(mock_temporal_search, mock_llm_client):
-    """
-    Verify endpoint returns 200 (with llm_unavailable status) and valid schema when LLM is offline.
-    """
-    mock_temporal_search.return_value = {
-        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
-        "results": generate_mock_scenes(7)
-    }
-    mock_llm_client.available = False
-
-    payload = {
-        "entities": ["Jay"],
-        "summary_style": "executive",
-        "max_results": 10
-    }
-
-    response = client.post("/api/search/temporal/summarize", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "llm_unavailable"
-    assert "query" in data
-    assert data["query"]["summary_style"] == "executive"
+    assert response.status_code == 422
+    mock_temporal_search.assert_not_called()
 
 
 def test_parse_narrative_segments():
@@ -224,9 +190,11 @@ def test_parse_narrative_segments():
     assert segments[0]["scene_id"] == "id1"
     assert segments[0]["text"] == "Segment one text."
     assert segments[0]["scene_index"] == 1
+    assert "source_file" not in segments[0]
     assert segments[1]["scene_id"] == "id2"
     assert segments[1]["text"] == "Segment two text."
     assert segments[1]["scene_index"] == 2
+    assert "source_file" not in segments[1]
 
     # Test case 2: Auto-healing for deep transition mode starting with [Scene 1] (shift + 1)
     mock_scenes_3 = [
@@ -268,4 +236,102 @@ def test_parse_narrative_segments():
     assert segments_spaces[0]["scene_id"] == "id1"
     assert segments_spaces[0]["text"] == "Segment one text."
     assert segments_spaces[0]["scene_index"] == 1
+
+
+def test_summarize_uses_one_injected_config_for_retrieval_and_models(
+    mock_temporal_search,
+    mock_llm_client,
+    monkeypatch,
+):
+    import retrieval.narrative_summarizer as module
+
+    cfg = {
+        "paths": {
+            "db_path": "private-epoch/memory.db",
+            "knowledge_graph_db": "private-epoch/knowledge_graph.db",
+        },
+        "llm": {"models": {}},
+    }
+    mock_temporal_search.return_value = {
+        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
+        "results": generate_mock_scenes(1),
+    }
+    mock_llm_client.get_active_model.return_value = "Llama3.2-Ollama"
+    monkeypatch.setattr(
+        module,
+        "load_configs",
+        MagicMock(side_effect=AssertionError("ambient config reload")),
+    )
+    build_models = MagicMock(return_value=[{"name": "verified-model"}])
+    monkeypatch.setattr(module, "build_llm_models", build_models)
+
+    result = synthesize_narrative(
+        entities=["Jay"],
+        config=cfg,
+        expected_epoch_id="private-epoch",
+    )
+
+    assert result["status"] == "success"
+    build_models.assert_called_once_with(cfg)
+    assert mock_temporal_search.call_args.kwargs["config"] is cfg
+    assert mock_temporal_search.call_args.kwargs["expected_epoch_id"] == "private-epoch"
+
+
+def test_summarize_uses_verified_models_without_rebuilding_policy(
+    mock_temporal_search,
+    mock_llm_client,
+    monkeypatch,
+):
+    import retrieval.narrative_summarizer as module
+
+    cfg = {"paths": {}, "llm": {}}
+    verified_models = [MagicMock(name="verified-model")]
+    mock_temporal_search.return_value = {
+        "query": {"entities": ["Jay"], "grouping": "semantic_episode"},
+        "results": generate_mock_scenes(1),
+    }
+    mock_llm_client.get_active_model.return_value = "Llama3.2-Ollama"
+    rebuild_policy = MagicMock(
+        side_effect=AssertionError("model policy rebuilt after verification")
+    )
+    monkeypatch.setattr(module, "build_llm_models", rebuild_policy)
+
+    result = synthesize_narrative(
+        entities=["Jay"],
+        config=cfg,
+        expected_epoch_id="private-epoch",
+        models=verified_models,
+        allow_model_activation=False,
+        allow_environment_proxies=False,
+    )
+
+    assert result["status"] == "success"
+    rebuild_policy.assert_not_called()
+    assert module.LLMClient.call_args.kwargs["models"] is verified_models
+    assert module.LLMClient.call_args.kwargs["allow_auto_activation"] is False
+    assert module.LLMClient.call_args.kwargs["allow_environment_proxies"] is False
+
+
+def test_temporal_search_rejects_epoch_drift_before_database_open(
+    tmp_path,
+    monkeypatch,
+):
+    import retrieval.temporal_reasoning as module
+
+    configured_epoch = tmp_path / "epoch_current"
+    paths = {
+        "db_path": configured_epoch / "memory.db",
+        "knowledge_graph_db": configured_epoch / "knowledge_graph.db",
+    }
+    monkeypatch.setattr(module, "get_runtime_paths", lambda _cfg: paths)
+    connect = MagicMock(side_effect=AssertionError("database opened before epoch check"))
+    monkeypatch.setattr(module.sqlite3, "connect", connect)
+
+    with pytest.raises(RuntimeError, match="epoch"):
+        module.temporal_search(
+            config={"paths": {}},
+            expected_epoch_id="epoch_changed",
+        )
+
+    connect.assert_not_called()
 

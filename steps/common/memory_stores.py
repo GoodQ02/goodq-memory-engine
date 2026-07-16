@@ -11,11 +11,13 @@ from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 from steps.common.retrieval_events import (
     RetrievalEvent,
+    RetrievalEventPolicy,
     emit_retrieval_events,
     normalize_retrieval_context,
-    retrieval_events_enabled,
+    resolve_retrieval_event_policy,
     utc_now_iso,
 )
+from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +32,17 @@ class EphemeralMemory(MemoryStore):
         max_items: int = 512,
         *,
         db_path: Optional[str] = None,
-        log_dir: Optional[str] = None,
-        log_retrieval_events: bool = True,
+        retrieval_event_policy: Optional[RetrievalEventPolicy] = None,
     ):
         self.dim = dim
         self.ttl_seconds = ttl_seconds
         self.max_items = max_items
         self.db_path = db_path
-        self.log_dir = log_dir
-        self.log_retrieval_events = log_retrieval_events
+        self.retrieval_event_policy = (
+            retrieval_event_policy
+            if retrieval_event_policy is not None
+            else RetrievalEventPolicy()
+        )
         self._items: List[Dict[str, Any]] = []
         self._hits = 0
         self._misses = 0
@@ -71,7 +75,14 @@ class EphemeralMemory(MemoryStore):
         self._purge_expired()
         return True
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         import numpy as np  # type: ignore
 
         self._purge_expired()
@@ -108,7 +119,7 @@ class EphemeralMemory(MemoryStore):
         else:
             self._misses += 1
         try:
-            context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+            context = normalize_retrieval_context(retrieval_context)
             ts = utc_now_iso()
             events: List[RetrievalEvent] = []
             for h in results:
@@ -139,7 +150,11 @@ class EphemeralMemory(MemoryStore):
                         },
                     )
                 )
-            emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+            emit_retrieval_events(
+                self.db_path,
+                events,
+                policy=self.retrieval_event_policy,
+            )
         except Exception as e:
             logger.warning(
                 "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
@@ -174,16 +189,21 @@ class FaissMemory(MemoryStore):
         dim: int,
         db_path: Optional[str] = None,
         *,
-        log_dir: Optional[str] = None,
-        log_retrieval_events: bool = True,
+        retrieval_event_policy: Optional[RetrievalEventPolicy] = None,
         cfg: Optional[Dict[str, Any]] = None,
     ):
         self.index_path = index_path
         self.dim = dim
         self.db_path = db_path
-        self.log_dir = log_dir
-        self.log_retrieval_events = log_retrieval_events
+        self.retrieval_event_policy = (
+            retrieval_event_policy
+            if retrieval_event_policy is not None
+            else RetrievalEventPolicy()
+        )
         self.cfg = cfg
+
+    def _store_ref(self) -> Optional[str]:
+        return os.path.basename(self.index_path) if self.index_path else None
 
     def _load_index(self):
         import faiss  # type: ignore
@@ -218,10 +238,10 @@ class FaissMemory(MemoryStore):
                     return False
                 if missing_id_count or len(ids) != len(vecs):
                     logger.warning(
-                        "memory_stores operation failed store=%s operation=%s index_path=%s reason=%s vector_count=%s id_count=%s missing_id_count=%s",
+                        "memory_stores operation failed store=%s operation=%s store_ref=%s reason=%s vector_count=%s id_count=%s missing_id_count=%s",
                         "faiss",
                         "insert",
-                        self.index_path,
+                        self._store_ref(),
                         "explicit_ids_required",
                         len(vecs),
                         len(ids),
@@ -235,16 +255,22 @@ class FaissMemory(MemoryStore):
                 return True
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "insert",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
             return False
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         if not self.index_path or not os.path.isfile(self.index_path):
             return []
         if not query_vector or len(query_vector) != self.dim:
@@ -265,12 +291,11 @@ class FaissMemory(MemoryStore):
                 attach_provenance_to_hits(self.db_path, out)
             except Exception as e:
                 logger.warning(
-                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                     "faiss",
                     "attach_provenance",
-                    self.index_path,
+                    self._store_ref(),
                     type(e).__name__,
-                    e,
                 )
 
             # Shadow-Mode scoring comparison
@@ -281,19 +306,22 @@ class FaissMemory(MemoryStore):
                     if shadow_mode:
                         valid_ids = [h["id"] for h in out if h["id"] is not None]
                         if valid_ids:
-                            import sqlite3
-                            conn = sqlite3.connect(self.db_path)
-                            placeholders = ",".join("?" for _ in valid_ids)
-                            cursor = conn.execute(
-                                f"""
-                                SELECT faiss_id, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
-                                FROM embeddings
-                                WHERE faiss_id IN ({placeholders})
-                                """,
-                                valid_ids
+                            conn = sqlite_read_authority.open_sqlite_read_connection(
+                                self.db_path
                             )
-                            rows = cursor.fetchall()
-                            conn.close()
+                            try:
+                                placeholders = ",".join("?" for _ in valid_ids)
+                                cursor = conn.execute(
+                                    f"""
+                                    SELECT faiss_id, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                                    FROM embeddings
+                                    WHERE faiss_id IN ({placeholders})
+                                    """,
+                                    valid_ids
+                                )
+                                rows = cursor.fetchall()
+                            finally:
+                                conn.close()
 
                             sidecars = {}
                             for r_id, tq_idx_b, tq_norm_val, tq_sign_b, tq_res_val in rows:
@@ -378,7 +406,7 @@ class FaissMemory(MemoryStore):
                     utc_now_iso,
                 )
 
-                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                context = normalize_retrieval_context(retrieval_context)
                 ts = utc_now_iso()
                 events: List[RetrievalEvent] = []
                 for h in out:
@@ -389,12 +417,11 @@ class FaissMemory(MemoryStore):
                         score_f = float(score) if score is not None else None
                     except Exception as e:
                         logger.warning(
-                            "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                            "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                             "faiss",
                             "query.score_parse",
-                            self.index_path,
+                            self._store_ref(),
                             type(e).__name__,
-                            e,
                         )
                         score_f = None
                     payload = h.get("payload") if isinstance(h.get("payload"), dict) else {}
@@ -424,30 +451,31 @@ class FaissMemory(MemoryStore):
                             score=score_f,
                             details={
                                 "store_type": "faiss",
-                                "store_ref": os.path.basename(self.index_path) if self.index_path else None,
-                                "index_path": self.index_path,
+                                "store_ref": self._store_ref(),
                             },
                         )
                     )
-                emit_retrieval_events(self.db_path, events, enabled=self.log_retrieval_events, log_dir=self.log_dir)
+                emit_retrieval_events(
+                    self.db_path,
+                    events,
+                    policy=self.retrieval_event_policy,
+                )
             except Exception as e:
                 logger.warning(
-                    "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                    "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                     "faiss",
                     "emit_retrieval_events",
-                    self.index_path,
+                    self._store_ref(),
                     type(e).__name__,
-                    e,
                 )
             return out
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "query",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
             return []
 
@@ -459,12 +487,11 @@ class FaissMemory(MemoryStore):
                 return {"available": True, "vectors": int(getattr(idx, "ntotal", 0)), "dim": self.dim}
         except Exception as e:
             logger.warning(
-                "memory_stores operation failed store=%s operation=%s index_path=%s exc_type=%s exc=%s",
+                "memory_stores operation failed store=%s operation=%s store_ref=%s exc_type=%s",
                 "faiss",
                 "stats",
-                self.index_path,
+                self._store_ref(),
                 type(e).__name__,
-                e,
             )
         return {"available": False, "vectors": 0, "dim": self.dim}
 
@@ -477,8 +504,20 @@ class QdrantMemory(MemoryStore):
     def insert(self, vectors: List[Dict[str, Any]]) -> bool:
         return self.client.upsert(vectors)
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        return self.client.query(query_vector, top_k=top_k, payload_filter=filter)
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
+        return self.client.query(
+            query_vector,
+            top_k=top_k,
+            payload_filter=filter,
+            retrieval_context=retrieval_context,
+        )
 
     def stats(self) -> Dict[str, Any]:
         return {"available": True, "collection": getattr(self.client, "cfg", None).collection if getattr(self.client, "cfg", None) else None}
@@ -492,25 +531,13 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
     ttl_seconds = memory_cfg.get("ttl_seconds", 900)
     max_ephemeral = memory_cfg.get("max_ephemeral_items", 512)
     text_dim = dims_cfg.get("text", 384)
-    log_retrieval = True
-    try:
-        log_retrieval = retrieval_events_enabled(cfg, default=True)
-    except Exception as e:
-        logger.warning(
-            "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",
-            "build_text_stores",
-            "retrieval_events_enabled",
-            type(e).__name__,
-            e,
-        )
-        log_retrieval = True
+    retrieval_event_policy = resolve_retrieval_event_policy(cfg)
     stores["ephemeral"] = EphemeralMemory(
         text_dim,
         ttl_seconds=ttl_seconds,
         max_items=max_ephemeral,
         db_path=paths.get("db_path"),
-        log_dir=paths.get("log_dir"),
-        log_retrieval_events=log_retrieval,
+        retrieval_event_policy=retrieval_event_policy,
     )
     faiss_path = paths.get("faiss_index_path") or ""
     if faiss_path:
@@ -518,13 +545,17 @@ def build_text_stores(cfg: Dict[str, Any]) -> Dict[str, MemoryStore]:
             faiss_path,
             text_dim,
             db_path=paths.get("db_path"),
-            log_dir=paths.get("log_dir"),
-            log_retrieval_events=log_retrieval,
+            retrieval_event_policy=retrieval_event_policy,
             cfg=cfg,
         )
     q_client = None
     try:
-        q_client = build_qdrant_client(cfg, dim=text_dim, key="text")
+        q_client = build_qdrant_client(
+            cfg,
+            dim=text_dim,
+            key="text",
+            retrieval_event_policy=retrieval_event_policy,
+        )
     except Exception as e:
         logger.warning(
             "memory_stores operation failed store=%s operation=%s exc_type=%s exc=%s",

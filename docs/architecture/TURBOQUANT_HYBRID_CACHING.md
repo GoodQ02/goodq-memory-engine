@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # TurboQuant Hybrid-Precision Vector Caching
 
 This document details the mathematical framework, cache invalidation policies, and integration details of the **TurboQuant** sidecar vector caching system implemented in GoodQ4All.

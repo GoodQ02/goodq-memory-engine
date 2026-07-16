@@ -16,6 +16,7 @@ def _load_route_module(module_name: str):
     spec = importlib.util.spec_from_file_location(f"tests.{module_name}_route_sentiment", module_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module.__name__] = module
     spec.loader.exec_module(module)
     return module
 
@@ -29,7 +30,7 @@ class _FakeSearchEngine:
         self.weight_visual = 0.4
         self.weight_audio = 0.1
 
-    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None):
+    def search_multimodal(self, query: str, top_k: int, modalities: list[str] | None = None, **kwargs):
         return [
             {
                 "id": "video_001:101",

@@ -2,7 +2,7 @@
 
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 ## Purpose
 
@@ -100,6 +100,18 @@ Use these comment badges at the top of each document.
 4. EXPERIMENTAL docs cannot be cited as runtime contract.
 5. Every doc update must refresh `DOC_LAST_VERIFIED` when semantics change.
 6. New docs must declare a type badge before merge.
+7. `DOC_BADGE` values are limited to `CANONICAL`, `OPERATIONAL`,
+   `HISTORICAL`, and `EXPERIMENTAL`; narrower roles belong in `DOC_STATUS`.
+8. Active Markdown must contain exactly one badge, one uppercase status, and
+   one valid, non-future ISO `DOC_LAST_VERIFIED` date in its header.
+9. Schema-governed `SKILL.md` files are exempt because their YAML frontmatter
+   must remain first. Their package schema and skill verifier govern metadata.
+10. Generated indexes use `OPERATIONAL / GENERATED_INDEX`; they are discovery
+    surfaces and cannot claim canonical authority.
+11. `DOC_STATUS` uses the closed compatibility registry
+    `ALLOWED_DOC_STATUSES` in `scripts/docs/doc_authority_lint.py`. Adding a
+    status requires a policy review plus a focused regression test; arbitrary
+    uppercase labels are not accepted.
 
 ## Canonical Location Rules
 
@@ -113,6 +125,9 @@ Use these comment badges at the top of each document.
 2. If an operational guide conflicts with canonical doctrine, treat the guide as stale until corrected.
 3. Every phase checkpoint must record verified date and commit hash in canonical docs.
 4. `docs/bootstrap/doc_authority_map.md` is a curated authority index, not a whole-repo generated snapshot.
+5. Run `python scripts/docs/doc_authority_lint.py verify` to check metadata,
+   active links, bounded mission naming, generated-index parity, current-state
+   parity, active epoch claims, and Qdrant storage-root semantics.
 
 ## Precedence Rules
 

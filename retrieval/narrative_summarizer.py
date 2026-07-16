@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from retrieval.temporal_reasoning import temporal_search
 from steps.common.config_loader import load_configs
 from steps.common.llm_model_factory import build_llm_models
-from lib.llm_client import LLMClient
+from lib.llm_client import LLMClient, ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +56,11 @@ def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, l
     if is_deep:
         # Map leading text to Scene 1
         scene_id = None
-        source_file = None
         start_time = None
         end_time = None
         if len(source_scenes) > 0:
             scene = source_scenes[0]
             scene_id = scene.get("scene_id")
-            source_file = scene.get("source_file")
             start_time = scene.get("start_time")
             end_time = scene.get("end_time")
             
@@ -70,7 +68,6 @@ def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, l
             "scene_index": 1,
             "scene_id": scene_id,
             "text": leading,
-            "source_file": source_file,
             "start_time": start_time,
             "end_time": end_time
         })
@@ -86,7 +83,6 @@ def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, l
             "scene_index": None,
             "scene_id": None,
             "text": leading,
-            "source_file": None,
             "start_time": None,
             "end_time": None
         })
@@ -105,14 +101,12 @@ def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, l
             
         scene_idx = target_scene_num - 1
         scene_id = None
-        source_file = None
         start_time = None
         end_time = None
         
         if 0 <= scene_idx < len(source_scenes):
             scene = source_scenes[scene_idx]
             scene_id = scene.get("scene_id")
-            source_file = scene.get("source_file")
             start_time = scene.get("start_time")
             end_time = scene.get("end_time")
             
@@ -120,7 +114,6 @@ def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, l
             "scene_index": target_scene_num,
             "scene_id": scene_id,
             "text": segment_text,
-            "source_file": source_file,
             "start_time": start_time,
             "end_time": end_time
         })
@@ -141,12 +134,18 @@ def synthesize_narrative(
     max_results: int = 25,
     grouping: str = "semantic_episode",
     summary_style: str = "narrative",
+    config: Optional[Dict[str, Any]] = None,
+    expected_epoch_id: Optional[str] = None,
+    models: Optional[List[ModelConfig]] = None,
+    allow_model_activation: bool = True,
+    allow_environment_proxies: bool = True,
 ) -> Dict[str, Any]:
     """
     Execute chronological narrative search and synthesize results using a local LLM.
     Enforces the strict no-invention rule and preserves dynamic evidence metrics.
     """
     # 1. Fetch matching scene sequence
+    resolved_config = config if config is not None else load_configs({})
     search_res = temporal_search(
         entities=entities,
         start_date=start_date,
@@ -156,6 +155,8 @@ def synthesize_narrative(
         modality=modality,
         max_results=max_results,
         grouping=grouping,
+        config=resolved_config,
+        expected_epoch_id=expected_epoch_id,
     )
     results = search_res.get("results", [])
     total_found = len(results)
@@ -289,20 +290,21 @@ def synthesize_narrative(
             "source_scene_ids": [],
             "source_count": 0,
             "truncated": False,
-            "warnings": [],
+            "warnings": ["no_matching_scenes"],
         }
 
     # 5. Initialize LLM Client with active configs
-    cfg = load_configs({})
     try:
-        models = build_llm_models(cfg)
+        resolved_models = models if models is not None else build_llm_models(resolved_config)
         client = LLMClient(
-            models=models,
+            models=resolved_models,
             health_check_interval=60,
             max_retries=2,
             timeout=45,
             cache_ttl=300,
             enable_health_checks=True,
+            allow_auto_activation=allow_model_activation,
+            allow_environment_proxies=allow_environment_proxies,
         )
     except Exception as e:
         logger.error(f"Failed to initialize LLMClient: {e}", exc_info=True)
@@ -318,7 +320,7 @@ def synthesize_narrative(
             "source_scene_ids": source_scene_ids,
             "source_count": source_count,
             "truncated": truncated,
-            "warnings": ["LLM client config error."],
+            "warnings": ["llm_config_unavailable"],
         }
 
     if not client.available:
@@ -334,7 +336,7 @@ def synthesize_narrative(
             "source_scene_ids": source_scene_ids,
             "source_count": source_count,
             "truncated": truncated,
-            "warnings": ["vLLM and Ollama are offline."],
+            "warnings": ["model_unavailable"],
         }
 
     # 6. Execute inference chat request
@@ -364,7 +366,7 @@ def synthesize_narrative(
                     "source_scene_ids": source_scene_ids,
                     "source_count": source_count,
                     "truncated": truncated,
-                    "warnings": [f"Llama3.2-Ollama is {reason}."],
+                    "warnings": ["required_model_unavailable"],
                 }
         
         # Estimate input tokens: 1 token is approx 2.8 characters
@@ -400,7 +402,7 @@ def synthesize_narrative(
                 "source_scene_ids": source_scene_ids,
                 "source_count": source_count,
                 "truncated": truncated,
-                "warnings": [f"Failover from Llama3.2-Ollama to {model_used} occurred."],
+                "warnings": ["model_failover_blocked"],
             }
 
         segments = None
@@ -409,7 +411,7 @@ def synthesize_narrative(
 
         warnings_list = []
         if truncated:
-            warnings_list.append("Only the top 20 matching scenes were summarized.")
+            warnings_list.append("source_results_truncated")
 
         return {
             "query": {
@@ -435,10 +437,10 @@ def synthesize_narrative(
                 "summary_style": summary_style,
             },
             "status": "llm_unavailable",
-            "summary": f"LLM inference request failed: {str(e)}",
+            "summary": "LLM inference request failed.",
             "model_used": "none",
             "source_scene_ids": source_scene_ids,
             "source_count": source_count,
             "truncated": truncated,
-            "warnings": [f"Inference error: {str(e)}"],
+            "warnings": ["llm_inference_error"],
         }

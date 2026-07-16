@@ -1,0 +1,939 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from agents.mini_agent_client import MiniAgentClient
+
+
+def _audit_path() -> Path:
+    import os
+
+    return Path(os.environ["GOODQ_TOOL_AUDIT_LOG"])
+
+
+def _rows() -> list[dict]:
+    path = _audit_path()
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _client() -> MiniAgentClient:
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    client.agent_available = True
+    return client
+
+
+def _external_outcome(**overrides) -> dict:
+    outcome = {
+        "operation": "generate_video_summary",
+        "arguments": {"job_id": "job-one", "video_hash": "video-one"},
+        "request_id": "request-one",
+        "mode": "ops",
+        "status": "succeeded",
+        "return_code": 0,
+        "duration_ms": 25,
+        "side_effect_report": {
+            "mutated": True,
+            "targets": ["video-summary:job-one"],
+        },
+        "error_codes": [],
+    }
+    outcome.update(overrides)
+    return outcome
+
+
+def test_external_outcome_rejects_non_authorization_only_operation():
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(operation="run_ingestion")
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["authorization_only_action_required"],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize("operation", [[], {}])
+def test_external_outcome_rejects_malformed_operation_without_raising(operation):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(operation=operation)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["authorization_only_action_required"],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize("status", [[], {}])
+def test_external_outcome_rejects_malformed_status_without_raising(status):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(status=status)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["invalid_execution_status"],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_code"),
+    [
+        ({"arguments": {"job_id": "job-one"}}, "invalid_tool_arguments"),
+        (
+            {
+                "arguments": {
+                    "job_id": "job-one",
+                    "video_hash": "video-one",
+                    "confirmation_token": "must-not-persist",
+                }
+            },
+            "invalid_tool_arguments",
+        ),
+        ({"request_id": "   "}, "invalid_request_id"),
+        ({"status": "success"}, "invalid_execution_status"),
+        ({"return_code": 1}, "invalid_return_code"),
+        ({"status": "failed", "return_code": 0}, "invalid_return_code"),
+        ({"status": "interrupted", "return_code": 0}, "invalid_return_code"),
+        ({"return_code": True}, "invalid_return_code"),
+        ({"duration_ms": -1}, "invalid_duration_ms"),
+        ({"duration_ms": 1.5}, "invalid_duration_ms"),
+        ({"duration_ms": True}, "invalid_duration_ms"),
+        ({"side_effect_report": []}, "invalid_side_effect_report"),
+        (
+            {"side_effect_report": {"mutated": 1, "targets": []}},
+            "invalid_side_effect_report",
+        ),
+        (
+            {"side_effect_report": {"mutated": True, "targets": "target"}},
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["target"] * 33,
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["t" * 129],
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        (
+            {
+                "side_effect_report": {
+                    "mutated": True,
+                    "targets": ["target"],
+                    "traceback": "must-not-persist",
+                    "model_output": "must-not-persist",
+                }
+            },
+            "invalid_side_effect_report",
+        ),
+        ({"error_codes": ["error"] * 33}, "invalid_error_codes"),
+        ({"error_codes": ["e" * 65]}, "invalid_error_codes"),
+        ({"error_codes": [1]}, "invalid_error_codes"),
+    ],
+)
+def test_external_outcome_rejects_invalid_fields_without_audit(
+    overrides,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(**overrides)
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": [expected_code],
+    }
+    assert _rows() == []
+
+
+@pytest.mark.parametrize(
+    ("status", "return_code", "mutated", "error_codes"),
+    [
+        ("succeeded", 0, True, []),
+        ("failed", 9, False, ["video_summary_failed"]),
+        ("interrupted", -1, False, ["worker_interrupted"]),
+    ],
+)
+def test_external_outcome_appends_existing_execution_schema(
+    status,
+    return_code,
+    mutated,
+    error_codes,
+):
+    client = _client()
+    outcome = _external_outcome(
+        status=status,
+        return_code=return_code,
+        side_effect_report={
+            "mutated": mutated,
+            "targets": ["video-summary:job-one"],
+        },
+        error_codes=error_codes,
+    )
+
+    result = client.record_external_execution_outcome(**outcome)
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    assert len(_rows()) == 1
+    row = _rows()[0]
+    assert row["schema_version"] == "goodq.tool-audit.v1"
+    assert row["event_type"] == "execution"
+    assert row["timestamp"].endswith("Z")
+    assert row["tool_name"] == outcome["operation"]
+    assert row["arguments"] == outcome["arguments"]
+    assert row["request_id"] == outcome["request_id"]
+    assert row["profile"] == "safe"
+    assert row["mode"] == outcome["mode"]
+    assert row["status"] == status
+    assert row["return_code"] == return_code
+    assert row["duration_ms"] == outcome["duration_ms"]
+    assert row["side_effect_report"] == outcome["side_effect_report"]
+    assert row["error_codes"] == error_codes
+
+
+def test_external_outcome_accepts_controller_resolved_bounds():
+    client = _client()
+    targets = ["t" * 128] * 32
+    error_codes = ["e" * 64] * 32
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(
+            status="failed",
+            return_code=1,
+            side_effect_report={"mutated": True, "targets": targets},
+            error_codes=error_codes,
+        )
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    assert _rows()[0]["side_effect_report"]["targets"] == targets
+    assert _rows()[0]["error_codes"] == error_codes
+
+
+def test_external_outcome_uses_existing_path_sanitization():
+    client = _client()
+    private_job = r"C:\private\job-one"
+    private_target = r"C:\private\summary.mp4"
+
+    result = client.record_external_execution_outcome(
+        **_external_outcome(
+            arguments={"job_id": private_job, "video_hash": "video-one"},
+            side_effect_report={"mutated": True, "targets": [private_target]},
+        )
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[0]
+    assert row["arguments"]["job_id"] == "relative/job-one"
+    assert row["side_effect_report"]["targets"] == ["relative/summary.mp4"]
+    serialized = _audit_path().read_text(encoding="utf-8")
+    assert private_job not in serialized
+    assert private_target not in serialized
+    assert "C:\\private" not in serialized
+
+
+def test_external_outcome_audit_failure_preserves_success_truth(
+    monkeypatch,
+    caplog,
+):
+    client = _client()
+    append = MagicMock(side_effect=OSError("audit unavailable"))
+    monkeypatch.setattr(client, "_append_tool_audit", append)
+
+    result = client.record_external_execution_outcome(**_external_outcome())
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["audit_log_error"],
+    }
+    attempted_row = append.call_args.args[0]
+    assert attempted_row["status"] == "succeeded"
+    assert attempted_row["return_code"] == 0
+    assert attempted_row["side_effect_report"]["mutated"] is True
+    assert "status" not in result
+    assert "execution_failed" not in result["error_codes"]
+    assert "Failed to persist external execution audit" in caplog.text
+
+
+def test_decision_audit_is_durable_redacted_and_path_sanitized():
+    client = _client()
+    prompt = "PRIVATE PROMPT MUST NOT BE LOGGED"
+    args = {
+        "input_dir": r"C:\private\incoming.mp4",
+        "authorization": "Bearer private-auth",
+        "nested": {
+            "password": "private-password",
+            "HA_TOKEN": "private-ha-token",
+            "confirmation_token": "private-confirmation-token",
+            "safe": "retained",
+        },
+    }
+
+    envelope, rc = client.validate_action(
+        prompt=prompt,
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args=args,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    rows = _rows()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["schema_version"] == "goodq.tool-audit.v1"
+    assert row["event_type"] == "decision"
+    assert row["tool_name"] == "run_ingestion"
+    assert row["status"] == "needs_confirmation"
+    assert row["return_code"] == 3
+    assert row["arguments"]["input_dir"] == "relative/incoming.mp4"
+    assert row["arguments"]["authorization"] == "[REDACTED]"
+    assert row["arguments"]["nested"] == {
+        "password": "[REDACTED]",
+        "HA_TOKEN": "[REDACTED]",
+        "confirmation_token": "[REDACTED]",
+        "safe": "retained",
+    }
+    serialized = _audit_path().read_text(encoding="utf-8")
+    for forbidden in (
+        prompt,
+        "private-auth",
+        "private-password",
+        "private-ha-token",
+        "private-confirmation-token",
+        "C:\\private",
+    ):
+        assert forbidden not in serialized
+
+
+def test_confirmed_execution_appends_decision_and_execution_rows():
+    client = _client()
+    args = {"input_dir": "incoming", "epoch": "epoch-one"}
+    handler = MagicMock(return_value={"status": "staged_complete"})
+    client._execute_run_ingestion = handler
+
+    confirmation, confirmation_rc = client.validate_action(
+        prompt="Request ingestion",
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args=args,
+    )
+    assert confirmation_rc == 3
+
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=args,
+        mode="ops",
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+    assert rc == 0
+    assert result["status"] == "success"
+    handler.assert_called_once_with(args)
+    rows = _rows()
+    assert [row["event_type"] for row in rows] == [
+        "decision",
+        "decision",
+        "execution",
+    ]
+    execution = rows[-1]
+    assert execution["status"] == "success"
+    assert execution["return_code"] == 0
+    assert execution["duration_ms"] >= 0
+    assert execution["side_effect_report"]["mutated"] is True
+    assert execution["error_codes"] == []
+
+
+def test_handler_failure_appends_execution_failure_row():
+    client = _client()
+    args = {"input_dir": "incoming", "epoch": "epoch-one"}
+    client._execute_run_ingestion = MagicMock(side_effect=RuntimeError("boom"))
+
+    confirmation, confirmation_rc = client.validate_action(
+        prompt="Request ingestion",
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args=args,
+    )
+    assert confirmation_rc == 3
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=args,
+        mode="ops",
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    execution = _rows()[-1]
+    assert execution["event_type"] == "execution"
+    assert execution["status"] == "fatal_error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["execution_failed"]
+
+
+def test_decision_audit_failure_is_fail_closed_before_handler(monkeypatch):
+    client = _client()
+    handler = MagicMock(return_value={"status": "staged_complete"})
+    client._execute_run_ingestion = handler
+    monkeypatch.setattr(
+        client,
+        "_append_tool_audit",
+        MagicMock(side_effect=OSError("audit unavailable")),
+    )
+
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+        mode="ops",
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "audit_log_error"
+    assert "confirmation_token" not in result.get("result", {})
+    handler.assert_not_called()
+    import os
+
+    token_store = Path(os.environ["GOODQ_MINI_AGENT_HOME"]) / "confirmation_tokens.json"
+    if token_store.exists():
+        assert json.loads(token_store.read_text(encoding="utf-8")) == {}
+
+
+def test_execution_audit_failure_preserves_observed_side_effects(monkeypatch):
+    client = _client()
+    args = {"input_dir": "incoming", "epoch": "epoch-one"}
+    handler = MagicMock(return_value={"status": "staged_complete", "count": 1})
+    client._execute_run_ingestion = handler
+    confirmation, confirmation_rc = client.validate_action(
+        prompt="Request ingestion",
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args=args,
+    )
+    assert confirmation_rc == 3
+
+    original_append = client._append_tool_audit
+
+    def fail_execution_row(row):
+        if row["event_type"] == "execution":
+            raise OSError("audit completion unavailable")
+        original_append(row)
+
+    monkeypatch.setattr(client, "_append_tool_audit", fail_execution_row)
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=args,
+        mode="ops",
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "audit_log_error"
+    assert result["errors"][0]["details"]["side_effects_may_have_occurred"] is True
+    assert result["side_effect_report"]["mutated"] is True
+    assert result["output"] == {"status": "staged_complete", "count": 1}
+    handler.assert_called_once_with(args)
+
+
+def test_multiple_decisions_append_without_overwriting():
+    client = _client()
+
+    for epoch in ("epoch-one", "epoch-two"):
+        envelope, rc = client.validate_action(
+            prompt="Request ingestion",
+            mode="ops",
+            tool_name="run_ingestion",
+            tool_args={"input_dir": "incoming", "epoch": epoch},
+        )
+        assert rc == 3
+        assert envelope["status"] == "needs_confirmation"
+
+    rows = _rows()
+    assert len(rows) == 2
+    assert [row["arguments"]["epoch"] for row in rows] == [
+        "epoch-one",
+        "epoch-two",
+    ]
+
+
+def test_authorization_claim_race_audits_final_rejection(monkeypatch):
+    client = _client()
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact staged request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    monkeypatch.setattr(
+        client,
+        "_claim_confirmation_token",
+        MagicMock(return_value=(False, None)),
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Confirm exact staged request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "invalid_confirmation_token"
+    rows = _rows()
+    assert rows[-1]["status"] == "error"
+    assert rows[-1]["return_code"] == 1
+    assert rows[-1]["error_codes"] == ["invalid_confirmation_token"]
+
+
+def test_blocked_handler_outcome_is_not_audited_as_mutation():
+    client = _client()
+    args = {"video_hash": "video-one", "epoch_id": "epoch-one"}
+    client._execute_promote_ucf_to_memory = MagicMock(
+        return_value={
+            "status": "blocked",
+            "reason": "promotion_blocked_unvalidated_frames",
+            "staged_count": 1,
+        }
+    )
+    confirmation, confirmation_rc = client.validate_action(
+        prompt="Request promotion",
+        mode="ops",
+        tool_name="promote_ucf_to_memory",
+        tool_args=args,
+    )
+    assert confirmation_rc == 3
+
+    result, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=args,
+        mode="ops",
+        confirm=True,
+        confirmation_token=confirmation["result"]["confirmation_token"],
+    )
+
+    assert rc == 0
+    assert result["output"]["status"] == "blocked"
+    assert result["side_effect_report"]["mutated"] is False
+    execution = _rows()[-1]
+    assert execution["event_type"] == "execution"
+    assert execution["status"] == "blocked"
+    assert execution["handler_status"] == "blocked"
+    assert execution["handler_reason"] == "promotion_blocked_unvalidated_frames"
+    assert execution["side_effect_report"]["mutated"] is False
+
+
+def test_handler_declared_error_returns_error_envelope_and_truthful_audit():
+    client = _client()
+    args = {
+        "collection": "goodq_text",
+        "query_vector": [0.1] * 384,
+        "top_k": 5,
+        "ucf_status_filter": "staged",
+    }
+
+    result, rc = client.execute_tool(
+        tool_name="qdrant_query",
+        tool_args=args,
+        mode="research",
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"] == [
+        {
+            "code": "invalid_ucf_status_filter",
+            "message": "Tool handler reported an error.",
+        }
+    ]
+    assert result["output"]["status"] == "error"
+    assert result["side_effect_report"]["mutated"] is False
+    execution = _rows()[-1]
+    assert execution["event_type"] == "execution"
+    assert execution["status"] == "error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["invalid_ucf_status_filter"]
+    assert execution["handler_status"] == "error"
+    assert execution["handler_reason"] == "invalid_ucf_status_filter"
+    assert execution["side_effect_report"]["mutated"] is False
+
+
+def test_handler_declared_error_without_reason_uses_generic_error_code():
+    client = _client()
+    client._execute_qdrant_query = MagicMock(return_value={"status": "error"})
+
+    result, rc = client.execute_tool(
+        tool_name="qdrant_query",
+        tool_args={"collection": "goodq_text", "query_vector": [0.1]},
+    )
+
+    assert rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "handler_reported_error"
+    execution = _rows()[-1]
+    assert execution["status"] == "error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["handler_reported_error"]
+    assert execution["handler_reason"] is None
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "target"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_2026_07_12_test",
+                "payload_sha256": "a" * 64,
+            },
+            "summary-collection:create:action_1234abcd",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_2026_07_12_test",
+                "collection_id": "col_20260712_deadbeef",
+                "expected_record_sha256": "b" * 64,
+            },
+            "summary-collection:delete:job_1234abcd",
+        ),
+    ],
+)
+def test_summary_collection_external_outcome_uses_redacted_exact_scope(
+    operation,
+    arguments,
+    target,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[-1]
+    assert row["schema_version"] == "goodq.tool-audit.v1"
+    assert row["event_type"] == "execution"
+    assert row["tool_name"] == operation
+    assert row["arguments"] == arguments
+    serialized = json.dumps(row, sort_keys=True)
+    assert "private transcript" not in serialized
+    assert "confirmation_token" not in serialized
+    assert "C:\\" not in serialized
+    assert "/home/" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "targets", "expected_code"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_test",
+                "payload_sha256": "A" * 64,
+            },
+            ["summary-collection:create:action_1234abcd"],
+            "invalid_tool_arguments",
+        ),
+        (
+            "create_summary_collection",
+            {
+                "action_id": "action_1234abcd",
+                "epoch_id": "epoch_test",
+                "payload_sha256": "a" * 64,
+                "name": "private collection name",
+            },
+            ["summary-collection:create:action_1234abcd"],
+            "invalid_tool_arguments",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            ["C:\\private\\saved_collections.json"],
+            "invalid_side_effect_report",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            ["summary-collection:delete:wrong-job"],
+            "invalid_side_effect_report",
+        ),
+    ],
+)
+def test_summary_collection_external_outcome_rejects_scope_or_target_leaks(
+    operation,
+    arguments,
+    targets,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": targets},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "failed", "error_codes": [expected_code]}
+    assert _rows() == []
+
+
+def test_summary_collection_external_outcome_surfaces_audit_write_failure(
+    monkeypatch,
+):
+    client = _client()
+    append = MagicMock(side_effect=OSError("audit unavailable"))
+    monkeypatch.setattr(client, "_append_tool_audit", append)
+
+    result = client.record_external_execution_outcome(
+        operation="create_summary_collection",
+        arguments={
+            "action_id": "action_1234abcd",
+            "epoch_id": "epoch_test",
+            "payload_sha256": "a" * 64,
+        },
+        request_id="request-summary-collection",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={
+            "mutated": True,
+            "targets": ["summary-collection:create:action_1234abcd"],
+        },
+        error_codes=[],
+    )
+
+    assert result == {
+        "audit_status": "failed",
+        "error_codes": ["audit_log_error"],
+    }
+    append.assert_called_once()
+
+
+def _temporal_summary_scope(**overrides):
+    scope = {
+        "job_id": "job_" + "a" * 32,
+        "epoch_id": "epoch_2026_07_family",
+        "request_sha256": "b" * 64,
+        "execution_policy_sha256": "c" * 64,
+    }
+    scope.update(overrides)
+    return scope
+
+
+def test_temporal_summary_external_outcome_uses_exact_redacted_target():
+    client = _client()
+    arguments = _temporal_summary_scope()
+    target = f"temporal-summary:{arguments['job_id']}"
+
+    result = client.record_external_execution_outcome(
+        operation="generate_temporal_summary",
+        arguments=arguments,
+        request_id="request-temporal-summary",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=25,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}
+    row = _rows()[-1]
+    assert row["tool_name"] == "generate_temporal_summary"
+    assert row["arguments"] == arguments
+    assert row["side_effect_report"] == {
+        "mutated": True,
+        "targets": [target],
+    }
+    serialized = json.dumps(row, sort_keys=True)
+    for private in (
+        "private entity",
+        "source_file",
+        "prompt",
+        "narrative",
+        "confirmation_token",
+        "C:\\",
+        "/home/",
+    ):
+        assert private not in serialized
+
+
+@pytest.mark.parametrize(
+    ("arguments", "targets", "expected_code"),
+    [
+        (
+            _temporal_summary_scope(query={"entities": ["private entity"]}),
+            [f"temporal-summary:{_temporal_summary_scope()['job_id']}"],
+            "invalid_tool_arguments",
+        ),
+        (
+            _temporal_summary_scope(),
+            ["C:\\private\\temporal-result.json"],
+            "invalid_side_effect_report",
+        ),
+        (
+            _temporal_summary_scope(),
+            ["temporal-summary:job_wrong"],
+            "invalid_side_effect_report",
+        ),
+    ],
+)
+def test_temporal_summary_external_outcome_rejects_scope_or_target_leaks(
+    arguments,
+    targets,
+    expected_code,
+):
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation="generate_temporal_summary",
+        arguments=arguments,
+        request_id="request-temporal-summary",
+        mode="ops",
+        status="failed",
+        return_code=1,
+        duration_ms=25,
+        side_effect_report={"mutated": False, "targets": targets},
+        error_codes=["model_unavailable"],
+    )
+
+    assert result == {"audit_status": "failed", "error_codes": [expected_code]}
+    assert _rows() == []
+
+
+def test_temporal_summary_invalid_decision_audit_redacts_raw_scope():
+    client = _client()
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject private temporal scope",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=_temporal_summary_scope(
+            query={"entities": ["private entity"]},
+            source_file="C:\\private\\source.mp4",
+        ),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    row = _rows()[-1]
+    assert row["arguments"] == {"scope_valid": False}
+    serialized = json.dumps(row, sort_keys=True)
+    assert "private entity" not in serialized
+    assert "source_file" not in serialized
+    assert "C:\\" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "target"),
+    [
+        (
+            "create_summary_collection",
+            {
+                "action_id": "a" * 102,
+                "epoch_id": "epoch_test",
+                "payload_sha256": "a" * 64,
+            },
+            f"summary-collection:create:{'a' * 102}",
+        ),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "j" * 102,
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+                "expected_record_sha256": "b" * 64,
+            },
+            f"summary-collection:delete:{'j' * 102}",
+        ),
+    ],
+)
+def test_summary_collection_correlation_id_limit_fits_exact_audit_target(
+    operation,
+    arguments,
+    target,
+):
+    assert len(target) == 128
+    client = _client()
+
+    result = client.record_external_execution_outcome(
+        operation=operation,
+        arguments=arguments,
+        request_id="request-summary-collection-boundary",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=12,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result == {"audit_status": "recorded", "error_codes": []}

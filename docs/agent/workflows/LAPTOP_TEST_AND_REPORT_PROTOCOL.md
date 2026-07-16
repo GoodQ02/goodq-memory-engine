@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Laptop Setup Test & Report Protocol
 
 This document defines the operational protocol for the agent executing on the target Windows 11 laptop (`GOOD-SPEED-32` / `GOOD-SPEED-16` / `GOOD-RECON-16`) to install, verify, and document the offline sandboxed ingestion system.

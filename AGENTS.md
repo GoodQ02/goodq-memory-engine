@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # GoodQ4All Agent Operating Protocol
 
@@ -17,8 +17,23 @@
 - Resilient: optional enrichments may fail without halting ingestion.
 - Not a demo system and not a stateless pipeline.
 
+## Project Orientation
+
+- Read `docs/agent/PROJECT_ORIENTATION.md` before transient current-state notes.
+- GOOD-CUBE development is one GoodQ project distributed across the private
+  repository, the configured data root, the workstation control plane, Hermes,
+  and the portable agent surfaces.
+- Before proposing work, run the overview's no-repeat preflight and identify the
+  smallest unfinished seam. Do not infer incompleteness from a stale status note.
+
 ## Agent Knowledge Workspace
-The primary workspace for agent onboarding, shared protocols, models and VRAM budgets, workflows, and historical lessons is located at the environment-relative path: `%USERPROFILE%\My Drive\_AGENT`. Future agents must reference this workspace for all persistent runbooks, environment capability checks via the bootstrap script (`bootstrap_agent.ps1`), and workspace verification rules (`verify_agent_workspace.py`).
+The primary workspace for agent onboarding, shared protocols, models and VRAM
+budgets, workflows, and historical lessons is resolved through
+`%SYSTEMDRIVE%\Tools\AGENT_TRAINING.lnk`. The shortcut isolates active docs from
+the backing location used by the current sync provider. Do not hardcode or infer
+that backing drive. Future agents must reference this workspace for persistent
+runbooks, environment capability checks via `bootstrap_agent.ps1`, and workspace
+verification rules via `verify_agent_workspace.py`.
 
 ## Canonical Runtime Model
 - Primary host: Windows 11 desktop (source of truth).
@@ -31,10 +46,13 @@ The primary workspace for agent onboarding, shared protocols, models and VRAM bu
 - Assume long-running jobs and partial restarts are normal.
 
 ## Git Repository and Branch Governance (Anti-Drift)
-- **Dev Repository**: `JoesDomingo/goodq4all` (`origin`) with the single canonical development branch `dev`.
-- **Public Repository**: `GoodQ02/goodq4all` (`public`) with the single canonical release branch `main`.
-- **No Stale Branches**: There are no other branches (such as `public/dev` or custom copilot/dependabot branches). Stale branches must be deleted immediately to prevent version drift.
-- **Push Policy**: Local changes on `dev` are pushed to `origin dev`. When releasing/syncing to public, push local `dev` to `public main` (`git push public dev:main`) and push tags (e.g., `git push public v2.5.3`). Agents must never create or push to a `dev` branch on `public`.
+- **Private Development Authority**: `JoesDomingo/goodq4all` (`origin`) is the complete private development repository. Its canonical product branch is `dev`.
+- **Public Release Mirror**: `GoodQ02/goodq4all` is downstream-only. Its canonical product branch is `main`, and the separate public checkout is used for sanitization and independent release verification.
+- **Authority Rule**: Every functional correction must exist in private `dev` before public release. If a correction is discovered in the public checkout, apply and verify it in private development first. Public-only code is never authoritative.
+- **Allowed Non-Product Branches**: `gh-pages` is an infrastructure branch. Temporary Dependabot branches are automation branches. Short-lived local feature branches are allowed while work is active, but they must merge back to private `dev` or be discarded; they do not become release authorities.
+- **Anti-Drift Rule**: Do not create a long-lived public `dev` branch or any second product-development branch. Remove stale working or automation branches only after their ownership, merge state, and purpose have been verified.
+- **Release Flow**: private `dev` repair -> private verification -> privacy and portability scan -> public `main` update -> independent public-checkout verification. The public checkout may be replaced from verified private authority; preserving obsolete public-only state is not a goal.
+- **Push Policy**: Push development to `origin dev`. Public branch updates, tags, branch deletion, and any destructive checkout reconciliation remain explicit release approval gates.
 
 ## Agent Roles
 - Pipeline Operator: ingestion, audits, backfills, validation.
@@ -104,6 +122,7 @@ Preferred escalation order:
 - multi-episode witness only after the smaller gates pass
 
 ## Documentation Reading Order (authoritative)
+- docs/agent/PROJECT_ORIENTATION.md
 - docs/agent/CURRENT_STATE.md
 - docs/agent/current_state.json
 - docs/agent/README.md
@@ -128,9 +147,9 @@ Preferred escalation order:
 - docs/technical/LIB_COMPONENTS.md
 - docs/goodq4all_agent_status.md
 - docs/SYSTEM_SNAPSHOT.md
-- docs/HANDOFF_BASEMENT_PHASE.md
+- docs/archive/HANDOFF_BASEMENT_PHASE.md
 - Do not contradict these without explicit instruction.
-- Treat `docs/HANDOFF_BASEMENT_PHASE.md` as a sealed basement-era record, not
+- Treat `docs/archive/HANDOFF_BASEMENT_PHASE.md` as a sealed basement-era record, not
   the active scratchpad for new-agent restart state.
 
 ## Security and Data Handling

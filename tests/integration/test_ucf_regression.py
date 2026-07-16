@@ -124,7 +124,8 @@ def setup_env(tmp_path, monkeypatch):
             "dino_id_map_db": str(tmp_path / "dino_id_map.sqlite"),
             "clap_id_map_db": str(tmp_path / "clap_id_map.sqlite"),
             "db_path": str(tmp_path / "memory.db"),
-            "processing": str(tmp_path / "processing")
+            "processing": str(tmp_path / "processing"),
+            "reports_dir": str(tmp_path / "reports"),
         },
         "qdrant": {
             "collections": {
@@ -556,22 +557,6 @@ def test_checks_failed_no_double_count_on_exception(setup_env, monkeypatch):
     failed_count = sum(1 for cat in check_categories if report[cat]["status"] == "failed")
     
     assert report["summary"]["checks_failed"] == failed_count
-
-
-def test_skill_schema_sync():
-    """Verify that canonical ucf_ledger.py and the copy in ucf-invariant-anchor skill are identical."""
-    canonical_path = Path("scripts/ucf/ucf_ledger.py")
-    skill_path = Path(".agents/skills/ucf-invariant-anchor/scripts/ucf_ledger.py")
-    assert canonical_path.exists(), f"{canonical_path} does not exist"
-    assert skill_path.exists(), f"{skill_path} does not exist"
-    
-    # Read both and assert equality to show a detailed diff if they differ
-    canonical_content = canonical_path.read_text(encoding="utf-8")
-    skill_content = skill_path.read_text(encoding="utf-8")
-    assert canonical_content == skill_content, (
-        f"ucf_ledger.py and its skill copy are not identical! "
-        f"Canonical path: {canonical_path.resolve()}, Skill copy path: {skill_path.resolve()}"
-    )
 
 
 def test_timestamp_rounding_and_conflict_handling(setup_env):

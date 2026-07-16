@@ -202,7 +202,11 @@ def test_search_text_hybrid_blend(monkeypatch: pytest.MonkeyPatch, temp_db_path:
     )
 
     # Executing hybrid text search
-    fused_results = engine.search_text("Tony", top_k=5)
+    fused_results = engine.search_text(
+        "Tony",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
 
     # RRF fuses both semantic (scene_01) and lexical (scene_02)
     assert len(fused_results) == 2

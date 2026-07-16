@@ -1,0 +1,35 @@
+# GoodQ Family Roster — Canonical Identity Manifest Template
+# ============================================================
+# PRIVATE — copy this file to the identity data path and populate it.
+# The actual family_roster.yaml is gitignored and never committed.
+#
+# Default data path: ${GOODQ_DATA_ROOT}/GoodQ_Data/identity/family_roster.yaml
+# Override with env var: GOODQ_IDENTITY_PATH
+#
+# Rules:
+#   - face_cluster_ids must reference clusters with status='labeled' in face_clusters.json
+#   - speaker_cluster_ids are hypothesis-only until manually confirmed here
+#   - No cluster ID may be assigned to two different identities
+#   - aliases are used for transcript mention matching (case-insensitive)
+#   - name_mention_keys reference keys from name_mentions.json
+#
+# The roster is the ONLY authority. Scripts suggest. This file decides.
+
+identities:
+  - id: person_REDACTED_1
+    display_name: "REDACTED"
+    aliases: []                  # e.g. [Nickname, Another Name]
+    face_cluster_ids: []         # e.g. [face_cluster_0, face_cluster_3]
+    speaker_cluster_ids: []      # e.g. [spk_cluster_0] — confirm manually
+    name_mention_keys: []        # e.g. [Name, Nickname]
+    role: "subject"              # subject | parent | sibling | relative | other
+    notes: ""
+
+  - id: person_REDACTED_2
+    display_name: "REDACTED"
+    aliases: []
+    face_cluster_ids: []
+    speaker_cluster_ids: []
+    name_mention_keys: []
+    role: "parent"
+    notes: ""

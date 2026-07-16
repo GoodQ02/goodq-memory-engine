@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Testing Infrastructure for Agent-Gated Staged Ingestion Harness
 
 This document outlines the architecture, requirements, and design patterns utilized for the E2E test suite of the Agent-Gated Staged Ingestion Harness in `goodq4all`.

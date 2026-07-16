@@ -146,13 +146,25 @@ def main():
     engine = MultimodalSearchEngine(cfg)
     
     # 1. Text Search query
-    text_results = engine.search_text(query="mountain bike surprise", top_k=5)
+    text_results = engine.search_text(
+        query="mountain bike surprise",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     
     # 2. Temporal Search query
-    temporal_results = engine.search_text(query="Christmas 1993", top_k=5)
+    temporal_results = engine.search_text(
+        query="Christmas 1993",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     
     # 3. Entity Search query
-    entity_results = engine.search_text(query="Dad speaker", top_k=5)
+    entity_results = engine.search_text(
+        query="Dad speaker",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     
     # Build birth certificate report content
     print("Formatting birth certificate markdown...")

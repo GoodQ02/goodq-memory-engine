@@ -15,7 +15,14 @@ class MemoryStore(Protocol):
     def insert(self, vectors: List[Dict[str, Any]]) -> bool:
         ...
 
-    def query(self, query_vector: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         ...
 
     def stats(self) -> Dict[str, Any]:

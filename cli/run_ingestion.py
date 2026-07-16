@@ -6,7 +6,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(errors="replace")
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 import asyncio
 import hashlib
 import json
@@ -348,22 +348,66 @@ _PIPELINE_OBSERVER: Optional[PipelineObserver] = None
 _GLOBAL_LLM_CLIENT: Optional[Any] = None
 
 
+def _control_agent_activation_requested(
+    cfg: Dict[str, Any],
+    *,
+    cli_enabled: bool = False,
+) -> bool:
+    """Return true only for an explicit CLI, config, or environment opt-in."""
+    control_agent_cfg = cfg.get("control_agent", {}) or {}
+    return bool(
+        cli_enabled is True
+        or control_agent_cfg.get("enabled", False) is True
+        or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"
+    )
+
+
+def _control_agent_mutation_requested(
+    *,
+    activation_requested: bool,
+    auto_healing_requested: bool,
+    dry_run: bool,
+) -> bool:
+    """Mutation is dormant unless all three explicit safety gates agree."""
+    return (
+        activation_requested is True
+        and auto_healing_requested is True
+        and dry_run is False
+    )
+
+
 def _control_agent_runtime_enabled() -> bool:
     global _GLOBAL_LLM_CLIENT, CONTROL_AGENT_AVAILABLE
     if not CONTROL_AGENT_AVAILABLE:
         return False
-    
-    # Try to initialize LLM Client on demand for test hooks or direct calls
+
+    status = (
+        _CURRENT_RUN_CONTEXT.get("control_agent_status")
+        if isinstance(_CURRENT_RUN_CONTEXT, dict)
+        else None
+    )
+    if status is not None and status != "initialized":
+        return False
+
+    cfg: Optional[Dict[str, Any]] = None
+    activated_by_current_run = status == "initialized"
+    if not activated_by_current_run:
+        try:
+            from steps.common.config_loader import load_configs
+            cfg = load_configs({})
+            if not _control_agent_activation_requested(cfg):
+                return False
+        except Exception:
+            return False
+
+    # Try to initialize LLM Client on demand for explicit test hooks/direct calls.
     if _GLOBAL_LLM_CLIENT is None:
         try:
             from steps.common.config_loader import load_configs
             from steps.common.llm_model_factory import build_llm_models
             from lib.llm_client import LLMClient
-            cfg = load_configs({})
-            control_agent_cfg = cfg.get('control_agent', {}) or {}
-            # Explicit enable gate
-            if not (control_agent_cfg.get('enabled', False) or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"):
-                return False
+            if cfg is None:
+                cfg = load_configs({})
             models = build_llm_models(cfg)
             _GLOBAL_LLM_CLIENT = LLMClient(
                 models=models,
@@ -377,9 +421,6 @@ def _control_agent_runtime_enabled() -> bool:
             return False
 
     if not isinstance(_CURRENT_RUN_CONTEXT, dict):
-        return _GLOBAL_LLM_CLIENT is not None
-    status = _CURRENT_RUN_CONTEXT.get('control_agent_status')
-    if status is None:
         return _GLOBAL_LLM_CLIENT is not None
     return status == 'initialized'
 
@@ -2044,6 +2085,413 @@ def _safe_read_json_dict(path_value: Any) -> Optional[Dict[str, Any]]:
             e,
         )
         return None
+
+
+_CHECKPOINT_TARGETS = {
+    'memory_db',
+    'knowledge_graph',
+    'vectors',
+    'scene_manifest',
+    'temporal_index',
+}
+_CHECKPOINT_TARGET_STATES = {'committed', 'not_applicable', 'failed'}
+
+
+def _sqlite_contains_window_scenes(
+    db_path_value: Any,
+    *,
+    table: str,
+    id_column: str,
+    scene_ids: List[str],
+    video_hash: Optional[str] = None,
+) -> bool:
+    if table not in {'scenes', 'media_nodes'} or id_column not in {'id', 'scene_id'}:
+        raise ValueError('unsupported checkpoint probe target')
+    normalized_ids = [str(scene_id) for scene_id in scene_ids if scene_id]
+    if not normalized_ids or not isinstance(db_path_value, (str, Path)):
+        return False
+    db_path = Path(db_path_value)
+    if not db_path.is_file():
+        return False
+
+    placeholders = ','.join('?' for _ in normalized_ids)
+    query = f"SELECT DISTINCT {id_column} FROM {table} WHERE {id_column} IN ({placeholders})"
+    params: List[Any] = list(normalized_ids)
+    if table == 'scenes' and video_hash:
+        query += ' AND video_hash = ?'
+        params.append(video_hash)
+    try:
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            found = {
+                str(row[0])
+                for row in conn.execute(query, tuple(params)).fetchall()
+                if row and row[0]
+            }
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        logger.warning('Checkpoint persistence probe failed for %s: %s', table, exc)
+        return False
+    return set(normalized_ids).issubset(found)
+
+
+def _scene_manifest_contains_window_scenes(
+    scene_manifest_path: Any,
+    scene_ids: List[str],
+) -> bool:
+    manifest = _safe_read_json_dict(scene_manifest_path)
+    raw_scenes = manifest.get('scenes') if isinstance(manifest, dict) else None
+    if not isinstance(raw_scenes, list):
+        return False
+    expected = {str(scene_id) for scene_id in scene_ids if scene_id}
+    found = {
+        str(scene.get('scene_id') or scene.get('id'))
+        for scene in raw_scenes
+        if isinstance(scene, dict) and (scene.get('scene_id') or scene.get('id'))
+    }
+    return bool(expected) and expected.issubset(found)
+
+
+def _scene_manifest_has_committed_vectors(
+    scene_manifest_path: Any,
+    scene_ids: List[str],
+) -> bool:
+    """Verify canonical Phase 6 vector commit evidence for the window scenes."""
+    manifest = _safe_read_json_dict(scene_manifest_path)
+    if not isinstance(manifest, dict):
+        return False
+    if manifest.get('phase6_complete') is not True or manifest.get('phase6_status') != 'complete':
+        return False
+
+    vector_commit = manifest.get('phase6_vector_commit')
+    if not isinstance(vector_commit, dict) or vector_commit.get('enabled') is not True:
+        return False
+    if vector_commit.get('qdrant_ok') is not True:
+        return False
+
+    expected = {str(scene_id) for scene_id in scene_ids if scene_id}
+    raw_scenes = manifest.get('scenes')
+    if not expected or not isinstance(raw_scenes, list):
+        return False
+    committed_scene_ids = {
+        str(scene.get('scene_id') or scene.get('id'))
+        for scene in raw_scenes
+        if (
+            isinstance(scene, dict)
+            and (scene.get('scene_id') or scene.get('id'))
+            and scene.get('clip_id')
+            and scene.get('dino_id')
+            and scene.get('qdrant_ok') is True
+        )
+    }
+    return expected.issubset(committed_scene_ids)
+
+
+def _temporal_index_contains_window_scenes(
+    temporal_index_path: Any,
+    scene_ids: List[str],
+) -> bool:
+    temporal_index = _safe_read_json_dict(temporal_index_path)
+    raw_segments = temporal_index.get('segments') if isinstance(temporal_index, dict) else None
+    if not isinstance(raw_segments, list):
+        return False
+    expected = {str(scene_id) for scene_id in scene_ids if scene_id}
+    found = {
+        str(segment.get('scene_id'))
+        for segment in raw_segments
+        if isinstance(segment, dict) and segment.get('scene_id')
+    }
+    return bool(expected) and expected.issubset(found)
+
+
+def _target_checkpoint_status(*, applicable: bool, committed: bool) -> str:
+    if not applicable:
+        return 'not_applicable'
+    return 'committed' if committed else 'failed'
+
+
+def _build_progressive_checkpoint_record(
+    *,
+    cfg: Dict[str, Any],
+    run_id: str,
+    video_hash: str,
+    window_idx: int,
+    window_start: float,
+    window_end: float,
+    scene_ids: List[str],
+    graph_applicable: bool,
+    graph_failed: bool,
+    vectors_applicable: bool,
+    scene_manifest_path: Path,
+    temporal_index_applicable: bool,
+    temporal_index_committed: bool,
+    temporal_index_path: Path,
+) -> Dict[str, Any]:
+    """Build checkpoint truth from the actual persistence surfaces."""
+    paths = cfg.get('paths', {}) or {}
+    isolation = bool(cfg.get('ingestion_isolation', False))
+    normalized_scene_ids = [str(scene_id) for scene_id in scene_ids if scene_id]
+
+    memory_committed = (
+        not isolation
+        and _sqlite_contains_window_scenes(
+            paths.get('db_path'),
+            table='scenes',
+            id_column='id',
+            scene_ids=normalized_scene_ids,
+            video_hash=video_hash,
+        )
+    )
+    graph_committed = (
+        graph_applicable
+        and not graph_failed
+        and _sqlite_contains_window_scenes(
+            paths.get('knowledge_graph_db'),
+            table='media_nodes',
+            id_column='scene_id',
+            scene_ids=normalized_scene_ids,
+        )
+    )
+    manifest_committed = _scene_manifest_contains_window_scenes(
+        scene_manifest_path,
+        normalized_scene_ids,
+    )
+    vector_manifest_committed = (
+        vectors_applicable
+        and _scene_manifest_has_committed_vectors(
+            scene_manifest_path,
+            normalized_scene_ids,
+        )
+    )
+    temporal_artifact_committed = (
+        temporal_index_committed
+        and _temporal_index_contains_window_scenes(
+            temporal_index_path,
+            normalized_scene_ids,
+        )
+    )
+
+    targets = {
+        'memory_db': _target_checkpoint_status(
+            applicable=not isolation,
+            committed=memory_committed,
+        ),
+        'knowledge_graph': _target_checkpoint_status(
+            applicable=graph_applicable,
+            committed=graph_committed,
+        ),
+        'vectors': _target_checkpoint_status(
+            applicable=vectors_applicable,
+            committed=vector_manifest_committed,
+        ),
+        'scene_manifest': _target_checkpoint_status(
+            applicable=True,
+            committed=manifest_committed,
+        ),
+        'temporal_index': _target_checkpoint_status(
+            applicable=temporal_index_applicable,
+            committed=temporal_artifact_committed,
+        ),
+    }
+    failed_targets = sorted(
+        target for target, status in targets.items() if status == 'failed'
+    )
+    return {
+        'run_id': run_id,
+        'window_idx': int(window_idx),
+        'window_start': float(window_start),
+        'window_end': float(window_end),
+        'scene_ids': normalized_scene_ids,
+        'window_status': 'failed' if failed_targets else 'committed',
+        'persistence_targets': targets,
+        'failed_targets': failed_targets,
+        'completed_at': datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _checkpoint_window_matches_current_persistence(
+    *,
+    cfg: Dict[str, Any],
+    processing_dir: Path,
+    video_hash: str,
+    record: Dict[str, Any],
+) -> bool:
+    """Re-probe a checkpoint window before trusting it during resume."""
+    targets = record['persistence_targets']
+    scene_ids = [str(scene_id) for scene_id in record.get('scene_ids', []) if scene_id]
+    if not scene_ids:
+        return False
+
+    paths = cfg.get('paths', {}) or {}
+    isolation = bool(cfg.get('ingestion_isolation', False))
+    phase6_cfg = cfg.get('phase6', {}) or {}
+    phase6_enabled = bool(phase6_cfg.get('enabled', True))
+    vectors_applicable = bool(
+        phase6_enabled
+        and (phase6_cfg.get('retrieval', {}) or {}).get('enable', True)
+    )
+    graph_applicable = bool(
+        KNOWLEDGE_GRAPH_AVAILABLE
+        and cfg.get('knowledge_graph', {}).get('enabled', True)
+        and not isolation
+    )
+
+    if isolation:
+        if targets['memory_db'] != 'not_applicable':
+            return False
+    elif (
+        targets['memory_db'] != 'committed'
+        or not _sqlite_contains_window_scenes(
+            paths.get('db_path'),
+            table='scenes',
+            id_column='id',
+            scene_ids=scene_ids,
+            video_hash=video_hash,
+        )
+    ):
+        return False
+
+    if not graph_applicable:
+        if targets['knowledge_graph'] != 'not_applicable':
+            return False
+    elif (
+        targets['knowledge_graph'] != 'committed'
+        or not _sqlite_contains_window_scenes(
+            _resolve_graph_db_path(cfg),
+            table='media_nodes',
+            id_column='scene_id',
+            scene_ids=scene_ids,
+        )
+    ):
+        return False
+
+    scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
+    if (
+        targets['scene_manifest'] != 'committed'
+        or not _scene_manifest_contains_window_scenes(scene_manifest_path, scene_ids)
+    ):
+        return False
+
+    if not vectors_applicable:
+        if targets['vectors'] != 'not_applicable':
+            return False
+    elif (
+        targets['vectors'] != 'committed'
+        or not _scene_manifest_has_committed_vectors(scene_manifest_path, scene_ids)
+    ):
+        return False
+
+    temporal_status = targets['temporal_index']
+    if not phase6_enabled:
+        return temporal_status == 'not_applicable'
+    if temporal_status == 'not_applicable':
+        return True
+    if temporal_status != 'committed':
+        return False
+    temporal_candidates = (
+        processing_dir / 'temporal_index.json',
+        processing_dir / 'video' / 'temporal_index.json',
+    )
+    return any(
+        _temporal_index_contains_window_scenes(path, scene_ids)
+        for path in temporal_candidates
+    )
+
+
+def _completed_checkpoint_window_indices(
+    state_data: Dict[str, Any],
+    video_hash: str,
+    *,
+    cfg: Dict[str, Any],
+    processing_dir: Path,
+) -> Set[int]:
+    """Return schema-v2 windows whose current persistence evidence still holds."""
+    if state_data.get('checkpoint_version') != 2:
+        return set()
+    if state_data.get('video_hash') != video_hash:
+        return set()
+    windows = state_data.get('windows')
+    if not isinstance(windows, dict):
+        return set()
+
+    completed: Set[int] = set()
+    for key, record in windows.items():
+        if not isinstance(record, dict) or record.get('window_status') != 'committed':
+            continue
+        targets = record.get('persistence_targets')
+        if not isinstance(targets, dict) or set(targets) != _CHECKPOINT_TARGETS:
+            continue
+        if any(status not in _CHECKPOINT_TARGET_STATES for status in targets.values()):
+            continue
+        if any(status == 'failed' for status in targets.values()):
+            continue
+        if targets.get('scene_manifest') != 'committed':
+            continue
+        try:
+            window_idx = int(record.get('window_idx', key))
+        except (TypeError, ValueError):
+            continue
+        if str(window_idx) != str(key):
+            continue
+        if not _checkpoint_window_matches_current_persistence(
+            cfg=cfg,
+            processing_dir=processing_dir,
+            video_hash=video_hash,
+            record=record,
+        ):
+            continue
+        completed.add(window_idx)
+    return completed
+
+
+def _progressive_checkpoint_cleanup_ready(
+    *,
+    state_data: Dict[str, Any],
+    video_hash: str,
+    cfg: Dict[str, Any],
+    processing_dir: Path,
+    expected_window_indices: Iterable[int],
+    phase6_complete: bool,
+) -> bool:
+    """Require fresh five-target evidence for every current window before cleanup."""
+    if phase6_complete is not True:
+        return False
+    expected = {int(window_idx) for window_idx in expected_window_indices}
+    if not expected:
+        return False
+    verified = _completed_checkpoint_window_indices(
+        state_data,
+        video_hash,
+        cfg=cfg,
+        processing_dir=processing_dir,
+    )
+    return verified == expected
+
+
+def _get_checkpoint_scene_meta(
+    cfg: Dict[str, Any],
+    scene_id: str,
+    manifest_by_id: Dict[str, Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Resolve resume evidence without opening memory.db in isolation mode."""
+    if cfg.get('ingestion_isolation', False):
+        manifest_scene = manifest_by_id.get(scene_id)
+        return dict(manifest_scene) if isinstance(manifest_scene, dict) else None
+    return get_scene_meta(cfg, scene_id)
+
+
+def _sort_checkpoint_scene_outputs(
+    scene_outputs: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Restore chronological order after non-contiguous checkpoint resume."""
+    return sorted(
+        scene_outputs,
+        key=lambda item: (
+            float(item.get('start', 0.0) or 0.0),
+            int(item.get('index', 0) or 0),
+        ),
+    )
 
 
 def _rehydrate_video_result_scenes_from_manifest(
@@ -4814,25 +5262,10 @@ def _process_frame(
 
 
 def _load_ucf_ledger() -> Any:
-    """Dynamically imports ucf_ledger from the skill scripts directory."""
-    import importlib.util
-    import sys
-    from pathlib import Path
-    
-    repo_root = Path(__file__).resolve().parent.parent
-    ucf_ledger_path = repo_root / '.agents' / 'skills' / 'ucf-invariant-anchor' / 'scripts' / 'ucf_ledger.py'
-    
-    if not ucf_ledger_path.exists():
-        raise FileNotFoundError(f"ucf_ledger.py not found at {ucf_ledger_path}")
-    
-    spec = importlib.util.spec_from_file_location("ucf_ledger", str(ucf_ledger_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load spec for ucf_ledger at {ucf_ledger_path}")
-    
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["ucf_ledger"] = module
-    spec.loader.exec_module(module)
-    return module
+    """Loads the repository-owned UCF ledger implementation."""
+    from scripts.ucf import ucf_ledger
+
+    return ucf_ledger
 
 
 def _log_audio_to_ucf_ledger(
@@ -7104,7 +7537,7 @@ def run(
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
-    ENABLE_AUTO_HEALING = enable_auto_healing
+    ENABLE_AUTO_HEALING = False
 
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
@@ -7267,10 +7700,14 @@ def run(
 
     # Initialize Control Agent if available
     control_agent_cfg = cfg.get('control_agent', {}) or {}
-    control_agent_enabled_gate = (
-        enable_control_agent
-        or control_agent_cfg.get('enabled', False)
-        or os.getenv("GOODQ_CONTROL_AGENT_ENABLED") == "1"
+    control_agent_enabled_gate = _control_agent_activation_requested(
+        cfg,
+        cli_enabled=enable_control_agent,
+    )
+    ENABLE_AUTO_HEALING = _control_agent_mutation_requested(
+        activation_requested=control_agent_enabled_gate,
+        auto_healing_requested=enable_auto_healing,
+        dry_run=True,
     )
     control_agent = None
     control_agent_status = 'disabled'
@@ -7308,6 +7745,11 @@ def run(
                 )
             # Default to dry_run = True for safety unless explicitly configured False
             dry_run_val = control_agent_cfg.get('dry_run', True)
+            ENABLE_AUTO_HEALING = _control_agent_mutation_requested(
+                activation_requested=control_agent_enabled_gate,
+                auto_healing_requested=enable_auto_healing,
+                dry_run=dry_run_val,
+            )
             control_agent = ControlAgent(llm_client=_GLOBAL_LLM_CLIENT, dry_run=dry_run_val, enable_mutation=ENABLE_AUTO_HEALING)
             control_agent_status = 'initialized'
             control_agent_reason = None
@@ -7323,6 +7765,7 @@ def run(
             control_agent_status = CONTROL_AGENT_STATUS_DISABLED_NO_LLM_CLIENT
             control_agent_reason = f"{CONTROL_AGENT_DISABLED_REASON_NO_LLM_CLIENT}: {exc}"
             control_agent = None
+            ENABLE_AUTO_HEALING = False
 
     run_context['control_agent_status'] = control_agent_status
     run_context['control_agent_reason'] = control_agent_reason
@@ -7551,13 +7994,31 @@ def run(
         sorted_window_indices = sorted(grouped_scenes.keys())
 
         checkpoint_path = Path(processing_dir) / 'progressive_ingestion_state.json'
-        last_completed_window_idx = -1
+        checkpoint_windows: Dict[str, Any] = {}
+        completed_window_indices: Set[int] = set()
         if checkpoint_path.exists() and not force_reprocess:
             try:
                 state_data = json.loads(checkpoint_path.read_text(encoding='utf-8'))
                 if state_data.get('video_hash') == video_hash:
-                    last_completed_window_idx = int(state_data.get('window_idx', -1))
-                    logger.info(f"[CHECKPOINT] Resuming progressive ingestion. Skipping completed windows up to index {last_completed_window_idx}")
+                    raw_windows = state_data.get('windows')
+                    if state_data.get('checkpoint_version') == 2 and isinstance(raw_windows, dict):
+                        checkpoint_windows = dict(raw_windows)
+                        completed_window_indices = _completed_checkpoint_window_indices(
+                            state_data,
+                            video_hash,
+                            cfg=cfg,
+                            processing_dir=Path(processing_dir),
+                        )
+                        logger.info(
+                            "[CHECKPOINT] Resuming progressive ingestion from schema v2; "
+                            "verified committed windows=%s",
+                            sorted(completed_window_indices),
+                        )
+                    else:
+                        logger.warning(
+                            "[CHECKPOINT] Ignoring legacy checkpoint without schema-v2 "
+                            "persistence evidence; all windows will be re-evaluated"
+                        )
             except Exception as e:
                 logger.warning(f"[CHECKPOINT] Failed to read progressive ingestion checkpoint: {e}")
 
@@ -7568,14 +8029,35 @@ def run(
         scene_loop_step = f"loop.scenes.{video_hash[:12]}"
         
         # Load skipped scene details from database to populate scene_outputs
-        if last_completed_window_idx >= 0 and not force_reprocess:
+        checkpoint_manifest_by_id: Dict[str, Dict[str, Any]] = {}
+        if completed_window_indices and cfg.get('ingestion_isolation', False):
+            checkpoint_manifest = _safe_read_json_dict(
+                processing_dir / 'video' / 'scene_manifest.json'
+            )
+            raw_checkpoint_scenes = (
+                checkpoint_manifest.get('scenes')
+                if isinstance(checkpoint_manifest, dict)
+                else None
+            )
+            if isinstance(raw_checkpoint_scenes, list):
+                checkpoint_manifest_by_id = {
+                    str(scene.get('scene_id') or scene.get('id')): scene
+                    for scene in raw_checkpoint_scenes
+                    if isinstance(scene, dict) and (scene.get('scene_id') or scene.get('id'))
+                }
+
+        if completed_window_indices and not force_reprocess:
             for w_idx in sorted_window_indices:
-                if w_idx <= last_completed_window_idx:
+                if w_idx in completed_window_indices:
                     for scene in grouped_scenes[w_idx]:
                         scene_start = float(scene.get('start', 0.0) or 0.0)
                         scene_end = float(scene.get('end', scene_start) or scene_start)
                         scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
-                        meta = get_scene_meta(cfg, scene_id)
+                        meta = _get_checkpoint_scene_meta(
+                            cfg,
+                            scene_id,
+                            checkpoint_manifest_by_id,
+                        )
                         if meta:
                             scene_record = {
                                 'scene_id': scene_id,
@@ -7602,7 +8084,7 @@ def run(
                             scene_outputs.append(scene_record)
                         else:
                             logger.warning(f"[CHECKPOINT] Skipped scene {scene_id} not found in database. Will reprocess from window index {w_idx}")
-                            last_completed_window_idx = w_idx - 1
+                            completed_window_indices.discard(w_idx)
                             break
 
         if observer:
@@ -7887,7 +8369,7 @@ def run(
             nonlocal knowledge_graph_status_local
             
             for w_idx in sorted_window_indices:
-                if w_idx <= last_completed_window_idx and not force_reprocess:
+                if w_idx in completed_window_indices and not force_reprocess:
                     continue
                 
                 window_start_time = time.perf_counter()
@@ -8039,7 +8521,13 @@ def run(
                 sqlite_duration = time.perf_counter() - sqlite_start
 
                 kg_start = time.perf_counter()
-                if KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True) and not cfg.get('ingestion_isolation', False):
+                graph_applicable = bool(
+                    KNOWLEDGE_GRAPH_AVAILABLE
+                    and cfg.get('knowledge_graph', {}).get('enabled', True)
+                    and not cfg.get('ingestion_isolation', False)
+                )
+                graph_failed = False
+                if graph_applicable:
                     graph_db_path = _resolve_graph_db_path(cfg).resolve()
                     graph_db_path.parent.mkdir(parents=True, exist_ok=True)
                     kg_instance = KnowledgeGraph(str(graph_db_path))
@@ -8066,6 +8554,7 @@ def run(
                                         kg=kg_instance
                                     )
                                 except Exception as kg_err:
+                                    graph_failed = True
                                     knowledge_graph_status_local = 'error_runtime'
                                     logger.warning(f"[WINDOW {w_idx}] KG update failed for scene {scene_res['scene_id']}: {kg_err}")
                     finally:
@@ -8197,6 +8686,7 @@ def run(
 
                     scene_outputs.append(scene_record)
 
+                scene_outputs[:] = _sort_checkpoint_scene_outputs(scene_outputs)
                 manifest_start = time.perf_counter()
                 scene_manifest = {
                     'video_id': video_hash,
@@ -8259,9 +8749,13 @@ def run(
                     'video_hash': video_hash,
                 }
                 
-                vectors_committed = False
-                manifest_updated = False
-                temporal_index_updated = False
+                vectors_applicable = bool(
+                    phase6_enabled
+                    and cfg.get('phase6', {}).get('retrieval', {}).get('enable', True)
+                )
+                temporal_index_applicable = False
+                temporal_index_committed = False
+                temporal_index_path_for_checkpoint = processing_dir / 'video' / 'temporal_index.json'
 
                 p6a_duration = 0.0
                 p6b_duration = 0.0
@@ -8272,8 +8766,6 @@ def run(
                         embeddings_result = _run_step('goodq_image_caption', 'scene_visual_embeddings', phase6_item, cfg_json)
                         p6a_duration = time.perf_counter() - p6a_start
                         if isinstance(embeddings_result, dict) and embeddings_result.get('phase6_status') == 'complete':
-                            vectors_committed = True
-                            manifest_updated = True
                             if embeddings_result.get('scenes'):
                                 _rehydrate_video_result_scenes_from_manifest({'scenes': scene_outputs}, str(scene_manifest_path))
                             # Log visual scene embeddings to UCF ledger
@@ -8306,11 +8798,25 @@ def run(
                         logger.warning(f"[WINDOW {w_idx}] Phase 6a incremental run failed: {p6a_err}")
 
                     try:
+                        temporal_index_applicable = True
                         p6b_start = time.perf_counter()
                         harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
                         p6b_duration = time.perf_counter() - p6b_start
-                        if isinstance(harmonization_result, dict) and harmonization_result.get('harmonization_status') != 'skipped':
-                            temporal_index_updated = True
+                        if isinstance(harmonization_result, dict):
+                            if harmonization_result.get('harmonization_status') == 'skipped':
+                                temporal_index_applicable = False
+                            else:
+                                primary_temporal_path = processing_dir / 'temporal_index.json'
+                                video_temporal_path = processing_dir / 'video' / 'temporal_index.json'
+                                temporal_index_path_for_checkpoint = (
+                                    primary_temporal_path
+                                    if primary_temporal_path.exists()
+                                    else video_temporal_path
+                                )
+                                temporal_index_committed = (
+                                    _safe_read_json_dict(temporal_index_path_for_checkpoint)
+                                    is not None
+                                )
                     except Exception as p6b_err:
                         logger.warning(f"[WINDOW {w_idx}] Phase 6b incremental run failed: {p6b_err}")
 
@@ -8352,22 +8858,46 @@ def run(
                 except Exception as e:
                     logger.warning(f"Failed to write progressive ingestion timings: {e}")
 
+                window_scene_ids = [
+                    str(scene_res.get('scene_id'))
+                    for scene_res in window_results
+                    if scene_res.get('scene_id')
+                ]
+                window_record = _build_progressive_checkpoint_record(
+                    cfg=cfg,
+                    run_id=run_id,
+                    video_hash=video_hash,
+                    window_idx=w_idx,
+                    window_start=w_idx * step_val,
+                    window_end=(w_idx * step_val) + chunk_size_val,
+                    scene_ids=window_scene_ids,
+                    graph_applicable=graph_applicable,
+                    graph_failed=graph_failed,
+                    vectors_applicable=vectors_applicable,
+                    scene_manifest_path=scene_manifest_path,
+                    temporal_index_applicable=temporal_index_applicable,
+                    temporal_index_committed=temporal_index_committed,
+                    temporal_index_path=temporal_index_path_for_checkpoint,
+                )
+                checkpoint_windows[str(w_idx)] = window_record
                 state_record = {
+                    'checkpoint_version': 2,
                     'run_id': run_id,
                     'video_hash': video_hash,
-                    'window_idx': w_idx,
-                    'window_start': w_idx * step_val,
-                    'window_end': (w_idx * step_val) + chunk_size_val,
-                    'scene_ids_committed': [s.get('scene_id') for s in window_scenes],
-                    'main_db_committed': True,
-                    'kg_db_committed': KNOWLEDGE_GRAPH_AVAILABLE and cfg.get('knowledge_graph', {}).get('enabled', True),
-                    'vectors_committed': vectors_committed,
-                    'manifest_updated': manifest_updated,
-                    'temporal_index_updated': temporal_index_updated,
-                    'completed_at': datetime.now(timezone.utc).isoformat(),
+                    'windows': checkpoint_windows,
+                    'updated_at': datetime.now(timezone.utc).isoformat(),
                 }
                 atomic_write_json(checkpoint_path, state_record)
-                logger.info(f"[WINDOW {w_idx}] Checkpoint written: window index {w_idx} successfully committed.")
+                if window_record['window_status'] == 'committed':
+                    completed_window_indices.add(w_idx)
+                else:
+                    completed_window_indices.discard(w_idx)
+                logger.info(
+                    "[WINDOW %s] Checkpoint written status=%s targets=%s",
+                    w_idx,
+                    window_record['window_status'],
+                    window_record['persistence_targets'],
+                )
 
             return knowledge_graph_status_local
 
@@ -8484,14 +9014,33 @@ def run(
         video_result['faiss_ok'] = _merge_store_statuses(scene_faiss_status, phase6_faiss_status)
         video_result['modality_status'] = _aggregate_modality_status(scene_outputs, phase6_embeddings_result)
         
-        # Clean up progressive ingestion checkpoint on successful completion
-        if video_result.get('phase6_complete') is True:
+        # Clean up only after every current window re-probes as fully committed.
+        final_checkpoint_state = {
+            'checkpoint_version': 2,
+            'run_id': run_id,
+            'video_hash': video_hash,
+            'windows': checkpoint_windows,
+        }
+        checkpoint_cleanup_ready = _progressive_checkpoint_cleanup_ready(
+            state_data=final_checkpoint_state,
+            video_hash=video_hash,
+            cfg=cfg,
+            processing_dir=Path(processing_dir),
+            expected_window_indices=sorted_window_indices,
+            phase6_complete=video_result.get('phase6_complete') is True,
+        )
+        if checkpoint_cleanup_ready:
             try:
                 if checkpoint_path.exists():
                     checkpoint_path.unlink()
                     logger.info(f"Cleaned up progressive ingestion checkpoint for completed video: {video_path.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete completed progressive state checkpoint: {e}")
+        elif checkpoint_path.exists():
+            logger.warning(
+                "Retaining progressive ingestion checkpoint because one or more "
+                "current windows lack verified five-target persistence"
+            )
 
         results.append(video_result)
         if tracker is not None:

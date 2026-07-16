@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: ACTIVE_OPERATOR_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Ollama Port Boundaries
 
 > **Status**: Active operator reference  

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # Security Policy
 
 ## Supported Surface
@@ -74,4 +78,4 @@ a reproducible product vulnerability:
 - Support routing: [`SUPPORT.md`](SUPPORT.md)
 - Contributor expectations: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - Bootstrap guide: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
-- Shipping profile: [`docs/releases/SHIP_PROFILE.md`](docs/releases/SHIP_PROFILE.md)
+- Historical shipping profile: [`docs/archive/releases/SHIP_PROFILE.md`](docs/archive/releases/SHIP_PROFILE.md)

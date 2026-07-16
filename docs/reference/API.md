@@ -207,14 +207,41 @@ The active line no longer exposes the older compatibility shell that previously 
   - checkpointed
   - auditable
 - Any future ingest route must remain a controlled facade over the canonical runtime path rather than a second ingest engine.
-- The active ingest facade stages a single supported local file into the canonical inbox, writes a durable request record, and returns a request handle.
+- The active ingest facade accepts either a JSON local-file handoff or a
+  multipart browser upload at the same `POST /api/ingest/submit` route. Both
+  forms first create a durable `pending_confirmation` request and a private
+  pending copy outside the watched inbox. The response includes the server-
+  derived name, byte count, SHA-256, request ID, and a ten-minute confirmation
+  token bound to exactly those values plus the policy profile.
+- This mutation route accepts only loopback clients (`127.0.0.1` or `::1`).
+  Remote binding does not make ingest staging remotely writable.
+- Multipart parsing enforces `api.max_upload_size` while file bytes are being
+  spooled. The aggregate pending-copy budget is
+  `api.max_pending_ingest_bytes` (defaulting to the same limit). The durable
+  request record stores the confirmation expiry. Before each new preparation,
+  all incomplete records are rechecked under their per-request locks: abandoned
+  receiving or unconfirmed copies expire, interrupted cancellation is finished,
+  and an already-authorized hidden verification copy is recovered rather than
+  discarded.
+- A separate JSON call to the same route with `action=confirm` atomically claims
+  that single-use authorization, moves the pending copy to a hidden
+  verification path, rechecks its byte count and SHA-256, and only then exposes
+  it in the watched inbox. `action=cancel` revokes the exact authorization and
+  removes only the pending copy. Neither action invokes the ingestion runner
+  directly.
 - The active ingest facade does not execute ingestion, manage a second job engine, bypass watchdog, or mutate memory directly.
+- The retired `/api/ingest/upload` bypass is not a supported compatibility
+  route. Browser staging must use `/api/ingest/submit`.
 - The current supported ingest surfaces remain:
-  - `POST /api/ingest/submit` for request intake only
+  - `POST /api/ingest/submit` for prepare, confirm, or cancel
   - `GET /api/ingest/status/{request_id}` for request-centric lifecycle status
   - `conda run -n goodq_core python -m cli.watchdog`
   - `conda run -n goodq_core python -m cli.run_ingestion --input-dir <path>`
   - the configured `<GOODQ_DATA_ROOT>\GoodQ_Data\import_inbox`
+- Public submit/status responses omit source, pending, and staged filesystem
+  paths. Confirmation tokens are returned only by the initial prepare response.
+- A confirmed response is a truthful staging acknowledgment, not a claim that
+  ingestion has started.
 - `POST /api/system/reindex` and `POST /api/system/reload` remain operator-only and intentionally unavailable as public API mutation routes on the active line.
 
 ## Scene API Truth

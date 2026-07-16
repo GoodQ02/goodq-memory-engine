@@ -16,7 +16,7 @@
 - `cli/run_ingestion.py` and `cli/watchdog.py` persist explicit control-plane state for every run.
 - `agents/mini_agent_client.py` is the canonical policy-gated interface for future interactive/generative agent queries, planning, research, and tool operations.
 - `agents/stack/` contains the version-controlled schemas, policies, contracts, and configs for the `goodq_mini_agent` validation engine.
-- `agents/control_agent.py` is conditional and disabled by default unless an `llm_client` is explicitly injected.
+- `agents/control_agent.py` is conditional and disabled by default. The canonical ingestion CLI may construct a local client only after explicit CLI/config/environment activation; Watchdog remains injection-only, and mutation has a separate opt-in gate.
 - `agents/watchdog_agent_integration.py`, `agents/pipeline_integration.py`, and `agents/orchestrator.py` are retired legacy surfaces.
 - The current truth anchors are:
   - `docs/agent/CONTROL_AGENT.md`

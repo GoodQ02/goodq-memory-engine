@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, List
 import logging
 import os
@@ -7,6 +7,11 @@ import uuid
 import string
 import requests
 import time
+
+from steps.common.retrieval_events import (
+    RetrievalEventPolicy,
+    resolve_retrieval_event_policy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +36,9 @@ class QdrantConfig:
     distance: str = "Cosine"
     enabled: bool = True
     db_path: Optional[str] = None
-    log_dir: Optional[str] = None
-    log_retrieval_events: bool = True
+    retrieval_event_policy: RetrievalEventPolicy = field(
+        default_factory=RetrievalEventPolicy
+    )
 
 
 class QdrantClient:
@@ -126,6 +132,45 @@ class QdrantClient:
                 logger.warning(
                     "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
                     "ensure_collection",
+                    self.cfg.collection,
+                    type(e).__name__,
+                    e,
+                    attempt + 1,
+                )
+            if attempt == 0:
+                time.sleep(0.5)
+        return False
+
+    def collection_exists(self) -> bool:
+        """Inspect collection availability without creating it."""
+        if self._collection_ready:
+            return True
+        if not self.cfg.enabled:
+            return False
+        for attempt in range(2):
+            try:
+                response = self.session.get(
+                    f"{self.cfg.host}/collections/{self.cfg.collection}",
+                    timeout=3,
+                )
+                if response.status_code == 200:
+                    self._collection_ready = True
+                    return True
+                body = _truncate_http_body(getattr(response, "text", None))
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s status_code=%s body=%s attempt=%s",
+                    "collection_exists",
+                    self.cfg.collection,
+                    getattr(response, "status_code", None),
+                    body,
+                    attempt + 1,
+                )
+                if response.status_code == 404:
+                    return False
+            except Exception as e:
+                logger.warning(
+                    "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
+                    "collection_exists",
                     self.cfg.collection,
                     type(e).__name__,
                     e,
@@ -310,10 +355,17 @@ class QdrantClient:
             )
             return False
 
-    def query(self, vector: List[float], top_k: int = 5, payload_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        vector: List[float],
+        top_k: int = 5,
+        payload_filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
+    ) -> List[Dict[str, Any]]:
         if not self.cfg.enabled:
             return []
-        if not self.ensure_collection():
+        if not self.collection_exists():
             return []
         try:
             body: Dict[str, Any] = {
@@ -358,7 +410,7 @@ class QdrantClient:
                     self._collection_ready = False
                 if attempt == 0:
                     time.sleep(0.5)
-                    if not self.ensure_collection():
+                    if not self.collection_exists():
                         return []
             if res is None:
                 return []
@@ -390,7 +442,7 @@ class QdrantClient:
                     utc_now_iso,
                 )
 
-                context = normalize_retrieval_context(os.environ.get("GOODQ_RETRIEVAL_CONTEXT"))
+                context = normalize_retrieval_context(retrieval_context)
                 ts = utc_now_iso()
                 events: List[RetrievalEvent] = []
                 for h in hits:
@@ -448,8 +500,7 @@ class QdrantClient:
                 emit_retrieval_events(
                     getattr(self.cfg, "db_path", None),
                     events,
-                    enabled=getattr(self.cfg, "log_retrieval_events", True),
-                    log_dir=getattr(self.cfg, "log_dir", None),
+                    policy=self.cfg.retrieval_event_policy,
                 )
             except Exception as e:
                 logger.warning(
@@ -499,7 +550,13 @@ class QdrantClient:
         return info
 
 
-def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[QdrantClient]:
+def build_qdrant_client(
+    cfg: Dict[str, Any],
+    dim: int,
+    key: str,
+    *,
+    retrieval_event_policy: Optional[RetrievalEventPolicy] = None,
+) -> Optional[QdrantClient]:
     qcfg = (cfg.get("qdrant") or {}) if cfg else {}
     if not qcfg.get("enabled", False):
         val = os.environ.get("GOODQ_VECTOR_DEBUG", "")
@@ -511,21 +568,11 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
     collection = collections.get(key, f"goodq_{key}")
     paths = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
     db_path = paths.get("db_path")
-    log_dir = paths.get("log_dir")
-    log_retrieval = True
-    try:
-        from steps.common.retrieval_events import retrieval_events_enabled
-
-        log_retrieval = retrieval_events_enabled(cfg, default=True)
-    except Exception as e:
-        logger.warning(
-            "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
-            "build_qdrant_client.retrieval_events_enabled",
-            collection,
-            type(e).__name__,
-            e,
-        )
-        log_retrieval = True
+    policy = (
+        retrieval_event_policy
+        if retrieval_event_policy is not None
+        else resolve_retrieval_event_policy(cfg)
+    )
     return QdrantClient(
         QdrantConfig(
             host=host,
@@ -533,7 +580,6 @@ def build_qdrant_client(cfg: Dict[str, Any], dim: int, key: str) -> Optional[Qdr
             dim=dim,
             enabled=True,
             db_path=db_path,
-            log_dir=log_dir if isinstance(log_dir, str) else None,
-            log_retrieval_events=log_retrieval,
+            retrieval_event_policy=policy,
         )
     )

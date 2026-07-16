@@ -9,10 +9,94 @@ const state = {
   currentPlaylistScenes: [],
   llmSummarizationEnabled: false,
   currentVideoHash: null,
-  summarizationInProgress: false
+  summarizationInProgress: false,
+  activeSummaryJobId: null
 };
 
 let pollInterval = null;
+const MAX_SUMMARY_POLL_FAILURES = 3;
+
+function isSafeSummaryJob(job, videoHash) {
+  return !!job
+    && typeof job === "object"
+    && typeof job.job_id === "string"
+    && /^job_[0-9a-f]{32}$/.test(job.job_id)
+    && job.operation === "video_summary.generate"
+    && !!job.scope
+    && typeof job.scope === "object"
+    && Object.keys(job.scope).length === 1
+    && job.scope.video_hash === videoHash
+    && typeof job.state === "string";
+}
+
+function isSafeCollectionCreatePrepare(data, confirmationToken) {
+  return !!data
+    && typeof data === "object"
+    && data.success === true
+    && typeof data.action_id === "string"
+    && /^action_[0-9a-f]{32}$/.test(data.action_id)
+    && typeof data.epoch_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(data.epoch_id)
+    && typeof data.payload_sha256 === "string"
+    && /^[0-9a-f]{64}$/.test(data.payload_sha256)
+    && typeof confirmationToken === "string"
+    && confirmationToken.trim().length > 0;
+}
+
+function isSafeCollectionCreateConfirm(data, actionId, epochId, expectedName) {
+  return !!data
+    && typeof data === "object"
+    && data.success === true
+    && data.action_id === actionId
+    && typeof data.recovered === "boolean"
+    && ["recorded", "failed"].includes(data.audit_status)
+    && !!data.collection
+    && typeof data.collection === "object"
+    && typeof data.collection.collection_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(data.collection.collection_id)
+    && data.collection.name === expectedName
+    && data.collection.status === "active"
+    && data.collection.source_epoch === epochId
+    && Array.isArray(data.collection.history)
+    && data.collection.history.every(entry => {
+      if (!entry || typeof entry !== "object") return false;
+      const keys = Object.keys(entry);
+      return typeof entry.action === "string"
+        && typeof entry.timestamp_utc === "string"
+        && keys.every(key => ["action", "timestamp_utc", "operator_note"].includes(key));
+    });
+}
+
+function isSafeCollectionDeleteJob(job, collectionId) {
+  return !!job
+    && typeof job === "object"
+    && typeof job.job_id === "string"
+    && /^job_[0-9a-f]{32}$/.test(job.job_id)
+    && job.operation === "summary_collection.delete"
+    && !!job.scope
+    && typeof job.scope === "object"
+    && Object.keys(job.scope).length === 3
+    && job.scope.collection_id === collectionId
+    && typeof job.scope.epoch_id === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(job.scope.epoch_id)
+    && typeof job.scope.expected_record_sha256 === "string"
+    && /^[0-9a-f]{64}$/.test(job.scope.expected_record_sha256)
+    && typeof job.state === "string";
+}
+
+function stopSummaryPolling(regenBtn, message = null, type = "error") {
+  if (pollInterval) {
+    clearTimeout(pollInterval);
+    pollInterval = null;
+  }
+  state.activeSummaryJobId = null;
+  state.summarizationInProgress = false;
+  if (regenBtn) {
+    regenBtn.disabled = false;
+    regenBtn.innerText = "REWRITE SUMMARY 🤖";
+  }
+  if (message) showToast(message, type);
+}
 
 // Toast Notifications
 function showToast(message, type = 'success') {
@@ -81,6 +165,7 @@ function setupModalListeners() {
   const closeBtn = document.getElementById('modal-close-btn');
   const cancelBtn = document.getElementById('modal-cancel-btn');
   const saveBtn = document.getElementById('save-playlist-btn');
+  const submitBtn = document.getElementById('modal-submit-btn');
   const form = document.getElementById('save-collection-form');
   
   saveBtn.addEventListener('click', () => {
@@ -122,24 +207,76 @@ function setupModalListeners() {
       operator_note: `Created from summary workbench playlist with ${state.currentPlaylistScenes.length} scenes.`
     };
     
+    submitBtn.disabled = true;
     try {
-      const resp = await fetch('/api/summary/collections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!resp.ok) throw new Error('Failed to create collection.');
-      
-      const data = await resp.json();
-      showToast(`Collection "${data.collection.name}" saved successfully!`);
+      const collection = await createSummaryCollection(payload);
+      if (!collection) return;
       closeModal();
-      loadCustomCollections();
+      await loadCustomCollections();
     } catch (err) {
-      console.error(err);
-      showToast(err.message, 'error');
+      showToast('Collection could not be confirmed. Try again.', 'error');
+    } finally {
+      submitBtn.disabled = false;
     }
   });
+}
+
+async function createSummaryCollection(payload) {
+  const confirmed = window.confirm(`Save collection "${payload.name}"?`);
+  if (!confirmed) return null;
+
+  const endpoint = '/api/summary/collections';
+  const prepareResp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "prepare",
+      collection: payload
+    })
+  });
+  if (!prepareResp.ok) throw new Error("collection_prepare_failed");
+
+  const prepareData = await prepareResp.json();
+  let confirmationToken = prepareData && prepareData.confirmation_token;
+  if (prepareData) prepareData.confirmation_token = null;
+  if (!isSafeCollectionCreatePrepare(prepareData, confirmationToken)) {
+    throw new Error("collection_prepare_invalid");
+  }
+  const actionId = prepareData.action_id;
+  const epochId = prepareData.epoch_id;
+  const payloadSha256 = prepareData.payload_sha256;
+
+  let confirmResp;
+  try {
+    confirmResp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "confirm",
+        action_id: actionId,
+        epoch_id: epochId,
+        payload_sha256: payloadSha256,
+        confirmation_token: confirmationToken,
+        collection: payload
+      })
+    });
+  } finally {
+    confirmationToken = null;
+  }
+
+  if (!confirmResp.ok) throw new Error("collection_confirm_failed");
+  if (confirmResp.status !== 200) throw new Error("collection_confirm_failed");
+  const confirmData = await confirmResp.json();
+  if (!isSafeCollectionCreateConfirm(confirmData, actionId, epochId, payload.name)) {
+    throw new Error("collection_confirm_invalid");
+  }
+
+  if (confirmData.audit_status === "failed") {
+    showToast("Collection saved, but durable audit recording needs attention.", "error");
+  } else {
+    showToast("Collection saved successfully.");
+  }
+  return confirmData.collection;
 }
 
 // Load scope metadata and dashboard metrics
@@ -565,17 +702,103 @@ function loadCustomCollection(col) {
 
 // Delete custom collection
 async function handleDeleteCollection(collectionId) {
-  if (!confirm(`Are you sure you want to delete collection ${collectionId}?`)) return;
-  
+  const confirmed = window.confirm(`Are you sure you want to delete collection ${collectionId}?`);
+  if (!confirmed) return;
+
+  const endpoint = `/api/summary/collections/${encodeURIComponent(collectionId)}`;
+  const deleteButtons = document.querySelectorAll('.col-delete-btn');
+  deleteButtons.forEach(button => { button.disabled = true; });
   try {
-    const resp = await fetch(`/api/summary/collections/${encodeURIComponent(collectionId)}`, {
-      method: 'DELETE'
+    const prepareResp = await fetch(endpoint, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "prepare" })
     });
-    
-    if (!resp.ok) throw new Error('Failed to delete collection.');
-    
-    showToast('Collection deleted.');
-    
+    if (prepareResp.status === 409) throw new Error("collection_delete_active");
+    if (!prepareResp.ok) throw new Error("collection_delete_prepare_failed");
+
+    const prepareData = await prepareResp.json();
+    const preparedJob = prepareData && prepareData.job;
+    let confirmationToken = prepareData && prepareData.confirmation_token;
+    if (prepareData) prepareData.confirmation_token = null;
+    if (
+      !prepareData
+      || prepareData.success !== true
+      || !isSafeCollectionDeleteJob(preparedJob, collectionId)
+      || preparedJob.state !== "pending_confirmation"
+      || typeof confirmationToken !== "string"
+      || !confirmationToken.trim()
+    ) {
+      throw new Error("collection_delete_prepare_invalid");
+    }
+    const jobId = preparedJob.job_id;
+    const epochId = preparedJob.scope.epoch_id;
+    const expectedRecordSha256 = preparedJob.scope.expected_record_sha256;
+
+    let confirmResp;
+    try {
+      confirmResp = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "confirm",
+          job_id: jobId,
+          epoch_id: epochId,
+          expected_record_sha256: expectedRecordSha256,
+          confirmation_token: confirmationToken
+        })
+      });
+    } finally {
+      confirmationToken = null;
+    }
+
+    if (confirmResp.status !== 200) {
+      let failureData = null;
+      try {
+        failureData = await confirmResp.json();
+      } catch (error) {
+        failureData = null;
+      }
+      const detail = failureData && failureData.detail;
+      if (
+        confirmResp.status === 503
+        && detail
+        && detail.code === "collection_finalization_pending"
+        && isSafeCollectionDeleteJob(detail.job, collectionId)
+        && detail.job.job_id === jobId
+        && detail.job.scope.epoch_id === epochId
+        && detail.job.scope.expected_record_sha256 === expectedRecordSha256
+        && detail.job.state === "running"
+      ) {
+        throw new Error("collection_finalization_pending");
+      }
+      throw new Error("collection_delete_confirm_failed");
+    }
+
+    const confirmData = await confirmResp.json();
+    if (
+      !confirmData
+      || confirmData.success !== true
+      || typeof confirmData.recovered !== "boolean"
+      || !isSafeCollectionDeleteJob(confirmData && confirmData.job, collectionId)
+      || confirmData.job.job_id !== jobId
+      || confirmData.job.scope.epoch_id !== epochId
+      || confirmData.job.scope.expected_record_sha256 !== expectedRecordSha256
+      || confirmData.job.state !== "succeeded"
+      || !confirmData.job.outcome
+      || typeof confirmData.job.outcome !== "object"
+      || confirmData.job.outcome.code !== "collection_deleted"
+      || !["recorded", "failed"].includes(confirmData.job.audit_status)
+    ) {
+      throw new Error("collection_delete_confirm_invalid");
+    }
+
+    if (confirmData.job.audit_status === "failed") {
+      showToast("Collection deleted, but durable audit recording needs attention.", "error");
+    } else {
+      showToast('Collection deleted.');
+    }
+
     // Clear display if the deleted collection was open
     if (state.activeCollection && state.activeCollection.collection_id === collectionId) {
       document.getElementById('no-profile-selected').hidden = false;
@@ -583,10 +806,18 @@ async function handleDeleteCollection(collectionId) {
       state.activeCollection = null;
       state.currentPlaylistScenes = [];
     }
-    
-    loadCustomCollections();
+
+    await loadCustomCollections();
   } catch (err) {
-    showToast(err.message, 'error');
+    if (err.message === "collection_finalization_pending") {
+      showToast('Collection deletion is awaiting durable finalization. Reload before retrying.', 'error');
+    } else if (err.message === "collection_delete_active") {
+      showToast('A collection delete is already pending. Reload before retrying.', 'error');
+    } else {
+      showToast('Collection deletion could not be confirmed. Try again.', 'error');
+    }
+  } finally {
+    deleteButtons.forEach(button => { button.disabled = false; });
   }
 }
 
@@ -664,10 +895,11 @@ async function loadVideoProfile(videoId, videoTitle) {
     state.currentVideoHash = videoId;
     
     if (pollInterval) {
-      clearInterval(pollInterval);
+      clearTimeout(pollInterval);
       pollInterval = null;
     }
     state.summarizationInProgress = false;
+    state.activeSummaryJobId = null;
     
     document.getElementById('profile-name').textContent = videoTitle || videoId;
     
@@ -710,14 +942,9 @@ async function loadVideoProfile(videoId, videoTitle) {
       const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
       if (statusResp.ok) {
         const statusData = await statusResp.json();
-        if (statusData.status === 'running') {
-          regenBtn.disabled = true;
-          regenBtn.innerText = "GENERATING...";
-          startPollingStatus(videoId);
-        } else {
-          regenBtn.disabled = false;
-          regenBtn.innerText = "REWRITE SUMMARY 🤖";
-        }
+        resumeExistingSummaryJobStatus(videoId, statusData, regenBtn);
+      } else {
+        stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
       }
     } else {
       summaryBox.hidden = false;
@@ -759,35 +986,178 @@ async function loadVideoProfile(videoId, videoTitle) {
   }
 }
 
-function startPollingStatus(videoHash) {
-  if (pollInterval) clearInterval(pollInterval);
-  
-  pollInterval = setInterval(async () => {
-    try {
-      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/status`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.status === 'idle') {
-          clearInterval(pollInterval);
-          pollInterval = null;
-          showToast('Narrative summary generated successfully.');
-          
-          const regenBtn = document.getElementById("regen-summary-btn");
-          if (regenBtn) {
-            regenBtn.disabled = false;
-            regenBtn.innerText = "REWRITE SUMMARY 🤖";
-          }
-          state.summarizationInProgress = false;
-          
-          if (state.currentVideoHash === videoHash) {
-            loadVideoProfile(videoHash, document.getElementById('profile-name').textContent);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error polling status:', e);
-    }
+async function handleSucceededSummaryJob(videoHash, regenBtn) {
+  stopSummaryPolling(regenBtn);
+  showToast("Narrative summary generated successfully.");
+  if (state.currentVideoHash === videoHash) {
+    await loadVideoProfile(
+      videoHash,
+      document.getElementById("profile-name").textContent
+    );
+  }
+}
+
+async function handleSummaryJobState(videoHash, jobId, status, regenBtn) {
+  switch (status) {
+    case "pending_confirmation":
+      stopSummaryPolling(
+        regenBtn,
+        "Exact confirmation is still required. Rewrite recovery needs a new one-time token."
+      );
+      return false;
+    case "authorizing":
+      return true;
+    case "queued":
+      return true;
+    case "running":
+      return true;
+    case "succeeded":
+      await handleSucceededSummaryJob(videoHash, regenBtn);
+      return false;
+    case "failed":
+      stopSummaryPolling(regenBtn, "Summary generation failed. Try rewriting again.");
+      return false;
+    case "interrupted":
+      stopSummaryPolling(regenBtn, "Summary generation was interrupted. Rewrite to start a new job.");
+      return false;
+    case "expired":
+      stopSummaryPolling(regenBtn, "Summary confirmation expired. Rewrite to prepare a new job.");
+      return false;
+    case "not_started":
+      stopSummaryPolling(regenBtn);
+      return false;
+    default:
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return false;
+  }
+}
+
+function scheduleSummaryPoll(videoHash, jobId, failureCount) {
+  if (state.activeSummaryJobId !== jobId) return;
+  pollInterval = setTimeout(() => {
+    pollInterval = null;
+    pollSummaryJobStatus(videoHash, jobId, failureCount);
   }, 2000);
+}
+
+async function pollSummaryJobStatus(videoHash, jobId, failureCount = 0) {
+  if (state.activeSummaryJobId !== jobId) return;
+  const regenBtn = document.getElementById("regen-summary-btn");
+  try {
+    const resp = await fetch(
+      `/api/summary/video/${encodeURIComponent(videoHash)}/status?job_id=${encodeURIComponent(jobId)}`
+    );
+    if (!resp.ok) throw new Error("summary_status_request_failed");
+    const data = await resp.json();
+    if (state.activeSummaryJobId !== jobId) return;
+    const status = data && data.status;
+    if (
+      status !== "not_started"
+      && (
+        !isSafeSummaryJob(data && data.job, videoHash)
+        || data.job.job_id !== jobId
+        || data.job.state !== status
+      )
+    ) {
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return;
+    }
+    const keepPolling = await handleSummaryJobState(
+      videoHash,
+      jobId,
+      status,
+      regenBtn
+    );
+    if (keepPolling) scheduleSummaryPoll(videoHash, jobId, 0);
+  } catch (error) {
+    if (state.activeSummaryJobId !== jobId) return;
+    const nextFailureCount = failureCount + 1;
+    if (nextFailureCount >= MAX_SUMMARY_POLL_FAILURES) {
+      stopSummaryPolling(regenBtn, "Unknown summary status after repeated polling failures.");
+      return;
+    }
+    scheduleSummaryPoll(videoHash, jobId, nextFailureCount);
+  }
+}
+
+function startPollingStatus(videoHash, jobId) {
+  const regenBtn = document.getElementById("regen-summary-btn");
+  if (typeof jobId !== "string" || !/^job_[0-9a-f]{32}$/.test(jobId)) {
+    stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+    return;
+  }
+  if (pollInterval) clearTimeout(pollInterval);
+  state.activeSummaryJobId = jobId;
+  state.summarizationInProgress = true;
+  if (regenBtn) {
+    regenBtn.disabled = true;
+    regenBtn.innerText = "GENERATING...";
+  }
+  scheduleSummaryPoll(videoHash, jobId, 0);
+}
+
+function resumeExistingSummaryJobStatus(videoHash, statusData, regenBtn) {
+  const status = statusData && statusData.status;
+  const job = statusData && statusData.job;
+  if (["authorizing", "queued", "running"].includes(status)) {
+    if (!isSafeSummaryJob(job, videoHash)) {
+      stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+      return;
+    }
+    startPollingStatus(videoHash, job.job_id);
+    return;
+  }
+  if (status === "pending_confirmation") {
+    stopSummaryPolling(
+      regenBtn,
+      "Exact confirmation is still required. The one-time confirmation token is unavailable."
+    );
+    return;
+  }
+  if (status === "failed") {
+    stopSummaryPolling(regenBtn, "The latest summary job failed. Rewrite to try again.");
+    return;
+  }
+  if (status === "interrupted") {
+    stopSummaryPolling(regenBtn, "The latest summary job was interrupted. Rewrite to start again.");
+    return;
+  }
+  if (status === "expired") {
+    stopSummaryPolling(regenBtn, "The latest summary confirmation expired. Rewrite to try again.");
+    return;
+  }
+  if (status === "succeeded" || status === "not_started") {
+    stopSummaryPolling(regenBtn);
+    return;
+  }
+  stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+}
+
+async function handlePrepareConflict(prepareResp, videoHash, regenBtn) {
+  let payload = null;
+  try {
+    payload = await prepareResp.json();
+  } catch (error) {
+    payload = null;
+  }
+  const job = payload && payload.detail && payload.detail.job;
+  if (!isSafeSummaryJob(job, videoHash)) {
+    stopSummaryPolling(regenBtn, "An active summary job could not be verified.");
+    return;
+  }
+  if (["authorizing", "queued", "running"].includes(job.state)) {
+    showToast("Resuming the active durable summary job.", "info");
+    startPollingStatus(videoHash, job.job_id);
+    return;
+  }
+  if (job.state === "pending_confirmation") {
+    stopSummaryPolling(
+      regenBtn,
+      "This job still needs exact confirmation, but its one-time confirmation token is no longer available."
+    );
+    return;
+  }
+  stopSummaryPolling(regenBtn, "The active summary job cannot be resumed.");
 }
 
 function setupRegenListener() {
@@ -799,25 +1169,69 @@ function setupRegenListener() {
     if (!videoHash) return;
     
     if (state.summarizationInProgress) return;
+
+    const confirmed = window.confirm(`Rewrite the narrative summary for video ${videoHash}?`);
+    if (!confirmed) return;
     
     state.summarizationInProgress = true;
     regenBtn.disabled = true;
-    regenBtn.innerText = "GENERATING...";
+    regenBtn.innerText = "PREPARING...";
     
     try {
-      const resp = await fetch(`/api/summary/video/${encodeURIComponent(videoHash)}/generate`, { method: 'POST' });
-      if (resp.status === 200) {
-        showToast("Video summarization task successfully started.", "info");
-        startPollingStatus(videoHash);
-      } else {
-        const err = await resp.json();
-        showToast(`Failed to start summarization: ${err.detail || 'unknown error'}`, "error");
-        regenBtn.disabled = false;
-        regenBtn.innerText = "REWRITE SUMMARY 🤖";
-        state.summarizationInProgress = false;
+      const endpoint = `/api/summary/video/${encodeURIComponent(videoHash)}/generate`;
+      const prepareResp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepare" })
+      });
+      if (prepareResp.status === 409) {
+        await handlePrepareConflict(prepareResp, videoHash, regenBtn);
+        return;
       }
+      if (!prepareResp.ok) throw new Error("summary_prepare_failed");
+
+      const prepareData = await prepareResp.json();
+      const preparedJob = prepareData && prepareData.job;
+      const jobId = preparedJob && preparedJob.job_id;
+      let confirmationToken = prepareData && prepareData.confirmation_token;
+      if (
+        !isSafeSummaryJob(preparedJob, videoHash)
+        || preparedJob.state !== "pending_confirmation"
+        || typeof confirmationToken !== "string"
+        || !confirmationToken
+      ) {
+        throw new Error("summary_prepare_invalid");
+      }
+
+      let confirmResp;
+      try {
+        confirmResp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            job_id: jobId,
+            confirmation_token: confirmationToken
+          })
+        });
+      } finally {
+        confirmationToken = null;
+      }
+
+      if (confirmResp.status !== 202) throw new Error("summary_confirm_failed");
+      const confirmData = await confirmResp.json();
+      if (
+        !isSafeSummaryJob(confirmData && confirmData.job, videoHash)
+        || confirmData.job.job_id !== jobId
+        || !["authorizing", "queued", "running"].includes(confirmData.job.state)
+      ) {
+        throw new Error("summary_confirm_invalid");
+      }
+      showToast("Video summarization confirmed.", "info");
+      regenBtn.innerText = "GENERATING...";
+      startPollingStatus(videoHash, jobId);
     } catch (e) {
-      showToast("Network error while triggering summarization.", "error");
+      showToast("Summary rewrite could not be confirmed. Try again.", "error");
       regenBtn.disabled = false;
       regenBtn.innerText = "REWRITE SUMMARY 🤖";
       state.summarizationInProgress = false;

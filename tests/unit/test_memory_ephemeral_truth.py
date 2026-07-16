@@ -22,6 +22,8 @@ class _DummyStore:
         query_vector: List[float],
         top_k: int = 5,
         filter: Optional[Dict[str, Any]] = None,
+        *,
+        retrieval_context: str,
     ) -> List[Dict[str, Any]]:
         return self.hits[:top_k]
 
@@ -69,7 +71,11 @@ def test_memory_router_resolves_legacy_chroma_reads_to_ephemeral_store() -> None
         ),
     )
 
-    hits = router.query([0.1, 0.2, 0.3], top_k=1)
+    hits = router.query(
+        [0.1, 0.2, 0.3],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(hits) == 1
     assert hits[0]["id"] == "scene-1"
@@ -79,8 +85,9 @@ def test_memory_router_resolves_legacy_chroma_reads_to_ephemeral_store() -> None
 def test_ephemeral_memory_logs_truthful_store_names(monkeypatch) -> None:
     emitted = {}
 
-    def _capture(db_path, events, *, enabled=None, log_dir=None, cfg=None):
+    def _capture(db_path, events, *, policy):
         emitted["events"] = events
+        emitted["policy"] = policy
 
     monkeypatch.setattr(memory_stores, "emit_retrieval_events", _capture)
 
@@ -95,9 +102,14 @@ def test_ephemeral_memory_logs_truthful_store_names(monkeypatch) -> None:
         ]
     )
 
-    hits = cache.query([1.0, 0.0, 0.0], top_k=1)
+    hits = cache.query(
+        [1.0, 0.0, 0.0],
+        top_k=1,
+        retrieval_context="system.healthcheck",
+    )
 
     assert len(hits) == 1
     assert emitted["events"][0].store == "ephemeral"
     assert emitted["events"][0].details["store_type"] == "ephemeral_cache"
     assert emitted["events"][0].details["store_ref"] == "ephemeral_memory"
+    assert emitted["policy"] is cache.retrieval_event_policy

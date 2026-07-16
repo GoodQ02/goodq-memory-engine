@@ -152,7 +152,9 @@ class LLMClient:
         max_retries: int,
         timeout: int,
         cache_ttl: int,
-        enable_health_checks: bool
+        enable_health_checks: bool,
+        allow_auto_activation: bool = True,
+        allow_environment_proxies: bool = True,
     ):
         """
         Initialize LLM client
@@ -163,11 +165,17 @@ class LLMClient:
             timeout: Request timeout in seconds
             cache_ttl: Health cache time-to-live in seconds
             enable_health_checks: Enable health monitoring (default: load from config)
+            allow_auto_activation: Permit failed health checks to start local services
+            allow_environment_proxies: Permit requests to inherit proxy environment variables
         """
         if not models:
             raise ValueError("LLMClient requires a non-empty models list")
         if enable_health_checks is None:
             raise ValueError("LLMClient requires explicit enable_health_checks")
+        if not isinstance(allow_auto_activation, bool):
+            raise ValueError("LLMClient requires an explicit activation policy")
+        if not isinstance(allow_environment_proxies, bool):
+            raise ValueError("LLMClient requires an explicit proxy policy")
 
         self.MODELS = models
         self.health_check_interval = health_check_interval
@@ -176,6 +184,7 @@ class LLMClient:
         self.cache_ttl = cache_ttl
 
         self.health_checks_enabled = enable_health_checks
+        self.allow_auto_activation = allow_auto_activation
         
         # Health tracking
         self.health_status: Dict[str, HealthStatus] = {}
@@ -187,6 +196,7 @@ class LLMClient:
         
         # Session for connection pooling
         self.session = requests.Session()
+        self.session.trust_env = allow_environment_proxies
         self.session.headers.update({
             "Content-Type": "application/json",
             "User-Agent": "GoodQ4All-LLM-Client/1.0"
@@ -272,7 +282,7 @@ class LLMClient:
                 failures = prev_status.consecutive_failures + 1 if prev_status else 1
                 
                 # Auto-activate local model services on the first consecutive failure
-                if failures == 1:
+                if failures == 1 and self.allow_auto_activation:
                     logger.info(f"Model service {model.name} ({model.backend}) is offline. Attempting auto-activation...")
                     if self._attempt_auto_activation(model):
                         try:

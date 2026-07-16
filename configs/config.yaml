@@ -9,16 +9,16 @@ ingestion_isolation: true
 # USER & MODEL IDENTITY
 # ============================================================================
 user:
-  name: Joseph Domingo Benvenuti
-  nickname: GoodSex, Joes, Agent, 00-Joes, Joe
-  pronouns: he/him
-  personality_traits: compassionate, resilient, witty, detail-obsessed, creative, musically inclined
-  values: innovation, empathy, knowledge, precision, music, authenticity, healing, chaos
-  background: Chicago DJ who almost made it (www.goodsexmusic.com) turned sober nightly vibe-coder
-  music_style: house, eclectic electronic, soul-infused Chicago grooves
-  role_nursing: registered nurse in IL, bachelor of science and nursing + certified school nurse
-  nursing_philosophy: evidence-based care, radical empathy, advocate for the unseen
-  role_personal: husband to wife Katy Banks, father to dog Ryder and step-father to Kay's dog 'Lovie'
+  name: "Local User"
+  nickname: "Local Operator"
+  pronouns: "unspecified"
+  personality_traits: "Configured in configs/config.local.yaml"
+  values: "Configured in configs/config.local.yaml"
+  background: "Private local profile belongs in configs/config.local.yaml"
+  music_style: "Configured in configs/config.local.yaml"
+  role_nursing: "Configured in configs/config.local.yaml"
+  nursing_philosophy: "Configured in configs/config.local.yaml"
+  role_personal: "Configured in configs/config.local.yaml"
 
 model:
   identity: 'GoodQ: Digital embodiment of Q from the James Bond universe'
@@ -26,17 +26,17 @@ model:
   values: service, innovation, protection, efficiency, dry humor, reliability, intelligence
   humor_style: 007 Secret Agent excitement, witty Q-style dry sarcasm, clever jabs
   tech_sidekick_persona: tech-savvy sidekick with dry wit and taste for innovation
-  zone_1: Command_Center
-  zone_1_desc: User's main workstation for coding, music production, and gaming
-  zone_2: Desk Dock
-  zone_2_desc: Razer Laptop Dock with RGB lighting and Dual 25-inch HP Monitors
-  zone_3: Chase Recon
-  zone_3_desc: Relaxing large lounge day-bed with dual monitor setup and lakeside views
-  main_hardware: Alienware Aurora R16
-  main_hardware_codename: THE_GOODENGINE
-  mission_name: GoodQ_o2
-  assigned_zone: The_GoodPlace
-  workplace: The GoodPlace, Chicago, Illinois
+  zone_1: local
+  zone_1_desc: Configured in configs/config.local.yaml
+  zone_2: optional
+  zone_2_desc: Configured in configs/config.local.yaml
+  zone_3: optional
+  zone_3_desc: Configured in configs/config.local.yaml
+  main_hardware: auto
+  main_hardware_codename: local
+  mission_name: GoodQ4All
+  assigned_zone: local
+  workplace: Configured in configs/config.local.yaml
 
 # ============================================================================
 # HOST IDENTITY (PORTABILITY LAYER)
@@ -54,22 +54,22 @@ host:
 # ============================================================================
 paths:
   # Core directories
-  log_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs
-  output_directory: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/output
-  db_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22
-  db_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/memory.db
-  knowledge_graph_db: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/knowledge_graph.db
-  faiss_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/faiss
-  faiss_audio_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/faiss/goodq_audio_epoch_2025_12_22.index
+  log_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/logs
+  output_directory: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/output
+  db_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}
+  db_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/memory.db
+  knowledge_graph_db: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/knowledge_graph.db
+  faiss_dir: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/faiss
+  faiss_audio_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/faiss/goodq_audio_${GOODQ_EPOCH_ID:-default}.index
   qdrant_storage: ${GOODQ_DATA_ROOT}/qdrant_storage
-  watchdog_state_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog_state.json
-  watchdog_lock_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/watchdog.lock
+  watchdog_state_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/logs/watchdog_state.json
+  watchdog_lock_file: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/logs/watchdog.lock
   config_dir: configs
   
   # Data paths
   data_root: ${GOODQ_DATA_ROOT}/GoodQ_Data
   import_inbox: ${GOODQ_DATA_ROOT}/GoodQ_Data/import_inbox
-  processing: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/processing
+  processing: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/processing
   processed: ${GOODQ_DATA_ROOT}/GoodQ_Data/processed
   failed: ${GOODQ_DATA_ROOT}/GoodQ_Data/failed
   models_cache: ${GOODQ_DATA_ROOT}/models
@@ -81,7 +81,7 @@ paths:
   metadata_subdir: metadata
   
   # External paths
-  csv_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/logs/system_metrics.csv
+  csv_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/logs/system_metrics.csv
   nas_path: ${GOODQ_DATA_ROOT}/GoodQ_Data/archive
 
 # ============================================================================
@@ -112,29 +112,29 @@ llm:
   ollama_model: llama3.2:latest
 
 tts:
-  elevenlabs_voice_id: 4YYIPFl9wE5c4L2eu2Gb
-  piper_voice: joe
-  last_used_voice: moviephone
+  elevenlabs_voice_id: ${ELEVENLABS_VOICE_ID:-example_voice_id}
+  piper_voice: ${GOODQ_PIPER_VOICE:-default}
+  last_used_voice: ${GOODQ_TTS_LAST_USED_VOICE:-default}
 
 # ============================================================================
 # HOME ASSISTANT
 # ============================================================================
 home_assistant:
-  url: http://192.168.0.154:8123
-  token: ${HA_TOKEN}
+  url: ${GOODQ_HOME_ASSISTANT_URL:-http://127.0.0.1:8123}
+  token: ${HA_TOKEN:-}
 
 # ============================================================================
 # SYSTEM HARDWARE
 # ============================================================================
 system:
-  cpu: Intel Core i7-14700KF
-  gpu: NVIDIA GeForce RTX 4070 Ti SUPER with 16GB GDDR6X
-  ram1: 32GB Crucial DDR5 at 5200MHz
-  ram2: 32GB Crucial DDR5 at 5200MHz
-  ssd1: Samsung 990 Pro 4TB NVMe SSD
-  ssd2: Samsung 990 Pro 4TB NVMe SSD
-  network: Tp-Link Archer AXE7800 with 2.5Gbps Ethernet and Wi-Fi 6E
-  storage: UGREEN NAS with 44TB of storage
+  cpu: "auto"
+  gpu: "auto"
+  ram1: "auto"
+  ram2: "auto"
+  ssd1: "auto"
+  ssd2: "auto"
+  network: "auto"
+  storage: "auto"
 
 # ============================================================================
 # GPU CONFIGURATION
@@ -170,10 +170,10 @@ qdrant:
   enabled: true
   host: http://127.0.0.1:6333
   collections:
-    clip: goodq_clip_epoch_2025_12_22
-    dino: goodq_dino_epoch_2025_12_22
-    text: goodq_text_epoch_2025_12_22
-    audio: goodq_audio_epoch_2025_12_22
+    clip: goodq_clip_${GOODQ_EPOCH_ID:-default}
+    dino: goodq_dino_${GOODQ_EPOCH_ID:-default}
+    text: goodq_text_${GOODQ_EPOCH_ID:-default}
+    audio: goodq_audio_${GOODQ_EPOCH_ID:-default}
   embedding_dims:
     clip: 768
     dino: 1024
@@ -285,8 +285,8 @@ phase6:
   max_gpu_batch_size: 8
   
   # Collections
-  clip_collection: goodq_clip_epoch_2025_12_22
-  dino_collection: goodq_dino_epoch_2025_12_22
+  clip_collection: goodq_clip_${GOODQ_EPOCH_ID:-default}
+  dino_collection: goodq_dino_${GOODQ_EPOCH_ID:-default}
   
   # Retrieval settings
   retrieval:
@@ -306,6 +306,7 @@ api:
   reload: true
   cors_enabled: false
   max_upload_size: 5368709120  # 5GB
+  max_pending_ingest_bytes: 5368709120  # Aggregate unconfirmed staging budget
 
 # ============================================================================
 # UI CONFIGURATION
@@ -343,3 +344,11 @@ logging:
   save_logs: true
   verbose: true
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# ============================================================================
+# OBSERVABILITY
+# ============================================================================
+observability:
+  retrieval_events:
+    enabled: true
+    jsonl_fallback: true

@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import logging
 import os
+from pathlib import Path
 import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+
+logger = logging.getLogger(__name__)
 
 
 _SCHEMA_SQL = """
@@ -80,55 +85,107 @@ def normalize_retrieval_context(raw: Optional[str]) -> str:
     return "unknown"
 
 
-def retrieval_events_jsonl_enabled(cfg: Optional[Dict[str, Any]] = None, *, default: bool = True) -> bool:
-    if "GOODQ_RETRIEVAL_EVENTS_JSONL" in os.environ:
-        return _truthy_env("GOODQ_RETRIEVAL_EVENTS_JSONL", default=default)
+_TRUE_VALUES = {"1", "true", "yes", "y", "on"}
+_FALSE_VALUES = {"0", "false", "no", "n", "off"}
 
-    if not isinstance(cfg, dict):
-        return default
 
-    obs = cfg.get("observability")
-    if isinstance(obs, dict):
-        re_cfg = obs.get("retrieval_events")
-        if isinstance(re_cfg, dict):
-            if "jsonl_fallback" in re_cfg:
-                return bool(re_cfg.get("jsonl_fallback"))
-            if "jsonl_enabled" in re_cfg:
-                return bool(re_cfg.get("jsonl_enabled"))
-
-    mem = cfg.get("memory")
-    if isinstance(mem, dict):
-        re_cfg = mem.get("retrieval_events")
-        if isinstance(re_cfg, dict):
-            if "jsonl_fallback" in re_cfg:
-                return bool(re_cfg.get("jsonl_fallback"))
-            if "jsonl_enabled" in re_cfg:
-                return bool(re_cfg.get("jsonl_enabled"))
-
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _TRUE_VALUES:
+            return True
+        if normalized in _FALSE_VALUES:
+            return False
     return default
 
 
-def retrieval_events_enabled(cfg: Optional[Dict[str, Any]] = None, *, default: bool = True) -> bool:
-    # Env override (allows runtime disable without code/config changes).
+@dataclass(frozen=True)
+class RetrievalEventPolicy:
+    enabled: bool = True
+    jsonl_fallback: bool = True
+    log_dir: Optional[str] = None
+
+
+def _existing_log_directory(cfg: Any) -> Optional[str]:
+    if not isinstance(cfg, dict):
+        return None
+    paths = cfg.get("paths")
+    if not isinstance(paths, dict):
+        return None
+    raw = paths.get("log_dir")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        resolved = Path(raw).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    return str(resolved) if resolved.is_dir() else None
+
+
+def resolve_retrieval_event_policy(
+    cfg: Optional[Dict[str, Any]] = None,
+    *,
+    default_enabled: bool = True,
+    default_jsonl_fallback: bool = True,
+) -> RetrievalEventPolicy:
+    enabled = default_enabled
+    jsonl_fallback = default_jsonl_fallback
+    if isinstance(cfg, dict):
+        observability = cfg.get("observability")
+        if isinstance(observability, dict):
+            policy_cfg = observability.get("retrieval_events")
+            if isinstance(policy_cfg, dict):
+                enabled = _coerce_bool(
+                    policy_cfg.get("enabled"),
+                    default=default_enabled,
+                )
+                jsonl_fallback = _coerce_bool(
+                    policy_cfg.get("jsonl_fallback"),
+                    default=default_jsonl_fallback,
+                )
+
     if "GOODQ_RETRIEVAL_EVENTS" in os.environ:
-        return _truthy_env("GOODQ_RETRIEVAL_EVENTS", default=default)
+        enabled = _coerce_bool(
+            os.environ.get("GOODQ_RETRIEVAL_EVENTS"),
+            default=enabled,
+        )
+    if "GOODQ_RETRIEVAL_EVENTS_JSONL" in os.environ:
+        jsonl_fallback = _coerce_bool(
+            os.environ.get("GOODQ_RETRIEVAL_EVENTS_JSONL"),
+            default=jsonl_fallback,
+        )
 
-    if not isinstance(cfg, dict):
-        return default
+    return RetrievalEventPolicy(
+        enabled=enabled,
+        jsonl_fallback=jsonl_fallback,
+        log_dir=_existing_log_directory(cfg),
+    )
 
-    obs = cfg.get("observability")
-    if isinstance(obs, dict):
-        re_cfg = obs.get("retrieval_events")
-        if isinstance(re_cfg, dict) and "enabled" in re_cfg:
-            return bool(re_cfg.get("enabled"))
 
-    mem = cfg.get("memory")
-    if isinstance(mem, dict):
-        re_cfg = mem.get("retrieval_events")
-        if isinstance(re_cfg, dict) and "enabled" in re_cfg:
-            return bool(re_cfg.get("enabled"))
+def retrieval_events_jsonl_enabled(
+    cfg: Optional[Dict[str, Any]] = None,
+    *,
+    default: bool = True,
+) -> bool:
+    return resolve_retrieval_event_policy(
+        cfg,
+        default_jsonl_fallback=default,
+    ).jsonl_fallback
 
-    return default
+
+def retrieval_events_enabled(
+    cfg: Optional[Dict[str, Any]] = None,
+    *,
+    default: bool = True,
+) -> bool:
+    return resolve_retrieval_event_policy(
+        cfg,
+        default_enabled=default,
+    ).enabled
 
 
 @dataclass
@@ -176,106 +233,150 @@ class RetrievalEvent:
         }
 
 
-_SCHEMA_INITIALIZED: set[str] = set()
+_SCHEMA_NAMES = {
+    "retrieval_events",
+    "idx_re_ts",
+    "idx_re_embedding",
+    "idx_re_scene",
+    "idx_re_store",
+}
 
 
-def _ensure_schema(conn: sqlite3.Connection, db_path: str) -> None:
-    if db_path in _SCHEMA_INITIALIZED:
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE name IN (?,?,?,?,?)",
+        tuple(sorted(_SCHEMA_NAMES)),
+    ).fetchall()
+    existing = {str(row[0]) for row in rows}
+    if existing == _SCHEMA_NAMES:
         return
     try:
         # Best-effort: favor WAL for low-contention, append-only event writes.
         conn.execute("PRAGMA journal_mode=WAL")
-    except Exception:
-        pass
+    except sqlite3.Error:
+        logger.debug("retrieval_event_schema_setup reason=journal_mode_unavailable")
     conn.executescript(_SCHEMA_SQL)
-    _SCHEMA_INITIALIZED.add(db_path)
 
 def _configure_conn(conn: sqlite3.Connection, *, busy_timeout_ms: int) -> None:
-    try:
-        conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
-    except Exception:
-        pass
-    try:
-        conn.execute("PRAGMA synchronous=NORMAL")
-    except Exception:
-        pass
-
-def _cfg_paths(cfg: Any) -> Dict[str, Any]:
-    return (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+    conn.execute("PRAGMA synchronous=NORMAL")
 
 
 def _is_sqlite_locked_error(exc: Exception) -> bool:
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    error_code = getattr(exc, "sqlite_errorcode", None)
+    if isinstance(error_code, int) and (error_code & 0xFF) in (5, 6):
+        return True
     try:
-        msg = str(exc).lower()
+        message = str(exc).strip().lower()
     except Exception:
         return False
-    return "database is locked" in msg or "database is busy" in msg or "locked" in msg or "busy" in msg
+    canonical_messages = (
+        "database is locked",
+        "database is busy",
+        "database table is locked",
+        "database table is busy",
+        "database schema is locked",
+        "database schema is busy",
+    )
+    return any(
+        message == canonical or message.startswith(f"{canonical}:")
+        for canonical in canonical_messages
+    )
 
 
-def _fallback_log_dir(db_path: str, cfg: Optional[Dict[str, Any]], log_dir: Optional[str]) -> Optional[str]:
-    if isinstance(log_dir, str) and log_dir.strip() and os.path.isdir(log_dir):
-        return log_dir
-    paths = _cfg_paths(cfg) if isinstance(cfg, dict) else {}
-    cfg_log_dir = paths.get("log_dir")
-    if isinstance(cfg_log_dir, str) and cfg_log_dir.strip() and os.path.isdir(cfg_log_dir):
-        return cfg_log_dir
-    try:
-        parent = os.path.dirname(db_path)
-        if parent and os.path.isdir(parent):
-            return parent
-    except Exception:
-        pass
-    return None
+def _warn_persistence_unavailable(*, reason: str, event_count: int) -> None:
+    logger.warning(
+        "retrieval_event_persistence_unavailable reason=%s event_count=%s",
+        reason,
+        int(event_count),
+    )
+
+
+def _existing_database_rw_uri(db_path: str) -> str:
+    resolved = Path(db_path).expanduser().resolve(strict=True)
+    if not resolved.is_file():
+        raise FileNotFoundError("retrieval event database is not a regular file")
+    return f"{resolved.as_uri()}?mode=rw"
 
 
 def _emit_jsonl_fallback(
-    db_path: str,
     events: Sequence[RetrievalEvent],
     *,
-    cfg: Optional[Dict[str, Any]] = None,
-    log_dir: Optional[str] = None,
-) -> None:
-    if not retrieval_events_jsonl_enabled(cfg, default=True):
-        return
-    dest_dir = _fallback_log_dir(db_path, cfg, log_dir)
-    if not dest_dir:
-        return
-    jsonl_path = os.path.join(dest_dir, "retrieval_events.jsonl")
+    policy: RetrievalEventPolicy,
+) -> bool:
+    if not isinstance(policy.log_dir, str) or not policy.log_dir.strip():
+        _warn_persistence_unavailable(
+            reason="fallback_unavailable",
+            event_count=len(events),
+        )
+        return False
+    destination = Path(policy.log_dir)
+    if not destination.is_dir():
+        _warn_persistence_unavailable(
+            reason="fallback_unavailable",
+            event_count=len(events),
+        )
+        return False
+    jsonl_path = destination / "retrieval_events.jsonl"
     try:
-        with open(jsonl_path, "a", encoding="utf-8") as f:
+        with jsonl_path.open("a", encoding="utf-8") as f:
             for ev in events:
                 f.write(json.dumps(ev.to_dict(), ensure_ascii=False) + "\n")
     except Exception:
-        return
+        _warn_persistence_unavailable(
+            reason="fallback_write_failed",
+            event_count=len(events),
+        )
+        return False
+    return True
 
 
 def emit_retrieval_events(
     db_path: Optional[str],
     events: Sequence[Union[RetrievalEvent, Dict[str, Any]]],
     *,
-    cfg: Optional[Dict[str, Any]] = None,
-    enabled: Optional[bool] = None,
-    log_dir: Optional[str] = None,
+    policy: RetrievalEventPolicy,
 ) -> None:
     if not events:
         return
-    if not isinstance(db_path, str) or not db_path.strip():
+    if not policy.enabled:
         return
-
-    allow = retrieval_events_enabled(cfg, default=(bool(enabled) if enabled is not None else True))
-    if not allow:
+    if not isinstance(db_path, str) or not db_path.strip():
+        _warn_persistence_unavailable(
+            reason="missing_database",
+            event_count=len(events),
+        )
         return
 
     normalized: List[RetrievalEvent] = []
+    invalid_count = 0
     for ev in events:
         try:
             if isinstance(ev, RetrievalEvent):
                 normalized.append(ev)
             elif isinstance(ev, dict):
                 normalized.append(RetrievalEvent(**ev))
+            else:
+                invalid_count += 1
         except Exception:
-            continue
+            invalid_count += 1
+    if invalid_count:
+        _warn_persistence_unavailable(
+            reason="invalid_event",
+            event_count=invalid_count,
+        )
     if not normalized:
+        return
+
+    try:
+        database_uri = _existing_database_rw_uri(db_path)
+    except (OSError, RuntimeError):
+        _warn_persistence_unavailable(
+            reason="missing_database",
+            event_count=len(normalized),
+        )
         return
 
     debug = _vector_debug_enabled()
@@ -288,10 +389,15 @@ def emit_retrieval_events(
             pass
 
     try:
-        conn = sqlite3.connect(db_path, timeout=0.05, check_same_thread=False)
+        conn = sqlite3.connect(
+            database_uri,
+            uri=True,
+            timeout=0.05,
+            check_same_thread=False,
+        )
         try:
             _configure_conn(conn, busy_timeout_ms=50)
-            _ensure_schema(conn, db_path)
+            _ensure_schema(conn)
             rows = [ev.to_row() for ev in normalized]
             with conn:
                 conn.executemany(
@@ -307,13 +413,25 @@ def emit_retrieval_events(
             try:
                 conn.close()
             except Exception:
-                pass
+                logger.debug("retrieval_event_connection_close reason=close_failed")
     except Exception as exc:
         if _is_sqlite_locked_error(exc):
-            _emit_jsonl_fallback(db_path, normalized, cfg=cfg, log_dir=log_dir)
-            if debug:
+            if policy.jsonl_fallback:
+                used_fallback = _emit_jsonl_fallback(normalized, policy=policy)
+            else:
+                used_fallback = False
+                _warn_persistence_unavailable(
+                    reason="sqlite_locked",
+                    event_count=len(normalized),
+                )
+            if debug and used_fallback:
                 try:
                     print(f"[VECTOR_DEBUG] retrieval_events.jsonl_fallback hits={len(normalized)}")
                 except Exception:
                     pass
+        else:
+            _warn_persistence_unavailable(
+                reason="sqlite_error",
+                event_count=len(normalized),
+            )
         return

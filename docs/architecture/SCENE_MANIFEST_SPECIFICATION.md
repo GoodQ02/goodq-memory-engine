@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-04-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Scene Manifest Specification
 
 **Status:** ✅ **STABLE AND OPERATIONAL**
-**Last Verified:** April 24, 2026
+**Last Verified:** 2026-07-11
 **Evidence:** fresh Season 5 projection smoke artifacts produced epoch-scoped manifests with active WSL audio, persisted diarization/emotion truth, speaker continuity, and additive harmonized scene fields
 
 ---
@@ -13,6 +13,12 @@
 ## Overview
 
 `scene_manifest.json` is the canonical per-video artifact emitted by ingestion. It is the handoff surface between scene processing, Phase 6, retrieval, and the identity formation layer.
+
+Its authority is artifact-scoped. Under `ingestion_isolation: true`, a complete
+manifest (including successful Phase 6 fields) is per-video evidence, not proof
+that the video is active or promoted memory. `ucf/ucf_ledger.db` governs the
+lifecycle; only explicit validation followed by human-gated promotion of the
+exact video/epoch scope may materialize active memory and graph views.
 
 It is authoritative for:
 - scene boundaries and scene ids
@@ -332,7 +338,8 @@ control recurrence reporting.
    - Uses scene payload truth, not stale labels, for `content_summary`
 
 3. **Realtime KG Integration** (`lib/kg_realtime_integration.py`)
-   - Consumes scene bundles during ingestion
+   - Consumes scene bundles during non-isolated ingestion; under isolation,
+     active KG materialization is deferred to governed promotion
    - Uses transcript, speaker alignment, voice signatures, captions, OCR, objects, and tags
 
 4. **Identity Ledger Rebuilds** (`lib/identity_ledger.py`, `scripts/build_identity_ledger.py`)
@@ -413,10 +420,12 @@ dense on every episode.
 
 ## Summary
 
-`scene_manifest.json` is the canonical per-video scene bundle. It is no longer just a segmentation artifact; it is the durable truth surface for:
+`scene_manifest.json` is the canonical per-video artifact bundle. It is no longer just a segmentation artifact; it is the durable artifact truth surface for:
 - multimodal scene data
 - backend attribution
 - Phase 6 completion
 - speaker-owned transcript alignment
 - voice-signature capture used by identity stitching
 - additive perception and interaction context written by harmonization
+
+Those truths become active memory only through the governed lifecycle above.

@@ -38,7 +38,8 @@ def setup_validator_env(tmp_path, monkeypatch):
             "faiss_dino_path": str(tmp_path / "faiss_dino.index"),
             "clip_id_map_db": str(tmp_path / "clip_id_map.sqlite"),
             "dino_id_map_db": str(tmp_path / "dino_id_map.sqlite"),
-            "processing": str(tmp_path / "processing")
+            "processing": str(tmp_path / "processing"),
+            "reports_dir": str(tmp_path / "reports"),
         },
         "qdrant": {
             "collections": {
@@ -678,6 +679,7 @@ def setup_gapc_env(tmp_path, monkeypatch):
             "clap_id_map_db": str(tmp_path / "clap_id_map.sqlite"),
             "db_path": str(tmp_path / "memory.db"),
             "processing": str(tmp_path / "processing"),
+            "reports_dir": str(tmp_path / "reports"),
         },
         "qdrant": {
             "collections": {

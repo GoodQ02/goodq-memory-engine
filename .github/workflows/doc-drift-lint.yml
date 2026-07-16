@@ -7,17 +7,19 @@ on:
       - main
     paths:
       - ".github/workflows/doc-drift-lint.yml"
-      - "README*.md"
+      - "*.md"
       - "docs/**"
       - "AGENTS.md"
       - "scripts/docs/doc_drift_lint.py"
+      - "scripts/docs/doc_authority_lint.py"
   pull_request:
     paths:
       - ".github/workflows/doc-drift-lint.yml"
-      - "README*.md"
+      - "*.md"
       - "docs/**"
       - "AGENTS.md"
       - "scripts/docs/doc_drift_lint.py"
+      - "scripts/docs/doc_authority_lint.py"
   workflow_dispatch:
 
 jobs:
@@ -34,3 +36,6 @@ jobs:
 
       - name: Run doc drift lint
         run: python scripts/docs/doc_drift_lint.py
+
+      - name: Run documentation authority lint
+        run: python scripts/docs/doc_authority_lint.py verify

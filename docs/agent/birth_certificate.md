@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # GoodQ4All Birth Certificate & Promotion Witness Report
 **Epoch ID:** `epoch_2026_07_05_home_memory_clean_01`
 **Status:** `VALIDATED & PROMOTED (100% GREEN)`

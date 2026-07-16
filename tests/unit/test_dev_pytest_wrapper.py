@@ -12,6 +12,8 @@ def test_dev_pytest_wrapper_uses_canonical_env_and_repo_local_temp() -> None:
     assert "$CondaEnv = \"goodq_core\"" in content
     assert "Get-GoodQCondaEnv" not in content
     assert "tmp\\conda_run" in content
+    assert "[string]$TempRoot" in content
+    assert "if ($TempRoot)" in content
     assert "$env:TEMP = $localTemp" in content
     assert "$env:TMP = $localTemp" in content
     assert '"run", "--no-capture-output", "-n", $CondaEnv, "python", "-m", "pytest"' in content

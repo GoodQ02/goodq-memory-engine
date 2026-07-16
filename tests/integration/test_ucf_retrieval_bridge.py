@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 import copy
 import json
+import uuid
 
 from steps.common.qdrant_client import QdrantClient, QdrantConfig
 from agents.mini_agent_client import MiniAgentClient
@@ -85,6 +86,36 @@ def _confirm_tool_directly(client, tool_name, tool_args):
         confirm=True,
         confirmation_token=token,
     )
+
+
+_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+
+
+def _qdrant_update_response(status_code=200):
+    return MagicMock(status_code=status_code, text="{}")
+
+
+def _qdrant_verify_response(
+    vector_key,
+    promotion_status,
+    *,
+    video_hash="vh_test_001",
+    epoch_id="epoch_test",
+):
+    response = MagicMock(status_code=200, text="{}")
+    response.json.return_value = {
+        "result": [
+            {
+                "id": str(uuid.uuid5(_POINT_ID_NAMESPACE, vector_key)),
+                "payload": {
+                    "video_hash": video_hash,
+                    "epoch_id": epoch_id,
+                    "ucf_promotion_status": promotion_status,
+                },
+            }
+        ]
+    }
+    return response
 
 # ---------------------------------------------------------------------------
 # set_payload tests (5)
@@ -179,10 +210,27 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monke
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
-    mock_post.return_value = MagicMock(status_code=200, text="{}")
+    mock_post.side_effect = [
+        _qdrant_verify_response("vec-key-1", "staged"),
+        _qdrant_update_response(),
+        _qdrant_verify_response("vec-key-1", "promoted"),
+    ]
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
+    monkeypatch.setattr(
+        client, "_execute_validate_ucf_epoch", lambda _args: {"success": True, "errors": []}
+    )
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
@@ -209,8 +257,8 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monke
     assert kwargs["json"]["payload"] == {"ucf_promotion_status": "promoted"}
 
 @patch("requests.post")
-def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tmp_path, monkeypatch):
-    """R2: test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning — requests.post returns 500; assert warning in envelope"""
+def test_promote_qdrant_sync_failure_is_visible_and_pending(mock_post, tmp_path, monkeypatch):
+    """R2: a failed verified projection is visible and remains durably pending."""
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
@@ -218,21 +266,31 @@ def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tm
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
+    monkeypatch.setattr(
+        client, "_execute_validate_ucf_epoch", lambda _args: {"success": True, "errors": []}
+    )
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
-    assert rc == 0
-    assert res["status"] == "success"
+    assert rc == 1
+    assert res["status"] == "error"
+    assert res["errors"][0]["code"] == "promotion_committed_sync_pending"
     
     output = res["output"]
-    assert output["status"] == "promoted_complete"
+    assert output["status"] == "promotion_committed_sync_pending"
     
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "warning"
     assert "goodq_clip" in q_sync["failed_collections"]
     
-    assert "warnings" in res
-    assert "qdrant_payload_sync_failed" in res["warnings"]
+    assert "qdrant_payload_sync_failed" in output["warnings"]
+    assert output["outbox"]["delivery_state"] == "pending"
 
 @patch("requests.post")
 def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, monkeypatch):
@@ -240,17 +298,29 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, m
     # 1. Reject
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-reject", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_post.return_value = MagicMock(status_code=200, text="{}")
+    mock_post.side_effect = [
+        _qdrant_verify_response("vec-key-reject", "validated"),
+        _qdrant_update_response(),
+        _qdrant_verify_response("vec-key-reject", "rejected"),
+        _qdrant_verify_response("vec-key-supersede", "promoted"),
+        _qdrant_update_response(),
+        _qdrant_verify_response("vec-key-supersede", "superseded"),
+    ]
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
 
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "bad resolution"})
     assert rc == 0
     assert res["output"]["status"] == "rejected_complete"
     
-    assert mock_post.call_count == 1
-    args, kwargs = mock_post.call_args
+    assert mock_post.call_count == 3
+    args, kwargs = mock_post.call_args_list[1]
     assert "collections/goodq_clip/points/payload" in args[0]
     assert kwargs["json"]["payload"] == {"ucf_promotion_status": "rejected"}
 
@@ -262,26 +332,43 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, m
     assert rc2 == 0
     assert res2["output"]["status"] == "superseded_complete"
     
-    assert mock_post.call_count == 2
-    args, kwargs = mock_post.call_args_list[1]
+    assert mock_post.call_count == 6
+    args, kwargs = mock_post.call_args_list[4]
     assert "collections/goodq_clip/points/payload" in args[0]
     assert kwargs["json"]["payload"] == {"ucf_promotion_status": "superseded"}
 
 @patch("requests.post")
-def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_post, tmp_path, monkeypatch):
-    """R2: test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped — NULL vector_keys; assert requests.post NOT called; qdrant_sync status='skipped'"""
+def test_null_vector_key_frames_use_verified_scope_readback(mock_post, tmp_path, monkeypatch):
+    """R2: NULL vector keys use exact-scope readback instead of row-key delivery."""
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key=None, vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_execute_validate_ucf_epoch",
+        lambda _args: {"success": True, "errors": []},
+    )
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     
-    q_sync = res["output"]["qdrant_sync"]
+    output = res["output"]
+    q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is False
     assert q_sync["status"] == "skipped"
+    assert output["scope_sync"]["points_verified"] == 1
+    assert output["outbox"]["delivery_state"] == "complete"
     mock_post.assert_not_called()
 
 
@@ -508,10 +595,25 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     db_path = _create_mock_db_for_test(tmp_path, "staged", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     mock_run_validation.return_value = 0
-    mock_post.return_value = MagicMock(status_code=200, text="{}")
+    mock_post.side_effect = [
+        _qdrant_verify_response("vec-key-1", "staged"),
+        _qdrant_update_response(),
+        _qdrant_verify_response("vec-key-1", "promoted"),
+        _qdrant_update_response(),
+        _qdrant_verify_response("vec-key-1", "rejected"),
+    ]
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
 
     # Setup paths under tmp_path
     db_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test"
@@ -583,6 +685,8 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     res, rc = _confirm_tool_directly(client, "validate_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     assert res["output"]["validated_count"] == 1
+    assert not Path(client.config["paths"]["db_path"]).exists()
+    assert not Path(client.config["paths"]["knowledge_graph_db"]).exists()
 
     # 4. Promote (trigger materialization)
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
@@ -689,7 +793,11 @@ def test_search_visibility_lifecycle():
 
     # Scenario A & B & C & D: Default search visibility (only promoted evidence)
     # search_text
-    engine.search_text("test query", top_k=5)
+    engine.search_text(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -701,7 +809,11 @@ def test_search_visibility_lifecycle():
 
     # search_visual
     mock_client.reset_mock()
-    engine.search_visual("test query", top_k=5)
+    engine.search_visual(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -713,7 +825,11 @@ def test_search_visibility_lifecycle():
 
     # search_audio
     mock_client.reset_mock()
-    engine.search_audio("test query", top_k=5)
+    engine.search_audio(
+        "test query",
+        top_k=5,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -726,7 +842,12 @@ def test_search_visibility_lifecycle():
     # Scenario E: Debug/audit search explicitly requested (ucf_include_terminal=True)
     # search_text
     mock_client.reset_mock()
-    engine.search_text("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_text(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -737,7 +858,12 @@ def test_search_visibility_lifecycle():
 
     # search_visual
     mock_client.reset_mock()
-    engine.search_visual("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_visual(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
@@ -747,11 +873,15 @@ def test_search_visibility_lifecycle():
 
     # search_audio
     mock_client.reset_mock()
-    engine.search_audio("test query", top_k=5, ucf_include_terminal=True)
+    engine.search_audio(
+        "test query",
+        top_k=5,
+        ucf_include_terminal=True,
+        retrieval_context="system.healthcheck",
+    )
     mock_client.query.assert_called_once()
     _, kwargs = mock_client.query.call_args
     p_filter = kwargs["payload_filter"]
     if "must" in p_filter:
         must_keys = [item["key"] for item in p_filter["must"]]
         assert "ucf_promotion_status" not in must_keys
-

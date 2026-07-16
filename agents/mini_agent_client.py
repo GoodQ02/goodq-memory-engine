@@ -4,13 +4,15 @@ Integrates goodq_mini_agent checks with the unified codebase LLMClient.
 """
 
 from __future__ import annotations
+import hashlib
+import json
 import os
 import sys
 import uuid
 import time
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple, Optional
 
 # Setup dynamic home root for the agent trace logs
@@ -26,6 +28,16 @@ from lib.llm_client import LLMClient
 
 import threading
 from contextlib import contextmanager
+
+
+def _report_evidence_state(path: Path) -> Optional[Tuple[int, int, str]]:
+    """Returns a stable fingerprint used to reject stale validator reports."""
+    try:
+        stat = path.stat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        return stat.st_mtime_ns, stat.st_size, digest
+    except OSError:
+        return None
 
 class ReentrantFileLock:
     def __init__(self, lock_file_path: Path):
@@ -106,6 +118,11 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 }
 
 MUTATING_DENY_ON_AGENT_FAILURE = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_temporal_summary",
+    "generate_video_summary",
     "home_assistant_call_service",
     "qdrant_upsert",
     "faiss_write",
@@ -113,15 +130,407 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
     "config_write",
     "file_delete",
     "file_move",
+    "stage_ingest_request",
     "run_ingestion",
     "watchdog_trigger",
     "process_start",
     "process_stop",
     "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
     "validate_ucf_frames",
     "reject_ucf_frames",
     "supersede_ucf_frames",
 }
+
+LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_temporal_summary",
+    "generate_video_summary",
+    "stage_ingest_request",
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
+# These operations reuse the durable exact-scope confirmation authority but
+# intentionally have no native execution handler. The caller owns the governed
+# side effect after ``authorize_action`` succeeds.
+LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_temporal_summary",
+    "generate_video_summary",
+    "stage_ingest_request",
+}
+
+LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_temporal_summary",
+    "generate_video_summary",
+    "stage_ingest_request",
+    "run_ingestion",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+    "file_delete",
+    "validate_ucf_epoch",
+}
+
+TOOL_AUDIT_SCHEMA_VERSION = "goodq.tool-audit.v1"
+TOOL_AUDIT_LOG_ENV = "GOODQ_TOOL_AUDIT_LOG"
+CONFIRMATION_TOKEN_TTL_SECONDS = 600
+EXTERNAL_AUDIT_MAX_TARGETS = 32
+EXTERNAL_AUDIT_MAX_TARGET_LENGTH = 128
+EXTERNAL_AUDIT_MAX_ERROR_CODES = 32
+EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH = 64
+
+PROMOTE_UCF_SCOPE_FIELDS = ("video_hash", "epoch_id")
+SCOPE_BOUND_UCF_TOOLS = {"promote_ucf_to_memory", "reconcile_ucf_qdrant"}
+VIDEO_SUMMARY_SCOPE_FIELDS = ("job_id", "video_hash")
+TEMPORAL_SUMMARY_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "request_sha256",
+    "execution_policy_sha256",
+)
+TEMPORAL_SUMMARY_TARGET_PREFIX = "temporal-summary:"
+SUMMARY_COLLECTION_CREATE_SCOPE_FIELDS = (
+    "action_id",
+    "epoch_id",
+    "payload_sha256",
+)
+SUMMARY_COLLECTION_DELETE_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "collection_id",
+    "expected_record_sha256",
+)
+SUMMARY_COLLECTION_ACTIONS = {
+    "create_summary_collection",
+    "delete_summary_collection",
+}
+CLEAN_MEMORY_APPLY_ACTION = "clean_memory.apply"
+CLEAN_MEMORY_APPLY_SCOPE_FIELDS = (
+    "job_id",
+    "epoch_id",
+    "plan_sha256",
+    "config_scope_sha256",
+    "disposition_sha256",
+    "rollback_sha256",
+)
+CLEAN_MEMORY_AUDIT_TARGET_PREFIX = "clean-memory:"
+REDACTED_SCOPE_AUTHORIZATION_ACTIONS = SUMMARY_COLLECTION_ACTIONS | {
+    CLEAN_MEMORY_APPLY_ACTION,
+    "generate_temporal_summary"
+}
+SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH = 128
+SUMMARY_COLLECTION_CREATE_TARGET_PREFIX = "summary-collection:create:"
+SUMMARY_COLLECTION_DELETE_TARGET_PREFIX = "summary-collection:delete:"
+SUMMARY_COLLECTION_CORRELATION_ID_MAX_LENGTH = min(
+    EXTERNAL_AUDIT_MAX_TARGET_LENGTH - len(SUMMARY_COLLECTION_CREATE_TARGET_PREFIX),
+    EXTERNAL_AUDIT_MAX_TARGET_LENGTH - len(SUMMARY_COLLECTION_DELETE_TARGET_PREFIX),
+)
+SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+)
+
+
+def _validate_promote_ucf_scope(tool_args: Dict[str, Any]) -> List[str]:
+    """Validate the exact, non-ambiguous promotion scope."""
+    violations: List[str] = []
+    expected = set(PROMOTE_UCF_SCOPE_FIELDS)
+    actual = set(tool_args)
+
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    for field in PROMOTE_UCF_SCOPE_FIELDS:
+        value = tool_args.get(field)
+        if field in tool_args and (not isinstance(value, str) or not value.strip()):
+            violations.append(f"{field} must be a non-empty string")
+
+    return violations
+
+
+def _validate_video_summary_scope(tool_args: Any) -> List[str]:
+    """Validate one exact external video-summary job scope."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+
+    violations: List[str] = []
+    expected = set(VIDEO_SUMMARY_SCOPE_FIELDS)
+    actual = set(tool_args)
+
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    for field in VIDEO_SUMMARY_SCOPE_FIELDS:
+        value = tool_args.get(field)
+        if field in tool_args and (not isinstance(value, str) or not value.strip()):
+            violations.append(f"{field} must be a non-empty string")
+
+    return violations
+
+
+def _validate_summary_collection_identifier(field: str, value: Any) -> List[str]:
+    if not isinstance(value, str) or not value:
+        return [f"{field} must be a non-empty string"]
+    if value != value.strip():
+        return [f"{field} must not contain surrounding whitespace"]
+    max_length = (
+        SUMMARY_COLLECTION_CORRELATION_ID_MAX_LENGTH
+        if field in {"action_id", "job_id"}
+        else SUMMARY_COLLECTION_IDENTIFIER_MAX_LENGTH
+    )
+    if len(value) > max_length:
+        return [
+            f"{field} exceeds {max_length} characters"
+        ]
+    if not value[0].isalnum() or any(
+        character not in SUMMARY_COLLECTION_IDENTIFIER_CHARACTERS
+        for character in value
+    ):
+        return [f"{field} must be a path-free identifier"]
+    return []
+
+
+def _validate_summary_collection_digest(field: str, value: Any) -> List[str]:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        return [f"{field} must be a lowercase SHA-256 digest"]
+    return []
+
+
+def _validate_summary_collection_scope(
+    tool_args: Any,
+    *,
+    expected_fields: Tuple[str, ...],
+    identifier_fields: Tuple[str, ...],
+    digest_fields: Tuple[str, ...],
+) -> List[str]:
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    if any(not isinstance(field, str) for field in tool_args):
+        return ["scope field names must be strings"]
+
+    violations: List[str] = []
+    expected = set(expected_fields)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    for field in identifier_fields:
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_identifier(field, tool_args[field])
+            )
+    for field in digest_fields:
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_digest(field, tool_args[field])
+            )
+    return violations
+
+
+def _validate_summary_collection_create_scope(tool_args: Any) -> List[str]:
+    return _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=SUMMARY_COLLECTION_CREATE_SCOPE_FIELDS,
+        identifier_fields=("action_id", "epoch_id"),
+        digest_fields=("payload_sha256",),
+    )
+
+
+def _validate_summary_collection_delete_scope(tool_args: Any) -> List[str]:
+    return _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=SUMMARY_COLLECTION_DELETE_SCOPE_FIELDS,
+        identifier_fields=("job_id", "epoch_id", "collection_id"),
+        digest_fields=("expected_record_sha256",),
+    )
+
+
+def _validate_temporal_summary_scope(tool_args: Any) -> List[str]:
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    if any(not isinstance(field, str) for field in tool_args):
+        return ["scope field names must be strings"]
+
+    violations: List[str] = []
+    expected = set(TEMPORAL_SUMMARY_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+
+    job_id = tool_args.get("job_id")
+    if "job_id" in tool_args and (
+        not isinstance(job_id, str)
+        or len(job_id) != 36
+        or not job_id.startswith("job_")
+        or any(character not in "0123456789abcdef" for character in job_id[4:])
+    ):
+        violations.append("job_id must be an opaque lowercase action job identifier")
+    if "epoch_id" in tool_args:
+        violations.extend(
+            _validate_summary_collection_identifier("epoch_id", tool_args["epoch_id"])
+        )
+    for field in ("request_sha256", "execution_policy_sha256"):
+        if field in tool_args:
+            violations.extend(
+                _validate_summary_collection_digest(field, tool_args[field])
+            )
+    return violations
+
+
+def _validate_clean_memory_apply_scope(tool_args: Any) -> List[str]:
+    violations = _validate_summary_collection_scope(
+        tool_args,
+        expected_fields=CLEAN_MEMORY_APPLY_SCOPE_FIELDS,
+        identifier_fields=("epoch_id",),
+        digest_fields=(
+            "plan_sha256",
+            "config_scope_sha256",
+            "disposition_sha256",
+            "rollback_sha256",
+        ),
+    )
+    if not isinstance(tool_args, dict) or any(
+        not isinstance(field, str) for field in tool_args
+    ):
+        return violations
+    job_id = tool_args.get("job_id")
+    if "job_id" in tool_args and (
+        not isinstance(job_id, str)
+        or len(job_id) != 36
+        or not job_id.startswith("job_")
+        or any(character not in "0123456789abcdef" for character in job_id[4:])
+    ):
+        violations.append("job_id must be an opaque lowercase action job identifier")
+    return violations
+
+
+AUTHORIZATION_SCOPE_VALIDATORS = {
+    CLEAN_MEMORY_APPLY_ACTION: _validate_clean_memory_apply_scope,
+    "generate_video_summary": _validate_video_summary_scope,
+    "generate_temporal_summary": _validate_temporal_summary_scope,
+    "create_summary_collection": _validate_summary_collection_create_scope,
+    "delete_summary_collection": _validate_summary_collection_delete_scope,
+}
+
+
+def _expected_summary_collection_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == "create_summary_collection":
+        return f"{SUMMARY_COLLECTION_CREATE_TARGET_PREFIX}{arguments['action_id']}"
+    if operation == "delete_summary_collection":
+        return f"{SUMMARY_COLLECTION_DELETE_TARGET_PREFIX}{arguments['job_id']}"
+    return None
+
+
+def _expected_temporal_summary_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == "generate_temporal_summary":
+        return f"{TEMPORAL_SUMMARY_TARGET_PREFIX}{arguments['job_id']}"
+    return None
+
+
+def _expected_clean_memory_audit_target(
+    operation: str,
+    arguments: Dict[str, Any],
+) -> Optional[str]:
+    if operation == CLEAN_MEMORY_APPLY_ACTION:
+        return f"{CLEAN_MEMORY_AUDIT_TARGET_PREFIX}{arguments['job_id']}"
+    return None
+
+
+def _parse_canonical_utc_deadline(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if (
+        parsed.tzinfo is None
+        or parsed.utcoffset() != timezone.utc.utcoffset(parsed)
+        or parsed.isoformat() != value
+    ):
+        return None
+    return parsed
+
+
+def _validate_cleanup_authorization_binding(
+    authorization_request_id: Optional[str],
+    authorization_expires_at_utc: Optional[str],
+    *,
+    enforce_issue_window: bool,
+) -> List[str]:
+    violations: List[str] = []
+    if (
+        not isinstance(authorization_request_id, str)
+        or not authorization_request_id
+        or len(authorization_request_id) > 128
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-"
+            for character in authorization_request_id
+        )
+    ):
+        violations.append("authorization request ID is invalid")
+    deadline = _parse_canonical_utc_deadline(authorization_expires_at_utc)
+    if deadline is None:
+        violations.append("authorization deadline must be canonical UTC")
+    elif enforce_issue_window:
+        now = datetime.now(timezone.utc)
+        if deadline <= now:
+            violations.append("authorization deadline must be in the future")
+        elif (deadline - now).total_seconds() > CONFIRMATION_TOKEN_TTL_SECONDS:
+            violations.append("authorization deadline exceeds the confirmation TTL")
+    return violations
+
+
+def _decision_audit_arguments(tool_name: str, tool_args: Any) -> Dict[str, Any]:
+    """Persist exact safe scope, never rejected collection request material."""
+    if tool_name not in REDACTED_SCOPE_AUTHORIZATION_ACTIONS:
+        return tool_args
+    scope_validator = AUTHORIZATION_SCOPE_VALIDATORS[tool_name]
+    if scope_validator(tool_args):
+        return {"scope_valid": False}
+    return tool_args
+
 
 def _load_ucf_ledger() -> Any:
     """Dynamically imports ucf_ledger from the scripts directory."""
@@ -148,11 +557,6 @@ class UCFValidationError(Exception):
         self.details = details
         super().__init__("Validation failed.")
 
-class OrphanVectorError(Exception):
-    def __init__(self, vector_key: str):
-        self.vector_key = vector_key
-        super().__init__(f"Orphan vector {vector_key} blocked from injection.")
-
 # Module-level deferred bootstrapping of the policy engine package
 _DEFAULT_AGENT_AVAILABLE = False
 _DEFAULT_LAST_ERROR_TYPE: Optional[str] = None
@@ -172,7 +576,11 @@ def _bootstrap_module_layer() -> None:
         if not getattr(goodq_mini_agent.paths, "_goodq_monkeypatched", False):
             original_assets_dir = goodq_mini_agent.paths.ASSETS_DIR
             goodq_mini_agent.paths.ASSETS_DIR = Path(__file__).resolve().parent / "stack"
-            goodq_mini_agent.paths.assets_script = lambda name: original_assets_dir / "scripts" / name
+            packaged_assets_script = (
+                lambda name, root=original_assets_dir: root / "scripts" / name
+            )
+            goodq_mini_agent.paths.assets_script = packaged_assets_script
+            goodq_mini_agent.stack_runner.assets_script = packaged_assets_script
             goodq_mini_agent.paths._goodq_monkeypatched = True
             
         _DEFAULT_RUNNER = goodq_mini_agent.stack_runner
@@ -286,6 +694,100 @@ class MiniAgentClient:
             return res
         return data
 
+    def _tool_audit_log_path(self) -> Path:
+        override = os.environ.get(TOOL_AUDIT_LOG_ENV)
+        if override:
+            return Path(os.path.expandvars(override)).expanduser()
+        return REPO_ROOT / ".goodq" / "logs" / "tool-audit.jsonl"
+
+    def _redact_tool_audit_value(self, value: Any) -> Any:
+        """Recursively redact contract-declared secrets before durable audit."""
+        if isinstance(value, dict):
+            redacted: Dict[str, Any] = {}
+            for key, item in value.items():
+                normalized = str(key).lower()
+                sensitive = (
+                    normalized == "elevenlabs_voice_id"
+                    or "authorization" in normalized
+                    or "password" in normalized
+                    or "token" in normalized
+                )
+                redacted[key] = (
+                    "[REDACTED]"
+                    if sensitive
+                    else self._redact_tool_audit_value(item)
+                )
+            return redacted
+        if isinstance(value, list):
+            return [self._redact_tool_audit_value(item) for item in value]
+        if isinstance(value, tuple):
+            return [self._redact_tool_audit_value(item) for item in value]
+        return self.sanitize_envelope(value)
+
+    def _append_tool_audit(self, row: Dict[str, Any]) -> None:
+        """Append one locked, flushed JSONL audit row or raise visibly."""
+        audit_path = self._tool_audit_log_path()
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        lock = ReentrantFileLock(
+            audit_path.with_name(f"{audit_path.name}.lock")
+        )
+        durable_row = self._redact_tool_audit_value(
+            {"schema_version": TOOL_AUDIT_SCHEMA_VERSION, **row}
+        )
+        encoded = json.dumps(
+            durable_row,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        with lock.lock():
+            with open(audit_path, "a", encoding="utf-8") as audit_file:
+                audit_file.write(encoded + "\n")
+                audit_file.flush()
+                os.fsync(audit_file.fileno())
+
+    @staticmethod
+    def _audit_error_codes(envelope: Dict[str, Any]) -> List[str]:
+        codes: List[str] = []
+        for error in envelope.get("errors", []) or []:
+            if isinstance(error, dict) and error.get("code"):
+                codes.append(str(error["code"]))
+        return codes
+
+    def _audit_log_error_envelope(
+        self,
+        request_id: str,
+        *,
+        original: Optional[Dict[str, Any]] = None,
+        side_effects_may_have_occurred: bool = False,
+        confirmation_token_revocation_failed: bool = False,
+    ) -> Tuple[Dict[str, Any], int]:
+        error = {
+            "code": "audit_log_error",
+            "message": "Durable tool audit evidence could not be persisted.",
+            "details": {
+                "side_effects_may_have_occurred": side_effects_may_have_occurred,
+                "confirmation_token_revocation_failed": (
+                    confirmation_token_revocation_failed
+                ),
+            },
+        }
+        if original is None:
+            envelope: Dict[str, Any] = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [error],
+            }
+        else:
+            envelope = dict(original)
+            envelope["status"] = "error"
+            envelope["errors"] = [error]
+            envelope["error"] = error
+        return self.sanitize_envelope(envelope), 1
+
     @contextmanager
     def _lock_token_store(self):
         home_dir = Path(os.environ.get("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agent")))
@@ -315,11 +817,192 @@ class MiniAgentClient:
             home_dir = Path(os.environ.get("GOODQ_MINI_AGENT_HOME", str(REPO_ROOT / ".goodq-mini-agent")))
             token_store_path = home_dir / "confirmation_tokens.json"
             home_dir.mkdir(parents=True, exist_ok=True)
+            temp_store_path = token_store_path.with_name(
+                f"{token_store_path.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}"
+            )
             try:
-                with open(token_store_path, "w", encoding="utf-8") as f:
+                with open(temp_store_path, "w", encoding="utf-8") as f:
                     json.dump(tokens, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logger.error(f"Failed to save tokens: {e}")
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_store_path, token_store_path)
+            except Exception:
+                try:
+                    temp_store_path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning(
+                        "Failed to remove partial confirmation token store",
+                        exc_info=True,
+                    )
+                logger.error("Failed to save confirmation tokens", exc_info=True)
+                raise
+
+    def _revoke_confirmation_token(self, confirmation_token: str) -> None:
+        """Remove an unexposed token when its decision cannot be audited."""
+        with self._lock_token_store():
+            tokens = self._load_tokens()
+            if confirmation_token not in tokens:
+                return
+            del tokens[confirmation_token]
+            self._save_tokens(tokens)
+
+    def _confirmation_token_error(
+        self,
+        tokens: Dict[str, Any],
+        confirmation_token: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Optional[Dict[str, str]]:
+        if confirmation_token not in tokens:
+            return {
+                "code": "invalid_confirmation_token",
+                "message": "Invalid confirmation token.",
+            }
+        token_info = tokens[confirmation_token]
+        if token_info.get("operation") != tool_name:
+            return {
+                "code": "token_operation_mismatch",
+                "message": "Token was not issued for this operation.",
+            }
+        if token_info.get("tool_args", {}) != tool_args:
+            return {
+                "code": "token_scope_mismatch",
+                "message": "Confirmation token was not issued for these exact tool arguments.",
+            }
+        if token_info.get("used"):
+            return {
+                "code": "token_already_used",
+                "message": "Token has already been used.",
+            }
+
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            now_utc = datetime.now(timezone.utc)
+            stored_request_id = token_info.get("authorization_request_id")
+            stored_deadline_text = token_info.get("authorization_expires_at_utc")
+            stored_deadline = _parse_canonical_utc_deadline(stored_deadline_text)
+            stored_issued_at_text = token_info.get("timestamp")
+            stored_issued_at = None
+            if isinstance(stored_issued_at_text, str):
+                try:
+                    stored_issued_at = datetime.fromisoformat(stored_issued_at_text)
+                except ValueError:
+                    stored_issued_at = None
+                if stored_issued_at is not None:
+                    if stored_issued_at.tzinfo is None:
+                        stored_issued_at = stored_issued_at.replace(tzinfo=timezone.utc)
+                    else:
+                        stored_issued_at = stored_issued_at.astimezone(timezone.utc)
+            if (
+                _validate_cleanup_authorization_binding(
+                    stored_request_id,
+                    stored_deadline_text,
+                    enforce_issue_window=False,
+                )
+                or stored_deadline is None
+                or stored_issued_at is None
+                or stored_issued_at > now_utc
+                or stored_deadline <= stored_issued_at
+                or (stored_deadline - stored_issued_at).total_seconds()
+                > CONFIRMATION_TOKEN_TTL_SECONDS
+            ):
+                return {
+                    "code": "invalid_confirmation_token_metadata",
+                    "message": "Confirmation token metadata is invalid.",
+                }
+            if authorization_request_id != stored_request_id:
+                return {
+                    "code": "token_request_id_mismatch",
+                    "message": "Confirmation token request binding does not match.",
+                }
+            if authorization_expires_at_utc != stored_deadline_text:
+                return {
+                    "code": "token_deadline_mismatch",
+                    "message": "Confirmation token deadline binding does not match.",
+                }
+            if stored_deadline <= now_utc:
+                return {
+                    "code": "token_expired",
+                    "message": "Confirmation token expired.",
+                }
+            return None
+
+        expired = bool(
+            tool_args.get("simulate_expired_token")
+            or token_info.get("tool_args", {}).get("simulate_expired_token")
+        )
+        if not expired:
+            timestamp = token_info.get("timestamp")
+            if timestamp:
+                try:
+                    normalized = timestamp[:-1] if timestamp.endswith("Z") else timestamp
+                    issued_at = datetime.fromisoformat(normalized)
+                    if issued_at.tzinfo is not None:
+                        issued_at = issued_at.astimezone(timezone.utc).replace(tzinfo=None)
+                    expired = (
+                        datetime.utcnow() - issued_at
+                    ).total_seconds() > CONFIRMATION_TOKEN_TTL_SECONDS
+                except Exception:
+                    expired = False
+        if expired:
+            return {
+                "code": "token_expired",
+                "message": "Confirmation token expired.",
+            }
+        return None
+
+    def _confirmation_error_envelope(
+        self,
+        request_id: str,
+        error: Dict[str, str],
+    ) -> Tuple[Dict[str, Any], int]:
+        envelope = {
+            "request_id": request_id,
+            "profile": self.profile,
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "result": {"allowed": False},
+            "errors": [error],
+        }
+        return self.sanitize_envelope(envelope), 1
+
+    def _claim_confirmation_token(
+        self,
+        confirmation_token: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[bool, Optional[Dict[str, str]]]:
+        """Atomically mark a locally issued token used before execution."""
+        with self._lock_token_store():
+            tokens = self._load_tokens()
+            if confirmation_token not in tokens:
+                return False, None
+            if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                error = self._confirmation_token_error(
+                    tokens,
+                    confirmation_token,
+                    tool_name,
+                    tool_args,
+                    authorization_request_id=authorization_request_id,
+                    authorization_expires_at_utc=authorization_expires_at_utc,
+                )
+            else:
+                error = self._confirmation_token_error(
+                    tokens,
+                    confirmation_token,
+                    tool_name,
+                    tool_args,
+                )
+            if error:
+                return True, error
+            tokens[confirmation_token]["used"] = True
+            self._save_tokens(tokens)
+            return True, None
 
     def _offline_fallback_validation(
         self,
@@ -448,6 +1131,473 @@ class MiniAgentClient:
         confirmation_token: str = "",
         context_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], int]:
+        """Validate a proposed action and durably record the decision."""
+        envelope, return_code = self._validate_action_impl(
+            prompt=prompt,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+            context_overrides=context_overrides,
+        )
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=tool_args or {},
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+        )
+
+    def _record_decision_result(
+        self,
+        *,
+        envelope: Dict[str, Any],
+        return_code: int,
+        mode: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        confirm: bool,
+        confirmation_token: str,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Persist the final observed decision after any token transition."""
+        if not tool_name:
+            return envelope, return_code
+
+        decision_row = {
+            "event_type": "decision",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "request_id": envelope.get("request_id"),
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": tool_name,
+            "status": envelope.get("status", "unknown"),
+            "return_code": return_code,
+            "arguments": _decision_audit_arguments(tool_name, tool_args),
+            "confirmed": bool(confirm and confirmation_token),
+            "error_codes": self._audit_error_codes(envelope),
+        }
+        try:
+            self._append_tool_audit(decision_row)
+        except Exception:
+            logger.error("Failed to persist MiniAgent decision audit", exc_info=True)
+            issued_token = (envelope.get("result") or {}).get("confirmation_token")
+            revocation_failed = False
+            if issued_token:
+                try:
+                    self._revoke_confirmation_token(str(issued_token))
+                except Exception:
+                    revocation_failed = True
+                    logger.critical(
+                        "Failed to revoke unaudited confirmation token",
+                        exc_info=True,
+                    )
+            return self._audit_log_error_envelope(
+                str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                confirmation_token_revocation_failed=revocation_failed,
+            )
+        return envelope, return_code
+
+    def authorize_action(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Authorize one exact-scope action owned by an external caller.
+
+        Native executable tools must use :meth:`execute_tool` so their handler
+        outcome receives the durable execution audit. Only explicitly declared
+        authorization-only actions may cross this boundary.
+        """
+        if tool_name not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+            envelope, return_code = self._confirmation_error_envelope(
+                f"task-{uuid.uuid4().hex[:8]}",
+                {
+                    "code": "authorization_only_action_required",
+                    "message": "This operation must use the native execution path.",
+                },
+            )
+            return self._record_decision_result(
+                envelope=envelope,
+                return_code=return_code,
+                mode=mode,
+                tool_name=tool_name,
+                tool_args=tool_args or {},
+                confirm=confirm,
+                confirmation_token=confirmation_token,
+            )
+        authorize_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+            "confirm": confirm,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            authorize_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        return self._authorize_action_impl(**authorize_arguments)
+
+    def record_external_execution_outcome(
+        self,
+        *,
+        operation: str,
+        arguments: Dict[str, Any],
+        request_id: str,
+        mode: str,
+        status: str,
+        return_code: int,
+        duration_ms: int,
+        side_effect_report: Dict[str, Any],
+        error_codes: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Record the observed outcome of one externally owned side effect."""
+        def failed(code: str) -> Dict[str, Any]:
+            return {"audit_status": "failed", "error_codes": [code]}
+
+        if (
+            not isinstance(operation, str)
+            or operation not in LOCAL_AUTHORIZATION_ONLY_ACTIONS
+        ):
+            return failed("authorization_only_action_required")
+
+        if not isinstance(arguments, dict):
+            return failed("invalid_tool_arguments")
+        scope_validator = AUTHORIZATION_SCOPE_VALIDATORS.get(operation)
+        scope_violations = (
+            scope_validator(arguments)
+            if scope_validator is not None
+            else ["no exact-scope validator is declared"]
+        )
+        if scope_violations:
+            return failed("invalid_tool_arguments")
+
+        if not isinstance(request_id, str) or not request_id.strip():
+            return failed("invalid_request_id")
+        if (
+            not isinstance(status, str)
+            or status not in {"succeeded", "failed", "interrupted"}
+        ):
+            return failed("invalid_execution_status")
+        if (
+            not isinstance(return_code, int)
+            or isinstance(return_code, bool)
+            or (status == "succeeded") != (return_code == 0)
+        ):
+            return failed("invalid_return_code")
+        if (
+            not isinstance(duration_ms, int)
+            or isinstance(duration_ms, bool)
+            or duration_ms < 0
+        ):
+            return failed("invalid_duration_ms")
+
+        if not isinstance(side_effect_report, dict) or set(side_effect_report) != {
+            "mutated",
+            "targets",
+        }:
+            return failed("invalid_side_effect_report")
+        targets = side_effect_report.get("targets")
+        if (
+            not isinstance(side_effect_report.get("mutated"), bool)
+            or not isinstance(targets, list)
+            or len(targets) > EXTERNAL_AUDIT_MAX_TARGETS
+            or any(
+                not isinstance(target, str)
+                or len(target) > EXTERNAL_AUDIT_MAX_TARGET_LENGTH
+                for target in targets
+            )
+        ):
+            return failed("invalid_side_effect_report")
+
+        expected_collection_target = _expected_summary_collection_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_collection_target is not None
+            and targets != [expected_collection_target]
+        ):
+            return failed("invalid_side_effect_report")
+        expected_temporal_target = _expected_temporal_summary_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_temporal_target is not None
+            and targets != [expected_temporal_target]
+        ):
+            return failed("invalid_side_effect_report")
+        expected_clean_memory_target = _expected_clean_memory_audit_target(
+            operation,
+            arguments,
+        )
+        if (
+            expected_clean_memory_target is not None
+            and targets != [expected_clean_memory_target]
+        ):
+            return failed("invalid_side_effect_report")
+
+        resolved_error_codes = [] if error_codes is None else error_codes
+        if (
+            not isinstance(resolved_error_codes, list)
+            or len(resolved_error_codes) > EXTERNAL_AUDIT_MAX_ERROR_CODES
+            or any(
+                not isinstance(code, str)
+                or len(code) > EXTERNAL_AUDIT_MAX_ERROR_CODE_LENGTH
+                for code in resolved_error_codes
+            )
+        ):
+            return failed("invalid_error_codes")
+
+        execution_row = {
+            "event_type": "execution",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "request_id": request_id,
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": operation,
+            "status": status,
+            "return_code": return_code,
+            "arguments": arguments,
+            "error_codes": resolved_error_codes,
+            "duration_ms": duration_ms,
+            "side_effect_report": side_effect_report,
+        }
+        try:
+            self._append_tool_audit(execution_row)
+        except Exception:
+            logger.error(
+                "Failed to persist external execution audit",
+                exc_info=True,
+            )
+            return failed("audit_log_error")
+        return {"audit_status": "recorded", "error_codes": []}
+
+    def _authorize_action_impl(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Validate and atomically claim without dispatching a handler."""
+        resolved_args = tool_args or {}
+        validation_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": resolved_args,
+            "confirm": confirm,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            validation_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        envelope, return_code = self._validate_action_impl(**validation_arguments)
+        if return_code == 0 and confirm and confirmation_token:
+            try:
+                if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                    claimed, claim_error = self._claim_confirmation_token(
+                        confirmation_token,
+                        tool_name,
+                        resolved_args,
+                        authorization_request_id=authorization_request_id,
+                        authorization_expires_at_utc=authorization_expires_at_utc,
+                    )
+                else:
+                    claimed, claim_error = self._claim_confirmation_token(
+                        confirmation_token,
+                        tool_name,
+                        resolved_args,
+                    )
+            except Exception:
+                logger.error(
+                    "Failed to persist confirmation token claim",
+                    exc_info=True,
+                )
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    {
+                        "code": "confirmation_token_store_error",
+                        "message": "Confirmation token claim could not be persisted.",
+                    },
+                )
+                claimed = False
+                claim_error = None
+            if return_code == 0 and claim_error:
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    claim_error,
+                )
+            if (
+                return_code == 0
+                and tool_name in LOCAL_CONFIRMATION_REQUIRED_TOOLS
+                and not claimed
+            ):
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(envelope.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                    {
+                        "code": "invalid_confirmation_token",
+                        "message": "Invalid confirmation token.",
+                    },
+                )
+
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=confirm,
+            confirmation_token=confirmation_token,
+        )
+
+    def revoke_action_authorization(
+        self,
+        prompt: str,
+        mode: str,
+        tool_name: str,
+        tool_args: Optional[Dict[str, Any]],
+        confirmation_token: str,
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Validate exact scope, then atomically revoke an unused local token."""
+        if tool_name not in LOCAL_AUTHORIZATION_ONLY_ACTIONS:
+            envelope, return_code = self._confirmation_error_envelope(
+                f"task-{uuid.uuid4().hex[:8]}",
+                {
+                    "code": "authorization_only_action_required",
+                    "message": "This operation must use the native execution path.",
+                },
+            )
+            return self._record_decision_result(
+                envelope=envelope,
+                return_code=return_code,
+                mode=mode,
+                tool_name=tool_name,
+                tool_args=tool_args or {},
+                confirm=True,
+                confirmation_token=confirmation_token,
+            )
+        resolved_args = tool_args or {}
+        validation_arguments = {
+            "prompt": prompt,
+            "mode": mode,
+            "tool_name": tool_name,
+            "tool_args": resolved_args,
+            "confirm": True,
+            "confirmation_token": confirmation_token,
+            "context_overrides": context_overrides,
+        }
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+            validation_arguments.update(
+                {
+                    "authorization_request_id": authorization_request_id,
+                    "authorization_expires_at_utc": authorization_expires_at_utc,
+                }
+            )
+        envelope, return_code = self._validate_action_impl(**validation_arguments)
+        if return_code == 0:
+            try:
+                with self._lock_token_store():
+                    tokens = self._load_tokens()
+                    if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            resolved_args,
+                            authorization_request_id=authorization_request_id,
+                            authorization_expires_at_utc=authorization_expires_at_utc,
+                        )
+                    else:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            resolved_args,
+                        )
+                    if token_error:
+                        envelope, return_code = self._confirmation_error_envelope(
+                            str(
+                                envelope.get("request_id")
+                                or f"task-{uuid.uuid4().hex[:8]}"
+                            ),
+                            token_error,
+                        )
+                    else:
+                        del tokens[confirmation_token]
+                        self._save_tokens(tokens)
+            except Exception:
+                logger.error(
+                    "Failed to persist confirmation token revocation",
+                    exc_info=True,
+                )
+                envelope, return_code = self._confirmation_error_envelope(
+                    str(
+                        envelope.get("request_id")
+                        or f"task-{uuid.uuid4().hex[:8]}"
+                    ),
+                    {
+                        "code": "confirmation_token_store_error",
+                        "message": "Confirmation token revocation could not be persisted.",
+                    },
+                )
+
+        return self._record_decision_result(
+            envelope=envelope,
+            return_code=return_code,
+            mode=mode,
+            tool_name=tool_name,
+            tool_args=resolved_args,
+            confirm=True,
+            confirmation_token=confirmation_token,
+        )
+
+    def _validate_action_impl(
+        self,
+        prompt: str,
+        mode: str = "research",
+        tool_name: str = "",
+        tool_args: Optional[Dict[str, Any]] = None,
+        confirm: bool = False,
+        confirmation_token: str = "",
+        context_overrides: Optional[Dict[str, Any]] = None,
+        *,
+        authorization_request_id: Optional[str] = None,
+        authorization_expires_at_utc: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], int]:
         """
         Runs policy check validations for a prompt and a proposed tool execution.
         
@@ -456,76 +1606,78 @@ class MiniAgentClient:
         """
         request_id = f"task-{uuid.uuid4().hex[:8]}"
         tool_args = tool_args or {}
+
+        scope_validator = AUTHORIZATION_SCOPE_VALIDATORS.get(tool_name)
+        if scope_validator is not None and self.profile != "offline":
+            scope_violations = scope_validator(tool_args)
+            if scope_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [{
+                        "code": "invalid_tool_arguments",
+                        "message": (
+                            f"{tool_name} requires its exact declared scope."
+                        ),
+                        "details": {"violations": scope_violations},
+                    }],
+                }
+                return self.sanitize_envelope(envelope), 1
+
+        if tool_name == CLEAN_MEMORY_APPLY_ACTION and self.profile != "offline":
+            binding_violations = _validate_cleanup_authorization_binding(
+                authorization_request_id,
+                authorization_expires_at_utc,
+                enforce_issue_window=not confirm,
+            )
+            if binding_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [
+                        {
+                            "code": "invalid_authorization_binding",
+                            "message": (
+                                "clean_memory.apply requires one bounded request "
+                                "and deadline binding."
+                            ),
+                        }
+                    ],
+                }
+                return self.sanitize_envelope(envelope), 1
         
         # 1. Confirmation token validation if provided
-        NATIVELY_GATED_TOOLS = {"promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"}
         if confirmation_token:
             with self._lock_token_store():
                 tokens = self._load_tokens()
-                if confirmation_token not in tokens and tool_name not in NATIVELY_GATED_TOOLS:
+                if confirmation_token not in tokens and tool_name not in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
                     # Non-native token for a non-native tool: delegate to subprocess
                     pass
                 else:
-                    if confirmation_token not in tokens:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "invalid_confirmation_token", "message": "Invalid confirmation token."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-                    tok_info = tokens[confirmation_token]
-                    if tok_info.get("operation") != tool_name:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_operation_mismatch", "message": "Token was not issued for this operation."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-                    if tok_info.get("used"):
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_already_used", "message": "Token has already been used."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
-
-                    # Check expiration
-                    expired = False
-                    if tool_args.get("simulate_expired_token") or tok_info.get("tool_args", {}).get("simulate_expired_token"):
-                        expired = True
+                    if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            tool_args,
+                            authorization_request_id=authorization_request_id,
+                            authorization_expires_at_utc=authorization_expires_at_utc,
+                        )
                     else:
-                        ts_str = tok_info.get("timestamp")
-                        if ts_str:
-                            try:
-                                if ts_str.endswith("Z"):
-                                    ts_str = ts_str[:-1]
-                                t_val = datetime.fromisoformat(ts_str)
-                                if t_val.tzinfo is not None:
-                                    from datetime import timezone
-                                    t_val = t_val.astimezone(timezone.utc).replace(tzinfo=None)
-                                if (datetime.utcnow() - t_val).total_seconds() > 600:
-                                    expired = True
-                            except Exception:
-                                pass
-                    if expired:
-                        envelope = {
-                            "request_id": request_id,
-                            "profile": self.profile,
-                            "status": "error",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                            "result": {"allowed": False},
-                            "errors": [{"code": "token_expired", "message": "Confirmation token expired."}],
-                        }
-                        return self.sanitize_envelope(envelope), 1
+                        token_error = self._confirmation_token_error(
+                            tokens,
+                            confirmation_token,
+                            tool_name,
+                            tool_args,
+                        )
+                    if token_error:
+                        return self._confirmation_error_envelope(request_id, token_error)
 
         # 2. Profile Routing (Offline Profile check)
         if self.profile == "offline":
@@ -564,25 +1716,84 @@ class MiniAgentClient:
                 }
                 return self.sanitize_envelope(envelope), 1
 
+        if tool_name == "file_delete" and os.environ.get("GOODQ_BREAK_GLASS") != "1":
+            envelope = {
+                "request_id": request_id,
+                "profile": self.profile,
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "result": {"allowed": False},
+                "errors": [{"code": "break_glass_required", "message": f"Destructive operation '{tool_name}' requires break-glass override."}],
+            }
+            return self.sanitize_envelope(envelope), 1
+
+        if tool_name in SCOPE_BOUND_UCF_TOOLS:
+            scope_violations = _validate_promote_ucf_scope(tool_args)
+            if scope_violations:
+                envelope = {
+                    "request_id": request_id,
+                    "profile": self.profile,
+                    "status": "error",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "result": {"allowed": False},
+                    "errors": [{
+                        "code": "invalid_tool_arguments",
+                        "message": f"{tool_name} requires an explicit video_hash and epoch_id scope.",
+                        "details": {"violations": scope_violations},
+                    }],
+                }
+                return self.sanitize_envelope(envelope), 1
+
         # 4. Human-in-the-Loop Gating Validation
-        if self.profile != "unrestricted" and tool_name in ("promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames"):
+        if tool_name in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
             if not confirm:
                 token = f"token-{tool_name.replace('_', '-')}-{uuid.uuid4().hex[:8]}"
-                with self._lock_token_store():
-                    tokens = self._load_tokens()
-                    tokens[token] = {
-                        "operation": tool_name,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "used": False,
-                        "tool_args": tool_args or {}
-                    }
-                    self._save_tokens(tokens)
+                try:
+                    with self._lock_token_store():
+                        tokens = self._load_tokens()
+                        tokens[token] = {
+                            "operation": tool_name,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "used": False,
+                            "tool_args": tool_args or {}
+                        }
+                        if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                            tokens[token].update(
+                                {
+                                    "authorization_request_id": (
+                                        authorization_request_id
+                                    ),
+                                    "authorization_expires_at_utc": (
+                                        authorization_expires_at_utc
+                                    ),
+                                }
+                            )
+                        self._save_tokens(tokens)
+                except Exception:
+                    logger.error("Failed to persist confirmation token issuance", exc_info=True)
+                    return self._confirmation_error_envelope(
+                        request_id,
+                        {
+                            "code": "confirmation_token_store_error",
+                            "message": "Confirmation token issuance could not be persisted.",
+                        },
+                    )
+                result = {"allowed": False, "confirmation_token": token}
+                if tool_name == CLEAN_MEMORY_APPLY_ACTION:
+                    result.update(
+                        {
+                            "authorization_request_id": authorization_request_id,
+                            "authorization_expires_at_utc": (
+                                authorization_expires_at_utc
+                            ),
+                        }
+                    )
                 envelope = {
                     "request_id": request_id,
                     "profile": self.profile,
                     "status": "needs_confirmation",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
-                    "result": {"allowed": False, "confirmation_token": token},
+                    "result": result,
                     "errors": [{"code": "mutability_requires_confirmation", "message": f"{tool_name} requires human confirmation."}],
                 }
                 return self.sanitize_envelope(envelope), 3
@@ -599,19 +1810,8 @@ class MiniAgentClient:
                     }
                     return self.sanitize_envelope(envelope), 1
 
-        # 5. Native tool validation bypass & Destructive break-glass check
-        if tool_name == "file_delete" and self.profile in ("safe", "offline") and os.environ.get("GOODQ_BREAK_GLASS") != "1":
-            envelope = {
-                "request_id": request_id,
-                "profile": self.profile,
-                "status": "error",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "result": {"allowed": False},
-                "errors": [{"code": "break_glass_required", "message": f"Destructive operation '{tool_name}' requires break-glass override."}],
-            }
-            return self.sanitize_envelope(envelope), 1
-
-        if tool_name in ("run_ingestion", "promote_ucf_to_memory", "validate_ucf_frames", "reject_ucf_frames", "supersede_ucf_frames", "file_delete", "validate_ucf_epoch"):
+        # 5. Native tool validation bypass
+        if tool_name in LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS:
             envelope = {
                 "request_id": request_id,
                 "profile": self.profile,
@@ -684,8 +1884,8 @@ class MiniAgentClient:
         started_at = datetime.utcnow().isoformat() + "Z"
         start_time = time.monotonic()
         
-        # 1. Run policy check
-        envelope, rc = self.validate_action(
+        # 1. Validate and atomically claim any local confirmation authority.
+        envelope, rc = self._authorize_action_impl(
             prompt=prompt,
             mode=mode,
             tool_name=tool_name,
@@ -697,15 +1897,7 @@ class MiniAgentClient:
         if rc != 0:
             # Rejections or confirmation requests are returned directly
             return envelope, rc
-            
-        # Consume token atomically under lock if confirm is True
-        if confirm and confirmation_token:
-            with self._lock_token_store():
-                tokens = self._load_tokens()
-                if confirmation_token in tokens:
-                    tokens[confirmation_token]["used"] = True
-                    self._save_tokens(tokens)
-            
+
         # 2. Route and execute tool logic
         tool_result: Dict[str, Any] = {}
         status = "success"
@@ -730,6 +1922,8 @@ class MiniAgentClient:
                 tool_result = self._execute_validate_ucf_epoch(tool_args)
             elif tool_name == "promote_ucf_to_memory":
                 tool_result = self._execute_promote_ucf_to_memory(tool_args)
+            elif tool_name == "reconcile_ucf_qdrant":
+                tool_result = self._execute_reconcile_ucf_qdrant(tool_args)
             elif tool_name == "validate_ucf_frames":
                 tool_result = self._execute_validate_ucf_frames(tool_args)
             elif tool_name == "reject_ucf_frames":
@@ -744,17 +1938,54 @@ class MiniAgentClient:
             status = "fatal_error"
             errors_list = [{"code": "ucf_validation_failed", "message": "Validation failed.", "details": e.details}]
             logger.error(f"Validation failed for tool {tool_name}: {e.details}")
-        except OrphanVectorError as e:
-            status = "error"
-            errors_list = [{"code": "orphan_vector_blocked", "message": str(e)}]
-            logger.error(f"Orphan vector blocked: {e}")
         except Exception as e:
             status = "fatal_error"
             errors_list = [{"code": "execution_failed", "message": str(e)}]
             logger.error(f"Execution of tool {tool_name} failed: {e}", exc_info=True)
             
+        if isinstance(tool_result, dict) and tool_result.get("status") in {
+            "promotion_committed_sync_pending",
+            "qdrant_sync_pending",
+        }:
+            status = "error"
+            pending_code = str(tool_result["status"])
+            errors_list = [{
+                "code": pending_code,
+                "message": "Local state committed, but verified Qdrant synchronization remains pending.",
+            }]
+
         completed_at = datetime.utcnow().isoformat() + "Z"
         duration_ms = int((time.monotonic() - start_time) * 1000)
+        handler_status = (
+            str(tool_result.get("status"))
+            if isinstance(tool_result, dict) and tool_result.get("status") is not None
+            else None
+        )
+        handler_reason = (
+            str(tool_result.get("reason"))
+            if isinstance(tool_result, dict) and tool_result.get("reason") is not None
+            else None
+        )
+        if handler_status == "error" and status == "success":
+            status = "error"
+            errors_list = [
+                {
+                    "code": handler_reason or "handler_reported_error",
+                    "message": "Tool handler reported an error.",
+                }
+            ]
+        declared_mutation = tool_name in (
+            "qdrant_upsert",
+            "home_assistant_call_service",
+            "run_ingestion",
+            "promote_ucf_to_memory",
+            "validate_ucf_frames",
+            "reconcile_ucf_qdrant",
+            "reject_ucf_frames",
+            "supersede_ucf_frames",
+            "file_delete",
+        )
+        mutation_blocked = handler_status in {"blocked", "error"}
         
         # 3. Construct result envelope matching tool-result-v1.schema.json
         result_envelope: Dict[str, Any] = {
@@ -765,9 +1996,7 @@ class MiniAgentClient:
             "completed_at": completed_at,
             "duration_ms": duration_ms,
             "side_effect_report": {
-                "mutated": tool_name in ("qdrant_upsert", "home_assistant_call_service", "run_ingestion",
-                                          "promote_ucf_to_memory", "validate_ucf_frames",
-                                          "reject_ucf_frames", "supersede_ucf_frames", "file_delete"),
+                "mutated": declared_mutation and not mutation_blocked,
                 "targets": [tool_name]
             }
         }
@@ -789,10 +2018,46 @@ class MiniAgentClient:
                 result_envelope["warnings"] = tool_result["warnings"]
         else:
             result_envelope["errors"] = errors_list
+            if tool_result:
+                result_envelope["output"] = tool_result
             # Also set deprecated 'error' field for backward compatibility
             result_envelope["error"] = errors_list[0] if errors_list else {"code": "execution_failed", "message": "Tool execution error"}
             
-        return self.sanitize_envelope(result_envelope), 0 if status == "success" else 1
+        return_code = 0 if status == "success" else 1
+        sanitized_result = self.sanitize_envelope(result_envelope)
+        execution_row = {
+            "event_type": "execution",
+            "timestamp": completed_at,
+            "request_id": sanitized_result.get("request_id"),
+            "profile": self.profile,
+            "mode": mode,
+            "tool_name": tool_name,
+            "status": (
+                handler_status
+                if handler_status in {"blocked", "error"}
+                else status
+            ),
+            "return_code": return_code,
+            "arguments": tool_args,
+            "confirmed": bool(confirm and confirmation_token),
+            "error_codes": self._audit_error_codes(sanitized_result),
+            "duration_ms": duration_ms,
+            "side_effect_report": sanitized_result["side_effect_report"],
+            "handler_status": handler_status,
+            "handler_reason": handler_reason,
+        }
+        try:
+            self._append_tool_audit(execution_row)
+        except Exception:
+            logger.error("Failed to persist MiniAgent execution audit", exc_info=True)
+            return self._audit_log_error_envelope(
+                str(sanitized_result.get("request_id") or f"task-{uuid.uuid4().hex[:8]}"),
+                original=sanitized_result,
+                side_effects_may_have_occurred=bool(
+                    sanitized_result.get("side_effect_report", {}).get("mutated")
+                ),
+            )
+        return sanitized_result, return_code
 
     def _get_ucf_db_path(self) -> Path:
         db_dir = self.config.get('paths', {}).get('db_dir')
@@ -804,177 +2069,675 @@ class MiniAgentClient:
         ucf_db_dir.mkdir(parents=True, exist_ok=True)
         return ucf_db_dir / 'ucf_ledger.db'
 
-    def _sync_ucf_status_to_qdrant(self, frames_to_sync: List[Tuple[Any, Any, Any]], status_val: str) -> Dict[str, Any]:
-        import logging
-        logger = logging.getLogger(__name__)
+    @staticmethod
+    def _ensure_qdrant_sync_outbox(conn: Any) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ucf_qdrant_sync_outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation TEXT NOT NULL,
+                video_hash TEXT NOT NULL,
+                epoch_id TEXT NOT NULL,
+                target_status TEXT NOT NULL,
+                delivery_state TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                UNIQUE(operation, video_hash, epoch_id, target_status)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_uqso_pending_scope "
+            "ON ucf_qdrant_sync_outbox(delivery_state, epoch_id, video_hash)"
+        )
+
+    @classmethod
+    def _queue_promotion_qdrant_sync(
+        cls, conn: Any, *, video_hash: str, epoch_id: str
+    ) -> None:
+        cls._ensure_qdrant_sync_outbox(conn)
+        now = datetime.utcnow().isoformat() + "Z"
+        conn.execute(
+            """
+            INSERT INTO ucf_qdrant_sync_outbox
+                (operation, video_hash, epoch_id, target_status, delivery_state,
+                 attempt_count, last_error, created_at, updated_at, completed_at)
+            VALUES ('promotion', ?, ?, 'promoted', 'pending', 0, NULL, ?, ?, NULL)
+            ON CONFLICT(operation, video_hash, epoch_id, target_status) DO UPDATE SET
+                delivery_state = 'pending',
+                attempt_count = 0,
+                last_error = NULL,
+                updated_at = excluded.updated_at,
+                completed_at = NULL
+            """,
+            (video_hash, epoch_id, now, now),
+        )
+
+    def _read_promotion_qdrant_outbox(
+        self, *, video_hash: str, epoch_id: str
+    ) -> Optional[Dict[str, Any]]:
+        import sqlite3
+
+        conn = sqlite3.connect(str(self._get_ucf_db_path()))
+        try:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'ucf_qdrant_sync_outbox'"
+            ).fetchone()
+            if not exists:
+                return None
+            row = conn.execute(
+                "SELECT id, delivery_state, attempt_count, last_error "
+                "FROM ucf_qdrant_sync_outbox "
+                "WHERE operation = 'promotion' AND video_hash = ? AND epoch_id = ? "
+                "AND target_status = 'promoted'",
+                (video_hash, epoch_id),
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "id": int(row[0]),
+                "delivery_state": str(row[1]),
+                "attempt_count": int(row[2]),
+                "last_error": row[3],
+            }
+        finally:
+            conn.close()
+
+    def _record_promotion_qdrant_attempt(
+        self,
+        *,
+        video_hash: str,
+        epoch_id: str,
+        delivered: bool,
+        failure_summary: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        import json
+        import sqlite3
+
+        conn = sqlite3.connect(str(self._get_ucf_db_path()))
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._ensure_qdrant_sync_outbox(conn)
+            row = conn.execute(
+                "SELECT id FROM ucf_qdrant_sync_outbox "
+                "WHERE operation = 'promotion' AND video_hash = ? AND epoch_id = ? "
+                "AND target_status = 'promoted' AND delivery_state = 'pending'",
+                (video_hash, epoch_id),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return self._read_promotion_qdrant_outbox(
+                    video_hash=video_hash, epoch_id=epoch_id
+                )
+            now = datetime.utcnow().isoformat() + "Z"
+            conn.execute(
+                "UPDATE ucf_qdrant_sync_outbox SET delivery_state = ?, "
+                "attempt_count = attempt_count + 1, last_error = ?, updated_at = ?, "
+                "completed_at = ? WHERE id = ? AND delivery_state = 'pending'",
+                (
+                    "complete" if delivered else "pending",
+                    None if delivered else json.dumps(failure_summary or {}, sort_keys=True),
+                    now,
+                    now if delivered else None,
+                    int(row[0]),
+                ),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return self._read_promotion_qdrant_outbox(
+            video_hash=video_hash, epoch_id=epoch_id
+        )
+
+    def _cancel_pending_promotion_qdrant_sync(
+        self, *, video_hash: str, epoch_id: str, reason: str
+    ) -> Optional[Dict[str, Any]]:
+        import json
+        import sqlite3
+
+        conn = sqlite3.connect(str(self._get_ucf_db_path()))
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._ensure_qdrant_sync_outbox(conn)
+            now = datetime.utcnow().isoformat() + "Z"
+            conn.execute(
+                "UPDATE ucf_qdrant_sync_outbox SET delivery_state = 'cancelled', "
+                "last_error = ?, updated_at = ?, completed_at = ? "
+                "WHERE operation = 'promotion' AND video_hash = ? AND epoch_id = ? "
+                "AND target_status = 'promoted' AND delivery_state = 'pending'",
+                (
+                    json.dumps({"reason": reason}, sort_keys=True),
+                    now,
+                    now,
+                    video_hash,
+                    epoch_id,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return self._read_promotion_qdrant_outbox(
+            video_hash=video_hash, epoch_id=epoch_id
+        )
+
+    def _sync_ucf_status_to_qdrant(
+        self,
+        frames_to_sync: List[Tuple[Any, Any, Any]],
+        status_val: str,
+        *,
+        expected_video_hash: Optional[str] = None,
+        expected_epoch_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         import requests
         import uuid
-        
-        qdrant_updates = {}
-        for v_key, v_coll, v_backend in frames_to_sync:
-            if not v_key or not v_coll or not v_backend:
+
+        qdrant_updates: Dict[str, List[Any]] = {}
+        point_namespace = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+        for vector_key, collection, backend in frames_to_sync:
+            if not vector_key or not collection or not backend:
                 continue
-            if str(v_backend).strip().lower() == "qdrant":
-                qdrant_updates.setdefault(v_coll, []).append(v_key)
-                
-        attempted = len(qdrant_updates) > 0
-        collections_attempted = list(qdrant_updates.keys())
-        points_attempted = sum(len(v) for v in qdrant_updates.values())
-        failed_collections = []
-        
-        if attempted:
-            qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
-            GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+            if str(backend).strip().lower() != "qdrant":
+                continue
+            key = str(vector_key).strip()
+            hex_candidate = key.replace("-", "")
+            if len(hex_candidate) == 32 and all(
+                character in "0123456789abcdefABCDEF" for character in hex_candidate
+            ):
+                normalized = str(uuid.UUID(hex_candidate))
+            elif key.isdigit():
+                normalized = int(key)
+            else:
+                normalized = str(uuid.uuid5(point_namespace, key))
+            qdrant_updates.setdefault(str(collection), []).append(normalized)
 
-            for v_coll, keys in qdrant_updates.items():
-                success = False
-                try:
-                    # Normalize point IDs
-                    normalized_ids = []
-                    for k in keys:
-                        s = k.strip()
-                        hex_candidate = s.replace("-", "")
-                        if len(hex_candidate) == 32 and all(ch in "0123456789abcdefABCDEF" for ch in hex_candidate):
-                            normalized_ids.append(str(uuid.UUID(hex_candidate)))
-                        elif s.isdigit():
-                            normalized_ids.append(s)
-                        else:
-                            normalized_ids.append(str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s)))
+        for collection, point_ids in list(qdrant_updates.items()):
+            qdrant_updates[collection] = list(dict.fromkeys(point_ids))
 
-                    if not normalized_ids:
-                        continue
+        attempted = bool(qdrant_updates)
+        collections_attempted = sorted(qdrant_updates)
+        points_attempted = sum(len(ids) for ids in qdrant_updates.values())
+        points_verified = 0
+        failed_collections: List[str] = []
+        qdrant_host = self.config.get("qdrant", {}).get(
+            "host", "http://127.0.0.1:6333"
+        )
+        allowed_source_statuses = {
+            "promoted": {"staged", "validated", "promoted"},
+            "rejected": {"staged", "validated", "rejected"},
+            "superseded": {"validated", "promoted", "superseded"},
+        }.get(status_val, {status_val})
+        canonical_epoch_collections = (
+            {
+                f"goodq_{modality}_{expected_epoch_id}"
+                for modality in ("text", "audio", "clip", "dino")
+            }
+            if expected_epoch_id
+            else set()
+        )
 
-                    # Use direct REST with the exact collection name from UCF ledger
-                    # (avoids double-prefix bug from build_qdrant_client)
-                    resp = requests.post(
-                        f"{qdrant_host}/collections/{v_coll}/points/payload",
+        def _point_matches_expected_scope(
+            point: Dict[str, Any], collection: str
+        ) -> bool:
+            if expected_video_hash is None or expected_epoch_id is None:
+                return True
+            payload = point.get("payload") or {}
+            if payload.get("video_hash") != expected_video_hash:
+                return False
+            payload_epoch = payload.get("epoch_id")
+            if collection in canonical_epoch_collections:
+                return payload_epoch in (None, expected_epoch_id)
+            return payload_epoch == expected_epoch_id
+
+        for collection, point_ids in qdrant_updates.items():
+            try:
+                if expected_video_hash is not None and expected_epoch_id is not None:
+                    preflight_response = requests.post(
+                        f"{qdrant_host}/collections/{collection}/points",
                         json={
-                            "payload": {"ucf_promotion_status": status_val},
-                            "points": normalized_ids,
+                            "ids": point_ids,
+                            "with_payload": True,
+                            "with_vector": False,
                         },
                         timeout=10,
                     )
-                    if resp.status_code in (200, 202):
-                        success = True
-                    else:
-                        logger.warning(
-                            "Row sync payload update failed for %s: %s %s",
-                            v_coll, resp.status_code, resp.text[:200] if resp.text else "",
+                    if preflight_response.status_code != 200:
+                        failed_collections.append(collection)
+                        continue
+                    preflight_points = preflight_response.json().get("result", [])
+                    preflight_returned = {
+                        str(point.get("id")): point for point in preflight_points
+                    }
+                    if set(preflight_returned) != {
+                        str(point_id) for point_id in point_ids
+                    } or any(
+                        not _point_matches_expected_scope(point, collection)
+                        or (point.get("payload") or {}).get(
+                            "ucf_promotion_status"
                         )
-                except Exception as e:
-                    logger.warning(
-                        "Failed to sync ucf status to qdrant for collection %s: %s",
-                        v_coll,
-                        e
-                    )
-                
-                if not success:
-                    failed_collections.append(v_coll)
-            
-            status = "warning" if failed_collections else "ok"
-        else:
-            status = "skipped"
-            
+                        not in allowed_source_statuses
+                        for point in preflight_returned.values()
+                    ):
+                        failed_collections.append(collection)
+                        continue
+                update_response = requests.post(
+                    f"{qdrant_host}/collections/{collection}/points/payload?wait=true",
+                    json={
+                        "payload": {"ucf_promotion_status": status_val},
+                        "points": point_ids,
+                    },
+                    timeout=10,
+                )
+                if update_response.status_code != 200:
+                    failed_collections.append(collection)
+                    continue
+                verify_response = requests.post(
+                    f"{qdrant_host}/collections/{collection}/points",
+                    json={
+                        "ids": point_ids,
+                        "with_payload": True,
+                        "with_vector": False,
+                    },
+                    timeout=10,
+                )
+                if verify_response.status_code != 200:
+                    failed_collections.append(collection)
+                    continue
+                points = verify_response.json().get("result", [])
+                returned = {str(point.get("id")): point for point in points}
+                if set(returned) != {str(point_id) for point_id in point_ids}:
+                    failed_collections.append(collection)
+                    continue
+                if any(
+                    not _point_matches_expected_scope(point, collection)
+                    or (point.get("payload") or {}).get("ucf_promotion_status")
+                    != status_val
+                    for point in returned.values()
+                ):
+                    failed_collections.append(collection)
+                    continue
+                points_verified += len(point_ids)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to sync and verify UCF status in Qdrant collection %s: %s",
+                    collection,
+                    exc,
+                )
+                failed_collections.append(collection)
+
         return {
             "attempted": attempted,
-            "status": status,
+            "status": "warning" if failed_collections else ("ok" if attempted else "skipped"),
             "collections_attempted": collections_attempted,
             "points_attempted": points_attempted,
+            "points_verified": points_verified,
+            "failed_collections": sorted(set(failed_collections)),
+        }
+
+    def _sync_qdrant_by_scope(
+        self, epoch_id: str, status_val: str, video_hash: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update and verify only the exact video scope in epoch collections."""
+        import requests
+
+        if not isinstance(video_hash, str) or not video_hash.strip():
+            return {
+                "status": "error",
+                "reason": "exact_video_scope_required",
+                "collections_swept": [],
+                "points_updated": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            }
+
+        qdrant_host = self.config.get("qdrant", {}).get(
+            "host", "http://127.0.0.1:6333"
+        )
+        collections_swept: List[str] = []
+        points_verified = 0
+        failed: List[str] = []
+        empty_verified_scope = False
+        allowed_source_statuses = {
+            "promoted": ("staged", "validated", "promoted"),
+            "rejected": ("staged", "validated", "rejected"),
+            "superseded": ("validated", "promoted", "superseded"),
+        }.get(status_val, (status_val,))
+        valid_lifecycle_statuses = {
+            "staged",
+            "validated",
+            "promoted",
+            "rejected",
+            "superseded",
+        }
+
+        try:
+            response = requests.get(f"{qdrant_host}/collections", timeout=5)
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "reason": "collections_list_failed",
+                    "collections_swept": [],
+                    "points_updated": 0,
+                    "points_verified": 0,
+                    "failed_collections": [],
+                }
+            all_collections = response.json().get("result", {}).get("collections", [])
+        except Exception as exc:
+            logger.warning("Qdrant collection discovery failed: %s", exc)
+            return {
+                "status": "error",
+                "reason": "collections_list_failed",
+                "collections_swept": [],
+                "points_updated": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            }
+
+        configured_collections = self.config.get("qdrant", {}).get(
+            "collections", {}
+        )
+        canonical_epoch_collections = {
+            f"goodq_{modality}_{epoch_id}"
+            for modality in ("text", "audio", "clip", "dino")
+        }
+        expected_collection_names = set(canonical_epoch_collections)
+        if isinstance(configured_collections, dict):
+            expected_collection_names.update(
+                str(name)
+                for name in configured_collections.values()
+                if isinstance(name, str) and name.strip()
+                and not any(
+                    str(name).startswith(f"goodq_{modality}_epoch_")
+                    for modality in ("text", "audio", "clip", "dino")
+                )
+            )
+        epoch_collections = sorted(
+            collection["name"]
+            for collection in all_collections
+            if str(collection.get("name", "")) in expected_collection_names
+        )
+        if not epoch_collections:
+            return {
+                "status": "error",
+                "reason": "no_epoch_collections",
+                "collections_swept": [],
+                "points_updated": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            }
+
+        for collection in epoch_collections:
+            collections_swept.append(collection)
+            collection_proves_epoch = collection in canonical_epoch_collections
+            exact_filter: Dict[str, Any] = {
+                "must": [
+                    {"key": "video_hash", "match": {"value": video_hash}},
+                ]
+            }
+            if not collection_proves_epoch:
+                exact_filter["must"].append(
+                    {"key": "epoch_id", "match": {"value": epoch_id}}
+                )
+            try:
+                preflight_points: List[Dict[str, Any]] = []
+                offset = None
+                preflight_failed = False
+                while True:
+                    preflight_body: Dict[str, Any] = {
+                        "filter": exact_filter,
+                        "limit": 100,
+                        "with_payload": True,
+                        "with_vector": False,
+                    }
+                    if offset is not None:
+                        preflight_body["offset"] = offset
+                    preflight_response = requests.post(
+                        f"{qdrant_host}/collections/{collection}/points/scroll",
+                        json=preflight_body,
+                        timeout=10,
+                    )
+                    if preflight_response.status_code != 200:
+                        preflight_failed = True
+                        break
+                    preflight_result = preflight_response.json().get("result", {})
+                    page_points = preflight_result.get("points", [])
+                    preflight_points.extend(page_points)
+                    offset = preflight_result.get("next_page_offset")
+                    if offset is None or not page_points:
+                        break
+
+                def _payload_mismatches_scope(point: Dict[str, Any]) -> bool:
+                    payload = point.get("payload") or {}
+                    payload_epoch = payload.get("epoch_id")
+                    epoch_mismatch = (
+                        payload_epoch not in (None, epoch_id)
+                        if collection_proves_epoch
+                        else payload_epoch != epoch_id
+                    )
+                    return payload.get("video_hash") != video_hash or epoch_mismatch
+
+                if preflight_failed or any(
+                    _payload_mismatches_scope(point)
+                    or (point.get("payload") or {}).get("ucf_promotion_status")
+                    not in valid_lifecycle_statuses
+                    for point in preflight_points
+                ):
+                    failed.append(collection)
+                    continue
+
+                eligible_count = sum(
+                    (point.get("payload") or {}).get("ucf_promotion_status")
+                    in allowed_source_statuses
+                    for point in preflight_points
+                )
+                if eligible_count == 0:
+                    continue
+
+                mutation_filter = {
+                    "must": list(exact_filter["must"])
+                    + [
+                        {
+                            "key": "ucf_promotion_status",
+                            "match": {"any": list(allowed_source_statuses)},
+                        }
+                    ]
+                }
+                update_response = requests.post(
+                    f"{qdrant_host}/collections/{collection}/points/payload?wait=true",
+                    json={
+                        "payload": {"ucf_promotion_status": status_val},
+                        "filter": mutation_filter,
+                    },
+                    timeout=10,
+                )
+                if update_response.status_code != 200:
+                    failed.append(collection)
+                    continue
+
+                offset = None
+                collection_verified = 0
+                collection_failed = False
+                while True:
+                    scroll_body: Dict[str, Any] = {
+                        "filter": mutation_filter,
+                        "limit": 100,
+                        "with_payload": True,
+                        "with_vector": False,
+                    }
+                    if offset is not None:
+                        scroll_body["offset"] = offset
+                    verify_response = requests.post(
+                        f"{qdrant_host}/collections/{collection}/points/scroll",
+                        json=scroll_body,
+                        timeout=10,
+                    )
+                    if verify_response.status_code != 200:
+                        collection_failed = True
+                        break
+                    result = verify_response.json().get("result", {})
+                    points = result.get("points", [])
+                    if any(
+                        _payload_mismatches_scope(point)
+                        or (point.get("payload") or {}).get(
+                            "ucf_promotion_status"
+                        )
+                        != status_val
+                        for point in points
+                    ):
+                        collection_failed = True
+                        break
+                    collection_verified += len(points)
+                    offset = result.get("next_page_offset")
+                    if offset is None or not points:
+                        break
+                if (
+                    not collection_failed
+                    and eligible_count > 0
+                    and collection_verified == 0
+                ):
+                    empty_verified_scope = True
+                if collection_failed or collection_verified != eligible_count:
+                    failed.append(collection)
+                else:
+                    points_verified += collection_verified
+            except Exception as exc:
+                logger.warning("Exact-scope Qdrant sync failed for %s: %s", collection, exc)
+                failed.append(collection)
+
+        failed_collections = sorted(set(failed))
+        status = "warning" if failed_collections else "ok"
+        reason = None
+        if points_verified == 0 and (
+            empty_verified_scope or not failed_collections
+        ):
+            status = "warning"
+            reason = "no_scoped_points_verified"
+        return {
+            "status": status,
+            "reason": reason,
+            "collections_swept": collections_swept,
+            "points_updated": points_verified,
+            "points_verified": points_verified,
             "failed_collections": failed_collections,
         }
 
-    def _sync_qdrant_by_scope(self, epoch_id: str, status_val: str,
-                               video_hash: Optional[str] = None) -> Dict[str, Any]:
-        """Scope-based Qdrant sync for points not tracked by UCF (e.g. Phase 6a).
+    def _deliver_pending_promotion_qdrant_sync(
+        self, *, video_hash: str, epoch_id: str
+    ) -> Dict[str, Any]:
+        import sqlite3
 
-        Scrolls all epoch-scoped Qdrant collections and updates any points
-        missing ucf_promotion_status or having a stale value.
-        """
-        import logging
-        import requests
-        logger = logging.getLogger(__name__)
+        outbox = self._read_promotion_qdrant_outbox(
+            video_hash=video_hash, epoch_id=epoch_id
+        )
+        if outbox is None or outbox["delivery_state"] != "pending":
+            return {"status": "not_pending", "outbox": outbox}
 
-        qdrant_host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
-        collections_swept = []
-        points_updated = 0
-        failed = []
-
-        # Discover epoch-scoped collections
+        conn = sqlite3.connect(str(self._get_ucf_db_path()))
         try:
-            resp = requests.get(f"{qdrant_host}/collections", timeout=5)
-            if resp.status_code != 200:
-                return {"status": "error", "error": f"collections list failed: {resp.status_code}"}
-            all_colls = resp.json().get("result", {}).get("collections", [])
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
+            frames_to_sync = conn.execute(
+                "SELECT vector_key, vector_collection, vector_backend "
+                "FROM context_frames WHERE video_hash = ? AND epoch_id = ? "
+                "AND promotion_status = 'promoted'",
+                (video_hash, epoch_id),
+            ).fetchall()
+            promoted_frame_count = conn.execute(
+                "SELECT count(*) FROM context_frames WHERE video_hash = ? "
+                "AND epoch_id = ? AND promotion_status = 'promoted'",
+                (video_hash, epoch_id),
+            ).fetchone()[0]
+        finally:
+            conn.close()
 
-        epoch_colls = [c["name"] for c in all_colls if epoch_id in c.get("name", "")]
-        if not epoch_colls:
-            return {"status": "skipped", "reason": "no_epoch_collections",
-                    "collections_swept": [], "points_updated": 0}
+        if promoted_frame_count == 0:
+            cancelled_outbox = self._cancel_pending_promotion_qdrant_sync(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                reason="promotion_scope_no_longer_promoted",
+            )
+            return {
+                "status": "cancelled",
+                "qdrant_sync": None,
+                "scope_sync": None,
+                "outbox": {
+                    "delivery_state": cancelled_outbox["delivery_state"],
+                    "attempt_count": cancelled_outbox["attempt_count"],
+                }
+                if cancelled_outbox
+                else None,
+            }
 
-        for coll_name in epoch_colls:
-            try:
-                offset = None
-                coll_updated = 0
-                while True:
-                    scroll_body = {"limit": 100, "with_payload": True}
-                    if offset is not None:
-                        scroll_body["offset"] = offset
-
-                    scroll_resp = requests.post(
-                        f"{qdrant_host}/collections/{coll_name}/points/scroll",
-                        json=scroll_body, timeout=10
-                    )
-                    if scroll_resp.status_code != 200:
-                        failed.append(coll_name)
-                        break
-
-                    result = scroll_resp.json().get("result", {})
-                    points = result.get("points", [])
-                    next_offset = result.get("next_page_offset")
-
-                    # Find points needing update
-                    points_to_update = []
-                    for pt in points:
-                        payload = pt.get("payload", {})
-                        current_status = payload.get("ucf_promotion_status")
-                        if current_status != status_val:
-                            points_to_update.append(pt["id"])
-
-                    # Batch update
-                    if points_to_update:
-                        update_resp = requests.post(
-                            f"{qdrant_host}/collections/{coll_name}/points/payload",
-                            json={
-                                "payload": {"ucf_promotion_status": status_val},
-                                "points": points_to_update,
-                            },
-                            timeout=10,
-                        )
-                        if update_resp.status_code == 200:
-                            coll_updated += len(points_to_update)
-                        else:
-                            logger.warning(
-                                "Scope sync payload update failed for %s: %s",
-                                coll_name, update_resp.status_code
-                            )
-
-                    if not next_offset or not points:
-                        break
-                    offset = next_offset
-
-                collections_swept.append(coll_name)
-                points_updated += coll_updated
-            except Exception as e:
-                logger.warning("Scope sync failed for collection %s: %s", coll_name, e)
-                failed.append(coll_name)
-
+        row_sync = self._sync_ucf_status_to_qdrant(
+            frames_to_sync,
+            "promoted",
+            expected_video_hash=video_hash,
+            expected_epoch_id=epoch_id,
+        )
+        scope_sync = self._sync_qdrant_by_scope(
+            epoch_id=epoch_id, status_val="promoted", video_hash=video_hash
+        )
+        row_attempted = int(row_sync.get("points_attempted", 0) or 0)
+        row_verified = int(row_sync.get("points_verified", 0) or 0)
+        row_verified_exactly = (
+            row_sync.get("status") == "skipped" and row_attempted == 0
+        ) or (
+            row_sync.get("status") == "ok"
+            and row_attempted > 0
+            and row_verified == row_attempted
+        )
+        scope_verified = (
+            scope_sync.get("status") == "ok"
+            and int(scope_sync.get("points_verified", 0) or 0) > 0
+        )
+        delivered = (
+            row_verified_exactly
+            and scope_verified
+            and not row_sync.get("failed_collections")
+            and not scope_sync.get("failed_collections")
+        )
+        failure_summary = None
+        if not delivered:
+            failure_summary = {
+                "row_status": row_sync.get("status", "error"),
+                "row_points_attempted": row_attempted,
+                "row_points_verified": row_verified,
+                "row_failed_collections": row_sync.get("failed_collections", []),
+                "scope_status": scope_sync.get("status", "error"),
+                "scope_points_verified": scope_sync.get("points_verified", 0),
+                "scope_failed_collections": scope_sync.get("failed_collections", []),
+            }
+        updated_outbox = self._record_promotion_qdrant_attempt(
+            video_hash=video_hash,
+            epoch_id=epoch_id,
+            delivered=delivered,
+            failure_summary=failure_summary,
+        )
+        durable_delivery_state = (
+            updated_outbox.get("delivery_state") if updated_outbox else "pending"
+        )
+        delivery_status = (
+            durable_delivery_state
+            if durable_delivery_state in {"complete", "cancelled"}
+            else "pending"
+        )
         return {
-            "status": "warning" if failed else "ok",
-            "collections_swept": collections_swept,
-            "points_updated": points_updated,
-            "failed_collections": failed,
+            "status": delivery_status,
+            "qdrant_sync": row_sync,
+            "scope_sync": scope_sync,
+            "outbox": {
+                "delivery_state": updated_outbox["delivery_state"],
+                "attempt_count": updated_outbox["attempt_count"],
+            }
+            if updated_outbox
+            else None,
         }
 
     def _cleanup_backfilled_vectors(self, records: List[Dict[str, Any]], inserted_ids: List[int]) -> None:
@@ -1206,8 +2969,11 @@ class MiniAgentClient:
         from scripts.ucf.validate_ucf_epoch import run_validation
         validation_failed = False
         val_errors = []
+        reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
+        report_path = reports_dir / 'ucf_validation_report.json'
+        report_before = _report_evidence_state(report_path)
         try:
-            val_rc = run_validation(mode="offline")
+            val_rc = run_validation(mode="offline", report_dir=reports_dir)
             if val_rc != 0:
                 validation_failed = True
                 val_errors.append("validate_ucf_epoch validator script returned non-zero exit code.")
@@ -1217,10 +2983,9 @@ class MiniAgentClient:
             
         if validation_failed:
             # Try reading report for details
-            reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
-            report_path = reports_dir / 'ucf_validation_report.json'
             details = []
-            if report_path.exists():
+            report_after = _report_evidence_state(report_path)
+            if report_after is not None and report_after != report_before:
                 try:
                     with open(report_path, "r", encoding="utf-8") as f:
                         rep_data = json.load(f)
@@ -1254,13 +3019,15 @@ class MiniAgentClient:
     def _execute_validate_ucf_epoch(self, args: Dict[str, Any]) -> Dict[str, Any]:
         from scripts.ucf.validate_ucf_epoch import run_validation
         validation_errors = []
+        reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
+        report_path = reports_dir / 'ucf_validation_report.json'
+        report_before = _report_evidence_state(report_path)
         try:
-            val_rc = run_validation(mode="offline")
+            val_rc = run_validation(mode="offline", report_dir=reports_dir)
             success = (val_rc == 0)
             if not success:
-                reports_dir = Path(self.config.get('paths', {}).get('reports_dir', REPO_ROOT / 'reports'))
-                report_path = reports_dir / 'ucf_validation_report.json'
-                if report_path.exists():
+                report_after = _report_evidence_state(report_path)
+                if report_after is not None and report_after != report_before:
                     try:
                         with open(report_path, "r", encoding="utf-8") as f:
                             rep_data = json.load(f)
@@ -1625,21 +3392,8 @@ class MiniAgentClient:
         
         conn = sqlite3.connect(str(ucf_db_path))
         
-        attempted_vectors = args.get("vectors", [])
-        video_hash = args.get("video_hash") or args.get("video_id")
-        epoch_id = args.get("epoch_id")
-        
-        # Auto-resolve scope from validated records
-        if not video_hash:
-            cursor = conn.execute("SELECT DISTINCT video_hash FROM context_frames WHERE promotion_status = 'validated'")
-            rows = cursor.fetchall()
-            if len(rows) == 1:
-                video_hash = rows[0][0]
-        if not epoch_id:
-            cursor = conn.execute("SELECT DISTINCT epoch_id FROM context_frames WHERE promotion_status = 'validated'")
-            rows = cursor.fetchall()
-            if len(rows) == 1:
-                epoch_id = rows[0][0]
+        video_hash = args["video_hash"]
+        epoch_id = args["epoch_id"]
 
         # 0. Pre-check: block promotion if any staged frames exist
         check_staged = "SELECT count(*) FROM context_frames WHERE promotion_status = 'staged'"
@@ -1650,39 +3404,9 @@ class MiniAgentClient:
         if epoch_id:
             check_staged += " AND epoch_id = ?"
             check_args.append(epoch_id)
-        staged_count = conn.execute(check_staged, tuple(check_args)).fetchone()[0]
-        if staged_count > 0:
-            conn.close()
-            return {
-                "status": "blocked",
-                "reason": "promotion_blocked_unvalidated_frames",
-                "staged_count": staged_count,
-                "message": (
-                    f"Cannot promote: {staged_count} context frame(s) are still in "
-                    "'staged' status. Run validate_ucf_frames (with confirmation) "
-                    "before calling promote_ucf_to_memory."
-                ),
-            }
-
-        # 1. Orphan vector check
-        query = "SELECT vector_key FROM context_frames WHERE promotion_status IN ('validated', 'promoted')"
-        query_args: list = []
-        if video_hash:
-            query += " AND video_hash = ?"
-            query_args.append(video_hash)
-        if epoch_id:
-            query += " AND epoch_id = ?"
-            query_args.append(epoch_id)
-            
-        cursor = conn.execute(query, tuple(query_args))
-        valid_vector_keys = {row[0] for row in cursor.fetchall() if row[0]}
-        
-        for v_key in attempted_vectors:
-            if v_key not in valid_vector_keys:
-                conn.close()
-                raise OrphanVectorError(v_key)
-
-        # Query vector_key, vector_collection, vector_backend for frames to be promoted
+        # Build scoped promotion queries. The staged gate, exact frame capture,
+        # status mutation, transition evidence, and delivery outbox enqueue all
+        # execute under the same immediate transaction below.
         select_sync = "SELECT vector_key, vector_collection, vector_backend FROM context_frames WHERE promotion_status = 'validated'"
         sync_args = []
         if video_hash:
@@ -1691,11 +3415,7 @@ class MiniAgentClient:
         if epoch_id:
             select_sync += " AND epoch_id = ?"
             sync_args.append(epoch_id)
-        cursor = conn.execute(select_sync, tuple(sync_args))
-        frames_to_sync = cursor.fetchall()
-
-        # Update ucf ledger status inside transaction
-        select_validated = "SELECT count(*) FROM context_frames WHERE promotion_status = 'validated'"
+        select_validated = "SELECT frame_id FROM context_frames WHERE promotion_status = 'validated'"
         update_validated = "UPDATE context_frames SET promotion_status = 'promoted' WHERE promotion_status = 'validated'"
         if video_hash:
             select_validated += " AND video_hash = ?"
@@ -1703,12 +3423,10 @@ class MiniAgentClient:
         if epoch_id:
             select_validated += " AND epoch_id = ?"
             update_validated += " AND epoch_id = ?"
+        select_validated += " ORDER BY frame_id"
         promote_args = list(sync_args)
-        promoted_count = conn.execute(select_validated, tuple(promote_args)).fetchone()[0]
-        
-        conn.execute("BEGIN TRANSACTION")
-        conn.execute(update_validated, tuple(promote_args))
-
+        frames_to_sync = []
+        promoted_count = 0
         scenes_count = 0
         segments_count = 0
         embeddings_count = 0
@@ -1719,8 +3437,58 @@ class MiniAgentClient:
         graph_db_path = _resolve_graph_db_path(self.config)
         scene_manifest_path = Path()
         temporal_index_path = Path()
+        active_view_write_started = False
 
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            staged_count = conn.execute(
+                check_staged, tuple(check_args)
+            ).fetchone()[0]
+            if staged_count > 0:
+                conn.rollback()
+                conn.close()
+                return {
+                    "status": "blocked",
+                    "reason": "promotion_blocked_unvalidated_frames",
+                    "staged_count": staged_count,
+                    "message": (
+                        f"Cannot promote: {staged_count} context frame(s) are still in "
+                        "'staged' status. Run validate_ucf_frames (with confirmation) "
+                        "before calling promote_ucf_to_memory."
+                    ),
+                }
+
+            frames_to_sync = conn.execute(
+                select_sync, tuple(sync_args)
+            ).fetchall()
+            transition_frame_ids = [
+                int(row[0])
+                for row in conn.execute(
+                    select_validated, tuple(promote_args)
+                ).fetchall()
+            ]
+            promoted_count = len(transition_frame_ids)
+            update_cursor = conn.execute(update_validated, tuple(promote_args))
+            if update_cursor.rowcount != promoted_count:
+                raise RuntimeError(
+                    "promotion row count changed inside materialization transaction"
+                )
+            if transition_frame_ids:
+                UCFLedgerClient.insert_status_transition(
+                    conn,
+                    old_status="validated",
+                    new_status="promoted",
+                    tool_name="promote_ucf_to_memory",
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    scope=f"video_hash={video_hash},epoch_id={epoch_id}",
+                    evidence={"affected_count": promoted_count},
+                    frame_ids=transition_frame_ids,
+                )
+                self._queue_promotion_qdrant_sync(
+                    conn, video_hash=video_hash, epoch_id=epoch_id
+                )
+
             cursor_ms = conn.execute("SELECT file_path FROM media_sources WHERE video_hash = ?", (video_hash,))
             row_ms = cursor_ms.fetchone()
             file_path = row_ms[0] if row_ms else None
@@ -1749,8 +3517,9 @@ class MiniAgentClient:
 
             cursor_f = conn.execute(
                 "SELECT frame_id, source_artifact_id, worker_name, vector_key, vector_collection, payload, t_start, t_end, modality "
-                "FROM context_frames WHERE video_hash = ? AND promotion_status = 'promoted'",
-                (video_hash,)
+                "FROM context_frames WHERE video_hash = ? AND epoch_id = ? "
+                "AND promotion_status = 'promoted'",
+                (video_hash, epoch_id),
             )
             promoted_frames = cursor_f.fetchall()
             promoted_frame_ids = [row[0] for row in promoted_frames]
@@ -1773,6 +3542,7 @@ class MiniAgentClient:
             if not db_path:
                 raise RuntimeError("db_path is not defined in config paths")
             
+            active_view_write_started = True
             conn_mem = _connect(str(db_path))
             conn_mem.execute("PRAGMA foreign_keys = ON;")
             
@@ -2069,13 +3839,18 @@ class MiniAgentClient:
             conn.close()
 
         except Exception as materialization_err:
-            logger.error(f"Materialization failed for video_hash {video_hash}: {materialization_err}", exc_info=True)
+            logger.error(
+                f"Promotion transaction/materialization failed for video_hash "
+                f"{video_hash}: {materialization_err}",
+                exc_info=True,
+            )
             try:
                 conn.execute("ROLLBACK")
                 conn.close()
             except Exception:
                 pass
-            self._dematerialize_active_views(video_hash=video_hash)
+            if active_view_write_started:
+                self._dematerialize_active_views(video_hash=video_hash)
             raise materialization_err
 
         val_errors = []
@@ -2113,18 +3888,88 @@ class MiniAgentClient:
             "validation_reference": "validate_ucf_epoch --mode strict"
         }
 
-        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_to_sync, "promoted")
-        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="promoted", video_hash=video_hash)
+        delivery = (
+            self._deliver_pending_promotion_qdrant_sync(
+                video_hash=video_hash, epoch_id=epoch_id
+            )
+            if promoted_count
+            else {"status": "not_pending", "outbox": None}
+        )
+        qdrant_sync = delivery.get(
+            "qdrant_sync",
+            {
+                "attempted": False,
+                "status": "skipped",
+                "collections_attempted": [],
+                "points_attempted": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            },
+        )
+        scope_sync = delivery.get(
+            "scope_sync",
+            {
+                "status": "skipped",
+                "reason": "no_promotion_transition",
+                "collections_swept": [],
+                "points_updated": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            },
+        )
         res = {
             "promoted_count": promoted_count,
-            "status": "promoted_complete",
+            "status": (
+                "promotion_committed_sync_pending"
+                if delivery.get("status") != "complete"
+                else "promoted_complete"
+            ),
             "qdrant_sync": qdrant_sync,
             "scope_sync": scope_sync,
-            "materialization_report": report
+            "materialization_report": report,
+            "outbox": delivery.get("outbox"),
         }
-        if qdrant_sync["status"] == "warning":
+        if delivery.get("status") != "complete":
             res["warnings"] = ["qdrant_payload_sync_failed"]
         return res
+
+    def _execute_reconcile_ucf_qdrant(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Retry only a durable, exact-scope promotion projection obligation."""
+        video_hash = args["video_hash"]
+        epoch_id = args["epoch_id"]
+        outbox = self._read_promotion_qdrant_outbox(
+            video_hash=video_hash, epoch_id=epoch_id
+        )
+        if outbox is None or outbox["delivery_state"] != "pending":
+            return {
+                "status": "blocked",
+                "reason": "qdrant_sync_not_pending",
+                "message": "No pending promotion Qdrant synchronization exists for this scope.",
+            }
+
+        delivery = self._deliver_pending_promotion_qdrant_sync(
+            video_hash=video_hash, epoch_id=epoch_id
+        )
+        if delivery.get("status") == "complete":
+            return {
+                "status": "qdrant_sync_reconciled",
+                "qdrant_sync": delivery["qdrant_sync"],
+                "scope_sync": delivery["scope_sync"],
+                "outbox": delivery["outbox"],
+            }
+        if delivery.get("status") == "cancelled":
+            return {
+                "status": "blocked",
+                "reason": "qdrant_sync_not_pending",
+                "message": "The promotion projection was cancelled because the scope is no longer pending delivery.",
+            }
+        return {
+            "status": "qdrant_sync_pending",
+            "qdrant_sync": delivery.get("qdrant_sync", {}),
+            "scope_sync": delivery.get("scope_sync", {}),
+            "outbox": delivery.get("outbox"),
+            "warnings": ["qdrant_payload_sync_failed"],
+        }
 
     def _execute_reject_ucf_frames(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Transitions in-scope context frames from 'staged' or 'validated' to 'rejected'.
@@ -2197,7 +4042,12 @@ class MiniAgentClient:
         client.close()
         
         frames_for_sync = [(f[0], f[1], f[2]) for f in frames_to_sync]
-        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_for_sync, "rejected")
+        qdrant_sync = self._sync_ucf_status_to_qdrant(
+            frames_for_sync,
+            "rejected",
+            expected_video_hash=video_hash,
+            expected_epoch_id=epoch_id,
+        )
         scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="rejected", video_hash=video_hash)
         
         # Dematerialize active views
@@ -2261,9 +4111,20 @@ class MiniAgentClient:
             epoch_id=epoch_id,
         )
         client.close()
+        if superseded_count and video_hash and epoch_id:
+            self._cancel_pending_promotion_qdrant_sync(
+                video_hash=video_hash,
+                epoch_id=epoch_id,
+                reason="promotion_scope_superseded",
+            )
         
         frames_for_sync = [(f[0], f[1], f[2]) for f in frames_to_sync]
-        qdrant_sync = self._sync_ucf_status_to_qdrant(frames_for_sync, "superseded")
+        qdrant_sync = self._sync_ucf_status_to_qdrant(
+            frames_for_sync,
+            "superseded",
+            expected_video_hash=video_hash,
+            expected_epoch_id=epoch_id,
+        )
         scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="superseded", video_hash=video_hash)
         
         # Dematerialize active views
@@ -2354,7 +4215,12 @@ class MiniAgentClient:
         if not q_client:
             raise RuntimeError("Qdrant client could not be built from config")
             
-        hits = q_client.query(vector, top_k=top_k, payload_filter=payload_filter)
+        hits = q_client.query(
+            vector,
+            top_k=top_k,
+            payload_filter=payload_filter,
+            retrieval_context="agent.reasoning",
+        )
         return {"matches": hits}
 
     def _execute_qdrant_upsert(self, args: Dict[str, Any]) -> Dict[str, Any]:

@@ -106,7 +106,9 @@ def _store_ref(store: str, details: Any) -> Optional[str]:
         if store == "faiss":
             ref = details.get("index_path")
             if isinstance(ref, str) and ref.strip():
-                return ref.strip()
+                normalized = ref.strip().replace("\\", "/").rstrip("/")
+                logical_ref = normalized.rsplit("/", 1)[-1].strip()
+                return logical_ref or None
     return None
 
 

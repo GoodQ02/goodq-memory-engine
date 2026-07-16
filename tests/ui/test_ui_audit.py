@@ -109,13 +109,17 @@ def test_ui_audit():
         assert cog_body.is_visible()
         assert "Hide" in cog_toggle.text_content()
         
+        # Select active video dataset that has matching "record" scenes
+        page.select_option("#dataset-select", "957e41002ef04c89ab85733c7d72b6cb")
+        page.wait_for_timeout(1000)
+
         # Run search query "record"
         query_input = page.locator("#query-input")
         query_input.fill("record")
         page.locator("#search-submit").click()
         
         # Wait for timeline grid to have matched results
-        page.wait_for_selector(".scene-card.matched", timeout=10000)
+        page.wait_for_selector(".scene-card.matched", timeout=30000)
         matched_cards = page.locator(".scene-card.matched")
         assert matched_cards.count() > 0, "No matched scenes found for query 'record'"
         

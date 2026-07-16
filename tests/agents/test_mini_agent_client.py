@@ -1,14 +1,1191 @@
 import pytest
 import os
+import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from agents.mini_agent_client import MiniAgentClient
 import goodq_mini_agent.paths
 
+
+def _promotion_contract():
+    return _tool_contract("promote_ucf_to_memory")
+
+
+def _tool_contract(tool_name):
+    contract_path = (
+        Path(__file__).resolve().parents[2]
+        / "agents"
+        / "stack"
+        / "contracts"
+        / "goodq-o2-local.contract.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    return next(tool for tool in contract["tools"] if tool["name"] == tool_name)
+
+
+def _allow_verified_promotion_delivery(client, monkeypatch):
+    """Keep non-Qdrant promotion tests isolated from validator/report and delivery I/O."""
+    monkeypatch.setattr(
+        client,
+        "_execute_validate_ucf_epoch",
+        lambda _args: {"success": True, "errors": []},
+    )
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
+
+
+def test_validate_ucf_epoch_uses_configured_report_directory(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    captured = {}
+
+    def fake_run_validation(*, mode, report_dir):
+        captured["mode"] = mode
+        captured["report_dir"] = report_dir
+        return 0
+
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        fake_run_validation,
+    )
+    expected_report_dir = tmp_path / "validator-reports"
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(expected_report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {"success": True, "errors": []}
+    assert captured == {
+        "mode": "offline",
+        "report_dir": expected_report_dir,
+    }
+
+
+def test_validate_ucf_epoch_reads_failure_from_same_report_directory(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    expected_report_dir = tmp_path / "validator-reports"
+
+    def fake_run_validation(*, mode, report_dir):
+        assert mode == "offline"
+        assert report_dir == expected_report_dir
+        report_dir.mkdir(parents=True)
+        (report_dir / "ucf_validation_report.json").write_text(
+            json.dumps({"vector_integrity": {"errors": ["isolated validator failure"]}}),
+            encoding="utf-8",
+        )
+        return 1
+
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        fake_run_validation,
+    )
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(expected_report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {
+        "success": False,
+        "errors": ["isolated validator failure"],
+    }
+
+
+def test_validate_ucf_epoch_rejects_stale_failure_report(tmp_path, monkeypatch):
+    import scripts.ucf.validate_ucf_epoch
+
+    report_dir = tmp_path / "validator-reports"
+    report_dir.mkdir(parents=True)
+    (report_dir / "ucf_validation_report.json").write_text(
+        json.dumps({"vector_integrity": {"errors": ["stale operator error"]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        scripts.ucf.validate_ucf_epoch,
+        "run_validation",
+        lambda **_kwargs: 1,
+    )
+    client = MiniAgentClient(
+        profile="safe",
+        config={"paths": {"reports_dir": str(report_dir)}},
+    )
+
+    result = client._execute_validate_ucf_epoch({})
+
+    assert result == {
+        "success": False,
+        "errors": ["Validator script returned non-zero exit code."],
+    }
+
+
+def test_promote_ucf_contract_declares_explicit_scope_and_actual_results():
+    tool = _promotion_contract()
+    input_schema = tool["input_schema"]
+
+    assert input_schema["required"] == ["video_hash", "epoch_id"]
+    assert input_schema["additionalProperties"] is False
+    assert input_schema["properties"] == {
+        "video_hash": {"type": "string", "minLength": 1},
+        "epoch_id": {"type": "string", "minLength": 1},
+    }
+
+    output_schema = tool["output_schema"]
+    assert output_schema["additionalProperties"] is False
+    assert {variant["properties"]["status"]["const"] for variant in output_schema["oneOf"]} == {
+        "blocked",
+        "promoted_complete",
+        "promotion_committed_sync_pending",
+    }
+
+
+def test_reconcile_ucf_qdrant_contract_is_exact_scope_and_human_gated():
+    tool = _tool_contract("reconcile_ucf_qdrant")
+
+    assert tool["input_schema"]["required"] == ["video_hash", "epoch_id"]
+    assert tool["input_schema"]["additionalProperties"] is False
+    assert tool["requires_confirmation"] is True
+    assert tool["mutability_class"] == "mutate_canonical"
+
+
+def test_reconcile_confirmation_token_is_bound_to_exact_pending_scope():
+    client = MiniAgentClient(profile="safe")
+    requested_scope = {"video_hash": "vh_test_001", "epoch_id": "epoch_one"}
+
+    envelope, rc = client.validate_action(
+        prompt="Reconcile pending Qdrant projection",
+        tool_name="reconcile_ucf_qdrant",
+        tool_args=requested_scope,
+    )
+    assert rc == 3
+
+    result, confirm_rc = client.validate_action(
+        prompt="Reconcile pending Qdrant projection",
+        tool_name="reconcile_ucf_qdrant",
+        tool_args={"video_hash": "vh_test_002", "epoch_id": "epoch_one"},
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert confirm_rc == 1
+    assert result["errors"][0]["code"] == "token_scope_mismatch"
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        {},
+        {"video_hash": "vh_test_001"},
+        {"epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "epoch": "legacy"},
+        {"video_id": "vh_test_001", "epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "vectors": []},
+        {"video_hash": "", "epoch_id": "epoch_test"},
+        {"video_hash": "vh_test_001", "epoch_id": "   "},
+    ],
+)
+def test_promote_ucf_rejects_missing_extra_ambiguous_or_blank_scope(tool_args):
+    client = MiniAgentClient(profile="safe")
+
+    envelope, rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+
+
+def test_promote_ucf_confirmation_token_is_bound_to_exact_scope():
+    client = MiniAgentClient(profile="safe")
+    requested_scope = {"video_hash": "vh_test_001", "epoch_id": "epoch_one"}
+
+    envelope, rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args=requested_scope,
+    )
+    assert rc == 3
+
+    result, confirm_rc = client.validate_action(
+        prompt="Promote scoped UCF evidence",
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_two"},
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert confirm_rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "token_scope_mismatch"
+
+
+def test_confirmation_token_store_failure_blocks_execution(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "agent-home"))
+    scope = {"video_hash": "vh_test_001", "epoch_id": "epoch_one"}
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+    )
+    assert rc == 3
+    token = envelope["result"]["confirmation_token"]
+    handler = MagicMock(return_value={"status": "promoted_complete", "promoted_count": 1})
+    monkeypatch.setattr(client, "_execute_promote_ucf_to_memory", handler)
+
+    def fail_save(*_args, **_kwargs):
+        raise OSError("simulated token-store write failure")
+
+    monkeypatch.setattr(json, "dump", fail_save)
+    result, confirm_rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert confirm_rc == 1
+    assert result["status"] == "error"
+    assert result["errors"][0]["code"] == "confirmation_token_store_error"
+    handler.assert_not_called()
+
+
+def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, monkeypatch):
+    agent_home = tmp_path / "agent-home"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    agent_home.mkdir(parents=True)
+    token_store = agent_home / "confirmation_tokens.json"
+    original = '{"existing":{"used":false}}\n'
+    token_store.write_text(original, encoding="utf-8")
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+
+    def fail_save(*_args, **_kwargs):
+        raise OSError("simulated token-store write failure")
+
+    monkeypatch.setattr(json, "dump", fail_save)
+
+    with pytest.raises(OSError, match="simulated token-store write failure"):
+        client._save_tokens({"replacement": {"used": True}})
+
+    assert token_store.read_text(encoding="utf-8") == original
+    assert list(agent_home.glob("confirmation_tokens.json.tmp-*")) == []
+
+
+EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_video_summary",
+    "generate_temporal_summary",
+    "stage_ingest_request",
+    "run_ingestion",
+    "file_delete",
+    "promote_ucf_to_memory",
+    "reconcile_ucf_qdrant",
+    "validate_ucf_frames",
+    "reject_ucf_frames",
+    "supersede_ucf_frames",
+}
+
+EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "clean_memory.apply",
+    "create_summary_collection",
+    "delete_summary_collection",
+    "generate_video_summary",
+    "generate_temporal_summary",
+    "stage_ingest_request",
+}
+
+
+def test_local_confirmation_required_tools_have_one_module_level_authority():
+    import agents.mini_agent_client as mini_agent_client
+
+    assert getattr(mini_agent_client, "LOCAL_CONFIRMATION_REQUIRED_TOOLS", None) == (
+        EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
+    )
+    assert getattr(mini_agent_client, "LOCAL_AUTHORIZATION_ONLY_ACTIONS", None) == (
+        EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS
+    )
+    assert "generate_video_summary" in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert "generate_temporal_summary" in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert (
+        "generate_video_summary"
+        in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    )
+    assert (
+        "generate_temporal_summary"
+        in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    )
+
+
+def _temporal_summary_scope(**overrides):
+    scope = {
+        "job_id": "job_" + "a" * 32,
+        "epoch_id": "epoch_2026_07_family",
+        "request_sha256": "b" * 64,
+        "execution_policy_sha256": "c" * 64,
+    }
+    scope.update(overrides)
+    return scope
+
+
+def test_generate_temporal_summary_accepts_only_exact_digest_scope(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "temporal-exact"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact temporal summary",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=_temporal_summary_scope(),
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        [],
+        {},
+        _temporal_summary_scope(job_id="job_short"),
+        _temporal_summary_scope(epoch_id="../private"),
+        _temporal_summary_scope(request_sha256="B" * 64),
+        _temporal_summary_scope(execution_policy_sha256="short"),
+        _temporal_summary_scope(query={"entities": ["private"]}),
+        _temporal_summary_scope(confirmation_token="must-not-persist"),
+    ],
+)
+def test_generate_temporal_summary_rejects_invalid_scope_before_token_issue(
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "temporal-invalid"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject an invalid temporal summary scope",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_generate_temporal_summary_token_is_scope_bound_and_single_use(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "temporal-token"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = _temporal_summary_scope()
+    prepared, prepared_rc = client.authorize_action(
+        prompt="Prepare temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+    )
+    assert prepared_rc == 3
+    token = prepared["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Reject changed temporal policy",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args={**scope, "execution_policy_sha256": "d" * 64},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    claimed, claimed_rc = client.authorize_action(
+        prompt="Claim exact temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert claimed_rc == 0
+    assert claimed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reject reused temporal summary authority",
+        mode="ops",
+        tool_name="generate_temporal_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+
+
+def test_generate_video_summary_accepts_only_exact_nonempty_job_video_scope(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "exact-scope"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-one", "video_hash": "video-one"},
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    "tool_args",
+    [
+        ["job-one", "video-one"],
+        {},
+        {"job_id": "job-one"},
+        {"video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": "video-one", "extra": True},
+        {"job_id": "", "video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": "   "},
+        {"job_id": 1, "video_hash": "video-one"},
+        {"job_id": "job-one", "video_hash": None},
+    ],
+)
+def test_generate_video_summary_rejects_invalid_scope_before_token_issuance(
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "invalid-scope"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare invalid video summary scope",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=tool_args,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_generate_video_summary_rejects_invalid_scope_before_token_claim(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "claim-scope"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare one exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    claim = MagicMock(side_effect=AssertionError("invalid scope reached claim"))
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+
+    envelope, rc = client.authorize_action(
+        prompt="Claim changed video summary scope",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={**scope, "extra": True},
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    claim.assert_not_called()
+
+
+def test_generate_video_summary_preserves_mismatch_expiry_and_single_use(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "token-lifecycle"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare one video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Claim changed video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-two", "video_hash": "video-one"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = "2020-01-01T00:00:00"
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+    expired, expired_rc = client.authorize_action(
+        prompt="Claim expired video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert expired_rc == 1
+    assert expired["errors"][0]["code"] == "token_expired"
+
+    fresh, fresh_rc = client.authorize_action(
+        prompt="Prepare a fresh video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert fresh_rc == 3
+    fresh_token = fresh["result"]["confirmation_token"]
+    claimed, claimed_rc = client.authorize_action(
+        prompt="Claim exact video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=fresh_token,
+    )
+    assert claimed_rc == 0
+    assert claimed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reuse video summary authority",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=fresh_token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+
+
+def test_generate_video_summary_claim_is_atomic_across_clients(
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "atomic-claim"))
+    first = MiniAgentClient(profile="safe")
+    second = MiniAgentClient(profile="safe")
+    first.agent_available = True
+    second.agent_available = True
+    scope = {"job_id": "job-one", "video_hash": "video-one"}
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait()
+        return client.authorize_action(
+            prompt="Claim atomic video summary",
+            mode="ops",
+            tool_name="generate_video_summary",
+            tool_args=scope,
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+def test_generate_video_summary_is_denied_offline_without_issuing_token(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "offline"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="offline")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare offline video summary",
+        mode="ops",
+        tool_name="generate_video_summary",
+        tool_args={"job_id": "job-one", "video_hash": "video-one"},
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "offline_blocked"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+@pytest.mark.parametrize("profile", ["safe", "unrestricted"])
+def test_run_ingestion_requires_exact_local_confirmation(
+    profile,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / profile))
+    client = MiniAgentClient(
+        profile=profile,
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"status": "staged_complete", "epoch": "epoch-one"})
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+    requested_args = {"input_dir": "incoming-one", "epoch": "epoch-one"}
+
+    envelope, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=requested_args,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    handler.assert_not_called()
+    token = envelope["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming-two", "epoch": "epoch-one"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+    handler.assert_not_called()
+
+    result, confirm_rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args=requested_args,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirm_rc == 0
+    assert result["status"] == "success"
+    handler.assert_called_once_with(requested_args)
+
+
+def test_authorize_action_claims_exact_scope_once_without_executing_handler(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "authorize"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"status": "should-not-run"})
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+    scope = {
+        "request_id": "ingest-request-one",
+        "source_kind": "upload",
+        "original_name": "family.mp4",
+        "file_size": 12,
+        "file_hash": "a" * 64,
+        "policy_profile": "local_ingest_facade_v1",
+    }
+
+    requested, requested_rc = client.authorize_action(
+        prompt="Authorize one exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    assert requested["status"] == "needs_confirmation"
+    token = requested["result"]["confirmation_token"]
+
+    authorized, authorized_rc = client.authorize_action(
+        prompt="Confirm one exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert authorized_rc == 0
+    assert authorized["status"] == "ok"
+    handler.assert_not_called()
+
+    changed_after_use, changed_after_use_rc = client.authorize_action(
+        prompt="Attempt used authorization against changed scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={**scope, "request_id": "ingest-request-two"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert changed_after_use_rc == 1
+    assert changed_after_use["errors"][0]["code"] == "token_scope_mismatch"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Attempt confirmation token reuse",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+    handler.assert_not_called()
+
+
+def test_authorize_action_scope_mismatch_does_not_consume_token(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "scope"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_hash": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Request exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.authorize_action(
+        prompt="Attempt changed ingestion scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={"request_id": "request-two", "file_hash": "a" * 64},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    authorized, authorized_rc = client.authorize_action(
+        prompt="Confirm original ingestion scope",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert authorized_rc == 0
+    assert authorized["status"] == "ok"
+
+
+def test_authorize_action_fails_closed_when_token_disappears_before_claim(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "claim-race"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_hash": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Request exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    monkeypatch.setattr(
+        client,
+        "_claim_confirmation_token",
+        MagicMock(return_value=(False, None)),
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Confirm exact ingestion authorization",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_authorize_action_rejects_native_execution_tools_without_claiming(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "native-reject"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+
+    result, rc = client.authorize_action(
+        prompt="Attempt standalone native authorization",
+        mode="ops",
+        tool_name="run_ingestion",
+        tool_args={"ucf_records": []},
+    )
+
+    assert rc == 1
+    assert result["errors"][0]["code"] == "authorization_only_action_required"
+    token_store = Path(tmp_path / "native-reject" / "confirmation_tokens.json")
+    assert not token_store.exists()
+
+
+def test_revoke_action_authorization_requires_exact_scope_and_removes_token(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "revoke"))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.revoke_action_authorization(
+        prompt="Cancel changed staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args={"request_id": "request-two", "file_sha256": "a" * 64},
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+    revoked, revoked_rc = client.revoke_action_authorization(
+        prompt="Cancel exact staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirmation_token=token,
+    )
+    assert revoked_rc == 0
+    assert revoked["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Attempt revoked staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_execute_tool_delegates_to_authorize_action_once(monkeypatch):
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    authorized = {
+        "request_id": "task-authorized",
+        "profile": "safe",
+        "status": "ok",
+        "timestamp": "2026-07-11T00:00:00Z",
+        "result": {"allowed": True},
+        "errors": [],
+    }
+    authorize = MagicMock(return_value=(authorized, 0))
+    claim = MagicMock(side_effect=AssertionError("execute_tool claimed twice"))
+    handler = MagicMock(return_value={"status": "staged_complete"})
+    monkeypatch.setattr(client, "_authorize_action_impl", authorize)
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+    monkeypatch.setattr(client, "_execute_run_ingestion", handler)
+
+    result, rc = client.execute_tool(
+        tool_name="run_ingestion",
+        tool_args={"ucf_records": []},
+        mode="ops",
+        confirm=True,
+        confirmation_token="token-one",
+    )
+
+    assert rc == 0
+    assert result["status"] == "success"
+    authorize.assert_called_once()
+    claim.assert_not_called()
+    handler.assert_called_once_with({"ucf_records": []})
+
+
+@pytest.mark.parametrize("profile", ["safe", "unrestricted"])
+def test_file_delete_requires_break_glass_and_exact_confirmation(
+    profile,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / profile))
+    monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
+    client = MiniAgentClient(
+        profile=profile,
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+    handler = MagicMock(return_value={"deleted": "target-one.txt"})
+    monkeypatch.setattr(client, "_execute_file_delete", handler)
+    requested_args = {"path": "target-one.txt"}
+
+    blocked, blocked_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+    )
+    assert blocked_rc == 1
+    assert blocked["errors"][0]["code"] == "break_glass_required"
+    assert "confirmation_token" not in blocked["result"]
+    handler.assert_not_called()
+
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    envelope, rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+    )
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    handler.assert_not_called()
+    token = envelope["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args={"path": "target-two.txt"},
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+    handler.assert_not_called()
+
+    result, confirm_rc = client.execute_tool(
+        tool_name="file_delete",
+        tool_args=requested_args,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirm_rc == 0
+    assert result["status"] == "success"
+    handler.assert_called_once_with(requested_args)
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "requested_args", "changed_args"),
+    [
+        (
+            "validate_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one"},
+            {"video_hash": "video-one", "epoch_id": "epoch-two"},
+        ),
+        (
+            "reject_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "bad frame"},
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "different reason"},
+        ),
+        (
+            "supersede_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one"},
+            {"video_hash": "video-two", "epoch_id": "epoch-one"},
+        ),
+    ],
+)
+def test_lifecycle_confirmation_token_rejects_changed_complete_args(
+    tool_name,
+    requested_args,
+    changed_args,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / tool_name))
+    client = MiniAgentClient(profile="safe")
+    envelope, rc = client.validate_action(
+        prompt="Request lifecycle mutation",
+        tool_name=tool_name,
+        tool_args=requested_args,
+    )
+    assert rc == 3
+
+    mismatch, mismatch_rc = client.validate_action(
+        prompt="Attempt changed lifecycle mutation",
+        tool_name=tool_name,
+        tool_args=changed_args,
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_scope_mismatch"
+
+
+def test_unrestricted_promotion_still_requires_local_confirmation(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "unrestricted"))
+    client = MiniAgentClient(profile="unrestricted")
+    scope = {"video_hash": "video-one", "epoch_id": "epoch-one"}
+
+    envelope, rc = client.validate_action(
+        prompt="Promote exact scope",
+        tool_name="promote_ucf_to_memory",
+        tool_args=scope,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "tool_args"),
+    [
+        ("run_ingestion", {"input_dir": "incoming", "epoch": "epoch-one"}),
+        ("file_delete", {"path": "target.txt"}),
+        ("promote_ucf_to_memory", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        ("reconcile_ucf_qdrant", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        ("validate_ucf_frames", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+        (
+            "reject_ucf_frames",
+            {"video_hash": "video-one", "epoch_id": "epoch-one", "reason": "bad frame"},
+        ),
+        ("supersede_ucf_frames", {"video_hash": "video-one", "epoch_id": "epoch-one"}),
+    ],
+)
+def test_local_confirmation_rejects_confirm_true_without_token(
+    tool_name,
+    tool_args,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / tool_name))
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    client = MiniAgentClient(profile="safe")
+
+    envelope, rc = client.validate_action(
+        prompt="Attempt confirmation without token",
+        tool_name=tool_name,
+        tool_args=tool_args,
+        confirm=True,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token"
+
+
+def test_confirmation_token_issuance_store_failure_is_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "issuance-failure"))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(
+        client,
+        "_save_tokens",
+        MagicMock(side_effect=OSError("simulated issuance persistence failure")),
+    )
+
+    envelope, rc = client.validate_action(
+        prompt="Ingest exact scope",
+        tool_name="run_ingestion",
+        tool_args={"input_dir": "incoming", "epoch": "epoch-one"},
+    )
+
+    assert rc == 1
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "confirmation_token_store_error"
+    assert "confirmation_token" not in envelope["result"]
+
+
 def test_assets_dir_monkeypatch():
     """Verify that ASSETS_DIR was successfully redirected to our local folder."""
     expected_path = Path(__file__).resolve().parent.parent.parent / "agents" / "stack"
     assert goodq_mini_agent.paths.ASSETS_DIR.resolve() == expected_path.resolve()
+
+
+def test_fresh_agent_home_bootstraps_packaged_validation_scripts(tmp_path, monkeypatch):
+    agent_home = tmp_path / "fresh-agent-home"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+
+    envelope, rc = client.validate_action(
+        prompt="Search memory for scene context",
+        mode="research",
+        tool_name="qdrant_query",
+        tool_args={
+            "collection": "goodq_text",
+            "query_vector": [0.1] * 384,
+            "top_k": 5,
+        },
+    )
+
+    assert rc == 0, envelope
+    assert (agent_home / "scripts" / "validate_contract.py").is_file()
+
 
 def test_validate_action_approved_tool():
     """Verify that qdrant_query (read-only) passes without blocking."""
@@ -351,6 +1528,7 @@ def test_promote_ucf_succeeds_when_frames_validated(tmp_path, monkeypatch):
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
 
     # Request confirmation token
     envelope, rc = client.execute_tool(
@@ -378,6 +1556,353 @@ def test_promote_ucf_succeeds_when_frames_validated(tmp_path, monkeypatch):
     row = conn.execute("SELECT promotion_status FROM context_frames LIMIT 1").fetchone()
     conn.close()
     assert row[0] == "promoted"
+
+
+def test_promote_ucf_records_scoped_transition_with_frame_evidence(tmp_path, monkeypatch):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    frame_id = conn.execute("SELECT frame_id FROM context_frames").fetchone()[0]
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 0
+    assert result["output"]["promoted_count"] == 1
+    conn = sqlite3.connect(str(db_path))
+    transition = conn.execute(
+        "SELECT frame_ids, video_hash, epoch_id, old_status, new_status, "
+        "tool_name, scope, evidence FROM ucf_status_transitions"
+    ).fetchone()
+    conn.close()
+    assert transition is not None
+    assert json.loads(transition[0]) == [frame_id]
+    assert transition[1:6] == (
+        "vh_test_001",
+        "epoch_test",
+        "validated",
+        "promoted",
+        "promote_ucf_to_memory",
+    )
+    assert transition[6] == "video_hash=vh_test_001,epoch_id=epoch_test"
+    assert json.loads(transition[7]) == {"affected_count": 1}
+
+
+def test_promote_ucf_audit_failure_rolls_back_without_dematerializing(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.execute(
+        "CREATE TRIGGER force_promotion_transition_failure "
+        "BEFORE INSERT ON ucf_status_transitions "
+        "BEGIN SELECT RAISE(ABORT, 'forced promotion transition failure'); END"
+    )
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    outbox_table_exists = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ucf_qdrant_sync_outbox'"
+    ).fetchone()[0]
+    outbox_count = (
+        conn.execute("SELECT COUNT(*) FROM ucf_qdrant_sync_outbox").fetchone()[0]
+        if outbox_table_exists
+        else 0
+    )
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert outbox_count == 0
+    assert dematerialized == []
+
+
+def test_promote_ucf_staged_gate_and_transition_share_write_lock(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    from types import SimpleNamespace
+
+    import agents.mini_agent_client as mini_agent_module
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    assert rc == 3
+
+    real_ledger_module = mini_agent_module._load_ucf_ledger()
+
+    class SchemaReadyLedger:
+        insert_status_transition = staticmethod(
+            real_ledger_module.UCFLedgerClient.insert_status_transition
+        )
+
+        def __init__(self, _db_path):
+            pass
+
+        def init_schema(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        mini_agent_module,
+        "_load_ucf_ledger",
+        lambda: SimpleNamespace(UCFLedgerClient=SchemaReadyLedger),
+    )
+
+    real_connect = sqlite3.connect
+    injection_results = []
+
+    class StagedCountCursor:
+        def __init__(self, cursor):
+            self._cursor = cursor
+
+        def fetchone(self):
+            row = self._cursor.fetchone()
+            writer = real_connect(str(db_path), timeout=0.05)
+            try:
+                writer.execute(
+                    """
+                    INSERT INTO context_frames (
+                        video_hash, ucf_schema_version, epoch_id, run_id,
+                        t_start, t_end, modality, worker_name, model_tag,
+                        payload, payload_hash, promotion_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "vh_test_001",
+                        "ucf.v0.1",
+                        "epoch_test",
+                        "run_race",
+                        2.0,
+                        3.0,
+                        "video",
+                        "image_embed_clip",
+                        "openai/clip-vit-large-patch14",
+                        json.dumps({"label": "racing_staged_frame"}),
+                        "racing-staged-frame",
+                        "staged",
+                    ),
+                )
+                writer.commit()
+                injection_results.append("inserted")
+            except sqlite3.OperationalError as exc:
+                writer.rollback()
+                assert "locked" in str(exc).lower()
+                injection_results.append("blocked")
+            finally:
+                writer.close()
+            return row
+
+        def __getattr__(self, name):
+            return getattr(self._cursor, name)
+
+    class PromotionConnection:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def execute(self, query, params=()):
+            cursor = self._connection.execute(query, params)
+            if (
+                "SELECT count(*) FROM context_frames" in query
+                and "promotion_status = 'staged'" in query
+            ):
+                return StagedCountCursor(cursor)
+            return cursor
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+    def connect_with_race_probe(database, *args, **kwargs):
+        connection = real_connect(database, *args, **kwargs)
+        if Path(database).resolve() == db_path.resolve():
+            return PromotionConnection(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", connect_with_race_probe)
+    result, confirm_rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=envelope["result"]["confirmation_token"],
+    )
+
+    assert confirm_rc == 0
+    assert result["output"]["promoted_count"] == 1
+    assert injection_results == ["blocked"]
+    conn = real_connect(str(db_path))
+    staged_count = conn.execute(
+        "SELECT COUNT(*) FROM context_frames WHERE promotion_status = 'staged'"
+    ).fetchone()[0]
+    conn.close()
+    assert staged_count == 0
+
+
+def test_promote_ucf_pre_materialization_failure_rolls_back_status_and_transition(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    client = MiniAgentClient(config={"paths": {"db_dir": str(tmp_path)}})
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    envelope, rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+    token = envelope["result"]["confirmation_token"]
+    result, confirm_rc = client.execute_tool(
+        tool_name="promote_ucf_to_memory",
+        tool_args={"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert rc == 3
+    assert confirm_rc == 1
+    assert result["status"] == "fatal_error"
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert dematerialized == []
+
+
+def test_promote_ucf_post_write_failure_rolls_back_and_compensates(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+
+    import lib.knowledge_graph as knowledge_graph_module
+
+    db_path = _make_ucf_db_with_staged_frame(tmp_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE context_frames SET promotion_status = 'validated'")
+    conn.commit()
+    conn.close()
+
+    memory_db = tmp_path / "memory.db"
+    client = MiniAgentClient(
+        config={
+            "paths": {
+                "db_path": str(memory_db),
+                "knowledge_graph_db": str(tmp_path / "knowledge_graph.db"),
+                "processing": str(tmp_path / "processing"),
+            }
+        }
+    )
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    dematerialized = []
+    monkeypatch.setattr(
+        client,
+        "_dematerialize_active_views",
+        lambda **kwargs: dematerialized.append(kwargs),
+    )
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    class FailingKnowledgeGraph:
+        def __init__(self, _path):
+            raise RuntimeError("forced post-write materialization failure")
+
+    monkeypatch.setattr(
+        knowledge_graph_module, "KnowledgeGraph", FailingKnowledgeGraph
+    )
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    assert memory_db.exists()
+    conn = sqlite3.connect(str(db_path))
+    status = conn.execute("SELECT promotion_status FROM context_frames").fetchone()[0]
+    transition_count = conn.execute(
+        "SELECT COUNT(*) FROM ucf_status_transitions"
+    ).fetchone()[0]
+    outbox_table_exists = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ucf_qdrant_sync_outbox'"
+    ).fetchone()[0]
+    outbox_count = (
+        conn.execute("SELECT COUNT(*) FROM ucf_qdrant_sync_outbox").fetchone()[0]
+        if outbox_table_exists
+        else 0
+    )
+    conn.close()
+    assert status == "validated"
+    assert transition_count == 0
+    assert outbox_count == 0
+    assert dematerialized == [{"video_hash": "vh_test_001"}]
 
 
 def test_validate_ucf_frames_transitions_staged_to_validated(tmp_path, monkeypatch):
@@ -500,6 +2025,64 @@ def _confirm_tool(client, tool_name, tool_args):
         confirm=True,
         confirmation_token=token,
     )
+
+
+def test_promote_materializes_only_the_exact_epoch(tmp_path, monkeypatch):
+    """A scoped promotion must not materialize promoted frames from another epoch."""
+    import sqlite3
+
+    db_path = _make_ucf_db_with_status(tmp_path, "promoted")
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE context_frames SET epoch_id = 'epoch_old', run_id = 'run_old'"
+    )
+    old_frame_id = conn.execute(
+        "SELECT frame_id FROM context_frames WHERE epoch_id = 'epoch_old'"
+    ).fetchone()[0]
+    cursor = conn.execute(
+        """
+        INSERT INTO context_frames (
+            video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
+            modality, worker_name, model_tag, payload, payload_hash,
+            promotion_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vh_test_001",
+            "ucf.v0.1",
+            "epoch_target",
+            "run_target",
+            2.0,
+            3.0,
+            "video",
+            "image_embed_clip",
+            "openai/clip-vit-large-patch14",
+            "{}",
+            "target-hash",
+            "validated",
+        ),
+    )
+    target_frame_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
+
+    result, rc = _confirm_tool(
+        client,
+        "promote_ucf_to_memory",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_target"},
+    )
+
+    assert rc == 0
+    promoted_frame_ids = result["output"]["materialization_report"]["scope"][
+        "promoted_frame_ids"
+    ]
+    assert promoted_frame_ids == [target_frame_id]
+    assert old_frame_id not in promoted_frame_ids
 
 
 def test_reject_ucf_frames_transitions_staged_to_rejected(tmp_path, monkeypatch):
@@ -731,6 +2314,7 @@ def test_promotion_excludes_rejected_frames(tmp_path, monkeypatch):
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
 
     # No staged frames → pre-check passes; only validated (1) should be promoted
     result, rc = _confirm_tool(
@@ -786,6 +2370,7 @@ def test_reingest_supersession_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
 
     # Step 1: validate old epoch
     r, rc = _confirm_tool(client, "validate_ucf_frames", {"video_hash": "vh_vid_001", "epoch_id": "epoch_old"})
@@ -838,84 +2423,49 @@ def test_reingest_supersession_flow(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_hitl_tool_registry_completeness():
-    """Phase 0.8: every HITL-gated native tool must appear in all 6 required locations.
+    """Every locally confirmed native tool must stay registered for execution and audit.
 
     This test is the single source of truth for the tool registration contract.
     If a new HITL-gated tool is added without being registered in all locations,
     this test will fail immediately on the first run.
 
     Required locations:
-    1. MUTATING_DENY_ON_AGENT_FAILURE (module-level set)
-    2. Local NATIVELY_GATED_TOOLS in validate_action() (line ~454)
-    3. HITL gate 'if tool_name in (...)' in validate_action() (line ~561)
-    4. Native bypass list in validate_action() (line ~596)
-    5. Dispatch 'elif tool_name ==' chain in execute_tool()
-    6. side_effect_report.mutated set in execute_tool()
+    1. LOCAL_CONFIRMATION_REQUIRED_TOOLS (module-level authority)
+    2. MUTATING_DENY_ON_AGENT_FAILURE
+    3. Dispatch 'elif tool_name ==' chain in execute_tool()
+    4. declared_mutation set used by side_effect_report in execute_tool()
     """
     import inspect
     import re
-    from agents.mini_agent_client import MUTATING_DENY_ON_AGENT_FAILURE
+    from agents.mini_agent_client import (
+        LOCAL_AUTHORIZATION_ONLY_ACTIONS,
+        LOCAL_CONFIRMATION_REQUIRED_TOOLS,
+        MUTATING_DENY_ON_AGENT_FAILURE,
+    )
 
-    # The canonical set of HITL-gated native tools. Update this list when
-    # adding a new HITL-gated tool — the test will enforce all registrations.
-    HITL_GATED_TOOLS = {
-        "promote_ucf_to_memory",
-        "validate_ucf_frames",
-        "reject_ucf_frames",
-        "supersede_ucf_frames",
-    }
+    assert LOCAL_CONFIRMATION_REQUIRED_TOOLS == EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
 
-    # 1. All HITL tools must be in the module-level MUTATING set
-    for tool in HITL_GATED_TOOLS:
+    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS:
         assert tool in MUTATING_DENY_ON_AGENT_FAILURE, (
             f"HITL tool '{tool}' missing from MUTATING_DENY_ON_AGENT_FAILURE"
         )
 
-    # Inspect source for the remaining 5 locations
+    # Inspect source for dispatch and mutation reporting registrations.
     source = inspect.getsource(MiniAgentClient)
 
-    for tool in HITL_GATED_TOOLS:
-        # 2. Local NATIVELY_GATED_TOOLS in validate_action
-        assert f'"{tool}"' in source or f"'{tool}'" in source, (
-            f"HITL tool '{tool}' not found in MiniAgentClient source"
-        )
-
-        # 3. HITL gate presence — look for tool in the HITL 'if tool_name in' block
-        hitl_gate_match = re.search(
-            r'# 4\. Human-in-the-Loop.*?if tool_name in \(([^)]+)\)',
-            source, re.DOTALL
-        )
-        assert hitl_gate_match, "HITL gate block not found in MiniAgentClient"
-        hitl_tools_str = hitl_gate_match.group(1)
-        assert tool in hitl_tools_str, (
-            f"HITL tool '{tool}' missing from HITL gate in validate_action()"
-        )
-
-        # 4. Native bypass list
-        bypass_match = re.search(
-            r'# 5\. Native tool validation bypass.*?if tool_name in \(([^)]+)\)',
-            source, re.DOTALL
-        )
-        assert bypass_match, "Native bypass list not found in MiniAgentClient"
-        bypass_tools_str = bypass_match.group(1)
-        assert tool in bypass_tools_str, (
-            f"HITL tool '{tool}' missing from native bypass list"
-        )
-
-        # 5. Dispatch chain — each tool must have an elif branch
+    for tool in LOCAL_CONFIRMATION_REQUIRED_TOOLS - LOCAL_AUTHORIZATION_ONLY_ACTIONS:
         assert f'tool_name == "{tool}"' in source or f"tool_name == '{tool}'" in source, (
             f"HITL tool '{tool}' missing from dispatch elif chain in execute_tool()"
         )
 
-        # 6. side_effect_report.mutated
         mutated_match = re.search(
-            r'"mutated":\s*tool_name\s+in\s+\(([^)]+)\)',
+            r'declared_mutation\s*=\s*tool_name\s+in\s+\(([^)]+)\)',
             source, re.DOTALL
         )
-        assert mutated_match, "side_effect_report.mutated set not found in MiniAgentClient"
+        assert mutated_match, "declared_mutation set not found in MiniAgentClient"
         mutated_tools_str = mutated_match.group(1)
         assert tool in mutated_tools_str, (
-            f"HITL tool '{tool}' missing from side_effect_report.mutated"
+            f"HITL tool '{tool}' missing from declared_mutation"
         )
 
 
@@ -1021,6 +2571,7 @@ def test_tool_registration_matrix_extraction():
         "process_start",
         "process_stop",
         "promote_ucf_to_memory",
+        "reconcile_ucf_qdrant",
         "validate_ucf_frames",
         "reject_ucf_frames",
         "supersede_ucf_frames"
@@ -1029,24 +2580,17 @@ def test_tool_registration_matrix_extraction():
     for tool in expected_mutating:
         assert tool in mutating_tools, f"Expected mutating tool '{tool}' not found in MUTATING_DENY_ON_AGENT_FAILURE matrix"
         
-    # Slice out NATIVELY_GATED_TOOLS set
-    start_str_native = "NATIVELY_GATED_TOOLS = {"
+    # Slice out the one module-level local confirmation authority set.
+    start_str_native = "LOCAL_CONFIRMATION_REQUIRED_TOOLS = {"
     idx_start_native = src.find(start_str_native)
-    assert idx_start_native != -1, "NATIVELY_GATED_TOOLS not found in source code"
+    assert idx_start_native != -1, "LOCAL_CONFIRMATION_REQUIRED_TOOLS not found in source code"
     idx_end_native = src.find("}", idx_start_native)
-    assert idx_end_native != -1, "Closing bracket for NATIVELY_GATED_TOOLS not found"
+    assert idx_end_native != -1, "Closing bracket for LOCAL_CONFIRMATION_REQUIRED_TOOLS not found"
     
     native_slice = src[idx_start_native + len(start_str_native):idx_end_native]
     native_gated_tools = set(re.findall(r'["\']([^"\']+)["\']', native_slice))
     
-    expected_native_gated = {
-        "promote_ucf_to_memory",
-        "validate_ucf_frames",
-        "reject_ucf_frames",
-        "supersede_ucf_frames"
-    }
-    
-    assert native_gated_tools == expected_native_gated, f"NATIVELY_GATED_TOOLS set mismatch: {native_gated_tools}"
+    assert native_gated_tools == EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -1209,30 +2753,129 @@ def test_set_payload_empty_points_noop(mock_put):
 
 @patch("requests.post")
 def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monkeypatch):
+    import uuid
+
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"result": {"collections": []}}
-    mock_post.return_value = mock_resp
+    update_response = MagicMock(status_code=200)
+    point_id = str(
+        uuid.uuid5(
+            uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4"), "vec-key-1"
+        )
+    )
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": [
+            {
+                "id": point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "staged",
+                },
+            }
+        ]
+    }
+    verify_response = MagicMock(status_code=200)
+    verify_response.json.return_value = {
+        "result": [
+            {
+                "id": point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "promoted",
+                },
+            }
+        ]
+    }
+    mock_post.side_effect = [preflight_response, update_response, verify_response]
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
+    monkeypatch.setattr(
+        client, "_execute_validate_ucf_epoch", lambda _args: {"success": True, "errors": []}
+    )
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     assert res["status"] == "success"
-    
+
     output = res["output"]
     assert output["status"] == "promoted_complete"
     assert output["promoted_count"] == 1
-    
+
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "ok"
 
+
 @patch("requests.post")
-def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tmp_path, monkeypatch):
+def test_ucf_status_sync_normalizes_numeric_point_ids_as_integers(mock_post):
+    update_response = MagicMock(status_code=200)
+    verify_response = MagicMock(status_code=200)
+    verify_response.json.return_value = {
+        "result": [
+            {"id": 123, "payload": {"ucf_promotion_status": "promoted"}}
+        ]
+    }
+    mock_post.side_effect = [update_response, verify_response]
+    client = MiniAgentClient(profile="safe")
+
+    result = client._sync_ucf_status_to_qdrant(
+        [("123", "goodq_text", "qdrant")], "promoted"
+    )
+
+    assert result["status"] == "ok"
+    assert mock_post.call_args_list[0].kwargs["json"]["points"] == [123]
+    assert mock_post.call_args_list[1].kwargs["json"]["ids"] == [123]
+
+
+@patch("requests.post")
+def test_row_sync_rejects_wrong_scope_before_mutation(mock_post):
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": [
+            {
+                "id": "point-a",
+                "payload": {
+                    "video_hash": "video-b",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "staged",
+                },
+            }
+        ]
+    }
+    mock_post.return_value = preflight_response
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_ucf_status_to_qdrant(
+        [("point-a", "goodq_text_epoch_test", "qdrant")],
+        "promoted",
+        expected_video_hash="video-a",
+        expected_epoch_id="epoch_test",
+    )
+
+    assert result["status"] == "warning"
+    assert result["points_verified"] == 0
+    assert len(mock_post.call_args_list) == 1
+    assert mock_post.call_args_list[0].args[0].endswith("/points")
+
+
+@patch("requests.post")
+def test_promote_qdrant_sync_failure_is_pending_and_visible(mock_post, tmp_path, monkeypatch):
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-1", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     mock_resp = MagicMock()
@@ -1243,31 +2886,699 @@ def test_promote_qdrant_sync_nonfatal_and_envelope_carries_warning(mock_post, tm
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
+    monkeypatch.setattr(
+        client, "_execute_validate_ucf_epoch", lambda _args: {"success": True, "errors": []}
+    )
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
-    assert rc == 0
-    assert res["status"] == "success"
-    
+    assert rc == 1
+    assert res["status"] == "error"
+    assert res["errors"][0]["code"] == "promotion_committed_sync_pending"
+
     output = res["output"]
-    assert output["status"] == "promoted_complete"
-    
+    assert output["status"] == "promotion_committed_sync_pending"
+
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "warning"
-    assert "warnings" in res
-    assert "qdrant_payload_sync_failed" in res["warnings"]
+    assert "qdrant_payload_sync_failed" in output["warnings"]
+    assert output["outbox"]["delivery_state"] == "pending"
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_filters_and_verifies_only_the_exact_video(
+    mock_post, mock_get
+):
+    collection_response = MagicMock()
+    collection_response.status_code = 200
+    collection_response.json.return_value = {
+        "result": {
+            "collections": [
+                {"name": "goodq_text_epoch_test"},
+                {"name": "goodq_clip_epoch_test"},
+                {"name": "goodq_text_other_epoch_test"},
+                {"name": "goodq_text_epoch_test_other"},
+            ]
+        }
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "staged",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    update_response = MagicMock()
+    update_response.status_code = 200
+    verified_response = MagicMock()
+    verified_response.status_code = 200
+    verified_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "promoted",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    mock_post.side_effect = [
+        preflight_response,
+        update_response,
+        verified_response,
+        preflight_response,
+        update_response,
+        verified_response,
+    ]
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test",
+        status_val="promoted",
+        video_hash="video-a",
+    )
+
+    assert result["status"] == "ok"
+    assert result["points_verified"] == 2
+    assert result["collections_swept"] == [
+        "goodq_clip_epoch_test",
+        "goodq_text_epoch_test",
+    ]
+    expected_scope_filter = {
+        "must": [
+            {"key": "video_hash", "match": {"value": "video-a"}},
+        ]
+    }
+    expected_mutation_filter = {
+        "must": [
+            {"key": "video_hash", "match": {"value": "video-a"}},
+            {
+                "key": "ucf_promotion_status",
+                "match": {"any": ["staged", "validated", "promoted"]},
+            },
+        ]
+    }
+    for index in (0, 3):
+        assert mock_post.call_args_list[index].kwargs["json"]["filter"] == expected_scope_filter
+    for index in (1, 2, 4, 5):
+        assert mock_post.call_args_list[index].kwargs["json"]["filter"] == expected_mutation_filter
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_promotion_filter_allowlists_nonterminal_sources(mock_post, mock_get):
+    collection_response = MagicMock(status_code=200)
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_text_epoch_test"}]}
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "staged",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    update_response = MagicMock(status_code=200)
+    verified_response = MagicMock(status_code=200)
+    verified_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "promoted",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    mock_post.side_effect = [preflight_response, update_response, verified_response]
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "ok"
+    update_filter = mock_post.call_args_list[1].kwargs["json"]["filter"]
+    lifecycle_match = next(
+        item["match"]["any"]
+        for item in update_filter["must"]
+        if item["key"] == "ucf_promotion_status"
+    )
+    assert lifecycle_match == ["staged", "validated", "promoted"]
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_uses_exact_epoch_collection_for_legacy_audio_payloads(
+    mock_post, mock_get
+):
+    collection_response = MagicMock(status_code=200)
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_audio_epoch_test"}]}
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "audio-point",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "ucf_promotion_status": "staged",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    update_response = MagicMock(status_code=200)
+    verified_response = MagicMock(status_code=200)
+    verified_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "audio-point",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "ucf_promotion_status": "promoted",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    mock_post.side_effect = [preflight_response, update_response, verified_response]
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "ok"
+    assert result["points_verified"] == 1
+    exact_filter = mock_post.call_args_list[0].kwargs["json"]["filter"]
+    assert [entry["key"] for entry in exact_filter["must"]] == ["video_hash"]
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_ignores_configured_epoch_collection_for_another_epoch(
+    mock_post, mock_get
+):
+    collection_response = MagicMock(status_code=200)
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_audio_epoch_old"}]}
+    }
+    mock_get.return_value = collection_response
+    client = MiniAgentClient(
+        profile="safe",
+        config={
+            "qdrant": {
+                "host": "http://qdrant.test",
+                "collections": {"audio": "goodq_audio_epoch_old"},
+            }
+        },
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == "no_epoch_collections"
+    mock_post.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"video_hash": "video-a"},
+        {
+            "video_hash": "video-a",
+            "epoch_id": "epoch-other",
+            "ucf_promotion_status": "staged",
+        },
+    ],
+    ids=["lifecycle-anonymous", "conflicting-epoch"],
+)
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_rejects_invalid_scope_before_mutation(
+    mock_post, mock_get, payload
+):
+    collection_response = MagicMock(status_code=200)
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_text_epoch_test"}]}
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [{"id": "invalid-point", "payload": payload}],
+            "next_page_offset": None,
+        }
+    }
+    mock_post.return_value = preflight_response
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "warning"
+    assert result["failed_collections"] == ["goodq_text_epoch_test"]
+    assert len(mock_post.call_args_list) == 1
+    assert "/points/scroll" in mock_post.call_args_list[0].args[0]
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_reports_unverified_payload_as_failure(mock_post, mock_get):
+    collection_response = MagicMock()
+    collection_response.status_code = 200
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_text_epoch_test"}]}
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "staged",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    update_response = MagicMock()
+    update_response.status_code = 200
+    stale_response = MagicMock()
+    stale_response.status_code = 200
+    stale_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "ucf_promotion_status": "validated",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    mock_post.side_effect = [preflight_response, update_response, stale_response]
+    client = MiniAgentClient(
+        profile="safe", config={"qdrant": {"host": "http://qdrant.test"}}
+    )
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test",
+        status_val="promoted",
+        video_hash="video-a",
+    )
+
+    assert result["status"] == "warning"
+    assert result["points_verified"] == 0
+    assert result["failed_collections"] == ["goodq_text_epoch_test"]
+
+
+@patch("requests.get")
+def test_scope_sync_fails_when_exact_epoch_collections_are_absent(mock_get):
+    response = MagicMock(status_code=200)
+    response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_text_other_epoch_test"}]}
+    }
+    mock_get.return_value = response
+    client = MiniAgentClient(profile="safe")
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == "no_epoch_collections"
+    assert result["points_verified"] == 0
+
+
+@patch("requests.get")
+@patch("requests.post")
+def test_scope_sync_requires_nonzero_readback(mock_post, mock_get):
+    collection_response = MagicMock(status_code=200)
+    collection_response.json.return_value = {
+        "result": {"collections": [{"name": "goodq_text_epoch_test"}]}
+    }
+    mock_get.return_value = collection_response
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": {
+            "points": [
+                {
+                    "id": "point-video-a",
+                    "payload": {
+                        "video_hash": "video-a",
+                        "epoch_id": "epoch_test",
+                        "ucf_promotion_status": "staged",
+                    },
+                }
+            ],
+            "next_page_offset": None,
+        }
+    }
+    update_response = MagicMock(status_code=200)
+    empty_response = MagicMock(status_code=200)
+    empty_response.json.return_value = {
+        "result": {"points": [], "next_page_offset": None}
+    }
+    mock_post.side_effect = [preflight_response, update_response, empty_response]
+    client = MiniAgentClient(profile="safe")
+
+    result = client._sync_qdrant_by_scope(
+        epoch_id="epoch_test", status_val="promoted", video_hash="video-a"
+    )
+
+    assert result["status"] == "warning"
+    assert result["reason"] == "no_scoped_points_verified"
+    assert result["points_verified"] == 0
+
+
+def test_pending_delivery_requires_verified_qdrant_points(tmp_path, monkeypatch):
+    db_path = _create_mock_db_for_test(tmp_path, promotion_status="promoted")
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    conn = sqlite3.connect(str(db_path))
+    client._queue_promotion_qdrant_sync(
+        conn, video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(
+        client,
+        "_sync_ucf_status_to_qdrant",
+        lambda *_args, **_kwargs: {
+            "status": "skipped",
+            "points_attempted": 0,
+            "points_verified": 0,
+            "failed_collections": [],
+        },
+    )
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {
+            "status": "ok",
+            "points_verified": 0,
+            "failed_collections": [],
+        },
+    )
+
+    result = client._deliver_pending_promotion_qdrant_sync(
+        video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+
+    assert result["status"] == "pending"
+    assert result["outbox"]["delivery_state"] == "pending"
+
+
+def test_pending_delivery_reports_durable_cancelled_state(tmp_path, monkeypatch):
+    db_path = _create_mock_db_for_test(tmp_path, promotion_status="promoted")
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    conn = sqlite3.connect(str(db_path))
+    client._queue_promotion_qdrant_sync(
+        conn, video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(
+        client,
+        "_sync_ucf_status_to_qdrant",
+        lambda *_args, **_kwargs: {
+            "status": "ok",
+            "points_attempted": 1,
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {
+            "status": "ok",
+            "points_verified": 1,
+            "failed_collections": [],
+        },
+    )
+    monkeypatch.setattr(
+        client,
+        "_record_promotion_qdrant_attempt",
+        lambda **_kwargs: {"delivery_state": "cancelled", "attempt_count": 0},
+    )
+
+    result = client._deliver_pending_promotion_qdrant_sync(
+        video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+
+    assert result["status"] == "cancelled"
+    assert result["outbox"]["delivery_state"] == "cancelled"
+
+
+def test_supersede_cancels_pending_promotion_outbox(tmp_path, monkeypatch):
+    db_path = _create_mock_db_for_test(tmp_path, promotion_status="promoted")
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_ucf_status_to_qdrant",
+        lambda *_args, **_kwargs: {"status": "ok", "failed_collections": []},
+    )
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {"status": "ok", "failed_collections": []},
+    )
+    monkeypatch.setattr(client, "_dematerialize_active_views", lambda **_kwargs: None)
+    conn = sqlite3.connect(str(db_path))
+    client._queue_promotion_qdrant_sync(
+        conn, video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+    conn.commit()
+    conn.close()
+
+    result, rc = _confirm_tool_directly(
+        client,
+        "supersede_ucf_frames",
+        {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+    )
+
+    assert rc == 0
+    assert result["output"]["superseded_count"] == 1
+    outbox = client._read_promotion_qdrant_outbox(
+        video_hash="vh_test_001", epoch_id="epoch_test"
+    )
+    assert outbox["delivery_state"] == "cancelled"
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "source_status", "tool_args"),
+    [
+        (
+            "reject_ucf_frames",
+            "validated",
+            {
+                "video_hash": "vh_test_001",
+                "epoch_id": "epoch_test",
+                "reason": "wrong-scope fixture",
+            },
+        ),
+        (
+            "supersede_ucf_frames",
+            "promoted",
+            {"video_hash": "vh_test_001", "epoch_id": "epoch_test"},
+        ),
+    ],
+)
+@patch("requests.post")
+def test_terminal_tools_reject_wrong_scope_row_before_mutation(
+    mock_post, tmp_path, monkeypatch, tool_name, source_status, tool_args
+):
+    import uuid
+
+    vector_key = f"{tool_name}-point"
+    point_id = str(
+        uuid.uuid5(
+            uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4"), vector_key
+        )
+    )
+    db_path = _create_mock_db_for_test(
+        tmp_path,
+        source_status,
+        vector_key=vector_key,
+        vector_collection="goodq_clip",
+    )
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    preflight_response = MagicMock(status_code=200)
+    preflight_response.json.return_value = {
+        "result": [
+            {
+                "id": point_id,
+                "payload": {
+                    "video_hash": "another-video",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": source_status,
+                },
+            }
+        ]
+    }
+    mock_post.return_value = preflight_response
+    client = MiniAgentClient(profile="safe")
+    monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_kwargs: {"status": "ok", "failed_collections": []},
+    )
+    monkeypatch.setattr(client, "_dematerialize_active_views", lambda **_kwargs: None)
+
+    result, rc = _confirm_tool_directly(client, tool_name, tool_args)
+
+    assert rc == 0
+    assert result["output"]["qdrant_sync"]["status"] == "warning"
+    assert len(mock_post.call_args_list) == 1
+    assert mock_post.call_args_list[0].args[0].endswith("/points")
+
 
 @patch("requests.post")
 def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, monkeypatch):
+    import uuid
+
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key="vec-key-reject", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"result": {"collections": []}}
-    mock_post.return_value = mock_resp
+    namespace = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+    reject_point_id = str(uuid.uuid5(namespace, "vec-key-reject"))
+    supersede_point_id = str(uuid.uuid5(namespace, "vec-key-supersede"))
+    update_response = MagicMock(status_code=200)
+    reject_preflight_response = MagicMock(status_code=200)
+    reject_preflight_response.json.return_value = {
+        "result": [
+            {
+                "id": reject_point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "validated",
+                },
+            }
+        ]
+    }
+    reject_verify_response = MagicMock(status_code=200)
+    reject_verify_response.json.return_value = {
+        "result": [
+            {
+                "id": reject_point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "rejected",
+                },
+            }
+        ]
+    }
+    supersede_preflight_response = MagicMock(status_code=200)
+    supersede_preflight_response.json.return_value = {
+        "result": [
+            {
+                "id": supersede_point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "promoted",
+                },
+            }
+        ]
+    }
+    supersede_verify_response = MagicMock(status_code=200)
+    supersede_verify_response.json.return_value = {
+        "result": [
+            {
+                "id": supersede_point_id,
+                "payload": {
+                    "video_hash": "vh_test_001",
+                    "epoch_id": "epoch_test",
+                    "ucf_promotion_status": "superseded",
+                },
+            }
+        ]
+    }
+    mock_post.side_effect = [
+        reject_preflight_response,
+        update_response,
+        reject_verify_response,
+        supersede_preflight_response,
+        update_response,
+        supersede_verify_response,
+    ]
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        client,
+        "_sync_qdrant_by_scope",
+        lambda **_: {"status": "skipped", "failed_collections": []},
+    )
 
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "bad resolution"})
     assert rc == 0
@@ -1283,19 +3594,23 @@ def test_reject_and_supersede_sync_their_status_to_qdrant(mock_post, tmp_path, m
     assert res2["output"]["qdrant_sync"]["status"] == "ok"
 
 @patch("steps.common.qdrant_client.QdrantClient.set_payload")
-def test_null_vector_key_frames_skipped_and_qdrant_sync_is_skipped(mock_set_payload, tmp_path, monkeypatch):
+def test_null_vector_key_frames_use_verified_scope_readback(mock_set_payload, tmp_path, monkeypatch):
     db_path = _create_mock_db_for_test(tmp_path, "validated", vector_key=None, vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
     client = MiniAgentClient(profile="safe")
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
+    _allow_verified_promotion_delivery(client, monkeypatch)
 
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     
-    q_sync = res["output"]["qdrant_sync"]
+    output = res["output"]
+    q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is False
     assert q_sync["status"] == "skipped"
+    assert output["scope_sync"]["points_verified"] == 1
+    assert output["outbox"]["delivery_state"] == "complete"
     mock_set_payload.assert_not_called()
 
 # Default filter tests
@@ -1498,7 +3813,7 @@ def test_sanitize_envelope_diverse_inputs():
 
 
 def test_break_glass_gate_for_file_delete(monkeypatch):
-    """Verify that file_delete is blocked in safe/offline profiles unless GOODQ_BREAK_GLASS=1 is set."""
+    """Verify break-glass is necessary but does not replace local confirmation."""
     # 1. Under safe profile without break-glass
     monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
     client_safe = MiniAgentClient(profile="safe")
@@ -1520,8 +3835,9 @@ def test_break_glass_gate_for_file_delete(monkeypatch):
         tool_name="file_delete",
         tool_args={"path": "some_file.json"}
     )
-    assert rc == 0
-    assert envelope["status"] == "ok"
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
 
     # 3. Under offline profile without break-glass
     monkeypatch.delenv("GOODQ_BREAK_GLASS", raising=False)
@@ -1552,4 +3868,910 @@ def test_offline_profile_denies_mutating_operations():
         assert rc == 1, f"Mutating tool {tool} was not blocked under offline profile!"
         assert envelope["status"] == "error"
         assert envelope["errors"][0]["code"] == "offline_blocked"
+
+
+_DIGEST_A = "a" * 64
+_DIGEST_B = "b" * 64
+_CREATE_COLLECTION_SCOPE = {
+    "action_id": "action_1234abcd",
+    "epoch_id": "epoch_2026_07_12_test",
+    "payload_sha256": _DIGEST_A,
+}
+_DELETE_COLLECTION_SCOPE = {
+    "job_id": "job_1234abcd",
+    "epoch_id": "epoch_2026_07_12_test",
+    "collection_id": "col_20260712_120000_deadbeef",
+    "expected_record_sha256": _DIGEST_B,
+}
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_accept_only_exact_privacy_safe_scope(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare one exact summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["confirmation_token"]
+    token_store = json.loads(
+        (tmp_path / operation / "confirmation_tokens.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    stored = next(iter(token_store.values()))
+    assert stored["tool_args"] == scope
+
+
+@pytest.mark.parametrize(
+    ("operation", "invalid_scope"),
+    [
+        ("create_summary_collection", []),
+        ("create_summary_collection", {}),
+        (
+            "create_summary_collection",
+            {"action_id": "action_1234abcd", "epoch_id": "epoch_test"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "raw_payload": "private transcript"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, 7: "non-string field name"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "action_id": " ../action "},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "epoch_id": "epoch/test"},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "action_id": "a" * 103},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "epoch_id": "e" * 129},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": "A" * 64},
+        ),
+        (
+            "create_summary_collection",
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": "a" * 63},
+        ),
+        ("delete_summary_collection", []),
+        ("delete_summary_collection", {}),
+        (
+            "delete_summary_collection",
+            {
+                "job_id": "job_1234abcd",
+                "epoch_id": "epoch_test",
+                "collection_id": "col_one",
+            },
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "confirmation_token": "secret"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "job_id": "job\\one"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "job_id": "j" * 103},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": "../collection"},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": 7},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "expected_record_sha256": "g" * 64},
+        ),
+        (
+            "delete_summary_collection",
+            {**_DELETE_COLLECTION_SCOPE, "expected_record_sha256": "b" * 65},
+        ),
+    ],
+)
+def test_summary_collection_actions_reject_invalid_scope_before_token_issue(
+    operation,
+    invalid_scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / f"invalid-{operation}"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=invalid_scope,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+    audit_path = Path(os.environ["GOODQ_TOOL_AUDIT_LOG"])
+    rows = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[-1]["arguments"] == {"scope_valid": False}
+    serialized = audit_path.read_text(encoding="utf-8")
+    assert "private transcript" not in serialized
+    assert "confirmation_token" not in serialized
+    assert "raw_payload" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope", "changed_scope"),
+    [
+        (
+            "create_summary_collection",
+            _CREATE_COLLECTION_SCOPE,
+            {**_CREATE_COLLECTION_SCOPE, "payload_sha256": _DIGEST_B},
+        ),
+        (
+            "delete_summary_collection",
+            _DELETE_COLLECTION_SCOPE,
+            {**_DELETE_COLLECTION_SCOPE, "collection_id": "col_changed"},
+        ),
+    ],
+)
+def test_summary_collection_action_tokens_are_scope_bound_and_single_use(
+    operation,
+    scope,
+    changed_scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare exact summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatched, mismatch_rc = client.authorize_action(
+        prompt="Reject changed summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=changed_scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert mismatch_rc == 1
+    assert mismatched["errors"][0]["code"] == "token_scope_mismatch"
+
+    confirmed, confirmed_rc = client.authorize_action(
+        prompt="Confirm exact summary collection scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirmed_rc == 0
+    assert confirmed["status"] == "ok"
+
+    reused, reused_rc = client.authorize_action(
+        prompt="Reject reused summary collection token",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert reused_rc == 1
+    assert reused["errors"][0]["code"] == "token_already_used"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_reject_invalid_scope_before_token_claim(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare summary collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    claim = MagicMock(side_effect=AssertionError("invalid scope reached claim"))
+    monkeypatch.setattr(client, "_claim_confirmation_token", claim)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid claim scope",
+        mode="ops",
+        tool_name=operation,
+        tool_args={**scope, "raw_payload": "private transcript"},
+        confirm=True,
+        confirmation_token=requested["result"]["confirmation_token"],
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    claim.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_action_tokens_expire(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / operation
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare expiring collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = "2020-01-01T00:00:00"
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject expired collection action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "token_expired"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_action_claim_is_atomic_across_clients(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / operation))
+    first = MiniAgentClient(profile="safe")
+    second = MiniAgentClient(profile="safe")
+    first.agent_available = True
+    second.agent_available = True
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic collection claim",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait(timeout=10)
+        return client.authorize_action(
+            prompt="Claim atomic collection authority",
+            mode="ops",
+            tool_name=operation,
+            tool_args=dict(scope),
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+@pytest.mark.parametrize(
+    ("operation", "scope"),
+    [
+        ("create_summary_collection", _CREATE_COLLECTION_SCOPE),
+        ("delete_summary_collection", _DELETE_COLLECTION_SCOPE),
+    ],
+)
+def test_summary_collection_actions_are_denied_offline_without_token(
+    operation,
+    scope,
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / operation
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="offline")
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject offline summary collection mutation",
+        mode="ops",
+        tool_name=operation,
+        tool_args=dict(scope),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "offline_blocked"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+_CLEAN_MEMORY_SCOPE = {
+    "job_id": "job_" + "1" * 32,
+    "epoch_id": "epoch_2026_07_13_test",
+    "plan_sha256": "a" * 64,
+    "config_scope_sha256": "b" * 64,
+    "disposition_sha256": "c" * 64,
+    "rollback_sha256": "d" * 64,
+}
+
+
+def _clean_memory_binding(*, seconds=300):
+    deadline = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+        seconds=seconds
+    )
+    return {
+        "authorization_request_id": "clean-auth-request-1",
+        "authorization_expires_at_utc": deadline.isoformat(),
+    }
+
+
+def _clean_memory_client(tmp_path, monkeypatch):
+    agent_home = tmp_path / "clean-memory-agent"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    return client, agent_home
+
+
+def test_clean_memory_apply_contract_declares_exact_logical_scope():
+    contract = _tool_contract("clean_memory.apply")
+    schema = contract["input_schema"]
+
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == set(_CLEAN_MEMORY_SCOPE)
+    assert set(schema["required"]) == set(_CLEAN_MEMORY_SCOPE)
+    assert schema["properties"]["job_id"]["pattern"] == "^job_[0-9a-f]{32}$"
+    assert schema["properties"]["epoch_id"]["maxLength"] == 128
+    for field in (
+        "plan_sha256",
+        "config_scope_sha256",
+        "disposition_sha256",
+        "rollback_sha256",
+    ):
+        assert schema["properties"][field]["pattern"] == "^[0-9a-f]{64}$"
+    assert contract["requires_confirmation"] is True
+    assert contract["allowed_in_modes"] == ["execute"]
+    assert contract["mutability_class"] == "destructive"
+    assert contract["retry_policy"]["max_attempts"] == 1
+
+
+def test_clean_memory_apply_registration_matrix_is_authorization_only():
+    import agents.mini_agent_client as mini_agent_client
+
+    operation = "clean_memory.apply"
+    assert operation in mini_agent_client.MUTATING_DENY_ON_AGENT_FAILURE
+    assert operation in mini_agent_client.LOCAL_CONFIRMATION_REQUIRED_TOOLS
+    assert operation in mini_agent_client.LOCAL_AUTHORIZATION_ONLY_ACTIONS
+    assert operation in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
+    assert operation in mini_agent_client.AUTHORIZATION_SCOPE_VALIDATORS
+    assert operation in mini_agent_client.REDACTED_SCOPE_AUTHORIZATION_ACTIONS
+    assert not hasattr(MiniAgentClient, "_execute_clean_memory_apply")
+    assert not hasattr(MiniAgentClient, "_execute_clean_memory")
+
+
+@pytest.mark.parametrize(
+    "invalid_scope",
+    [
+        [],
+        {},
+        {key: value for key, value in _CLEAN_MEMORY_SCOPE.items() if key != "job_id"},
+        {**_CLEAN_MEMORY_SCOPE, "extra": "private"},
+        {**_CLEAN_MEMORY_SCOPE, "job_id": "job_not_lower_hex"},
+        {**_CLEAN_MEMORY_SCOPE, "epoch_id": "../epoch"},
+        {**_CLEAN_MEMORY_SCOPE, "plan_sha256": "A" * 64},
+        {**_CLEAN_MEMORY_SCOPE, "rollback_sha256": "d" * 63},
+    ],
+)
+def test_clean_memory_apply_rejects_invalid_scope_before_token_issue(
+    invalid_scope,
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid cleanup authority scope",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=invalid_scope,
+        **_clean_memory_binding(),
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [
+        {},
+        {"authorization_request_id": "clean-auth-request-1"},
+        {
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat()
+        },
+        {
+            "authorization_request_id": "../request",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat(),
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": "2026-07-13T18:05:00",
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).replace(microsecond=0).isoformat(),
+        },
+        {
+            "authorization_request_id": "clean-auth-request-1",
+            "authorization_expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(seconds=1200)
+            ).replace(microsecond=0).isoformat(),
+        },
+    ],
+)
+def test_clean_memory_apply_requires_bounded_request_and_deadline_before_issue(
+    binding,
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject invalid cleanup challenge binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_authorization_binding"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+def test_clean_memory_apply_echoes_and_persists_exact_binding(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare exact cleanup authority",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+
+    assert rc == 3
+    assert envelope["status"] == "needs_confirmation"
+    assert envelope["result"]["authorization_request_id"] == binding[
+        "authorization_request_id"
+    ]
+    assert envelope["result"]["authorization_expires_at_utc"] == binding[
+        "authorization_expires_at_utc"
+    ]
+    token = envelope["result"]["confirmation_token"]
+    stored = json.loads(
+        (agent_home / "confirmation_tokens.json").read_text(encoding="utf-8")
+    )[token]
+    assert stored["authorization_request_id"] == binding["authorization_request_id"]
+    assert stored["authorization_expires_at_utc"] == binding[
+        "authorization_expires_at_utc"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("changed_field", "expected_code"),
+    [
+        ("authorization_request_id", "token_request_id_mismatch"),
+        ("authorization_expires_at_utc", "token_deadline_mismatch"),
+    ],
+)
+def test_clean_memory_apply_binding_mismatch_does_not_consume_token(
+    changed_field,
+    expected_code,
+    tmp_path,
+    monkeypatch,
+):
+    client, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare cleanup binding mismatch witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    changed = dict(binding)
+    changed[changed_field] = (
+        "clean-auth-request-2"
+        if changed_field == "authorization_request_id"
+        else (
+            datetime.fromisoformat(binding[changed_field]) + timedelta(seconds=1)
+        ).isoformat()
+    )
+
+    rejected, rejected_rc = client.authorize_action(
+        prompt="Reject changed cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **changed,
+    )
+    assert rejected_rc == 1
+    assert rejected["errors"][0]["code"] == expected_code
+
+    accepted, accepted_rc = client.authorize_action(
+        prompt="Claim exact cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **binding,
+    )
+    assert accepted_rc == 0
+    assert accepted["status"] == "ok"
+
+
+def test_clean_memory_apply_rejects_malformed_stored_binding_without_consuming(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare malformed stored binding witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    del tokens[token]["authorization_request_id"]
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject malformed stored cleanup binding",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        **binding,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token_metadata"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_rejects_future_issued_token_metadata_without_consuming(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare future-issued cleanup metadata witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    forged_issued_at = datetime.now(timezone.utc) + timedelta(days=1)
+    forged_deadline = (forged_issued_at + timedelta(seconds=300)).isoformat()
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = forged_issued_at.replace(tzinfo=None).isoformat()
+    tokens[token]["authorization_expires_at_utc"] = forged_deadline
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject future-issued cleanup token metadata",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        authorization_request_id=binding["authorization_request_id"],
+        authorization_expires_at_utc=forged_deadline,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_confirmation_token_metadata"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_bound_token_uses_absolute_deadline(
+    tmp_path,
+    monkeypatch,
+):
+    client, agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare absolute cleanup deadline witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    expired_deadline = (
+        datetime.now(timezone.utc) - timedelta(seconds=1)
+    ).replace(microsecond=0).isoformat()
+    token_store = agent_home / "confirmation_tokens.json"
+    tokens = json.loads(token_store.read_text(encoding="utf-8"))
+    tokens[token]["timestamp"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=301)
+    ).replace(tzinfo=None, microsecond=0).isoformat()
+    tokens[token]["authorization_expires_at_utc"] = expired_deadline
+    token_store.write_text(json.dumps(tokens), encoding="utf-8")
+
+    envelope, rc = client.authorize_action(
+        prompt="Reject cleanup token at its absolute deadline",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirm=True,
+        confirmation_token=token,
+        authorization_request_id=binding["authorization_request_id"],
+        authorization_expires_at_utc=expired_deadline,
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "token_expired"
+    assert json.loads(token_store.read_text(encoding="utf-8"))[token]["used"] is False
+
+
+def test_clean_memory_apply_claim_is_atomic_across_clients(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    first, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    second = MiniAgentClient(profile="safe")
+    second.agent_available = True
+    binding = _clean_memory_binding()
+    requested, requested_rc = first.authorize_action(
+        prompt="Prepare atomic cleanup claim",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+    barrier = Barrier(2)
+
+    def claim(client):
+        barrier.wait(timeout=10)
+        return client.authorize_action(
+            prompt="Claim exact cleanup authority",
+            mode="ops",
+            tool_name="clean_memory.apply",
+            tool_args=dict(_CLEAN_MEMORY_SCOPE),
+            confirm=True,
+            confirmation_token=token,
+            **binding,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(claim, (first, second)))
+
+    assert sorted(rc for _envelope, rc in results) == [0, 1]
+    rejected = next(envelope for envelope, rc in results if rc == 1)
+    assert rejected["errors"][0]["code"] == "token_already_used"
+
+
+def test_clean_memory_apply_revocation_requires_exact_binding(
+    tmp_path,
+    monkeypatch,
+):
+    client, _agent_home = _clean_memory_client(tmp_path, monkeypatch)
+    binding = _clean_memory_binding()
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare cleanup revocation witness",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        **binding,
+    )
+    assert requested_rc == 3
+    token = requested["result"]["confirmation_token"]
+
+    mismatch, mismatch_rc = client.revoke_action_authorization(
+        prompt="Reject changed cleanup revocation",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirmation_token=token,
+        authorization_request_id="clean-auth-request-2",
+        authorization_expires_at_utc=binding["authorization_expires_at_utc"],
+    )
+    assert mismatch_rc == 1
+    assert mismatch["errors"][0]["code"] == "token_request_id_mismatch"
+
+    revoked, revoked_rc = client.revoke_action_authorization(
+        prompt="Revoke exact cleanup authority",
+        mode="ops",
+        tool_name="clean_memory.apply",
+        tool_args=dict(_CLEAN_MEMORY_SCOPE),
+        confirmation_token=token,
+        **binding,
+    )
+    assert revoked_rc == 0
+    assert revoked["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_status"),
+    [
+        ("clean-memory:" + _CLEAN_MEMORY_SCOPE["job_id"], "recorded"),
+        ("clean-memory:job_" + "2" * 32, "failed"),
+    ],
+)
+def test_clean_memory_apply_external_outcome_requires_exact_logical_target(
+    target,
+    expected_status,
+):
+    client = MiniAgentClient(profile="safe")
+
+    result = client.record_external_execution_outcome(
+        operation="clean_memory.apply",
+        arguments=dict(_CLEAN_MEMORY_SCOPE),
+        request_id="clean-auth-request-1",
+        mode="ops",
+        status="succeeded",
+        return_code=0,
+        duration_ms=25,
+        side_effect_report={"mutated": True, "targets": [target]},
+        error_codes=[],
+    )
+
+    assert result["audit_status"] == expected_status
+    if expected_status == "failed":
+        assert result["error_codes"] == ["invalid_side_effect_report"]
+
+
+def test_legacy_authorization_only_action_keeps_timestamp_token_contract(
+    tmp_path,
+    monkeypatch,
+):
+    agent_home = tmp_path / "legacy-authorization"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"request_id": "request-one", "file_sha256": "a" * 64}
+
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare legacy staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+    )
+
+    assert requested_rc == 3
+    assert "authorization_request_id" not in requested["result"]
+    assert "authorization_expires_at_utc" not in requested["result"]
+    token = requested["result"]["confirmation_token"]
+    stored = json.loads(
+        (agent_home / "confirmation_tokens.json").read_text(encoding="utf-8")
+    )[token]
+    assert set(stored) == {"operation", "timestamp", "used", "tool_args"}
+
+    confirmed, confirmed_rc = client.authorize_action(
+        prompt="Claim legacy staged ingestion request",
+        mode="ops",
+        tool_name="stage_ingest_request",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+    assert confirmed_rc == 0
+    assert confirmed["status"] == "ok"
+
+    import agents.mini_agent_client as mini_agent_client
+
+    assert mini_agent_client.CONFIRMATION_TOKEN_TTL_SECONDS == 600
 

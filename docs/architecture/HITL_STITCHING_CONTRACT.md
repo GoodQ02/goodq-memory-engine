@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: CANONICAL -->
+<!-- DOC_STATUS: AUTHORITATIVE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+
 # HITL Stitching Contract
 
 **Purpose:** Define the mutation, persistence, and evaluation contracts for human-in-the-loop (HITL) identity stitching in GoodQ.
@@ -29,7 +33,9 @@
    * All operator writes require a two-stage transaction:
      1. **Preview (`confirm=false`):** Simulates the mapping addition, checks for existing conflicts, and lists the affected scenes and episodes.
      2. **Commit (`confirm=true`):** Persists the mapping, updates the SQLite graph database, and triggers ledger updates.
-   * The Retro Console and Operator Console v1 remain strictly read-only.
+   * Operator Console v1 remains strictly read-only. Retro Console browsing is
+     read-only except for its explicit governed request-staging pad; that pad
+     does not perform identity mutation or direct ingestion execution.
    * Any mutation UI or stitching features must reside in a clearly separate Identity Stitching workbench.
 
 6. **Rebuild Boundaries:**

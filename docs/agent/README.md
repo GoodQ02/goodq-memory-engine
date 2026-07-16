@@ -1,21 +1,24 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_OFFICE_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # GoodQ4All Agent Office
 
 This directory is the small first-read layer for agents working in GoodQ4All.
-It exists so fresh sessions do not have to infer current truth from long
-basement-era handoff logs.
+It exists so fresh sessions understand the durable project shape before they
+interpret transient status or long basement-era handoff logs.
 
 ## First Read Order
 
-1. `docs/agent/CURRENT_STATE.md` - human-readable current operating state.
-2. `docs/agent/current_state.json` - machine-readable mirror of the same state.
-3. `AGENTS.md` - durable operating protocol and engineering constraints.
-4. `gemini.md` - desktop agent & workstation environment integration guide.
-5. `PLAN.md` - coding agent execution plan (ExecPlan) guidelines.
-6. The canonical contract named by the current task.
+1. `docs/agent/PROJECT_ORIENTATION.md` - timeless multi-root project map,
+   evidence hierarchy, no-repeat preflight, and shift-report practice.
+2. `docs/agent/CURRENT_STATE.md` - human-readable restart snapshot; verify its
+   time-sensitive claims against live evidence.
+3. `docs/agent/current_state.json` - machine-readable mirror of transient state.
+4. `AGENTS.md` - durable operating protocol and engineering constraints.
+5. `gemini.md` - desktop agent and workstation integration guide.
+6. `PLAN.md` - coding agent execution plan (ExecPlan) guidelines.
+7. The canonical contract named by the current task.
 
 ## Active Workflows
 
@@ -25,7 +28,10 @@ basement-era handoff logs.
 
 ## What Lives Here
 
-- `CURRENT_STATE.md`: current pause point, runtime posture, clean-start status, and known non-issues.
+- `PROJECT_ORIENTATION.md`: durable project topology, authority boundaries,
+  no-repeat gate, and incoming/outgoing shift-report format.
+- `CURRENT_STATE.md`: current pause point, runtime posture, clean-start status,
+  and known non-issues; it is intentionally transient.
 - `current_state.json`: compact normalized state for agents and tools.
 - `workflows/`: durable operator runbooks that should stay smaller than the canonical architecture docs.
 - `skills/`: durable developer/operator capability files, prompt drafts, and codebase LLM audit workflows.
@@ -43,6 +49,6 @@ basement-era handoff logs.
 
 ## Maintenance Rule
 
-Update this directory when a fresh agent would otherwise start from stale state
-or investigate a sealed problem first. Keep it concise; link to deeper proof
-instead of copying it.
+Update `PROJECT_ORIENTATION.md` only when durable topology or authority changes.
+Update current-state files when a restart handoff changes. Keep both concise;
+link to deeper proof instead of copying it.

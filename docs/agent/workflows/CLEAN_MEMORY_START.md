@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_RUNBOOK -->
-<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
 
 # Clean Memory Start Workflow
 
@@ -174,7 +174,10 @@ faiss_dir = paths.get('faiss_dir')
 legacy_kg = Path("data/knowledge_graph.db")
 
 # Control agent and recovery databases
-data_root = paths.get('data_root') or "L:/_DATA/GoodQ_Data"
+data_root = paths.get('data_root') or os.environ.get('GOODQ_DATA_ROOT')
+if not data_root:
+    print("[ERROR] GOODQ_DATA_ROOT is not resolved; refusing destructive cleanup.")
+    sys.exit(1)
 control_dbs = [
     Path(data_root) / "control_memory.db",
     Path(data_root) / "recovery.db",

@@ -2810,11 +2810,11 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monke
     res, rc = _confirm_tool_directly(client, "promote_ucf_to_memory", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
     assert rc == 0
     assert res["status"] == "success"
-    
+
     output = res["output"]
     assert output["status"] == "promoted_complete"
     assert output["promoted_count"] == 1
-    
+
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "ok"
@@ -2899,10 +2899,10 @@ def test_promote_qdrant_sync_failure_is_pending_and_visible(mock_post, tmp_path,
     assert rc == 1
     assert res["status"] == "error"
     assert res["errors"][0]["code"] == "promotion_committed_sync_pending"
-    
+
     output = res["output"]
     assert output["status"] == "promotion_committed_sync_pending"
-    
+
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "warning"

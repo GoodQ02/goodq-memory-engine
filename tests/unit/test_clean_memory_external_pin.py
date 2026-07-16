@@ -2187,12 +2187,14 @@ def test_evidence_rejects_invalid_internal_projection(mutator) -> None:
 def test_module_import_loads_no_native_capability(monkeypatch) -> None:
     calls: list[tuple[object, ...]] = []
     monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs: calls.append(args))
-    sys.modules.pop("cli.clean_memory_external_pin", None)
-
-    module = importlib.import_module("cli.clean_memory_external_pin")
-
-    assert module.__all__[0] == "EXTERNAL_PIN_EVIDENCE_SCHEMA"
-    assert calls == []
+    original_module = sys.modules.get("cli.clean_memory_external_pin")
+    try:
+        sys.modules.pop("cli.clean_memory_external_pin", None)
+        module = importlib.import_module("cli.clean_memory_external_pin")
+        assert module.__all__[0] == "EXTERNAL_PIN_EVIDENCE_SCHEMA"
+        assert calls == []
+    finally:
+        sys.modules["cli.clean_memory_external_pin"] = original_module
 
 
 def test_non_windows_rejects_before_native_binding(monkeypatch) -> None:

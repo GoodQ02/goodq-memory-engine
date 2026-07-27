@@ -54,22 +54,31 @@ _SYNTHETIC_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face
 
 
 def _has_wsl_unified_audio_embeddings(item: Dict[str, Any]) -> bool:
+    """Return whether WSL already produced a *persisted CLAP* embedding.
+
+    The unified WSL response also carries a 768-dimensional Wav2Vec2 feature
+    vector.  That is useful audio evidence, but it is not interchangeable with
+    the canonical 512-dimensional CLAP vector and must never suppress the
+    CLAP step merely because generic embeddings are present.
+    """
     if not isinstance(item, dict):
         return False
     if not bool(item.get('wsl2_unified')):
         return False
     if str(item.get('audio_backend_effective') or '').strip().lower() != 'wsl':
         return False
-
-    embeddings = item.get('embeddings')
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        return True
-
-    embeddings_status = str(item.get('embeddings_status') or '').strip().lower()
-    if embeddings_status in {'ok', 'success', 'complete'} and item.get('embedding_dim') is not None:
-        return True
-
-    return False
+    clap_meta = item.get('clap_meta')
+    if not isinstance(clap_meta, dict):
+        return False
+    return (
+        clap_meta.get('status') == 'ok'
+        and clap_meta.get('component') == 'audio_embed_clap'
+        and isinstance(clap_meta.get('embedding_id'), str)
+        and bool(clap_meta.get('embedding_id').strip())
+        and clap_meta.get('qdrant_committed') is True
+        and isinstance(clap_meta.get('qdrant_collection'), str)
+        and bool(clap_meta.get('qdrant_collection').strip())
+    )
 
 
 def _mark_wsl_unified_audio_embed_skip(item: Dict[str, Any]) -> Dict[str, Any]:

@@ -7579,9 +7579,102 @@ def _is_video_phase6_complete(cfg: Dict[str, Any], video_hash: str, processing_d
     return False
 
 
+_INGEST_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
+
+
+def _select_ingest_videos(
+    input_dir: Optional[Path],
+    input_file: Optional[Path],
+) -> tuple[Path, List[Path]]:
+    """Resolve one explicit video or preserve the existing directory glob behavior."""
+    if input_dir is not None and input_file is not None:
+        raise typer.BadParameter("--input-dir and --input-file are mutually exclusive")
+    if input_file is not None:
+        resolved_file = Path(input_file).resolve()
+        if not resolved_file.is_file():
+            raise typer.BadParameter(f"Input file not found: {resolved_file}")
+        if resolved_file.suffix.lower() not in _INGEST_VIDEO_SUFFIXES:
+            raise typer.BadParameter(f"Unsupported input file type: {resolved_file.suffix}")
+        return resolved_file.parent, [resolved_file]
+    if input_dir is None:
+        raise typer.BadParameter("Input directory is required when --input-file is not set")
+    resolved_dir = Path(input_dir).resolve()
+    if not resolved_dir.exists():
+        raise typer.BadParameter(f"Input directory not found: {resolved_dir}")
+    videos: List[Path] = []
+    for pattern in ("*.mp4", "*.mov", "*.mkv", "*.avi", "*.webm"):
+        videos.extend(sorted(resolved_dir.glob(pattern)))
+    return resolved_dir, videos
+
+
+def _filter_scenes_by_index(
+    scenes: List[Dict[str, Any]],
+    scene_start_index: Optional[int],
+    scene_end_index: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Return only the inclusive requested scene-index range."""
+    if scene_start_index is None and scene_end_index is None:
+        return scenes
+    start_idx = scene_start_index if scene_start_index is not None else 0
+    end_idx = scene_end_index if scene_end_index is not None else 10**12
+
+    def scene_index(scene: Dict[str, Any]) -> int:
+        try:
+            return int(scene.get("index"))
+        except (ValueError, TypeError):
+            return -1
+
+    return [scene for scene in scenes if start_idx <= scene_index(scene) <= end_idx]
+
+
+def _parse_scene_indices(scene_indices: Optional[str]) -> Optional[tuple[int, ...]]:
+    """Parse an exact, non-ambiguous scene-index selection for recovery work."""
+    if scene_indices is None:
+        return None
+    values = [value.strip() for value in scene_indices.split(",")]
+    if not values or any(not value for value in values):
+        raise typer.BadParameter("--scene-indices must be a comma-separated list of non-negative integers")
+    try:
+        parsed = tuple(int(value) for value in values)
+    except ValueError as exc:
+        raise typer.BadParameter("--scene-indices must be a comma-separated list of non-negative integers") from exc
+    if any(value < 0 for value in parsed) or len(set(parsed)) != len(parsed):
+        raise typer.BadParameter("--scene-indices must contain unique non-negative integers")
+    return tuple(sorted(parsed))
+
+
+def _filter_scenes_by_selection(
+    scenes: List[Dict[str, Any]],
+    scene_start_index: Optional[int],
+    scene_end_index: Optional[int],
+    scene_indices: Optional[tuple[int, ...]],
+) -> List[Dict[str, Any]]:
+    """Select the exact requested scene set, preserving detector order."""
+    if scene_indices is not None:
+        selected = set(scene_indices)
+        selected_scenes: List[Dict[str, Any]] = []
+        found: set[int] = set()
+        for scene in scenes:
+            try:
+                index = int(scene.get("index"))
+            except (TypeError, ValueError):
+                continue
+            if index in selected:
+                selected_scenes.append(scene)
+                found.add(index)
+        missing = selected - found
+        if missing:
+            raise typer.BadParameter(
+                f"Requested scene indices were not detected: {sorted(missing)}"
+            )
+        return selected_scenes
+    return _filter_scenes_by_index(scenes, scene_start_index, scene_end_index)
+
+
 @APP.command()
 def run(
     input_dir: Optional[Path] = typer.Option(None, help='Directory containing videos to ingest'),
+    input_file: Optional[Path] = typer.Option(None, help='One explicit video file to ingest'),
     output: Optional[Path] = typer.Option(None, help='Path to write JSON results'),
     workspace: Optional[Path] = typer.Option(None, help='Workspace directory for artifacts'),
     max_videos: int = typer.Option(0, help='Maximum number of videos to process (0 = all)'),
@@ -7597,6 +7690,7 @@ def run(
     enable_auto_healing: bool = typer.Option(False, '--enable-auto-healing', help='Enable config mutation/auto-healing'),
     scene_start_index: Optional[int] = typer.Option(None, "--scene-start-index", help="Start processing at this scene index (inclusive)"),
     scene_end_index: Optional[int] = typer.Option(None, "--scene-end-index", help="Stop processing at this scene index (inclusive)"),
+    scene_indices: Optional[str] = typer.Option(None, "--scene-indices", help="Exact comma-separated scene indices to process"),
 ) -> None:
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
@@ -7614,13 +7708,18 @@ def run(
         scene_start_index = getattr(scene_start_index, 'default', None)
     if scene_end_index is not None and not isinstance(scene_end_index, int):
         scene_end_index = getattr(scene_end_index, 'default', None)
+    if scene_indices is not None and not isinstance(scene_indices, str):
+        scene_indices = getattr(scene_indices, 'default', None)
+    if scene_indices is not None and (scene_start_index is not None or scene_end_index is not None):
+        raise typer.BadParameter("--scene-indices is mutually exclusive with --scene-start-index/--scene-end-index")
+    parsed_scene_indices = _parse_scene_indices(scene_indices)
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
     cfg['progressive_chunk_overlap'] = chunk_overlap
     required_runtime_keys: List[str] = []
-    if input_dir is None:
+    if input_dir is None and input_file is None:
         required_runtime_keys.append("import_inbox")
     if output is None:
         required_runtime_keys.append("output_directory")
@@ -7632,7 +7731,10 @@ def run(
         if required_runtime_keys
         else {}
     )
-    input_dir = (input_dir or Path(runtime_paths["import_inbox"])).resolve()
+    resolved_input_dir = input_dir
+    if resolved_input_dir is None and input_file is None:
+        resolved_input_dir = Path(runtime_paths["import_inbox"])
+    input_dir, videos = _select_ingest_videos(resolved_input_dir, input_file)
     output = (
         output
         or (Path(runtime_paths["output_directory"]) / "scene_ingest_results.json")
@@ -7641,9 +7743,6 @@ def run(
         workspace
         or (Path(runtime_paths["processing"]) / "_workspace" / "scene_ingest")
     ).resolve()
-
-    if not input_dir.exists():
-        raise typer.BadParameter(f'Input directory not found: {input_dir}')
 
     _ensure_dir(workspace)
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
@@ -7732,6 +7831,7 @@ def run(
             "pipeline.ingestion",
             metadata={
                 "input_dir": str(input_dir),
+                "input_file": str(input_file.resolve()) if input_file is not None else None,
                 "workspace": str(workspace),
                 "output": str(output),
             },
@@ -7745,10 +7845,6 @@ def run(
 
     ffmpeg = resolve_ffmpeg(cfg) or 'ffmpeg'
 
-    video_patterns = ('*.mp4', '*.mov', '*.mkv', '*.avi', '*.webm')
-    videos: List[Path] = []
-    for pattern in video_patterns:
-        videos.extend(sorted(input_dir.glob(pattern)))
     if not videos:
         typer.echo('No videos found to process.')
         if observer:
@@ -7995,23 +8091,13 @@ def run(
             detection['meta'] = detection_meta
 
         # Apply scene start/end index filtering
-        if scene_start_index is not None or scene_end_index is not None:
-            start_idx = scene_start_index if scene_start_index is not None else 0
-            end_idx = scene_end_index if scene_end_index is not None else 10**12
-            
-            def get_scene_index_value(s: Dict[str, Any]) -> int:
-                val = s.get("index")
-                if val is None:
-                    return -1
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    return -1
-                    
-            scenes = [
-                scene for scene in scenes
-                if start_idx <= get_scene_index_value(scene) <= end_idx
-            ]
+        if scene_start_index is not None or scene_end_index is not None or parsed_scene_indices is not None:
+            scenes = _filter_scenes_by_selection(
+                scenes,
+                scene_start_index,
+                scene_end_index,
+                parsed_scene_indices,
+            )
             
             # Recalculate tracker steps if tracker is present
             if tracker is not None:
@@ -8019,7 +8105,10 @@ def run(
                 tracker.set_total_steps(total_progress_steps)
                 
             if VERBOSE:
-                typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
+                if parsed_scene_indices is not None:
+                    typer.echo(f"[INFO] Filtered scenes to exact indices {list(parsed_scene_indices)}. {len(scenes)} scenes remaining.")
+                else:
+                    typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
 
         # Resolve shadow pipeline overlay settings before the scene loop
         segmentation_shadow_result = _run_segmentation_shadow_pipeline(

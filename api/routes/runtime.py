@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import requests
+from steps.common.qdrant_client import build_qdrant_session
 from fastapi import APIRouter, HTTPException, Query
 
 from api.utils.ingest_requests import is_supported_ingest_path
@@ -292,7 +293,9 @@ def _collect_engine_details() -> Dict[str, Any]:
     }
 
     try:
-        resp = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
+        resp = build_qdrant_session(_qdrant_base_url()).get(
+            f"{_qdrant_base_url()}/collections", timeout=2
+        )
         if resp.status_code == 200:
             collections = resp.json().get("result", {}).get("collections", [])
             engines["qdrant"] = {
@@ -3704,7 +3707,9 @@ def get_memory_stats() -> Dict[str, Any]:
 
     qdrant_info = {"available": False, "collections": 0}
     try:
-        r = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
+        r = build_qdrant_session(_qdrant_base_url()).get(
+            f"{_qdrant_base_url()}/collections", timeout=2
+        )
         if r.status_code == 200:
             colls = r.json().get("result", {}).get("collections", []) or []
             qdrant_info["available"] = True

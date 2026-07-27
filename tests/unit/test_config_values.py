@@ -145,6 +145,50 @@ def test_portable_identity_search_defaults_are_safe_and_evidence_aware():
     }
 
 
+def test_resolved_config_validates_identity_search_without_scripts_path(
+    monkeypatch,
+    capsys,
+):
+    """The canonical loader must validate identity search for every entry point."""
+    scripts_path = str(Path(__file__).resolve().parents[2] / "scripts")
+    original_sys_path = list(sys.path)
+    while scripts_path in sys.path:
+        sys.path.remove(scripts_path)
+    monkeypatch.delitem(sys.modules, "config_schema", raising=False)
+    try:
+        result = load_configs({})
+
+        assert result["identity_search"]["enabled"] is True
+        assert 1 <= result["identity_search"]["candidate_pool_multiplier"] <= 10
+        output = capsys.readouterr().out
+        assert "Config validation failed" not in output
+        assert "Falling back to unvalidated config" not in output
+    finally:
+        sys.path[:] = original_sys_path
+
+
+def test_identity_search_schema_rejects_invalid_evidence_ranking_values():
+    scripts_path = str(Path(__file__).resolve().parents[2] / "scripts")
+    inserted = False
+    if scripts_path not in sys.path:
+        sys.path.insert(0, scripts_path)
+        inserted = True
+    try:
+        from config_schema import GoodQConfig
+
+        resolved = load_configs({})
+        invalid = dict(resolved)
+        invalid["identity_search"] = {
+            **resolved["identity_search"],
+            "mention_score_boost": 0.21,
+        }
+        with pytest.raises(ValueError, match="mention_score_boost"):
+            GoodQConfig.model_validate(invalid)
+    finally:
+        if inserted:
+            sys.path.remove(scripts_path)
+
+
 def test_tracked_configuration_surface_has_no_literal_drive_roots():
     config_dir = Path(__file__).resolve().parents[2] / "configs"
     violations = []

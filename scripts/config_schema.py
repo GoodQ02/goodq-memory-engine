@@ -396,6 +396,37 @@ class MemoryConfigSection(BaseModel):
 
 
 # ============================================================================
+# CURATED IDENTITY SEARCH
+# ============================================================================
+class IdentitySearchConfig(BaseModel):
+    """Validated controls for the evidence-aware identity retrieval layer."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    roster_path: str
+    kg_db_path: str
+    appearance_score_boost: float = Field(default=0.2, ge=0.0, le=1.0)
+    mention_score_boost: float = Field(default=0.05, ge=0.0, le=1.0)
+    candidate_pool_multiplier: int = Field(default=5, ge=1, le=10)
+    appearance_injection_limit: int = Field(default=1, ge=0, le=3)
+
+    @field_validator("mention_score_boost")
+    @classmethod
+    def mention_boost_cannot_exceed_appearance_boost(
+        cls,
+        value: float,
+        info: Any,
+    ) -> float:
+        appearance_boost = info.data.get("appearance_score_boost")
+        if appearance_boost is not None and value > appearance_boost:
+            raise ValueError(
+                "mention_score_boost must not exceed appearance_score_boost"
+            )
+        return value
+
+
+# ============================================================================
 # ROOT CONFIG
 # ============================================================================
 class GoodQConfig(BaseModel):
@@ -425,6 +456,7 @@ class GoodQConfig(BaseModel):
     logging: LoggingConfig
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     memory: Optional[MemoryConfigSection] = None
+    identity_search: Optional[IdentitySearchConfig] = None
     ingestion_isolation: Optional[bool] = None
 
     @field_validator("memory", mode="before")

@@ -7,6 +7,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(errors="replace")
 
 import logging
+import importlib.util
 import os
 import json
 import re
@@ -227,6 +228,35 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
             base[key] = value
 
 
+def _load_goodq_config_schema() -> Any:
+    """Load the canonical schema without depending on caller ``sys.path``."""
+    try:
+        from config_schema import GoodQConfig
+
+        return GoodQConfig
+    except ModuleNotFoundError as exc:
+        if exc.name != "config_schema":
+            raise
+
+    schema_path = Path(__file__).resolve().parents[2] / "scripts" / "config_schema.py"
+    module_name = "_goodq_config_schema"
+    existing_module = sys.modules.get(module_name)
+    if existing_module is not None:
+        return existing_module.GoodQConfig
+
+    spec = importlib.util.spec_from_file_location(module_name, schema_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load canonical config schema: {schema_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return module.GoodQConfig
+
+
 CANONICAL_RUNTIME_PATH_KEYS = (
     "data_root",
     "import_inbox",
@@ -337,9 +367,10 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
             except Exception as e:
                 print(f"[WARN] Failed to load runtime_config.json: {e}")
     
-    # Validate against Pydantic schema (optional - graceful degradation)
+    # Validate against Pydantic schema.  Resolve it relative to this module so
+    # entry-point-specific PYTHONPATH values cannot silently disable validation.
     try:
-        from config_schema import GoodQConfig
+        GoodQConfig = _load_goodq_config_schema()
         validated = GoodQConfig.model_validate(raw_cfg)
         return validated.model_dump()
     except ImportError:

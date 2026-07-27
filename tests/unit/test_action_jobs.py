@@ -1085,6 +1085,85 @@ def test_compare_and_update_rejects_stale_state_without_modification(tmp_path):
     assert ledger.load(authorizing["job_id"]) == authorizing
 
 
+def test_compare_and_update_registers_complete_child_pair_for_exact_owner(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    running = _record_in_state(ledger, "running", owner_instance="api-owner")
+
+    updated = ledger.compare_and_update(
+        running["job_id"],
+        expected_state="running",
+        expected_owner_instance="api-owner",
+        child_pid=4321,
+        child_start_token="abc123",
+    )
+
+    assert updated["state"] == "running"
+    assert updated["owner_instance"] == "api-owner"
+    assert updated["child_pid"] == 4321
+    assert updated["child_start_token"] == "abc123"
+    assert ledger.load(running["job_id"]) == updated
+
+
+@pytest.mark.parametrize(
+    ("expected_state", "expected_owner", "message"),
+    [
+        ("queued", "api-owner", "found running"),
+        ("running", "api-stale", "owner"),
+    ],
+)
+def test_compare_and_update_child_registration_rejects_stale_state_or_owner_byte_for_byte(
+    expected_state,
+    expected_owner,
+    message,
+    tmp_path,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    running = _record_in_state(ledger, "running", owner_instance="api-owner")
+    record_path = ledger.record_path(running["job_id"])
+    before = record_path.read_bytes()
+
+    with pytest.raises(action_jobs.StaleTransitionError, match=message):
+        ledger.compare_and_update(
+            running["job_id"],
+            expected_state=expected_state,
+            expected_owner_instance=expected_owner,
+            child_pid=4321,
+            child_start_token="abc123",
+        )
+
+    assert record_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"child_pid": 4321},
+        {"child_start_token": "abc123"},
+        {"child_pid": True, "child_start_token": "abc123"},
+        {"child_pid": 0, "child_start_token": "abc123"},
+        {"child_pid": 4321, "child_start_token": "not safe"},
+    ],
+)
+def test_compare_and_update_rejects_malformed_child_registration_without_mutation(
+    updates,
+    tmp_path,
+):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    running = _record_in_state(ledger, "running", owner_instance="api-owner")
+    record_path = ledger.record_path(running["job_id"])
+    before = record_path.read_bytes()
+
+    with pytest.raises(ValueError):
+        ledger.compare_and_update(
+            running["job_id"],
+            expected_state="running",
+            expected_owner_instance="api-owner",
+            **updates,
+        )
+
+    assert record_path.read_bytes() == before
+
+
 def test_compare_and_update_never_modifies_terminal_record(tmp_path):
     ledger = ActionJobLedger(tmp_path / "jobs")
     pending = _record_in_state(ledger, "pending_confirmation")

@@ -179,7 +179,7 @@
     ui.unstitchedCount.textContent = filtered.length;
     
     if (filtered.length === 0) {
-      ui.unstitchedList.innerHTML = `<div class="empty-state">No unstitched patterns found.</div>`;
+      ui.unstitchedList.innerHTML = `<div class="empty-state">No speaker-pattern evidence exists in the active epoch.<br><span class="muted">Roster validation does not create speaker patterns; this page only maps recurring voice-pattern evidence already present in the knowledge graph.</span></div>`;
       return;
     }
     

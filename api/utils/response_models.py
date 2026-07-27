@@ -88,6 +88,11 @@ class SceneResponse(BaseModel):
 class SearchResult(BaseModel):
     """Search result with score and metadata."""
     score: float
+    vector_score: Optional[float] = None
+    identity_boost: float = 0.0
+    identity_match: Optional[str] = None
+    identity_evidence: List[Dict[str, Any]] = Field(default_factory=list)
+    identity_only: bool = False
     modality: str
     modalities: List[str] = Field(default_factory=list)
     modality_scores: Dict[str, float] = Field(default_factory=dict)
@@ -394,6 +399,7 @@ class StitchRequest(BaseModel):
     target_person_name: str
     confirm: bool = False
     operator_note: Optional[str] = None
+    confirmation_token: Optional[str] = Field(None)
 
 
 class StitchResponse(BaseModel):
@@ -409,6 +415,7 @@ class StitchRevokeRequest(BaseModel):
     mapping_id: Optional[str] = None
     source_node_name: Optional[str] = None
     operator_note: Optional[str] = None
+    confirmation_token: Optional[str] = Field(None)
 
 
 class StitchRevokeResponse(BaseModel):

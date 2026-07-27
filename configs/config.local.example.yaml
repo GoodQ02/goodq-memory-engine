@@ -49,3 +49,12 @@ tts:
 home_assistant:
   url: ${GOODQ_HOME_ASSISTANT_URL:-http://localhost:8123}
   token: ${HA_TOKEN:-}
+
+identity_search:
+  enabled: false
+  roster_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/identity/family_roster.yaml
+  kg_db_path: ${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/${GOODQ_EPOCH_ID:-default}/knowledge_graph.db
+  appearance_score_boost: 0.2
+  mention_score_boost: 0.05
+  candidate_pool_multiplier: 5
+  appearance_injection_limit: 1

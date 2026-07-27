@@ -111,7 +111,6 @@
   });
 
   const diagnosticEndpointNames = new Set(["engines", "gpu", "wsl", "queue"]);
-  const optionalEndpointNames = new Set(["envelope"]);
   const operatorTargetIds = new Set(["overview", "runs", "surfaces", "diagnostics", "storage-panel", "memory", "evidence"]);
   const endpointTimeoutMs = {
     status: 30000,
@@ -559,6 +558,16 @@
         ? "high memory with low utilization; likely model/runtime reservation before a long run"
         : "GPU memory pressure is visible before ingestion",
       kind: reservedIdle ? "warn" : "info",
+    };
+  }
+
+  function normalizeGpuStats(gpu) {
+    const source = gpu || {};
+    return {
+      ...source,
+      utilization_percent: numberValue(source.utilization_percent ?? source.gpu_utilization),
+      memory_used_mb: numberValue(source.memory_used_mb ?? source.gpu_memory_used),
+      memory_total_mb: numberValue(source.memory_total_mb ?? source.gpu_memory_total),
     };
   }
 
@@ -1015,9 +1024,7 @@
     state.errors = {};
     renderLoadingShell();
 
-    const entries = Object.entries(endpoints).filter(
-      ([name]) => !diagnosticEndpointNames.has(name) && !optionalEndpointNames.has(name)
-    );
+    const entries = Object.entries(endpoints).filter(([name]) => !diagnosticEndpointNames.has(name));
     const diagnosticEntries = Object.entries(endpoints).filter(([name]) => diagnosticEndpointNames.has(name));
     diagnosticEntries.forEach(([name]) => {
       state.data[name] = null;
@@ -1535,6 +1542,7 @@
     const runStatus = String(evidenceRun.status || runPreview.status || latestEpisode.status || "").toLowerCase();
     const runScenes = numberValue(evidenceRun.scenes_processed ?? latestEpisode.scene_count ?? temporal.total_scenes ?? runPreview.scenes_processed);
     const stepRows = numberValue(steps.row_count);
+    const globalStepRows = numberValue(steps.global_ledger?.row_count);
     const okSteps = numberValue(statusCounts.ok);
     const skippedSteps = numberValue(steps.skipped_count ?? latestEpisode.step_skipped_count);
     const failedSteps = numberValue(steps.failed_count ?? latestEpisode.step_failed_count);
@@ -1923,7 +1931,9 @@
     const runScope = evidenceRun.scope || run.scope || "";
     const runKind = evidenceRun.run_kind || run.run_kind || "";
     const standaloneSceneScope = runScope === "scene_ingest_results" || runKind === "standalone_scene_results";
+    const directIngestScope = runScope === "direct_ingest_fallback";
     const artifacts = evidence.artifact_presence || {};
+    const artifactSources = evidence.artifact_sources || {};
     const steps = evidence.step_runs || {};
     const temporal = evidence.temporal_index || {};
     const sentiment = evidence.sentiment || {};
@@ -1965,11 +1975,15 @@
       ? `${provenanceCapablePoints} provenance-capable payloads across ${runTaggedAudioRuns || 0} run-tagged runs`
       : audioProvenance.impact || "Separate Qdrant inventory not exposed";
     const sceneResultsFallbackNote = sentiment.source === "scene_ingest_results" ? "Scene results fallback" : "";
-    const stepLedgerMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
+    const stepLedgerMissingLabel = directIngestScope && artifactSources.step_runs?.status === "unbound_global_ledger"
+      ? "Global ledger not bound"
+      : standaloneSceneScope ? "Standalone scope" : "Not observed";
     const temporalMissingLabel = standaloneSceneScope ? "Standalone scope" : "Not observed";
-    const stepLedgerMissingNote = standaloneSceneScope
-      ? "Direct scene probes do not generate wrapper step ledgers."
-      : "step_runs.jsonl missing or unreadable";
+    const stepLedgerMissingNote = directIngestScope && artifactSources.step_runs?.status === "unbound_global_ledger"
+      ? `${globalStepRows !== null ? `${globalStepRows} global rows observed` : "Global ledger observed"}; run binding is owned by ${safeString(artifactSources.step_runs?.remediation_owner || "ingest_run_index", "remediation_owner")}.`
+      : standaloneSceneScope
+        ? "Direct scene probes do not generate wrapper step ledgers."
+        : "step_runs.jsonl missing or unreadable";
     const temporalMissingNote = standaloneSceneScope
       ? "Direct scene probes do not generate temporal indexes."
       : "temporal_index.json missing or unreadable";
@@ -1982,7 +1996,7 @@
     const proofRows = [
       {
         label: "Step run ledger",
-        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", stepLedgerMissingLabel, stepRows !== null ? evidenceNote(stepRows, "rows") : standaloneSceneScope ? "Standalone scene probe" : "", standaloneSceneScope ? "historical" : "warn"),
+        state: proofState(artifacts.step_runs_jsonl === true && hasOkStatus(steps.status), "Observed", stepLedgerMissingLabel, stepRows !== null ? evidenceNote(stepRows, "rows") : directIngestScope ? stepLedgerMissingNote : standaloneSceneScope ? "Standalone scene probe" : "", standaloneSceneScope ? "historical" : "warn"),
         missingNote: stepLedgerMissingNote,
       },
       {
@@ -1992,8 +2006,8 @@
       },
       {
         label: "Scene ingest results",
-        state: proofState(artifacts.scene_ingest_results_json === true, "Observed", "Not observed", "scene_ingest_results.json", "warn"),
-        missingNote: "scene_ingest_results.json missing",
+        state: proofState(artifacts.scene_ingest_results_json === true || artifacts.direct_ingest_results_json === true, "Observed", "Not observed", artifacts.direct_ingest_results_json === true ? "direct-ingest results source" : "scene_ingest_results.json", "warn"),
+        missingNote: directIngestScope ? "Direct-ingest results source was not readable." : "scene_ingest_results.json missing",
       },
       {
         label: "Scene context LLM",
@@ -2691,7 +2705,10 @@
     const entityEvidence = evidence.entity_evidence || {};
 
     node.appendChild(panelHeader("Evidence surfaces", "Sanitized artifact presence and step history", evidence.available ? "read-only" : "offline"));
-    renderKv(node, evidence.artifact_presence || {}, ["step_runs_jsonl", "temporal_index_json", "scene_ingest_results_json"]);
+    renderKv(node, evidence.artifact_presence || {}, ["step_runs_jsonl", "temporal_index_json", "scene_ingest_results_json", "direct_ingest_results_json"]);
+    if (evidence.artifact_sources) {
+      renderKv(node, evidence.artifact_sources, ["scene_results", "temporal_index", "step_runs"]);
+    }
     appendIndicatorStrip(
       node,
       [
@@ -2722,7 +2739,7 @@
       "Home-memory labels and transcript snippets stay local; redact before sharing public screenshots.",
       "panel-subtitle"
     );
-    renderKv(node, stepRuns, ["status", "row_count", "recent_count", "failed_count", "warning_count", "latest_ts_utc"]);
+    renderKv(node, stepRuns, ["status", "current_run_bound", "row_count", "recent_count", "failed_count", "warning_count", "latest_ts_utc", "binding"]);
     renderKv(node, runtimeStepErrors, ["status", "event_count", "recovered_count", "terminal_count", "native_error_count", "native_recovered_count"]);
     renderMiniList(node, "Top step activity", stepRuns.top_steps, "step", "count");
     renderMiniList(node, "Recovered step errors", runtimeStepErrors.recent, "step", "category");
@@ -2899,7 +2916,7 @@
     if (state.errors.gpu) {
       appendInlineError(node, `GPU stats unavailable: ${state.errors.gpu}`);
     } else {
-      const gpu = state.data.gpu || state.data.status?.gpu || {};
+      const gpu = normalizeGpuStats(state.data.gpu || state.data.status?.gpu || {});
       appendText(node, "h3", "GPU", "panel-subtitle");
       appendIndicatorStrip(
         node,
@@ -2920,11 +2937,8 @@
         "available",
         "name",
         "utilization_percent",
-        "gpu_utilization",
         "memory_used_mb",
-        "gpu_memory_used",
         "memory_total_mb",
-        "gpu_memory_total",
         "memory_percent",
         "temperature_c",
       ]);
@@ -2957,6 +2971,8 @@
         "faster_whisper",
         "cuda_version",
         "driver_version",
+        "gpu_probe_status",
+        "gpu_probe_reason",
       ]);
     }
 
@@ -3293,6 +3309,23 @@
       strip.appendChild(chip);
     });
     container.appendChild(strip);
+  }
+
+  function appendIdentityEvidenceBadge(container, result) {
+    if (!container || !result || !Array.isArray(result.identity_evidence) || !result.identity_evidence.length) return;
+    const appearance = result.identity_match === "appearance";
+    const chip = document.createElement("span");
+    chip.className = `retrieval-identity-chip ${appearance ? "appearance" : "mention"}`;
+    chip.textContent = appearance
+      ? "Identity: face-backed appearance"
+      : "Identity: transcript mention only";
+    const names = result.identity_evidence
+      .map((item) => safeString(item && item.display_name, "identity_display_name"))
+      .filter(Boolean);
+    chip.title = names.length
+      ? `${[...new Set(names)].join(", ")} | ${appearance ? "visual candidate evidence" : "mentioned, not visually confirmed"}`
+      : (appearance ? "Visual candidate identity evidence" : "Mentioned, not visually confirmed");
+    container.appendChild(chip);
   }
 
   function renderRetrievalModalitySelector() {
@@ -4285,6 +4318,7 @@
       );
       appendText(label, "span", resultSummary(result), "retrieval-result-summary");
       appendRetrievalContributionStrip(label, result);
+      appendIdentityEvidenceBadge(label, result);
       row.appendChild(label);
       const percent = scorePercent(result);
       const status = document.createElement("div");
@@ -5869,15 +5903,21 @@
   function renderEvidence() {
     const node = qs("#evidence-panel");
     clear(node);
-    const hasEnvelope = valueObserved(state.data.envelope && state.data.envelope.envelope);
+    const envelope = state.data.envelope || {};
+    const hasEnvelope = valueObserved(envelope.envelope);
+    const envelopeState = hasEnvelope ? "ready" : safeString(envelope.status || "unavailable", "envelope_status");
     node.appendChild(
-      panelHeader("Justification Channel", "Literal envelope renderer", hasEnvelope ? "ready" : "not configured")
+      panelHeader("Justification Channel", "Literal envelope renderer", envelopeState)
     );
 
     const info = document.createElement("div");
     info.className = "kv-list";
     const rows = [
-      ["Envelope endpoint", hasEnvelope ? "/api/read/envelope" : "not configured"],
+      ["Envelope endpoint", "/api/read/envelope"],
+      ["State", envelopeState],
+      ["Reason", hasEnvelope ? "observed" : safeString(envelope.reason || state.errors.envelope || "not returned", "envelope_reason")],
+      ["Remediation owner", hasEnvelope ? "not required" : safeString(envelope.remediation_owner || "not declared", "remediation_owner")],
+      ["Remediation", hasEnvelope ? "not required" : safeString(envelope.remediation || "not declared", "remediation")],
       ["Source mode", "explicit read-only API"],
       ["Mutation boundary", "no actions, no commands, no ingestion triggers"],
     ];

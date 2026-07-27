@@ -80,6 +80,28 @@ def create_test_db(db_path: Path):
         )
 
 
+
+
+@pytest.fixture(autouse=True)
+def bypass_miniagent_confirmation(monkeypatch):
+    """Bypass MiniAgent confirmation gate so HITL tests exercise stitch behavior, not the gate."""
+    _ok_envelope = {
+        "status": "ok",
+        "request_id": "req-" + "b" * 16,
+        "result": {"allowed": True},
+        "errors": [],
+    }
+
+    class _BypassAuthority:
+        def authorize_action(self, **kwargs):
+            return _ok_envelope, 0
+
+        def record_external_execution_outcome(self, **kwargs):
+            return {"audit_status": "recorded", "error_codes": []}
+
+    monkeypatch.setattr("api.routes.system.MiniAgentClient", lambda **_kw: _BypassAuthority())
+
+
 def test_manual_mappings_load_save(tmp_path: Path) -> None:
     db_path = tmp_path / "knowledge_graph.db"
     

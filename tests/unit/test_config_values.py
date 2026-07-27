@@ -107,6 +107,42 @@ def test_local_override_template_covers_private_authority_fields():
     assert template["home_assistant"]["url"].startswith(
         "${GOODQ_HOME_ASSISTANT_URL:-"
     )
+    assert template["identity_search"] == {
+        "enabled": False,
+        "roster_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/identity/"
+            "family_roster.yaml"
+        ),
+        "kg_db_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/"
+            "${GOODQ_EPOCH_ID:-default}/knowledge_graph.db"
+        ),
+        "appearance_score_boost": 0.2,
+        "mention_score_boost": 0.05,
+        "candidate_pool_multiplier": 5,
+        "appearance_injection_limit": 1,
+    }
+
+
+def test_portable_identity_search_defaults_are_safe_and_evidence_aware():
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "config.yaml"
+    tracked = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert tracked["identity_search"] == {
+        "enabled": False,
+        "roster_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/identity/"
+            "family_roster.yaml"
+        ),
+        "kg_db_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/"
+            "${GOODQ_EPOCH_ID:-default}/knowledge_graph.db"
+        ),
+        "appearance_score_boost": 0.2,
+        "mention_score_boost": 0.05,
+        "candidate_pool_multiplier": 5,
+        "appearance_injection_limit": 1,
+    }
 
 
 def test_tracked_configuration_surface_has_no_literal_drive_roots():
@@ -420,6 +456,24 @@ def test_load_configs_runtime_config_merge(monkeypatch, tmp_path):
     result = load_configs({})
     assert result.get("qdrant", {}).get("port") == 6399
     assert result.get("qdrant", {}).get("host") == "192.168.1.100"
+
+
+def test_epoch_environment_binding_projects_one_runtime_authority(monkeypatch, tmp_path):
+    epoch_id = "epoch_read_authority"
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("GOODQ_EPOCH_ID", epoch_id)
+
+    result = load_configs({})
+
+    assert Path(result["paths"]["db_path"]).parent.name == epoch_id
+    assert Path(result["paths"]["processing"]).name == "processing"
+    assert Path(result["paths"]["processing"]).parent.name == epoch_id
+    assert result["qdrant"]["collections"] == {
+        "clip": f"goodq_clip_{epoch_id}",
+        "dino": f"goodq_dino_{epoch_id}",
+        "text": f"goodq_text_{epoch_id}",
+        "audio": f"goodq_audio_{epoch_id}",
+    }
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1297**
+Indexed active tracked paths: **1309**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -331,6 +331,7 @@ Indexed active tracked paths: **1297**
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -1073,6 +1074,7 @@ Indexed active tracked paths: **1297**
 | `/tests/unit/test_bootstrap_install_wsl.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_models_resilience.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_verify_model_cache.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_build_face_clusters_start_gate.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
@@ -1115,7 +1117,15 @@ Indexed active tracked paths: **1297**
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_ledger.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_mutation_confirmation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_process_confirmation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_process_recovery.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_roster_writes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_routes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_workbench_behavior.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_workbench_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_image_embed_dino_diagnostics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_image_ocr_observability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_request_ledger.py` | Verification | Test, fixture, or verification asset. |
@@ -1126,6 +1136,7 @@ Indexed active tracked paths: **1297**
 | `/tests/unit/test_ingestion_isolation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_installer_paths.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_kg_realtime_relationship_enrichment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_knowledge_graph_readonly.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_legacy_wsl_audio_bridge_compat.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_llm_client_activation_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_media_containment_hardening.py` | Verification | Test, fixture, or verification asset. |
@@ -1203,6 +1214,7 @@ Indexed active tracked paths: **1297**
 | `/tests/unit/test_summary_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_engine_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_route_policy.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_system_stitch_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tag_utils_taxonomy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_llm_enhanced_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_semantic_quality.py` | Verification | Test, fixture, or verification asset. |

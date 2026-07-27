@@ -1237,6 +1237,7 @@ def test_windows_native_trace_opens_only_drive_root_by_path(
         def __init__(self) -> None:
             self.root_paths: list[str] = []
             self.opened_ids: list[int | bytes] = []
+            self.enum_cache: dict[object, tuple] = {}
 
         def __enter__(self):
             native.__enter__()
@@ -1252,6 +1253,11 @@ def test_windows_native_trace_opens_only_drive_root_by_path(
         def open_by_id(self, volume_handle, entry, *, directory: bool):
             self.opened_ids.append(entry.file_id)
             return native.open_by_id(volume_handle, entry, directory=directory)
+
+        def enumerate_directory(self, handle: object, filesystem: str):
+            if handle not in self.enum_cache:
+                self.enum_cache[handle] = native.enumerate_directory(handle, filesystem)
+            return self.enum_cache[handle]
 
         def __getattr__(self, name: str):
             return getattr(native, name)

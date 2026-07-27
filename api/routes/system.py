@@ -33,6 +33,9 @@ from api.utils.media_projection import thumbnail_projection
 
 logger = logging.getLogger(__name__)
 
+from agents.mini_agent_client import MiniAgentClient
+from lib.identity_ledger import build_identity_ledger, write_identity_ledger_markdown, load_manual_mappings, save_manual_mappings
+
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 _data_loader = None
@@ -329,10 +332,11 @@ async def get_unstitched_patterns():
     from lib.knowledge_graph import KnowledgeGraph
     
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+        logger.error("Knowledge graph database not found (unstitched): %s", db_path)
+        raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
-        with KnowledgeGraph(str(db_path)) as kg:
+        with KnowledgeGraph(str(db_path), read_only=True) as kg:
             cur = kg.conn.cursor()
             rows = cur.execute(
                 """
@@ -388,8 +392,8 @@ async def get_unstitched_patterns():
                 )
             return results
     except Exception as e:
-        logger.error(f"Failed to get unstitched patterns: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to get unstitched patterns: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="stitch_failed")
 
 
 @router.post("/identity/stitch/preview", response_model=StitchPreviewResponse)
@@ -399,10 +403,11 @@ async def preview_stitch(request: StitchPreviewRequest):
     from lib.knowledge_graph import KnowledgeGraph
     
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+        logger.error("Knowledge graph database not found (preview): %s", db_path)
+        raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
-        with KnowledgeGraph(str(db_path)) as kg:
+        with KnowledgeGraph(str(db_path), read_only=True) as kg:
             cur = kg.conn.cursor()
             
             # Find the source pattern id
@@ -412,10 +417,10 @@ async def preview_stitch(request: StitchPreviewRequest):
             ).fetchone()
             
             if not source_row:
-                raise HTTPException(status_code=404, detail=f"Source speaker pattern not found: {request.source_node_name}")
-                
+                raise HTTPException(status_code=404, detail="speaker_pattern_not_found")
+
             source_id = int(source_row["id"])
-            
+
             # Calculate affected scenes and episodes
             counts_row = cur.execute(
                 """
@@ -464,8 +469,8 @@ async def preview_stitch(request: StitchPreviewRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to preview stitch: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to preview stitch: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="stitch_preview_failed")
 
 
 @router.post("/identity/stitch", response_model=StitchResponse)
@@ -474,13 +479,32 @@ async def execute_stitch(request: StitchRequest):
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Explicit confirmation required. Call /preview first.")
         
+    import time as _time
+    _start = _time.time()
+    authority = MiniAgentClient(profile="safe")
+    tool_args = {
+        "source_node_name": request.source_node_name,
+        "target_person_name": request.target_person_name,
+    }
+    _result, _code = authority.authorize_action(
+        prompt="Confirm identity stitch operation",
+        mode="ops",
+        tool_name="identity.execute_stitch",
+        tool_args=tool_args,
+        confirm=bool(request.confirmation_token),
+        confirmation_token=request.confirmation_token or "",
+    )
+    if _code != 0:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=403, content=_result)
+
     db_path = _get_kg_db_path()
     from lib.knowledge_graph import KnowledgeGraph
-    from lib.identity_ledger import load_manual_mappings, save_manual_mappings, build_identity_ledger
     import sqlite3
     
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+        logger.error("Knowledge graph database not found (stitch): %s", db_path)
+        raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
         with KnowledgeGraph(str(db_path)) as kg:
@@ -493,7 +517,7 @@ async def execute_stitch(request: StitchRequest):
             ).fetchone()
             
             if not source_row:
-                raise HTTPException(status_code=404, detail=f"Source speaker pattern not found: {request.source_node_name}")
+                raise HTTPException(status_code=404, detail="speaker_pattern_not_found")
                 
             source_id = int(source_row["id"])
             
@@ -597,41 +621,68 @@ async def execute_stitch(request: StitchRequest):
             from lib.identity_ledger import write_identity_ledger_markdown
             write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
             
-            return StitchResponse(
+            _response = StitchResponse(
                 success=True,
                 message=f"Successfully stitched {request.source_node_name} to {request.target_person_name}.",
                 mapping_id=mapping_id,
                 edge_id=edge_id
             )
-    except HTTPException:
-        raise
+            _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
+            authority.record_external_execution_outcome(
+                operation="identity.execute_stitch",
+                arguments=tool_args,
+                request_id=_request_id or "",
+                mode="ops",
+                status="succeeded",
+                return_code=0,
+                duration_ms=int((_time.time() - _start) * 1000),
+                side_effect_report={"mutated": True, "targets": [str(db_path), "manual_identity_mappings.json"]},
+            )
+            return _response
     except Exception as e:
-        logger.error(f"Failed to execute stitch: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to execute stitch: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="stitch_execute_failed")
 
 
 @router.get("/identity/mappings", response_model=ManualMappingsResponse)
 async def get_manual_mappings():
     """Get all manual mappings stored in manual_identity_mappings.json."""
     db_path = _get_kg_db_path()
-    from lib.identity_ledger import load_manual_mappings
     try:
         data = load_manual_mappings(db_path)
         return data
     except Exception as e:
-        logger.error(f"Failed to load manual mappings: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to load manual mappings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="mappings_load_failed")
 
 
 @router.post("/identity/stitch/revoke", response_model=StitchRevokeResponse)
 async def revoke_stitch(request: StitchRevokeRequest):
     """Revoke a manual identity mapping using mapping_id (primary) or legacy source_node_name (optional)."""
+    import time as _time
+    _start = _time.time()
+    authority = MiniAgentClient(profile="safe")
+    tool_args = {
+        "mapping_id": request.mapping_id or (request.source_node_name or ""),
+    }
+    _result, _code = authority.authorize_action(
+        prompt="Confirm identity stitch revocation",
+        mode="ops",
+        tool_name="identity.revoke_stitch",
+        tool_args=tool_args,
+        confirm=bool(request.confirmation_token),
+        confirmation_token=request.confirmation_token or "",
+    )
+    if _code != 0:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=403, content=_result)
+
     db_path = _get_kg_db_path()
     from lib.knowledge_graph import KnowledgeGraph
-    from lib.identity_ledger import load_manual_mappings, save_manual_mappings, build_identity_ledger
     
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail=f"Knowledge graph database not found at {db_path}")
+        logger.error("Knowledge graph database not found (revoke): %s", db_path)
+        raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
         mappings_data = load_manual_mappings(db_path)
@@ -736,13 +787,25 @@ async def revoke_stitch(request: StitchRevokeRequest):
             from lib.identity_ledger import write_identity_ledger_markdown
             write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
             
-        return StitchRevokeResponse(
+        _revoke_response = StitchRevokeResponse(
             success=True,
             message=f"Successfully revoked mapping {target_mapping.get('mapping_id')} for {target_mapping.get('source_node_name')}."
         )
+        _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
+        authority.record_external_execution_outcome(
+            operation="identity.revoke_stitch",
+            arguments=tool_args,
+            request_id=_request_id or "",
+            mode="ops",
+            status="succeeded",
+            return_code=0,
+            duration_ms=int((_time.time() - _start) * 1000),
+            side_effect_report={"mutated": True, "targets": ["manual_identity_mappings.json"]},
+        )
+        return _revoke_response
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to revoke stitch: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to revoke stitch: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="stitch_revoke_failed")
 

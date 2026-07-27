@@ -125,6 +125,10 @@ ROUTE_EFFECTS: dict[RouteOperation, RouteEffect] = {
         "/api/identity/rebuild-face-clusters",
     ): RouteEffect.PROCESS_EXECUTION,
     (
+        "GET",
+        "/api/identity/process-jobs/{job_id}",
+    ): RouteEffect.PASSIVE_READ,
+    (
         "POST",
         "/api/identity/face-clusters/label",
     ): RouteEffect.CURATED_MUTATION,

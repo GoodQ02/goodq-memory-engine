@@ -6,7 +6,7 @@
     <title>GoodQ Identity Curation Workbench</title>
     <meta name="description" content="GoodQ4All identity curation tool — label face clusters, confirm speaker hypotheses, and build the family roster." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050c1e'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2300d2ff'%3EIC%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/identity.css" />
+    <link rel="stylesheet" href="./static/css/identity.css?v=20260726-curation-reconcile" />
   </head>
   <body>
     <div class="crt-screen">
@@ -17,6 +17,12 @@
         <div class="header-brand">
           <span class="header-logo">GOODQ // IDENTITY CURATION WORKBENCH</span>
           <span class="header-status" id="system-status">Status: CONNECTING</span>
+        </div>
+                <div class="header-center">
+          <div class="progress-text" id="header-progress-text">Labeled: 0 / 0</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="header-progress-fill" style="width: 0%"></div>
+          </div>
         </div>
         <div class="header-controls">
           <span class="phase-indicator" id="phase-indicator">PHASE 1 — FACE CLUSTERS</span>
@@ -45,6 +51,8 @@
         </button>
       </nav>
 
+      <section id="epoch-authority-status" class="epoch-authority-status" role="alert" aria-live="assertive" hidden></section>
+
       <!-- Main content area -->
       <main class="workspace" id="workspace">
 
@@ -57,6 +65,11 @@
               <span class="toolbar-label">EPS THRESHOLD</span>
               <input type="number" id="eps-input" class="mini-input" value="0.4" min="0.05" max="0.95" step="0.05" title="DBSCAN eps — lower = stricter separation" />
               <button class="toolbar-btn" id="rerun-faces-btn" title="Re-run face clustering with new eps">RE-CLUSTER ↻</button>
+            </div>
+                        <div class="toolbar-center filter-group" id="faces-filter-group" style="display:flex; gap: 4px;">
+              <button class="toolbar-btn filter-btn" data-filter="ALL">ALL</button>
+              <button class="toolbar-btn filter-btn active" data-filter="UNLABELED">UNLABELED</button>
+              <button class="toolbar-btn filter-btn" data-filter="LABELED">LABELED</button>
             </div>
             <div class="toolbar-right">
               <span class="toolbar-note" id="faces-note">Load face_clusters.json to begin.</span>
@@ -177,33 +190,32 @@
 
       </main>
 
-      <!-- ── Face Cluster Label Modal ───────────────────────────────── -->
-      <div class="modal-backdrop" id="label-modal" hidden role="dialog" aria-modal="true" aria-labelledby="label-modal-title">
-        <div class="modal-content wide-modal">
-          <div class="modal-header">
-            <span id="label-modal-title">⬡ LABEL FACE CLUSTER</span>
-            <button class="close-btn" id="label-modal-close" aria-label="Close">×</button>
-          </div>
-          <div class="modal-body">
-            <div class="cluster-thumbnails" id="modal-thumbnails"></div>
-            <div class="modal-cluster-meta" id="modal-cluster-meta"></div>
-            <div class="modal-form-row">
-              <label for="cluster-label-input">ASSIGN IDENTITY LABEL</label>
-              <input type="text" id="cluster-label-input" class="modal-input" placeholder="Person's name (e.g. Joe)" autocomplete="off" spellcheck="false" list="known-identities-list" />
-              <datalist id="known-identities-list"></datalist>
+      <section id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></section>
+
+            <!-- Focus Panel Overlay -->
+      <dialog id="focus-panel" class="focus-panel">
+        <div class="focus-panel-content">
+          <div class="focus-panel-header">
+            <div class="focus-meta" id="focus-meta"></div>
+            <div class="focus-form">
+              <label>NAME</label>
+              <div class="typeahead-wrapper">
+                <input type="text" id="focus-name-input" class="focus-input" placeholder="Type a name..." autocomplete="off">
+                <ul id="focus-typeahead-list" class="typeahead-list" hidden></ul>
+              </div>
+              <label for="focus-operator-note">OPERATOR NOTE</label>
+              <textarea id="focus-operator-note" class="focus-note-input" rows="2" placeholder="Why this label is supported by the visible evidence..."></textarea>
             </div>
-            <div class="modal-form-row">
-              <label for="cluster-note-input">OPERATOR NOTE (optional)</label>
-              <input type="text" id="cluster-note-input" class="modal-input" placeholder="Brief justification..." />
+            <div class="focus-controls">
+              <button class="toolbar-btn" id="focus-prev">PREV</button>
+              <button class="toolbar-btn" id="focus-next">NEXT</button>
+              <button class="toolbar-btn secondary" id="focus-close">CLOSE</button>
             </div>
-            <div class="modal-warning" id="label-modal-warning" hidden></div>
           </div>
-          <div class="modal-footer">
-            <button class="modal-btn cancel-btn" id="label-modal-cancel">CANCEL</button>
-            <button class="modal-btn confirm-btn" id="label-modal-confirm">APPLY LABEL ▶</button>
-          </div>
+          <div id="focus-operation-failure" class="operation-failure" role="alert" hidden></div>
+          <div class="focus-grid" id="focus-grid"></div>
         </div>
-      </div>
+      </dialog>
 
       <!-- ── Validation Result Modal ────────────────────────────────── -->
       <div class="modal-backdrop" id="validate-modal" hidden role="dialog" aria-modal="true" aria-labelledby="validate-modal-title">
@@ -225,6 +237,6 @@
       <div class="toast-container" id="toast-container" aria-live="polite"></div>
     </div>
 
-    <script src="./static/js/identity.js"></script>
+    <script src="./static/js/identity.js?v=20260726-curation-reconcile"></script>
   </body>
 </html>

@@ -156,6 +156,14 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "validate_ucf_frames",
     "reject_ucf_frames",
     "supersede_ucf_frames",
+    "identity.label_face_cluster",
+    "identity.confirm_speaker_cluster",
+    "identity.save_roster",
+    "identity.export_roster",
+    "identity.execute_stitch",
+    "identity.revoke_stitch",
+    "identity.rebuild_face_clusters",
+    "identity.validate_roster",
 }
 
 # These operations reuse the durable exact-scope confirmation authority but
@@ -168,6 +176,14 @@ LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
     "generate_temporal_summary",
     "generate_video_summary",
     "stage_ingest_request",
+    "identity.label_face_cluster",
+    "identity.confirm_speaker_cluster",
+    "identity.save_roster",
+    "identity.export_roster",
+    "identity.execute_stitch",
+    "identity.revoke_stitch",
+    "identity.rebuild_face_clusters",
+    "identity.validate_roster",
 }
 
 LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
@@ -183,6 +199,14 @@ LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
     "validate_ucf_frames",
     "reject_ucf_frames",
     "supersede_ucf_frames",
+    "identity.label_face_cluster",
+    "identity.confirm_speaker_cluster",
+    "identity.save_roster",
+    "identity.export_roster",
+    "identity.execute_stitch",
+    "identity.revoke_stitch",
+    "identity.rebuild_face_clusters",
+    "identity.validate_roster",
     "file_delete",
     "validate_ucf_epoch",
 }
@@ -230,6 +254,17 @@ CLEAN_MEMORY_APPLY_SCOPE_FIELDS = (
     "rollback_sha256",
 )
 CLEAN_MEMORY_AUDIT_TARGET_PREFIX = "clean-memory:"
+
+# ── Identity curated mutation scope fields ────────────────────────────────────
+IDENTITY_LABEL_FACE_CLUSTER_SCOPE_FIELDS = ("cluster_id", "label")
+IDENTITY_CONFIRM_SPEAKER_CLUSTER_SCOPE_FIELDS = ("cluster_id", "confirmed")
+IDENTITY_SAVE_ROSTER_SCOPE_FIELDS = ("identity_id",)
+IDENTITY_EXPORT_ROSTER_SCOPE_FIELDS = ("identity_count",)
+IDENTITY_EXECUTE_STITCH_SCOPE_FIELDS = ("source_node_name", "target_person_name")
+IDENTITY_REVOKE_STITCH_SCOPE_FIELDS = ("mapping_id",)
+# ── Identity process execution scope fields ───────────────────────────────────
+IDENTITY_REBUILD_FACE_CLUSTERS_SCOPE_FIELDS = ("eps",)
+IDENTITY_VALIDATE_ROSTER_SCOPE_FIELDS: tuple[()] = ()
 REDACTED_SCOPE_AUTHORIZATION_ACTIONS = SUMMARY_COLLECTION_ACTIONS | {
     CLEAN_MEMORY_APPLY_ACTION,
     "generate_temporal_summary"
@@ -438,12 +473,182 @@ def _validate_clean_memory_apply_scope(tool_args: Any) -> List[str]:
     return violations
 
 
+def _validate_identity_label_face_cluster_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.label_face_cluster."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_LABEL_FACE_CLUSTER_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "cluster_id" in tool_args and (
+        not isinstance(tool_args["cluster_id"], str) or not tool_args["cluster_id"].strip()
+    ):
+        violations.append("cluster_id must be a non-empty string")
+    if "label" in tool_args and not isinstance(tool_args["label"], str):
+        violations.append("label must be a string")
+    return violations
+
+
+def _validate_identity_confirm_speaker_cluster_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.confirm_speaker_cluster."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_CONFIRM_SPEAKER_CLUSTER_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "cluster_id" in tool_args and (
+        not isinstance(tool_args["cluster_id"], str) or not tool_args["cluster_id"].strip()
+    ):
+        violations.append("cluster_id must be a non-empty string")
+    if "confirmed" in tool_args and not isinstance(tool_args["confirmed"], bool):
+        violations.append("confirmed must be a boolean")
+    return violations
+
+
+def _validate_identity_save_roster_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.save_roster."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_SAVE_ROSTER_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "identity_id" in tool_args and not isinstance(tool_args["identity_id"], str):
+        violations.append("identity_id must be a string")
+    return violations
+
+
+def _validate_identity_export_roster_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.export_roster."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_EXPORT_ROSTER_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "identity_count" in tool_args and (
+        not isinstance(tool_args["identity_count"], int)
+        or isinstance(tool_args["identity_count"], bool)
+        or tool_args["identity_count"] < 0
+    ):
+        violations.append("identity_count must be a non-negative integer")
+    return violations
+
+
+def _validate_identity_execute_stitch_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.execute_stitch."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_EXECUTE_STITCH_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "source_node_name" in tool_args and (
+        not isinstance(tool_args["source_node_name"], str)
+        or not tool_args["source_node_name"].strip()
+    ):
+        violations.append("source_node_name must be a non-empty string")
+    if "target_person_name" in tool_args and (
+        not isinstance(tool_args["target_person_name"], str)
+        or not tool_args["target_person_name"].strip()
+    ):
+        violations.append("target_person_name must be a non-empty string")
+    return violations
+
+
+def _validate_identity_revoke_stitch_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.revoke_stitch."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_REVOKE_STITCH_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "mapping_id" in tool_args and (
+        not isinstance(tool_args["mapping_id"], str)
+        or not tool_args["mapping_id"].strip()
+    ):
+        violations.append("mapping_id must be a non-empty string")
+    return violations
+
+
+def _validate_identity_rebuild_face_clusters_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.rebuild_face_clusters."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    violations: List[str] = []
+    expected = set(IDENTITY_REBUILD_FACE_CLUSTERS_SCOPE_FIELDS)
+    actual = set(tool_args)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        violations.append(f"missing required scope fields: {', '.join(missing)}")
+    if extra:
+        violations.append(f"unsupported scope fields: {', '.join(extra)}")
+    if "eps" in tool_args:
+        value = tool_args["eps"]
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            violations.append("eps must be a numeric value")
+        elif not (0.05 <= float(value) <= 0.95):
+            violations.append("eps must be between 0.05 and 0.95")
+    return violations
+
+
+def _validate_identity_validate_roster_scope(tool_args: Any) -> List[str]:
+    """Validate scope for identity.validate_roster (no parameters required)."""
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    if tool_args:
+        return [f"unsupported scope fields: {', '.join(sorted(tool_args))}"]
+    return []
+
+
 AUTHORIZATION_SCOPE_VALIDATORS = {
     CLEAN_MEMORY_APPLY_ACTION: _validate_clean_memory_apply_scope,
     "generate_video_summary": _validate_video_summary_scope,
     "generate_temporal_summary": _validate_temporal_summary_scope,
     "create_summary_collection": _validate_summary_collection_create_scope,
     "delete_summary_collection": _validate_summary_collection_delete_scope,
+    "identity.label_face_cluster": _validate_identity_label_face_cluster_scope,
+    "identity.confirm_speaker_cluster": _validate_identity_confirm_speaker_cluster_scope,
+    "identity.save_roster": _validate_identity_save_roster_scope,
+    "identity.export_roster": _validate_identity_export_roster_scope,
+    "identity.execute_stitch": _validate_identity_execute_stitch_scope,
+    "identity.revoke_stitch": _validate_identity_revoke_stitch_scope,
+    "identity.rebuild_face_clusters": _validate_identity_rebuild_face_clusters_scope,
+    "identity.validate_roster": _validate_identity_validate_roster_scope,
 }
 
 

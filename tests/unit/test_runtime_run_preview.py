@@ -27,6 +27,37 @@ class _FakeResponse:
         return self._payload
 
 
+def test_transcript_outcome_summary_does_not_infer_legacy_values(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {"paths": {}, "host": {}, "memory": {}, "llm": {}}
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+    summary = runtime._summarize_transcript_outcomes(
+        {"scenes": [
+            {"scene_id": "new", "audio": {"transcript_outcome": "no_speech"}},
+            {"scene_id": "old", "audio": {"transcript": ""}},
+        ]}
+    )
+
+    assert summary["outcomes"] == {"no_speech": 1}
+    assert summary["legacy_without_outcome_count"] == 1
+    assert summary["status"] == "ok"
+
+
 def test_latest_run_preview_uses_read_only_summary_projection(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
@@ -1655,3 +1686,110 @@ def test_audio_provenance_snapshot_lists_run_tagged_qdrant_audio_without_latest_
     serialized = json.dumps(snapshot)
     assert "source_path" not in serialized
     assert "secret.wav" not in serialized
+
+
+def test_direct_ingest_fallback_binds_exact_ledger_run(monkeypatch, tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {
+        "paths": {"data_root": str(tmp_path), "db_path": str(tmp_path / "memory.db"), "log_dir": str(tmp_path / "logs")},
+        "host": {}, "memory": {}, "llm": {},
+    }
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+
+    runtime = _load_runtime_route_module(repo_root)
+    epoch_root = tmp_path / "epochs" / "epoch_test"
+    logs = epoch_root / "logs"
+    logs.mkdir(parents=True)
+    processing = epoch_root / "processing" / "video-a"
+    processing.mkdir(parents=True)
+    temporal_path = processing / "temporal_index.json"
+    temporal_path.write_text(json.dumps({"total_scenes": 2, "segments": [{"scene_id": "scene-a"}, {"scene_id": "scene-b"}]}), encoding="utf-8")
+    direct_path = logs / "direct_ingest_alpha.json"
+    direct_path.write_text(json.dumps([{
+        "video_name": "family.mp4",
+        "video_id": "video-a",
+        "video_hash": "video-a",
+        "scenes": [{"scene_id": "scene-a"}, {"scene_id": "scene-b"}],
+        "temporal_index_path": str(temporal_path),
+    }]), encoding="utf-8")
+    (logs / "step_runs.jsonl").write_text(
+        "\n".join(
+            json.dumps({
+                "step": "text_embed", "status": "ok", "run_id": "run-alpha",
+                "run_started_at": "2026-07-01T00:00:00Z", "video_id": "video-a",
+                "video_hash": "video-a", "scene_id": scene_id,
+            })
+            for scene_id in ("scene-a", "scene-b")
+        ) + "\n",
+        encoding="utf-8",
+    )
+    runtime._LOG_DIR = logs
+    runtime._DB_PATH = epoch_root / "memory.db"
+    monkeypatch.setattr(runtime.run_index, "list_runs", lambda reports_root=None, limit=None: [])
+    monkeypatch.setattr(runtime, "_summarize_audio_vector_proof", lambda **kwargs: {"status": "unavailable"})
+
+    evidence = runtime._latest_run_evidence()
+
+    assert evidence["run"]["scope"] == "direct_ingest_fallback"
+    assert evidence["artifact_presence"]["direct_ingest_results_json"] is True
+    assert evidence["artifact_presence"]["temporal_index_json"] is True
+    assert evidence["temporal_index"]["total_scenes"] == 2
+    assert evidence["artifact_sources"]["temporal_index"]["current_run_bound"] is True
+    assert evidence["step_runs"]["status"] == "ok"
+    assert evidence["step_runs"]["row_count"] == 2
+    assert evidence["step_runs"]["binding"]["runtime_run_id"] == "run-alpha"
+    assert evidence["artifact_sources"]["step_runs"]["current_run_bound"] is True
+
+
+def test_direct_ingest_ledger_binding_rejects_ambiguous_or_foreign_scene_rows(monkeypatch, tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    fake_config_loader = types.ModuleType("steps.common.config_loader")
+    fake_config_loader.load_configs = lambda overrides=None: {"paths": {"data_root": str(tmp_path), "db_path": str(tmp_path / "epochs" / "epoch_test" / "memory.db")}, "host": {}, "memory": {}, "llm": {}}
+    monkeypatch.setitem(sys.modules, "steps.common.config_loader", fake_config_loader)
+    fake_memory_store = types.ModuleType("steps.common.memory_store")
+    fake_memory_store.normalize_memory_tier_list = lambda values: values
+    monkeypatch.setitem(sys.modules, "steps.common.memory_store", fake_memory_store)
+    fake_ingest_requests = types.ModuleType("api.utils.ingest_requests")
+    fake_ingest_requests.is_supported_ingest_path = lambda path: True
+    monkeypatch.setitem(sys.modules, "api.utils.ingest_requests", fake_ingest_requests)
+    fake_goodq_version = types.ModuleType("goodq_version")
+    fake_goodq_version.GOODQ_VERSION = "test"
+    monkeypatch.setitem(sys.modules, "goodq_version", fake_goodq_version)
+    runtime = _load_runtime_route_module(repo_root)
+
+    epoch_root = tmp_path / "epochs" / "epoch_test"
+    logs = epoch_root / "logs"
+    logs.mkdir(parents=True)
+    direct_path = logs / "direct_ingest_alpha.json"
+    direct_path.write_text("[]", encoding="utf-8")
+    step_path = logs / "step_runs.jsonl"
+    step_path.write_text("\n".join(json.dumps({"run_id": run_id, "run_started_at": started, "video_id": "video-a", "video_hash": "video-a", "scene_id": "scene-a"}) for run_id, started in (("run-alpha", "2026-07-01T00:00:00Z"), ("run-beta", "2026-07-02T00:00:00Z"))) + "\n", encoding="utf-8")
+    runtime._DB_PATH = epoch_root / "memory.db"
+
+    ambiguous = runtime._bind_direct_ingest_step_ledger(
+        step_path, direct_path, [{"video_id": "video-a", "video_hash": "video-a"}], {"segments": [{"scene_id": "scene-a"}]}
+    )
+    assert ambiguous["status"] == "binding_ambiguous"
+    assert ambiguous["reason"] == "direct_ledger_run_identity_ambiguous"
+
+    step_path.write_text(json.dumps({"run_id": "run-alpha", "run_started_at": "2026-07-01T00:00:00Z", "video_id": "video-a", "video_hash": "video-a", "scene_id": "foreign-scene"}) + "\n", encoding="utf-8")
+    mismatch = runtime._bind_direct_ingest_step_ledger(
+        step_path, direct_path, [{"video_id": "video-a", "video_hash": "video-a"}], {"segments": [{"scene_id": "scene-a"}]}
+    )
+    assert mismatch["status"] == "binding_not_proven"
+    assert mismatch["reason"] == "direct_ledger_scene_set_mismatch"

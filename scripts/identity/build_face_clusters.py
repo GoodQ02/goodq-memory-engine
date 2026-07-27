@@ -28,6 +28,7 @@ import base64
 import json
 import logging
 import os
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -44,6 +45,7 @@ DEFAULT_EPOCH_ROOT = "L:/_DATA/GoodQ_Data/epochs"
 DEFAULT_DATA_PATH  = "L:/_DATA/GoodQ_Data/identity"
 DEFAULT_EPS        = 0.4
 DEFAULT_MIN_SAMPLES = 2
+_JOB_ID_RE = re.compile(r"^job_[0-9a-f]{32}$")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -53,6 +55,25 @@ def _epoch_dir(epoch_root: str, epoch_id: str) -> Path:
     if not p.exists():
         raise FileNotFoundError(f"Epoch directory not found: {p}")
     return p
+
+
+def _start_gate_job_id(value: str) -> str:
+    if not _JOB_ID_RE.fullmatch(value):
+        raise argparse.ArgumentTypeError("invalid start-gate job ID")
+    return value
+
+
+def _wait_for_start_gate(job_id: str) -> bool:
+    expected = f"START {job_id}".encode("ascii")
+    binary_stdin = getattr(sys.stdin, "buffer", None)
+    if binary_stdin is not None:
+        marker = binary_stdin.readline()
+        return marker in {expected + b"\n", expected + b"\r\n"}
+    marker = sys.stdin.readline()
+    return marker in {
+        expected.decode("ascii") + "\n",
+        expected.decode("ascii") + "\r\n",
+    }
 
 
 def _ucf_db(epoch_dir: Path) -> Path:
@@ -337,7 +358,20 @@ def main() -> None:
         "--min-samples", type=int, default=DEFAULT_MIN_SAMPLES,
         help="DBSCAN min_samples. Default=2 (pair of faces to form a cluster).",
     )
+    parser.add_argument(
+        "--start-gate-job-id",
+        type=_start_gate_job_id,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
+
+    if (
+        args.start_gate_job_id is not None
+        and not _wait_for_start_gate(args.start_gate_job_id)
+    ):
+        log.error("Authorized rebuild start gate was not satisfied")
+        raise SystemExit(2)
 
     data_path = Path(args.data_path)
     data_path.mkdir(parents=True, exist_ok=True)

@@ -3314,6 +3314,70 @@ def _extract_segments(audio_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
+_TRANSCRIPT_OUTCOMES = {
+    'transcript_available',
+    'no_speech',
+    'no_intelligible_speech',
+    'low_confidence',
+    'missing_audio_artifact',
+    'runtime_failure',
+    'unclassified',
+}
+
+
+def _derive_transcript_outcome(
+    audio_info: Optional[Dict[str, Any]],
+    *,
+    audio_error: Optional[str],
+    audio_backend_fields: Optional[Dict[str, Any]],
+) -> Dict[str, str]:
+    """Classify the observed transcript result without guessing speech content.
+
+    Old artifacts have no outcome contract and remain untouched.  A successful
+    but empty transcript is deliberately ``unclassified`` unless its worker
+    emitted an explicit speech or quality outcome.
+    """
+    if isinstance(audio_error, str) and audio_error.strip():
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'audio_processing_error'}
+    if not isinstance(audio_info, dict):
+        return {
+            'transcript_outcome': 'missing_audio_artifact',
+            'transcript_outcome_reason': 'audio_processor_returned_no_artifact',
+        }
+
+    candidates: List[Dict[str, Any]] = [audio_info]
+    data = audio_info.get('data')
+    if isinstance(data, dict):
+        candidates.append(data)
+    for candidate in candidates:
+        outcome = str(candidate.get('transcript_outcome') or '').strip().lower()
+        if outcome in _TRANSCRIPT_OUTCOMES:
+            reason = str(candidate.get('transcript_outcome_reason') or '').strip()
+            return {'transcript_outcome': outcome, 'transcript_outcome_reason': reason or 'worker_reported_outcome'}
+
+    backend_effective = str((audio_backend_fields or {}).get('audio_backend_effective') or '').strip().lower()
+    backend_reason = str((audio_backend_fields or {}).get('audio_backend_effective_reason') or '').strip().lower()
+    if backend_effective == 'failed' or backend_reason.endswith('_failed'):
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'audio_backend_failure'}
+
+    transcript_meta: Dict[str, Any] = {}
+    for candidate in candidates:
+        meta = candidate.get('transcript_meta')
+        if isinstance(meta, dict):
+            transcript_meta = meta
+            break
+    if str(transcript_meta.get('status') or '').strip().lower() in {'error', 'failed', 'failure'}:
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'transcript_meta_error'}
+
+    for candidate in candidates:
+        if _extract_transcript_text(candidate) or _has_meaningful_audio_segments(_extract_segments(candidate)):
+            return {'transcript_outcome': 'transcript_available', 'transcript_outcome_reason': 'transcript_or_segments_present'}
+    return {
+        'transcript_outcome': 'unclassified',
+        'transcript_outcome_reason': 'no_explicit_speech_or_quality_outcome',
+    }
+
+
 def _has_meaningful_audio_segments(segments: List[Dict[str, Any]]) -> bool:
     for segment in segments:
         text = segment.get('text')
@@ -8078,7 +8142,8 @@ def run(
                             for k in ('audio_backend_selected', 'audio_backend_reason', 'audio_backend_effective', 
                                       'audio_backend_effective_reason', 'audio_backend_downgraded', 
                                       'audio_backend_downgrade_reason', 'audio_backend_downgrade_ts', 
-                                      'audio_backend_downgrade_details', 'vector_points_attempted'):
+                                      'audio_backend_downgrade_details', 'transcript_outcome',
+                                      'transcript_outcome_reason', 'vector_points_attempted'):
                                 if k in meta:
                                     scene_record[k] = meta[k]
                             scene_outputs.append(scene_record)
@@ -8309,6 +8374,11 @@ def run(
                     scene_id=scene_id,
                     scene_index=scene_index,
                 )
+                transcript_outcome_fields = _derive_transcript_outcome(
+                    audio_info,
+                    audio_error=audio_error,
+                    audio_backend_fields=audio_backend_fields,
+                )
                 if isinstance(audio_info, dict):
                     audio_info['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
                     audio_info['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
@@ -8320,6 +8390,7 @@ def run(
                     audio_info['audio_backend_downgrade_details'] = dict(
                         audio_backend_fields.get('audio_backend_downgrade_details') or {}
                     )
+                    audio_info.update(transcript_outcome_fields)
                     audio_data_for_backend = audio_info.get('data')
                     if isinstance(audio_data_for_backend, dict):
                         audio_data_for_backend['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
@@ -8338,6 +8409,7 @@ def run(
                         audio_data_for_backend['audio_backend_downgrade_details'] = dict(
                             audio_backend_fields.get('audio_backend_downgrade_details') or {}
                         )
+                        audio_data_for_backend.update(transcript_outcome_fields)
 
                 error_payload = {}
                 if frame_error:
@@ -8363,6 +8435,7 @@ def run(
                     'audio_info': audio_info,
                     'error_payload': error_payload,
                     'audio_backend_fields': audio_backend_fields,
+                    'transcript_outcome_fields': transcript_outcome_fields,
                 }
 
         async def process_video_scenes_async() -> str:
@@ -8582,6 +8655,8 @@ def run(
                         'audio_backend_downgrade_details': dict(
                             scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}
                         ),
+                        'transcript_outcome': scene_res['transcript_outcome_fields']['transcript_outcome'],
+                        'transcript_outcome_reason': scene_res['transcript_outcome_fields']['transcript_outcome_reason'],
                         'vector_points_attempted': (
                             _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
                             if isinstance(persist_result, dict)
@@ -8668,6 +8743,14 @@ def run(
                                 'audio_backend_downgrade_details',
                                 dict(scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}),
                             )
+                            formatted_audio.setdefault(
+                                'transcript_outcome',
+                                scene_res['transcript_outcome_fields']['transcript_outcome'],
+                            )
+                            formatted_audio.setdefault(
+                                'transcript_outcome_reason',
+                                scene_res['transcript_outcome_fields']['transcript_outcome_reason'],
+                            )
                             speaker_ids = _extract_speaker_ids(formatted_audio)
                             formatted_audio.setdefault('speaker_ids', speaker_ids)
                             formatted_audio.setdefault('speaker_count', len(speaker_ids))
@@ -8713,6 +8796,8 @@ def run(
                                 s.get('faiss_ok'),
                             ),
                             'content_state': s.get('content_state', 'signal'),
+                            'transcript_outcome': s.get('transcript_outcome'),
+                            'transcript_outcome_reason': s.get('transcript_outcome_reason'),
                             'speaker_ids': s.get('speaker_ids') or [],
                             'speaker_count': len(s.get('speaker_ids') or []),
                             'keyframe': s.get('keyframe', {}),

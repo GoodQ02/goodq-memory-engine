@@ -35,6 +35,15 @@ def _load_run_ingestion_module():
     return importlib.import_module("cli.run_ingestion")
 
 
+def test_initial_knowledge_graph_status_reports_isolated_epoch_truth(monkeypatch):
+    run_ingestion = _load_run_ingestion_module()
+    monkeypatch.setattr(run_ingestion, "KNOWLEDGE_GRAPH_AVAILABLE", True)
+
+    assert run_ingestion._initial_knowledge_graph_status({"ingestion_isolation": True}) == "not_applicable_isolated_epoch"
+    assert run_ingestion._initial_knowledge_graph_status({"knowledge_graph": {"enabled": False}}) == "disabled_config"
+    assert run_ingestion._initial_knowledge_graph_status({}) == "active"
+
+
 def test_classify_scene_content_signal_with_transcript_text():
     run_ingestion = _load_run_ingestion_module()
 

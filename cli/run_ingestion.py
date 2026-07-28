@@ -2586,6 +2586,18 @@ def _extract_segment_speaker_ids(segment: Any) -> List[str]:
     return speaker_ids
 
 
+def _initial_knowledge_graph_status(cfg: Dict[str, Any]) -> str:
+    """Report graph applicability, not merely whether its Python module imports."""
+    if not KNOWLEDGE_GRAPH_AVAILABLE:
+        return 'disabled_import_failure'
+    if cfg.get('ingestion_isolation', False):
+        return 'not_applicable_isolated_epoch'
+    graph_cfg = cfg.get('knowledge_graph', {})
+    if isinstance(graph_cfg, dict) and graph_cfg.get('enabled') is False:
+        return 'disabled_config'
+    return 'active'
+
+
 def _compute_scene_coverages(scene_outputs: List[Dict[str, Any]]) -> Dict[str, Any]:
     scenes = [scene for scene in scene_outputs if isinstance(scene, dict)]
     total = len(scenes)
@@ -7773,7 +7785,7 @@ def run(
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
     profile_override: Optional[str] = None
     profile_override_reason: Optional[str] = None
-    knowledge_graph_status = 'active' if KNOWLEDGE_GRAPH_AVAILABLE else 'disabled_import_failure'
+    knowledge_graph_status = _initial_knowledge_graph_status(cfg)
     if baseline_wsl_override:
         logger.warning("BASELINE override: WSL audio forced via GOODQ_REQUIRE_WSL_AUDIO=1")
         profile_override = "wsl_audio_forced_in_baseline"

@@ -173,6 +173,7 @@ WSL_AUDIO_ASSET_RELATIVE_PATHS: tuple[str, ...] = (
     "wsl2_audio/setup_wsl2_audio.sh",
     "wsl2_audio/setup_cuda_env.sh",
     "wsl2_audio/process_audio.py",
+    "wsl2_audio/signature_only.py",
     "wsl2_audio/audio_service.py",
     "wsl2_audio/model_cache.py",
     "wsl2_audio/fw_transcribe.py",

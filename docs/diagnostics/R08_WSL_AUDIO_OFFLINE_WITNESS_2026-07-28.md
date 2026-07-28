@@ -65,3 +65,17 @@ before/after receipt required by a later reconciliation write.
    the witness must be presented as stopped/cold rather than as a contradictory
    audio failure.
 3. Audit existing temporal-index structures before designing the next witness.
+
+## Signature-only historical proof
+
+After this witness, the historic July signature failures were separated from
+the runtime question. The isolated proof
+`epoch_2026_07_28_signature_only_proof_01` consumed one existing July audio
+chunk plus its persisted diarization input and emitted exactly two
+768-dimensional speaker signatures on CUDA with the pinned
+`facebook/wav2vec2-base-960h` revision.
+
+It did not invoke transcription or diarization and did not write the July
+manifest, temporal index, SQLite stores, vectors, or graph. The proof output
+contains signature evidence only. This establishes the scene-first executor
+shape for the separate historic backfill lane; it is not a batch backfill.

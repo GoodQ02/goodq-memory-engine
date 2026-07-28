@@ -89,7 +89,9 @@ diarization operation.
 1. Build a reviewed, signature-only historical backfill plan for the 1,408
    failed Wav2Vec records. The scene-first proof has passed using the locked
    model authority while preserving transcript, diarization, and CLAP outputs;
-   no batch backfill has run.
+   no batch backfill has run. The inspect-only plan classifies 1,328 scenes as
+   eligible and 80 as blocked because their manifests retain no diarization
+   segments despite a `success` status. Those 80 must not be silently retried.
 2. Review the five content-error packets, 29 unexplained empty transcripts, and
    14 boundary-excess packets. Only then define any historical metadata or
    timestamp repair; do not infer “silence” from an empty field.

@@ -23,6 +23,11 @@ import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 
+try:
+    from wsl2_audio import model_cache
+except ImportError:  # Direct WSL worker execution from its workspace.
+    import model_cache
+
 # Profile semantics (fallback to canonical behavior when steps package is unavailable in WSL context)
 try:
     from steps.common.profile_config import (
@@ -71,45 +76,10 @@ def _load_pyannote_pipeline(
     cache_dir: Optional[str] = None,
     is_offline: bool = False,
 ):
-    """Load pyannote pipeline from local cache first, and strictly prevent online access if offline."""
-    base_kwargs = {}
-    if cache_dir:
-        base_kwargs["cache_dir"] = cache_dir
-
-    # Try local only first
-    kwargs = dict(base_kwargs)
-    kwargs["local_files_only"] = True
-    try:
-        try:
-            return pipeline_cls.from_pretrained(model_name, **kwargs)
-        except TypeError as exc:
-            message = str(exc)
-            if "use_auth_token" not in message or "unexpected keyword" not in message:
-                raise
-            kwargs.pop("use_auth_token", None)
-            kwargs["token"] = token
-            return pipeline_cls.from_pretrained(model_name, **kwargs)
-    except Exception as e:
-        if is_offline:
-            raise OSError(
-                f"Offline mode: PyAnnote diarization pipeline failed to load locally from cache: {e}"
-            ) from e
-
-    # Try online with auth token if online
-    kwargs = dict(base_kwargs)
-    kwargs["use_auth_token"] = token
-    try:
-        try:
-            return pipeline_cls.from_pretrained(model_name, **kwargs)
-        except TypeError as exc:
-            message = str(exc)
-            if "use_auth_token" not in message or "unexpected keyword" not in message:
-                raise
-            kwargs.pop("use_auth_token", None)
-            kwargs["token"] = token
-            return pipeline_cls.from_pretrained(model_name, **kwargs)
-    except Exception as e:
-        raise OSError(f"Failed to load PyAnnote pipeline from Hugging Face: {e}") from e
+    """Delegate PyAnnote compatibility handling to the shared cache authority."""
+    return model_cache.load_pyannote_pipeline(
+        pipeline_cls, model_name, token, cache_dir=cache_dir, is_offline=is_offline
+    )
 
 
 @dataclass

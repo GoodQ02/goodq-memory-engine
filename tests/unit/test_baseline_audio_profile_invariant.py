@@ -214,7 +214,7 @@ def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatc
     assert any(entry["step"] == "audio_unified_wsl2" and entry["status"] == "error" for entry in logged_steps)
 
 
-def test_structured_wsl_audio_error_forces_local_fallback_even_when_wsl_required(monkeypatch, tmp_path: Path):
+def test_structured_wsl_audio_error_fails_visible_when_wsl_required(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     _process_audio = run_ingestion._process_audio
 
@@ -270,30 +270,23 @@ def test_structured_wsl_audio_error_forces_local_fallback_even_when_wsl_required
     monkeypatch.setattr(run_ingestion, "_run_step", lambda *args, **kwargs: {})
     monkeypatch.setattr(run_ingestion, "log_step_run", lambda *args, **kwargs: None)
 
-    result = _process_audio(
-        cfg_json=cfg_json,
-        ffmpeg="ffmpeg",
-        video_path=video_path,
-        scene={"start": 0.0, "end": 2.0, "index": 4},
-        audio_dir=audio_dir,
-        audio_artifact_dir=tmp_path / "processing" / "audio",
-        video_hash="vh",
-        scene_id="scene_0004",
-        audio_runtime_contract={
-            "selected": "wsl",
-            "reason": "wsl_runtime_required",
-        },
-    )
+    with pytest.raises(RuntimeError, match="GOODQ_REQUIRE_WSL_AUDIO=1"):
+        _process_audio(
+            cfg_json=cfg_json,
+            ffmpeg="ffmpeg",
+            video_path=video_path,
+            scene={"start": 0.0, "end": 2.0, "index": 4},
+            audio_dir=audio_dir,
+            audio_artifact_dir=tmp_path / "processing" / "audio",
+            video_hash="vh",
+            scene_id="scene_0004",
+            audio_runtime_contract={
+                "selected": "wsl",
+                "reason": "wsl_runtime_required",
+            },
+        )
 
-    assert result is not None
-    assert result["data"]["transcript"] == "forced local fallback transcript"
-    assert result["data"]["audio_backend_selected"] == "wsl"
-    assert result["data"]["audio_backend_effective"] == "windows"
-    assert result["data"]["audio_backend_effective_reason"] == "wsl_unified_error_fallback"
-    assert observed == {
-        "use_wsl2": False,
-        "require_wsl_audio": "0",
-    }
+    assert observed == {}
     assert os.environ.get("GOODQ_REQUIRE_WSL_AUDIO") == "1"
 
 

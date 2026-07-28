@@ -191,6 +191,55 @@ def check_pyannote_cache(model_name: str) -> bool:
         and check_hf_model_cache("pyannote/wespeaker-voxceleb-resnet34-LM")
     )
 
+
+def load_pyannote_pipeline(
+    pipeline_cls: Any,
+    model_name: str,
+    token: str,
+    *,
+    cache_dir: Optional[str] = None,
+    is_offline: bool = False,
+) -> Any:
+    """Load the pinned PyAnnote 3.x pipeline without weakening offline mode.
+
+    PyAnnote 3.3.2 accepts ``use_auth_token`` and ``cache_dir`` but not the
+    Transformers-only ``local_files_only`` keyword.  Offline mode is enforced
+    by the Hugging Face environment gate and the verified cache chain; the
+    compatibility retry therefore removes only that unsupported keyword.
+    """
+    base_kwargs: dict[str, Any] = {}
+    if cache_dir:
+        base_kwargs["cache_dir"] = cache_dir
+
+    try:
+        return pipeline_cls.from_pretrained(model_name, **base_kwargs, local_files_only=True)
+    except TypeError as exc:
+        if "local_files_only" not in str(exc) or "unexpected keyword" not in str(exc):
+            raise
+        try:
+            return pipeline_cls.from_pretrained(model_name, **base_kwargs)
+        except Exception as local_exc:
+            if is_offline:
+                raise OSError(
+                    f"Offline mode: PyAnnote diarization pipeline failed to load locally: {local_exc}"
+                ) from local_exc
+    except Exception as exc:
+        if is_offline:
+            raise OSError(
+                f"Offline mode: PyAnnote diarization pipeline failed to load locally: {exc}"
+            ) from exc
+
+    auth_kwargs = dict(base_kwargs)
+    auth_kwargs["use_auth_token"] = token
+    try:
+        return pipeline_cls.from_pretrained(model_name, **auth_kwargs)
+    except TypeError as exc:
+        if "use_auth_token" not in str(exc) or "unexpected keyword" not in str(exc):
+            raise
+        auth_kwargs.pop("use_auth_token", None)
+        auth_kwargs["token"] = token
+        return pipeline_cls.from_pretrained(model_name, **auth_kwargs)
+
 def load_silero_vad(offline: bool = False) -> Tuple[Any, Any]:
     """
     Loads Silero VAD model and returns (model, utils).

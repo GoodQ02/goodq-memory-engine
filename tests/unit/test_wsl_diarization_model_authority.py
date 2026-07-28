@@ -39,6 +39,27 @@ def test_hf_cache_recognizes_a_snapshot_symlink_by_its_snapshot_filename(monkeyp
     assert model_cache.check_hf_model_cache("pyannote/segmentation-3.0")
 
 
+def test_pyannote_offline_loader_retries_without_transformers_only_keyword():
+    from wsl2_audio import model_cache
+
+    calls = []
+
+    class Pipeline:
+        @staticmethod
+        def from_pretrained(model_name, **kwargs):
+            calls.append(kwargs)
+            if "local_files_only" in kwargs:
+                raise TypeError("unexpected keyword argument 'local_files_only'")
+            return {"model": model_name, "cache_dir": kwargs.get("cache_dir")}
+
+    result = model_cache.load_pyannote_pipeline(
+        Pipeline, "pyannote/speaker-diarization-3.1", "", cache_dir="/cache", is_offline=True
+    )
+
+    assert result == {"model": "pyannote/speaker-diarization-3.1", "cache_dir": "/cache"}
+    assert calls == [{"cache_dir": "/cache", "local_files_only": True}, {"cache_dir": "/cache"}]
+
+
 def test_model_registry_contains_wsl_diarization_repo_chain():
     import yaml
 

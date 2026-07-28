@@ -6651,6 +6651,10 @@ def _process_audio(
                             unavailable_details['reason'],
                             error_text,
                         )
+                        if require_wsl_audio():
+                            raise RuntimeError(
+                                f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {error_text}"
+                            )
                         run_local_audio_fallback('wsl_unified_error_fallback')
                     else:
                         log_unified_audio_attempt(unified_result, unified_duration_ms)
@@ -6670,6 +6674,10 @@ def _process_audio(
                     type(unified_error).__name__,
                     unified_error,
                 )
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {unified_error}"
+                    ) from unified_error
                 run_local_audio_fallback('wsl_unified_exception_fallback')
         else:
             if contract_selected == 'windows':
@@ -7357,6 +7365,10 @@ async def _process_audio_async(
                             unavailable_details['reason'],
                             error_text,
                         )
+                        if require_wsl_audio():
+                            raise RuntimeError(
+                                f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {error_text}"
+                            )
                         await run_local_audio_fallback_async('wsl_unified_error_fallback')
                     else:
                         log_unified_audio_attempt(unified_result, unified_duration_ms)
@@ -7376,6 +7388,10 @@ async def _process_audio_async(
                     type(unified_error).__name__,
                     unified_error,
                 )
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {unified_error}"
+                    ) from unified_error
                 await run_local_audio_fallback_async('wsl_unified_exception_fallback')
         else:
             if contract_selected == 'windows':

@@ -37,6 +37,17 @@ def test_model_registry_contains_wsl_embedding_cache_gate_repo():
     assert "facebook/wav2vec2-base-960h" in repo_ids
 
 
+def test_wav2vec_signature_model_uses_an_immutable_registry_revision():
+    import yaml
+
+    registry_path = Path(__file__).resolve().parents[2] / "configs" / "model_registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    model = registry["huggingface_models"]["wav2vec2_base_960h"]
+
+    assert model["revision"] != "main"
+    assert len(model["revision"]) == 40
+
+
 def test_bootstrap_fallback_contains_wsl_diarization_repo_chain():
     from scripts import bootstrap_models
     from scripts.wsl_audio_preflight import _DIARIZATION_REPOS

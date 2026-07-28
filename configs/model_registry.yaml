@@ -349,7 +349,7 @@ huggingface_models:
 
   wav2vec2_base_960h:
     repo_id: facebook/wav2vec2-base-960h
-    revision: main
+    revision: 22aad52d435eb6dbaf354bdad9b0da84ce7d6156
     model_type: speech-to-text
     trust_level: stable
     modalities: [audio]

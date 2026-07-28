@@ -92,6 +92,11 @@ if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
     export PYANNOTE_CACHE="${PYANNOTE_CACHE:-$HUGGINGFACE_HUB_CACHE}"
 fi
 
+# Keep the speaker-signature embedding model on the same immutable revision as
+# the project registry.  The default is deliberately local-only: bootstrap is
+# responsible for staging the snapshot before any offline ingest asks for it.
+export GOODQ_WAV2VEC2_BASE_REVISION="${GOODQ_WAV2VEC2_BASE_REVISION:-22aad52d435eb6dbaf354bdad9b0da84ce7d6156}"
+
 # Prefer the staged shared HF cache when it is complete, but fall back to the
 # local WSL cache if required audio models are missing there. This keeps the
 # runtime offline-first without depending on an incomplete mounted cache.

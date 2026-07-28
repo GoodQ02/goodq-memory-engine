@@ -843,6 +843,10 @@ def process_audio(audio_file, output_dir):
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
                 embed_repo = "facebook/wav2vec2-base-960h"
+                embed_revision = os.getenv(
+                    "GOODQ_WAV2VEC2_BASE_REVISION",
+                    "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
+                ).strip()
                 if is_offline and not model_cache.check_hf_model_cache(embed_repo):
                     raise OSError(
                         f"Offline mode: Wav2Vec2 Base model '{embed_repo}' is missing from local cache.\n"
@@ -854,6 +858,7 @@ def process_audio(audio_file, output_dir):
                 try:
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
@@ -862,6 +867,7 @@ def process_audio(audio_file, output_dir):
                         raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base model '{embed_repo}' from cache: {exc}") from exc
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                     )
                 embed_model.to(device)
@@ -875,6 +881,7 @@ def process_audio(audio_file, output_dir):
                 try:
                     embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
@@ -883,6 +890,7 @@ def process_audio(audio_file, output_dir):
                         raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base feature extractor '{embed_repo}' from cache: {exc}") from exc
                     embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                     )
                 inputs = embed_extractor(

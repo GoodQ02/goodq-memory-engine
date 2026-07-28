@@ -70,6 +70,44 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:30000/api/status' -TimeoutSec 10
    - Mark superseded observations as historical instead of deleting useful
      provenance.
 
+## Historical Derived-Evidence Backfill Branch
+
+Use this branch when a completed canonical corpus has a bounded historical
+failure in one *derived* evidence surface—such as speaker signatures—while the
+source audio, transcript, diarization, and scene identity already exist.
+
+This is a repair workflow, not an ingestion workflow. Do not re-ingest media to
+repair a derived field unless the inspect plan proves the underlying evidence is
+missing or invalid.
+
+1. **Inspect only.** Build a deterministic ledger from canonical manifests and
+   local artifacts. Classify each historical failure as `eligible`, `blocked`,
+   or already explained; list the field-path reason for every blocked item.
+2. **Prove the narrow computation.** In a fresh proof envelope, consume only
+   the existing minimum inputs. For speaker signatures this means audio plus
+   persisted diarization; it must not transcribe or diarize again.
+3. **Promote one scene.** Require a digest-bound confirmation, before/after
+   checksums, backup, rollback, and a receipt. Change only the canonical
+   derived field and its matching temporal projection. Preserve transcript,
+   diarization, CLAP, visual evidence, and neutral provenance.
+4. **Re-inspect independently.** The historical-debt count must decrease by
+   exactly one, with no new changes outside the target scene and temporal
+   segment.
+5. **Scale serially.** Only after the one-scene receipt passes, prepare small
+   deterministic batches. Every batch gets a fresh inspected digest, one
+   receipt per scene, and stops on the first checksum, artifact, runtime, or
+   projection mismatch. Never treat `success` status without its required
+   payload as eligible.
+
+Current GoodQ tooling:
+
+- `cli/signature_backfill_plan.py` is inspect-only and emits the eligible-set
+  digest; it has no execution path.
+- `wsl2_audio/signature_only.py` computes signatures from existing waveform
+  and diarization only.
+- `cli/signature_backfill_execute.py` performs the token-bound one-scene
+  promotion with backup and rollback.
+
 ## Fresh Probe Rules
 
 - Use a fresh epoch for personal-memory validation.

@@ -41,6 +41,22 @@ def _signature_meta(scene: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _speaker_ids(scene: dict[str, Any]) -> list[str]:
+    """Mirror the harmonizer's scene-payload speaker precedence, read-only."""
+    audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+    values: list[Any] = [scene.get("speaker_ids"), audio.get("speakers")]
+    values.extend(audio.get(key) for key in ("speaker_transcript", "speaker_segments", "diarization"))
+    result: list[str] = []
+    for raw_values in values:
+        if not isinstance(raw_values, list):
+            continue
+        for raw in raw_values:
+            value = raw if isinstance(raw, str) else raw.get("speaker", raw.get("label")) if isinstance(raw, dict) else None
+            if isinstance(value, str) and value.strip() and value.strip() not in result:
+                result.append(value.strip())
+    return result
+
+
 def _review_packet(scene: dict[str, Any], video_id: str, reasons: list[str]) -> dict[str, Any]:
     audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
     return {
@@ -159,6 +175,14 @@ def build_quality_report(
                     {**packet, "reasons": ["content_processing_error"]},
                 )
 
+            audio_diarization = audio.get("diarization_status")
+            derived_diarization = scene.get("diarization_status")
+            counts["diarization_audio_success"] += audio_diarization == "success"
+            counts["diarization_derived_success"] += derived_diarization == "success"
+            counts["diarization_path_disagreement"] += (
+                derived_diarization is not None and derived_diarization != audio_diarization
+            )
+
             segments = [
                 segment for segment in audio.get("segments", []) if isinstance(segment, dict)
             ]
@@ -193,7 +217,7 @@ def build_quality_report(
                 mismatches.append("transcript")
             if len(projected.get("transcript_segments") or []) != len(segments):
                 mismatches.append("transcript_segments")
-            if set(projected.get("speaker_ids") or []) != set(scene.get("speaker_ids") or []):
+            if set(projected.get("speaker_ids") or []) != set(_speaker_ids(scene)):
                 mismatches.append("speaker_ids")
             for field in mismatches:
                 temporal[f"mismatch_{field}"] += 1
@@ -212,6 +236,15 @@ def build_quality_report(
 
     return {
         "audit_kind": "human_perceived_quality_read_only",
+        "field_path_contract": {
+            "transcript": "scene.audio.full_text, fallback scene.audio.transcript",
+            "transcript_segments": "scene.audio.segments",
+            "diarization_runtime": "scene.audio.diarization_status",
+            "diarization_derived": "scene.diarization_status",
+            "speaker_ids": "scene.speaker_ids, then scene.audio speaker payloads",
+            "speaker_signature": "scene.audio.speaker_voice_signature_meta",
+            "temporal_projection": "temporal_index.segments[scene_id]",
+        },
         "processing_root": str(processing_root),
         "receipt_path": str(receipt_path) if receipt_path else None,
         "recovered_scene_count": len(recovered_scene_ids),

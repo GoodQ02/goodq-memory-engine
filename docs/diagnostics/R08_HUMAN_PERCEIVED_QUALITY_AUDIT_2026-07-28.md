@@ -47,9 +47,10 @@ The active July manifest authority has 12 videos and 1,457 canonical scenes.
 
 ## Projection findings
 
-- The committed recovery addendum leaves exactly 46 scene projections stale in
-  the temporal indexes. This is the bounded temporal-audio reconciliation seam
-  already recorded in the preceding R-08 audit.
+- The 46 recovery-addendum projections have been reconciled into their 10
+  matching temporal indexes through a scope-bound, backup-backed operation.
+  The recovery provenance is neutral audit context; it does not alter ranking,
+  retrieval, or confidence.
 - There are 17 additional pre-existing temporal mismatches: 4 transcript-text
   mismatches and 17 segment-count mismatches, with overlap. These must be
   classified separately from the addendum rather than silently swept into its
@@ -65,14 +66,30 @@ that any transcript, diarization label, or visual caption is semantically
 correct. The generated review queue is the next human evidence surface for that
 question.
 
+## Field-path contract
+
+The audit reads each claim from its named authority rather than inferring one
+status from another:
+
+| Claim | Authority field |
+| --- | --- |
+| Transcript | `scene.audio.full_text`, fallback `scene.audio.transcript` |
+| Transcript segments | `scene.audio.segments` |
+| Runtime diarization | `scene.audio.diarization_status` |
+| Derived diarization | `scene.diarization_status` |
+| Speaker IDs | scene and nested audio speaker payloads, in precedence order |
+| Signature metadata | `scene.audio.speaker_voice_signature_meta` |
+| Temporal projection | matching `temporal_index.segments[scene_id]` |
+
+This prevents a derived-field lag from being reported as a failed runtime
+diarization operation.
+
 ## Ordered next seams
 
-1. Build and prove the dedicated temporal-audio reconciler for the 46 committed
-   recovery scenes. Keep the 17 pre-existing mismatches out of that write set.
-2. Design a signature-only historical backfill for the 1,408 failed Wav2Vec
+1. Design a signature-only historical backfill for the 1,408 failed Wav2Vec
    records. It must use the now-locked model authority, preserve existing
    transcript/diarization/CLAP outputs, and run scene-first before any batch.
-3. Review the five content-error packets, 29 unexplained empty transcripts, and
+2. Review the five content-error packets, 29 unexplained empty transcripts, and
    14 boundary-excess packets. Only then define any historical metadata or
    timestamp repair; do not infer “silence” from an empty field.
 

@@ -65,6 +65,8 @@ def test_quality_audit_classifies_readiness_without_mutating_inputs(tmp_path: Pa
 
     assert report["counts"]["scenes"] == 2
     assert report["counts"]["speaker_signature_errors"] == 1
+    assert report["counts"]["diarization_audio_success"] == 0
+    assert report["field_path_contract"]["diarization_runtime"] == "scene.audio.diarization_status"
     assert report["counts"]["empty_transcripts_without_outcome"] == 1
     assert report["counts"]["transcript_segments_over_boundary"] == 1
     assert report["temporal_projection"]["recovery_addendum_temporal_stale"] == 1

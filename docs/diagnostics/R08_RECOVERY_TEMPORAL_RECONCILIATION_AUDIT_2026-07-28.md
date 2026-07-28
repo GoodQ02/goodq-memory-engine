@@ -1,5 +1,5 @@
 <!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: CHECKPOINT_EVIDENCE_COMPLETE -->
+<!-- DOC_STATUS: RECONCILIATION_COMMITTED -->
 <!-- DOC_LAST_VERIFIED: 2026-07-28 -->
 
 # R-08 Recovery Temporal Reconciliation Audit — 2026-07-28
@@ -26,7 +26,7 @@ ranking, or confidence.
 - Compared fields: full transcript, transcript segments, diarization status,
   speaker IDs, and speaker-signature count.
 
-## Result
+## Read-only finding (pre-write)
 
 All 46 scene IDs already exist in their respective temporal indexes. None is
 missing or structurally ambiguous. However, every compared temporal segment
@@ -52,7 +52,30 @@ also permits entity extraction and configured scene-context LLM work. Reusing it
 for this correction could refresh unrelated visual, entity, or context fields,
 which violates the recovery addendum's scene-scoped, audio-only boundary.
 
-## Required next write gate
+## Completed reconciliation
+
+The dedicated reconciler was implemented and fixture-tested before the live
+write. Live execution used the scope-bound plan digest
+`04525e1b8b3631849a33e4dc88f09cc6df0f5415d92b2254ac7a24e299907aa0`.
+
+| Verification | Result |
+| --- | --- |
+| Target scenes | 46 exact addendum scene IDs |
+| Temporal files | 10 exact video indexes |
+| Receipt status | `temporal_audio_reconciliation_committed` |
+| Backup | One timestamped backup of those 10 temporal-index files |
+| Manifest, SQLite, vectors, graph | Not written |
+| Post-write addendum-temporal stale projections | 0 |
+
+The receipt is stored under the active epoch's
+`temporal_reconciliations/` authority. It records the target IDs, plan digest,
+field list, backup location, and after-write temporal checksums.
+
+The post-write quality audit still reports 17 pre-existing temporal mismatches.
+Those are intentionally outside this repair's write set and remain review work,
+not a failed addendum reconciliation.
+
+## Historical required write gate
 
 Implement and test a dedicated temporal-audio reconciler before any live write.
 It must:
@@ -65,13 +88,12 @@ It must:
 5. preserve all non-target temporal segments and all manifest fields; and
 6. retain `recovery_addendum` as neutral provenance only.
 
-After fixture tests and a one-video disposable proof, the separate live
-confirmation may reconcile the 10 affected temporal indexes. It is not a corpus
-re-ingestion or a broad Phase 6b rerun.
+The historical gate was satisfied by fixture execution, exact live preflight,
+scope-bound confirmation, backup, and independent post-write audit. It was not
+a corpus re-ingestion or a broad Phase 6b rerun.
 
 ## Explicit non-actions
 
-- No July corpus data changed during this audit.
-- No temporal index was refreshed.
-- No vector, SQLite, knowledge-graph, or API mutation occurred.
+- No source media, canonical scene manifest, vector, SQLite, knowledge-graph,
+  or API authority was changed.
 - No proof-epoch collection was promoted.

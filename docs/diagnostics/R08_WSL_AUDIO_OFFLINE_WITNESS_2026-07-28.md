@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: OPERATIONAL -->
+<!-- DOC_STATUS: CHECKPOINT_EVIDENCE_COMPLETE -->
+<!-- DOC_LAST_VERIFIED: 2026-07-28 -->
+
 # R-08 WSL Audio Offline Witness — 2026-07-28
 
 ## Scope

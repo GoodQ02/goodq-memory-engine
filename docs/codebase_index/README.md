@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **402**
+Indexed active Python paths: **405**
 
 ## Repository root
 
@@ -59,6 +59,7 @@ Indexed active Python paths: **402**
 - `api/server.py`
 - `api/utils/__init__.py`
 - `api/utils/action_jobs.py`
+- `api/utils/identity_read_projection.py`
 - `api/utils/ingest_requests.py`
 - `api/utils/loaders.py`
 - `api/utils/media_projection.py`
@@ -94,6 +95,7 @@ Indexed active Python paths: **402**
 - `cli/observability_rollup.py`
 - `cli/persistent_store_alignment_audit.py`
 - `cli/print_config.py`
+- `cli/recovery_promotion.py`
 - `cli/retrieve.py`
 - `cli/run_ingestion.py`
 - `cli/step_runner.py`
@@ -206,6 +208,7 @@ Indexed active Python paths: **402**
 - `scripts/diagnostics/episode_reference_eval.py`
 - `scripts/diagnostics/monitor_progress.py`
 - `scripts/diagnostics/native_model_stability_smoke.py`
+- `scripts/diagnostics/pipeline_witness_sheet.py`
 - `scripts/diagnostics/scene_context_debug.py`
 - `scripts/docs/banned_token_lint.py`
 - `scripts/docs/build_current_state.py`

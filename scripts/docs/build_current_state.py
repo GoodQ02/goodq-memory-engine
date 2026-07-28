@@ -327,11 +327,16 @@ def _capture_qdrant(endpoint: str, collections: dict[str, str], dimensions: dict
         if isinstance(item, dict)
     }
     expected_names = set(collections.values())
-    if inventory_names != expected_names:
+    missing_names = expected_names - inventory_names
+    if missing_names:
         raise RuntimeError(
-            f"Qdrant collection authority mismatch: expected {sorted(expected_names)!r}, "
-            f"got {sorted(inventory_names)!r}"
+            f"Qdrant collection authority missing required collections: "
+            f"expected {sorted(expected_names)!r}, got {sorted(inventory_names)!r}"
         )
+    # A local Qdrant service may retain isolated witness or recovery collections.
+    # They are observable non-authority state, not a reason to reject the active
+    # epoch's four configured collections.
+    result["non_authority_collection_count"] = len(inventory_names - expected_names)
 
     for modality, name in collections.items():
         detail_status, detail = _http_json(f"{endpoint.rstrip('/')}/collections/{name}")
@@ -656,7 +661,8 @@ def render_current_state_markdown(evidence: dict[str, Any]) -> str:
     persistence = evidence["persistence"]
     services = evidence["observed_services"]
     configured = evidence["configured_runtime"]
-    qdrant = persistence["qdrant"]["collections"]
+    qdrant_observation = persistence["qdrant"]
+    qdrant = qdrant_observation["collections"]
     lifecycle = _lifecycle_state(evidence)
     lifecycle_claim = (
         "This capture proves the active corpus complete and fully promoted; it is not an ingestion target."
@@ -724,6 +730,10 @@ dimensions, and status below are observations returned by Qdrant at capture.
 | Modality | Exact collection | Points | Dimensions | Status |
 |---|---|---:|---:|---|
 {collection_rows}
+
+- Non-authority Qdrant collections observed: `{qdrant_observation.get('non_authority_collection_count', 0)}`.
+  They are excluded from active epoch authority and require a separate retention
+  audit before any cleanup.
 
 ## Configured Runtime Versus Observed State
 

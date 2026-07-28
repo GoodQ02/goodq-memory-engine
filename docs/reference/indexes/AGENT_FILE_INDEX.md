@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1309**
+Indexed active tracked paths: **1323**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -106,6 +106,7 @@ Indexed active tracked paths: **1309**
 | `/api/server.py` | API | API or local control-plane implementation. |
 | `/api/utils/__init__.py` | API | API or local control-plane implementation. |
 | `/api/utils/action_jobs.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_read_projection.py` | API | API or local control-plane implementation. |
 | `/api/utils/ingest_requests.py` | API | API or local control-plane implementation. |
 | `/api/utils/loaders.py` | API | API or local control-plane implementation. |
 | `/api/utils/media_projection.py` | API | API or local control-plane implementation. |
@@ -144,6 +145,7 @@ Indexed active tracked paths: **1309**
 | `/cli/observability_rollup.py` | CLI | Command-line operator surface. |
 | `/cli/persistent_store_alignment_audit.py` | CLI | Command-line operator surface. |
 | `/cli/print_config.py` | CLI | Command-line operator surface. |
+| `/cli/recovery_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/retrieve.py` | CLI | Command-line operator surface. |
 | `/cli/run_ingestion.py` | CLI | Command-line operator surface. |
 | `/cli/step_runner.py` | CLI | Command-line operator surface. |
@@ -332,6 +334,7 @@ Indexed active tracked paths: **1309**
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -656,6 +659,7 @@ Indexed active tracked paths: **1309**
 | `/scripts/diagnostics/episode_reference_eval.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/monitor_progress.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/native_model_stability_smoke.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/diagnostics/pipeline_witness_sheet.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/quick_laptop_test.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/scene_context_debug.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/docs/banned_token_lint.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1117,13 +1121,16 @@ Indexed active tracked paths: **1309**
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_epoch_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_ledger.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_mutation_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_process_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_process_recovery.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_resolver_evidence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_roster_writes.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_routes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_search_ranking.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_workbench_behavior.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_workbench_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_image_embed_dino_diagnostics.py` | Verification | Test, fixture, or verification asset. |
@@ -1168,7 +1175,10 @@ Indexed active tracked paths: **1309**
 | `/tests/unit/test_print_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_promote_identity_layer.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_qdrant_loopback_transport.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_recovery_promotion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_context_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_faiss_store_ref_privacy_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_model_cache_authority.py` | Verification | Test, fixture, or verification asset. |
@@ -1181,6 +1191,7 @@ Indexed active tracked paths: **1309**
 | `/tests/unit/test_run_ingestion_audio_backend_reducer.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_audio_entity_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_content_state.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_run_ingestion_input_file.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_modality_status.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_progress_tracking.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_step_json_errors.py` | Verification | Test, fixture, or verification asset. |
@@ -1242,14 +1253,17 @@ Indexed active tracked paths: **1309**
 | `/tests/unit/test_watchdog_processed_prefix_idempotent.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_registry_deadlock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_safety.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_stage_coverage.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_held_handle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_security_mechanics.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl2_audio_bridge_cache_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_robustness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_audio_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_audio_unified_bridge.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_diarization_model_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_process_audio_diarization.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl_unified_clap_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/verify_wsl_env.py` | Verification | Test, fixture, or verification asset. |
 | `/ui/docs_offline/favicon.ico` | User interface | User-interface implementation or asset. |
 | `/ui/docs_offline/redoc.standalone.js` | User interface | User-interface implementation or asset. |

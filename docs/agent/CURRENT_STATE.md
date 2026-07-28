@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_CURRENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-28 -->
 
 # GoodQ4All Current Agent State
 
-Generated from evidence `2923b9a7ca972db2` captured at
-`2026-07-11T13:08:29Z`. Do not hand-edit this file; regenerate it with
+Generated from evidence `4dbb3d27da27939f` captured at
+`2026-07-28T18:09:49Z`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
 ## Authority
@@ -29,8 +29,8 @@ Generated from evidence `2923b9a7ca972db2` captured at
 | Materialized scenes | 1,648 |
 | Materialized segments | 16,535 |
 | Embeddings | 8,736 |
-| Knowledge-graph nodes | 93,293 |
-| Knowledge-graph edges | 1,928,045 |
+| Knowledge-graph nodes | 93,308 |
+| Knowledge-graph edges | 1,929,056 |
 | Lifecycle transition rows | 1 |
 
 The lifecycle ledger contains only the events shown above. Do not reconstruct
@@ -48,6 +48,10 @@ dimensions, and status below are observations returned by Qdrant at capture.
 | dino | `goodq_dino_epoch_2026_07_05_home_memory_clean_01` | 2,913 | 1024 | green |
 | text | `goodq_text_epoch_2026_07_05_home_memory_clean_01` | 4,292 | 384 | green |
 
+- Non-authority Qdrant collections observed: `56`.
+  They are excluded from active epoch authority and require a separate retention
+  audit before any cleanup.
+
 ## Configured Runtime Versus Observed State
 
 Configuration describes intended routing; observation describes this one
@@ -56,16 +60,16 @@ column says so.
 
 | Service | Observed state |
 |---|---|
-| goodq_api | `timeout` |
+| goodq_api | `tcp_reachable` |
 | ollama | `reachable` |
 | qdrant | `running_loopback` |
-| vllm | `not_probed_non_loopback` |
+| vllm | `stopped_or_unavailable` |
 | wsl | `not_probed` |
 
 - Configured GoodQ API: `http://127.0.0.1:30000`
 - Configured Qdrant: `http://127.0.0.1:6333`
-- Configured vLLM: redacted (non-loopback configured) with model
-  `Qwen2.5-0.5B-Instruct`
+- Configured vLLM: `http://127.0.0.1:38005/v1` (loopback) with model
+  `Llama-3.2-1B-Instruct`
 - Configured GoodQ Ollama: `http://127.0.0.1:11434/v1` (loopback) with model
   `llama3.2:latest`
 - Hermes/Gemma on the GOOD-CUBE toolbelt is a separate local agent runtime and

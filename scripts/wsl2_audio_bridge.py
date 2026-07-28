@@ -121,6 +121,7 @@ class WindowsWSL2AudioRunner(AudioRunner):
             cfg = load_configs()
         except Exception:
             cfg = {}
+        self._config = cfg
         host_cfg = cfg.get('host', {})
         
         config_user = host_cfg.get('wsl_user')
@@ -286,6 +287,38 @@ class WindowsWSL2AudioRunner(AudioRunner):
             rest_win = rest.replace("/", "\\")
             return f"{drive}:\\{rest_win}"
         return wsl_path
+
+    def _wsl_model_cache_exports(self) -> Dict[str, str]:
+        """Return the canonical cache authority for a managed WSL audio run.
+
+        WSL does not inherit the Windows process environment.  Passing these
+        variables in the bridge command prevents Hugging Face from silently
+        creating or consuming a per-user fallback cache on GPU-managed hosts.
+        """
+        paths_cfg = self._config.get("paths", {}) if isinstance(self._config, dict) else {}
+        raw_root = (
+            os.environ.get("GOODQ_MODEL_CACHE_ROOT")
+            or os.environ.get("HF_HOME")
+            or paths_cfg.get("models_cache")
+        )
+        if not raw_root:
+            if self.require_wsl_audio:
+                raise RuntimeError(
+                    "GOODQ_REQUIRE_WSL_AUDIO=1 requires a configured canonical models_cache; "
+                    "refusing the per-user Hugging Face cache fallback."
+                )
+            return {}
+
+        root = self.wsl_path(Path(str(raw_root)))
+        hub = f"{root.rstrip('/')}/hub"
+        return {
+            "GOODQ_MODEL_CACHE_ROOT": root,
+            "HF_HOME": root,
+            "TORCH_HOME": root,
+            "HUGGINGFACE_HUB_CACHE": hub,
+            "HF_HUB_CACHE": hub,
+            "PYANNOTE_CACHE": hub,
+        }
         
     def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
         audio_path = Path(audio_file)
@@ -516,8 +549,14 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 if diarization_warning and diarization_warning not in env_warnings:
                     env_warnings.append(diarization_warning)
             import shlex
+            cache_exports = self._wsl_model_cache_exports()
+            cache_export_script = "".join(
+                f"export {key}={shlex.quote(value)}; "
+                for key, value in cache_exports.items()
+            )
             bridge_script = (
                 f'set -euo pipefail; '
+                f'{cache_export_script}'
                 f'source {shlex.quote(setup_script)}; '
                 f'export GOODQ_BRIDGE_REQUEST_UUID={shlex.quote(request_uuid)}; '
                 f'exec python3 {shlex.quote(processor)} {shlex.quote(wsl_input)} {shlex.quote(wsl_output)}'

@@ -135,7 +135,30 @@ def build_sheet(
         _require(int(signature.get("emitted") or 0) > 0, f"scene {scene.get('index')} has no Wav2Vec signature", errors)
         _require(clap.get("qdrant_committed") is True and clap.get("faiss_committed") is True, f"scene {scene.get('index')} lacks committed CLAP proof", errors)
         _require(clap.get("sqlite_embeddings_state") == "not_applicable_isolated_epoch", f"scene {scene.get('index')} has incorrect isolated SQLite state", errors)
-        per_scene.append({"index": scene.get("index"), "id": scene.get("scene_id"), "statuses": statuses, "signatures": signature.get("emitted")})
+        timings = audio.get("step_timings") or {}
+        per_scene.append(
+            {
+                "index": scene.get("index"),
+                "id": scene.get("scene_id"),
+                "statuses": statuses,
+                "signatures": signature.get("emitted"),
+                "start": audio.get("start"),
+                "end": audio.get("end"),
+                "duration": audio.get("duration"),
+                "transcript_chars": len(str(audio.get("transcript") or "")),
+                "transcript_segments": len(audio.get("segments") or []),
+                "diarization_turns": len(audio.get("diarization") or []),
+                "speaker_ids": audio.get("speaker_ids") or [],
+                "clap_id": clap.get("embedding_id"),
+                "clap_faiss_id": clap.get("faiss_id"),
+                "audio_wsl_seconds": timings.get("audio_unified_wsl2"),
+                "clap_seconds": timings.get("audio_embed_clap"),
+                "faces": len(keyframe.get("faces") or []),
+                "objects": len(keyframe.get("objects") or []),
+                "caption": keyframe.get("caption") or "",
+                "ocr_chars": len(str(keyframe.get("ocr_text") or "")),
+            }
+        )
 
     collections_expected = {
         f"goodq_audio_{epoch_root.name}": 2,
@@ -178,6 +201,36 @@ def build_sheet(
     ]
     table = "\n".join(f"| {a} | {b} | {c} | {d} |" for a, b, c, d in rows)
     scene_lines = "\n".join(f"| {row['index']} | `{row['id']}` | WSL | {row['signatures']} | ok |" for row in per_scene)
+    qa_scene_lines = "\n".join(
+        "| {index} | {start:.2f}–{end:.2f} ({duration:.2f}s) | {chars} chars / {segments} segments | "
+        "{speakers} / {turns} turns / {signatures} signatures | {faces} faces / {objects} objects / {ocr} OCR chars | "
+        "WSL {wsl:.2f}s; CLAP {clap:.2f}s |".format(
+            index=row["index"],
+            start=float(row["start"] or 0),
+            end=float(row["end"] or 0),
+            duration=float(row["duration"] or 0),
+            chars=row["transcript_chars"],
+            segments=row["transcript_segments"],
+            speakers=", ".join(str(value) for value in row["speaker_ids"]) or "none",
+            turns=row["diarization_turns"],
+            signatures=row["signatures"],
+            faces=row["faces"],
+            objects=row["objects"],
+            ocr=row["ocr_chars"],
+            wsl=float(row["audio_wsl_seconds"] or 0),
+            clap=float(row["clap_seconds"] or 0),
+        )
+        for row in per_scene
+    )
+    qa_identity_lines = "\n".join(
+        "- Scene {index}: CLAP embedding `{clap_id}`; FAISS ID `{faiss_id}`; caption: {caption}".format(
+            index=row["index"],
+            clap_id=row["clap_id"] or "unavailable",
+            faiss_id=row["clap_faiss_id"] if row["clap_faiss_id"] is not None else "unavailable",
+            caption=str(row["caption"]).replace("|", "\\|") or "unavailable",
+        )
+        for row in per_scene
+    )
     qdrant_lines = "\n".join(f"| `{name}` | {points} | {status} |" for name, points, status in collection_rows)
     step_lines = "\n".join(
         f"| `{step}` | {count} |"
@@ -185,7 +238,7 @@ def build_sheet(
         if step.startswith("step.") or step.startswith("pipeline.")
     )
     status = "PASS" if not errors else "FAIL"
-    error_section = "None." if not errors else "\n".join(f"- {error}" for error in errors)
+    error_section = "**PASS — no failed assertions.**" if not errors else "\n".join(f"- {error}" for error in errors)
     preflight_section = "Not supplied." if preflight is None else (
         f"`ready={preflight.get('ready')}`, `gpu_ready={preflight.get('gpu_ready')}`, "
         f"`diarization_ready={preflight.get('diarization_ready')}`, "
@@ -211,6 +264,20 @@ def build_sheet(
 | Index | Scene ID | Audio backend | Wav2Vec signatures | Core stage status |
 |---:|---|---|---:|---|
 {scene_lines}
+
+## Quality-assurance observed values
+
+These are values read from the completed witness receipts, not inferred from a
+health endpoint. Transcript text itself is intentionally not reproduced here;
+the counts below make the evidence auditable without duplicating source dialogue.
+
+| Scene | Time range | Transcript | Diarization / signatures | Vision | Measured audio stage time |
+|---:|---|---|---|---|---|
+{qa_scene_lines}
+
+### Immutable vector and visual receipt values
+
+{qa_identity_lines}
 
 ## Store receipts
 

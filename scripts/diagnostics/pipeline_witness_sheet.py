@@ -58,6 +58,14 @@ def _completed_steps(stdout_path: Path) -> collections.Counter[str]:
     return completed
 
 
+def _run_id(stdout_path: Path) -> str | None:
+    for line in stdout_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        event = _read_json_line(line)
+        if isinstance(event, dict) and isinstance(event.get("run_id"), str):
+            return event["run_id"]
+    return None
+
+
 def build_sheet(
     report_root: Path,
     epoch_root: Path,
@@ -69,8 +77,16 @@ def build_sheet(
     errors: list[str] = []
     _require(isinstance(result_items, list) and len(result_items) == 1, "result envelope must contain one video", errors)
     result = result_items[0] if isinstance(result_items, list) and result_items else {}
-    completed_steps = _completed_steps(report_root / "stdout.log")
+    stdout_path = report_root / "stdout.log"
+    completed_steps = _completed_steps(stdout_path)
+    run_id = _run_id(stdout_path)
     _require(completed_steps.get("pipeline.ingestion") == 1, "pipeline completion receipt missing", errors)
+    _require(run_id is not None, "structured run ID missing from stdout log", errors)
+    _require(
+        result.get("knowledge_graph_status") == "not_applicable_isolated_epoch",
+        f"isolated witness has incorrect graph status: {result.get('knowledge_graph_status')!r}",
+        errors,
+    )
     scenes = result.get("scenes") if isinstance(result, dict) else None
     _require(isinstance(scenes, list) and len(scenes) == 2, "witness must contain exactly two scenes", errors)
     scenes = scenes if isinstance(scenes, list) else []
@@ -156,6 +172,7 @@ def build_sheet(
         ("Audio model preflight", "configured Ubuntu WSL worker", "CUDA, Faster-Whisper, Pyannote, Wav2Vec, FFmpeg ready", "preflight receipt"),
         ("Audio/text vectors", "CLAP and text embedding stages", "two audio; transcript and frame text commits", "FAISS, Qdrant, epoch ledger"),
         ("Temporal fusion", "cross_modal_harmonization after scene processing", "2-scene index and committed modality projection", "canonical temporal_index.json"),
+        ("Knowledge graph", "incremental graph writer", "explicitly not applicable in isolated witness", "result receipt"),
         ("Provenance", "UCF context-frame registration", "one media source and context frames", "ucf/ucf_ledger.db"),
         ("Isolation", "epoch-local run contract", "SQLite explicitly not applicable", "receipt metadata and JSONL ledger"),
     ]
@@ -178,7 +195,7 @@ def build_sheet(
     )
     text = f"""# GoodQ Two-Scene Pipeline Witness — {status}
 
-**Run:** `{result.get('orchestration', {}).get('run_id', '2f1a8ec9-5dde-4a13-8aea-0a0aa2ab99e2')}`  
+**Run:** `{run_id or 'unavailable'}`
 **Source:** `{result.get('video_name')}`  
 **Epoch:** `{epoch_root.name}`  
 **Scope:** exactly scene indices `[0, 1]`; isolated from July production authority.

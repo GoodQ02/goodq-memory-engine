@@ -303,24 +303,26 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     )
         # Upsert generic embedding metadata for recall. Keep DINO distinct from
         # CLIP so the shared keyframe hash does not collapse visual modalities.
-        embedding_ok = False
-        embedding_reason = None
-        try:
-            from steps.common.memory import upsert_embedding
-            scene_id = item.get("scene_id") or item.get("scene_index")
-            if scene_id is not None and not isinstance(scene_id, str):
-                scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id, vector=feats[0].tolist())
-            embedding_ok = True
-        except Exception as e:
-            embedding_reason = f"exception:{type(e).__name__}"
-            logger.warning(
-                "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
-                "sqlite_embeddings.upsert",
-                path,
-                type(e).__name__,
-                e,
-            )
+        isolated_epoch = bool(cfg.get("ingestion_isolation", False))
+        embedding_ok = None if isolated_epoch else False
+        embedding_reason = "not_applicable_isolated_epoch" if isolated_epoch else None
+        if not isolated_epoch:
+            try:
+                from steps.common.memory import upsert_embedding
+                scene_id = item.get("scene_id") or item.get("scene_index")
+                if scene_id is not None and not isinstance(scene_id, str):
+                    scene_id = f"scene_{int(scene_id):04d}"
+                upsert_embedding(cfg, h, faiss_id, path, "dino", scene_id=scene_id, vector=feats[0].tolist())
+                embedding_ok = True
+            except Exception as e:
+                embedding_reason = f"exception:{type(e).__name__}"
+                logger.warning(
+                    "image_embed_dino operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "sqlite_embeddings.upsert",
+                    path,
+                    type(e).__name__,
+                    e,
+                )
         dino_meta: Dict[str, Any] = {
             "status": "ok",
             "index_path": index_path,
@@ -335,7 +337,8 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             "qdrant_committed": bool(qdrant_ok),
             "sqlite_map_attempted": bool(map_db),
             "sqlite_map_committed": bool(map_ok),
-            "sqlite_embeddings_committed": bool(embedding_ok),
+            "sqlite_embeddings_committed": embedding_ok,
+            "sqlite_embeddings_state": "not_applicable_isolated_epoch" if isolated_epoch else "committed" if embedding_ok else "failed",
         }
         if qdrant_collection:
             dino_meta["qdrant_collection"] = qdrant_collection

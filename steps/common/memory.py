@@ -1017,11 +1017,12 @@ def register_scene_bundle(
                         "count": 1
                     }
                 
-                targets["sqlite_embeddings"] = {
-                    "attempted": True,
-                    "committed": True,
-                    "ref": (cfg.get("paths", {}) or {}).get("db_path"),
-                }
+                if not cfg.get("ingestion_isolation", False):
+                    targets["sqlite_embeddings"] = {
+                        "attempted": True,
+                        "committed": True,
+                        "ref": (cfg.get("paths", {}) or {}).get("db_path"),
+                    }
                 
                 emit_memory_commit_event(
                     cfg,

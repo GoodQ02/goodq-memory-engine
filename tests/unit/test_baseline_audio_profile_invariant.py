@@ -677,6 +677,32 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     assert payload["scene_index"] == 7
     assert payload["audio_backend_effective"] == "wsl"
 
+    sqlite_embeddings.clear()
+    emitted_events.clear()
+    isolated_result = clap_step.audio_embed_clap(
+        {
+            "source_path": str(audio_path),
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+            "video_hash": "hash-alpha",
+            "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+        },
+        {
+            "ingestion_isolation": True,
+            "paths": {
+                "faiss_audio_path": str(tmp_path / "faiss" / "isolated_audio.index"),
+                "db_path": str(tmp_path / "isolated_memory.db"),
+            },
+        },
+    )
+
+    assert sqlite_embeddings == []
+    assert isolated_result["clap_meta"]["sqlite_embeddings_committed"] is None
+    assert isolated_result["clap_meta"]["sqlite_embeddings_state"] == "not_applicable_isolated_epoch"
+    assert len(emitted_events) == 1
+    assert "sqlite_embeddings" not in emitted_events[0].targets
+
 
 @pytest.mark.parametrize(
     ("failing_step", "expected_meta_field"),

@@ -82,12 +82,16 @@ timings, vector IDs, and store receipts; it does not reproduce source dialogue.
    has the pre-recovery audio projection. Build and prove a dedicated
    scene-scoped temporal-audio reconciler for those 10 videos; do not use a broad
    Phase 6b rerun.
-2. **Operator-status freshness seam.** The API should distinguish a completed
+2. **Historical Wav2Vec signature debt.** The human-perceived quality audit
+   found 1,408 explicit historical signature failures. Plan a signature-only,
+   scene-first backfill using the now-locked runtime; do not re-transcribe or
+   re-ingest the corpus.
+3. **Operator-status freshness seam.** The API should distinguish a completed
    last-step receipt from an active pipeline job, so an idle system cannot appear
    to be processing stale CLAP work.
-3. **Proof-collection retention audit.** Classify non-authority Qdrant
+4. **Proof-collection retention audit.** Classify non-authority Qdrant
    collections and write a deletion/retention manifest before any cleanup.
-4. **Selective development integration.** Reconcile the reviewed clean branch
+5. **Selective development integration.** Reconcile the reviewed clean branch
    against private `dev`; do not wholesale-merge a long-lived feature branch.
 
 ## Verification surfaces
@@ -98,5 +102,6 @@ timings, vector IDs, and store receipts; it does not reproduce source dialogue.
 - `docs/GOODQ_RAG_CONTEXT_PACK.md`
 - `docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md`
 - `docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md`
+- `docs/diagnostics/R08_HUMAN_PERCEIVED_QUALITY_AUDIT_2026-07-28.md`
 - `<data_root>/epochs/epoch_2026_07_05_home_memory_clean_01/recovery_addenda/recovery_addendum_20260728T154754Z_0d48779d8b45/receipt.json`
 - `<data_root>/reports/pipeline_witnesses/20260728_seinfeld_01x01_two_scene_v3/PIPELINE_WITNESS_ONE_SHEET.md`

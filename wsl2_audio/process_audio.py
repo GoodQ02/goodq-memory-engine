@@ -449,6 +449,13 @@ def _build_speaker_voice_signatures(
     return {"signatures": signatures, "meta": meta}
 
 
+def _diarization_outcome(diarization_segments: list[dict[str, Any]]) -> tuple[str, Optional[str]]:
+    """Make a clean zero-track result visible instead of calling it success."""
+    if diarization_segments:
+        return "success", None
+    return "completed_no_speakers", "diarization completed without emitted speaker tracks"
+
+
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
@@ -669,7 +676,10 @@ def process_audio(audio_file, output_dir):
                     result["speakers"] = list(set(speakers))
                     result["speaker_count"] = len(set(speakers))
                     result["diarization"] = diarization_segments
-                    result["diarization_status"] = "success"
+                    diarization_status, diarization_note = _diarization_outcome(diarization_segments)
+                    result["diarization_status"] = diarization_status
+                    if diarization_note:
+                        result["diarization_note"] = diarization_note
                     
                     # Clean up diarization pipeline
                     del diarization_pipeline

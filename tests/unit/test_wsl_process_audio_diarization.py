@@ -8,6 +8,16 @@ from pathlib import Path
 import torch
 
 
+def test_diarization_outcome_requires_emitted_tracks_for_success() -> None:
+    from wsl2_audio import process_audio as mod
+
+    assert mod._diarization_outcome([{"speaker": "SPEAKER_00"}]) == ("success", None)
+    assert mod._diarization_outcome([]) == (
+        "completed_no_speakers",
+        "diarization completed without emitted speaker tracks",
+    )
+
+
 def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path: Path):
     from wsl2_audio import process_audio as mod
 

@@ -96,6 +96,10 @@ diarization operation.
    receipt: two signatures were written to the canonical scene and its matching
    temporal projection while transcript and diarization remained unchanged.
    The remaining debt is 1,407: 1,327 eligible and 80 blocked.
+   A fresh isolated witness established the correct future outcome for this
+   exact case: `diarization_status=completed_no_speakers` with an explicit note.
+   The historic 80 are retained as historical metadata until a separately
+   scoped label-only reconciliation is reviewed.
 2. Review the five content-error packets, 29 unexplained empty transcripts, and
    14 boundary-excess packets. Only then define any historical metadata or
    timestamp repair; do not infer “silence” from an empty field.

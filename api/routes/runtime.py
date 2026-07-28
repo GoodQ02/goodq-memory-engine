@@ -70,6 +70,25 @@ _REPORTS_ROOT = Path(os.environ.get("GOODQ_RUN_REPORTS_ROOT") or (_DATA_ROOT / "
 _WSL_STATUS_CACHE: Dict[str, Any] | None = None
 _WSL_STATUS_CACHE_MONOTONIC = 0.0
 _WSL_STATUS_CACHE_SECONDS = 5.0
+
+
+def _decode_wsl_output(value: str | bytes | None) -> str:
+    """Decode Windows WSL output without leaking UTF-16 NULs to the API."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if not value:
+        return ""
+    encodings = ("utf-16-le", "utf-16", "utf-8") if b"\x00" in value else ("utf-8", "utf-16-le", "utf-16")
+    for encoding in encodings:
+        try:
+            decoded = value.decode(encoding).replace("\x00", "")
+            if decoded.strip():
+                return decoded
+        except UnicodeDecodeError:
+            continue
+    return value.decode("utf-8", errors="replace").replace("\x00", "")
+
+
 def _resolve_wsl_distro() -> str:
     env_override = os.environ.get("GOODQ_WSL_DISTRO")
     if env_override:
@@ -79,21 +98,7 @@ def _resolve_wsl_distro() -> str:
         return str(cfg_override)
     try:
         result = subprocess.run(["wsl", "-l", "-q"], capture_output=True, timeout=1.0)
-        stdout_bytes = result.stdout
-        decoded = ""
-        if isinstance(stdout_bytes, str):
-            decoded = stdout_bytes
-        elif stdout_bytes:
-            encodings = ("utf-16-le", "utf-16", "utf-8") if b"\x00" in stdout_bytes else ("utf-8", "utf-16-le", "utf-16")
-            for encoding in encodings:
-                try:
-                    temp = stdout_bytes.decode(encoding).strip()
-                    temp = temp.replace("\x00", "").strip()
-                    if temp:
-                        decoded = temp
-                        break
-                except Exception:
-                    pass
+        decoded = _decode_wsl_output(result.stdout)
         lines = [line.strip().replace("\x00", "") for line in decoded.splitlines() if line.strip()]
         if lines:
             for line in lines:
@@ -407,9 +412,9 @@ def _collect_wsl_status() -> Dict[str, Any]:
         return status
 
     try:
-        result = subprocess.run(["wsl", "--status"], capture_output=True, text=True, timeout=1.0)
+        result = subprocess.run(["wsl", "--status"], capture_output=True, timeout=1.0)
         status["status"] = "running" if result.returncode == 0 else "stopped"
-        status["status_output"] = result.stdout
+        status["status_output"] = _decode_wsl_output(result.stdout)
     except subprocess.TimeoutExpired as e:
         logger.warning(f"WSL status check timed out (frozen): {e}")
         status["status"] = "frozen"
@@ -420,8 +425,26 @@ def _collect_wsl_status() -> Dict[str, Any]:
         status["status"] = "unknown"
 
     try:
-        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, text=True, timeout=1.0)
-        status["list_output"] = list_result.stdout
+        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, timeout=1.0)
+        list_output = _decode_wsl_output(list_result.stdout)
+        status["list_output"] = list_output
+        matching_line = next(
+            (line for line in list_output.splitlines() if wsl_distro.lower() in line.lower()),
+            "",
+        ).lower()
+        if "stopped" in matching_line:
+            status.update(
+                {
+                    "status": "stopped",
+                    "audio_processing": "stopped",
+                    "audio_probe": "not_run_cold",
+                    "faster_whisper": "not_checked",
+                    "gpu_probe_status": "not_run_cold",
+                }
+            )
+            return status
+        if "running" in matching_line:
+            status["status"] = "running"
     except subprocess.TimeoutExpired as e:
         logger.warning(f"WSL list check timed out (frozen): {e}")
         status["status"] = "frozen"

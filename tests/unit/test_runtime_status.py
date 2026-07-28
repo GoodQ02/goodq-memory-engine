@@ -175,6 +175,32 @@ def test_resolve_wsl_distro_prefers_goodq_audio_distro(tmp_path: Path, monkeypat
     assert distro == "GoodQ_Audio_Distro"
 
 
+def test_wsl_status_reports_configured_stopped_distro_without_waking_it(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+    monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
+    monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
+
+    def _completed(args: list[str], stdout: bytes, returncode: int = 0):
+        return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr=b"")
+
+    def _fake_run(args, *, capture_output=None, text=None, timeout=None):
+        assert text is None
+        if args == ["wsl", "--status"]:
+            return _completed(args, "Default Distribution: Ubuntu-22.04\r\n".encode("utf-16-le"))
+        if args == ["wsl", "-l", "-v"]:
+            return _completed(args, "* Ubuntu-22.04    Stopped    2\r\n".encode("utf-16-le"))
+        raise AssertionError(f"cold status must not start a distro: {args!r}")
+
+    monkeypatch.setattr(runtime.subprocess, "run", _fake_run)
+    status = runtime._collect_wsl_status()
+
+    assert status["status"] == "stopped"
+    assert status["audio_processing"] == "stopped"
+    assert status["audio_probe"] == "not_run_cold"
+    assert "\x00" not in status["list_output"]
+
+
 def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path, monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     db_path = tmp_path / "memory.db"

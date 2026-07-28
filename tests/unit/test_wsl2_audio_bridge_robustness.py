@@ -81,7 +81,9 @@ def test_single_quote_in_workspace_preflight(monkeypatch):
     
     runner = WindowsWSL2AudioRunner()
     
-    with patch("subprocess.run") as mock_run:
+    with patch("subprocess.run") as mock_run, patch.object(
+        runner, "_workspace_worker_mismatches", return_value=[]
+    ):
         mock_run.return_value = MagicMock(returncode=0)
         
         runner._ensure_workspace_ready()

@@ -9,6 +9,8 @@ import json
 import time
 import os
 import uuid
+import hashlib
+import shlex
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -266,6 +268,19 @@ class WindowsWSL2AudioRunner(AudioRunner):
             if self.require_wsl_audio:
                 raise RuntimeError(message)
             self._warn_workspace_once(message, warning_kind="workspace_not_found")
+            return self._workspace_ready
+
+        mismatches = self._workspace_worker_mismatches()
+        if mismatches:
+            self._workspace_ready = False
+            message = (
+                "WSL worker deployment is stale or incomplete: "
+                + ", ".join(mismatches)
+                + ". Synchronize the worker before processing audio."
+            )
+            if self.require_wsl_audio:
+                raise RuntimeError(message)
+            self._warn_workspace_once(message, warning_kind="worker_mismatch")
         return self._workspace_ready
         
     def wsl_path(self, windows_path):
@@ -319,6 +334,40 @@ class WindowsWSL2AudioRunner(AudioRunner):
             "HF_HUB_CACHE": hub,
             "PYANNOTE_CACHE": hub,
         }
+
+    @staticmethod
+    def _worker_file_names() -> tuple[str, ...]:
+        return ("setup_cuda_env.sh", "process_audio.py", "model_cache.py")
+
+    def _expected_worker_hashes(self) -> Dict[str, str]:
+        source_root = Path(__file__).resolve().parents[1] / "wsl2_audio"
+        return {
+            name: hashlib.sha256((source_root / name).read_bytes()).hexdigest()
+            for name in self._worker_file_names()
+        }
+
+    def _workspace_worker_mismatches(self) -> list[str]:
+        """Return stale or unreadable deployed worker filenames without mutating WSL."""
+        expected = self._expected_worker_hashes()
+        paths = " ".join(
+            shlex.quote(f"{self.audio_workspace}/{name}")
+            for name in self._worker_file_names()
+        )
+        result = subprocess.run(
+            ["wsl", "-d", self.wsl_distro, "--", "bash", "-lc", f"sha256sum {paths}"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            return list(expected)
+        actual = [line.split(maxsplit=1)[0].lower() for line in result.stdout.splitlines() if line.strip()]
+        mismatches = [
+            name
+            for name, actual_hash in zip(self._worker_file_names(), actual)
+            if actual_hash != expected[name]
+        ]
+        return mismatches + list(self._worker_file_names()[len(actual):])
         
     def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
         audio_path = Path(audio_file)
@@ -548,7 +597,6 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 ).strip()
                 if diarization_warning and diarization_warning not in env_warnings:
                     env_warnings.append(diarization_warning)
-            import shlex
             cache_exports = self._wsl_model_cache_exports()
             cache_export_script = "".join(
                 f"export {key}={shlex.quote(value)}; "

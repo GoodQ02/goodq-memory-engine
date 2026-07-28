@@ -92,6 +92,10 @@ diarization operation.
    no batch backfill has run. The inspect-only plan classifies 1,328 scenes as
    eligible and 80 as blocked because their manifests retain no diarization
    segments despite a `success` status. Those 80 must not be silently retried.
+   One token-bound eligible-scene promotion has now passed with a backup and
+   receipt: two signatures were written to the canonical scene and its matching
+   temporal projection while transcript and diarization remained unchanged.
+   The remaining debt is 1,407: 1,327 eligible and 80 blocked.
 2. Review the five content-error packets, 29 unexplained empty transcripts, and
    14 boundary-excess packets. Only then define any historical metadata or
    timestamp repair; do not infer “silence” from an empty field.

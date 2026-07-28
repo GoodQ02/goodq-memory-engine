@@ -136,8 +136,12 @@ def check_hf_model_cache(repo_id: str) -> bool:
                                     try:
                                         resolved = file_path.resolve()
                                         if resolved.is_file() and resolved.stat().st_size > 0:
-                                            ext = resolved.suffix.lower()
-                                            name = resolved.name.lower()
+                                            # Hugging Face snapshots expose descriptive names as
+                                            # symlinks to content-addressed blobs.  Validate the
+                                            # resolved blob, but classify the snapshot entry; a
+                                            # blob hash itself has no useful extension.
+                                            ext = file_path.suffix.lower()
+                                            name = file_path.name.lower()
                                             if ext in ('.bin', '.safetensors', '.json', '.pt', '.pth', '.onnx', '.h5', '.ckpt') or name in ('config.json', 'model.bin'):
                                                 return True
                                     except Exception:
@@ -154,13 +158,38 @@ def check_whisper_cache(model_name: str) -> bool:
     return check_hf_model_cache(repo_name)
 
 def check_pyannote_cache(model_name: str) -> bool:
-    """Check if PyAnnote diarization pipeline and its sub-models are cached."""
-    repos = [
-        model_name,
-        "pyannote/segmentation-3.0",
-        "pyannote/wespeaker-voxceleb-resnet34-LM"
-    ]
-    return all(check_hf_model_cache(repo) for repo in repos)
+    """Check the offline PyAnnote pipeline chain without requiring fake weights.
+
+    ``speaker-diarization-3.1`` is a pipeline repository: its useful local
+    proof is ``config.yaml`` which references the separately cached
+    segmentation and WeSpeaker weight repositories.  The generic cache helper
+    deliberately requires a weight/config.json artifact, so using it for the
+    pipeline repo incorrectly reports a valid offline chain as absent.
+    """
+    def has_snapshot_file(repo_id: str, names: tuple[str, ...]) -> bool:
+        folder_name = "models--" + repo_id.replace("/", "--")
+        candidates = []
+        cache_root = os.environ.get("GOODQ_MODEL_CACHE_ROOT")
+        if cache_root:
+            candidates.extend([Path(cache_root) / "hub" / folder_name, Path(cache_root) / folder_name])
+        hf_home = os.environ.get("HF_HOME")
+        if hf_home:
+            candidates.append(Path(hf_home) / "hub" / folder_name)
+        hf_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.environ.get("HF_HUB_CACHE")
+        if hf_cache:
+            candidates.extend([Path(hf_cache) / folder_name, Path(hf_cache) / "hub" / folder_name])
+        candidates.append(Path.home() / ".cache" / "huggingface" / "hub" / folder_name)
+        return any(
+            any((snapshot / name).is_file() and (snapshot / name).stat().st_size > 0 for name in names)
+            for candidate in candidates if (candidate / "snapshots").is_dir()
+            for snapshot in (candidate / "snapshots").iterdir() if snapshot.is_dir()
+        )
+
+    return (
+        has_snapshot_file(model_name, ("config.yaml",))
+        and check_hf_model_cache("pyannote/segmentation-3.0")
+        and check_hf_model_cache("pyannote/wespeaker-voxceleb-resnet34-LM")
+    )
 
 def load_silero_vad(offline: bool = False) -> Tuple[Any, Any]:
     """

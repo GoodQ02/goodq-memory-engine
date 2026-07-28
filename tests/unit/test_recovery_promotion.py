@@ -22,6 +22,11 @@ def _recovered_scene(scene_id: str) -> dict:
             "full_text": "verified transcript",
             "audio_backend_effective": "wsl",
             "audio_backend_downgraded": False,
+            "clap_meta": {
+                "status": "ok",
+                "component": "audio_embed_clap",
+                "qdrant_committed": True,
+            },
         },
     }
 
@@ -57,6 +62,20 @@ def test_plan_blocks_partial_or_ambiguous_recovery_evidence(tmp_path: Path) -> N
     assert plan["status"] == "blocked"
     assert plan["rejected_scene_count"] == 1
     assert plan["rejections"][0]["reason"] == "empty_transcript"
+
+
+def test_plan_blocks_legacy_audio_without_persisted_clap(tmp_path: Path) -> None:
+    active, recovery = tmp_path / "active", tmp_path / "recovery"
+    _write_manifest(active, "video-a", [{"scene_id": "scene-a"}])
+    incomplete = _recovered_scene("scene-a")
+    incomplete["audio"]["clap_meta"] = {"status": "skipped"}
+    _write_manifest(recovery, "video-a", [incomplete])
+
+    plan = build_recovery_plan(active, recovery)
+
+    assert plan["status"] == "blocked"
+    assert plan["rejected_scene_count"] == 1
+    assert plan["rejections"][0]["reason"] == "clap_not_successful"
 
 
 def test_plan_admits_scene_first_receipt_through_the_same_gate(tmp_path: Path) -> None:

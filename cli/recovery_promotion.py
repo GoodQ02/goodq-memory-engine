@@ -61,6 +61,15 @@ def _recovery_failure(scene: dict[str, Any]) -> str | None:
         return "audio_not_from_wsl"
     if audio.get("audio_backend_downgraded") is True:
         return "audio_backend_downgraded"
+    clap_meta = audio.get("clap_meta")
+    if not isinstance(clap_meta, dict):
+        return "missing_clap_projection"
+    if clap_meta.get("status") != "ok":
+        return "clap_not_successful"
+    if clap_meta.get("component") != "audio_embed_clap":
+        return "clap_component_mismatch"
+    if clap_meta.get("qdrant_committed") is not True:
+        return "clap_qdrant_not_committed"
     if scene.get("qdrant_ok") is not True:
         return "recovery_vectors_not_committed"
     return None

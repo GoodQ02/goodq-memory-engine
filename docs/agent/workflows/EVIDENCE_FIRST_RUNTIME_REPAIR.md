@@ -115,6 +115,10 @@ Current GoodQ tooling:
   scene ranges.
   It does not automatically roll back earlier committed scene receipts; that
   partial outcome is recorded as a stopped batch receipt for review.
+- `cli/signature_backfill_serial_run.py` repeats only that immediate-next
+  operation for an explicitly bounded run, independently audits each committed
+  batch against its backups and projections, and stops on the first failed
+  execution or audit gate.
 
 ## Fresh Probe Rules
 

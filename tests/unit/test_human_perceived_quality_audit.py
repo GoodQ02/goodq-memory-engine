@@ -75,4 +75,39 @@ def test_quality_audit_classifies_readiness_without_mutating_inputs(tmp_path: Pa
     assert report["counts"]["transcript_segments_over_boundary"] == 1
     assert report["temporal_projection"]["recovery_addendum_temporal_stale"] == 1
     assert report["human_review_queue"]["recovery_addendum_temporal_stale"][0]["scene_id"] == recovered_id
+    assert "human_review_ledger" not in report
+    assert manifest_path.read_bytes() == before
+
+
+def test_quality_audit_full_review_ledger_is_complete_and_non_mutating(tmp_path: Path) -> None:
+    processing = tmp_path / "processing"
+    video = processing / "video-a"
+    manifest_path = video / "video" / "scene_manifest.json"
+    _write(
+        manifest_path,
+        {
+            "video_id": "video-a",
+            "scenes": [
+                {"scene_id": f"scene-{index}", "audio": {"full_text": "canonical", "segments": []}}
+                for index in range(audit.HUMAN_REVIEW_LIMIT_PER_REASON + 2)
+            ],
+        },
+    )
+    _write(
+        video / "temporal_index.json",
+        {
+            "segments": [
+                {"scene_id": f"scene-{index}", "full_transcript": "stale", "transcript_segments": [], "speaker_ids": []}
+                for index in range(audit.HUMAN_REVIEW_LIMIT_PER_REASON + 2)
+            ]
+        },
+    )
+    before = manifest_path.read_bytes()
+
+    report = audit.build_quality_report(processing, full_review_ledger=True)
+
+    assert len(report["human_review_queue"]["preexisting_temporal_mismatch"]) == audit.HUMAN_REVIEW_LIMIT_PER_REASON
+    ledger = report["human_review_ledger"]["preexisting_temporal_mismatch"]
+    assert [item["scene_id"] for item in ledger] == [f"scene-{index}" for index in range(7)]
+    assert all("full_text" not in item for item in ledger)
     assert manifest_path.read_bytes() == before

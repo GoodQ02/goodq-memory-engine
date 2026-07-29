@@ -72,8 +72,14 @@ def _review_packet(scene: dict[str, Any], video_id: str, reasons: list[str]) -> 
 
 
 def _add_review(
-    queue: dict[str, list[dict[str, Any]]], reason: str, packet: dict[str, Any]
+    queue: dict[str, list[dict[str, Any]]],
+    reason: str,
+    packet: dict[str, Any],
+    *,
+    full_ledger: dict[str, list[dict[str, Any]]] | None = None,
 ) -> None:
+    if full_ledger is not None:
+        full_ledger.setdefault(reason, []).append(packet)
     entries = queue.setdefault(reason, [])
     if len(entries) < HUMAN_REVIEW_LIMIT_PER_REASON:
         entries.append(packet)
@@ -94,6 +100,7 @@ def build_quality_report(
     *,
     receipt_path: Path | None = None,
     segment_overshoot_seconds: float = DEFAULT_SEGMENT_OVERSHOOT_SECONDS,
+    full_review_ledger: bool = False,
 ) -> dict[str, Any]:
     """Return a read-only quality ledger for canonical scene manifests."""
     manifests = sorted(processing_root.glob("*/video/scene_manifest.json"))
@@ -102,6 +109,7 @@ def build_quality_report(
     signature_status: Counter[str] = Counter()
     temporal: Counter[str] = Counter()
     review_queue: dict[str, list[dict[str, Any]]] = {}
+    review_ledger: dict[str, list[dict[str, Any]]] | None = {} if full_review_ledger else None
 
     for manifest_path in manifests:
         manifest = _read_json(manifest_path)
@@ -149,6 +157,7 @@ def build_quality_report(
                         review_queue,
                         "empty_transcript_without_outcome",
                         {**packet, "reasons": ["empty_transcript_without_outcome"]},
+                        full_ledger=review_ledger,
                     )
 
             signature_meta = _signature_meta(scene)
@@ -165,6 +174,7 @@ def build_quality_report(
                     review_queue,
                     "speaker_signature_error",
                     {**packet, "reasons": ["speaker_signature_error"]},
+                    full_ledger=review_ledger,
                 )
 
             if scene.get("content_state") == "processing_error":
@@ -173,6 +183,7 @@ def build_quality_report(
                     review_queue,
                     "content_processing_error",
                     {**packet, "reasons": ["content_processing_error"]},
+                    full_ledger=review_ledger,
                 )
 
             audio_diarization = audio.get("diarization_status")
@@ -206,6 +217,7 @@ def build_quality_report(
                             "reasons": ["transcript_segment_over_boundary"],
                             "segment_overshoot_seconds": round(overshoot, 3),
                         },
+                        full_ledger=review_ledger,
                     )
 
             projected = temporal_segments.get(scene_id)
@@ -215,6 +227,7 @@ def build_quality_report(
                     review_queue,
                     "missing_temporal_segment",
                     {**packet, "reasons": ["missing_temporal_segment"]},
+                    full_ledger=review_ledger,
                 )
                 continue
             temporal["segments_present"] += 1
@@ -238,9 +251,10 @@ def build_quality_report(
                     review_queue,
                     category,
                     {**packet, "reasons": [category, *mismatches]},
+                    full_ledger=review_ledger,
                 )
 
-    return {
+    report = {
         "audit_kind": "human_perceived_quality_read_only",
         "field_path_contract": {
             "transcript": "scene.audio.full_text, fallback scene.audio.transcript",
@@ -259,6 +273,9 @@ def build_quality_report(
         "temporal_projection": dict(sorted(temporal.items())),
         "human_review_queue": review_queue,
     }
+    if review_ledger is not None:
+        report["human_review_ledger"] = review_ledger
+    return report
 
 
 def main() -> None:
@@ -271,6 +288,11 @@ def main() -> None:
         type=float,
         default=DEFAULT_SEGMENT_OVERSHOOT_SECONDS,
     )
+    parser.add_argument(
+        "--full-review-ledger",
+        action="store_true",
+        help="Include every non-sensitive review packet instead of only the capped queue samples.",
+    )
     args = parser.parse_args()
     cfg = load_configs()
     processing_root = args.processing_root or Path(cfg["paths"]["processing"])
@@ -282,6 +304,7 @@ def main() -> None:
         processing_root,
         receipt_path=receipt_path,
         segment_overshoot_seconds=args.segment_overshoot_seconds,
+        full_review_ledger=args.full_review_ledger,
     )
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:

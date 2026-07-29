@@ -72,6 +72,17 @@ _WSL_STATUS_CACHE_MONOTONIC = 0.0
 _WSL_STATUS_CACHE_SECONDS = 5.0
 
 
+def _wsl_audio_component_status(wsl_status: Dict[str, Any]) -> str:
+    """Project WSL audio without treating an intentionally cold distro as failed."""
+    if not wsl_status.get("available"):
+        return "unavailable"
+    if wsl_status.get("audio_processing") == "available":
+        return "available"
+    if wsl_status.get("audio_probe") == "not_run_cold":
+        return "cold"
+    return "unavailable"
+
+
 def _decode_wsl_output(value: str | bytes | None) -> str:
     """Decode Windows WSL output without leaking UTF-16 NULs to the API."""
     if isinstance(value, str):
@@ -284,15 +295,18 @@ def _collect_engine_details() -> Dict[str, Any]:
     wsl_status = _shared_wsl_status()
     wsl_audio_ready = wsl_status.get("audio_processing") == "available"
     wsl_audio_reason = str(wsl_status.get("audio_processing") or "not_observed")
+    wsl_audio_component = _wsl_audio_component_status(wsl_status)
     engines["wsl_audio"] = {
         "name": "WSL Audio Transcription",
         "category": "Audio Processing",
         "description": (
             "Faster-Whisper with speaker diarization"
             if wsl_audio_ready
+            else "Configured worker not probed because the WSL distro is cold"
+            if wsl_audio_component == "cold"
             else f"Faster-Whisper unavailable ({wsl_audio_reason})"
         ),
-        "status": "ready" if wsl_audio_ready else "unavailable",
+        "status": "ready" if wsl_audio_ready else wsl_audio_component,
         "gpu": True,
         "probe_source": "wsl2_status",
     }
@@ -751,7 +765,7 @@ def get_status() -> Dict[str, Any]:
         "components": {
             "api": "running",
             "pipeline": processing_data["status"],
-            "wsl_audio": "available" if (wsl_status.get("available") and wsl_status.get("audio_processing") == "available") else "unavailable",
+            "wsl_audio": _wsl_audio_component_status(wsl_status),
         },
         "gpu": gpu_data,
         "models": models_data,

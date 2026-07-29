@@ -284,6 +284,26 @@ def test_wsl_audio_status_requires_verified_audio_processing(tmp_path: Path, mon
     assert status_resp["components"]["wsl_audio"] == "available"
 
 
+def test_wsl_audio_status_reports_cold_without_claiming_a_failure(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+
+    monkeypatch.setattr(
+        runtime,
+        "_collect_wsl_status",
+        lambda: {"available": True, "audio_processing": "stopped", "audio_probe": "not_run_cold"},
+    )
+
+    status_resp = runtime.get_status()
+    assert status_resp["components"]["wsl_audio"] == "cold"
+
+    runtime._WSL_STATUS_CACHE = None
+    runtime._WSL_STATUS_CACHE_MONOTONIC = 0.0
+    engines = runtime._collect_engine_details()
+    assert engines["wsl_audio"]["status"] == "cold"
+    assert "not probed" in engines["wsl_audio"]["description"].lower()
+
+
 def test_envelope_reports_not_configured_with_remediation(tmp_path: Path, monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")

@@ -80,6 +80,8 @@ def test_operator_console_keeps_absence_and_telemetry_provenance_visible() -> No
     assert "gpu_probe_reason" in app_js
     assert "remediation_owner" in app_js
     assert "optionalEndpointNames" not in app_js
+    assert "Cold, Not Probed" in app_js
+    assert "read-only status check did not wake" in app_js
 
 
 def test_operator_console_surfaces_witness_truth_spine() -> None:

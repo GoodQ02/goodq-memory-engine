@@ -368,8 +368,8 @@
     if (["ok", "active", "available", "healthy", "success", "running", "passed", "ready", "true", "complete", "completed"].includes(text)) {
       return "ok";
     }
-    if (["idle", "historical only"].includes(text)) {
-      return text === "idle" ? "info" : "historical";
+    if (["idle", "historical only", "cold"].includes(text)) {
+      return text === "historical only" ? "historical" : "info";
     }
     if ([
       "warn",
@@ -594,6 +594,14 @@
         value: "Ready",
         note: "runtime probe reports audio processing available",
         kind: "ok",
+      };
+    }
+    if (String(wsl?.audio_probe || "").toLowerCase() === "not_run_cold") {
+      return {
+        label: "WSL audio",
+        value: "Cold, Not Probed",
+        note: "the read-only status check did not wake the configured WSL worker; this is not a runtime failure",
+        kind: "info",
       };
     }
     return {

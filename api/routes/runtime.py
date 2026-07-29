@@ -668,6 +668,10 @@ def _collect_cli_progress(*, now: datetime | None = None) -> Dict[str, Any]:
     details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
     fresh = age_seconds is not None and age_seconds <= 7200
     active = fresh and status in {"active", "running", "processing", "in_progress"}
+    observed_step = payload.get("current_step")
+    stale_reason = None
+    if not active:
+        stale_reason = "progress_receipt_stale" if not fresh else "progress_receipt_not_active"
     return {
         "available": True,
         "source": "logs/progress.json",
@@ -676,7 +680,9 @@ def _collect_cli_progress(*, now: datetime | None = None) -> Dict[str, Any]:
         "status": status,
         "current_video": payload.get("current_file"),
         "run_id": payload.get("run_id"),
-        "current_step": payload.get("current_step"),
+        "current_step": observed_step if active else None,
+        "last_observed_step": observed_step if not active else None,
+        "stale_reason": stale_reason,
         "progress_percent": _round_number(payload.get("progress_percent")) or 0,
         "updated_at": payload.get("updated_at"),
         "age_seconds": _round_number(age_seconds),

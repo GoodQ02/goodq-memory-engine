@@ -213,6 +213,7 @@ def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path,
                 "status": "running",
                 "current_file": "home-video.mp4",
                 "run_id": "run-alpha",
+                "current_step": "Scene 19/141 - scene_loop",
                 "progress_percent": 42.5,
                 "updated_at": now.isoformat(),
                 "details": {"stage": "scene_loop", "scene_index": 19, "scenes_total": 141},
@@ -233,6 +234,9 @@ def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path,
     assert progress["stage"] == "scene_loop"
     assert progress["scene_index"] == 19
     assert progress["scenes_total"] == 141
+    assert progress["current_step"] == "Scene 19/141 - scene_loop"
+    assert progress["last_observed_step"] is None
+    assert progress["stale_reason"] is None
 
 
 def test_cli_progress_reader_keeps_completed_progress_non_active(tmp_path: Path, monkeypatch) -> None:
@@ -262,6 +266,35 @@ def test_cli_progress_reader_keeps_completed_progress_non_active(tmp_path: Path,
     assert progress["available"] is True
     assert progress["active"] is False
     assert progress["status"] == "completed"
+    assert progress["current_step"] is None
+    assert progress["stale_reason"] == "progress_receipt_not_active"
+
+
+def test_cli_progress_reader_moves_stale_running_step_to_historical_context(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "memory.db"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    observed_at = datetime(2026, 5, 22, 12, 0, 0)
+    (log_dir / "progress.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "current_step": "Scene 1/1 - Running audio_embed_clap",
+                "updated_at": observed_at.isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, db_path, log_dir=log_dir)
+    progress = runtime._collect_cli_progress(now=observed_at + timedelta(hours=3))
+
+    assert progress["active"] is False
+    assert progress["fresh"] is False
+    assert progress["current_step"] is None
+    assert progress["last_observed_step"] == "Scene 1/1 - Running audio_embed_clap"
+    assert progress["stale_reason"] == "progress_receipt_stale"
 
 
 def test_wsl_audio_status_requires_verified_audio_processing(tmp_path: Path, monkeypatch) -> None:

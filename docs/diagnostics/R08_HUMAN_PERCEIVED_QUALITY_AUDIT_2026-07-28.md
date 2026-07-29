@@ -4,6 +4,11 @@
 
 # R-08 Human-Perceived Quality Audit — 2026-07-28
 
+> **Operational update (2026-07-29):** The historical signature numbers below
+> are the audit's starting evidence, not current debt. The completed closeout
+> is recorded in
+> [R-08 Historical Signature Backfill Closeout](R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md).
+
 ## Purpose
 
 This read-only audit asks a stricter question than “did the pipeline run?”:
@@ -45,7 +50,7 @@ The active July manifest authority has 12 videos and 1,457 canonical scenes.
 | Content processing errors | 5 | Requires scene-level classification, not a corpus rerun. |
 | Segment boundary excess above 5 seconds | 14 | Requires a timestamp-contract review; padding is not automatically a failure. |
 
-### 2026-07-29 metadata reconciliation
+### 2026-07-29 metadata reconciliation and backfill closeout
 
 The 80 legacy zero-track scenes that previously claimed diarization `success`
 were reconciled with a token-bound, backup-backed operation across their 10
@@ -58,7 +63,10 @@ ran. The quality audit now counts this outcome explicitly on both runtime and
 derived field paths. Post-reconciliation audit values are 80 runtime and 80
 derived `completed_no_speakers` outcomes, 1,374 runtime `success` outcomes,
 1,328 derived `success` outcomes, and zero runtime/derived-status disagreements.
-The signature planner remains at 1,327 eligible and 80 blocked scenes.
+The initial planner state of 1,327 eligible and 80 blocked scenes is historical.
+After diversity preclassification and serial execution, the final planner state
+is zero eligible and 236 explicit terminal no-signature outcomes (80
+completed-no-speaker/zero-segment and 156 insufficient-diverse-speech).
 
 ## Projection findings
 
@@ -99,9 +107,9 @@ status from another:
 This prevents a derived-field lag from being reported as a failed runtime
 diarization operation.
 
-## Ordered next seams
+## Historical next seams and current status
 
-1. Build a reviewed, signature-only historical backfill plan for the 1,408
+1. **Closed on 2026-07-29:** Build a reviewed, signature-only historical backfill plan for the 1,408
    failed Wav2Vec records. The scene-first proof has passed using the locked
    model authority while preserving transcript, diarization, and CLAP outputs;
    no batch backfill has run. The inspect-only plan classifies 1,328 scenes as
@@ -111,7 +119,8 @@ diarization operation.
    One token-bound eligible-scene promotion has now passed with a backup and
    receipt: two signatures were written to the canonical scene and its matching
    temporal projection while transcript and diarization remained unchanged.
-   The remaining debt is 1,407: 1,327 eligible and 80 blocked.
+   The remaining debt was then classified and exhausted under the final
+   diversity contract; see the 2026-07-29 closeout for the current ledger.
    A fresh isolated witness established the correct future outcome for this
    exact case: `diarization_status=completed_no_speakers` with an explicit note;
    the historic 80 now match that contract through a separate metadata-only
@@ -124,5 +133,7 @@ diarization operation.
 
 - No source media, corpus manifest, temporal index, vector collection, or
   knowledge graph was changed by this audit.
-- No historical Wav2Vec backfill has run.
+- Historical Wav2Vec backfill subsequently ran only for scenes eligible under
+  the deterministic signature contract; the closeout record names the durable
+  receipts and terminal outcomes.
 - No broad re-ingestion is justified by these findings.

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1326**
+Indexed active tracked paths: **1347**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -133,6 +133,7 @@ Indexed active tracked paths: **1326**
 | `/cli/conduits_sensitive_sources.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_store_stats.py` | CLI | Command-line operator surface. |
 | `/cli/control_recurrence_report.py` | CLI | Command-line operator surface. |
+| `/cli/diarization_outcome_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/goodq_doctor.py` | CLI | Command-line operator surface. |
 | `/cli/links.py` | CLI | Command-line operator surface. |
 | `/cli/list_inbox.py` | CLI | Command-line operator surface. |
@@ -148,8 +149,14 @@ Indexed active tracked paths: **1326**
 | `/cli/recovery_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/retrieve.py` | CLI | Command-line operator surface. |
 | `/cli/run_ingestion.py` | CLI | Command-line operator surface. |
+| `/cli/signature_backfill_batch_execute.py` | CLI | Command-line operator surface. |
+| `/cli/signature_backfill_batches.py` | CLI | Command-line operator surface. |
+| `/cli/signature_backfill_execute.py` | CLI | Command-line operator surface. |
+| `/cli/signature_backfill_plan.py` | CLI | Command-line operator surface. |
+| `/cli/signature_backfill_serial_run.py` | CLI | Command-line operator surface. |
 | `/cli/step_runner.py` | CLI | Command-line operator surface. |
 | `/cli/system_status.py` | CLI | Command-line operator surface. |
+| `/cli/temporal_audio_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/test_ingestion.py` | CLI | Command-line operator surface. |
 | `/cli/ucf_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/ui_conduits_rollup.py` | CLI | Command-line operator surface. |
@@ -333,6 +340,8 @@ Indexed active tracked paths: **1326**
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_HISTORICAL_AUDIO_REPAIR_RESTART_HANDOFF_2026-07-28.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_HUMAN_PERCEIVED_QUALITY_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_PIPELINE_RECOVERY_AND_WITNESS_CLOSEOUT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
@@ -654,6 +663,7 @@ Indexed active tracked paths: **1326**
 | `/scripts/diagnostics/RUN_FULL_DIAGNOSTIC.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/RUN_HEALTH_CHECK.lnk` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/audit_gpu_steps.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/diagnostics/audit_human_perceived_quality.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/check_atomic_writes.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/check_dbs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/check_drive_roots.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1070,6 +1080,7 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_api_route_effect_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_surface_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_async_dag.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_atomic_io.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_atomic_json_write.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_bridge_native.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_segment_timeline_normalization.py` | Verification | Test, fixture, or verification asset. |
@@ -1109,6 +1120,7 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_current_state_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_pytest_wrapper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_doc_authority_lint.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_logging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
@@ -1123,6 +1135,7 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_human_perceived_quality_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_epoch_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
@@ -1221,6 +1234,11 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_segmentation_shadow_mode.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_self_healing_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_sidecar_migration.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_signature_backfill_batch_execute.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_signature_backfill_batches.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_signature_backfill_execute.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_signature_backfill_plan.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_signature_backfill_serial_run.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_step_runner_openmp_guard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |
@@ -1232,6 +1250,7 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_tag_utils_taxonomy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_llm_enhanced_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_temporal_audio_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_projection_repair.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_reasoning.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_summary_authority.py` | Verification | Test, fixture, or verification asset. |
@@ -1266,6 +1285,7 @@ Indexed active tracked paths: **1326**
 | `/tests/unit/test_wsl_audio_unified_bridge.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_diarization_model_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_process_audio_diarization.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl_signature_only_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_unified_clap_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/verify_wsl_env.py` | Verification | Test, fixture, or verification asset. |
 | `/ui/docs_offline/favicon.ico` | User interface | User-interface implementation or asset. |
@@ -1341,6 +1361,7 @@ Indexed active tracked paths: **1326**
 | `/wsl2_audio/setup_cuda_env.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/setup_windows.ps1` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/setup_wsl2_audio.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/signature_only.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/start_wsl2_service.bat` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/test_bridge.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/test_pipeline.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |

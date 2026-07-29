@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **405**
+Indexed active Python paths: **414**
 
 ## Repository root
 
@@ -84,6 +84,7 @@ Indexed active Python paths: **405**
 - `cli/conduits_sensitive_sources.py`
 - `cli/conduits_store_stats.py`
 - `cli/control_recurrence_report.py`
+- `cli/diarization_outcome_reconciliation.py`
 - `cli/goodq_doctor.py`
 - `cli/links.py`
 - `cli/list_inbox.py`
@@ -98,8 +99,14 @@ Indexed active Python paths: **405**
 - `cli/recovery_promotion.py`
 - `cli/retrieve.py`
 - `cli/run_ingestion.py`
+- `cli/signature_backfill_batch_execute.py`
+- `cli/signature_backfill_batches.py`
+- `cli/signature_backfill_execute.py`
+- `cli/signature_backfill_plan.py`
+- `cli/signature_backfill_serial_run.py`
 - `cli/step_runner.py`
 - `cli/system_status.py`
+- `cli/temporal_audio_reconciliation.py`
 - `cli/test_ingestion.py`
 - `cli/ucf_promotion.py`
 - `cli/ui_conduits_rollup.py`
@@ -200,6 +207,7 @@ Indexed active Python paths: **405**
 - `scripts/diagnose_transcription.py`
 - `scripts/diagnostics/FULL_SYSTEM_AUDIT.py`
 - `scripts/diagnostics/audit_gpu_steps.py`
+- `scripts/diagnostics/audit_human_perceived_quality.py`
 - `scripts/diagnostics/check_atomic_writes.py`
 - `scripts/diagnostics/check_dbs.py`
 - `scripts/diagnostics/check_drive_roots.py`
@@ -458,5 +466,6 @@ Indexed active Python paths: **405**
 - `wsl2_audio/fw_transcribe.py`
 - `wsl2_audio/model_cache.py`
 - `wsl2_audio/process_audio.py`
+- `wsl2_audio/signature_only.py`
 - `wsl2_audio/test_bridge.py`
 - `wsl2_audio/test_pipeline.py`

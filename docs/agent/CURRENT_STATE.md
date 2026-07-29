@@ -4,8 +4,8 @@
 
 # GoodQ4All Current Agent State
 
-Generated from evidence `b2723d030ff4e768` captured at
-`2026-07-29T202515Z`. Do not hand-edit this file; regenerate it with
+Generated from evidence `039570b0ba105be0` captured at
+`2026-07-29T204005Z`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
 ## Authority
@@ -48,7 +48,7 @@ dimensions, and status below are observations returned by Qdrant at capture.
 | dino | `goodq_dino_epoch_2026_07_05_home_memory_clean_01` | 2,913 | 1024 | green |
 | text | `goodq_text_epoch_2026_07_05_home_memory_clean_01` | 4,292 | 384 | green |
 
-- Non-authority Qdrant collections observed: `56`.
+- Non-authority Qdrant collections observed: `0`.
   They are excluded from active epoch authority and require a separate retention
   audit before any cleanup.
 

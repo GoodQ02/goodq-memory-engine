@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1369**
+Indexed active tracked paths: **1372**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -365,6 +365,7 @@ Indexed active tracked paths: **1369**
 | `/docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R22_HERMES_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R22_HERMES_ROUTING_PORT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |
@@ -1154,6 +1155,7 @@ Indexed active tracked paths: **1369**
 | `/tests/unit/test_gpu_config_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_hermes_llm_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_human_perceived_quality_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
@@ -1182,6 +1184,7 @@ Indexed active tracked paths: **1369**
 | `/tests/unit/test_knowledge_graph_readonly.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_legacy_wsl_audio_bridge_compat.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_llm_client_activation_policy.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_llm_client_endpoint_selection.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_media_containment_hardening.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_embedding_keying.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_ephemeral_truth.py` | Verification | Test, fixture, or verification asset. |

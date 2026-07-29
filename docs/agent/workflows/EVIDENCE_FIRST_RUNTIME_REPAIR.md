@@ -110,6 +110,9 @@ Current GoodQ tooling:
 - `cli/signature_backfill_batch_execute.py` builds one fresh deterministic
   batch, requires a batch-bound token, creates one signature-only CUDA proof
   and one atomic promotion receipt per scene, and stops at the first failure.
+  It accepts only the immediate next batch (`--batch-index 1`), because the
+  eligible ledger rebases after every committed batch; this prevents skipped
+  scene ranges.
   It does not automatically roll back earlier committed scene receipts; that
   partial outcome is recorded as a stopped batch receipt for review.
 

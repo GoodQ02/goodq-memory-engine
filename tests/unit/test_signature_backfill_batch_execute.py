@@ -57,6 +57,15 @@ def test_batch_plan_is_token_bound_and_deterministic(tmp_path: Path) -> None:
     assert len(plan_digest(plan)) == 64
 
 
+def test_executor_refuses_rebased_batch_index_that_would_skip_eligible_scenes(tmp_path: Path) -> None:
+    from cli.signature_backfill_batch_execute import BatchExecutionError, build_execution_plan
+
+    processing, _ = _fixture(tmp_path)
+
+    with pytest.raises(BatchExecutionError, match="batch_index=1"):
+        build_execution_plan(processing, batch_index=2, batch_size=2)
+
+
 def test_batch_executor_rejects_wrong_token_without_running_proofs(tmp_path: Path) -> None:
     from cli.signature_backfill_batch_execute import BatchExecutionError, build_execution_plan, execute_batch
 

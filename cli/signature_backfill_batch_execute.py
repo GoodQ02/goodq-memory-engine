@@ -68,7 +68,11 @@ def _runtime_contract() -> dict[str, str]:
 
 
 def build_execution_plan(processing_root: Path, *, batch_index: int, batch_size: int = DEFAULT_BATCH_SIZE) -> dict[str, Any]:
-    """Build one fresh, no-mutation batch plan from the current eligible ledger."""
+    """Build only the immediate next serial batch from the current eligible ledger."""
+    if batch_index != 1:
+        raise BatchExecutionError(
+            "serial executor accepts only batch_index=1; the eligible ledger rebases after every committed batch"
+        )
     source = build_signature_backfill_plan(processing_root)
     batches = build_batch_plan(source, batch_size=batch_size)
     selected = next((batch for batch in batches["batches"] if batch["batch_index"] == batch_index), None)

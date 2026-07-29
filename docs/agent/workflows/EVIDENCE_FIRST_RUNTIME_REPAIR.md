@@ -107,6 +107,11 @@ Current GoodQ tooling:
   and diarization only.
 - `cli/signature_backfill_execute.py` performs the token-bound one-scene
   promotion with backup and rollback.
+- `cli/signature_backfill_batch_execute.py` builds one fresh deterministic
+  batch, requires a batch-bound token, creates one signature-only CUDA proof
+  and one atomic promotion receipt per scene, and stops at the first failure.
+  It does not automatically roll back earlier committed scene receipts; that
+  partial outcome is recorded as a stopped batch receipt for review.
 
 ## Fresh Probe Rules
 

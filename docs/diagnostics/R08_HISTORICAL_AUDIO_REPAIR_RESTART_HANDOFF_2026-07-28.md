@@ -44,24 +44,25 @@ July home-memory corpus or conflating independent evidence lanes.
 ## Still Unproven Or Intentionally Unchanged
 
 1. **Historical signature debt:** after the one-scene promotion, 1,327 scenes
-   are eligible for signature-only backfill. The serial batch planner exists,
-   but no batch executor or batch run exists.
+   are eligible for signature-only backfill. The serial batch executor is now
+   fixture-proven and its first live plan is inspected, but no live batch has
+   run.
 2. **Separate human-quality queues:** 17 pre-existing temporal mismatches, 29
    empty-transcript scenes, and 5 processing-content errors remain review
    queues. They are not part of the zero-track or signature repair lanes.
 
 ## Exact Resume Seam
 
-Build and inspect the serial signature-backfill executor for the 1,327 eligible
-scenes. It remains a separate token-bound batch gate; do not execute a batch
-until its disposable-fixture and one-batch dry-run contracts pass.
+Review and explicitly approve (or reject) the inspected first ten-scene
+signature-only CUDA batch. It remains a separate token-bound write gate. The
+plan uses batch digest `9b04ef18978497bc4b99c55ebf3da3cea674e2937a09b0f5d2352eca7ed621df`.
 
 ## Do Not Repeat
 
 - Do not rerun the 46-scene audio recovery or its temporal reconciliation.
 - Do not treat the 80 zero-track scenes as eligible for signature backfill.
-- Do not launch the 1,327-scene signature batch. Build and inspect a separate
-  serial executor only after the metadata lane has a verified receipt.
+- Do not launch more than the separately approved first ten-scene signature
+  batch. Each later batch requires a fresh inspected digest and approval.
 - Do not hand-edit `docs/agent/CURRENT_STATE.md` or
   `docs/agent/current_state.json`; both are generated corpus/runtime snapshots.
 
@@ -74,8 +75,10 @@ until its disposable-fixture and one-batch dry-run contracts pass.
   successful, zero tracks, explicit `completed_no_speakers` status.
 - A no-repeat probe that correctly found no remaining legacy zero-track
   metadata targets.
+- Nine focused batch-executor, one-scene-promotion, and planner tests, plus a
+  live read-only first-batch plan containing exactly ten current eligible scenes.
 
 ## Approval Boundary
 
-The metadata reconciliation was explicitly approved and completed. A future
-signature batch remains a separate approval and verification gate.
+The metadata reconciliation was explicitly approved and completed. The first
+signature batch remains a separate explicit approval and verification gate.

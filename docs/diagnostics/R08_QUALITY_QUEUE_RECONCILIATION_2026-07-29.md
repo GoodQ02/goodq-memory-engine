@@ -33,35 +33,44 @@ queues without conflating their evidence, authority, or approval boundaries.
 5. The quality audit and signature planner now agree on canonical signature
    status: 1,209 scenes are `ok`; the 236 terminal failures are visible rather
    than masked by stale top-level metadata.
+6. All 14 material transcript-timestamp overshoots were reconciled from the
+   existing canonical audio evidence with scene-first validation, backups, and
+   no media processing. The post-audit boundary queue is zero.
+7. The one remaining temporal transcript conflict was reconciled from canonical
+   empty audio evidence after its raw and canonical sources agreed. The
+   post-audit temporal mismatch queue is zero.
 
 ## Separate Remaining Review Queues
 
-| Queue | Count | Required next action | Do not do |
+| Queue | Count | Status | Do not do |
 | --- | ---: | --- | --- |
-| Temporal projection mismatch | 1 | Human review of the canonical-empty versus temporal-text conflict, then a scoped decision. | Do not overwrite either source automatically. |
-| Transcript segment boundary | 14 | Read-only evidence review of timestamps and scene boundaries. | Do not treat an overshoot as a transcript failure or re-run audio. |
-| Terminal signature outcomes | 236 | Retain as explicit no-signature outcomes; revisit only if a future contract changes the eligibility criteria. | Do not batch backfill, synthesize, or use a fallback signature. |
-| Non-error signature statuses | 12 | Retain their explicit status (`missing`, `diarization_unavailable`, or insufficient speech) for operator visibility. | Do not merge them into the historical-failure count. |
+| Transcript timestamp boundary | 0 | Closed: 14 historical overshoots were bounded to their real WAV duration. | Do not re-run audio to repeat the metadata repair. |
+| Temporal projection mismatch | 0 | Closed: the final stale temporal transcript was refreshed from canonical empty evidence. | Do not overwrite canonical outcome from old temporal text. |
+| Terminal signature outcomes | 236 | Explicit no-signature outcomes; zero are eligible for execution. | Do not batch backfill, synthesize, or use a fallback signature. |
+| Empty transcript outcomes | 29 | Explicitly classified historical outcomes, not unexplained blanks. | Do not re-transcribe solely to improve a count. |
 
 ## Exact Resume Seam
 
-Start with the 14 transcript-boundary evidence packets in a read-only review.
-Each packet must be evaluated as its own scene-to-temporal-boundary question.
-Only after that queue is classified should the single temporal mismatch receive
-a separate scoped decision.
+The historical-audio quality lane is closed. Resume with the separate
+API/Operator Console WSL-status projection seam, then the non-authority Qdrant
+collection retention audit. Neither task authorizes a corpus repair or a
+signature rerun.
 
 ## Do Not Repeat
 
-- Do not re-run the 46-scene recovery or temporal reconciliation.
-- Do not re-run transcript outcome or content-state reconciliation; their
-  post-audit queues are zero.
+- Do not re-run the 46-scene recovery, transcript outcome, content-state,
+  timestamp, or temporal reconciliation lanes; their post-audit queues are
+  zero.
 - Do not launch another historical signature batch while the planner reports
   zero eligible scenes.
 - Do not use stale top-level signature metadata as a canonical status source.
 
 ## Targeted Validation
 
-- Focused quality-audit and signature-planner tests: 8 passed.
+- Focused timestamp reconciler, quality-audit, temporal reconciler, and WSL
+  audio tests passed before each write.
 - Quality audit Python compilation and Git whitespace check: passed.
-- Fresh read-only quality audit and fresh inspect-only signature planner agreed
-  on the 236 terminal signature-failure count and zero eligible backfill scope.
+- Fresh read-only quality audit reports 1,457 canonical scenes, zero material
+  timestamp overshoots, zero temporal mismatches, and 236 visible terminal
+  signature outcomes. The fresh inspect-only signature planner reports zero
+  eligible and 236 blocked scenes.

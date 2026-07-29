@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1353**
+Indexed active tracked paths: **1357**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -160,6 +160,7 @@ Indexed active tracked paths: **1353**
 | `/cli/temporal_audio_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/test_ingestion.py` | CLI | Command-line operator surface. |
 | `/cli/transcript_outcome_reconciliation.py` | CLI | Command-line operator surface. |
+| `/cli/transcript_timestamp_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/ucf_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/ui_conduits_rollup.py` | CLI | Command-line operator surface. |
 | `/cli/watchdog.py` | CLI | Command-line operator surface. |
@@ -347,6 +348,7 @@ Indexed active tracked paths: **1353**
 | `/docs/diagnostics/R08_HUMAN_PERCEIVED_QUALITY_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_PIPELINE_RECOVERY_AND_WITNESS_CLOSEOUT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -361,6 +363,7 @@ Indexed active tracked paths: **1353**
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29.json` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T185504Z.json` | Documentation | Active documentation or governance surface. |
 | `/docs/goodq4all_agent_status.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CONSOLIDATION_EXPLAINED.md` | Documentation | Active documentation or governance surface. |
@@ -1265,6 +1268,7 @@ Indexed active tracked paths: **1353**
 | `/tests/unit/test_tool_paths_piper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_resolver.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_transcript_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_transcript_timestamp_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_turboquant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_canonical_loader.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_promotion_cli.py` | Verification | Test, fixture, or verification asset. |

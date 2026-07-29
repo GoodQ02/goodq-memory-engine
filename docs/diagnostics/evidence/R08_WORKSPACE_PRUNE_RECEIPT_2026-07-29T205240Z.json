@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "operation": "workspace_safe_prune",
+  "executed_at_utc": "2026-07-29T205240Z",
+  "preserved_worktree_count": 6,
+  "removed_clean_merged_worktrees": [
+    {
+      "path": "C:/Users/jdben/.codex/worktrees/6efd/goodq4all",
+      "head": "b91e5f02d5431a4671c20cf2cda28f1885391544",
+      "bytes": 390031480
+    },
+    {
+      "path": "C:/Users/jdben/.codex/worktrees/r08-dev-integration-20260729",
+      "head": "525327bf8846283a96cf46972c8e58c3555791cb",
+      "bytes": 390239524
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/foundational-orientation-refinement",
+      "head": "42cd6fcc248ea50a4e040c679dd9089de926b0a8",
+      "bytes": 382037729
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r01-r02-checkpoints",
+      "head": "5a9e9c7cad108e35c5a946982b90d4fd76e1896e",
+      "bytes": 388828846
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r03-transition-audit",
+      "head": "45c741e198ea98bbfd3ded889cb4b6365105607b",
+      "bytes": 389106349
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r04-config-portability",
+      "head": "c6c2e4754b36cbea1f71894cecb8d3a569387526",
+      "bytes": 381999061
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r06-progressive-checkpoint",
+      "head": "b4ed9f3c0514df904ab677aa39d5adf948294cea",
+      "bytes": 384469597
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r09-current-state-truth",
+      "head": "1f4d5bc05b4d86abf5d7850dca2cafbf7edcf73d",
+      "bytes": 381957591
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r10-architecture-contracts",
+      "head": "fc4e3f1062c9cdd2cb73ade51b333097253111de",
+      "bytes": 383742941
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r11-control-authority",
+      "head": "1417e0ff603a12322eda4ef467012bab1d691877",
+      "bytes": 389333863
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r11-f1-handler-truth",
+      "head": "8b3e130822a093ecc09ef72481315a0177f6d6c1",
+      "bytes": 382899868
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r13-doc-authority",
+      "head": "2562daaa7c08e0f8adbfdc226a8ff6663ea56281",
+      "bytes": 381872682
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r17-foundational-docs",
+      "head": "eb4b5e281f3b751a0bd4109af3523ceeec829737",
+      "bytes": 382022532
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r17-mixed-tree-inventory",
+      "head": "a7d8249892724f131e0ecd85f9b2f33b3c5cf1a6",
+      "bytes": 381953296
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r18-evidence-isolation",
+      "head": "d4c5b686d2c370a25ed0467c5c333b72874d30fc",
+      "bytes": 382401412
+    },
+    {
+      "path": "L:/GOODCUBE/projects/goodq4all/.worktrees/r18-f1-api-test-harness",
+      "head": "04724ac1214c2d6d3ce32529846b21d1e81d9d14",
+      "bytes": 382269834
+    }
+  ],
+  "removed_ignored_cache_paths": [
+    "L:\\GOODCUBE\\projects\\goodq4all\\.worktrees\\dev-runtime\\.pytest_cache",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.worktrees\\dev-runtime\\__pycache__",
+    "L:\\GOODCUBE\\projects\\goodq4all\\__pycache__",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.pytest_tmp",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.pytest_tmp_auditor",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.pytest_tmp_challenger",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.pytest_tmp_clean",
+    "L:\\GOODCUBE\\projects\\goodq4all\\.pytest_tmp_migrated"
+  ],
+  "removed_worktree_bytes": 6155166605.0,
+  "removed_cache_bytes": 10120535.0,
+  "drive_free_before_bytes": 1602353954816,
+  "drive_free_after_bytes": 1607929004032
+}

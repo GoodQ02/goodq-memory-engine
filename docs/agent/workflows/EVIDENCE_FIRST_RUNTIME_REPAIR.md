@@ -83,6 +83,8 @@ missing or invalid.
 1. **Inspect only.** Build a deterministic ledger from canonical manifests and
    local artifacts. Classify each historical failure as `eligible`, `blocked`,
    or already explained; list the field-path reason for every blocked item.
+   For speaker signatures, eligibility must also satisfy the worker's
+   deterministic per-speaker diversity thresholds before WSL is invoked.
 2. **Prove the narrow computation.** In a fresh proof envelope, consume only
    the existing minimum inputs. For speaker signatures this means audio plus
    persisted diarization; it must not transcribe or diarize again.

@@ -50,25 +50,30 @@ July home-memory corpus or conflating independent evidence lanes.
 
 ## Still Unproven Or Intentionally Unchanged
 
-1. **Historical signature debt:** 1,317 scenes remain eligible for
-   signature-only backfill. The serial executor is now fixture-proven and one
-   ten-scene live batch has passed its independent audit.
+1. **Historical signature debt:** 1,134 scenes remain eligible for
+   signature-only backfill. The serial executor is fixture-proven; three
+   completed ten-scene batches and seven individually audited scenes passed.
+   The runner then stopped before promotion of a deterministic
+   `insufficient_diverse_speech` case. The planner now pre-classifies that
+   condition, leaving 236 blocked scenes (80 zero-track plus 156 below the
+   signature diversity threshold).
 2. **Separate human-quality queues:** 17 pre-existing temporal mismatches, 29
    empty-transcript scenes, and 5 processing-content errors remain review
    queues. They are not part of the zero-track or signature repair lanes.
 
 ## Exact Resume Seam
 
-Inspect the next fresh ten-scene signature-only CUDA plan and explicitly
-approve or reject it. It remains a separate token-bound write gate; no digest
-or approval carries forward from the completed first batch.
+Review the corrected fresh signature-only plan (1,134 eligible; 236 blocked)
+and explicitly approve or reject a resumed next ten-scene CUDA batch. It
+remains a separate token-bound write gate; no prior digest or approval carries
+forward across the corrected eligibility contract.
 
 ## Do Not Repeat
 
 - Do not rerun the 46-scene audio recovery or its temporal reconciliation.
 - Do not treat the 80 zero-track scenes as eligible for signature backfill.
-- Do not launch another signature batch until its fresh inspected digest and
-  separate approval exist.
+- Do not launch another signature batch until the corrected fresh inspected
+  digest and separate approval exist.
 - Do not hand-edit `docs/agent/CURRENT_STATE.md` or
   `docs/agent/current_state.json`; both are generated corpus/runtime snapshots.
 
@@ -86,9 +91,12 @@ or approval carries forward from the completed first batch.
 - Managed WSL executor activation check: the executor now sources the existing
   CUDA setup script; live runtime reports the configured GPU and all 10 proofs
   were CUDA successes.
+- Planner diversity-boundary tests and a live read-only reclassification: 156
+  former candidates now correctly block as `insufficient_diverse_speech`, so
+  no WSL proof is spent on a deterministic zero-signature outcome.
 
 ## Approval Boundary
 
-The metadata reconciliation and first signature batch were explicitly approved
-and completed. Every later batch remains a separate explicit approval and
-verification gate.
+The metadata reconciliation and initial serial signature work were explicitly
+approved and completed. Resuming after the corrected eligibility contract is a
+separate explicit approval and verification gate.

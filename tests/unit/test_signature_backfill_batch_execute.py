@@ -17,7 +17,10 @@ def _scene(scene_id: str, index: int, audio: Path) -> dict:
         "audio": {
             "path": str(audio),
             "diarization_status": "success",
-            "diarization": [{"speaker": "SPEAKER_00", "start": 0.0, "end": 2.0}],
+            "diarization": [
+                {"speaker": "SPEAKER_00", "start": 0.0, "end": 2.1},
+                {"speaker": "SPEAKER_00", "start": 3.0, "end": 5.2},
+            ],
             "speaker_voice_signature_meta": {"status": "error", "reason": "embedding_step_failed"},
         },
     }

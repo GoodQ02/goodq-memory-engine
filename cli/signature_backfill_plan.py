@@ -14,6 +14,12 @@ from steps.common.config_loader import load_configs
 
 TARGET_STATUS = "error"
 TARGET_REASON = "embedding_step_failed"
+# These values mirror wsl2_audio.process_audio's signature selector. Keep the
+# contract test synchronized with that worker before changing either side.
+SIGNATURE_MIN_TOTAL_SECONDS = 4.0
+SIGNATURE_MIN_SEGMENTS = 2
+SIGNATURE_MIN_SEGMENT_SECONDS = 0.75
+SIGNATURE_MAX_SEGMENTS = 4
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -46,6 +52,35 @@ def _scene_record(scene: dict[str, Any], manifest_path: Path, video_id: str) -> 
     }
 
 
+def _qualifying_signature_speakers(diarization: Any) -> list[dict[str, Any]]:
+    """Replicate the worker's deterministic pre-embedding selection boundary."""
+    grouped: dict[str, list[dict[str, float]]] = {}
+    if not isinstance(diarization, list):
+        return []
+    for segment in diarization:
+        if not isinstance(segment, dict):
+            continue
+        speaker = segment.get("speaker")
+        if not isinstance(speaker, str) or not speaker.strip():
+            continue
+        try:
+            start = float(segment.get("start") or 0.0)
+            end = float(segment.get("end") or start)
+        except (TypeError, ValueError):
+            continue
+        duration = max(0.0, end - start)
+        if duration < SIGNATURE_MIN_SEGMENT_SECONDS:
+            continue
+        grouped.setdefault(speaker.strip(), []).append({"start": start, "duration": duration})
+    qualified: list[dict[str, Any]] = []
+    for speaker, segments in grouped.items():
+        chosen = sorted(segments, key=lambda item: (-item["duration"], item["start"]))[:SIGNATURE_MAX_SEGMENTS]
+        voiced_seconds = sum(item["duration"] for item in chosen)
+        if len(chosen) >= SIGNATURE_MIN_SEGMENTS and voiced_seconds >= SIGNATURE_MIN_TOTAL_SECONDS:
+            qualified.append({"speaker": speaker, "selected_segment_count": len(chosen), "voiced_seconds": round(voiced_seconds, 3)})
+    return qualified
+
+
 def build_signature_backfill_plan(processing_root: Path) -> dict[str, Any]:
     """Classify existing scene evidence without reading media or changing state."""
     status_counts: Counter[str] = Counter()
@@ -76,10 +111,17 @@ def build_signature_backfill_plan(processing_root: Path) -> dict[str, Any]:
                 missing.append("diarization_not_success")
             if not record["diarization_segment_count"]:
                 missing.append("missing_diarization_segments")
+            qualifying_speakers = _qualifying_signature_speakers(
+                (scene.get("audio") or {}).get("diarization")
+                if isinstance(scene.get("audio"), dict)
+                else None
+            )
+            if not missing and not qualifying_speakers:
+                missing.append("insufficient_diverse_speech")
             if missing:
-                blocked.append({**record, "blocked_reasons": missing})
+                blocked.append({**record, "blocked_reasons": missing, "qualifying_signature_speakers": qualifying_speakers})
             else:
-                eligible.append(record)
+                eligible.append({**record, "qualifying_signature_speakers": qualifying_speakers})
 
     eligible.sort(key=lambda item: (item["video_id"], int(item["scene_index"] or -1), item["scene_id"]))
     blocked.sort(key=lambda item: (item["video_id"], int(item["scene_index"] or -1), item["scene_id"]))

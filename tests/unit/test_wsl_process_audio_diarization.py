@@ -18,6 +18,32 @@ def test_diarization_outcome_requires_emitted_tracks_for_success() -> None:
     )
 
 
+def test_transcript_timestamps_are_bounded_to_loaded_audio() -> None:
+    from wsl2_audio import process_audio as mod
+
+    segments = [
+        types.SimpleNamespace(start=-2.0, end=1.5, text=" opening ", avg_logprob=-0.2),
+        types.SimpleNamespace(start=8.0, end=13.0, text=" trailing ", avg_logprob=-0.4),
+        types.SimpleNamespace(start=14.0, end=16.0, text=" outside ", avg_logprob=-0.6),
+    ]
+
+    bounded, timing = mod._bound_transcript_segments_to_audio(
+        segments,
+        duration_seconds=10.0,
+    )
+
+    assert bounded == [
+        {"start": 0.0, "end": 1.5, "text": "opening", "confidence": -0.2},
+        {"start": 8.0, "end": 10.0, "text": "trailing", "confidence": -0.4},
+    ]
+    assert timing == {
+        "status": "bounded",
+        "input_duration_seconds": 10.0,
+        "clipped_segment_count": 2,
+        "dropped_segment_count": 1,
+    }
+
+
 def test_process_audio_uses_waveform_dict_for_diarization(monkeypatch, tmp_path: Path):
     from wsl2_audio import process_audio as mod
 

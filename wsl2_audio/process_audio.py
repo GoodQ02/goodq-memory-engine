@@ -11,6 +11,7 @@ import os
 import gc
 import importlib
 import logging
+import math
 import traceback
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -456,6 +457,59 @@ def _diarization_outcome(diarization_segments: list[dict[str, Any]]) -> tuple[st
     return "completed_no_speakers", "diarization completed without emitted speaker tracks"
 
 
+def _bound_transcript_segments_to_audio(
+    raw_segments: Any,
+    *,
+    duration_seconds: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Keep transcript timestamps within the waveform actually processed.
+
+    Faster-Whisper can occasionally emit a trailing timestamp beyond the input
+    chunk. The canonical scene contract cannot claim speech beyond the audio
+    file, so retain only overlapping text and make every correction observable.
+    """
+    duration = max(0.0, float(duration_seconds))
+    normalized: list[dict[str, Any]] = []
+    clipped_count = 0
+    dropped_count = 0
+
+    for raw in raw_segments if isinstance(raw_segments, list) else []:
+        try:
+            start = float(getattr(raw, "start"))
+            end = float(getattr(raw, "end"))
+        except (AttributeError, TypeError, ValueError):
+            dropped_count += 1
+            continue
+        if not (math.isfinite(start) and math.isfinite(end)):
+            dropped_count += 1
+            continue
+
+        bounded_start = min(duration, max(0.0, start))
+        bounded_end = min(duration, max(0.0, end))
+        if bounded_end <= bounded_start:
+            dropped_count += 1
+            continue
+        if bounded_start != start or bounded_end != end:
+            clipped_count += 1
+        normalized.append({
+            "start": bounded_start,
+            "end": bounded_end,
+            "text": str(getattr(raw, "text", "")).strip(),
+            "confidence": (
+                float(getattr(raw, "avg_logprob"))
+                if getattr(raw, "avg_logprob", None) is not None
+                else None
+            ),
+        })
+
+    return normalized, {
+        "status": "bounded" if clipped_count or dropped_count else "within_audio_bounds",
+        "input_duration_seconds": duration,
+        "clipped_segment_count": clipped_count,
+        "dropped_segment_count": dropped_count,
+    }
+
+
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
@@ -578,20 +632,19 @@ def process_audio(audio_file, output_dir):
                 beam_size=beam_size,
             )
             
-            transcription_text = ""
-            word_timestamps = []
+            word_timestamps, transcript_timing = _bound_transcript_segments_to_audio(
+                list(segments),
+                duration_seconds=result["duration_seconds"],
+            )
+            transcription_text = " ".join(
+                str(segment.get("text") or "").strip()
+                for segment in word_timestamps
+                if str(segment.get("text") or "").strip()
+            )
             
-            for segment in segments:
-                transcription_text += segment.text + " "
-                word_timestamps.append({
-                    "start": segment.start,
-                    "end": segment.end,
-                    "text": segment.text.strip(),
-                    "confidence": float(segment.avg_logprob) if hasattr(segment, 'avg_logprob') else None
-                })
-            
-            result["transcription"] = transcription_text.strip()
+            result["transcription"] = transcription_text
             result["word_timestamps"] = word_timestamps
+            result["transcription_timing"] = transcript_timing
             result["language"] = info.language
             result["language_probability"] = float(info.language_probability)
             result["transcription_status"] = "success"

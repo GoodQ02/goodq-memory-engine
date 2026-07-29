@@ -156,3 +156,12 @@ def test_quality_audit_does_not_compare_scene_and_temporal_segment_counts(tmp_pa
 
     assert report["temporal_projection"].get("preexisting_temporal_mismatch", 0) == 0
     assert "preexisting_temporal_mismatch" not in report["human_review_ledger"]
+
+
+def test_quality_audit_prefers_canonical_audio_signature_metadata() -> None:
+    scene = {
+        "speaker_voice_signature_meta": {"status": "error", "reason": "embedding_step_failed"},
+        "audio": {"speaker_voice_signature_meta": {"status": "ok"}},
+    }
+
+    assert audit._signature_meta(scene) == {"status": "ok"}

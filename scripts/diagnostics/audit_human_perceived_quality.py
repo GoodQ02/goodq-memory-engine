@@ -35,7 +35,9 @@ def _scene_text(scene: dict[str, Any]) -> str:
 
 def _signature_meta(scene: dict[str, Any]) -> dict[str, Any]:
     audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
-    value = scene.get("speaker_voice_signature_meta") or audio.get(
+    # The nested audio payload is the canonical derived-evidence writer.  The
+    # top-level field is a legacy projection and may retain a pre-backfill error.
+    value = audio.get("speaker_voice_signature_meta") or scene.get(
         "speaker_voice_signature_meta"
     )
     return value if isinstance(value, dict) else {}

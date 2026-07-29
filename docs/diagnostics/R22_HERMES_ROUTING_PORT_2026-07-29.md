@@ -28,6 +28,7 @@ history.
 | Local model inventory | The configured Hermes model is present at the configured local endpoint. |
 | Native one-token witness | Completed with visible output in approximately 0.65 seconds. |
 | Client witness, realistic budget | Selected `hermes-gemma4-64k:12b` and returned visible output through the OpenAI-compatible client path. |
+| Post-merge guard | 164 passed after making the portable-baseline test explicitly set `GOODQ_HOST_PROFILE=UNSET`; `.env.local` otherwise restores the workstation profile by design. |
 
 ## Quality Boundary
 

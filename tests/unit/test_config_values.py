@@ -457,8 +457,10 @@ def test_config_values():
 def test_build_llm_models_profile_injection(monkeypatch):
     from steps.common.llm_model_factory import build_llm_models
     
-    # 1. Default case (no profile)
-    monkeypatch.delenv("GOODQ_HOST_PROFILE", raising=False)
+    # 1. Portable baseline. ``load_configs`` deliberately reads the checkout's
+    # .env.local, so deleting the variable would allow the workstation's active
+    # GPU profile to re-enter this test.
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "UNSET")
     cfg = load_configs({
         "llm": {
             "vllm_url": "http://localhost:38005/v1",

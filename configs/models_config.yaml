@@ -42,6 +42,7 @@ models:
     engine: "ollama"
     category: "reasoning"
     gpu_accelerated: true
+    vram_gb: 9.5
     max_tokens: 16384
     temperature: 0.6
     description: "DeepSeek R1 14B Q4_K_M for heavy reasoning tasks"
@@ -54,6 +55,7 @@ models:
     engine: "ollama"
     category: "reasoning"
     gpu_accelerated: true
+    vram_gb: 5.0
     max_tokens: 16384
     temperature: 0.6
     description: "DeepSeek R1 7B for interactive light reasoning"
@@ -81,6 +83,21 @@ models:
     max_tokens: 4096
     temperature: 0.2
     description: "Lightweight VLM for concurrent desktop usage"
+
+  # Active Windows GPU chat model; served locally by the configured Ollama host.
+  hermes_gemma4_64k:
+    name: "Hermes-Gemma4-64K"
+    base_url: "http://127.0.0.1:31434/v1"
+    model_id: "hermes-gemma4-64k:12b"
+    engine: "ollama"
+    category: "chat"
+    gpu_accelerated: true
+    vram_gb: 12.0
+    max_tokens: 65536
+    temperature: 0.7
+    request_options:
+      think: false
+    description: "Local Hermes Gemma 4 chat model with non-thinking request mode"
 
   # Experimental: Gemma 4 Unified (Disabled by default, opt-in only)
   gemma_4_experimental:
@@ -110,6 +127,12 @@ strategies:
 
 # Hardened VRAM Profiles (Opt-In)
 profiles:
+  GPU_ENHANCED:
+    chat: "hermes_gemma4_64k"
+    load_policy: "sequential_only"
+    concurrency_allowed: false
+    estimated_vram_peak_gb: 12.0
+
   GPU_16GB_INGEST_QUALITY:
     reasoning: "deepseek_r1_14b"
     vision: "qwen2_5_vl_7b"

@@ -41,10 +41,17 @@ class ModelConfig:
     context_length: int
     capabilities: List[str] = field(default_factory=list)
     priority: int = 0  # Higher = preferred
+    request_options: Dict[str, Any] = field(default_factory=dict)
     
     @property
     def endpoint(self) -> str:
-        """Full API endpoint URL"""
+        """Full API endpoint URL.
+
+        Ollama uses the configured ``base_url`` and ``port`` deterministically.
+        ``GOODQ_OLLAMA_URL`` is the explicit full-URL override; ``OLLAMA_HOST``
+        is the compatible host-and-port override.  Neither override triggers
+        endpoint probing.
+        """
         if self.backend == "ollama":
             # Check env overrides first
             env_url = os.environ.get("GOODQ_OLLAMA_URL")
@@ -54,51 +61,27 @@ class ModelConfig:
             if env_host:
                 if not env_host.startswith("http"):
                     env_host = f"http://{env_host}"
+                env_host = env_host.rstrip("/")
                 if not env_host.endswith("/v1"):
-                    env_host = f"{env_host.rstrip('/')}/v1"
+                    env_host = f"{env_host}/v1"
                 return env_host
 
-            # Check cache (valid for 5 seconds to prevent network lag)
-            cached_val = getattr(self, "_cached_endpoint", None)
-            cached_time = getattr(self, "_cached_endpoint_time", 0.0)
-            if cached_val and (time.time() - cached_time < 5.0):
-                return cached_val
-
-            # Clean host from base_url
+            # Preserve the configured host and explicit port.  Runtime
+            # reachability is checked by the client health policy, not by
+            # endpoint selection, so a compatible listener cannot redirect a
+            # configured service to a different local port.
             from urllib.parse import urlparse
             try:
                 parsed = urlparse(self.base_url)
-                host = parsed.hostname or "127.0.0.1"
+                host = parsed.hostname
+                if not host:
+                    raise ValueError("Ollama base URL has no host")
                 scheme = parsed.scheme or "http"
-                clean_base = f"{scheme}://{host}"
+                port = parsed.port or self.port
+                path = parsed.path.rstrip("/") or "/v1"
+                return f"{scheme}://{host}:{port}{path}"
             except Exception:
-                clean_base = "http://127.0.0.1"
-
-            resolved = None
-            # Check responsiveness of 11434 first
-            try:
-                res = requests.get(f"{clean_base}:11434/v1/models", timeout=0.2)
-                if res.status_code == 200:
-                    resolved = f"{clean_base}:11434/v1"
-            except Exception:
-                pass
-            
-            # Check legacy 31434 only if 11434 is unresponsive
-            if not resolved:
-                try:
-                    res = requests.get(f"{clean_base}:31434/v1/models", timeout=0.2)
-                    if res.status_code == 200:
-                        resolved = f"{clean_base}:31434/v1"
-                except Exception:
-                    pass
-
-            # Default/prefer 11434
-            if not resolved:
-                resolved = f"{clean_base}:11434/v1"
-
-            self._cached_endpoint = resolved
-            self._cached_endpoint_time = time.time()
-            return resolved
+                return f"{self.base_url.rstrip('/')}:{self.port}/v1"
 
         return f"{self.base_url}:{self.port}/v1"
     
@@ -471,7 +454,8 @@ class LLMClient:
             temperature: Sampling temperature (0-2)
             max_tokens: Maximum tokens to generate
             stream: Enable streaming responses
-            **kwargs: Additional parameters passed to API
+            **kwargs: Additional parameters passed to API; explicit caller
+                values override the selected model's request defaults.
             
         Returns:
             OpenAI-compatible response dict
@@ -490,24 +474,23 @@ class LLMClient:
         if not model:
             raise Exception("No healthy chat models available")
         
-        # Build request
-        payload = {
-            "model": model.model_id,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": stream,
-            **kwargs
-        }
-        
         # Attempt request with retries
         last_error = None
         for attempt in range(self.max_retries):
             try:
                 logger.debug(f"Chat request to {model.name} (attempt {attempt + 1}/{self.max_retries})")
-                
-                # Dynamically update model ID in case of failover
-                payload["model"] = model.model_id
+
+                # Build a fresh payload for the model selected on this attempt.
+                # Model request options are defaults; explicit caller kwargs win.
+                payload = {
+                    "model": model.model_id,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": stream,
+                    **model.request_options,
+                    **kwargs,
+                }
                 
                 response = self.session.post(
                     f"{model.endpoint}/chat/completions",

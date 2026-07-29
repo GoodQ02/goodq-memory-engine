@@ -115,6 +115,21 @@ def test_build_wanted_models_uses_registry_repo_ids():
     assert all("@" not in model_id for model_id in wanted)
 
 
+def test_build_wanted_models_excludes_ollama_tags():
+    from scripts import bootstrap_models
+
+    registry = {
+        "huggingface_models": {
+            "hermes": {"repo_id": "hermes-gemma4-64k:12b", "revision": "local"},
+            "caption": {"repo_id": "Salesforce/blip-image-captioning-base", "revision": "abc"},
+        }
+    }
+
+    assert bootstrap_models.build_wanted_models(registry) == [
+        "Salesforce/blip-image-captioning-base"
+    ]
+
+
 def test_model_registry_revisions_do_not_use_placeholder_hashes():
     import yaml
 

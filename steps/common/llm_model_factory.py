@@ -57,14 +57,13 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
         ),
     ]
 
-    # Dynamically integrate profile-selected reasoning models if profile is set
+    # Dynamically integrate the active profile's configured chat model.
     host_profile = (os.environ.get("GOODQ_HOST_PROFILE") or cfg.get("host", {}).get("profile") or "").strip().upper()
     
-    if host_profile in ("GPU_16GB_INGEST_QUALITY", "GPU_16GB_INTERACTIVE_LIGHT"):
+    if host_profile:
         import yaml
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         models_config_path = os.path.join(repo_root, "configs", "models_config.yaml")
-        model_registry_path = os.path.join(repo_root, "configs", "model_registry.yaml")
         
         try:
             if os.path.isfile(models_config_path):
@@ -72,30 +71,22 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
                     models_cfg = yaml.safe_load(f) or {}
                 
                 profile_info = models_cfg.get("profiles", {}).get(host_profile, {})
-                reasoning_model_key = profile_info.get("reasoning")
+                reasoning_model_key = profile_info.get("chat") or profile_info.get("reasoning")
                 
                 if reasoning_model_key:
                     model_entry = models_cfg.get("models", {}).get(reasoning_model_key, {})
                     if model_entry:
-                        # Load registry to get exact VRAM estimate
-                        vram_estimate = 2.0
-                        if os.path.isfile(model_registry_path):
-                            with open(model_registry_path, "r", encoding="utf-8") as rf:
-                                registry_cfg = yaml.safe_load(rf) or {}
-                            registry_models = registry_cfg.get("huggingface_models", {}) or {}
-                            registry_entry = registry_models.get(reasoning_model_key, {})
-                            if not registry_entry:
-                                # Fallback fuzzy key matching
-                                for k, entry in registry_models.items():
-                                    if (k.startswith(reasoning_model_key) or 
-                                        reasoning_model_key.startswith(k) or 
-                                        k.replace("_distill_qwen", "") == reasoning_model_key or
-                                        reasoning_model_key.replace("_", "") in k.replace("_", "")):
-                                        registry_entry = entry
-                                        break
-                            vram_estimate = float(registry_entry.get("vram_estimate_gb", 2.0))
-                        
-                        raw_base_url = model_entry.get("base_url", "http://localhost:11434/v1")
+                        backend = model_entry.get("engine", "ollama")
+                        uses_resolved_ollama_endpoint = (
+                            host_profile == "GPU_ENHANCED"
+                            and profile_info.get("chat") == reasoning_model_key
+                            and backend == "ollama"
+                        )
+                        raw_base_url = (
+                            str(ollama_url)
+                            if uses_resolved_ollama_endpoint
+                            else model_entry.get("base_url", "http://localhost:11434/v1")
+                        )
                         m_base, m_port = _split_base_and_port(raw_base_url)
                         
                         profile_model = ModelConfig(
@@ -103,14 +94,27 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
                             base_url=m_base,
                             port=m_port,
                             model_id=model_entry.get("model_id", reasoning_model_key),
-                            backend=model_entry.get("engine", "ollama"),
-                            vram_gb=vram_estimate,
+                            backend=backend,
+                            vram_gb=float(model_entry.get("vram_gb", 2.0)),
                             tokens_per_sec=150,
                             context_length=int(model_entry.get("max_tokens", 16384)),
                             capabilities=["chat", "reasoning", "profile_primary"],
                             priority=200,  # Ensure it is prioritized
+                            request_options=dict(model_entry.get("request_options", {}) or {}),
                         )
-                        # Insert at the beginning of the list to be primary
+                        # Replace an equivalent generic entry instead of
+                        # advertising the same Ollama model twice.
+                        models_list = [
+                            model
+                            for model in models_list
+                            if not (
+                                model.backend == profile_model.backend
+                                and model.model_id == profile_model.model_id
+                                and model.base_url == profile_model.base_url
+                                and model.port == profile_model.port
+                            )
+                        ]
+                        # Insert the profile model at the front to make it primary.
                         models_list.insert(0, profile_model)
         except Exception as e:
             import logging

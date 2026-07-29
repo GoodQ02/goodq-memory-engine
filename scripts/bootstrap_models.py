@@ -537,7 +537,10 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
                 if not isinstance(model_info, dict):
                     continue
                 repo_id = str(model_info.get("repo_id") or "").strip()
-                if repo_id:
+                # This registry is the Hugging Face bootstrap contract.  Local
+                # Ollama tags are served by Ollama and must never be sent to
+                # Hugging Face snapshot_download.
+                if "/" in repo_id and ":" not in repo_id:
                     wanted.append(repo_id)
             if wanted:
                 return wanted

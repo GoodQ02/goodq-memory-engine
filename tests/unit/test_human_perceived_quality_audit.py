@@ -110,6 +110,9 @@ def test_quality_audit_full_review_ledger_is_complete_and_non_mutating(tmp_path:
     ledger = report["human_review_ledger"]["preexisting_temporal_mismatch"]
     assert [item["scene_id"] for item in ledger] == [f"scene-{index}" for index in range(7)]
     assert all("full_text" not in item for item in ledger)
+    assert all("audio_path" not in item and "representative_frame" not in item for item in ledger)
+    assert all(isinstance(item["representative_frame_present"], bool) for item in ledger)
+    assert all(isinstance(item["audio_artifact_available"], bool) for item in ledger)
     assert manifest_path.read_bytes() == before
 
 

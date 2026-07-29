@@ -59,15 +59,18 @@ def _speaker_ids(scene: dict[str, Any]) -> list[str]:
 
 def _review_packet(scene: dict[str, Any], video_id: str, reasons: list[str]) -> dict[str, Any]:
     audio = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
+    frame_path = scene.get("representative_frame") or (scene.get("keyframe") or {}).get("path")
+    audio_path = audio.get("path")
     return {
         "scene_id": str(scene.get("scene_id") or ""),
         "video_id": video_id,
         "reasons": reasons,
         "duration_seconds": scene.get("duration"),
         "transcript_characters": len(_scene_text(scene)),
-        "representative_frame": scene.get("representative_frame")
-        or (scene.get("keyframe") or {}).get("path"),
-        "audio_path": audio.get("path"),
+        "representative_frame_present": bool(frame_path),
+        "representative_frame_available": bool(frame_path and Path(str(frame_path)).exists()),
+        "audio_artifact_present": bool(audio_path),
+        "audio_artifact_available": bool(audio_path and Path(str(audio_path)).exists()),
     }
 
 
@@ -133,7 +136,7 @@ def build_quality_report(
             text = _scene_text(scene)
             packet = _review_packet(scene, video_id, [])
 
-            frame_path = packet["representative_frame"]
+            frame_path = scene.get("representative_frame") or (scene.get("keyframe") or {}).get("path")
             audio_path = audio.get("path")
             counts["representative_frames_present"] += bool(frame_path)
             counts["representative_frames_available"] += bool(
@@ -271,8 +274,8 @@ def build_quality_report(
             "speaker_signature": "scene.audio.speaker_voice_signature_meta",
             "temporal_projection": "temporal_index.segments[scene_id]",
         },
-        "processing_root": str(processing_root),
-        "receipt_path": str(receipt_path) if receipt_path else None,
+        "processing_root": "<configured>/processing",
+        "receipt_path": f"<receipt>/{receipt_path.name}" if receipt_path else None,
         "recovered_scene_count": len(recovered_scene_ids),
         "counts": dict(sorted(counts.items())),
         "speaker_signature_status": dict(sorted(signature_status.items())),

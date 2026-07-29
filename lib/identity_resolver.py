@@ -59,14 +59,20 @@ class IdentityResolver:
         enabled: bool = False,
     ) -> None:
         self._enabled = enabled
-        self._roster_path = Path(
+        configured_roster_path = Path(
             roster_path
             or os.environ.get("GOODQ_IDENTITY_PATH", DEFAULT_IDENTITY_PATH)
-        ) / DEFAULT_ROSTER_NAME
+        )
+        self._roster_path = (
+            configured_roster_path
+            if configured_roster_path.suffix.lower() in {".yaml", ".yml"}
+            else configured_roster_path / DEFAULT_ROSTER_NAME
+        )
         self._kg_db_path = kg_db_path
         self._lock = threading.Lock()
         self._cache: _RosterCache = _RosterCache()
         self._scene_cache: dict[str, set[str]] = {}  # person_id -> scene_name set
+        self._scene_evidence_cache: dict[str, dict[str, set[str]]] = {}
 
     def is_enabled(self) -> bool:
         """Returns False when disabled by config or when roster is absent."""
@@ -111,25 +117,28 @@ class IdentityResolver:
         with self._lock:
             self._cache = new_cache
             self._scene_cache.clear()  # invalidate scene cache on roster reload
+            self._scene_evidence_cache.clear()
         log.info(
             "IdentityResolver: loaded %d identities, %d alias terms",
             len(identities), len(alias_index),
         )
 
-    def _load_scenes_for_person(self, person_id: str) -> set[str]:
+    def _load_scene_evidence_for_person(
+        self,
+        person_id: str,
+    ) -> dict[str, set[str]]:
         """
-        Queries knowledge_graph.db for all scene names linked to a person
-        via person_appears_in_scene or person_mentioned_in_scene edges.
+        Returns scene names with their exact promoted identity evidence types.
         """
         if not self._kg_db_path:
-            return set()
+            return {}
         import sqlite3
         try:
             conn = sqlite3.connect(self._kg_db_path)
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT target_n.name
+                SELECT target_n.name, e.edge_type
                 FROM edges e
                 JOIN nodes source_n ON e.source_id = source_n.id
                 JOIN nodes target_n ON e.target_id = target_n.id
@@ -140,12 +149,22 @@ class IdentityResolver:
                 """,
                 (person_id,),
             )
-            scene_names = {row[0] for row in cur.fetchall()}
+            evidence: dict[str, set[str]] = {}
+            for scene_name, edge_type in cur.fetchall():
+                evidence_type = (
+                    "appearance"
+                    if edge_type == "person_appears_in_scene"
+                    else "mention"
+                )
+                evidence.setdefault(str(scene_name), set()).add(evidence_type)
             conn.close()
-            return scene_names
+            return evidence
         except Exception as e:
             log.warning("IdentityResolver: KG query failed for %s: %s", person_id, e)
-            return set()
+            return {}
+
+    def _load_scenes_for_person(self, person_id: str) -> set[str]:
+        return set(self._load_scene_evidence_for_person(person_id))
 
     def resolve_query_entities(self, query_text: str) -> list[PersonMatch]:
         """
@@ -206,6 +225,48 @@ class IdentityResolver:
                 self._scene_cache[person_id] = scenes
         return self._scene_cache.get(person_id, set())
 
+    def get_scene_evidence_for_person(
+        self,
+        person_id: str,
+    ) -> dict[str, set[str]]:
+        """Returns {scene_id: {appearance|mention}} for one curated person."""
+        if not self.is_enabled():
+            return {}
+        with self._lock:
+            if person_id not in self._scene_evidence_cache:
+                evidence = self._load_scene_evidence_for_person(person_id)
+                self._scene_evidence_cache[person_id] = evidence
+                self._scene_cache[person_id] = set(evidence)
+        return self._scene_evidence_cache.get(person_id, {})
+
+    def get_identity_scene_evidence(
+        self,
+        query_text: str,
+    ) -> dict[str, list[dict]]:
+        """Projects query-matched people onto scenes without flattening evidence."""
+        result: dict[str, list[dict]] = {}
+        for match in self.resolve_query_entities(query_text):
+            for scene_id, evidence_types in self.get_scene_evidence_for_person(
+                match.person_id
+            ).items():
+                ordered_types = [
+                    evidence_type
+                    for evidence_type in ("appearance", "mention")
+                    if evidence_type in evidence_types
+                ]
+                result.setdefault(scene_id, []).append({
+                    "person_id": match.person_id,
+                    "display_name": match.display_name,
+                    "matched_term": match.matched_term,
+                    "evidence_types": ordered_types,
+                    "strength": (
+                        "appearance"
+                        if "appearance" in evidence_types
+                        else "mention"
+                    ),
+                })
+        return result
+
     def get_identity_scene_ids(self, query_text: str) -> dict[str, set[str]]:
         """
         Convenience method: resolves query → persons → scene IDs.
@@ -235,9 +296,13 @@ def get_resolver(config: Optional[dict] = None) -> IdentityResolver:
     with _resolver_lock:
         if _resolver is None:
             cfg = (config or {}).get("identity_search", {})
+            paths = (config or {}).get("paths", {})
             _resolver = IdentityResolver(
                 roster_path=cfg.get("roster_path"),
-                kg_db_path=cfg.get("kg_db_path"),
+                kg_db_path=(
+                    cfg.get("kg_db_path")
+                    or paths.get("knowledge_graph_db")
+                ),
                 enabled=cfg.get("enabled", False),
             )
     return _resolver

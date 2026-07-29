@@ -17,12 +17,15 @@
     activeFaceModal: null,           // cluster being labeled
     activeRosterIdx: -1,             // selected roster entry index
     nameSortDir: -1,                 // -1 = desc, +1 = asc
+    faceFilter: "UNLABELED",
+    epochAuthority: null,
   };
 
   // ── UI Cache ─────────────────────────────────────────────────────────────
   const ui = {
     status:       document.getElementById("system-status"),
     phaseIndicator: document.getElementById("phase-indicator"),
+    epochAuthorityStatus: document.getElementById("epoch-authority-status"),
 
     // Tabs
     tabs: document.querySelectorAll(".tab-btn"),
@@ -33,6 +36,25 @@
     badgeSpeakers: document.getElementById("badge-speakers"),
     badgeNames:    document.getElementById("badge-names"),
     badgeRoster:   document.getElementById("badge-roster"),
+
+    // Header progress
+    headerProgressText: document.getElementById("header-progress-text"),
+    headerProgressFill: document.getElementById("header-progress-fill"),
+
+    // Focus Panel
+    focusPanel: document.getElementById("focus-panel"),
+    focusMeta: document.getElementById("focus-meta"),
+    focusNameInput: document.getElementById("focus-name-input"),
+    focusOperatorNote: document.getElementById("focus-operator-note"),
+    focusTypeaheadList: document.getElementById("focus-typeahead-list"),
+    focusOperationFailure: document.getElementById("focus-operation-failure"),
+    operationStatus: document.getElementById("operation-status"),
+    focusGrid: document.getElementById("focus-grid"),
+    focusPrev: document.getElementById("focus-prev"),
+    focusNext: document.getElementById("focus-next"),
+    focusClose: document.getElementById("focus-close"),
+
+    facesFilterBtns: document.querySelectorAll(".filter-btn"),
 
     // Phase 1 — Faces
     epsInput:      document.getElementById("eps-input"),
@@ -65,17 +87,6 @@
     addIdentityBtn:   document.getElementById("add-identity-btn"),
     rosterDetail:     document.getElementById("roster-detail"),
 
-    // Label Modal
-    labelModal:      document.getElementById("label-modal"),
-    labelModalClose: document.getElementById("label-modal-close"),
-    labelModalCancel:document.getElementById("label-modal-cancel"),
-    labelModalConfirm:document.getElementById("label-modal-confirm"),
-    labelInput:      document.getElementById("cluster-label-input"),
-    labelNoteInput:  document.getElementById("cluster-note-input"),
-    labelModalWarn:  document.getElementById("label-modal-warning"),
-    modalThumbnails: document.getElementById("modal-thumbnails"),
-    modalClusterMeta:document.getElementById("modal-cluster-meta"),
-    knownIdList:     document.getElementById("known-identities-list"),
 
     // Validate Modal
     validateModal:      document.getElementById("validate-modal"),
@@ -109,12 +120,54 @@
     });
     if (!resp.ok) {
       let msg = resp.statusText;
-      try { const j = await resp.json(); msg = j.detail || j.message || msg; } catch (_) {}
+      let payload = null;
+      try { payload = await resp.json(); msg = payload.detail || payload.message || msg; } catch (_) {}
       const err = new Error(msg);
       err.status = resp.status;
+      err.payload = payload;
       throw err;
     }
     return resp.json();
+  }
+
+  function setOperationStatus(message, type = "info") {
+    if (!ui.operationStatus) return;
+    ui.operationStatus.textContent = message || "";
+    ui.operationStatus.dataset.status = type;
+    ui.operationStatus.hidden = !message;
+  }
+
+  function setOperationFailure(message) {
+    if (message) setOperationStatus(message, "error");
+    if (!ui.focusOperationFailure) return;
+    ui.focusOperationFailure.textContent = message || "";
+    ui.focusOperationFailure.hidden = !message;
+  }
+
+  async function confirmedIdentityRequest(endpoint, payload, confirmationCopy) {
+    let confirmationToken = null;
+    try {
+      await apiCall(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      throw new Error("Confirmation gate did not require a scoped token.");
+    } catch (error) {
+      confirmationToken = error.payload && error.payload.result && error.payload.result.confirmation_token;
+      if (error.status !== 403 || !confirmationToken) throw error;
+      if (!window.confirm(confirmationCopy)) {
+        setOperationStatus("Operation cancelled; no change was made.");
+        return null;
+      }
+      const result = await apiCall(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ ...payload, confirmation_token: confirmationToken }),
+      });
+      setOperationStatus("Confirmed operation completed.", "success");
+      return result;
+    } finally {
+      confirmationToken = null;
+    }
   }
 
   // ── Tab Navigation ───────────────────────────────────────────────────────
@@ -145,12 +198,32 @@
   // ── System Status ────────────────────────────────────────────────────────
   async function checkStatus() {
     try {
-      await apiCall("/api/status");
-      ui.status.textContent = "Status: ONLINE";
+      const status = await apiCall("/api/status");
+      const authority = status.epoch_authority || {};
+      state.epochAuthority = authority;
+      if (!authority.ready) {
+        const configured = authority.configured_epoch_id || "UNSET";
+        const identity = authority.identity_epoch_id || "UNRESOLVED";
+        ui.status.textContent = "Status: BLOCKED · EPOCH MISMATCH";
+        ui.status.className = "header-status offline";
+        ui.epochAuthorityStatus.hidden = false;
+        ui.epochAuthorityStatus.textContent =
+          `IDENTITY WORKBENCH BLOCKED — configured epoch ${configured}; identity epoch ${identity}. ${authority.message || ""}`;
+        [
+          ui.rerunFacesBtn, ui.loadFacesBtn, ui.loadSpeakersBtn, ui.loadNamesBtn,
+          ui.loadRosterBtn, ui.validateRosterBtn, ui.exportRosterBtn,
+          ui.newIdentityInput, ui.addIdentityBtn,
+        ].forEach(control => { if (control) control.disabled = true; });
+        return false;
+      }
+      ui.status.textContent = `Status: ONLINE · EPOCH ${authority.configured_epoch_id}`;
       ui.status.className = "header-status online";
+      ui.epochAuthorityStatus.hidden = true;
+      return true;
     } catch (_) {
       ui.status.textContent = "Status: OFFLINE";
       ui.status.className = "header-status offline";
+      return false;
     }
   }
 
@@ -178,14 +251,21 @@
     ui.rerunFacesBtn.textContent = "RE-CLUSTERING…";
     ui.rerunFacesBtn.disabled = true;
     try {
-      const data = await apiCall(`/api/identity/rebuild-face-clusters?eps=${eps}`, { method: "POST" });
+      const data = await confirmedIdentityRequest(
+        "/api/identity/rebuild-face-clusters",
+        { eps },
+        `Re-cluster face evidence using eps=${eps}? This runs the identity process against the active epoch.`
+      );
+      if (!data) return;
       state.faceClusters = data.clusters || [];
       ui.badgeFaces.textContent = state.faceClusters.length;
       ui.facesNote.textContent = `${state.faceClusters.length} clusters (eps=${eps}).`;
       renderFaceGrid();
       toast(`Re-clustered: ${state.faceClusters.length} clusters with eps=${eps}`);
     } catch (e) {
-      toast(`Re-clustering failed: ${e.message}`, "error");
+      const message = `Re-clustering failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     } finally {
       ui.rerunFacesBtn.textContent = "RE-CLUSTER ↻";
       ui.rerunFacesBtn.disabled = false;
@@ -193,31 +273,59 @@
   }
 
   function renderFaceGrid() {
-    if (!state.faceClusters.length) {
+    let clusters = [...state.faceClusters];
+
+    // Calculate progress
+    const total = clusters.length;
+    const labeledCount = clusters.filter(c => c.label && c.label !== "null").length;
+    if(ui.headerProgressText) ui.headerProgressText.textContent = `Labeled: ${labeledCount} / ${total}`;
+    if(ui.headerProgressFill) ui.headerProgressFill.style.width = total ? `${(labeledCount / total) * 100}%` : '0%';
+
+    // Filter
+    if (state.faceFilter === "LABELED") {
+      clusters = clusters.filter(c => c.label && c.label !== "null");
+    } else if (state.faceFilter === "UNLABELED") {
+      clusters = clusters.filter(c => !c.label || c.label === "null");
+    }
+
+    // Sort
+    clusters.sort((a, b) => {
+       const aLabeled = a.label && a.label !== "null";
+       const bLabeled = b.label && b.label !== "null";
+       if (aLabeled !== bLabeled) return aLabeled ? 1 : -1;
+       return (b.face_count || 0) - (a.face_count || 0);
+    });
+
+    if (!clusters.length) {
       ui.facesGrid.innerHTML = `
         <div class="empty-card">
           <span class="pulse-icon">⬡</span>
-          <p>No clusters found. Try running Phase 1 or adjusting eps.</p>
+          <p>No clusters found matching filter.</p>
         </div>`;
       return;
     }
 
     ui.facesGrid.innerHTML = "";
-    state.faceClusters.forEach((cluster, idx) => {
+    clusters.forEach((cluster, loopIdx) => {
+      // We need original idx for the API call
+      const idx = state.faceClusters.indexOf(cluster);
       const labeled = cluster.label && cluster.label !== "null";
       const card = document.createElement("div");
       card.className = `cluster-card${labeled ? " labeled" : ""}`;
       card.dataset.idx = idx;
+      // staggered animation
+      card.style.animationDelay = `${(loopIdx % 20) * 50}ms`;
 
-      // Thumbnail strip — up to 5 face images
-      const thumbs = (cluster.sample_faces || []).slice(0, 5).map(src =>
-        `<img class="cluster-thumb" src="${escHtml(src)}" alt="face" loading="lazy"
-              onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'cluster-thumb-placeholder',textContent:'👤'}))">`
-      );
-      // Fill placeholders
-      while (thumbs.length < 3) {
-        thumbs.push(`<span class="cluster-thumb-placeholder">👤</span>`);
-      }
+      const faces = faceUrls(cluster);
+      const primaryEvidence = (cluster.representative_frames || [])[0] || {};
+      const multiFaceWarning = (primaryEvidence.source_face_count || 0) > 1
+        ? `<span class="multi-face-warning">MULTI-FACE SOURCE · TARGET DETECTION ${Number(primaryEvidence.target_face_index || 0) + 1} OF ${primaryEvidence.source_face_count}</span>`
+        : "";
+      const heroThumb = faces.length > 0 ? `<img class="hero-thumb" src="${escHtml(faces[0])}" alt="hero" loading="lazy">` : `<span class="hero-thumb-placeholder">👤</span>`;
+
+      const stripThumbs = faces.slice(1).map(src =>
+        `<img class="strip-thumb" src="${escHtml(src)}" alt="face" loading="lazy">`
+      ).join("");
 
       card.innerHTML = `
         <div class="cluster-card-header">
@@ -226,106 +334,208 @@
             ${labeled ? escHtml(cluster.label) : "UNLABELED"}
           </span>
         </div>
-        <div class="cluster-thumbnails-strip">${thumbs.join("")}</div>
+        <div class="cluster-hero-wrapper">
+           ${heroThumb}
+           ${multiFaceWarning}
+        </div>
+        <div class="cluster-thumbnails-strip">${stripThumbs}</div>
         <div class="cluster-card-footer">
           <span class="cluster-stat">Faces: <strong>${cluster.face_count ?? "—"}</strong></span>
-          <span class="cluster-stat">Videos: <strong>${(cluster.video_hashes || []).length}</strong></span>
-          <button class="cluster-edit-btn" data-idx="${idx}">LABEL ›</button>
+          <div class="typeahead-wrapper inline">
+            <input type="text" class="card-name-input" data-idx="${idx}" placeholder="Name..." value="${labeled ? escHtml(cluster.label) : ""}">
+            <ul class="typeahead-list" hidden></ul>
+          </div>
         </div>`;
 
-      card.querySelector(".cluster-edit-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        openLabelModal(idx);
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".typeahead-wrapper") || e.target.tagName === 'INPUT') return;
+        openFocusPanel(idx);
       });
-      card.addEventListener("click", () => openLabelModal(idx));
+      setupTypeahead(card.querySelector(".card-name-input"), card.querySelector(".typeahead-list"), idx);
+
       ui.facesGrid.appendChild(card);
     });
   }
 
-  // ── Face Label Modal ─────────────────────────────────────────────────────
+  // ── Focus Panel & Typeahead ─────────────────────────────────────────────
 
-  function openLabelModal(idx) {
+  let currentFocusIdx = -1;
+
+  function faceUrls(cluster) {
+    const representative = (cluster.representative_frames || [])
+      .map(face => typeof face === "string" ? face : face.frame_url)
+      .filter(Boolean);
+    const samples = (cluster.sample_faces || [])
+      .map(face => typeof face === "string" ? face : (face.frame_url || face.url))
+      .filter(Boolean);
+    return representative.length ? representative : samples;
+  }
+
+  function openFocusPanel(idx) {
+    if (idx < 0 || idx >= state.faceClusters.length) return;
+    currentFocusIdx = idx;
     const cluster = state.faceClusters[idx];
-    if (!cluster) return;
-    state.activeFaceModal = idx;
 
-    // Thumbnails
-    const thumbs = (cluster.sample_faces || []).slice(0, 10).map(src =>
-      `<img src="${escHtml(src)}" alt="face" loading="lazy"
-            onerror="this.style.display='none'">`
-    ).join("");
-    ui.modalThumbnails.innerHTML = thumbs || `<span style="color:var(--text-faint);font-size:11px">No thumbnail images available</span>`;
+    if (ui.focusMeta) ui.focusMeta.textContent = `Cluster: ${cluster.cluster_id} | Faces: ${cluster.face_count || 0}`;
 
-    // Meta info
-    ui.modalClusterMeta.innerHTML = `
-      <span>Cluster: <strong style="color:var(--accent)">${escHtml(cluster.cluster_id)}</strong></span>
-      <span>Detections: <strong>${cluster.face_count ?? "—"}</strong></span>
-      <span>Videos: <strong>${(cluster.video_hashes || []).length}</strong></span>
-      <span>Method: <strong>${escHtml(cluster.status || "candidate")}</strong></span>`;
+    const faces = faceUrls(cluster);
+    if (ui.focusGrid) ui.focusGrid.innerHTML = faces.map(src => `<img src="${escHtml(src)}" alt="face" loading="lazy">`).join("");
 
-    // Pre-fill existing label
-    ui.labelInput.value = cluster.label || "";
-    ui.labelNoteInput.value = cluster.operator_note || "";
-    ui.labelModalWarn.hidden = true;
-
-    // Datalist of known identities
-    ui.knownIdList.innerHTML = Array.from(state.knownIdentityLabels)
-      .map(name => `<option value="${escHtml(name)}">`).join("");
-
-    ui.labelModal.hidden = false;
-    ui.labelInput.focus();
-  }
-
-  function closeLabelModal() {
-    ui.labelModal.hidden = true;
-    state.activeFaceModal = null;
-  }
-
-  async function applyClusterLabel() {
-    const idx = state.activeFaceModal;
-    if (idx === null || idx === undefined) return;
-    const label = ui.labelInput.value.trim();
-    const note  = ui.labelNoteInput.value.trim();
-
-    if (!label) {
-      ui.labelModalWarn.textContent = "Label is required.";
-      ui.labelModalWarn.hidden = false;
-      ui.labelInput.focus();
-      return;
+    if (ui.focusNameInput) ui.focusNameInput.value = (cluster.label && cluster.label !== "null") ? cluster.label : "";
+    if (ui.focusOperatorNote) ui.focusOperatorNote.value = cluster.operator_note || "";
+    setOperationFailure("");
+    if (ui.focusPanel) {
+      if (!ui.focusPanel.open) ui.focusPanel.showModal();
     }
+  }
 
+  function closeFocusPanel() {
+    if (ui.focusPanel && ui.focusPanel.open) ui.focusPanel.close();
+  }
+
+  if(ui.focusClose) ui.focusClose.addEventListener("click", closeFocusPanel);
+  if(ui.focusPrev) ui.focusPrev.addEventListener("click", () => openFocusPanel(currentFocusIdx - 1));
+  if(ui.focusNext) ui.focusNext.addEventListener("click", () => openFocusPanel(currentFocusIdx + 1));
+
+  if(ui.focusPanel) ui.focusPanel.addEventListener("cancel", () => closeFocusPanel());
+
+  // Setup typeahead for focus panel
+  if (ui.focusNameInput && ui.focusTypeaheadList) {
+    setupTypeahead(ui.focusNameInput, ui.focusTypeaheadList, () => currentFocusIdx);
+  }
+
+  function getCombinedNames() {
+    const names = new Set(state.knownIdentityLabels);
+    Object.keys(state.nameMentions).forEach(k => names.add(k));
+    return Array.from(names).sort();
+  }
+
+  function setupTypeahead(inputEl, listEl, idxOrGetter) {
+    let activeIndex = -1;
+
+    inputEl.addEventListener("input", () => {
+      const val = inputEl.value.trim().toLowerCase();
+      activeIndex = -1;
+
+      if (!val) {
+        listEl.hidden = true;
+        return;
+      }
+
+      const matches = getCombinedNames().filter(n => n.toLowerCase().includes(val));
+      if (!matches.length) {
+        listEl.hidden = true;
+        return;
+      }
+
+      listEl.innerHTML = matches.map((m, i) => `<li data-index="${i}">${escHtml(m)}</li>`).join("");
+      listEl.hidden = false;
+    });
+
+    inputEl.addEventListener("keydown", async (e) => {
+      const items = listEl.querySelectorAll("li");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (items.length > 0) {
+          activeIndex = (activeIndex + 1) % items.length;
+          updateActive(items);
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (items.length > 0) {
+          activeIndex = (activeIndex - 1 + items.length) % items.length;
+          updateActive(items);
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        let selectedValue = inputEl.value.trim();
+        if (activeIndex >= 0 && items[activeIndex]) {
+          selectedValue = items[activeIndex].textContent;
+          inputEl.value = selectedValue;
+        }
+        listEl.hidden = true;
+
+        if (selectedValue) {
+          const actualIdx = typeof idxOrGetter === "function" ? idxOrGetter() : idxOrGetter;
+          await applyLabel(actualIdx, selectedValue);
+        }
+      } else if (e.key === "Escape") {
+        listEl.hidden = true;
+      }
+    });
+
+    listEl.addEventListener("click", async (e) => {
+      if (e.target.tagName === "LI") {
+        const val = e.target.textContent;
+        inputEl.value = val;
+        listEl.hidden = true;
+        const actualIdx = typeof idxOrGetter === "function" ? idxOrGetter() : idxOrGetter;
+        await applyLabel(actualIdx, val);
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (e.target !== inputEl && !listEl.contains(e.target)) {
+        listEl.hidden = true;
+      }
+    });
+
+    function updateActive(items) {
+      items.forEach((item, i) => {
+        item.classList.toggle("active", i === activeIndex);
+        if (i === activeIndex) {
+          item.scrollIntoView({ block: "nearest" });
+        }
+      });
+    }
+  }
+
+  async function applyLabel(idx, label) {
+    if (idx < 0 || idx >= state.faceClusters.length) return;
     const cluster = state.faceClusters[idx];
+    const operatorNote = ui.focusPanel && ui.focusPanel.open
+      ? ui.focusOperatorNote.value.trim()
+      : window.prompt(`Why is "${label}" supported for ${cluster.cluster_id}?`, cluster.operator_note || "");
+    if (operatorNote === null) return;
+
     try {
-      await apiCall("/api/identity/face-clusters/label", {
-        method: "POST",
-        body: JSON.stringify({
+      const result = await confirmedIdentityRequest(
+        "/api/identity/face-clusters/label",
+        {
           cluster_id: cluster.cluster_id,
           label,
-          operator_note: note,
-        }),
-      });
+          operator_note: operatorNote,
+        },
+        `Apply label "${label}" to ${cluster.cluster_id}? The scoped confirmation is single-use.`
+      );
+      if (!result) return;
       cluster.label = label;
-      cluster.operator_note = note;
+      cluster.operator_note = operatorNote;
       state.knownIdentityLabels.add(label);
       renderFaceGrid();
       updateRosterIdentityLabels();
+      if (ui.focusPanel && ui.focusPanel.open) {
+         closeFocusPanel();
+      }
       toast(`Cluster ${cluster.cluster_id} labeled → ${label}`);
-      closeLabelModal();
     } catch (e) {
-      ui.labelModalWarn.textContent = `Error: ${e.message}`;
-      ui.labelModalWarn.hidden = false;
+      const message = `Label request failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     }
   }
 
-  ui.labelModalClose.addEventListener("click", closeLabelModal);
-  ui.labelModalCancel.addEventListener("click", closeLabelModal);
-  ui.labelModalConfirm.addEventListener("click", applyClusterLabel);
-  ui.labelModal.addEventListener("click", e => { if (e.target === ui.labelModal) closeLabelModal(); });
-
-  // Confirm label on Enter
-  ui.labelInput.addEventListener("keydown", e => { if (e.key === "Enter") applyClusterLabel(); });
-
   // Toolbar buttons — Phase 1
+  if (ui.facesFilterBtns) {
+    ui.facesFilterBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        ui.facesFilterBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.faceFilter = btn.dataset.filter;
+        renderFaceGrid();
+      });
+    });
+  }
   ui.loadFacesBtn.addEventListener("click", loadFaceClusters);
   ui.rerunFacesBtn.addEventListener("click", rerunFaceClustering);
 
@@ -383,35 +593,46 @@
         </div>`;
 
       card.querySelector(".spk-confirm-cb").addEventListener("change", (e) => {
+        const previous = { ...state.speakerClusters[idx] };
         state.speakerClusters[idx].confirmed = e.target.checked;
         card.classList.toggle("confirmed", e.target.checked);
-        toast(`Speaker ${cluster.cluster_id}: confirmed = ${e.target.checked}`);
-        syncSpeakerAssignment(idx, card);
+        syncSpeakerAssignment(idx, previous);
       });
 
       card.querySelector(".speaker-identity-input").addEventListener("change", (e) => {
+        const previous = { ...state.speakerClusters[idx] };
         state.speakerClusters[idx].identity_label = e.target.value.trim();
-        syncSpeakerAssignment(idx, card);
+        syncSpeakerAssignment(idx, previous);
       });
 
       ui.speakersList.appendChild(card);
     });
   }
 
-  async function syncSpeakerAssignment(idx, _card) {
+  async function syncSpeakerAssignment(idx, previous) {
     const cluster = state.speakerClusters[idx];
     try {
-      await apiCall("/api/identity/speaker-clusters/confirm", {
-        method: "POST",
-        body: JSON.stringify({
+      const result = await confirmedIdentityRequest(
+        "/api/identity/speaker-clusters/confirm",
+        {
           cluster_id: cluster.cluster_id,
           confirmed: cluster.confirmed,
           identity_label: cluster.identity_label || null,
-        }),
-      });
+        },
+        `Save speaker confirmation for ${cluster.cluster_id}? The scoped confirmation is single-use.`
+      );
+      if (!result) {
+        state.speakerClusters[idx] = previous;
+        renderSpeakerList();
+        return;
+      }
+      toast(`Speaker ${cluster.cluster_id} saved.`);
     } catch (e) {
-      // Best-effort — UI state is already updated
-      console.warn("Speaker sync failed:", e.message);
+      state.speakerClusters[idx] = previous;
+      renderSpeakerList();
+      const message = `Speaker confirmation failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     }
   }
 
@@ -570,7 +791,11 @@
 
     // Build face cluster chip options
     const faceOptions = state.faceClusters
-      .filter(c => !(identity.face_cluster_ids || []).includes(c.cluster_id))
+      .filter(c => {
+        const ownerIdx = faceClusterOwner(c.cluster_id);
+        return !(identity.face_cluster_ids || []).includes(c.cluster_id)
+          && (ownerIdx === -1 || ownerIdx === idx);
+      })
       .map(c => `<option value="${escHtml(c.cluster_id)}">${escHtml(c.cluster_id)}${c.label ? " — " + c.label : ""}</option>`)
       .join("");
 
@@ -758,18 +983,28 @@
     });
   }
 
+  function faceClusterOwner(clusterId) {
+    return state.roster.findIndex(identity =>
+      (identity.face_cluster_ids || []).includes(clusterId)
+    );
+  }
+
   async function saveIdentity(idx) {
     const identity = state.roster[idx];
     try {
-      await apiCall("/api/identity/roster/save", {
-        method: "POST",
-        body: JSON.stringify({ identity }),
-      });
+      const result = await confirmedIdentityRequest(
+        "/api/identity/roster/save",
+        { identity },
+        `Save roster identity "${identity.display_name}"? The scoped confirmation is single-use.`
+      );
+      if (!result) return;
       state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
       renderRosterSidebar();
       toast(`Saved: ${identity.display_name}`);
     } catch (e) {
-      toast(`Save failed: ${e.message}`, "error");
+      const message = `Save failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     }
   }
 
@@ -817,11 +1052,18 @@
     ui.validateRosterBtn.textContent = "VALIDATING…";
     ui.validateRosterBtn.disabled = true;
     try {
-      const data = await apiCall("/api/identity/roster/validate", { method: "POST" });
+      const data = await confirmedIdentityRequest(
+        "/api/identity/roster/validate",
+        {},
+        "Run roster validation against the active identity data? This runs the identity process."
+      );
+      if (!data) return;
       renderValidationResult(data);
       ui.validateModal.hidden = false;
     } catch (e) {
-      toast(`Validation request failed: ${e.message}`, "error");
+      const message = `Validation request failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     } finally {
       ui.validateRosterBtn.textContent = "VALIDATE ✓";
       ui.validateRosterBtn.disabled = false;
@@ -843,7 +1085,10 @@
     }
     passed.forEach(m => { html += `<span class="pass">  ✓ ${escHtml(m)}\n</span>`; });
     warnings.forEach(m => { html += `<span class="warn">  ⚠ ${escHtml(m)}\n</span>`; });
-    errors.forEach(m => { html += `<span class="fail">  ✗ ${escHtml(m)}\n</span>`; });
+    errors.forEach(m => {
+      const message = typeof m === "string" ? m : m.message;
+      html += `<span class="fail">  ✗ ${escHtml(message || "Validation failed.")}\n</span>`;
+    });
 
     ui.validateResult.innerHTML = html;
   }
@@ -856,22 +1101,17 @@
   // ── Export YAML ───────────────────────────────────────────────────────────
   async function exportRoster() {
     try {
-      const data = await apiCall("/api/identity/roster/export", {
-        method: "POST",
-        body: JSON.stringify({ identities: state.roster }),
-      });
-      toast(`Roster exported: ${data.path || "family_roster.yaml"}`);
+      const data = await confirmedIdentityRequest(
+        "/api/identity/roster/export",
+        { identities: state.roster },
+        `Export ${state.roster.length} roster identities to the active identity data path? The scoped confirmation is single-use.`
+      );
+      if (!data) return;
+      toast(`Roster exported: ${data.count} identities.`);
     } catch (e) {
-      // Fallback — dump YAML-ish JSON the user can paste
-      const yaml = rosterToYaml(state.roster);
-      const blob = new Blob([yaml], { type: "text/yaml" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "family_roster.yaml";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast("Exported as download (API route unavailable)");
+      const message = `Roster export failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
     }
   }
 
@@ -919,7 +1159,7 @@
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   async function init() {
-    await checkStatus();
+    if (!await checkStatus()) return;
     // Auto-load all data sources on startup (silently ignore failures)
     await Promise.allSettled([
       loadFaceClusters(),

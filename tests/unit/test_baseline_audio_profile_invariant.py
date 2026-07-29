@@ -214,7 +214,7 @@ def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatc
     assert any(entry["step"] == "audio_unified_wsl2" and entry["status"] == "error" for entry in logged_steps)
 
 
-def test_structured_wsl_audio_error_forces_local_fallback_even_when_wsl_required(monkeypatch, tmp_path: Path):
+def test_structured_wsl_audio_error_fails_visible_when_wsl_required(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     _process_audio = run_ingestion._process_audio
 
@@ -270,30 +270,23 @@ def test_structured_wsl_audio_error_forces_local_fallback_even_when_wsl_required
     monkeypatch.setattr(run_ingestion, "_run_step", lambda *args, **kwargs: {})
     monkeypatch.setattr(run_ingestion, "log_step_run", lambda *args, **kwargs: None)
 
-    result = _process_audio(
-        cfg_json=cfg_json,
-        ffmpeg="ffmpeg",
-        video_path=video_path,
-        scene={"start": 0.0, "end": 2.0, "index": 4},
-        audio_dir=audio_dir,
-        audio_artifact_dir=tmp_path / "processing" / "audio",
-        video_hash="vh",
-        scene_id="scene_0004",
-        audio_runtime_contract={
-            "selected": "wsl",
-            "reason": "wsl_runtime_required",
-        },
-    )
+    with pytest.raises(RuntimeError, match="GOODQ_REQUIRE_WSL_AUDIO=1"):
+        _process_audio(
+            cfg_json=cfg_json,
+            ffmpeg="ffmpeg",
+            video_path=video_path,
+            scene={"start": 0.0, "end": 2.0, "index": 4},
+            audio_dir=audio_dir,
+            audio_artifact_dir=tmp_path / "processing" / "audio",
+            video_hash="vh",
+            scene_id="scene_0004",
+            audio_runtime_contract={
+                "selected": "wsl",
+                "reason": "wsl_runtime_required",
+            },
+        )
 
-    assert result is not None
-    assert result["data"]["transcript"] == "forced local fallback transcript"
-    assert result["data"]["audio_backend_selected"] == "wsl"
-    assert result["data"]["audio_backend_effective"] == "windows"
-    assert result["data"]["audio_backend_effective_reason"] == "wsl_unified_error_fallback"
-    assert observed == {
-        "use_wsl2": False,
-        "require_wsl_audio": "0",
-    }
+    assert observed == {}
     assert os.environ.get("GOODQ_REQUIRE_WSL_AUDIO") == "1"
 
 
@@ -683,6 +676,32 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     assert payload["video_hash"] == "hash-alpha"
     assert payload["scene_index"] == 7
     assert payload["audio_backend_effective"] == "wsl"
+
+    sqlite_embeddings.clear()
+    emitted_events.clear()
+    isolated_result = clap_step.audio_embed_clap(
+        {
+            "source_path": str(audio_path),
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+            "video_hash": "hash-alpha",
+            "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+        },
+        {
+            "ingestion_isolation": True,
+            "paths": {
+                "faiss_audio_path": str(tmp_path / "faiss" / "isolated_audio.index"),
+                "db_path": str(tmp_path / "isolated_memory.db"),
+            },
+        },
+    )
+
+    assert sqlite_embeddings == []
+    assert isolated_result["clap_meta"]["sqlite_embeddings_committed"] is None
+    assert isolated_result["clap_meta"]["sqlite_embeddings_state"] == "not_applicable_isolated_epoch"
+    assert len(emitted_events) == 1
+    assert "sqlite_embeddings" not in emitted_events[0].targets
 
 
 @pytest.mark.parametrize(

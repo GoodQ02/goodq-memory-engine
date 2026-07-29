@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **402**
+Indexed active Python paths: **414**
 
 ## Repository root
 
@@ -59,6 +59,7 @@ Indexed active Python paths: **402**
 - `api/server.py`
 - `api/utils/__init__.py`
 - `api/utils/action_jobs.py`
+- `api/utils/identity_read_projection.py`
 - `api/utils/ingest_requests.py`
 - `api/utils/loaders.py`
 - `api/utils/media_projection.py`
@@ -83,6 +84,7 @@ Indexed active Python paths: **402**
 - `cli/conduits_sensitive_sources.py`
 - `cli/conduits_store_stats.py`
 - `cli/control_recurrence_report.py`
+- `cli/diarization_outcome_reconciliation.py`
 - `cli/goodq_doctor.py`
 - `cli/links.py`
 - `cli/list_inbox.py`
@@ -94,10 +96,17 @@ Indexed active Python paths: **402**
 - `cli/observability_rollup.py`
 - `cli/persistent_store_alignment_audit.py`
 - `cli/print_config.py`
+- `cli/recovery_promotion.py`
 - `cli/retrieve.py`
 - `cli/run_ingestion.py`
+- `cli/signature_backfill_batch_execute.py`
+- `cli/signature_backfill_batches.py`
+- `cli/signature_backfill_execute.py`
+- `cli/signature_backfill_plan.py`
+- `cli/signature_backfill_serial_run.py`
 - `cli/step_runner.py`
 - `cli/system_status.py`
+- `cli/temporal_audio_reconciliation.py`
 - `cli/test_ingestion.py`
 - `cli/ucf_promotion.py`
 - `cli/ui_conduits_rollup.py`
@@ -198,6 +207,7 @@ Indexed active Python paths: **402**
 - `scripts/diagnose_transcription.py`
 - `scripts/diagnostics/FULL_SYSTEM_AUDIT.py`
 - `scripts/diagnostics/audit_gpu_steps.py`
+- `scripts/diagnostics/audit_human_perceived_quality.py`
 - `scripts/diagnostics/check_atomic_writes.py`
 - `scripts/diagnostics/check_dbs.py`
 - `scripts/diagnostics/check_drive_roots.py`
@@ -206,6 +216,7 @@ Indexed active Python paths: **402**
 - `scripts/diagnostics/episode_reference_eval.py`
 - `scripts/diagnostics/monitor_progress.py`
 - `scripts/diagnostics/native_model_stability_smoke.py`
+- `scripts/diagnostics/pipeline_witness_sheet.py`
 - `scripts/diagnostics/scene_context_debug.py`
 - `scripts/docs/banned_token_lint.py`
 - `scripts/docs/build_current_state.py`
@@ -455,5 +466,6 @@ Indexed active Python paths: **402**
 - `wsl2_audio/fw_transcribe.py`
 - `wsl2_audio/model_cache.py`
 - `wsl2_audio/process_audio.py`
+- `wsl2_audio/signature_only.py`
 - `wsl2_audio/test_bridge.py`
 - `wsl2_audio/test_pipeline.py`

@@ -278,6 +278,15 @@ def test_wsl_setup_exports_pyannote_cache_alias_for_nested_model_loads() -> None
     assert "unset PYANNOTE_CACHE" in setup_content
 
 
+def test_wsl_setup_refuses_user_cache_fallback_when_accelerated_audio_is_required() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    setup_content = (repo_root / "wsl2_audio" / "setup_cuda_env.sh").read_text(encoding="utf-8")
+
+    assert "GPU-managed WSL audio requires HUGGINGFACE_HUB_CACHE" in setup_content
+    assert "Canonical GPU audio cache is incomplete" in setup_content
+    assert "GOODQ_WSL_AUDIO_CACHE_FALLBACK=\"local\"" in setup_content
+
+
 def test_wsl_bootstrap_constraints_match_python310_cu121_lane() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     constraints_path = repo_root / "wsl2_audio" / "requirements-bootstrap-constraints.txt"

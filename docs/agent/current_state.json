@@ -10,7 +10,7 @@
     "epoch_id": "epoch_2026_07_05_home_memory_clean_01",
     "profile": "GPU_ENHANCED"
   },
-  "captured_at_utc": "2026-07-11T13:08:29Z",
+  "captured_at_utc": "2026-07-28T18:09:49Z",
   "completion": {
     "context_frames": 75094,
     "distinct_videos": 12,
@@ -37,13 +37,13 @@
       "loopback_only": true
     },
     "vllm": {
-      "endpoint": null,
-      "location": "non_loopback_configured",
-      "model": "Qwen2.5-0.5B-Instruct"
+      "endpoint": "http://127.0.0.1:38005/v1",
+      "location": "loopback",
+      "model": "Llama-3.2-1B-Instruct"
     }
   },
-  "evidence_id": "2923b9a7ca972db2",
-  "generated_from": "docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json",
+  "evidence_id": "4dbb3d27da27939f",
+  "generated_from": "docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json",
   "historical_evidence": [
     {
       "label": "July promotion witness",
@@ -76,19 +76,20 @@
     "goodq_api": {
       "health": "not_probed",
       "probe": "tcp_only",
-      "state": "timeout"
+      "state": "tcp_reachable"
     },
     "ollama": {
       "loaded_models": [],
       "state": "reachable",
-      "version": "0.31.2"
+      "version": "0.32.5"
     },
     "qdrant": {
       "state": "running_loopback"
     },
     "vllm": {
+      "error_class": "ConnectionRefusedError",
       "models": [],
-      "state": "not_probed_non_loopback"
+      "state": "stopped_or_unavailable"
     },
     "wsl": {
       "reason": "passive current-state capture does not start or query WSL",
@@ -118,17 +119,17 @@
       "indexes": 4
     },
     "knowledge_graph": {
-      "edges": 1928045,
+      "edges": 1929056,
       "event_nodes": 0,
       "events": 0,
       "media_nodes": 2914,
       "node_media": 19449,
-      "nodes": 93293
+      "nodes": 93308
     },
     "memory": {
       "embeddings": 8736,
       "links": 42800,
-      "retrieval_events": 9620,
+      "retrieval_events": 53580,
       "scenes": 1648,
       "segments": 16535
     },
@@ -163,6 +164,7 @@
           "status": "green"
         }
       },
+      "non_authority_collection_count": 56,
       "state": "running_loopback"
     },
     "ucf": {
@@ -171,8 +173,8 @@
     }
   },
   "repository": {
-    "commit": "e2b8f23e",
-    "dirty": false
+    "commit": "adb59393",
+    "dirty": true
   },
   "schema_version": 2
 }

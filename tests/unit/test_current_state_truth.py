@@ -366,6 +366,46 @@ def test_qdrant_dimensions_come_from_observed_collection_detail(monkeypatch):
         )
 
 
+def test_qdrant_capture_allows_non_authority_witness_collections(monkeypatch):
+    collections = _expected_test_collections()
+
+    def fake_http(url, *, method="GET", body=None, **_kwargs):
+        if url.endswith("/collections"):
+            names = [*collections.values(), "goodq_audio_epoch_isolated_witness"]
+            return 200, {"result": {"collections": [{"name": name} for name in names]}}
+        if url.endswith("/points/scroll"):
+            return 200, {"result": {"points": [{"id": "point"}]}}
+        modality = next(key for key, name in collections.items() if url.endswith(f"/{name}"))
+        observed = {"audio": 512, "clip": 768, "dino": 1024, "text": 384}[modality]
+        return 200, {
+            "result": {
+                "points_count": 1,
+                "status": "green",
+                "config": {"params": {"vectors": {"size": observed}}},
+            }
+        }
+
+    monkeypatch.setattr(current_state, "_http_json", fake_http)
+    result = current_state._capture_qdrant(
+        "http://127.0.0.1:6333",
+        collections,
+        {"audio": 512, "clip": 768, "dino": 1024, "text": 384},
+    )
+
+    assert result["non_authority_collection_count"] == 1
+    assert set(result["collections"]) == set(collections)
+
+
+def test_current_state_markdown_exposes_non_authority_collection_count(evidence):
+    evidence = copy.deepcopy(evidence)
+    evidence["persistence"]["qdrant"]["non_authority_collection_count"] = 3
+    evidence = _seal_evidence(evidence)
+
+    markdown = current_state.render_current_state_markdown(evidence)
+
+    assert "Non-authority Qdrant collections observed: `3`" in markdown
+
+
 def test_endpoint_and_observed_model_metadata_are_redacted(monkeypatch, tmp_path):
     epoch_root = _canonical_epoch_root(tmp_path)
     config = _test_config(epoch_root)

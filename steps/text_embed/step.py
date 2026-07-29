@@ -837,21 +837,23 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             pass
 
         # Persist mapping for recall/linking (FAISS id if available is not tracked here)
-        embedding_ok = False
-        embedding_reason = None
-        try:
-            scene_id = _coerce_scene_identity(item)
-            upsert_embedding(cfg, payload["id"], to_faiss_id(payload["id"]), item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id, vector=payload["vector"])
-            embedding_ok = True
-        except Exception as e:
-            embedding_reason = f"exception:{type(e).__name__}"
-            logger.warning(
-                "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
-                "sqlite_embeddings.upsert",
-                item.get("source_path"),
-                type(e).__name__,
-                e,
-            )
+        isolated_epoch = bool(cfg.get("ingestion_isolation", False))
+        embedding_ok = None if isolated_epoch else False
+        embedding_reason = "not_applicable_isolated_epoch" if isolated_epoch else None
+        if not isolated_epoch:
+            try:
+                scene_id = _coerce_scene_identity(item)
+                upsert_embedding(cfg, payload["id"], to_faiss_id(payload["id"]), item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id, vector=payload["vector"])
+                embedding_ok = True
+            except Exception as e:
+                embedding_reason = f"exception:{type(e).__name__}"
+                logger.warning(
+                    "text_embed operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "sqlite_embeddings.upsert",
+                    item.get("source_path"),
+                    type(e).__name__,
+                    e,
+                )
 
         try:
             from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event, utc_now_iso
@@ -897,12 +899,13 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 elif not ok:
                     reason = "insert_failed_or_filtered"
                 targets[str(target)] = {"attempted": bool(present), "committed": bool(ok), "ref": ref, "reason": reason, "count": 1}
-            targets["sqlite_embeddings"] = {
-                "attempted": True,
-                "committed": bool(embedding_ok),
-                "ref": (cfg.get("paths", {}) or {}).get("db_path"),
-                "reason": embedding_reason,
-            }
+            if not isolated_epoch:
+                targets["sqlite_embeddings"] = {
+                    "attempted": True,
+                    "committed": bool(embedding_ok),
+                    "ref": (cfg.get("paths", {}) or {}).get("db_path"),
+                    "reason": embedding_reason,
+                }
             emit_memory_commit_event(
                 cfg,
                 MemoryCommitEvent(

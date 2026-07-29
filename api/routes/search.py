@@ -38,6 +38,7 @@ from api.routes.runtime import (
 )
 from retrieval.multimodal_search import MultimodalSearchEngine
 from lib.llm_client import ModelConfig
+from lib.identity_resolver import get_resolver
 from steps.common.config_loader import load_configs
 from steps.common.llm_model_factory import build_llm_models
 
@@ -601,6 +602,11 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
 
     return SearchResult(
         score=result.get("score", 0.0),
+        vector_score=_safe_number(result.get("vector_score")),
+        identity_boost=_safe_number(result.get("identity_boost")) or 0.0,
+        identity_match=result.get("identity_match"),
+        identity_evidence=_list_dicts(result.get("identity_evidence")),
+        identity_only=bool(result.get("identity_only")),
         modality=modality or result.get("modality", "unknown"),
         modalities=_safe_modalities(result),
         modality_scores=_safe_modality_scores(result),
@@ -685,6 +691,158 @@ class MultimodalSearchRequest(BaseModel):
     fusion_weights: Optional[dict] = None
 
 
+def _identity_search_context(
+    query: str,
+    requested_top_k: int,
+) -> tuple[dict[str, list[dict]], int]:
+    config = _config or {}
+    identity_cfg = config.get("identity_search") or {}
+    if not identity_cfg.get("enabled", False):
+        return {}, requested_top_k
+    try:
+        evidence = get_resolver(config).get_identity_scene_evidence(query)
+    except Exception as exc:
+        logger.warning(
+            "Identity search evidence unavailable; preserving base retrieval: %s",
+            exc,
+        )
+        return {}, requested_top_k
+    if not evidence:
+        return {}, requested_top_k
+    try:
+        multiplier = int(identity_cfg.get("candidate_pool_multiplier", 5))
+    except (TypeError, ValueError):
+        multiplier = 5
+    multiplier = max(1, min(multiplier, 10))
+    return evidence, min(max(requested_top_k * multiplier, requested_top_k), 100)
+
+
+def _rank_with_identity_evidence(
+    results: list[dict],
+    evidence: dict[str, list[dict]],
+    requested_top_k: int,
+) -> list[dict]:
+    if not evidence:
+        return results
+    identity_cfg = (_config or {}).get("identity_search") or {}
+    try:
+        appearance_boost = float(
+            identity_cfg.get("appearance_score_boost", 0.20)
+        )
+        mention_boost = float(identity_cfg.get("mention_score_boost", 0.05))
+    except (TypeError, ValueError):
+        appearance_boost, mention_boost = 0.20, 0.05
+    appearance_boost = max(0.0, min(appearance_boost, 1.0))
+    mention_boost = max(0.0, min(mention_boost, appearance_boost))
+
+    ranked = []
+    for raw_result in results:
+        result = dict(raw_result)
+        payload = (
+            result.get("payload")
+            if isinstance(result.get("payload"), dict)
+            else {}
+        )
+        scene_id = str(payload.get("scene_id") or "")
+        scene_evidence = evidence.get(scene_id, [])
+        identity_only = bool(result.get("identity_only"))
+        vector_score = _safe_number(result.get("score")) or 0.0
+        if not identity_only:
+            result["vector_score"] = vector_score
+        if scene_evidence:
+            match_strength = (
+                "appearance"
+                if any(
+                    item.get("strength") == "appearance"
+                    for item in scene_evidence
+                )
+                else "mention"
+            )
+            boost = (
+                appearance_boost
+                if match_strength == "appearance"
+                else mention_boost
+            )
+            result.update({
+                "identity_boost": boost,
+                "identity_match": match_strength,
+                "identity_evidence": scene_evidence,
+                "identity_only": identity_only,
+                "score": vector_score + boost,
+            })
+        ranked.append(result)
+    ranked.sort(
+        key=lambda item: _safe_number(item.get("score")) or 0.0,
+        reverse=True,
+    )
+    injected = [item for item in ranked if item.get("identity_only")]
+    if not injected:
+        return ranked[:requested_top_k]
+    retained = [
+        item for item in ranked
+        if not item.get("identity_only")
+    ][:max(requested_top_k - len(injected), 0)]
+    selected = retained + injected[:requested_top_k]
+    selected.sort(
+        key=lambda item: _safe_number(item.get("score")) or 0.0,
+        reverse=True,
+    )
+    return selected[:requested_top_k]
+
+
+def _inject_missing_appearance_candidates(
+    results: list[dict],
+    evidence: dict[str, list[dict]],
+) -> list[dict]:
+    if not evidence:
+        return results
+    identity_cfg = (_config or {}).get("identity_search") or {}
+    try:
+        limit = int(identity_cfg.get("appearance_injection_limit", 1))
+    except (TypeError, ValueError):
+        limit = 1
+    limit = max(0, min(limit, 3))
+    if limit == 0:
+        return results
+
+    existing_scene_ids = {
+        str(payload.get("scene_id"))
+        for result in results
+        if isinstance((payload := result.get("payload")), dict)
+        and payload.get("scene_id") not in (None, "")
+    }
+    existing_appearance_count = sum(
+        any(
+            item.get("strength") == "appearance"
+            for item in evidence.get(scene_id, [])
+        )
+        for scene_id in existing_scene_ids
+    )
+    missing_slots = max(limit - existing_appearance_count, 0)
+    if missing_slots == 0:
+        return results
+
+    candidates = [
+        scene_id
+        for scene_id, scene_evidence in evidence.items()
+        if scene_id not in existing_scene_ids
+        and any(
+            item.get("strength") == "appearance"
+            for item in scene_evidence
+        )
+    ]
+    augmented = list(results)
+    for scene_id in sorted(candidates)[:missing_slots]:
+        augmented.append({
+            "score": 0.0,
+            "modality": "identity",
+            "modalities": ["identity"],
+            "payload": {"scene_id": scene_id},
+            "identity_only": True,
+        })
+    return augmented
+
+
 @router.post("/multimodal", response_model=SearchResponse)
 async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
     """
@@ -698,13 +856,26 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
     """
     try:
         engine = get_search_engine()
+        identity_evidence, candidate_top_k = _identity_search_context(
+            request.query,
+            request.top_k,
+        )
         
         # Execute search
         results = engine.search_multimodal(
             query=request.query,
-            top_k=request.top_k,
+            top_k=candidate_top_k,
             modalities=request.modalities,
             retrieval_context="human.ui.search",
+        )
+        results = _inject_missing_appearance_candidates(
+            results,
+            identity_evidence,
+        )
+        results = _rank_with_identity_evidence(
+            results,
+            identity_evidence,
+            request.top_k,
         )
         
         # Convert to response format

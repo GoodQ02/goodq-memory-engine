@@ -1693,6 +1693,27 @@ a {
   overflow-wrap: anywhere;
 }
 
+.retrieval-identity-chip {
+  display: inline-block;
+  margin-top: 7px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 179, 0, 0.34);
+  border-radius: 999px;
+  color: #f7e5b0;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.retrieval-identity-chip.appearance {
+  border-color: rgba(126, 211, 159, 0.44);
+  background: rgba(126, 211, 159, 0.1);
+  color: #d2f3de;
+}
+
+.retrieval-identity-chip.mention {
+  background: rgba(255, 179, 0, 0.08);
+}
+
 .retrieval-similar-panel {
   grid-column: 1 / -1;
   display: grid;

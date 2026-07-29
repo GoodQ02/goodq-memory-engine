@@ -23,9 +23,11 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import requests
+from steps.common.qdrant_client import build_qdrant_session
 from fastapi import APIRouter, HTTPException, Query
 
 from api.utils.ingest_requests import is_supported_ingest_path
+from api.utils.identity_read_projection import epoch_authority_projection
 from goodq_version import GOODQ_VERSION
 from lib import run_index, run_summary
 from steps.common.config_loader import load_configs
@@ -65,6 +67,28 @@ _QDRANT_STORAGE = Path(_PATHS_CFG.get("qdrant_storage") or (_DATA_ROOT.parent / 
 _FAISS_DIR = Path(_PATHS_CFG.get("faiss_dir") or (_DATA_ROOT / "faiss"))
 _MODEL_CACHE = Path(_PATHS_CFG.get("model_cache") or os.environ.get("HF_HOME") or (_DATA_ROOT / "cache"))
 _REPORTS_ROOT = Path(os.environ.get("GOODQ_RUN_REPORTS_ROOT") or (_DATA_ROOT / "reports"))
+_WSL_STATUS_CACHE: Dict[str, Any] | None = None
+_WSL_STATUS_CACHE_MONOTONIC = 0.0
+_WSL_STATUS_CACHE_SECONDS = 5.0
+
+
+def _decode_wsl_output(value: str | bytes | None) -> str:
+    """Decode Windows WSL output without leaking UTF-16 NULs to the API."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if not value:
+        return ""
+    encodings = ("utf-16-le", "utf-16", "utf-8") if b"\x00" in value else ("utf-8", "utf-16-le", "utf-16")
+    for encoding in encodings:
+        try:
+            decoded = value.decode(encoding).replace("\x00", "")
+            if decoded.strip():
+                return decoded
+        except UnicodeDecodeError:
+            continue
+    return value.decode("utf-8", errors="replace").replace("\x00", "")
+
+
 def _resolve_wsl_distro() -> str:
     env_override = os.environ.get("GOODQ_WSL_DISTRO")
     if env_override:
@@ -74,21 +98,7 @@ def _resolve_wsl_distro() -> str:
         return str(cfg_override)
     try:
         result = subprocess.run(["wsl", "-l", "-q"], capture_output=True, timeout=1.0)
-        stdout_bytes = result.stdout
-        decoded = ""
-        if isinstance(stdout_bytes, str):
-            decoded = stdout_bytes
-        elif stdout_bytes:
-            encodings = ("utf-16-le", "utf-16", "utf-8") if b"\x00" in stdout_bytes else ("utf-8", "utf-16-le", "utf-16")
-            for encoding in encodings:
-                try:
-                    temp = stdout_bytes.decode(encoding).strip()
-                    temp = temp.replace("\x00", "").strip()
-                    if temp:
-                        decoded = temp
-                        break
-                except Exception:
-                    pass
+        decoded = _decode_wsl_output(result.stdout)
         lines = [line.strip().replace("\x00", "") for line in decoded.splitlines() if line.strip()]
         if lines:
             for line in lines:
@@ -271,17 +281,26 @@ def _collect_engine_details() -> Dict[str, Any]:
             "port": None,
         }
 
-    wsl_available = shutil.which("wsl") is not None
+    wsl_status = _shared_wsl_status()
+    wsl_audio_ready = wsl_status.get("audio_processing") == "available"
+    wsl_audio_reason = str(wsl_status.get("audio_processing") or "not_observed")
     engines["wsl_audio"] = {
         "name": "WSL Audio Transcription",
         "category": "Audio Processing",
-        "description": "Faster-Whisper with speaker diarization",
-        "status": "ready" if wsl_available else "unavailable",
+        "description": (
+            "Faster-Whisper with speaker diarization"
+            if wsl_audio_ready
+            else f"Faster-Whisper unavailable ({wsl_audio_reason})"
+        ),
+        "status": "ready" if wsl_audio_ready else "unavailable",
         "gpu": True,
+        "probe_source": "wsl2_status",
     }
 
     try:
-        resp = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
+        resp = build_qdrant_session(_qdrant_base_url()).get(
+            f"{_qdrant_base_url()}/collections", timeout=2
+        )
         if resp.status_code == 200:
             collections = resp.json().get("result", {}).get("collections", [])
             engines["qdrant"] = {
@@ -383,6 +402,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
         "gpu_memory_used_mb": None,
         "driver_version": None,
         "cuda_version": None,
+        "gpu_probe_status": "not_attempted",
+        "gpu_probe_reason": None,
     }
 
     wsl_available = shutil.which("wsl") is not None
@@ -391,9 +412,9 @@ def _collect_wsl_status() -> Dict[str, Any]:
         return status
 
     try:
-        result = subprocess.run(["wsl", "--status"], capture_output=True, text=True, timeout=1.0)
+        result = subprocess.run(["wsl", "--status"], capture_output=True, timeout=1.0)
         status["status"] = "running" if result.returncode == 0 else "stopped"
-        status["status_output"] = result.stdout
+        status["status_output"] = _decode_wsl_output(result.stdout)
     except subprocess.TimeoutExpired as e:
         logger.warning(f"WSL status check timed out (frozen): {e}")
         status["status"] = "frozen"
@@ -404,8 +425,26 @@ def _collect_wsl_status() -> Dict[str, Any]:
         status["status"] = "unknown"
 
     try:
-        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, text=True, timeout=1.0)
-        status["list_output"] = list_result.stdout
+        list_result = subprocess.run(["wsl", "-l", "-v"], capture_output=True, timeout=1.0)
+        list_output = _decode_wsl_output(list_result.stdout)
+        status["list_output"] = list_output
+        matching_line = next(
+            (line for line in list_output.splitlines() if wsl_distro.lower() in line.lower()),
+            "",
+        ).lower()
+        if "stopped" in matching_line:
+            status.update(
+                {
+                    "status": "stopped",
+                    "audio_processing": "stopped",
+                    "audio_probe": "not_run_cold",
+                    "faster_whisper": "not_checked",
+                    "gpu_probe_status": "not_run_cold",
+                }
+            )
+            return status
+        if "running" in matching_line:
+            status["status"] = "running"
     except subprocess.TimeoutExpired as e:
         logger.warning(f"WSL list check timed out (frozen): {e}")
         status["status"] = "frozen"
@@ -423,10 +462,8 @@ def _collect_wsl_status() -> Dict[str, Any]:
         )
         status["vllm_service"] = "active" if vllm_check.returncode == 0 else "inactive"
     except subprocess.TimeoutExpired as e:
-        logger.warning(f"WSL service check timed out (frozen): {e}")
-        status["status"] = "frozen"
-        status["audio_processing"] = "unresponsive"
-        return status
+        logger.warning(f"WSL vLLM service check timed out; continuing with the independent audio probe: {e}")
+        status["vllm_service"] = "unresponsive"
     except Exception as e:
         logger.debug(f"vLLM service check failed: {e}")
 
@@ -502,6 +539,10 @@ def _collect_wsl_status() -> Dict[str, Any]:
                 status["gpu_memory_total_mb"] = int(parts[1])
                 status["gpu_memory_used_mb"] = int(parts[2])
                 status["driver_version"] = parts[3]
+                status["gpu_probe_status"] = "ok"
+        if status["gpu_probe_status"] != "ok":
+            status["gpu_probe_status"] = "unavailable"
+            status["gpu_probe_reason"] = "wsl_nvidia_smi_returned_no_usable_telemetry"
 
         cuda_info = subprocess.run(
             [
@@ -526,9 +567,29 @@ def _collect_wsl_status() -> Dict[str, Any]:
         return status
     except Exception as e:
         logger.debug(f"WSL2 GPU probe failed: {e}")
+        status["gpu_probe_status"] = "probe_failed"
+        status["gpu_probe_reason"] = "wsl_nvidia_smi_probe_failed"
 
     status["active"] = status.get("status") == "running" or status.get("vllm_service") == "active"
     return status
+
+
+def _shared_wsl_status() -> Dict[str, Any]:
+    """Return one short-lived read-only WSL observation across adjacent console probes."""
+    global _WSL_STATUS_CACHE, _WSL_STATUS_CACHE_MONOTONIC
+    now = time.monotonic()
+    if _WSL_STATUS_CACHE is not None and now - _WSL_STATUS_CACHE_MONOTONIC < _WSL_STATUS_CACHE_SECONDS:
+        cached = dict(_WSL_STATUS_CACHE)
+        cached["observation_source"] = "shared_wsl_snapshot"
+        cached["observation_age_seconds"] = round(now - _WSL_STATUS_CACHE_MONOTONIC, 3)
+        return cached
+
+    observed = _collect_wsl_status()
+    _WSL_STATUS_CACHE = dict(observed)
+    _WSL_STATUS_CACHE_MONOTONIC = now
+    observed["observation_source"] = "fresh_wsl_snapshot"
+    observed["observation_age_seconds"] = 0.0
+    return observed
 
 
 def _database_status(db_path: str | Path | None = None) -> Dict[str, Any]:
@@ -665,7 +726,7 @@ def get_status() -> Dict[str, Any]:
 
     database_data = _database_status()
 
-    wsl_status = _collect_wsl_status()
+    wsl_status = _shared_wsl_status()
 
     try:
         result = subprocess.run(
@@ -696,6 +757,7 @@ def get_status() -> Dict[str, Any]:
         "models": models_data,
         "processing": processing_data,
         "database": database_data,
+        "epoch_authority": epoch_authority_projection(_CFG),
         "wsl": wsl_status,
         "elevenlabs_agent_id": os.environ.get("ELEVENLABS_AGENT_ID"),
     }
@@ -1070,7 +1132,7 @@ def get_gpu_stats() -> Dict[str, Any]:
 @router.get("/api/wsl2-status")
 def get_wsl2_status() -> Dict[str, Any]:
     """Get WSL2 status (consolidated helper)."""
-    return _collect_wsl_status()
+    return _shared_wsl_status()
 
 
 @router.get("/api/models")
@@ -1191,7 +1253,15 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
     outcome = summary.get("outcome_classification") if isinstance(summary.get("outcome_classification"), dict) else {}
     latest_episode = summary.get("latest_episode") if isinstance(summary.get("latest_episode"), dict) else {}
 
-    scene_results_path = _episode_artifact_path(latest_episode, "scene_ingest_results.json")
+    direct_ingest_fallback = latest.get("scope") == "direct_ingest_fallback"
+    direct_results_path = Path(str(latest.get("scene_results_path") or "")) if direct_ingest_fallback else None
+    if direct_results_path is not None and not direct_results_path.is_file():
+        direct_results_path = None
+    scene_results_path = (
+        direct_results_path
+        if direct_ingest_fallback
+        else _episode_artifact_path(latest_episode, "scene_ingest_results.json")
+    )
     scene_results_payload = _load_json_any(scene_results_path)
     temporal_path = _episode_artifact_path(latest_episode, "temporal_index.json")
     if temporal_path is None:
@@ -1207,7 +1277,39 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         knowledge_graph["total_entities"] = entity_evidence.get("total_entities")
         knowledge_graph["segments_with_any_entity_evidence"] = entity_evidence.get("segments_with_any_entity_evidence")
 
-    step_runs_summary = _summarize_step_runs(step_runs_path, limit=limit)
+    direct_step_binding: Dict[str, Any] | None = None
+    if direct_ingest_fallback:
+        direct_step_binding = _bind_direct_ingest_step_ledger(
+            step_runs_path,
+            direct_results_path,
+            scene_results_payload,
+            temporal_payload,
+        )
+        if direct_step_binding.get("status") == "bound":
+            step_runs_summary = _summarize_step_runs(
+                step_runs_path,
+                limit=limit,
+                rows=direct_step_binding["rows"],
+                malformed=direct_step_binding["malformed_count"],
+            )
+            step_runs_summary["current_run_bound"] = True
+            step_runs_summary["binding"] = direct_step_binding["projection"]
+        else:
+            global_ledger = _summarize_step_runs(step_runs_path, limit=limit)
+            step_runs_summary = {
+                "status": "unavailable",
+                "reason": direct_step_binding.get("reason") or "binding_not_proven",
+                "current_run_bound": False,
+                "binding": direct_step_binding.get("projection"),
+                "global_ledger": {
+                    "status": global_ledger.get("status"),
+                    "row_count": global_ledger.get("row_count"),
+                    "latest_ts_utc": global_ledger.get("latest_ts_utc"),
+                    "source_scope": "epoch_global_step_ledger",
+                },
+            }
+    else:
+        step_runs_summary = _summarize_step_runs(step_runs_path, limit=limit)
     runtime_step_errors = _summarize_runtime_step_errors(
         _find_runtime_log_paths(latest_episode, [temporal_path, scene_results_path]),
         completed_step_keys=_completed_step_keys_from_step_runs(step_runs_path),
@@ -1235,11 +1337,45 @@ def _latest_run_evidence(limit: int = 24) -> Dict[str, Any]:
         "artifact_presence": {
             "step_runs_jsonl": bool(step_runs_path and step_runs_path.is_file()),
             "temporal_index_json": bool(temporal_path and temporal_path.is_file()),
-            "scene_ingest_results_json": bool(scene_results_path and scene_results_path.is_file()),
+            "scene_ingest_results_json": bool(
+                scene_results_path and scene_results_path.is_file() and not direct_ingest_fallback
+            ),
+            "direct_ingest_results_json": bool(direct_results_path and direct_results_path.is_file()),
+        },
+        "artifact_sources": {
+            "scene_results": {
+                "status": "observed" if scene_results_path else "not_observed",
+                "kind": "direct_ingest_log" if direct_ingest_fallback else "scene_ingest_results_json",
+                "current_run_bound": bool(scene_results_path),
+            },
+            "temporal_index": {
+                "status": "observed" if temporal_path else "not_produced",
+                "kind": "embedded_or_explicit_direct_pointer" if direct_ingest_fallback else "episode_artifact",
+                "current_run_bound": bool(temporal_path),
+            },
+            "step_runs": {
+                "status": (
+                    "bound"
+                    if direct_step_binding and direct_step_binding.get("status") == "bound"
+                    else "unbound_global_ledger"
+                ) if direct_ingest_fallback and step_runs_path else (
+                    "observed" if step_runs_path else "not_produced"
+                ),
+                "current_run_bound": bool(step_runs_path) and (
+                    not direct_ingest_fallback or bool(direct_step_binding and direct_step_binding.get("status") == "bound")
+                ),
+                "remediation_owner": (
+                    "ingest_run_index"
+                    if direct_ingest_fallback and step_runs_path and not (direct_step_binding and direct_step_binding.get("status") == "bound")
+                    else None
+                ),
+                "reason": direct_step_binding.get("reason") if direct_step_binding else None,
+            },
         },
         "step_runs": step_runs_summary,
         "runtime_step_errors": runtime_step_errors,
         "temporal_index": _summarize_temporal_index(temporal_payload),
+        "transcript_outcomes": _summarize_transcript_outcomes(scene_results_payload),
         "sentiment": _summarize_sentiment(temporal_payload, scene_results_payload=scene_results_payload),
         "entity_evidence": entity_evidence,
         "knowledge_graph": knowledge_graph,
@@ -1320,13 +1456,46 @@ def _direct_ingest_fallback_summary(run: Dict[str, Any]) -> Dict[str, Any]:
     if payload is None:
         return {"status": "unavailable", "run_id": run.get("run_id"), "scope": "direct_ingest_fallback"}
     scene_records = _scene_records_from_results(payload)
+    first_record = _first_result_record(payload)
+    temporal_pointer = _artifact_path_from_scene_results(payload, "temporal_index.json")
+    video_name = _first_text_value(
+        first_record.get("video_name") if isinstance(first_record, dict) else None,
+        first_record.get("video") if isinstance(first_record, dict) else None,
+        first_record.get("filename") if isinstance(first_record, dict) else None,
+        "Direct ingest output",
+    )
+    timeline_video_id = _timeline_video_id_from_path_value(
+        first_record.get("temporal_index_path") if isinstance(first_record, dict) else None
+    )
+    artifact_paths = [str(path) for path in (path, temporal_pointer) if path is not None]
     return {
-        "status": "ok",
-        "run_id": run.get("run_id"),
-        "scope": "direct_ingest_fallback",
-        "scene_count": len(scene_records),
-        "source_path": str(path),
-        "scenes": scene_records[:10],  # cap preview
+        "run_header": {
+            "run_id": run.get("run_id"),
+            "run_kind": "direct_ingest_fallback",
+            "scope": "direct_ingest_fallback",
+            "status": "completed" if scene_records else "unknown",
+            "epoch": _epoch_name_from_path(path),
+        },
+        "file_job_overview": {
+            "episodes_total": 1 if scene_records else 0,
+            "episodes_completed": 1 if scene_records else 0,
+            "episodes_failed": 0,
+            "episodes_running": 0,
+            "episodes_pending": 0,
+            "scenes_processed": len(scene_records),
+        },
+        "outcome_classification": {"status": "completed" if scene_records else "unknown"},
+        "latest_episode": {
+            "episode": video_name,
+            "timeline_video_id": timeline_video_id,
+            "status": "completed" if scene_records else "unknown",
+            "scene_count": len(scene_records),
+            "run_dir": str(path.parent),
+            "files_read": artifact_paths,
+            "canonical_episode_artifacts": [str(temporal_pointer)] if temporal_pointer else [],
+            "errors": [],
+            "warnings": [],
+        },
     }
 
 
@@ -1731,11 +1900,120 @@ def _completed_step_keys_from_step_runs(path: Path | None) -> set[tuple[int, str
     return completed
 
 
-def _summarize_step_runs(path: Path | None, limit: int = 24) -> Dict[str, Any]:
-    if path is None or not path.is_file():
-        return {"status": "unavailable", "reason": "step_runs_jsonl_missing"}
+def _bind_direct_ingest_step_ledger(
+    step_runs_path: Path | None,
+    direct_results_path: Path | None,
+    direct_results_payload: Any,
+    temporal_payload: Any,
+) -> Dict[str, Any]:
+    """Bind a direct-ingest artifact to one ledger run only when its evidence is exact."""
+    projection: Dict[str, Any] = {
+        "status": "binding_not_proven",
+        "current_run_bound": False,
+        "candidate_run_count": 0,
+        "bound_row_count": 0,
+        "temporal_scene_count": 0,
+        "ledger_scene_extra_count": 0,
+    }
+    configured_epoch = _DB_PATH.parent.name
+    direct_epoch = _epoch_name_from_path(direct_results_path) if direct_results_path else None
+    ledger_epoch = _epoch_name_from_path(step_runs_path) if step_runs_path else None
+    projection["epoch"] = configured_epoch
+    if not configured_epoch or direct_epoch != configured_epoch or ledger_epoch != configured_epoch:
+        return {
+            "status": "binding_not_proven",
+            "reason": "direct_ledger_epoch_mismatch",
+            "projection": projection,
+        }
+    first_record = _first_result_record(direct_results_payload)
+    if not isinstance(first_record, dict):
+        return {"status": "binding_not_proven", "reason": "direct_results_record_missing", "projection": projection}
 
-    rows, malformed = _load_step_run_rows(path)
+    video_id = str(first_record.get("video_id") or "").strip()
+    video_hash = str(first_record.get("video_hash") or "").strip()
+    if not video_id or not video_hash:
+        return {"status": "binding_not_proven", "reason": "direct_results_video_identity_missing", "projection": projection}
+
+    segments = temporal_payload.get("segments") if isinstance(temporal_payload, dict) else None
+    temporal_scene_ids = {
+        str(segment.get("scene_id") or "").strip()
+        for segment in segments or []
+        if isinstance(segment, dict) and str(segment.get("scene_id") or "").strip()
+    }
+    projection["temporal_scene_count"] = len(temporal_scene_ids)
+    if not temporal_scene_ids:
+        return {"status": "binding_not_proven", "reason": "direct_temporal_scene_set_missing", "projection": projection}
+
+    rows, malformed = _load_step_run_rows(step_runs_path)
+    if malformed < 0:
+        return {"status": "binding_not_proven", "reason": "step_runs_unreadable", "projection": projection}
+    matched_rows = [
+        row
+        for row in rows
+        if str(row.get("video_id") or "").strip() == video_id
+        and str(row.get("video_hash") or "").strip() == video_hash
+    ]
+    candidate_pairs = {
+        (str(row.get("run_id") or "").strip(), str(row.get("run_started_at") or "").strip())
+        for row in matched_rows
+        if str(row.get("run_id") or "").strip() and str(row.get("run_started_at") or "").strip()
+    }
+    projection["candidate_run_count"] = len(candidate_pairs)
+    if len(candidate_pairs) != 1:
+        return {
+            "status": "binding_ambiguous",
+            "reason": "direct_ledger_run_identity_ambiguous",
+            "projection": projection,
+        }
+
+    ledger_scene_ids = {
+        str(row.get("scene_id") or "").strip()
+        for row in matched_rows
+        if str(row.get("scene_id") or "").strip()
+    }
+    extras = ledger_scene_ids - temporal_scene_ids
+    projection["ledger_scene_extra_count"] = len(extras)
+    if extras:
+        return {
+            "status": "binding_not_proven",
+            "reason": "direct_ledger_scene_set_mismatch",
+            "projection": projection,
+        }
+
+    run_id, run_started_at = next(iter(candidate_pairs))
+    projection.update(
+        {
+            "status": "bound",
+            "current_run_bound": True,
+            "runtime_run_id": run_id,
+            "run_started_at": run_started_at,
+            "bound_row_count": len(matched_rows),
+            "ledger_scene_count": len(ledger_scene_ids),
+            "binding_keys": ["epoch", "video_id", "video_hash", "run_id", "run_started_at", "temporal_scene_set"],
+        }
+    )
+    return {
+        "status": "bound",
+        "reason": None,
+        "projection": projection,
+        "rows": matched_rows,
+        "malformed_count": malformed,
+    }
+
+
+def _summarize_step_runs(
+    path: Path | None,
+    limit: int = 24,
+    *,
+    rows: List[Dict[str, Any]] | None = None,
+    malformed: int | None = None,
+) -> Dict[str, Any]:
+    if rows is None:
+        if path is None or not path.is_file():
+            return {"status": "unavailable", "reason": "step_runs_jsonl_missing"}
+        rows, malformed = _load_step_run_rows(path)
+    if malformed is None:
+        malformed = 0
     if malformed < 0:
         return {"status": "unavailable", "reason": "step_runs_unreadable"}
 
@@ -2084,6 +2362,31 @@ def _count_audio_emotion_score_records(records: List[Dict[str, Any]], *, nested_
         if isinstance(scores, dict) and any(_safe_float(value) is not None for value in scores.values()):
             count += 1
     return count
+
+
+def _summarize_transcript_outcomes(scene_results_payload: Any) -> Dict[str, Any]:
+    """Expose new transcript outcome fields without inventing them for old runs."""
+    records = _scene_records_from_results(scene_results_payload)
+    if not records:
+        return {"status": "unavailable", "reason": "scene_ingest_results_missing"}
+
+    outcomes: Counter[str] = Counter()
+    legacy_without_outcome = 0
+    for record in records:
+        audio = record.get("audio") if isinstance(record.get("audio"), dict) else {}
+        outcome = record.get("transcript_outcome") or audio.get("transcript_outcome")
+        if isinstance(outcome, str) and outcome.strip():
+            outcomes[outcome.strip().lower()] += 1
+        else:
+            legacy_without_outcome += 1
+    return {
+        "status": "ok" if outcomes else "not_observed",
+        "source": "scene_ingest_results",
+        "scene_scope_count": len(records),
+        "outcomes": dict(sorted(outcomes.items())),
+        "legacy_without_outcome_count": legacy_without_outcome,
+        "interpretation": "Outcome states are emitted only by current ingestion; absent values in historical artifacts are not inferred.",
+    }
 
 
 def _text_emotion_buckets_from_records(records: List[Dict[str, Any]], *, nested_audio: bool = False) -> List[Dict[str, Any]]:
@@ -3427,7 +3730,9 @@ def get_memory_stats() -> Dict[str, Any]:
 
     qdrant_info = {"available": False, "collections": 0}
     try:
-        r = requests.get(f"{_qdrant_base_url()}/collections", timeout=2)
+        r = build_qdrant_session(_qdrant_base_url()).get(
+            f"{_qdrant_base_url()}/collections", timeout=2
+        )
         if r.status_code == 200:
             colls = r.json().get("result", {}).get("collections", []) or []
             qdrant_info["available"] = True
@@ -3452,11 +3757,25 @@ def read_epistemic_envelope() -> Dict[str, Any]:
     """Serve a precomputed EpistemicReadEnvelope bundle without accepting arbitrary queries/commands."""
     bundle_path = os.environ.get("GOODQ_READONLY_ENVELOPE_PATH", "").strip()
     if not bundle_path:
-        raise HTTPException(status_code=404, detail="Envelope bundle not configured (set GOODQ_READONLY_ENVELOPE_PATH).")
+        return {
+            "status": "not_configured",
+            "reason": "readonly_envelope_path_not_configured",
+            "remediation_owner": "operator_configuration",
+            "remediation": "Configure a durable read-only envelope bundle before enabling this surface.",
+            "envelope": None,
+            "nonActionDecisions": [],
+        }
 
     p = Path(bundle_path)
     if not p.is_file():
-        raise HTTPException(status_code=404, detail="Envelope bundle not found.")
+        return {
+            "status": "unavailable",
+            "reason": "readonly_envelope_bundle_missing",
+            "remediation_owner": "operator_configuration",
+            "remediation": "Repair the configured durable read-only envelope bundle path.",
+            "envelope": None,
+            "nonActionDecisions": [],
+        }
 
     try:
         data = json.loads(p.read_text(encoding="utf-8"))

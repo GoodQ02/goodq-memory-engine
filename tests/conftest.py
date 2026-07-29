@@ -56,3 +56,12 @@ def isolate_goodq_agent_state(tmp_path, monkeypatch):
         "GOODQ_TOOL_AUDIT_LOG",
         str(tmp_path / "goodq-tool-audit" / "tool-audit.jsonl"),
     )
+
+
+@pytest.fixture(autouse=True)
+def isolate_goodq_identity_state(tmp_path, monkeypatch):
+    """Keep identity path from touching operator-owned filesystem paths."""
+    monkeypatch.setenv(
+        "GOODQ_IDENTITY_PATH",
+        str(tmp_path / "goodq-identity"),
+    )

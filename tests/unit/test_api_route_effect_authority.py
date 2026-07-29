@@ -92,6 +92,7 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
     ): "passive_read",
     ("GET", "/api/identity/face-clusters"): "automatic_mutation",
     ("POST", "/api/identity/rebuild-face-clusters"): "process_execution",
+    ("GET", "/api/identity/process-jobs/{job_id}"): "passive_read",
     ("POST", "/api/identity/face-clusters/label"): "curated_mutation",
     ("GET", "/api/identity/speaker-clusters"): "automatic_mutation",
     ("POST", "/api/identity/speaker-clusters/confirm"): "curated_mutation",
@@ -105,7 +106,7 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
 }
 
 EXPECTED_COUNTS = {
-    "passive_read": 41,
+    "passive_read": 42,
     "request_staging": 1,
     "automatic_mutation": 10,
     "curated_mutation": 8,
@@ -783,7 +784,7 @@ def test_openapi_projects_every_effect_and_preserves_ingest_schema() -> None:
             if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}:
                 operations.append(operation)
 
-    assert len(operations) == 67
+    assert len(operations) == 68
     assert all(operation.get("x-goodq-effect") in EXPECTED_COUNTS for operation in operations)
 
     submit_operation = schema["paths"]["/api/ingest/submit"]["post"]

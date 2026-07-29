@@ -33,12 +33,18 @@ def _json_loads(value: Any) -> Dict[str, Any]:
 class KnowledgeGraph:
     """SQLite-backed lightweight knowledge graph store."""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, read_only: bool = False):
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.conn.row_factory = sqlite3.Row
-        self._init_schema()
+        if read_only:
+            if not self.db_path.exists():
+                raise FileNotFoundError(f"Database file not found: {self.db_path}")
+            self.conn = sqlite3.connect(f"file:{self.db_path.absolute().as_posix()}?mode=ro&immutable=1", uri=True)
+            self.conn.row_factory = sqlite3.Row
+        else:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self.conn = sqlite3.connect(str(self.db_path))
+            self.conn.row_factory = sqlite3.Row
+            self._init_schema()
 
     def __enter__(self) -> "KnowledgeGraph":
         return self

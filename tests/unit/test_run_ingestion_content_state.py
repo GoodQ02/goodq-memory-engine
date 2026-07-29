@@ -35,6 +35,15 @@ def _load_run_ingestion_module():
     return importlib.import_module("cli.run_ingestion")
 
 
+def test_initial_knowledge_graph_status_reports_isolated_epoch_truth(monkeypatch):
+    run_ingestion = _load_run_ingestion_module()
+    monkeypatch.setattr(run_ingestion, "KNOWLEDGE_GRAPH_AVAILABLE", True)
+
+    assert run_ingestion._initial_knowledge_graph_status({"ingestion_isolation": True}) == "not_applicable_isolated_epoch"
+    assert run_ingestion._initial_knowledge_graph_status({"knowledge_graph": {"enabled": False}}) == "disabled_config"
+    assert run_ingestion._initial_knowledge_graph_status({}) == "active"
+
+
 def test_classify_scene_content_signal_with_transcript_text():
     run_ingestion = _load_run_ingestion_module()
 
@@ -103,6 +112,51 @@ def test_classify_scene_content_processing_error_with_audio_error():
     state = run_ingestion._classify_scene_content(scene, empty_duration_threshold_sec=1.0)
 
     assert state == "processing_error"
+
+
+def test_transcript_outcome_keeps_successful_empty_output_unclassified():
+    run_ingestion = _load_run_ingestion_module()
+
+    outcome = run_ingestion._derive_transcript_outcome(
+        {
+            "path": "audio/scene_0001.wav",
+            "data": {"transcript": "", "segments": [], "transcript_meta": {"status": "success"}},
+        },
+        audio_error=None,
+        audio_backend_fields={"audio_backend_effective": "wsl", "audio_backend_effective_reason": "wsl_unified_success"},
+    )
+
+    assert outcome == {
+        "transcript_outcome": "unclassified",
+        "transcript_outcome_reason": "no_explicit_speech_or_quality_outcome",
+    }
+
+
+def test_transcript_outcome_preserves_explicit_worker_classification():
+    run_ingestion = _load_run_ingestion_module()
+
+    outcome = run_ingestion._derive_transcript_outcome(
+        {"data": {"transcript_outcome": "low_confidence", "transcript_outcome_reason": "threshold_rejected"}},
+        audio_error=None,
+        audio_backend_fields={"audio_backend_effective": "wsl"},
+    )
+
+    assert outcome == {"transcript_outcome": "low_confidence", "transcript_outcome_reason": "threshold_rejected"}
+
+
+def test_transcript_outcome_distinguishes_missing_artifact_and_runtime_failure():
+    run_ingestion = _load_run_ingestion_module()
+
+    assert run_ingestion._derive_transcript_outcome(
+        None,
+        audio_error=None,
+        audio_backend_fields={"audio_backend_effective": "none"},
+    )["transcript_outcome"] == "missing_audio_artifact"
+    assert run_ingestion._derive_transcript_outcome(
+        {"data": {"transcript_meta": {"status": "error"}}},
+        audio_error=None,
+        audio_backend_fields={"audio_backend_effective": "failed"},
+    )["transcript_outcome"] == "runtime_failure"
 
 
 def test_extract_step_failure_details_preserves_step_and_raw_message():

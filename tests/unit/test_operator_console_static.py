@@ -68,6 +68,20 @@ def test_operator_console_surfaces_runtime_clarity_state_grammar_and_storage() -
     assert "File name redacted" in app_js
 
 
+def test_operator_console_keeps_absence_and_telemetry_provenance_visible() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (repo_root / "ui" / "operator_console_v1" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "direct_ingest_results_json" in app_js
+    assert "artifact_sources" in app_js
+    assert "Global ledger not bound" in app_js
+    assert "normalizeGpuStats" in app_js
+    assert '"memory_total_mb",\n        "memory_percent"' in app_js
+    assert "gpu_probe_reason" in app_js
+    assert "remediation_owner" in app_js
+    assert "optionalEndpointNames" not in app_js
+
+
 def test_operator_console_surfaces_witness_truth_spine() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     index_html = (repo_root / "ui" / "operator_console_v1" / "index.html").read_text(encoding="utf-8")
@@ -206,6 +220,28 @@ def test_retrieval_console_uses_timeline_handoff_id_for_enriched_results() -> No
     assert "top_speaker_aligned_mentions" in app_js
     assert "kg_evidence" in app_js
     assert "KG / Entity Evidence" in app_js
+
+
+def test_retrieval_console_labels_identity_appearance_and_mentions() -> None:
+    """Catches identity evidence being returned by the API but hidden in the UI."""
+    repo_root = Path(__file__).resolve().parents[2]
+    app_js = (
+        repo_root
+        / "ui"
+        / "operator_console_v1"
+        / "static"
+        / "js"
+        / "app.js"
+    ).read_text(encoding="utf-8")
+    index_html = (
+        repo_root / "ui" / "operator_console_v1" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "Identity: face-backed appearance" in app_js
+    assert "Identity: transcript mention only" in app_js
+    assert "identity_evidence" in app_js
+    assert "identity_match" in app_js
+    assert index_html.count("identity-evidence-1") == 2
 
 
 def test_operator_console_uses_no_store_refresh_and_run_scope_cache_boundary() -> None:

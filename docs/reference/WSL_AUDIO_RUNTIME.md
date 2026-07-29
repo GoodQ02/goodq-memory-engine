@@ -305,6 +305,9 @@ Operator meaning:
 - `speaker_voice_signature_meta` records whether signatures were emitted and which minimum thresholds applied.
 - `diarization_status` / `emotion_status` are part of the active persisted truth
   surface, not debug-only side channels.
+- `diarization_status=completed_no_speakers` means the diarization worker
+  completed but emitted zero speaker tracks. It is neither a failure nor usable
+  speaker evidence; it must not enter a signature-backfill candidate set.
 
 Current runtime thresholds for signature emission are:
 

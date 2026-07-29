@@ -611,24 +611,26 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             e,
                         )
         # Upsert generic embedding metadata for recall
-        embedding_ok = False
-        embedding_reason = None
-        try:
-            from steps.common.memory import upsert_embedding
-            scene_id = item.get("scene_id") or item.get("scene_index")
-            if scene_id is not None and not isinstance(scene_id, str):
-                scene_id = f"scene_{int(scene_id):04d}"
-            upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio", scene_id=scene_id, vector=feats[0].tolist())
-            embedding_ok = True
-        except Exception as e:
-            embedding_reason = f"exception:{type(e).__name__}"
-            logger.warning(
-                "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
-                "sqlite_embeddings.upsert",
-                path,
-                type(e).__name__,
-                e,
-            )
+        isolated_epoch = bool(cfg.get("ingestion_isolation", False))
+        embedding_ok = None if isolated_epoch else False
+        embedding_reason = "not_applicable_isolated_epoch" if isolated_epoch else None
+        if not isolated_epoch:
+            try:
+                from steps.common.memory import upsert_embedding
+                scene_id = item.get("scene_id") or item.get("scene_index")
+                if scene_id is not None and not isinstance(scene_id, str):
+                    scene_id = f"scene_{int(scene_id):04d}"
+                upsert_embedding(cfg, h, faiss_id, path, item.get("modality", "audio") or "audio", scene_id=scene_id, vector=feats[0].tolist())
+                embedding_ok = True
+            except Exception as e:
+                embedding_reason = f"exception:{type(e).__name__}"
+                logger.warning(
+                    "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
+                    "sqlite_embeddings.upsert",
+                    path,
+                    type(e).__name__,
+                    e,
+                )
 
         try:
             from steps.common.memory_commit_events import MemoryCommitEvent, emit_memory_commit_event
@@ -652,12 +654,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "faiss": {"attempted": True, "committed": bool(faiss_ok), "ref": index_path, "reason": None if faiss_ok else "write_failed"},
                         "qdrant": {"attempted": bool(qdrant_attempted), "committed": bool(qdrant_ok), "ref": qdrant_collection, "reason": qdrant_reason},
                         "sqlite_map": {"attempted": bool(map_db), "committed": bool(map_ok), "ref": map_db, "reason": map_reason},
-                        "sqlite_embeddings": {
+                        **({} if isolated_epoch else {"sqlite_embeddings": {
                             "attempted": True,
                             "committed": bool(embedding_ok),
                             "ref": (cfg.get("paths", {}) or {}).get("db_path"),
                             "reason": embedding_reason,
-                        },
+                        }}),
                     },
                     details={
                         "faiss_id": faiss_id,
@@ -690,7 +692,8 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             "qdrant_committed": bool(qdrant_ok),
             "sqlite_map_attempted": bool(map_db),
             "sqlite_map_committed": bool(map_ok),
-            "sqlite_embeddings_committed": bool(embedding_ok),
+            "sqlite_embeddings_committed": embedding_ok,
+            "sqlite_embeddings_state": "not_applicable_isolated_epoch" if isolated_epoch else "committed" if embedding_ok else "failed",
         }
         run_id = _resolve_run_id(item, cfg)
         if run_id:

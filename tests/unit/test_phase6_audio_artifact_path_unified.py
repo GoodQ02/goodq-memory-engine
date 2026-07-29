@@ -13,6 +13,59 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def test_harmonizer_reads_isolated_epoch_commit_ledger(tmp_path: Path) -> None:
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    scene_id = "scene_0000"
+    (log_dir / "memory_commit_events.jsonl").write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "video_id": "video_001",
+                    "scene_id": scene_id,
+                    "modality": "audio",
+                    "attempted": True,
+                    "committed": True,
+                },
+                {
+                    "video_id": "video_001",
+                    "scene_id": scene_id,
+                    "modality": "audio_transcript",
+                    "attempted": True,
+                    "committed": True,
+                },
+                {
+                    "video_id": "other_video",
+                    "scene_id": "other_scene",
+                    "modality": "audio",
+                    "attempted": True,
+                    "committed": True,
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    presence = harmonizer_module._load_commit_presence(
+        {
+            "ingestion_isolation": True,
+            "paths": {"log_dir": str(log_dir)},
+        },
+        "video_001",
+        scene_ids=[scene_id],
+    )
+
+    assert presence == {
+        "available": True,
+        "has_audio": True,
+        "has_transcripts": True,
+        "audio_scene_ids": {scene_id},
+        "transcript_scene_ids": {scene_id},
+    }
+
+
 def test_harmonizer_uses_explicit_audio_artifact_dir(tmp_path: Path) -> None:
     processing_root = tmp_path / "processing"
     video_id = "video_001"

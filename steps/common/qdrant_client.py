@@ -7,6 +7,7 @@ import uuid
 import string
 import requests
 import time
+from urllib.parse import urlparse
 
 from steps.common.retrieval_events import (
     RetrievalEventPolicy,
@@ -19,6 +20,21 @@ logger = logging.getLogger(__name__)
 # NOTE: This namespace is part of GoodQ's storage identity for Qdrant point IDs.
 # Changing it will change derived UUIDs and can create duplicates for the same raw IDs.
 GOODQ_POINT_ID_NAMESPACE = uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4")
+
+
+def build_qdrant_session(host: str) -> requests.Session:
+    """Create a transport session that never proxies canonical loopback Qdrant.
+
+    Workstation shells may legitimately export a proxy for external traffic.
+    Qdrant is a local-only authority, so routing its loopback endpoint through
+    that proxy makes a healthy service look unavailable.  Non-loopback hosts
+    retain the caller environment unchanged.
+    """
+    session = requests.Session()
+    hostname = (urlparse(str(host)).hostname or "").lower()
+    if hostname in {"localhost", "127.0.0.1", "::1"}:
+        session.trust_env = False
+    return session
 
 
 def _truncate_http_body(body: Optional[str], max_len: int = 300) -> str:
@@ -44,7 +60,7 @@ class QdrantConfig:
 class QdrantClient:
     def __init__(self, cfg: QdrantConfig):
         self.cfg = cfg
-        self.session = requests.Session()
+        self.session = build_qdrant_session(cfg.host)
         self._collection_ready = False
         self._points_cached: Optional[int] = None
         self._upsert_metrics: Dict[str, int] = {

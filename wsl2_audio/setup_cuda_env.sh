@@ -14,6 +14,13 @@ has_hf_snapshot_file() {
     compgen -G "$1" > /dev/null
 }
 
+is_truthy() {
+    case "${1:-}" in
+        1|true|TRUE|yes|YES|on|ON) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 if [ ! -f "$VENV_DIR/bin/activate" ] && [ -f "$SCRIPT_DIR/env/bin/activate" ]; then
     VENV_DIR="$SCRIPT_DIR/env"
 fi
@@ -92,9 +99,20 @@ if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
     export PYANNOTE_CACHE="${PYANNOTE_CACHE:-$HUGGINGFACE_HUB_CACHE}"
 fi
 
+# Keep the speaker-signature embedding model on the same immutable revision as
+# the project registry.  The default is deliberately local-only: bootstrap is
+# responsible for staging the snapshot before any offline ingest asks for it.
+export GOODQ_WAV2VEC2_BASE_REVISION="${GOODQ_WAV2VEC2_BASE_REVISION:-22aad52d435eb6dbaf354bdad9b0da84ce7d6156}"
+
 # Prefer the staged shared HF cache when it is complete, but fall back to the
 # local WSL cache if required audio models are missing there. This keeps the
 # runtime offline-first without depending on an incomplete mounted cache.
+if { is_truthy "${GOODQ_REQUIRE_GPU:-}" || is_truthy "${GOODQ_REQUIRE_WSL_AUDIO:-}"; } && \
+   [ -z "${HUGGINGFACE_HUB_CACHE:-}" ]; then
+    echo "✗ GPU-managed WSL audio requires HUGGINGFACE_HUB_CACHE; refusing per-user cache fallback" >&2
+    return 1 2>/dev/null || exit 1
+fi
+
 if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
     EMOTION_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--ehcalabres--wav2vec2-lg-xlsr-en-speech-emotion-recognition/snapshots/*/preprocessor_config.json"
     EMBEDDING_CACHE_GLOB="${HUGGINGFACE_HUB_CACHE%/}/models--facebook--wav2vec2-base-960h/snapshots/*/preprocessor_config.json"
@@ -106,6 +124,10 @@ if [ -n "${HUGGINGFACE_HUB_CACHE:-}" ]; then
        ! has_hf_snapshot_file "$DIARIZATION_CACHE_GLOB" || \
        ! has_hf_snapshot_file "$SEGMENTATION_CACHE_GLOB" || \
        ! has_hf_snapshot_file "$WESPEAKER_CACHE_GLOB"; then
+        if is_truthy "${GOODQ_REQUIRE_GPU:-}" || is_truthy "${GOODQ_REQUIRE_WSL_AUDIO:-}"; then
+            echo "✗ Canonical GPU audio cache is incomplete; refusing per-user cache fallback" >&2
+            return 1 2>/dev/null || exit 1
+        fi
         unset HF_HOME
         unset HF_HUB_CACHE
         unset HUGGINGFACE_HUB_CACHE

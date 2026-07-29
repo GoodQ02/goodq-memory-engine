@@ -63,6 +63,26 @@ def _replace_file_allowing_open_readers(source: Path, destination: Path) -> None
         raise ctypes.WinError(ctypes.get_last_error())
 
 
+def _replace_file_with_retry_for_open_readers(
+    source: Path,
+    destination: Path,
+    *,
+    attempts: int = 50,
+    retry_seconds: float = 0.1,
+) -> None:
+    """Retry transient Windows sharing violations while preserving atomicity."""
+    if attempts < 1:
+        raise ValueError("Atomic-replace attempts must be positive")
+    for attempt in range(attempts):
+        try:
+            _replace_file_allowing_open_readers(source, destination)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (32, 33) or attempt + 1 == attempts:
+                raise
+            time.sleep(retry_seconds)
+
+
 def atomic_write_json_for_concurrent_readers(
     path: Path,
     data: Any,
@@ -74,7 +94,7 @@ def atomic_write_json_for_concurrent_readers(
         path,
         data,
         indent=indent,
-        replace=_replace_file_allowing_open_readers,
+        replace=_replace_file_with_retry_for_open_readers,
     )
 
 

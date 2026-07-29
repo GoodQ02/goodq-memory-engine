@@ -177,6 +177,141 @@ def _get_segment_node_id(conn: sqlite3.Connection, segment_name: str) -> int | N
     return row[0] if row else None
 
 
+def _read_only_kg_conn(kg_path: Path) -> sqlite3.Connection:
+    uri = f"{kg_path.resolve().as_uri()}?mode=ro"
+    return sqlite3.connect(uri, uri=True)
+
+
+def _scene_authority(
+    conn: sqlite3.Connection,
+) -> tuple[dict[int, list[tuple[int, str]]], dict[str, list[int]]]:
+    frame_to_scenes: dict[int, list[tuple[int, str]]] = defaultdict(list)
+    name_to_ids: dict[str, list[int]] = defaultdict(list)
+    rows = conn.execute(
+        "SELECT id, name, properties FROM nodes WHERE node_type = 'scene'"
+    ).fetchall()
+    for scene_id, scene_name, properties_json in rows:
+        name_to_ids[str(scene_name)].append(int(scene_id))
+        try:
+            properties = json.loads(properties_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            properties = {}
+        provenance = properties.get("ucf_provenance")
+        if not isinstance(provenance, list):
+            continue
+        for frame_id in provenance:
+            try:
+                normalized_frame_id = int(frame_id)
+            except (TypeError, ValueError):
+                continue
+            frame_to_scenes[normalized_frame_id].append(
+                (int(scene_id), str(scene_name))
+            )
+    return dict(frame_to_scenes), dict(name_to_ids)
+
+
+def _face_frame_id(face_id: str) -> int | None:
+    try:
+        frame_id, face_index = str(face_id).split("_", 1)
+        int(face_index)
+        return int(frame_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bounded_term_matches(terms: list[str], text: str) -> list[str]:
+    matches = []
+    for term in terms:
+        pattern = re.compile(
+            rf"(?<!\w){re.escape(term)}(?!\w)",
+            re.IGNORECASE,
+        )
+        if pattern.search(text):
+            matches.append(term)
+    return matches
+
+
+def _segment_scene_candidates(
+    meta: dict,
+    frame_to_scenes: dict[int, list[tuple[int, str]]],
+    scene_name_to_ids: dict[str, list[int]],
+) -> list[tuple[int, str]]:
+    scene_name = str(meta.get("scene_id") or "").strip()
+    explicit_candidates = {
+        (scene_id, scene_name)
+        for scene_id in scene_name_to_ids.get(scene_name, [])
+    }
+    if scene_name and not explicit_candidates:
+        return []
+    provenance_candidates = set()
+    provenance = meta.get("ucf_provenance")
+    if isinstance(provenance, list):
+        for frame_id in provenance:
+            try:
+                normalized_frame_id = int(frame_id)
+            except (TypeError, ValueError):
+                continue
+            provenance_candidates.update(
+                frame_to_scenes.get(normalized_frame_id, [])
+            )
+    candidates = explicit_candidates | provenance_candidates
+    return sorted(candidates, key=lambda item: (item[1], item[0]))
+
+
+def _apply_promotion_manifest(
+    conn: sqlite3.Connection,
+    manifest: dict,
+) -> None:
+    node_ids: dict[tuple[str, str], int] = {}
+    for node in manifest["nodes_created"]:
+        node_type = str(node["node_type"])
+        name = str(node["name"])
+        node_ids[(node_type, name)] = _upsert_node(
+            conn,
+            node_type,
+            name,
+            dict(node.get("properties") or {}),
+        )
+
+    for edge in manifest["edges_created"]:
+        edge_type = str(edge["edge"])
+        source_id = node_ids[("Person", str(edge["from"]))]
+        properties: dict = {}
+        weight = 1.0
+        if edge_type == "person_has_face_cluster":
+            target_id = node_ids[("FaceCluster", str(edge["to"]))]
+            properties = {"confidence": "candidate"}
+        elif edge_type == "person_has_voice_cluster":
+            target_id = node_ids[("VoiceCluster", str(edge["to"]))]
+        elif edge_type == "person_appears_in_scene":
+            target_id = int(edge["target_node_id"])
+            weight = 0.7
+            properties = {
+                "confidence": "candidate",
+                "via_face_clusters": edge["via_face_clusters"],
+                "evidence_face_ids": edge["evidence_face_ids"],
+            }
+        elif edge_type == "person_mentioned_in_scene":
+            target_id = int(edge["target_node_id"])
+            weight = 0.5
+            properties = {
+                "confidence": "mention",
+                "via_transcript_match": True,
+                "matched_terms": edge["matched_terms"],
+                "speakers": edge["speakers"],
+            }
+        else:
+            raise RuntimeError(f"Unsupported identity promotion edge: {edge_type}")
+        _upsert_edge(
+            conn,
+            source_id,
+            target_id,
+            edge_type,
+            weight=weight,
+            properties=properties,
+        )
+
+
 # ── Main promotion logic ────────────────────────────────────────────────────────
 
 def promote(
@@ -186,16 +321,10 @@ def promote(
     mem_db_path: Path,
     dry_run: bool,
 ) -> dict:
-    """
-    Promotes person nodes from the roster into knowledge_graph.db.
-    Returns a manifest of all writes (or planned writes in dry-run mode).
-    """
-    roster_path        = data_path / "family_roster.yaml"
+    """Builds one exact-scene plan, then optionally applies that same plan."""
+    roster_path = data_path / "family_roster.yaml"
     face_manifest_path = data_path / "face_clusters.json"
-    spk_manifest_path  = data_path / "speaker_clusters.json"
-    name_mentions_path = data_path / "name_mentions.json"
-
-    # Load roster
+    spk_manifest_path = data_path / "speaker_clusters.json"
     try:
         import yaml
         with open(roster_path, encoding="utf-8") as f:
@@ -206,18 +335,14 @@ def promote(
 
     identities = roster.get("identities", [])
     face_manifest = json.loads(face_manifest_path.read_text()) if face_manifest_path.exists() else {}
-    spk_manifest  = json.loads(spk_manifest_path.read_text())  if spk_manifest_path.exists()  else {}
-    name_mentions = json.loads(name_mentions_path.read_text()) if name_mentions_path.exists()  else {}
-
+    spk_manifest = json.loads(spk_manifest_path.read_text()) if spk_manifest_path.exists() else {}
     face_cluster_map = {c["cluster_id"]: c for c in face_manifest.get("clusters", [])}
-    spk_cluster_map  = {c["cluster_id"]: c for c in spk_manifest.get("clusters", [])}
+    spk_cluster_map = {c["cluster_id"]: c for c in spk_manifest.get("clusters", [])}
 
-    # Load memory.db segments for transcript mention linking
-    mem_conn = sqlite3.connect(str(mem_db_path))
-    mem_cur = mem_conn.cursor()
-    mem_cur.execute("SELECT video_hash, speaker, meta FROM segments")
-    segments = mem_cur.fetchall()
-    mem_conn.close()
+    with sqlite3.connect(str(mem_db_path)) as mem_conn:
+        segments = mem_conn.execute(
+            "SELECT video_hash, speaker, meta FROM segments"
+        ).fetchall()
 
     manifest = {
         "epoch_id": epoch_id,
@@ -229,20 +354,17 @@ def promote(
         "errors": [],
     }
 
-    kg_conn = _kg_conn(kg_path) if not dry_run else None
-
-    try:
+    with _read_only_kg_conn(kg_path) as projection_conn:
+        frame_to_scenes, scene_name_to_ids = _scene_authority(projection_conn)
         for identity in identities:
-            iid    = identity["id"]
-            dname  = identity.get("display_name", iid)
+            iid = identity["id"]
+            dname = identity.get("display_name", iid)
             aliases = identity.get("aliases") or []
             face_cluster_ids = identity.get("face_cluster_ids") or []
-            spk_cluster_ids  = identity.get("speaker_cluster_ids") or []
+            spk_cluster_ids = identity.get("speaker_cluster_ids") or []
             name_keys = identity.get("name_mention_keys") or []
-
             log.info("Processing identity: %s (%s)", iid, dname)
 
-            # 1. Person node
             person_props = {
                 "display_name": dname,
                 "aliases": aliases,
@@ -255,11 +377,8 @@ def promote(
                 "name": iid,
                 "properties": person_props,
             })
-            person_id = None
-            if not dry_run:
-                person_id = _upsert_node(kg_conn, "Person", iid, person_props)
 
-            # 2. FaceCluster nodes + links
+            face_scene_evidence: dict[tuple[int, str], dict[str, set[str]]] = {}
             for fc_id in face_cluster_ids:
                 cluster = face_cluster_map.get(fc_id, {})
                 fc_props = {
@@ -268,44 +387,67 @@ def promote(
                     "status": "candidate",
                     "person_id": iid,
                 }
-                manifest["nodes_created"].append({"node_type": "FaceCluster", "name": fc_id})
+                manifest["nodes_created"].append({
+                    "node_type": "FaceCluster",
+                    "name": fc_id,
+                    "properties": fc_props,
+                })
                 manifest["edges_created"].append({
                     "edge": "person_has_face_cluster",
                     "from": iid, "to": fc_id,
                 })
-                face_node_id = None
-                if not dry_run:
-                    face_node_id = _upsert_node(kg_conn, "FaceCluster", fc_id, fc_props)
-                    _upsert_edge(kg_conn, person_id, face_node_id, "person_has_face_cluster",
-                                 properties={"confidence": "candidate"})
+                for face_id in cluster.get("face_ids", []):
+                    frame_id = _face_frame_id(str(face_id))
+                    if frame_id is None:
+                        manifest["errors"].append({
+                            "code": "face_detection_id_invalid",
+                            "identity_id": iid,
+                            "cluster_id": fc_id,
+                            "face_id": str(face_id),
+                        })
+                        continue
+                    scenes = frame_to_scenes.get(frame_id, [])
+                    if not scenes:
+                        manifest["errors"].append({
+                            "code": "face_detection_scene_missing",
+                            "identity_id": iid,
+                            "cluster_id": fc_id,
+                            "face_id": str(face_id),
+                            "frame_id": frame_id,
+                        })
+                        continue
+                    if len(scenes) != 1:
+                        manifest["errors"].append({
+                            "code": "face_detection_scene_ambiguous",
+                            "identity_id": iid,
+                            "cluster_id": fc_id,
+                            "face_id": str(face_id),
+                            "frame_id": frame_id,
+                            "scene_ids": [scene[1] for scene in scenes],
+                        })
+                        continue
+                    scene_key = scenes[0]
+                    evidence = face_scene_evidence.setdefault(
+                        scene_key,
+                        {"clusters": set(), "face_ids": set()},
+                    )
+                    evidence["clusters"].add(fc_id)
+                    evidence["face_ids"].add(str(face_id))
 
-                # Link face cluster → scenes
-                for vh in cluster.get("video_hashes", []):
-                    # Each face detection in this cluster connects to a scene via
-                    # the KG's existing scene nodes for that video
-                    if not dry_run:
-                        scene_cur = kg_conn.execute(
-                            "SELECT n.id, n.name FROM nodes n "
-                            "JOIN edges e ON e.target_id = n.id "
-                            "JOIN nodes v ON e.source_id = v.id "
-                            "WHERE n.node_type = 'scene' "
-                            "AND v.node_type = 'video' AND v.name = ? "
-                            "AND e.edge_type = 'video_contains_scene'",
-                            (vh,),
-                        )
-                        for scene_db_id, scene_name in scene_cur.fetchall():
-                            _upsert_edge(
-                                kg_conn, person_id, scene_db_id,
-                                "person_appears_in_scene",
-                                weight=0.7,  # candidate weight, not confirmed
-                                properties={"confidence": "candidate", "via_face_cluster": fc_id},
-                            )
-                            manifest["edges_created"].append({
-                                "edge": "person_appears_in_scene",
-                                "from": iid, "to": scene_name, "confidence": "candidate",
-                            })
+            for (scene_db_id, scene_name), evidence in sorted(
+                face_scene_evidence.items(),
+                key=lambda item: (item[0][1], item[0][0]),
+            ):
+                manifest["edges_created"].append({
+                    "edge": "person_appears_in_scene",
+                    "from": iid,
+                    "to": scene_name,
+                    "target_node_id": scene_db_id,
+                    "confidence": "candidate",
+                    "via_face_clusters": sorted(evidence["clusters"]),
+                    "evidence_face_ids": sorted(evidence["face_ids"]),
+                })
 
-            # 3. VoiceCluster nodes + links
             for sc_id in spk_cluster_ids:
                 cluster = spk_cluster_map.get(sc_id, {})
                 vc_props = {
@@ -315,65 +457,123 @@ def promote(
                     "person_id": iid,
                     "status": "confirmed",  # only reaches here after roster confirmation
                 }
-                manifest["nodes_created"].append({"node_type": "VoiceCluster", "name": sc_id})
+                manifest["nodes_created"].append({
+                    "node_type": "VoiceCluster",
+                    "name": sc_id,
+                    "properties": vc_props,
+                })
                 manifest["edges_created"].append({
                     "edge": "person_has_voice_cluster", "from": iid, "to": sc_id,
                 })
-                if not dry_run:
-                    vc_node_id = _upsert_node(kg_conn, "VoiceCluster", sc_id, vc_props)
-                    _upsert_edge(kg_conn, person_id, vc_node_id, "person_has_voice_cluster")
 
-            # 4. Name mention → segment links
-            all_search_terms = (
-                [dname] + aliases + name_keys
-            )
+            all_search_terms = sorted({
+                str(term).strip()
+                for term in [dname] + aliases + name_keys
+                if str(term).strip()
+            }, key=lambda term: (-len(term), term.casefold()))
             if all_search_terms:
-                pattern = re.compile(
-                    "|".join(re.escape(t) for t in all_search_terms if t),
-                    re.IGNORECASE,
-                )
-                mention_edge_count = 0
+                mention_evidence: dict[tuple[int, str], dict[str, set[str]]] = {}
                 for video_hash, speaker, meta_json in segments:
                     try:
                         meta = json.loads(meta_json)
                     except (json.JSONDecodeError, TypeError):
                         continue
                     transcript = (meta.get("text") or meta.get("transcript", "")).strip()
-                    if not transcript or not pattern.search(transcript):
+                    if not transcript:
                         continue
-                    scene_id = meta.get("scene_id", "")
-                    if not dry_run and scene_id:
-                        scene_node_id = _get_scene_node_id(kg_conn, scene_id)
-                        if scene_node_id and person_id:
-                            _upsert_edge(
-                                kg_conn, person_id, scene_node_id,
-                                "person_mentioned_in_scene",
-                                weight=0.5,
-                                properties={
-                                    "confidence": "mention",
-                                    "via_transcript_match": True,
-                                    "speaker": speaker,
-                                },
-                            )
-                    mention_edge_count += 1
+                    matched_terms = _bounded_term_matches(
+                        all_search_terms,
+                        transcript,
+                    )
+                    if not matched_terms:
+                        continue
+                    scene_candidates = _segment_scene_candidates(
+                        meta,
+                        frame_to_scenes,
+                        scene_name_to_ids,
+                    )
+                    if not scene_candidates:
+                        manifest["errors"].append({
+                            "code": "mention_scene_missing",
+                            "identity_id": iid,
+                            "video_hash": video_hash,
+                        })
+                        continue
+                    if len(scene_candidates) != 1:
+                        manifest["errors"].append({
+                            "code": "mention_scene_ambiguous",
+                            "identity_id": iid,
+                            "video_hash": video_hash,
+                            "scene_ids": [
+                                scene[1] for scene in scene_candidates
+                            ],
+                        })
+                        continue
+                    scene_key = scene_candidates[0]
+                    evidence = mention_evidence.setdefault(
+                        scene_key,
+                        {"terms": set(), "speakers": set()},
+                    )
+                    evidence["terms"].update(matched_terms)
+                    if speaker:
+                        evidence["speakers"].add(str(speaker))
 
-                manifest["edges_created"].append({
-                    "edge": "person_mentioned_in_scene (via transcript)",
-                    "from": iid,
-                    "to": f"{mention_edge_count} scenes",
-                })
+                for (scene_db_id, scene_name), evidence in sorted(
+                    mention_evidence.items(),
+                    key=lambda item: (item[0][1], item[0][0]),
+                ):
+                    manifest["edges_created"].append({
+                        "edge": "person_mentioned_in_scene",
+                        "from": iid,
+                        "to": scene_name,
+                        "target_node_id": scene_db_id,
+                        "matched_terms": sorted(evidence["terms"]),
+                        "speakers": sorted(evidence["speakers"]),
+                    })
 
             manifest["identities_processed"] += 1
 
+    if manifest["errors"]:
+        log.error(
+            "Identity promotion plan has %d authority errors.",
+            len(manifest["errors"]),
+        )
         if not dry_run:
+            raise RuntimeError("identity promotion plan has errors")
+        return manifest
+
+    if not dry_run:
+        kg_conn = _kg_conn(kg_path)
+        try:
+            _apply_promotion_manifest(kg_conn, manifest)
             kg_conn.commit()
             log.info("KG writes committed.")
-
-    finally:
-        if kg_conn:
+        except Exception:
+            kg_conn.rollback()
+            raise
+        finally:
             kg_conn.close()
 
     return manifest
+
+
+def _fail_if_plan_errors(manifest: dict) -> None:
+    errors = manifest.get("errors", [])
+    if not errors:
+        return
+    error_counts: dict[str, int] = {}
+    for error in errors:
+        code = str(error.get("code", "unknown"))
+        error_counts[code] = error_counts.get(code, 0) + 1
+    log.error(
+        "Identity promotion plan is not safe to apply: %d authority errors (%s).",
+        len(errors),
+        ", ".join(
+            f"{code}={count}" for code, count in sorted(error_counts.items())
+        ),
+    )
+    log.error("Inspect the written plan errors before retrying.")
+    raise SystemExit(1)
 
 
 def main() -> None:
@@ -431,6 +631,7 @@ def main() -> None:
     report_dir.mkdir(parents=True, exist_ok=True)
     plan_path = report_dir / ("dry_run_plan.json" if dry_run else "identity_promotion_manifest.json")
     plan_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    _fail_if_plan_errors(manifest)
 
     if dry_run:
         log.info("=== DRY-RUN COMPLETE ===")

@@ -301,6 +301,35 @@ class ProcessedRegistry:
                 return False
             record = self.processed[file_hash]
             return record.get('status') == 'success'
+
+    def coverage_decision(
+        self,
+        file_hash: str,
+        requested_stages: Dict[str, Any],
+    ) -> str:
+        """Return the single Watchdog authority decision for a requested stage set.
+
+        A successful content hash alone is deliberately insufficient for a
+        recovery request: every requested stage must have a successful record
+        with matching provenance.  Legacy success-only records remain readable
+        but are not evidence that a newly requested stage is complete.
+        """
+        with self.lock:
+            record = self.processed.get(file_hash)
+            if not isinstance(record, dict):
+                return "recover"
+            if record.get("status") != "success":
+                return "recover"
+            coverage = record.get("stage_coverage")
+            if not isinstance(coverage, dict):
+                return "recover"
+            for stage, provenance in requested_stages.items():
+                entry = coverage.get(stage)
+                if not isinstance(entry, dict) or entry.get("status") != "success":
+                    return "recover"
+                if entry.get("provenance") != provenance:
+                    return "recover"
+            return "skip"
     
     def mark_processed(
         self,
@@ -308,15 +337,19 @@ class ProcessedRegistry:
         original_name: str,
         status: str = 'success',
         run_id: Optional[str] = None,
+        stage_coverage: Optional[Dict[str, Dict[str, Any]]] = None,
     ):
         """Mark file as processed"""
         with self.lock:
-            self.processed[file_hash] = {
+            record: Dict[str, Any] = {
                 'original_name': original_name,
                 'status': status,
                 'run_id': run_id,
                 'timestamp': datetime.now().isoformat()
             }
+            if stage_coverage is not None:
+                record['stage_coverage'] = stage_coverage
+            self.processed[file_hash] = record
             self.save()
 
     def mark_failed(

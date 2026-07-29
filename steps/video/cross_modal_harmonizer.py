@@ -2365,15 +2365,85 @@ def _load_required_audio_artifact(path: Path, artifact_name: str) -> tuple[Optio
         return None, False
 
 
-def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[str] | None = None) -> Dict[str, Any]:
-    """Best-effort: derive modality presence from committed memory events (authoritative)."""
-    presence = {
+def _empty_commit_presence() -> Dict[str, Any]:
+    return {
         'available': False,
         'has_audio': False,
         'has_transcripts': False,
         'audio_scene_ids': set(),
         'transcript_scene_ids': set(),
     }
+
+
+def _load_isolated_commit_presence(
+    cfg: Dict[str, Any],
+    video_id: str,
+    scene_ids: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Read the epoch-local commit ledger used by isolated ingestion runs.
+
+    Isolation intentionally avoids writing observability rows into ``memory.db``.
+    The append-only JSONL ledger is therefore the authoritative commit projection
+    for that run; treating its absence as an empty SQLite table would make real
+    committed vectors appear unavailable in the temporal index.
+    """
+    presence = _empty_commit_presence()
+    paths = (cfg.get('paths') or {}) if isinstance(cfg, dict) else {}
+    log_dir = paths.get('log_dir')
+    if not isinstance(log_dir, str) or not log_dir.strip():
+        return presence
+
+    jsonl_path = Path(log_dir) / 'memory_commit_events.jsonl'
+    if not jsonl_path.is_file():
+        return presence
+
+    selected_scene_ids = {str(scene_id) for scene_id in (scene_ids or []) if scene_id}
+    audio_scene_ids: set[str] = set()
+    transcript_scene_ids: set[str] = set()
+    try:
+        with jsonl_path.open('r', encoding='utf-8') as handle:
+            for line in handle:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                if str(event.get('video_id') or '') != video_id:
+                    continue
+                if event.get('attempted') is not True or event.get('committed') is not True:
+                    continue
+                scene_id = str(event.get('scene_id') or '')
+                if selected_scene_ids and scene_id not in selected_scene_ids:
+                    continue
+                modality = event.get('modality')
+                if modality == 'audio' and scene_id:
+                    audio_scene_ids.add(scene_id)
+                elif modality == 'audio_transcript' and scene_id:
+                    transcript_scene_ids.add(scene_id)
+    except OSError as exc:
+        logger.warning(
+            '[HARMONIZER] Failed to read isolated commit ledger path=%s exc_type=%s exc=%s',
+            jsonl_path,
+            type(exc).__name__,
+            exc,
+        )
+        return presence
+
+    presence['available'] = True
+    presence['audio_scene_ids'] = audio_scene_ids
+    presence['transcript_scene_ids'] = transcript_scene_ids
+    presence['has_audio'] = bool(audio_scene_ids)
+    presence['has_transcripts'] = bool(transcript_scene_ids)
+    return presence
+
+
+def _load_commit_presence(cfg: Dict[str, Any], video_id: str, scene_ids: List[str] | None = None) -> Dict[str, Any]:
+    """Derive modality presence from the run's authoritative commit ledger."""
+    if isinstance(cfg, dict) and cfg.get('ingestion_isolation', False):
+        return _load_isolated_commit_presence(cfg, video_id, scene_ids)
+
+    presence = _empty_commit_presence()
 
     try:
         runtime_paths = get_runtime_paths(cfg, 'db_path', require_canonical=False)

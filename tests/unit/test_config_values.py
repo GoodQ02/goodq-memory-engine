@@ -107,6 +107,86 @@ def test_local_override_template_covers_private_authority_fields():
     assert template["home_assistant"]["url"].startswith(
         "${GOODQ_HOME_ASSISTANT_URL:-"
     )
+    assert template["identity_search"] == {
+        "enabled": False,
+        "roster_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/identity/"
+            "family_roster.yaml"
+        ),
+        "kg_db_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/"
+            "${GOODQ_EPOCH_ID:-default}/knowledge_graph.db"
+        ),
+        "appearance_score_boost": 0.2,
+        "mention_score_boost": 0.05,
+        "candidate_pool_multiplier": 5,
+        "appearance_injection_limit": 1,
+    }
+
+
+def test_portable_identity_search_defaults_are_safe_and_evidence_aware():
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "config.yaml"
+    tracked = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert tracked["identity_search"] == {
+        "enabled": False,
+        "roster_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/identity/"
+            "family_roster.yaml"
+        ),
+        "kg_db_path": (
+            "${GOODQ_DATA_ROOT:-./_DATA}/GoodQ_Data/epochs/"
+            "${GOODQ_EPOCH_ID:-default}/knowledge_graph.db"
+        ),
+        "appearance_score_boost": 0.2,
+        "mention_score_boost": 0.05,
+        "candidate_pool_multiplier": 5,
+        "appearance_injection_limit": 1,
+    }
+
+
+def test_resolved_config_validates_identity_search_without_scripts_path(
+    monkeypatch,
+    capsys,
+):
+    """The canonical loader must validate identity search for every entry point."""
+    scripts_path = str(Path(__file__).resolve().parents[2] / "scripts")
+    original_sys_path = list(sys.path)
+    while scripts_path in sys.path:
+        sys.path.remove(scripts_path)
+    monkeypatch.delitem(sys.modules, "config_schema", raising=False)
+    try:
+        result = load_configs({})
+
+        assert result["identity_search"]["enabled"] is True
+        assert 1 <= result["identity_search"]["candidate_pool_multiplier"] <= 10
+        output = capsys.readouterr().out
+        assert "Config validation failed" not in output
+        assert "Falling back to unvalidated config" not in output
+    finally:
+        sys.path[:] = original_sys_path
+
+
+def test_identity_search_schema_rejects_invalid_evidence_ranking_values():
+    scripts_path = str(Path(__file__).resolve().parents[2] / "scripts")
+    inserted = False
+    if scripts_path not in sys.path:
+        sys.path.insert(0, scripts_path)
+        inserted = True
+    try:
+        from config_schema import GoodQConfig
+
+        resolved = load_configs({})
+        invalid = dict(resolved)
+        invalid["identity_search"] = {
+            **resolved["identity_search"],
+            "mention_score_boost": 0.21,
+        }
+        with pytest.raises(ValueError, match="mention_score_boost"):
+            GoodQConfig.model_validate(invalid)
+    finally:
+        if inserted:
+            sys.path.remove(scripts_path)
 
 
 def test_tracked_configuration_surface_has_no_literal_drive_roots():
@@ -420,6 +500,24 @@ def test_load_configs_runtime_config_merge(monkeypatch, tmp_path):
     result = load_configs({})
     assert result.get("qdrant", {}).get("port") == 6399
     assert result.get("qdrant", {}).get("host") == "192.168.1.100"
+
+
+def test_epoch_environment_binding_projects_one_runtime_authority(monkeypatch, tmp_path):
+    epoch_id = "epoch_read_authority"
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("GOODQ_EPOCH_ID", epoch_id)
+
+    result = load_configs({})
+
+    assert Path(result["paths"]["db_path"]).parent.name == epoch_id
+    assert Path(result["paths"]["processing"]).name == "processing"
+    assert Path(result["paths"]["processing"]).parent.name == epoch_id
+    assert result["qdrant"]["collections"] == {
+        "clip": f"goodq_clip_{epoch_id}",
+        "dino": f"goodq_dino_{epoch_id}",
+        "text": f"goodq_text_{epoch_id}",
+        "audio": f"goodq_audio_{epoch_id}",
+    }
 
 
 if __name__ == "__main__":

@@ -20,6 +20,15 @@ interpret transient status or long basement-era handoff logs.
 6. `PLAN.md` - coding agent execution plan (ExecPlan) guidelines.
 7. The canonical contract named by the current task.
 
+## Active Restart Handoff
+
+For the current July historical-audio repair seam, read the
+[`R08 Historical Signature Backfill Closeout`](../diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md)
+after the generated current-state snapshot, then the
+[`R08 Historical Audio Repair Restart Handoff`](../diagnostics/R08_HISTORICAL_AUDIO_REPAIR_RESTART_HANDOFF_2026-07-28.md).
+They record the closed signature lane and the next bounded visibility seam; they
+do not supersede live runtime probes.
+
 ## Active Workflows
 
 - `workflows/PIPELINE_TROUBLESHOOTING_FLOW.md`: step-by-step pipeline threshold tuning, bug isolation, and regression verification against verified source ground truth.

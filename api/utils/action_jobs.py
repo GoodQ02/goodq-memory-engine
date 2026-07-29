@@ -46,6 +46,9 @@ _UPDATE_FIELDS = {
     "authorization_expires_at_utc",
     "outcome",
     "audit_status",
+    "launch_protocol",
+    "child_pid",
+    "child_start_token",
 }
 _INITIAL_AUTHORIZATION_METADATA_FIELDS = frozenset(
     {"authorization_request_id", "authorization_expires_at_utc"}
@@ -157,7 +160,10 @@ def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise ValueError(f"Unsupported action job update fields: {sorted(unknown)}")
     _reject_secret_bearing(
-        updates, allowed_top_level_keys=frozenset({"tokenfingerprint"})
+        updates,
+        allowed_top_level_keys=frozenset(
+            {"tokenfingerprint", "childstarttoken"}
+        ),
     )
 
     validated: dict[str, Any] = {}
@@ -209,6 +215,29 @@ def _validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError("Invalid audit status")
         validated["audit_status"] = audit_status
+    if "launch_protocol" in updates:
+        launch_protocol = updates["launch_protocol"]
+        if launch_protocol != "stdin_gate_v1":
+            raise ValueError("Invalid action job launch protocol")
+        validated["launch_protocol"] = launch_protocol
+    child_fields = {"child_pid", "child_start_token"} & set(updates)
+    if child_fields and child_fields != {"child_pid", "child_start_token"}:
+        raise ValueError("Child PID and start token must be registered together")
+    if child_fields:
+        child_pid = updates["child_pid"]
+        child_start_token = updates["child_start_token"]
+        if (
+            not isinstance(child_pid, int)
+            or isinstance(child_pid, bool)
+            or child_pid <= 0
+        ):
+            raise ValueError("Child PID must be a positive integer")
+        if not isinstance(child_start_token, str) or not re.fullmatch(
+            r"[0-9a-f]{1,32}", child_start_token
+        ):
+            raise ValueError("Child start token is invalid")
+        validated["child_pid"] = child_pid
+        validated["child_start_token"] = child_start_token
     return validated
 
 
@@ -558,12 +587,18 @@ class ActionJobLedger:
         job_id: str,
         *,
         expected_state: str,
+        expected_owner_instance: str | None = None,
         **updates: Any,
     ) -> dict[str, Any]:
         if expected_state not in NONTERMINAL_STATES:
             raise ValueError("Expected action job state must be nonterminal")
         if not updates:
             raise ValueError("Action job metadata update must not be empty")
+        expected_owner = (
+            _validate_owner_instance(expected_owner_instance, label="Expected")
+            if expected_owner_instance is not None
+            else None
+        )
         validated_updates = _validate_updates(updates)
 
         with self._lock:
@@ -578,6 +613,13 @@ class ActionJobLedger:
             if current_state != expected_state:
                 raise StaleTransitionError(
                     f"Action job {job_id} expected {expected_state}, found {current_state}"
+                )
+            if (
+                expected_owner is not None
+                and record.get("owner_instance") != expected_owner
+            ):
+                raise StaleTransitionError(
+                    f"Action job {job_id} owner does not match expected owner"
                 )
             updated = dict(record)
             updated.update(validated_updates)

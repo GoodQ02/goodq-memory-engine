@@ -306,6 +306,14 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "validate_ucf_frames",
     "reject_ucf_frames",
     "supersede_ucf_frames",
+    "identity.label_face_cluster",
+    "identity.confirm_speaker_cluster",
+    "identity.save_roster",
+    "identity.export_roster",
+    "identity.execute_stitch",
+    "identity.revoke_stitch",
+    "identity.rebuild_face_clusters",
+    "identity.validate_roster",
 }
 
 EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
@@ -315,6 +323,14 @@ EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
     "generate_video_summary",
     "generate_temporal_summary",
     "stage_ingest_request",
+    "identity.label_face_cluster",
+    "identity.confirm_speaker_cluster",
+    "identity.save_roster",
+    "identity.export_roster",
+    "identity.execute_stitch",
+    "identity.revoke_stitch",
+    "identity.rebuild_face_clusters",
+    "identity.validate_roster",
 }
 
 
@@ -337,6 +353,39 @@ def test_local_confirmation_required_tools_have_one_module_level_authority():
         "generate_temporal_summary"
         in mini_agent_client.LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS
     )
+
+
+def test_identity_face_label_requires_exact_scope_confirmation(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "agent-home"))
+    client = MiniAgentClient(profile="safe")
+    client.agent_available = True
+    scope = {"cluster_id": "face_cluster_0", "label": "Grace"}
+
+    requested, requested_rc = client.authorize_action(
+        prompt="Prepare one face label",
+        mode="ops",
+        tool_name="identity.label_face_cluster",
+        tool_args=scope,
+    )
+
+    assert requested_rc == 3
+    assert requested["status"] == "needs_confirmation"
+    token = requested["result"]["confirmation_token"]
+
+    confirmed, confirmed_rc = client.authorize_action(
+        prompt="Confirm one face label",
+        mode="ops",
+        tool_name="identity.label_face_cluster",
+        tool_args=scope,
+        confirm=True,
+        confirmation_token=token,
+    )
+
+    assert confirmed_rc == 0
+    assert confirmed["status"] == "ok"
 
 
 def _temporal_summary_scope(**overrides):

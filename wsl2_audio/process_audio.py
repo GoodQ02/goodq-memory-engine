@@ -20,6 +20,11 @@ from typing import Any, Dict, List, Optional
 import torch
 import numpy as np
 
+try:
+    from wsl2_audio import model_cache
+except ImportError:  # Direct WSL worker execution from its workspace.
+    import model_cache
+
 
 class _LazyTorchaudio:
     """Defer torchaudio import until audio I/O is actually needed."""
@@ -215,36 +220,10 @@ def _resolve_hf_cache_dir() -> Optional[str]:
 
 
 def _load_pyannote_pipeline(pipeline_cls, model_name: str, token: str, cache_dir: Optional[str] = None, is_offline: bool = False):
-    """Load pyannote across the 3.x/4.x auth kwarg boundary, trying local_files_only=True first, blocking online if offline."""
-    base_kwargs = {}
-    if cache_dir:
-        base_kwargs["cache_dir"] = cache_dir
-
-    local_attempts = (True,) if is_offline else (True, False)
-    for local_only in local_attempts:
-        kwargs = dict(base_kwargs)
-        if local_only:
-            kwargs["local_files_only"] = True
-        else:
-            kwargs["use_auth_token"] = token
-        try:
-            try:
-                return pipeline_cls.from_pretrained(model_name, **kwargs)
-            except TypeError as exc:
-                message = str(exc)
-                if "use_auth_token" not in message or "unexpected keyword" not in message:
-                    raise
-                if local_only:
-                    continue
-                kwargs.pop("use_auth_token", None)
-                kwargs["token"] = token
-                return pipeline_cls.from_pretrained(model_name, **kwargs)
-        except Exception as e:
-            if local_only:
-                if is_offline:
-                    raise OSError(f"Offline mode: PyAnnote diarization pipeline failed to load locally: {e}") from e
-                continue
-            raise
+    """Delegate PyAnnote compatibility handling to the shared cache authority."""
+    return model_cache.load_pyannote_pipeline(
+        pipeline_cls, model_name, token, cache_dir=cache_dir, is_offline=is_offline
+    )
 
 
 def clear_gpu_memory():
@@ -470,6 +449,13 @@ def _build_speaker_voice_signatures(
     return {"signatures": signatures, "meta": meta}
 
 
+def _diarization_outcome(diarization_segments: list[dict[str, Any]]) -> tuple[str, Optional[str]]:
+    """Make a clean zero-track result visible instead of calling it success."""
+    if diarization_segments:
+        return "success", None
+    return "completed_no_speakers", "diarization completed without emitted speaker tracks"
+
+
 def process_audio(audio_file, output_dir):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
@@ -690,7 +676,10 @@ def process_audio(audio_file, output_dir):
                     result["speakers"] = list(set(speakers))
                     result["speaker_count"] = len(set(speakers))
                     result["diarization"] = diarization_segments
-                    result["diarization_status"] = "success"
+                    diarization_status, diarization_note = _diarization_outcome(diarization_segments)
+                    result["diarization_status"] = diarization_status
+                    if diarization_note:
+                        result["diarization_note"] = diarization_note
                     
                     # Clean up diarization pipeline
                     del diarization_pipeline
@@ -843,6 +832,10 @@ def process_audio(audio_file, output_dir):
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
                 embed_repo = "facebook/wav2vec2-base-960h"
+                embed_revision = os.getenv(
+                    "GOODQ_WAV2VEC2_BASE_REVISION",
+                    "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
+                ).strip()
                 if is_offline and not model_cache.check_hf_model_cache(embed_repo):
                     raise OSError(
                         f"Offline mode: Wav2Vec2 Base model '{embed_repo}' is missing from local cache.\n"
@@ -854,6 +847,7 @@ def process_audio(audio_file, output_dir):
                 try:
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
@@ -862,6 +856,7 @@ def process_audio(audio_file, output_dir):
                         raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base model '{embed_repo}' from cache: {exc}") from exc
                     embed_model = Wav2Vec2Model.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                     )
                 embed_model.to(device)
@@ -875,6 +870,7 @@ def process_audio(audio_file, output_dir):
                 try:
                     embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                         local_files_only=True,
                     )
@@ -883,6 +879,7 @@ def process_audio(audio_file, output_dir):
                         raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base feature extractor '{embed_repo}' from cache: {exc}") from exc
                     embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                         embed_repo,
+                        revision=embed_revision or None,
                         cache_dir=wav2vec_cache_dir,
                     )
                 inputs = embed_extractor(

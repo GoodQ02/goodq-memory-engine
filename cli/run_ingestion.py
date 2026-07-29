@@ -54,22 +54,31 @@ _SYNTHETIC_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face
 
 
 def _has_wsl_unified_audio_embeddings(item: Dict[str, Any]) -> bool:
+    """Return whether WSL already produced a *persisted CLAP* embedding.
+
+    The unified WSL response also carries a 768-dimensional Wav2Vec2 feature
+    vector.  That is useful audio evidence, but it is not interchangeable with
+    the canonical 512-dimensional CLAP vector and must never suppress the
+    CLAP step merely because generic embeddings are present.
+    """
     if not isinstance(item, dict):
         return False
     if not bool(item.get('wsl2_unified')):
         return False
     if str(item.get('audio_backend_effective') or '').strip().lower() != 'wsl':
         return False
-
-    embeddings = item.get('embeddings')
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        return True
-
-    embeddings_status = str(item.get('embeddings_status') or '').strip().lower()
-    if embeddings_status in {'ok', 'success', 'complete'} and item.get('embedding_dim') is not None:
-        return True
-
-    return False
+    clap_meta = item.get('clap_meta')
+    if not isinstance(clap_meta, dict):
+        return False
+    return (
+        clap_meta.get('status') == 'ok'
+        and clap_meta.get('component') == 'audio_embed_clap'
+        and isinstance(clap_meta.get('embedding_id'), str)
+        and bool(clap_meta.get('embedding_id').strip())
+        and clap_meta.get('qdrant_committed') is True
+        and isinstance(clap_meta.get('qdrant_collection'), str)
+        and bool(clap_meta.get('qdrant_collection').strip())
+    )
 
 
 def _mark_wsl_unified_audio_embed_skip(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -2577,6 +2586,18 @@ def _extract_segment_speaker_ids(segment: Any) -> List[str]:
     return speaker_ids
 
 
+def _initial_knowledge_graph_status(cfg: Dict[str, Any]) -> str:
+    """Report graph applicability, not merely whether its Python module imports."""
+    if not KNOWLEDGE_GRAPH_AVAILABLE:
+        return 'disabled_import_failure'
+    if cfg.get('ingestion_isolation', False):
+        return 'not_applicable_isolated_epoch'
+    graph_cfg = cfg.get('knowledge_graph', {})
+    if isinstance(graph_cfg, dict) and graph_cfg.get('enabled') is False:
+        return 'disabled_config'
+    return 'active'
+
+
 def _compute_scene_coverages(scene_outputs: List[Dict[str, Any]]) -> Dict[str, Any]:
     scenes = [scene for scene in scene_outputs if isinstance(scene, dict)]
     total = len(scenes)
@@ -3312,6 +3333,70 @@ def _extract_segments(audio_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     if isinstance(raw, dict) and isinstance(raw.get('segments'), list):
         return [seg for seg in raw.get('segments') if isinstance(seg, dict)]
     return []
+
+
+_TRANSCRIPT_OUTCOMES = {
+    'transcript_available',
+    'no_speech',
+    'no_intelligible_speech',
+    'low_confidence',
+    'missing_audio_artifact',
+    'runtime_failure',
+    'unclassified',
+}
+
+
+def _derive_transcript_outcome(
+    audio_info: Optional[Dict[str, Any]],
+    *,
+    audio_error: Optional[str],
+    audio_backend_fields: Optional[Dict[str, Any]],
+) -> Dict[str, str]:
+    """Classify the observed transcript result without guessing speech content.
+
+    Old artifacts have no outcome contract and remain untouched.  A successful
+    but empty transcript is deliberately ``unclassified`` unless its worker
+    emitted an explicit speech or quality outcome.
+    """
+    if isinstance(audio_error, str) and audio_error.strip():
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'audio_processing_error'}
+    if not isinstance(audio_info, dict):
+        return {
+            'transcript_outcome': 'missing_audio_artifact',
+            'transcript_outcome_reason': 'audio_processor_returned_no_artifact',
+        }
+
+    candidates: List[Dict[str, Any]] = [audio_info]
+    data = audio_info.get('data')
+    if isinstance(data, dict):
+        candidates.append(data)
+    for candidate in candidates:
+        outcome = str(candidate.get('transcript_outcome') or '').strip().lower()
+        if outcome in _TRANSCRIPT_OUTCOMES:
+            reason = str(candidate.get('transcript_outcome_reason') or '').strip()
+            return {'transcript_outcome': outcome, 'transcript_outcome_reason': reason or 'worker_reported_outcome'}
+
+    backend_effective = str((audio_backend_fields or {}).get('audio_backend_effective') or '').strip().lower()
+    backend_reason = str((audio_backend_fields or {}).get('audio_backend_effective_reason') or '').strip().lower()
+    if backend_effective == 'failed' or backend_reason.endswith('_failed'):
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'audio_backend_failure'}
+
+    transcript_meta: Dict[str, Any] = {}
+    for candidate in candidates:
+        meta = candidate.get('transcript_meta')
+        if isinstance(meta, dict):
+            transcript_meta = meta
+            break
+    if str(transcript_meta.get('status') or '').strip().lower() in {'error', 'failed', 'failure'}:
+        return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'transcript_meta_error'}
+
+    for candidate in candidates:
+        if _extract_transcript_text(candidate) or _has_meaningful_audio_segments(_extract_segments(candidate)):
+            return {'transcript_outcome': 'transcript_available', 'transcript_outcome_reason': 'transcript_or_segments_present'}
+    return {
+        'transcript_outcome': 'unclassified',
+        'transcript_outcome_reason': 'no_explicit_speech_or_quality_outcome',
+    }
 
 
 def _has_meaningful_audio_segments(segments: List[Dict[str, Any]]) -> bool:
@@ -6578,6 +6663,10 @@ def _process_audio(
                             unavailable_details['reason'],
                             error_text,
                         )
+                        if require_wsl_audio():
+                            raise RuntimeError(
+                                f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {error_text}"
+                            )
                         run_local_audio_fallback('wsl_unified_error_fallback')
                     else:
                         log_unified_audio_attempt(unified_result, unified_duration_ms)
@@ -6597,6 +6686,10 @@ def _process_audio(
                     type(unified_error).__name__,
                     unified_error,
                 )
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {unified_error}"
+                    ) from unified_error
                 run_local_audio_fallback('wsl_unified_exception_fallback')
         else:
             if contract_selected == 'windows':
@@ -7284,6 +7377,10 @@ async def _process_audio_async(
                             unavailable_details['reason'],
                             error_text,
                         )
+                        if require_wsl_audio():
+                            raise RuntimeError(
+                                f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {error_text}"
+                            )
                         await run_local_audio_fallback_async('wsl_unified_error_fallback')
                     else:
                         log_unified_audio_attempt(unified_result, unified_duration_ms)
@@ -7303,6 +7400,10 @@ async def _process_audio_async(
                     type(unified_error).__name__,
                     unified_error,
                 )
+                if require_wsl_audio():
+                    raise RuntimeError(
+                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL unified audio failed: {unified_error}"
+                    ) from unified_error
                 await run_local_audio_fallback_async('wsl_unified_exception_fallback')
         else:
             if contract_selected == 'windows':
@@ -7515,9 +7616,102 @@ def _is_video_phase6_complete(cfg: Dict[str, Any], video_hash: str, processing_d
     return False
 
 
+_INGEST_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
+
+
+def _select_ingest_videos(
+    input_dir: Optional[Path],
+    input_file: Optional[Path],
+) -> tuple[Path, List[Path]]:
+    """Resolve one explicit video or preserve the existing directory glob behavior."""
+    if input_dir is not None and input_file is not None:
+        raise typer.BadParameter("--input-dir and --input-file are mutually exclusive")
+    if input_file is not None:
+        resolved_file = Path(input_file).resolve()
+        if not resolved_file.is_file():
+            raise typer.BadParameter(f"Input file not found: {resolved_file}")
+        if resolved_file.suffix.lower() not in _INGEST_VIDEO_SUFFIXES:
+            raise typer.BadParameter(f"Unsupported input file type: {resolved_file.suffix}")
+        return resolved_file.parent, [resolved_file]
+    if input_dir is None:
+        raise typer.BadParameter("Input directory is required when --input-file is not set")
+    resolved_dir = Path(input_dir).resolve()
+    if not resolved_dir.exists():
+        raise typer.BadParameter(f"Input directory not found: {resolved_dir}")
+    videos: List[Path] = []
+    for pattern in ("*.mp4", "*.mov", "*.mkv", "*.avi", "*.webm"):
+        videos.extend(sorted(resolved_dir.glob(pattern)))
+    return resolved_dir, videos
+
+
+def _filter_scenes_by_index(
+    scenes: List[Dict[str, Any]],
+    scene_start_index: Optional[int],
+    scene_end_index: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Return only the inclusive requested scene-index range."""
+    if scene_start_index is None and scene_end_index is None:
+        return scenes
+    start_idx = scene_start_index if scene_start_index is not None else 0
+    end_idx = scene_end_index if scene_end_index is not None else 10**12
+
+    def scene_index(scene: Dict[str, Any]) -> int:
+        try:
+            return int(scene.get("index"))
+        except (ValueError, TypeError):
+            return -1
+
+    return [scene for scene in scenes if start_idx <= scene_index(scene) <= end_idx]
+
+
+def _parse_scene_indices(scene_indices: Optional[str]) -> Optional[tuple[int, ...]]:
+    """Parse an exact, non-ambiguous scene-index selection for recovery work."""
+    if scene_indices is None:
+        return None
+    values = [value.strip() for value in scene_indices.split(",")]
+    if not values or any(not value for value in values):
+        raise typer.BadParameter("--scene-indices must be a comma-separated list of non-negative integers")
+    try:
+        parsed = tuple(int(value) for value in values)
+    except ValueError as exc:
+        raise typer.BadParameter("--scene-indices must be a comma-separated list of non-negative integers") from exc
+    if any(value < 0 for value in parsed) or len(set(parsed)) != len(parsed):
+        raise typer.BadParameter("--scene-indices must contain unique non-negative integers")
+    return tuple(sorted(parsed))
+
+
+def _filter_scenes_by_selection(
+    scenes: List[Dict[str, Any]],
+    scene_start_index: Optional[int],
+    scene_end_index: Optional[int],
+    scene_indices: Optional[tuple[int, ...]],
+) -> List[Dict[str, Any]]:
+    """Select the exact requested scene set, preserving detector order."""
+    if scene_indices is not None:
+        selected = set(scene_indices)
+        selected_scenes: List[Dict[str, Any]] = []
+        found: set[int] = set()
+        for scene in scenes:
+            try:
+                index = int(scene.get("index"))
+            except (TypeError, ValueError):
+                continue
+            if index in selected:
+                selected_scenes.append(scene)
+                found.add(index)
+        missing = selected - found
+        if missing:
+            raise typer.BadParameter(
+                f"Requested scene indices were not detected: {sorted(missing)}"
+            )
+        return selected_scenes
+    return _filter_scenes_by_index(scenes, scene_start_index, scene_end_index)
+
+
 @APP.command()
 def run(
     input_dir: Optional[Path] = typer.Option(None, help='Directory containing videos to ingest'),
+    input_file: Optional[Path] = typer.Option(None, help='One explicit video file to ingest'),
     output: Optional[Path] = typer.Option(None, help='Path to write JSON results'),
     workspace: Optional[Path] = typer.Option(None, help='Workspace directory for artifacts'),
     max_videos: int = typer.Option(0, help='Maximum number of videos to process (0 = all)'),
@@ -7533,6 +7727,7 @@ def run(
     enable_auto_healing: bool = typer.Option(False, '--enable-auto-healing', help='Enable config mutation/auto-healing'),
     scene_start_index: Optional[int] = typer.Option(None, "--scene-start-index", help="Start processing at this scene index (inclusive)"),
     scene_end_index: Optional[int] = typer.Option(None, "--scene-end-index", help="Stop processing at this scene index (inclusive)"),
+    scene_indices: Optional[str] = typer.Option(None, "--scene-indices", help="Exact comma-separated scene indices to process"),
 ) -> None:
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
@@ -7550,13 +7745,18 @@ def run(
         scene_start_index = getattr(scene_start_index, 'default', None)
     if scene_end_index is not None and not isinstance(scene_end_index, int):
         scene_end_index = getattr(scene_end_index, 'default', None)
+    if scene_indices is not None and not isinstance(scene_indices, str):
+        scene_indices = getattr(scene_indices, 'default', None)
+    if scene_indices is not None and (scene_start_index is not None or scene_end_index is not None):
+        raise typer.BadParameter("--scene-indices is mutually exclusive with --scene-start-index/--scene-end-index")
+    parsed_scene_indices = _parse_scene_indices(scene_indices)
 
     base_cfg = load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
     cfg['progressive_chunk_overlap'] = chunk_overlap
     required_runtime_keys: List[str] = []
-    if input_dir is None:
+    if input_dir is None and input_file is None:
         required_runtime_keys.append("import_inbox")
     if output is None:
         required_runtime_keys.append("output_directory")
@@ -7568,7 +7768,10 @@ def run(
         if required_runtime_keys
         else {}
     )
-    input_dir = (input_dir or Path(runtime_paths["import_inbox"])).resolve()
+    resolved_input_dir = input_dir
+    if resolved_input_dir is None and input_file is None:
+        resolved_input_dir = Path(runtime_paths["import_inbox"])
+    input_dir, videos = _select_ingest_videos(resolved_input_dir, input_file)
     output = (
         output
         or (Path(runtime_paths["output_directory"]) / "scene_ingest_results.json")
@@ -7578,14 +7781,11 @@ def run(
         or (Path(runtime_paths["processing"]) / "_workspace" / "scene_ingest")
     ).resolve()
 
-    if not input_dir.exists():
-        raise typer.BadParameter(f'Input directory not found: {input_dir}')
-
     _ensure_dir(workspace)
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
     profile_override: Optional[str] = None
     profile_override_reason: Optional[str] = None
-    knowledge_graph_status = 'active' if KNOWLEDGE_GRAPH_AVAILABLE else 'disabled_import_failure'
+    knowledge_graph_status = _initial_knowledge_graph_status(cfg)
     if baseline_wsl_override:
         logger.warning("BASELINE override: WSL audio forced via GOODQ_REQUIRE_WSL_AUDIO=1")
         profile_override = "wsl_audio_forced_in_baseline"
@@ -7668,6 +7868,7 @@ def run(
             "pipeline.ingestion",
             metadata={
                 "input_dir": str(input_dir),
+                "input_file": str(input_file.resolve()) if input_file is not None else None,
                 "workspace": str(workspace),
                 "output": str(output),
             },
@@ -7681,10 +7882,6 @@ def run(
 
     ffmpeg = resolve_ffmpeg(cfg) or 'ffmpeg'
 
-    video_patterns = ('*.mp4', '*.mov', '*.mkv', '*.avi', '*.webm')
-    videos: List[Path] = []
-    for pattern in video_patterns:
-        videos.extend(sorted(input_dir.glob(pattern)))
     if not videos:
         typer.echo('No videos found to process.')
         if observer:
@@ -7931,23 +8128,13 @@ def run(
             detection['meta'] = detection_meta
 
         # Apply scene start/end index filtering
-        if scene_start_index is not None or scene_end_index is not None:
-            start_idx = scene_start_index if scene_start_index is not None else 0
-            end_idx = scene_end_index if scene_end_index is not None else 10**12
-            
-            def get_scene_index_value(s: Dict[str, Any]) -> int:
-                val = s.get("index")
-                if val is None:
-                    return -1
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    return -1
-                    
-            scenes = [
-                scene for scene in scenes
-                if start_idx <= get_scene_index_value(scene) <= end_idx
-            ]
+        if scene_start_index is not None or scene_end_index is not None or parsed_scene_indices is not None:
+            scenes = _filter_scenes_by_selection(
+                scenes,
+                scene_start_index,
+                scene_end_index,
+                parsed_scene_indices,
+            )
             
             # Recalculate tracker steps if tracker is present
             if tracker is not None:
@@ -7955,7 +8142,10 @@ def run(
                 tracker.set_total_steps(total_progress_steps)
                 
             if VERBOSE:
-                typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
+                if parsed_scene_indices is not None:
+                    typer.echo(f"[INFO] Filtered scenes to exact indices {list(parsed_scene_indices)}. {len(scenes)} scenes remaining.")
+                else:
+                    typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
 
         # Resolve shadow pipeline overlay settings before the scene loop
         segmentation_shadow_result = _run_segmentation_shadow_pipeline(
@@ -8078,7 +8268,8 @@ def run(
                             for k in ('audio_backend_selected', 'audio_backend_reason', 'audio_backend_effective', 
                                       'audio_backend_effective_reason', 'audio_backend_downgraded', 
                                       'audio_backend_downgrade_reason', 'audio_backend_downgrade_ts', 
-                                      'audio_backend_downgrade_details', 'vector_points_attempted'):
+                                      'audio_backend_downgrade_details', 'transcript_outcome',
+                                      'transcript_outcome_reason', 'vector_points_attempted'):
                                 if k in meta:
                                     scene_record[k] = meta[k]
                             scene_outputs.append(scene_record)
@@ -8309,6 +8500,11 @@ def run(
                     scene_id=scene_id,
                     scene_index=scene_index,
                 )
+                transcript_outcome_fields = _derive_transcript_outcome(
+                    audio_info,
+                    audio_error=audio_error,
+                    audio_backend_fields=audio_backend_fields,
+                )
                 if isinstance(audio_info, dict):
                     audio_info['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
                     audio_info['audio_backend_reason'] = audio_backend_fields['audio_backend_reason']
@@ -8320,6 +8516,7 @@ def run(
                     audio_info['audio_backend_downgrade_details'] = dict(
                         audio_backend_fields.get('audio_backend_downgrade_details') or {}
                     )
+                    audio_info.update(transcript_outcome_fields)
                     audio_data_for_backend = audio_info.get('data')
                     if isinstance(audio_data_for_backend, dict):
                         audio_data_for_backend['audio_backend_selected'] = audio_backend_fields['audio_backend_selected']
@@ -8338,6 +8535,7 @@ def run(
                         audio_data_for_backend['audio_backend_downgrade_details'] = dict(
                             audio_backend_fields.get('audio_backend_downgrade_details') or {}
                         )
+                        audio_data_for_backend.update(transcript_outcome_fields)
 
                 error_payload = {}
                 if frame_error:
@@ -8363,6 +8561,7 @@ def run(
                     'audio_info': audio_info,
                     'error_payload': error_payload,
                     'audio_backend_fields': audio_backend_fields,
+                    'transcript_outcome_fields': transcript_outcome_fields,
                 }
 
         async def process_video_scenes_async() -> str:
@@ -8582,6 +8781,8 @@ def run(
                         'audio_backend_downgrade_details': dict(
                             scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}
                         ),
+                        'transcript_outcome': scene_res['transcript_outcome_fields']['transcript_outcome'],
+                        'transcript_outcome_reason': scene_res['transcript_outcome_fields']['transcript_outcome_reason'],
                         'vector_points_attempted': (
                             _coerce_nonnegative_int(persist_result.get('vector_points_attempted'))
                             if isinstance(persist_result, dict)
@@ -8668,6 +8869,14 @@ def run(
                                 'audio_backend_downgrade_details',
                                 dict(scene_res['audio_backend_fields'].get('audio_backend_downgrade_details') or {}),
                             )
+                            formatted_audio.setdefault(
+                                'transcript_outcome',
+                                scene_res['transcript_outcome_fields']['transcript_outcome'],
+                            )
+                            formatted_audio.setdefault(
+                                'transcript_outcome_reason',
+                                scene_res['transcript_outcome_fields']['transcript_outcome_reason'],
+                            )
                             speaker_ids = _extract_speaker_ids(formatted_audio)
                             formatted_audio.setdefault('speaker_ids', speaker_ids)
                             formatted_audio.setdefault('speaker_count', len(speaker_ids))
@@ -8713,6 +8922,8 @@ def run(
                                 s.get('faiss_ok'),
                             ),
                             'content_state': s.get('content_state', 'signal'),
+                            'transcript_outcome': s.get('transcript_outcome'),
+                            'transcript_outcome_reason': s.get('transcript_outcome_reason'),
                             'speaker_ids': s.get('speaker_ids') or [],
                             'speaker_count': len(s.get('speaker_ids') or []),
                             'keyframe': s.get('keyframe', {}),

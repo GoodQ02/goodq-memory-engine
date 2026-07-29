@@ -117,6 +117,43 @@ def test_wsl_status_probes_configured_audio_worker(tmp_path: Path, monkeypatch) 
     assert status["cuda_version"] == "13.2"
 
 
+def test_wsl_audio_probe_is_not_blocked_by_unrelated_vllm_timeout(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+    runtime._WSL_WORKSPACE = "/home/goodq/goodq_audio"
+
+    monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
+
+    def _completed(args: list[str], stdout: str = "", returncode: int = 0):
+        return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr="")
+
+    def _fake_run(args, *, capture_output=None, text=None, timeout=None):
+        if args == ["wsl", "--status"]:
+            return _completed(args, "Default Distribution: Ubuntu-22.04\n")
+        if args == ["wsl", "-l", "-v"]:
+            return _completed(args, "Ubuntu-22.04 Running 2\n")
+        if args == ["wsl", "-d", "Ubuntu-22.04", "--", "systemctl", "is-active", "vllm-llama1b.service"]:
+            raise subprocess.TimeoutExpired(args, timeout)
+        if args[:5] == ["wsl", "-d", "Ubuntu-22.04", "--", "bash"]:
+            script = args[-1]
+            if "faster_whisper" in script:
+                return _completed(args, "ok:1.2.1\n")
+            if "--query-gpu=name" in script:
+                return _completed(args, "NVIDIA RTX Test, 16384, 1024, 999.00\n")
+            if "CUDA Version" in script:
+                return _completed(args, "13.2\n")
+        raise AssertionError(f"unexpected subprocess call: {args!r}")
+
+    monkeypatch.setattr(runtime.subprocess, "run", _fake_run)
+
+    status = runtime._collect_wsl_status()
+
+    assert status["vllm_service"] == "unresponsive"
+    assert status["audio_processing"] == "available"
+    assert status["faster_whisper_version"] == "1.2.1"
+    assert status["gpu_probe_status"] == "ok"
+
+
 def test_resolve_wsl_distro_prefers_goodq_audio_distro(tmp_path: Path, monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     db_path = tmp_path / "memory.db"
@@ -136,6 +173,32 @@ def test_resolve_wsl_distro_prefers_goodq_audio_distro(tmp_path: Path, monkeypat
 
     distro = runtime._resolve_wsl_distro()
     assert distro == "GoodQ_Audio_Distro"
+
+
+def test_wsl_status_reports_configured_stopped_distro_without_waking_it(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+    monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
+    monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
+
+    def _completed(args: list[str], stdout: bytes, returncode: int = 0):
+        return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr=b"")
+
+    def _fake_run(args, *, capture_output=None, text=None, timeout=None):
+        assert text is None
+        if args == ["wsl", "--status"]:
+            return _completed(args, "Default Distribution: Ubuntu-22.04\r\n".encode("utf-16-le"))
+        if args == ["wsl", "-l", "-v"]:
+            return _completed(args, "* Ubuntu-22.04    Stopped    2\r\n".encode("utf-16-le"))
+        raise AssertionError(f"cold status must not start a distro: {args!r}")
+
+    monkeypatch.setattr(runtime.subprocess, "run", _fake_run)
+    status = runtime._collect_wsl_status()
+
+    assert status["status"] == "stopped"
+    assert status["audio_processing"] == "stopped"
+    assert status["audio_probe"] == "not_run_cold"
+    assert "\x00" not in status["list_output"]
 
 
 def test_cli_progress_reader_marks_fresh_running_progress_active(tmp_path: Path, monkeypatch) -> None:
@@ -214,7 +277,34 @@ def test_wsl_audio_status_requires_verified_audio_processing(tmp_path: Path, mon
     assert status_resp["components"]["wsl_audio"] == "unavailable"
 
     # 2. WSL available and audio processing available
+    runtime._WSL_STATUS_CACHE = None
+    runtime._WSL_STATUS_CACHE_MONOTONIC = 0.0
     monkeypatch.setattr(runtime, "_collect_wsl_status", lambda: {"available": True, "audio_processing": "available"})
     status_resp = runtime.get_status()
     assert status_resp["components"]["wsl_audio"] == "available"
+
+
+def test_envelope_reports_not_configured_with_remediation(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+    monkeypatch.delenv("GOODQ_READONLY_ENVELOPE_PATH", raising=False)
+
+    payload = runtime.read_epistemic_envelope()
+
+    assert payload["status"] == "not_configured"
+    assert payload["reason"] == "readonly_envelope_path_not_configured"
+    assert payload["remediation_owner"] == "operator_configuration"
+    assert payload["envelope"] is None
+
+
+def test_engine_wsl_audio_uses_shared_probe_truth(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
+    monkeypatch.setattr(runtime, "_collect_wsl_status", lambda: {"audio_processing": "unavailable"})
+    monkeypatch.setattr(runtime.requests, "get", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")))
+
+    engines = runtime._collect_engine_details()
+
+    assert engines["wsl_audio"]["status"] == "unavailable"
+    assert engines["wsl_audio"]["probe_source"] == "wsl2_status"
 

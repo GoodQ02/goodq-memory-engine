@@ -2007,6 +2007,8 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-07-16: Checkpointed the R-08 identity GET non-creating routes seam after verifying all 4 routes do not mutatively create folders on disk when files are absent. Isolated the test paths with an autouse fixture in conftest.py, and added focused unit tests in tests/unit/test_identity_routes.py. All 4 focused tests passed, and 3549 tests in the full unit test suite passed. Evidence: docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md.
+
 - 2026-07-16: Checkpointed the fail-closed R-07 Qdrant observer seam at `ab3622c9` after 7 focused tests, 557 clean-memory tests, the full 4018-test private gate, compilation, import purity, and doc linting. Advanced next to R-08 identity route reconciliation.
 
 - 2026-07-16: Completed the read-only R-07 Qdrant observation boundary audit checkpoint and committed it in docs commit `docs: R-07 Qdrant observation boundary audit checkpoint` to verify endpoint, transport, and fail-closed collection patterns.

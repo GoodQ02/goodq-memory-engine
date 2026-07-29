@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: RESTART_HANDOFF -->
-<!-- DOC_LAST_VERIFIED: 2026-07-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-29 -->
 
 # R-08 Historical Audio Repair Restart Handoff
 
@@ -40,29 +40,35 @@ July home-memory corpus or conflating independent evidence lanes.
    Operation: `diarization_outcome_reconciliation_20260729T050409Z_3d4aa1022bbc`.
    Independent post-audit found 80 runtime and 80 derived normalized outcomes,
    with zero status-path disagreements.
+6. **First serial signature batch:** the first 10 inspected eligible scenes
+   completed with CUDA signature proofs and independent per-scene backup audits.
+   Each signature count matches its temporal projection; transcript,
+   diarization, CLAP, visual, and all other non-signature fields are unchanged.
+   The eligible debt moved from 1,327 to 1,317, while Qdrant audio remained
+   green at 1,453 points. Batch operation:
+   `signature_backfill_batch_20260729T065638Z_73f62119ca3d`.
 
 ## Still Unproven Or Intentionally Unchanged
 
-1. **Historical signature debt:** after the one-scene promotion, 1,327 scenes
-   are eligible for signature-only backfill. The serial batch executor is now
-   fixture-proven and its first live plan is inspected, but no live batch has
-   run.
+1. **Historical signature debt:** 1,317 scenes remain eligible for
+   signature-only backfill. The serial executor is now fixture-proven and one
+   ten-scene live batch has passed its independent audit.
 2. **Separate human-quality queues:** 17 pre-existing temporal mismatches, 29
    empty-transcript scenes, and 5 processing-content errors remain review
    queues. They are not part of the zero-track or signature repair lanes.
 
 ## Exact Resume Seam
 
-Review and explicitly approve (or reject) the inspected first ten-scene
-signature-only CUDA batch. It remains a separate token-bound write gate. The
-plan uses batch digest `9b04ef18978497bc4b99c55ebf3da3cea674e2937a09b0f5d2352eca7ed621df`.
+Inspect the next fresh ten-scene signature-only CUDA plan and explicitly
+approve or reject it. It remains a separate token-bound write gate; no digest
+or approval carries forward from the completed first batch.
 
 ## Do Not Repeat
 
 - Do not rerun the 46-scene audio recovery or its temporal reconciliation.
 - Do not treat the 80 zero-track scenes as eligible for signature backfill.
-- Do not launch more than the separately approved first ten-scene signature
-  batch. Each later batch requires a fresh inspected digest and approval.
+- Do not launch another signature batch until its fresh inspected digest and
+  separate approval exist.
 - Do not hand-edit `docs/agent/CURRENT_STATE.md` or
   `docs/agent/current_state.json`; both are generated corpus/runtime snapshots.
 
@@ -75,10 +81,14 @@ plan uses batch digest `9b04ef18978497bc4b99c55ebf3da3cea674e2937a09b0f5d2352eca
   successful, zero tracks, explicit `completed_no_speakers` status.
 - A no-repeat probe that correctly found no remaining legacy zero-track
   metadata targets.
-- Nine focused batch-executor, one-scene-promotion, and planner tests, plus a
-  live read-only first-batch plan containing exactly ten current eligible scenes.
+- Ten focused batch-executor, one-scene-promotion, and planner tests, plus the
+  live first-batch execution and independent backup-versus-canonical audit.
+- Managed WSL executor activation check: the executor now sources the existing
+  CUDA setup script; live runtime reports the configured GPU and all 10 proofs
+  were CUDA successes.
 
 ## Approval Boundary
 
-The metadata reconciliation was explicitly approved and completed. The first
-signature batch remains a separate explicit approval and verification gate.
+The metadata reconciliation and first signature batch were explicitly approved
+and completed. Every later batch remains a separate explicit approval and
+verification gate.

@@ -43,7 +43,6 @@
     }
   },
   "evidence_id": "b2723d030ff4e768",
-  "generated_from": "docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T202515Z.json",
   "historical_evidence": [
     {
       "label": "July promotion witness",
@@ -58,13 +57,6 @@
       "path": "docs/archive/HANDOFF_BASEMENT_PHASE.md"
     }
   ],
-  "lifecycle": {
-    "complete_and_fully_promoted": true,
-    "context_frames": 75094,
-    "non_promoted_frames": 0,
-    "promoted_frames": 75094,
-    "state": "complete_and_fully_promoted"
-  },
   "limitations": [
     "Service observations are a point-in-time snapshot and do not start stopped services.",
     "WSL was intentionally not probed because that can change runtime state.",
@@ -172,9 +164,16 @@
       "validated_transitions": 1
     }
   },
+  "provenance": [
+    "sanitized resolved config",
+    "immutable SQLite mode=ro reads",
+    "bounded Qdrant inventory/detail/identity-only scroll",
+    "bounded TCP and model-registry probes",
+    "epoch filesystem inventory"
+  ],
   "repository": {
     "commit": "521e32f8",
     "dirty": false
   },
-  "schema_version": 2
+  "schema_version": 1
 }

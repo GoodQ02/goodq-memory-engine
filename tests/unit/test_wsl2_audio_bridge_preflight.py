@@ -39,6 +39,7 @@ def test_workspace_preflight_retries_once_after_timeout(monkeypatch):
     monkeypatch.setattr(bridge_module.time, "sleep", lambda _seconds: None)
 
     bridge = bridge_module.WSL2AudioBridge()
+    monkeypatch.setattr(bridge.runner, "_workspace_worker_mismatches", lambda: [])
 
     assert bridge._ensure_workspace_ready() is True
     assert calls["count"] == 2

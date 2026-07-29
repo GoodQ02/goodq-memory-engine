@@ -158,7 +158,9 @@ def test_resolved_config_validates_identity_search_without_scripts_path(
     try:
         result = load_configs({})
 
-        assert result["identity_search"]["enabled"] is True
+        # Portable defaults stay disabled; a project-local override may enable
+        # the feature for the active epoch, but validation must not depend on it.
+        assert result["identity_search"]["enabled"] is False
         assert 1 <= result["identity_search"]["candidate_pool_multiplier"] <= 10
         output = capsys.readouterr().out
         assert "Config validation failed" not in output

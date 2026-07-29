@@ -111,7 +111,7 @@ def test_aggregate_modality_status_prefers_available_when_any_scene_succeeds():
     assert status["text_embed"] == "available"
 
 
-def test_wsl_unified_embeddings_mark_audio_embed_available():
+def test_wsl_wav2vec_embeddings_do_not_count_as_persisted_clap():
     run_ingestion = _load_run_ingestion_module()
 
     audio_payload = {
@@ -123,8 +123,8 @@ def test_wsl_unified_embeddings_mark_audio_embed_available():
         "clap_meta": {"status": "skipped", "reason": "wsl_unified_embeddings_present"},
     }
 
-    assert run_ingestion._has_wsl_unified_audio_embeddings(audio_payload) is True
+    assert run_ingestion._has_wsl_unified_audio_embeddings(audio_payload) is False
 
     status = run_ingestion._aggregate_modality_status([{"audio": audio_payload}])
 
-    assert status["audio_embed"] == "available"
+    assert status["audio_embed"] == "not_attempted"

@@ -7734,6 +7734,13 @@ def run(
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
     ENABLE_AUTO_HEALING = False
 
+    # Direct Python callers receive Typer OptionInfo defaults rather than None.
+    # Normalize both ingest selectors before enforcing their explicit-scope rule.
+    if input_dir is not None and not isinstance(input_dir, Path):
+        input_dir = getattr(input_dir, 'default', None)
+    if input_file is not None and not isinstance(input_file, Path):
+        input_file = getattr(input_file, 'default', None)
+
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
         chunk_size = getattr(chunk_size, 'default', 300.0)

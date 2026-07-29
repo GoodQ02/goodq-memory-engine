@@ -278,7 +278,9 @@ def test_pyannote_offline_load_success(monkeypatch, tmp_path):
     
     result = process_audio.process_audio(str(audio_file), None)
     
-    assert result["diarization_status"] == "success"
+    # The mocked pipeline emits no tracks.  A successful offline load must
+    # therefore preserve the explicit zero-speaker completion outcome.
+    assert result["diarization_status"] == "completed_no_speakers"
     assert len(pyannote_init_args) == 1
     assert pyannote_init_args[0][1].get("local_files_only") is True
 

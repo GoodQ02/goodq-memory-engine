@@ -44,3 +44,10 @@ token budgets.
 - No historical R-08 identity commits were merged.
 - No claim is made about arbitrary prompt quality beyond the bounded local
   completion witness.
+
+## Integration Governance Note
+
+The remote accepted this verified integration but reported that `dev` is
+intended to remain linear. The resulting shared history is preserved; no
+history rewrite is authorized by this checkpoint. Future bounded ports must use
+the linear integration path documented in the agent workflow.

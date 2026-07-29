@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -101,3 +102,26 @@ def test_batch_executor_records_all_scene_receipts_on_success(tmp_path: Path) ->
     assert receipt["completed_scene_ids"] == ids[:2]
     assert len(receipt["scene_receipts"]) == 2
     assert Path(receipt["batch_root"]).is_dir()
+
+
+def test_wsl_proof_sources_the_managed_cuda_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from cli.signature_backfill_batch_execute import _run_wsl_signature_proof
+
+    proof_path = tmp_path / "proof.json"
+    request = {
+        "scene_id": "scene-a",
+        "audio_path": str(tmp_path / "audio.wav"),
+        "diarization_segments": [{"speaker": "SPEAKER_00", "start": 0.0, "end": 1.0}],
+        "proof_result_path": str(proof_path),
+    }
+    Path(request["audio_path"]).write_bytes(b"audio")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        assert "source ./setup_cuda_env.sh >/dev/null" in command[-1]
+        proof_path.write_text(json.dumps({**_proof("scene-a"), "device": "cuda"}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("cli.signature_backfill_batch_execute.subprocess.run", fake_run)
+    proof = _run_wsl_signature_proof(request, {"wsl_distro": "Ubuntu-22.04", "wsl_workspace": "/home/test/goodq_audio"})
+
+    assert proof["device"] == "cuda"

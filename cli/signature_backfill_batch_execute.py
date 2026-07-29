@@ -144,7 +144,7 @@ def _run_wsl_signature_proof(request: dict[str, Any], runtime: dict[str, str]) -
     command = " && ".join(
         [
             f"cd {shlex.quote(runtime['wsl_workspace'])}",
-            "set -a; [ -f ./.goodq_env ] && source ./.goodq_env; set +a",
+            "source ./setup_cuda_env.sh >/dev/null",
             "python3 signature_only.py "
             + " ".join(
                 shlex.quote(value)

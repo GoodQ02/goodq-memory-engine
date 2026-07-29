@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1362**
+Indexed active tracked paths: **1364**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -351,6 +351,7 @@ Indexed active tracked paths: **1362**
 | `/docs/diagnostics/R08_QDRANT_RETENTION_MANIFEST_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_WORKSPACE_HYGIENE_AUDIT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
@@ -369,6 +370,7 @@ Indexed active tracked paths: **1362**
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T202515Z.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T204005Z.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/evidence/R08_WORKSPACE_PRUNE_RECEIPT_2026-07-29T205240Z.json` | Documentation | Active documentation or governance surface. |
 | `/docs/goodq4all_agent_status.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CONSOLIDATION_EXPLAINED.md` | Documentation | Active documentation or governance surface. |

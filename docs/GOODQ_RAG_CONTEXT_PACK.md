@@ -4,8 +4,8 @@
 
 # GoodQ RAG Context Pack
 
-Generated from evidence `039570b0ba105be0` captured at
-`2026-07-29T204005Z`. This is the portable read-only contract for
+Generated from evidence `615a7c4bbcb84c87` captured at
+`2026-07-29T205357Z`. This is the portable read-only contract for
 GoodQ retrieval agents. Runtime snapshots and local agent configuration do not
 override this epoch authority.
 

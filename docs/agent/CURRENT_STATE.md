@@ -4,8 +4,8 @@
 
 # GoodQ4All Current Agent State
 
-Generated from evidence `039570b0ba105be0` captured at
-`2026-07-29T204005Z`. Do not hand-edit this file; regenerate it with
+Generated from evidence `615a7c4bbcb84c87` captured at
+`2026-07-29T205357Z`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
 ## Authority

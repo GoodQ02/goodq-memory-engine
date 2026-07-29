@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1367**
+Indexed active tracked paths: **1369**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -352,6 +352,7 @@ Indexed active tracked paths: **1367**
 | `/docs/diagnostics/R08_PIPELINE_RECOVERY_AND_WITNESS_CLOSEOUT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_QDRANT_RETENTION_MANIFEST_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_RECONCILIATION_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_WORKSPACE_HYGIENE_AUDIT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md` | Documentation | Active documentation or governance surface. |
@@ -363,6 +364,7 @@ Indexed active tracked paths: **1367**
 | `/docs/diagnostics/R17_FROZEN_MAIN_INVENTORY_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R22_HERMES_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |

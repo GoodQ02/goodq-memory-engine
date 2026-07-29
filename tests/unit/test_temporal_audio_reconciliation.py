@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 
 MODULE = Path(__file__).parents[2] / "cli" / "temporal_audio_reconciliation.py"
@@ -79,3 +82,34 @@ def test_direct_plan_requires_explicit_reason_and_preserves_untargeted_scenes(tm
     assert temporal["segments"][0]["full_transcript"] == "Canonical text"
     assert temporal["segments"][0]["custom"] == "preserve"
     assert temporal["segments"][1] == {"scene_id": "scene-b", "full_transcript": "untouched"}
+
+
+def test_direct_cli_prefers_its_own_repository_root(tmp_path: Path) -> None:
+    processing = tmp_path / "epoch" / "processing"
+    manifest_path = processing / "video-a" / "video" / "scene_manifest.json"
+    temporal_path = processing / "video-a" / "temporal_index.json"
+    _write(
+        manifest_path,
+        {"scenes": [{"scene_id": "scene-a", "duration": 10.0, "audio": {"full_text": "Canonical text", "segments": []}}]},
+    )
+    _write(temporal_path, {"segments": [{"scene_id": "scene-a", "full_transcript": "stale"}]})
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(MODULE.parents[3])
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MODULE),
+            "--processing-root",
+            str(processing),
+            "--scene-id",
+            "scene-a",
+            "--reason",
+            "test",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["scene_count"] == 1

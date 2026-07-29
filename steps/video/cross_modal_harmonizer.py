@@ -2821,7 +2821,12 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
         payload_audio_path = payload_audio_path.strip() if isinstance(payload_audio_path, str) else ''
         payload_audio_meta = scene_audio_payload.get('audio_meta')
         payload_audio_segments = scene_audio_payload.get('segments') if isinstance(scene_audio_payload.get('segments'), list) else []
-        payload_transcript_text = scene_audio_payload.get('transcript')
+        # ``full_text`` is the canonical persisted scene transcript; retain the
+        # legacy ``transcript`` fallback for older manifests.
+        payload_transcript_text = (
+            scene_audio_payload.get('full_text')
+            or scene_audio_payload.get('transcript')
+        )
         payload_transcript_text = payload_transcript_text.strip() if isinstance(payload_transcript_text, str) else ''
 
         # Prefer artifact overlap segments; fallback to scene payload segments; then fallback to full transcript text.

@@ -156,7 +156,7 @@ def test_harmonizer_transcript_truth_uses_scene_payload_even_without_commits(
                     "audio": {
                         "path": "audio/scene_0000.wav",
                         "audio_meta": {"duration_sec": 5.0, "sample_rate": 16000},
-                        "transcript": "PAYLOAD_TRANSCRIPT",
+                        "full_text": "PAYLOAD_FULL_TEXT",
                         "segments": [{"start": 0.0, "end": 1.0, "text": "PAYLOAD_SEGMENT"}],
                     },
                 }
@@ -200,7 +200,7 @@ def test_harmonizer_transcript_truth_uses_scene_payload_even_without_commits(
     assert temporal_index["has_audio"] is True
     assert segment["has_transcript"] is True
     assert segment["has_audio"] is True
-    assert "PAYLOAD_TRANSCRIPT" in segment["full_transcript"]
+    assert "PAYLOAD_FULL_TEXT" in segment["full_transcript"]
     assert temporal_index["committed_modalities"]["audio_transcript"] is False
 
 

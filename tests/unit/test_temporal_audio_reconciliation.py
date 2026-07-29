@@ -44,3 +44,38 @@ def test_token_bound_reconciliation_changes_only_target_temporal_audio_fields(tm
     assert updated["custom"] == "preserve"
     assert temporal["segments"][1] == untouched
     assert Path(result["backup_root"]).is_dir()
+
+
+def test_direct_plan_requires_explicit_reason_and_preserves_untargeted_scenes(tmp_path: Path) -> None:
+    processing = tmp_path / "epoch" / "processing"
+    manifest_path = processing / "video-a" / "video" / "scene_manifest.json"
+    temporal_path = processing / "video-a" / "temporal_index.json"
+    _write(
+        manifest_path,
+        {"scenes": [{"scene_id": "scene-a", "audio": {"full_text": "Canonical text", "segments": []}}]},
+    )
+    _write(
+        temporal_path,
+        {"segments": [
+            {"scene_id": "scene-a", "full_transcript": "", "custom": "preserve"},
+            {"scene_id": "scene-b", "full_transcript": "untouched"},
+        ]},
+    )
+
+    try:
+        reconcile.build_direct_plan(processing, ["scene-a"], "")
+    except reconcile.TemporalAudioReconciliationError as exc:
+        assert "requires a reason" in str(exc)
+    else:
+        raise AssertionError("expected direct plan without reason to fail")
+
+    plan = reconcile.build_direct_plan(processing, ["scene-a"], "canonical_full_text_projection")
+    result = reconcile.execute_plan(plan, reconcile.plan_digest(plan))
+
+    assert plan["kind"] == "historical_temporal_audio_reconciliation"
+    assert plan["source"]["reason"] == "canonical_full_text_projection"
+    assert result["status"] == "temporal_audio_reconciliation_committed"
+    temporal = json.loads(temporal_path.read_text())
+    assert temporal["segments"][0]["full_transcript"] == "Canonical text"
+    assert temporal["segments"][0]["custom"] == "preserve"
+    assert temporal["segments"][1] == {"scene_id": "scene-b", "full_transcript": "untouched"}

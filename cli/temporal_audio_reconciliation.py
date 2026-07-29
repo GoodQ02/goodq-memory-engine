@@ -109,9 +109,14 @@ def _receipt_scene_ids(receipt_path: Path) -> set[str]:
     return set(ids)
 
 
-def build_plan(processing_root: Path, receipt_path: Path) -> dict[str, Any]:
-    """Build the exact no-mutation plan for one committed recovery addendum."""
-    targets = _receipt_scene_ids(receipt_path)
+def _build_plan(
+    processing_root: Path,
+    targets: set[str],
+    *,
+    kind: str,
+    source: dict[str, Any],
+) -> dict[str, Any]:
+    """Build an exact no-mutation temporal audio projection plan."""
     remaining = set(targets)
     files: dict[Path, dict[str, Any]] = {}
     scene_entries: list[dict[str, Any]] = []
@@ -157,9 +162,10 @@ def build_plan(processing_root: Path, receipt_path: Path) -> dict[str, Any]:
         raise TemporalAudioReconciliationError("plan scope is incomplete")
     return {
         "status": "ready",
-        "kind": "recovery_addendum_temporal_audio_reconciliation",
-        "receipt_path": str(receipt_path),
+        "kind": kind,
+        "source": source,
         "processing_root": str(processing_root),
+        "operation_root": str(processing_root.parent),
         "scene_count": len(scene_entries),
         "temporal_file_count": len(files),
         "fields": list(_FIELDS),
@@ -177,10 +183,36 @@ def build_plan(processing_root: Path, receipt_path: Path) -> dict[str, Any]:
     }
 
 
+def build_plan(processing_root: Path, receipt_path: Path) -> dict[str, Any]:
+    """Build the exact no-mutation plan for one committed recovery addendum."""
+    return _build_plan(
+        processing_root,
+        _receipt_scene_ids(receipt_path),
+        kind="recovery_addendum_temporal_audio_reconciliation",
+        source={"kind": "recovery_addendum", "receipt_path": str(receipt_path)},
+    )
+
+
+def build_direct_plan(processing_root: Path, scene_ids: list[str], reason: str) -> dict[str, Any]:
+    """Plan an explicit historical projection repair without inventing a receipt."""
+    targets = {scene_id.strip() for scene_id in scene_ids if scene_id.strip()}
+    if not targets or len(targets) != len(scene_ids):
+        raise TemporalAudioReconciliationError("scene ids must be non-empty and unique")
+    normalized_reason = reason.strip()
+    if not normalized_reason:
+        raise TemporalAudioReconciliationError("direct reconciliation requires a reason")
+    return _build_plan(
+        processing_root,
+        targets,
+        kind="historical_temporal_audio_reconciliation",
+        source={"kind": "explicit_scene_ids", "reason": normalized_reason, "scene_ids": sorted(targets)},
+    )
+
+
 def plan_digest(plan: dict[str, Any]) -> str:
     scope = {
         key: plan.get(key)
-        for key in ("kind", "receipt_path", "processing_root", "scene_count", "temporal_file_count", "fields", "files", "scenes", "provenance_policy")
+        for key in ("kind", "source", "processing_root", "operation_root", "scene_count", "temporal_file_count", "fields", "files", "scenes", "provenance_policy")
     }
     return _canonical_digest(scope)
 
@@ -193,8 +225,7 @@ def execute_plan(plan: dict[str, Any], confirmation_token: str) -> dict[str, Any
     scenes = plan.get("scenes")
     if not isinstance(files, list) or not isinstance(scenes, list) or not scenes:
         raise TemporalAudioReconciliationError("plan is structurally incomplete")
-    receipt_path = Path(str(plan["receipt_path"])).resolve()
-    target_root = receipt_path.parents[2]
+    target_root = Path(str(plan["operation_root"])).resolve()
     operation_id = f"temporal_audio_reconciliation_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{confirmation_token[:12]}"
     receipt_root = target_root / "temporal_reconciliations" / operation_id
     backup_root = receipt_root / "backup"
@@ -255,12 +286,19 @@ def execute_plan(plan: dict[str, Any], confirmation_token: str) -> dict[str, Any
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--processing-root", required=True, type=Path)
-    parser.add_argument("--receipt", required=True, type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--receipt", type=Path)
+    source.add_argument("--scene-id", action="append", default=[])
+    parser.add_argument("--reason", help="Required with --scene-id; stored as repair provenance.")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--confirmation-token")
     args = parser.parse_args()
     try:
-        plan = build_plan(args.processing_root, args.receipt)
+        plan = (
+            build_plan(args.processing_root, args.receipt)
+            if args.receipt is not None
+            else build_direct_plan(args.processing_root, args.scene_id, str(args.reason or ""))
+        )
         plan["plan_digest"] = plan_digest(plan)
         result: dict[str, Any] = plan
         if args.execute:

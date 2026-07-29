@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 def test_managed_bridge_exports_one_canonical_cache_to_wsl(monkeypatch) -> None:
     monkeypatch.setenv("GOODQ_WSL_USER", "goodq")
+    monkeypatch.setenv("GOODQ_MODEL_CACHE_ROOT", r"C:\\stale-user-cache")
     runner = WindowsWSL2AudioRunner()
     runner._config = {"paths": {"models_cache": r"L:\\_DATA\\models"}}
 

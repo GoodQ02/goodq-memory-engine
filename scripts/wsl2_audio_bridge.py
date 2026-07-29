@@ -311,10 +311,14 @@ class WindowsWSL2AudioRunner(AudioRunner):
         creating or consuming a per-user fallback cache on GPU-managed hosts.
         """
         paths_cfg = self._config.get("paths", {}) if isinstance(self._config, dict) else {}
+        # The loaded runtime configuration is the authority for a managed run.
+        # Ambient cache variables are intentionally a portable fallback only:
+        # allowing them to win here can silently redirect a managed GPU worker
+        # to a stale per-user cache.
         raw_root = (
-            os.environ.get("GOODQ_MODEL_CACHE_ROOT")
+            paths_cfg.get("models_cache")
+            or os.environ.get("GOODQ_MODEL_CACHE_ROOT")
             or os.environ.get("HF_HOME")
-            or paths_cfg.get("models_cache")
         )
         if not raw_root:
             if self.require_wsl_audio:

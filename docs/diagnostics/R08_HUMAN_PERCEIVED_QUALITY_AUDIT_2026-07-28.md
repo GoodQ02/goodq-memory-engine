@@ -45,6 +45,21 @@ The active July manifest authority has 12 videos and 1,457 canonical scenes.
 | Content processing errors | 5 | Requires scene-level classification, not a corpus rerun. |
 | Segment boundary excess above 5 seconds | 14 | Requires a timestamp-contract review; padding is not automatically a failure. |
 
+### 2026-07-29 metadata reconciliation
+
+The 80 legacy zero-track scenes that previously claimed diarization `success`
+were reconciled with a token-bound, backup-backed operation across their 10
+canonical manifest and temporal-index pairs. They now state
+`completed_no_speakers` with the explicit note “diarization completed without
+emitted speaker tracks.” The three already-explained
+`skipped:diarization_unavailable` scenes were excluded. No WSL worker, media,
+transcript, diarization, signature, vector, SQLite, graph, or re-ingestion work
+ran. The quality audit now counts this outcome explicitly on both runtime and
+derived field paths. Post-reconciliation audit values are 80 runtime and 80
+derived `completed_no_speakers` outcomes, 1,374 runtime `success` outcomes,
+1,328 derived `success` outcomes, and zero runtime/derived-status disagreements.
+The signature planner remains at 1,327 eligible and 80 blocked scenes.
+
 ## Projection findings
 
 - The 46 recovery-addendum projections have been reconciled into their 10
@@ -91,15 +106,16 @@ diarization operation.
    model authority while preserving transcript, diarization, and CLAP outputs;
    no batch backfill has run. The inspect-only plan classifies 1,328 scenes as
    eligible and 80 as blocked because their manifests retain no diarization
-   segments despite a `success` status. Those 80 must not be silently retried.
+   segments. Those 80 now have the truthful
+   `completed_no_speakers` outcome and must not be retried.
    One token-bound eligible-scene promotion has now passed with a backup and
    receipt: two signatures were written to the canonical scene and its matching
    temporal projection while transcript and diarization remained unchanged.
    The remaining debt is 1,407: 1,327 eligible and 80 blocked.
    A fresh isolated witness established the correct future outcome for this
-   exact case: `diarization_status=completed_no_speakers` with an explicit note.
-   The historic 80 are retained as historical metadata until a separately
-   scoped label-only reconciliation is reviewed.
+   exact case: `diarization_status=completed_no_speakers` with an explicit note;
+   the historic 80 now match that contract through a separate metadata-only
+   receipt.
 2. Review the five content-error packets, 29 unexplained empty transcripts, and
    14 boundary-excess packets. Only then define any historical metadata or
    timestamp repair; do not infer “silence” from an empty field.

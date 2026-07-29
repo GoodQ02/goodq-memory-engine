@@ -179,6 +179,12 @@ def build_quality_report(
             derived_diarization = scene.get("diarization_status")
             counts["diarization_audio_success"] += audio_diarization == "success"
             counts["diarization_derived_success"] += derived_diarization == "success"
+            counts["diarization_audio_completed_no_speakers"] += (
+                audio_diarization == "completed_no_speakers"
+            )
+            counts["diarization_derived_completed_no_speakers"] += (
+                derived_diarization == "completed_no_speakers"
+            )
             counts["diarization_path_disagreement"] += (
                 derived_diarization is not None and derived_diarization != audio_diarization
             )

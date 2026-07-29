@@ -16,7 +16,7 @@ July home-memory corpus or conflating independent evidence lanes.
 - The signature-only proof envelope and one-scene backfill receipt.
 - WSL worker contract tests and the fresh zero-track diarization proof.
 - Repository branch `codex/r08-identity-integration-20260727`, through commit
-  `3769d7cb`.
+  `af3ad83a` before this reconciliation.
 
 ## Verified Complete
 
@@ -32,36 +32,29 @@ July home-memory corpus or conflating independent evidence lanes.
 4. **Forward zero-track truthfulness:** the WSL audio worker now emits
    `completed_no_speakers` with an explanatory note when diarization completes
    but produces zero tracks. A fresh isolated CUDA proof confirmed that outcome.
+5. **Historical zero-track metadata reconciliation:** exactly 80 legacy
+   signature-failure zero-track scenes were normalized in their canonical and
+   temporal projections. The operation checked 10 manifest/temporal pairs,
+   created 20 file backups, and emitted a digest-bound receipt. The 3
+   `skipped:diarization_unavailable` scenes were excluded.
+   Operation: `diarization_outcome_reconciliation_20260729T050409Z_3d4aa1022bbc`.
+   Independent post-audit found 80 runtime and 80 derived normalized outcomes,
+   with zero status-path disagreements.
 
 ## Still Unproven Or Intentionally Unchanged
 
-1. **Historical zero-track labels:** 80 existing canonical scenes still record
-   legacy `diarization_status=success` despite zero persisted tracks. Their
-   audio exists; no diarization artifact was lost. They are not signature
-   inputs and must not be re-diarized merely to change a label.
-2. **Historical signature debt:** after the one-scene promotion, 1,327 scenes
+1. **Historical signature debt:** after the one-scene promotion, 1,327 scenes
    are eligible for signature-only backfill. The serial batch planner exists,
    but no batch executor or batch run exists.
-3. **Separate human-quality queues:** 17 pre-existing temporal mismatches, 29
+2. **Separate human-quality queues:** 17 pre-existing temporal mismatches, 29
    empty-transcript scenes, and 5 processing-content errors remain review
    queues. They are not part of the zero-track or signature repair lanes.
 
 ## Exact Resume Seam
 
-Implement and validate a token-bound, metadata-only reconciliation for the 80
-historical zero-track scenes. It must:
-
-- inspect and hash the exact target set before writing;
-- back up the affected canonical manifests and temporal indexes;
-- change only the diarization status and explanatory note in the existing
-  canonical and matching temporal fields;
-- perform no WSL work, media processing, transcription, diarization, signature
-  calculation, vector write, re-ingestion, SQLite write, or graph write; and
-- emit a receipt and independently re-audit the 80 targets.
-
-The intended normalized status is `completed_no_speakers`. It means the
-diarization operation completed but emitted no speaker tracks; it is not a
-failure, an absent audio claim, or a successful speaker-evidence claim.
+Build and inspect the serial signature-backfill executor for the 1,327 eligible
+scenes. It remains a separate token-bound batch gate; do not execute a batch
+until its disposable-fixture and one-batch dry-run contracts pass.
 
 ## Do Not Repeat
 
@@ -74,12 +67,15 @@ failure, an absent audio claim, or a successful speaker-evidence claim.
 
 ## Targeted Validation Already Passed
 
-- 13 focused WSL diarization and unified-bridge tests.
+- 16 focused reconciliation, quality-audit, WSL diarization, and
+  signature-planner tests.
 - Python compilation and documentation drift lint.
 - Fresh isolated zero-track proof: CUDA active, transcript and embeddings
   successful, zero tracks, explicit `completed_no_speakers` status.
+- A no-repeat probe that correctly found no remaining legacy zero-track
+  metadata targets.
 
 ## Approval Boundary
 
-The user has approved the bounded metadata reconciliation. A future signature
-batch remains a separate approval and verification gate.
+The metadata reconciliation was explicitly approved and completed. A future
+signature batch remains a separate approval and verification gate.

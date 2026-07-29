@@ -35,6 +35,7 @@ def test_quality_audit_classifies_readiness_without_mutating_inputs(tmp_path: Pa
                 "representative_frame": str(frame),
                 "audio": {
                     "path": str(audio),
+                    "diarization_status": "completed_no_speakers",
                     "full_text": "Recovered speech",
                     "segments": [{"start": 0.0, "end": 16.0}],
                     "speaker_voice_signature_meta": {
@@ -42,6 +43,7 @@ def test_quality_audit_classifies_readiness_without_mutating_inputs(tmp_path: Pa
                         "reason": "embedding_step_failed",
                     },
                 },
+                "diarization_status": "completed_no_speakers",
                 "content_state": "processing_error",
             },
             {
@@ -66,6 +68,8 @@ def test_quality_audit_classifies_readiness_without_mutating_inputs(tmp_path: Pa
     assert report["counts"]["scenes"] == 2
     assert report["counts"]["speaker_signature_errors"] == 1
     assert report["counts"]["diarization_audio_success"] == 0
+    assert report["counts"]["diarization_audio_completed_no_speakers"] == 1
+    assert report["counts"]["diarization_derived_completed_no_speakers"] == 1
     assert report["field_path_contract"]["diarization_runtime"] == "scene.audio.diarization_status"
     assert report["counts"]["empty_transcripts_without_outcome"] == 1
     assert report["counts"]["transcript_segments_over_boundary"] == 1

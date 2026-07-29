@@ -1,0 +1,419 @@
+{
+  "schema_version": 1,
+  "operation": "qdrant_non_authority_prune",
+  "executed_at_utc": "2026-07-29T203811Z",
+  "plan_sha256": "91b1d96fe5ac683081f3d2a5188fb8327cbc62f0d5ae7458162e48f5c49b4a98",
+  "active_authority": [
+    "goodq_audio_epoch_2026_07_05_home_memory_clean_01",
+    "goodq_clip_epoch_2026_07_05_home_memory_clean_01",
+    "goodq_dino_epoch_2026_07_05_home_memory_clean_01",
+    "goodq_text_epoch_2026_07_05_home_memory_clean_01"
+  ],
+  "before": {
+    "collections": 60,
+    "candidate_collections": 56,
+    "candidate_points": 788.0,
+    "candidate_vectors": 788.0
+  },
+  "snapshots": [
+    {
+      "name": "goodq_audio_epoch_2026_07_27_clap_legacy_recovery_01",
+      "snapshot": "goodq_audio_epoch_2026_07_27_clap_legacy_recovery_01-4948676180079940-2026-07-29-20-38-12.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_27_clap_proof_02",
+      "snapshot": "goodq_audio_epoch_2026_07_27_clap_proof_02-4948676180079940-2026-07-29-20-38-12.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_27_clap_recovery_02",
+      "snapshot": "goodq_audio_epoch_2026_07_27_clap_recovery_02-4948676180079940-2026-07-29-20-38-13.snapshot",
+      "points": 44,
+      "vectors": 44
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+      "snapshot": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_01-4948676180079940-2026-07-29-20-38-15.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+      "snapshot": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_02-4948676180079940-2026-07-29-20-38-16.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+      "snapshot": "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_03-4948676180079940-2026-07-29-20-38-16.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_02",
+      "snapshot": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_02-4948676180079940-2026-07-29-20-38-17.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_03",
+      "snapshot": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_03-4948676180079940-2026-07-29-20-38-18.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_04",
+      "snapshot": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_04-4948676180079940-2026-07-29-20-38-19.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_05",
+      "snapshot": "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_05-4948676180079940-2026-07-29-20-38-19.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_witness_r24_002",
+      "snapshot": "goodq_audio_epoch_witness_r24_002-4948676180079940-2026-07-29-20-38-20.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_witness_r24_003",
+      "snapshot": "goodq_audio_epoch_witness_r24_003-4948676180079940-2026-07-29-20-38-21.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_audio_epoch_witness_r24_004",
+      "snapshot": "goodq_audio_epoch_witness_r24_004-4948676180079940-2026-07-29-20-38-22.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_26_audio_recovery_01",
+      "snapshot": "goodq_clip_epoch_2026_07_26_audio_recovery_01-4948676180079940-2026-07-29-20-38-23.snapshot",
+      "points": 92,
+      "vectors": 92
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_27_clap_legacy_recovery_01",
+      "snapshot": "goodq_clip_epoch_2026_07_27_clap_legacy_recovery_01-4948676180079940-2026-07-29-20-38-25.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_27_clap_proof_02",
+      "snapshot": "goodq_clip_epoch_2026_07_27_clap_proof_02-4948676180079940-2026-07-29-20-38-26.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_27_clap_recovery_02",
+      "snapshot": "goodq_clip_epoch_2026_07_27_clap_recovery_02-4948676180079940-2026-07-29-20-38-26.snapshot",
+      "points": 87,
+      "vectors": 87
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+      "snapshot": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_01-4948676180079940-2026-07-29-20-38-28.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+      "snapshot": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_02-4948676180079940-2026-07-29-20-38-29.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+      "snapshot": "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_03-4948676180079940-2026-07-29-20-38-30.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_02",
+      "snapshot": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_02-4948676180079940-2026-07-29-20-38-30.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_03",
+      "snapshot": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_03-4948676180079940-2026-07-29-20-38-31.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_04",
+      "snapshot": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_04-4948676180079940-2026-07-29-20-38-31.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_05",
+      "snapshot": "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_05-4948676180079940-2026-07-29-20-38-32.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_witness_r24_002",
+      "snapshot": "goodq_clip_epoch_witness_r24_002-4948676180079940-2026-07-29-20-38-33.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_witness_r24_003",
+      "snapshot": "goodq_clip_epoch_witness_r24_003-4948676180079940-2026-07-29-20-38-33.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_clip_epoch_witness_r24_004",
+      "snapshot": "goodq_clip_epoch_witness_r24_004-4948676180079940-2026-07-29-20-38-34.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_26_audio_recovery_01",
+      "snapshot": "goodq_dino_epoch_2026_07_26_audio_recovery_01-4948676180079940-2026-07-29-20-38-35.snapshot",
+      "points": 92,
+      "vectors": 92
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_27_clap_legacy_recovery_01",
+      "snapshot": "goodq_dino_epoch_2026_07_27_clap_legacy_recovery_01-4948676180079940-2026-07-29-20-38-36.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_27_clap_proof_02",
+      "snapshot": "goodq_dino_epoch_2026_07_27_clap_proof_02-4948676180079940-2026-07-29-20-38-37.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_27_clap_recovery_02",
+      "snapshot": "goodq_dino_epoch_2026_07_27_clap_recovery_02-4948676180079940-2026-07-29-20-38-37.snapshot",
+      "points": 88,
+      "vectors": 88
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+      "snapshot": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_01-4948676180079940-2026-07-29-20-38-39.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+      "snapshot": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_02-4948676180079940-2026-07-29-20-38-40.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+      "snapshot": "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_03-4948676180079940-2026-07-29-20-38-41.snapshot",
+      "points": 4,
+      "vectors": 4
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_02",
+      "snapshot": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_02-4948676180079940-2026-07-29-20-38-41.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_03",
+      "snapshot": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_03-4948676180079940-2026-07-29-20-38-42.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_04",
+      "snapshot": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_04-4948676180079940-2026-07-29-20-38-42.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_05",
+      "snapshot": "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_05-4948676180079940-2026-07-29-20-38-43.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_witness_r24_002",
+      "snapshot": "goodq_dino_epoch_witness_r24_002-4948676180079940-2026-07-29-20-38-44.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_witness_r24_003",
+      "snapshot": "goodq_dino_epoch_witness_r24_003-4948676180079940-2026-07-29-20-38-45.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_dino_epoch_witness_r24_004",
+      "snapshot": "goodq_dino_epoch_witness_r24_004-4948676180079940-2026-07-29-20-38-46.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_26_audio_recovery_01",
+      "snapshot": "goodq_text_epoch_2026_07_26_audio_recovery_01-4948676180079940-2026-07-29-20-38-47.snapshot",
+      "points": 138,
+      "vectors": 138
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_27_clap_legacy_recovery_01",
+      "snapshot": "goodq_text_epoch_2026_07_27_clap_legacy_recovery_01-4948676180079940-2026-07-29-20-38-50.snapshot",
+      "points": 3,
+      "vectors": 3
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_27_clap_proof_02",
+      "snapshot": "goodq_text_epoch_2026_07_27_clap_proof_02-4948676180079940-2026-07-29-20-38-50.snapshot",
+      "points": 3,
+      "vectors": 3
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_27_clap_recovery_02",
+      "snapshot": "goodq_text_epoch_2026_07_27_clap_recovery_02-4948676180079940-2026-07-29-20-38-51.snapshot",
+      "points": 132,
+      "vectors": 132
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+      "snapshot": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_01-4948676180079940-2026-07-29-20-38-53.snapshot",
+      "points": 6,
+      "vectors": 6
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+      "snapshot": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_02-4948676180079940-2026-07-29-20-38-54.snapshot",
+      "points": 6,
+      "vectors": 6
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+      "snapshot": "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_03-4948676180079940-2026-07-29-20-38-55.snapshot",
+      "points": 6,
+      "vectors": 6
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_02",
+      "snapshot": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_02-4948676180079940-2026-07-29-20-38-56.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_03",
+      "snapshot": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_03-4948676180079940-2026-07-29-20-38-56.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_04",
+      "snapshot": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_04-4948676180079940-2026-07-29-20-38-57.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_05",
+      "snapshot": "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_05-4948676180079940-2026-07-29-20-38-58.snapshot",
+      "points": 3,
+      "vectors": 3
+    },
+    {
+      "name": "goodq_text_epoch_witness_r24_001",
+      "snapshot": "goodq_text_epoch_witness_r24_001-4948676180079940-2026-07-29-20-38-59.snapshot",
+      "points": 1,
+      "vectors": 1
+    },
+    {
+      "name": "goodq_text_epoch_witness_r24_002",
+      "snapshot": "goodq_text_epoch_witness_r24_002-4948676180079940-2026-07-29-20-38-59.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_witness_r24_003",
+      "snapshot": "goodq_text_epoch_witness_r24_003-4948676180079940-2026-07-29-20-39-00.snapshot",
+      "points": 2,
+      "vectors": 2
+    },
+    {
+      "name": "goodq_text_epoch_witness_r24_004",
+      "snapshot": "goodq_text_epoch_witness_r24_004-4948676180079940-2026-07-29-20-39-00.snapshot",
+      "points": 2,
+      "vectors": 2
+    }
+  ],
+  "deleted_collections": [
+    "goodq_audio_epoch_2026_07_27_clap_legacy_recovery_01",
+    "goodq_audio_epoch_2026_07_27_clap_proof_02",
+    "goodq_audio_epoch_2026_07_27_clap_recovery_02",
+    "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+    "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+    "goodq_audio_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+    "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_02",
+    "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_03",
+    "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_04",
+    "goodq_audio_epoch_2026_07_28_wav2vec_lock_proof_05",
+    "goodq_audio_epoch_witness_r24_002",
+    "goodq_audio_epoch_witness_r24_003",
+    "goodq_audio_epoch_witness_r24_004",
+    "goodq_clip_epoch_2026_07_26_audio_recovery_01",
+    "goodq_clip_epoch_2026_07_27_clap_legacy_recovery_01",
+    "goodq_clip_epoch_2026_07_27_clap_proof_02",
+    "goodq_clip_epoch_2026_07_27_clap_recovery_02",
+    "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+    "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+    "goodq_clip_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+    "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_02",
+    "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_03",
+    "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_04",
+    "goodq_clip_epoch_2026_07_28_wav2vec_lock_proof_05",
+    "goodq_clip_epoch_witness_r24_002",
+    "goodq_clip_epoch_witness_r24_003",
+    "goodq_clip_epoch_witness_r24_004",
+    "goodq_dino_epoch_2026_07_26_audio_recovery_01",
+    "goodq_dino_epoch_2026_07_27_clap_legacy_recovery_01",
+    "goodq_dino_epoch_2026_07_27_clap_proof_02",
+    "goodq_dino_epoch_2026_07_27_clap_recovery_02",
+    "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+    "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+    "goodq_dino_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+    "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_02",
+    "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_03",
+    "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_04",
+    "goodq_dino_epoch_2026_07_28_wav2vec_lock_proof_05",
+    "goodq_dino_epoch_witness_r24_002",
+    "goodq_dino_epoch_witness_r24_003",
+    "goodq_dino_epoch_witness_r24_004",
+    "goodq_text_epoch_2026_07_26_audio_recovery_01",
+    "goodq_text_epoch_2026_07_27_clap_legacy_recovery_01",
+    "goodq_text_epoch_2026_07_27_clap_proof_02",
+    "goodq_text_epoch_2026_07_27_clap_recovery_02",
+    "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_01",
+    "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_02",
+    "goodq_text_epoch_2026_07_28_seinfeld_two_scene_witness_03",
+    "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_02",
+    "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_03",
+    "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_04",
+    "goodq_text_epoch_2026_07_28_wav2vec_lock_proof_05",
+    "goodq_text_epoch_witness_r24_001",
+    "goodq_text_epoch_witness_r24_002",
+    "goodq_text_epoch_witness_r24_003",
+    "goodq_text_epoch_witness_r24_004"
+  ],
+  "after": {
+    "collections": 4,
+    "non_authority_collections": 0,
+    "active_authority_present": true
+  }
+}

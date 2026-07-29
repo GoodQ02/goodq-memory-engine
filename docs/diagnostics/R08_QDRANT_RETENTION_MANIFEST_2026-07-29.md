@@ -57,9 +57,21 @@ unowned or safe to remove.
 - Do not use collection naming as a substitute for a fresh pre-action
   fingerprint.
 
-## Exact next seam
+## Execution result
 
-The retention classification is complete. Any cleanup is a distinct destructive
-operation requiring an explicit decision and a fresh, collection-scoped cleanup
-manifest. No corpus, Qdrant collection, or runtime configuration changed during
-this audit.
+The operator explicitly approved the scoped prune after a fresh live preflight
+on 2026-07-29. The executor re-resolved the active four-collection authority,
+required the original `56 collections / 788 vectors` candidate census, created
+and verified one Qdrant-native snapshot per candidate, and only then deleted
+the exact locked list sequentially.
+
+Result: all 56 non-authority recovery, proof, and witness collections were
+removed from active Qdrant storage; the four active July authority collections
+remain green with their original counts (audio 1,453; CLIP 2,913; DINO 2,913;
+text 4,292). The durable execution receipt, including the plan SHA-256,
+snapshot names, deleted collection names, and after-state assertion, is
+[`R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json`](evidence/R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json).
+
+No corpus, SQLite store, graph, FAISS index, runtime configuration, or active
+July Qdrant collection changed. Snapshot retention is a separate future policy
+decision; this operation removed the obsolete live collections only.

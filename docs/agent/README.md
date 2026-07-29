@@ -23,11 +23,12 @@ interpret transient status or long basement-era handoff logs.
 ## Active Restart Handoff
 
 For the current July historical-audio repair seam, read the
-[`R08 Historical Signature Backfill Closeout`](../diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md)
-after the generated current-state snapshot, then the
-[`R08 Historical Audio Repair Restart Handoff`](../diagnostics/R08_HISTORICAL_AUDIO_REPAIR_RESTART_HANDOFF_2026-07-28.md).
-They record the closed signature lane and the next bounded visibility seam; they
-do not supersede live runtime probes.
+[`R08 Quality Queue Reconciliation`](../diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md)
+after the generated current-state snapshot. It records the closed repair lanes,
+the current independent review queues, and the exact no-repeat boundaries. Use
+the earlier [`R08 Historical Signature Backfill Closeout`](../diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md)
+only as supporting batch evidence; neither diagnostic supersedes live runtime
+probes.
 
 ## Active Workflows
 

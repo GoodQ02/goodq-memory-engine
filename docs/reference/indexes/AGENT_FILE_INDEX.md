@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1348**
+Indexed active tracked paths: **1353**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -132,6 +132,7 @@ Indexed active tracked paths: **1348**
 | `/cli/conduits_processing.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_sensitive_sources.py` | CLI | Command-line operator surface. |
 | `/cli/conduits_store_stats.py` | CLI | Command-line operator surface. |
+| `/cli/content_state_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/control_recurrence_report.py` | CLI | Command-line operator surface. |
 | `/cli/diarization_outcome_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/goodq_doctor.py` | CLI | Command-line operator surface. |
@@ -158,6 +159,7 @@ Indexed active tracked paths: **1348**
 | `/cli/system_status.py` | CLI | Command-line operator surface. |
 | `/cli/temporal_audio_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/test_ingestion.py` | CLI | Command-line operator surface. |
+| `/cli/transcript_outcome_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/ucf_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/ui_conduits_rollup.py` | CLI | Command-line operator surface. |
 | `/cli/watchdog.py` | CLI | Command-line operator surface. |
@@ -358,6 +360,7 @@ Indexed active tracked paths: **1348**
 | `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29.json` | Documentation | Active documentation or governance surface. |
 | `/docs/goodq4all_agent_status.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CONSOLIDATION_EXPLAINED.md` | Documentation | Active documentation or governance surface. |
@@ -1109,6 +1112,7 @@ Indexed active tracked paths: **1348**
 | `/tests/unit/test_clean_memory_windows_reader_identity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_content_state_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_context_analyzer_llm.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_agent_activation_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_agent_disable_invariant.py` | Verification | Test, fixture, or verification asset. |
@@ -1260,6 +1264,7 @@ Indexed active tracked paths: **1348**
 | `/tests/unit/test_time_hint_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_paths_piper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_resolver.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_transcript_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_turboquant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_canonical_loader.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_promotion_cli.py` | Verification | Test, fixture, or verification asset. |

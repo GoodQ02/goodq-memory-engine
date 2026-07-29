@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1365**
+Indexed active tracked paths: **1367**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -276,6 +276,7 @@ Indexed active tracked paths: **1365**
 | `/docs/diagnostics/R03_LIFECYCLE_TRANSITION_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R04_CONFIG_PORTABILITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R05_API_AUTHORITY_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
@@ -347,6 +348,7 @@ Indexed active tracked paths: **1365**
 | `/docs/diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_HUMAN_PERCEIVED_QUALITY_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/R08_IDENTITY_WORKBENCH_BRANCH_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_PIPELINE_RECOVERY_AND_WITNESS_CLOSEOUT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_QDRANT_RETENTION_MANIFEST_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |

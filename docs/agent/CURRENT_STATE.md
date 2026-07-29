@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_CURRENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-28 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-29 -->
 
 # GoodQ4All Current Agent State
 
-Generated from evidence `4dbb3d27da27939f` captured at
-`2026-07-28T18:09:49Z`. Do not hand-edit this file; regenerate it with
+Generated from evidence `f06e872fc8c8f0bf` captured at
+`2026-07-29T18:02:51Z`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
 ## Authority

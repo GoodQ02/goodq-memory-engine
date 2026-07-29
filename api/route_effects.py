@@ -139,6 +139,7 @@ ROUTE_EFFECTS: dict[RouteOperation, RouteEffect] = {
     ): RouteEffect.CURATED_MUTATION,
     ("GET", "/api/identity/name-mentions"): RouteEffect.AUTOMATIC_MUTATION,
     ("GET", "/api/identity/roster"): RouteEffect.AUTOMATIC_MUTATION,
+    ("GET", "/api/identity/evidence-pack"): RouteEffect.PASSIVE_READ,
     ("POST", "/api/identity/roster/save"): RouteEffect.CURATED_MUTATION,
     ("POST", "/api/identity/roster/validate"): RouteEffect.PROCESS_EXECUTION,
     ("POST", "/api/identity/roster/export"): RouteEffect.CURATED_MUTATION,

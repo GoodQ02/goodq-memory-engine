@@ -103,3 +103,19 @@ def test_get_roster_non_creating(client, tmp_path, monkeypatch) -> None:
 
     # This assertion will fail on RED run because _data_path() runs mkdir()
     assert not parent_dir.exists(), "Directory should not be created by GET /roster"
+
+
+def test_get_identity_evidence_pack_non_creating(client, tmp_path, monkeypatch) -> None:
+    temp_identity_path = tmp_path / "identity" / "family_roster.yaml"
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(temp_identity_path))
+    _use_temporary_identity_config(monkeypatch, temp_identity_path)
+
+    parent_dir = temp_identity_path.parent
+    assert not parent_dir.exists()
+
+    response = client.get("/api/identity/evidence-pack", params={"subjects": "Maria"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["claim_status"] == "not_established"
+    assert payload["identities"] == []
+    assert not parent_dir.exists(), "Directory should not be created by GET /evidence-pack"

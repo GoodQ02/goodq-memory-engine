@@ -10,6 +10,7 @@ Serves JSON for the identity_workbench UI:
   POST /api/identity/speaker-clusters/confirm
   GET  /api/identity/name-mentions
   GET  /api/identity/roster
+  GET  /api/identity/evidence-pack
   POST /api/identity/roster/save
   POST /api/identity/roster/validate
   POST /api/identity/roster/export
@@ -43,12 +44,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from filelock import FileLock
 from pydantic import BaseModel, Field
 
 from agents.mini_agent_client import MiniAgentClient
+from api.utils.identity_evidence_pack import build_identity_evidence_pack
 from api.utils.action_jobs import (
     ActionJobLedger,
     ActionJobTransitionError,
@@ -1439,6 +1441,32 @@ async def get_roster() -> dict:
         }
     except ImportError:
         raise HTTPException(status_code=500, detail="PyYAML not installed in the active environment.")
+
+
+@router.get("/evidence-pack")
+async def get_identity_evidence_pack(
+    subjects: str = Query(..., min_length=1, max_length=500),
+) -> dict:
+    """Return bounded curated identity labels and explicit pairwise claims only."""
+    roster_path = _identity_data_path() / "family_roster.yaml"
+    authority = _identity_epoch_authority()
+    if not roster_path.exists():
+        return {
+            **build_identity_evidence_pack([], []),
+            "epoch_authority": authority,
+            "message": "family_roster.yaml not found.",
+        }
+    try:
+        import yaml
+        with open(roster_path, encoding="utf-8") as handle:
+            roster = yaml.safe_load(handle) or {}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="PyYAML not installed in the active environment.")
+    requested = [item.strip() for item in subjects.split(",") if item.strip()]
+    return {
+        **build_identity_evidence_pack(roster.get("identities") or [], requested),
+        "epoch_authority": authority,
+    }
 
 
 class RosterSaveRequest(BaseModel):

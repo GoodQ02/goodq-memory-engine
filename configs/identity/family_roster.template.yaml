@@ -23,6 +23,9 @@ identities:
     speaker_cluster_ids: []      # e.g. [spk_cluster_0] — confirm manually
     name_mention_keys: []        # e.g. [Name, Nickname]
     role: "subject"              # subject | parent | sibling | relative | other
+    # Optional directed curated relationships. A role alone is never a
+    # relationship claim about another identity.
+    relationships: []             # e.g. [{target_id: person_REDACTED_2, type: parent}]
     notes: ""
 
   - id: person_REDACTED_2
@@ -32,4 +35,5 @@ identities:
     speaker_cluster_ids: []
     name_mention_keys: []
     role: "parent"
+    relationships: []
     notes: ""

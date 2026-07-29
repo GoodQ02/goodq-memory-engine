@@ -111,3 +111,45 @@ def test_quality_audit_full_review_ledger_is_complete_and_non_mutating(tmp_path:
     assert [item["scene_id"] for item in ledger] == [f"scene-{index}" for index in range(7)]
     assert all("full_text" not in item for item in ledger)
     assert manifest_path.read_bytes() == before
+
+
+def test_quality_audit_does_not_compare_scene_and_temporal_segment_counts(tmp_path: Path) -> None:
+    processing = tmp_path / "processing"
+    video = processing / "video-a"
+    manifest_path = video / "video" / "scene_manifest.json"
+    _write(
+        manifest_path,
+        {
+            "video_id": "video-a",
+            "scenes": [
+                {
+                    "scene_id": "scene-rollup",
+                    "audio": {
+                        "full_text": "same canonical text",
+                        "segments": [
+                            {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00", "text": "same"},
+                            {"start": 1.0, "end": 2.0, "speaker": "SPEAKER_00", "text": "canonical text"},
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+    _write(
+        video / "temporal_index.json",
+        {
+            "segments": [
+                {
+                    "scene_id": "scene-rollup",
+                    "full_transcript": "same canonical text",
+                    "transcript_segments": ["same canonical text"],
+                    "speaker_ids": [],
+                }
+            ]
+        },
+    )
+
+    report = audit.build_quality_report(processing, full_review_ledger=True)
+
+    assert report["temporal_projection"].get("preexisting_temporal_mismatch", 0) == 0
+    assert "preexisting_temporal_mismatch" not in report["human_review_ledger"]

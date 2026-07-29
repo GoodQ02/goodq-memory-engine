@@ -234,8 +234,14 @@ def build_quality_report(
             mismatches: list[str] = []
             if str(projected.get("full_transcript") or "").strip() != text:
                 mismatches.append("transcript")
-            if len(projected.get("transcript_segments") or []) != len(segments):
-                mismatches.append("transcript_segments")
+            # The temporal index stores overlap-filtered transcript *rollup*
+            # strings, whereas scene.audio.segments stores timestamped
+            # speaker-level dictionaries.  Their list counts intentionally do
+            # not match, so compare canonical full text and only require that
+            # a non-empty transcript has a temporal rollup container.
+            temporal_rollup = projected.get("transcript_segments")
+            if text and not isinstance(temporal_rollup, list):
+                mismatches.append("transcript_rollup_missing")
             if set(projected.get("speaker_ids") or []) != set(_speaker_ids(scene)):
                 mismatches.append("speaker_ids")
             for field in mismatches:
@@ -258,7 +264,7 @@ def build_quality_report(
         "audit_kind": "human_perceived_quality_read_only",
         "field_path_contract": {
             "transcript": "scene.audio.full_text, fallback scene.audio.transcript",
-            "transcript_segments": "scene.audio.segments",
+            "transcript_segments": "scene.audio.segments (timestamped speaker payload) versus temporal_index.segments[scene_id].transcript_segments (overlap-filtered rollup strings); list counts are not compared",
             "diarization_runtime": "scene.audio.diarization_status",
             "diarization_derived": "scene.diarization_status",
             "speaker_ids": "scene.speaker_ids, then scene.audio speaker payloads",

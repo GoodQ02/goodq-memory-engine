@@ -3,6 +3,7 @@ import sqlite3
 from api.utils.identity_evidence_pack import (
     build_identity_evidence_pack,
     load_identity_scene_evidence,
+    load_identity_scene_context,
 )
 
 
@@ -86,5 +87,60 @@ def test_scene_evidence_preserves_typed_person_scene_edges(tmp_path) -> None:
                 "evidence_types": ["appearance", "mention"],
                 "strength": "appearance",
             }],
+        }],
+    }
+
+
+def test_scene_context_projects_stored_ucf_text_without_narration(tmp_path) -> None:
+    kg_path = tmp_path / "knowledge_graph.db"
+    ucf_path = tmp_path / "ucf_ledger.db"
+    with sqlite3.connect(kg_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE nodes (id INTEGER PRIMARY KEY, node_type TEXT, name TEXT, properties TEXT);
+            CREATE TABLE edges (source_id INTEGER, target_id INTEGER, edge_type TEXT);
+            INSERT INTO nodes VALUES
+                (1, 'Person', 'maria', '{}'),
+                (2, 'scene', 'scene-a', '{"ucf_provenance": [10, 11]}'),
+                (3, 'video', 'video-hash-a', '{}');
+            INSERT INTO edges VALUES
+                (1, 2, 'person_mentioned_in_scene'),
+                (3, 2, 'video_contains_scene');
+            """
+        )
+    with sqlite3.connect(ucf_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE context_frames (
+                frame_id INTEGER PRIMARY KEY,
+                t_start REAL,
+                t_end REAL,
+                worker_name TEXT,
+                payload TEXT
+            );
+            INSERT INTO context_frames VALUES
+                (10, 5.0, 8.0, 'audio_transcribe', '{"text": "Stored transcript."}'),
+                (11, 8.0, 10.0, 'audio_embed_clap', '{}');
+            """
+        )
+
+    payload = load_identity_scene_context(
+        [{"id": "maria", "display_name": "Maria"}], kg_path, ucf_path, limit=1
+    )
+
+    assert payload == {
+        "source": "promoted_knowledge_graph_and_ucf",
+        "scenes": [{
+            "scene_id": "scene-a",
+            "video_hash": "video-hash-a",
+            "start": 5.0,
+            "end": 10.0,
+            "people": [{
+                "identity_id": "maria",
+                "display_name": "Maria",
+                "evidence_types": ["mention"],
+                "strength": "mention",
+            }],
+            "transcript_excerpts": ["Stored transcript."],
         }],
     }

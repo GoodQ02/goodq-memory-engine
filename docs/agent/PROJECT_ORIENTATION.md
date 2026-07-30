@@ -301,3 +301,4 @@ this overview unchanged unless topology or authority actually changes.
 - [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md)
 - [Memory and Storage Architecture](../architecture/MEMORY_STORAGE.md)
 - [Evidence-First Runtime Repair](workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md)
+- [Hermes Personal-Memory Retrieval](workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md)

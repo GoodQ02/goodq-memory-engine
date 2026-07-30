@@ -35,6 +35,7 @@ probes.
 - `workflows/PIPELINE_TROUBLESHOOTING_FLOW.md`: step-by-step pipeline threshold tuning, bug isolation, and regression verification against verified source ground truth.
 - `workflows/CLEAN_MEMORY_START.md`: safe clean-slate Qdrant/epoch/FAISS preparation before personal-memory ingestion.
 - `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop for capability gaps where config, API, persistence, and UI evidence must be reconciled before broad reruns.
+- `workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md`: evidence-bound identity, relationship, and scene retrieval for the local Hermes agent.
 
 ## What Lives Here
 

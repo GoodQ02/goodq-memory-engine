@@ -11,6 +11,7 @@ Serves JSON for the identity_workbench UI:
   GET  /api/identity/name-mentions
   GET  /api/identity/roster
   GET  /api/identity/evidence-pack
+  GET  /api/identity/scene-evidence
   POST /api/identity/roster/save
   POST /api/identity/roster/validate
   POST /api/identity/roster/export
@@ -50,7 +51,10 @@ from filelock import FileLock
 from pydantic import BaseModel, Field
 
 from agents.mini_agent_client import MiniAgentClient
-from api.utils.identity_evidence_pack import build_identity_evidence_pack
+from api.utils.identity_evidence_pack import (
+    build_identity_evidence_pack,
+    load_identity_scene_evidence,
+)
 from api.utils.action_jobs import (
     ActionJobLedger,
     ActionJobTransitionError,
@@ -1466,6 +1470,44 @@ async def get_identity_evidence_pack(
     return {
         **build_identity_evidence_pack(roster.get("identities") or [], requested),
         "epoch_authority": authority,
+    }
+
+
+@router.get("/scene-evidence")
+async def get_identity_scene_evidence(
+    subjects: str = Query(..., min_length=1, max_length=500),
+    limit: int = Query(20, ge=1, le=100),
+) -> dict:
+    """Return bounded promoted Person-to-scene evidence without running retrieval."""
+    roster_path = _identity_data_path() / "family_roster.yaml"
+    authority = _identity_epoch_authority()
+    if not roster_path.exists():
+        return {
+            "scene_refs": [],
+            "source": "promoted_knowledge_graph",
+            "epoch_authority": authority,
+            "message": "family_roster.yaml not found.",
+        }
+    try:
+        import yaml
+        with open(roster_path, encoding="utf-8") as handle:
+            roster = yaml.safe_load(handle) or {}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="PyYAML not installed in the active environment.")
+    requested = [item.strip() for item in subjects.split(",") if item.strip()]
+    pack = build_identity_evidence_pack(roster.get("identities") or [], requested)
+    identity_cfg = _CFG.get("identity_search") or {}
+    paths_cfg = _CFG.get("paths") or {}
+    kg_path = Path(identity_cfg.get("kg_db_path") or paths_cfg.get("knowledge_graph_db") or "")
+    return {
+        **load_identity_scene_evidence(pack["identities"], kg_path, limit=limit),
+        "matched_identities": pack["identities"],
+        "relationship_claim_status": pack["claim_status"],
+        "epoch_authority": authority,
+        "limitations": [
+            "Scene references prove only promoted appearance or mention evidence.",
+            "They do not establish a personal relationship or provide scene narration.",
+        ],
     }
 
 

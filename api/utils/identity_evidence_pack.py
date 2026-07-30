@@ -1,6 +1,9 @@
 """Passive, curated identity evidence for agent-facing read models."""
 from __future__ import annotations
 
+from collections import defaultdict
+from pathlib import Path
+import sqlite3
 from typing import Any, Iterable
 
 
@@ -80,3 +83,82 @@ def build_identity_evidence_pack(
             "Identity role labels and scene co-occurrence are not pairwise relationship claims.",
         ]),
     }
+
+
+def load_identity_scene_evidence(
+    identities: Iterable[dict[str, Any]],
+    kg_path: Path,
+    *,
+    limit: int,
+) -> dict[str, Any]:
+    """Read bounded, typed Person-to-scene evidence from the promoted KG.
+
+    Scene-node names and source video hashes are stable provenance references.
+    They intentionally are not presented as timeline coordinates or relationship
+    claims; callers must use a separate scene projection for scene narration.
+    """
+    identity_map = {
+        str(identity.get("id") or ""): identity
+        for identity in identities
+        if isinstance(identity, dict) and str(identity.get("id") or "")
+    }
+    if not identity_map or not kg_path.exists():
+        return {"scene_refs": [], "source": "promoted_knowledge_graph"}
+
+    placeholders = ",".join("?" for _ in identity_map)
+    query = f"""
+        SELECT person.name, scene.name, edge.edge_type, video.name
+        FROM edges AS edge
+        JOIN nodes AS person ON person.id = edge.source_id
+        JOIN nodes AS scene ON scene.id = edge.target_id
+        LEFT JOIN edges AS containment
+          ON containment.target_id = scene.id
+         AND containment.edge_type = 'video_contains_scene'
+        LEFT JOIN nodes AS video
+          ON video.id = containment.source_id
+         AND video.node_type = 'video'
+        WHERE person.node_type = 'Person'
+          AND person.name IN ({placeholders})
+          AND edge.edge_type IN ('person_appears_in_scene', 'person_mentioned_in_scene')
+          AND scene.node_type = 'scene'
+        ORDER BY scene.name, person.name, edge.edge_type
+    """
+    uri = f"{kg_path.resolve().as_uri()}?mode=ro"
+    try:
+        with sqlite3.connect(uri, uri=True) as conn:
+            rows = conn.execute(query, tuple(identity_map)).fetchall()
+    except sqlite3.Error:
+        return {"scene_refs": [], "source": "promoted_knowledge_graph_unavailable"}
+
+    scene_rows: dict[str, dict[str, Any]] = {}
+    for person_id, scene_id, edge_type, video_hash in rows:
+        scene_key = str(scene_id)
+        if scene_key not in scene_rows:
+            if len(scene_rows) >= limit:
+                break
+            scene_rows[scene_key] = {
+                "scene_id": scene_key,
+                "video_hash": str(video_hash) if video_hash else None,
+                "people": defaultdict(set),
+            }
+        evidence_type = "appearance" if edge_type == "person_appears_in_scene" else "mention"
+        scene_rows[scene_key]["people"][str(person_id)].add(evidence_type)
+
+    scene_refs = []
+    for row in scene_rows.values():
+        people = []
+        for person_id, evidence_types in sorted(row["people"].items()):
+            identity = identity_map[person_id]
+            ordered_types = [kind for kind in ("appearance", "mention") if kind in evidence_types]
+            people.append({
+                "identity_id": person_id,
+                "display_name": identity.get("display_name") or person_id,
+                "evidence_types": ordered_types,
+                "strength": "appearance" if "appearance" in evidence_types else "mention",
+            })
+        scene_refs.append({
+            "scene_id": row["scene_id"],
+            "video_hash": row["video_hash"],
+            "people": people,
+        })
+    return {"scene_refs": scene_refs, "source": "promoted_knowledge_graph"}

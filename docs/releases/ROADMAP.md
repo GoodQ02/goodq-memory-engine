@@ -1902,7 +1902,10 @@ the failure is not currently visible.
   model cache under the proposed artifact root, records supplied-input hashing
   and stream metadata, resolves required tool bindings, and leaves the root
   absent. The first local media preflight was read-only and did not authorize or
-  start an ingestion run.
+  start an ingestion run. The canonical runner now accepts an explicit witness
+  snapshot only when every mutable runtime path remains below the declared
+  witness root, models remain external, promotion is disabled, and Qdrant is a
+  noncanonical loopback endpoint.
 
 ### R-25 — Private integrated verification gate
 

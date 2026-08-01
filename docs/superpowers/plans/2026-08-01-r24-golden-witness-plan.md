@@ -149,6 +149,23 @@ directories, load models, access stores, or invoke the canonical runner.
   fresh-root and path-containment guard.
 - [ ] Run the focused preflight tests and commit the seal-only gate.
 
+### Task 2B: Add a fail-closed runner configuration boundary
+
+**Files:**
+- Modify: `cli/run_ingestion.py`
+- Create: `tests/unit/test_run_ingestion_isolated_config.py`
+
+The historical R-24 planner projected a runner `--config` argument that the
+canonical runner did not accept. Add that option only for a JSON snapshot that
+declares witness isolation, disables promotion, keeps every mutable runtime path
+under the witness root, preserves the model cache outside it, and selects a
+noncanonical loopback Qdrant endpoint. Existing non-witness invocations keep
+their current configuration path.
+
+- [ ] Write failing acceptance/rejection tests for isolated snapshot loading.
+- [ ] Add the CLI option and fail-closed validation without starting services.
+- [ ] Run focused runner and R-24 regression tests, then commit.
+
 ### Task 3: Operator-approved witness execution and acceptance report
 
 **Files:**

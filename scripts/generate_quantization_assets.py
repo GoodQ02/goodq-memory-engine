@@ -3,8 +3,8 @@
 GoodQ4All TurboQuant Asset Generator
 ====================================
 Generates seed-deterministic random orthogonal rotation matrices (Pi),
-Gaussian projection matrices (S), and Lloyd-Max quantization tables
-for 384-dimensional (text) and 512-dimensional (visual/audio) embeddings.
+Gaussian projection matrices (S), and Lloyd-Max quantization tables for every
+active GoodQ embedding dimension.
 
 Outputs are saved to configs/quantization_codebooks.npz.
 """
@@ -92,24 +92,18 @@ def main():
 
     print("Generating TurboQuant assets...")
     
-    # Generate for 384-dimensional text embeddings
-    Pi_384, S_384, centroids_384, boundaries_384 = generate_assets(384)
-    
-    # Generate for 512-dimensional visual/audio embeddings
-    Pi_512, S_512, centroids_512, boundaries_512 = generate_assets(512)
+    assets = {}
+    for dim in (384, 512, 768, 1024):
+        Pi, S, centroids, boundaries = generate_assets(dim)
+        assets.update({
+            f"Pi_{dim}": Pi,
+            f"S_{dim}": S,
+            f"centroids_{dim}": centroids,
+            f"boundaries_{dim}": boundaries,
+        })
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    np.savez(
-        args.output,
-        Pi_384=Pi_384,
-        S_384=S_384,
-        centroids_384=centroids_384,
-        boundaries_384=boundaries_384,
-        Pi_512=Pi_512,
-        S_512=S_512,
-        centroids_512=centroids_512,
-        boundaries_512=boundaries_512
-    )
+    np.savez(args.output, **assets)
 
     print(f"Successfully saved assets to {args.output}")
 

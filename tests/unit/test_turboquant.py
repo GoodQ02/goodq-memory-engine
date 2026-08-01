@@ -20,16 +20,12 @@ class TestTurboQuant(unittest.TestCase):
         self.assertIsNone(res["tq_qjl_sign"])
         self.assertIsNone(res["tq_norm_residual"])
 
-        # Supported dimensions
-        v_384 = np.random.randn(384)
-        res_384 = self.encoder.encode(v_384)
-        self.assertIsNotNone(res_384["tq_indices"])
-        self.assertEqual(len(res_384["tq_indices"]), 384)
-
-        v_512 = np.random.randn(512)
-        res_512 = self.encoder.encode(v_512)
-        self.assertIsNotNone(res_512["tq_indices"])
-        self.assertEqual(len(res_512["tq_indices"]), 512)
+        # Supported dimensions include every active embedding space.
+        for dim in (384, 512, 768, 1024):
+            with self.subTest(dim=dim):
+                result = self.encoder.encode(np.random.randn(dim))
+                self.assertIsNotNone(result["tq_indices"])
+                self.assertEqual(len(result["tq_indices"]), dim)
 
     def test_orthogonality(self):
         """Verify that Pi matrices are strictly orthogonal."""
@@ -38,16 +34,16 @@ class TestTurboQuant(unittest.TestCase):
         I_384 = np.eye(384)
         np.testing.assert_allclose(Pi_384 @ Pi_384.T, I_384, atol=1e-12)
 
-        # 512 Dim
-        Pi_512 = self.encoder.Pi_512
-        I_512 = np.eye(512)
-        np.testing.assert_allclose(Pi_512 @ Pi_512.T, I_512, atol=1e-12)
+        for dim in (512, 768, 1024):
+            with self.subTest(dim=dim):
+                Pi, _, _, _ = self.encoder._get_assets(dim)
+                np.testing.assert_allclose(Pi @ Pi.T, np.eye(dim), atol=1e-12)
 
     def test_reconstruction_fidelity_and_gates(self):
         """Verify the reconstruction fidelity constraint (Gate 4)."""
         np.random.seed(1337)
         
-        for dim in (384, 512):
+        for dim in (384, 512, 768, 1024):
             similarities = []
             for _ in range(200):
                 # Generate random unit vector representing normal embedding behavior
@@ -82,7 +78,7 @@ class TestTurboQuant(unittest.TestCase):
         """Verify that the estimated inner product is unbiased (expected difference ~ 0)."""
         np.random.seed(1337)
         
-        for dim in (384, 512):
+        for dim in (384, 512, 768, 1024):
             errors = []
             for _ in range(500):
                 # Generate key and query

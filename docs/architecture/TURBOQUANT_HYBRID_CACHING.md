@@ -14,6 +14,10 @@ GoodQ4All operates on a **hybrid-precision vector storage model**. While 32-bit 
 
 To accelerate top-K candidates pre-filtering and pruning without losing precision, TurboQuant stores quantized, compressed representations of these vectors directly in SQLite as "sidecar" columns.
 
+The checked-in deterministic codebook archive supports the active 384-, 512-,
+768-, and 1024-dimensional embedding spaces. Unsupported dimensions fail
+closed: no TurboQuant sidecar is written for them.
+
 ```
        [ Authoritative Ingestion ]
                     │

@@ -34,14 +34,28 @@ class TurboQuantEncoder:
         self.centroids_512 = data["centroids_512"]
         self.boundaries_512 = data["boundaries_512"]
 
+        self.Pi_768 = data["Pi_768"]
+        self.S_768 = data["S_768"]
+        self.centroids_768 = data["centroids_768"]
+        self.boundaries_768 = data["boundaries_768"]
+
+        self.Pi_1024 = data["Pi_1024"]
+        self.S_1024 = data["S_1024"]
+        self.centroids_1024 = data["centroids_1024"]
+        self.boundaries_1024 = data["boundaries_1024"]
+
     def _get_assets(self, dim: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Returns assets matching the given dimension."""
         if dim == 384:
             return self.Pi_384, self.S_384, self.centroids_384, self.boundaries_384
         elif dim == 512:
             return self.Pi_512, self.S_512, self.centroids_512, self.boundaries_512
+        elif dim == 768:
+            return self.Pi_768, self.S_768, self.centroids_768, self.boundaries_768
+        elif dim == 1024:
+            return self.Pi_1024, self.S_1024, self.centroids_1024, self.boundaries_1024
         else:
-            raise ValueError(f"Unsupported dimension for TurboQuant: {dim}. Supported: 384, 512.")
+            raise ValueError(f"Unsupported dimension for TurboQuant: {dim}. Supported: 384, 512, 768, 1024.")
 
     def encode(self, x: np.ndarray) -> Dict[str, Any]:
         """
@@ -52,7 +66,7 @@ class TurboQuantEncoder:
             x = np.array(x, dtype=np.float32)
 
         dim = x.shape[0]
-        if dim not in (384, 512):
+        if dim not in (384, 512, 768, 1024):
             return {
                 "tq_indices": None,
                 "tq_norm": None,

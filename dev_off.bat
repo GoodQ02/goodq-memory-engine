@@ -5,8 +5,9 @@ set "WSL_DISTRO=Ubuntu-22.04"
 
 echo [DEV OFF] Deactivating local agent services...
 
-REM Stop the vLLM systemd service cleanly first
-wsl -d %WSL_DISTRO% -u root -- systemctl stop vllm-llama1b.service
+REM Stop the GoodQ-owned vLLM service and keepalive anchor first.
+set "GOODQ_NO_PAUSE=1"
+call "%~dp0scripts\stop_vllm_servers.bat"
 
 REM Force shut down WSL VM to free 100% of memory and GPU VRAM
 wsl --shutdown

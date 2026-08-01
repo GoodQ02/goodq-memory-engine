@@ -297,6 +297,18 @@ def get_runtime_paths(
     return resolved
 
 
+def validate_config_mapping(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Strictly validate one resolved configuration mapping.
+
+    Runtime callers retain :func:`load_configs`' visible fallback behavior.
+    Operators that need a clean readiness gate, such as ``dev_on.bat``, call
+    this function directly and receive the schema error instead.
+    """
+    GoodQConfig = _load_goodq_config_schema()
+    validated = GoodQConfig.model_validate(raw_cfg)
+    return validated.model_dump()
+
+
 def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     Load and validate the canonical GoodQ4All configuration.
@@ -370,9 +382,7 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     # Validate against Pydantic schema.  Resolve it relative to this module so
     # entry-point-specific PYTHONPATH values cannot silently disable validation.
     try:
-        GoodQConfig = _load_goodq_config_schema()
-        validated = GoodQConfig.model_validate(raw_cfg)
-        return validated.model_dump()
+        return validate_config_mapping(raw_cfg)
     except ImportError:
         # Schema validation not available - use raw config (expected for now)
         pass

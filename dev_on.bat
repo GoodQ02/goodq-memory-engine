@@ -1,21 +1,9 @@
 @echo off
 REM GoodQ4All - Local Agent Mode (Dev On)
-REM Enables WSL keepalive, starts systemd vLLM, starts Qdrant, API Server, and Ingestion Watchdog.
+REM Validates local config, then starts the GoodQ-owned runtime services.
 set "WSL_DISTRO=Ubuntu-22.04"
 
-echo [DEV ON] Booting WSL and starting vLLM...
-
-REM Start Windows-side keepalive in the background
-start /B wsl -d %WSL_DISTRO% -- sleep infinity
-
-REM Start systemd service inside WSL
-wsl -d %WSL_DISTRO% -u root -- systemctl start vllm-llama1b.service
-
-echo [DEV ON] Starting local database services (Qdrant)...
-REM Start Qdrant service on Windows if configured as service
-net start "GoodQ_Qdrant" >nul 2>&1
-
-echo [DEV ON] Starting API Server and Ingestion Watchdog...
+echo [DEV ON] Resolving the GoodQ Python environment...
 
 set "PYTHONPATH=%~dp0"
 set "PYTHON_EXE="
@@ -24,6 +12,31 @@ if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\envs\goodq_core\pyth
 if not defined PYTHON_EXE if exist "C:\ProgramData\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\miniconda3\envs\goodq_core\python.exe"
 if not defined PYTHON_EXE if exist "C:\ProgramData\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\anaconda3\envs\goodq_core\python.exe"
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
+
+echo [DEV ON] Validating the resolved configuration...
+"%PYTHON_EXE%" -c "from steps.common.config_loader import load_configs, validate_config_mapping; validate_config_mapping(load_configs())"
+if errorlevel 1 (
+    echo [ERROR] Config validation failed. Local Agent Mode was not started.
+    exit /b 1
+)
+
+echo [DEV ON] Starting canonical vLLM control...
+set "GOODQ_NO_PAUSE=1"
+call "%~dp0scripts\start_vllm_servers.bat"
+if errorlevel 1 (
+    echo [ERROR] vLLM did not reach its required active state.
+    exit /b 1
+)
+
+echo [DEV ON] Starting local database services (Qdrant)...
+net start "GoodQ_Qdrant" >nul 2>&1
+powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:6333/collections | Out-Null; exit 0 } catch { Write-Error $_; exit 1 }"
+if errorlevel 1 (
+    echo [ERROR] Qdrant is not reachable on 127.0.0.1:6333.
+    exit /b 1
+)
+
+echo [DEV ON] Starting API Server and Ingestion Watchdog...
 
 REM Ensure existing API / Watchdog instances are closed first to prevent conflicts
 powershell -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"

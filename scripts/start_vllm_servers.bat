@@ -42,16 +42,24 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo Waiting up to 90 seconds for the vLLM speed endpoint...
+powershell -NoProfile -Command "$deadline=(Get-Date).AddSeconds(90); do { try { $response=Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:38005/v1/models; if ($response.StatusCode -eq 200) { exit 0 } } catch {}; Start-Sleep -Seconds 2 } while ((Get-Date) -lt $deadline); exit 1"
+if errorlevel 1 (
+    echo ERROR: vLLM speed endpoint did not become ready on http://127.0.0.1:38005/v1/models.
+    echo Check status: "%REPO_ROOT%\scripts\status_vllm_servers.bat"
+    if /I not "%GOODQ_NO_PAUSE%"=="1" pause
+    exit /b 1
+)
+
 echo.
 echo ========================================
-echo vLLM Services Starting...
+echo vLLM Services Ready...
 echo ========================================
 echo.
 echo vLLM Primary:         http://127.0.0.1:38005/v1
 echo Ollama (Fallback):    http://localhost:11434/v1 (or fallback: http://localhost:31434/v1)
 echo.
-echo Services are starting in the background.
-echo It may take 30-60 seconds for the primary model to fully load.
+echo The primary endpoint responded after its bounded readiness check.
 echo.
 echo Check status: "%REPO_ROOT%\\scripts\\status_vllm_servers.bat"
 echo.

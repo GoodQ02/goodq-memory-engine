@@ -39,3 +39,11 @@ def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
     dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
 
     assert "goodq_prewarm_retrieval_models=1" in dev_on
+
+
+def test_vllm_launcher_waits_for_the_advertised_speed_endpoint_not_only_systemd():
+    launcher = (REPO_ROOT / "scripts" / "start_vllm_servers.bat").read_text(encoding="utf-8").lower()
+
+    assert "http://127.0.0.1:38005/v1/models" in launcher
+    assert "addseconds(90)" in launcher
+    assert "vllm speed endpoint did not become ready" in launcher

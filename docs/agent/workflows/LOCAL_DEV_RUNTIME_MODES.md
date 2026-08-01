@@ -18,7 +18,8 @@ It performs these actions in order:
 1. Strictly validates the resolved GoodQ configuration.
 2. Synchronizes only the three versioned WSL audio worker files when their
    deployed hashes differ, then fails closed unless every deployed hash matches.
-3. Starts the canonical vLLM controls and confirms loopback Qdrant is reachable.
+3. Starts the canonical vLLM controls, waits up to 90 seconds for its advertised
+   loopback models endpoint to respond, and confirms loopback Qdrant is reachable.
 4. Replaces stale GoodQ API and watchdog processes, then starts fresh instances.
 5. Sets `GOODQ_PREWARM_RETRIEVAL_MODELS=1` only for the new API process.
 6. The API preloads the local text, CLIP, and CLAP query encoders once, so the

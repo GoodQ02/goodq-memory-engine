@@ -36,6 +36,7 @@ probes.
 - `workflows/CLEAN_MEMORY_START.md`: safe clean-slate Qdrant/epoch/FAISS preparation before personal-memory ingestion.
 - `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop for capability gaps where config, API, persistence, and UI evidence must be reconciled before broad reruns.
 - `workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md`: evidence-bound identity, relationship, and scene retrieval for the local Hermes agent.
+- `workflows/LOCAL_DEV_RUNTIME_MODES.md`: paired Dev On/Dev Off service posture, encoder pre-warm, local model identity checks, and GPU-memory recovery rules.
 
 ## What Lives Here
 

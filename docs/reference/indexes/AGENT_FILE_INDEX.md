@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1375**
+Indexed active tracked paths: **1379**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -216,6 +216,7 @@ Indexed active tracked paths: **1375**
 | `/docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/LAPTOP_TEST_AND_REPORT_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
+| `/docs/agent/workflows/LOCAL_DEV_RUNTIME_MODES.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/AGENT_DECISION_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/AGENT_SYSTEM.md` | Documentation | Active documentation or governance surface. |
@@ -1141,6 +1142,7 @@ Indexed active tracked paths: **1375**
 | `/tests/unit/test_control_recurrence_trend.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_crash_family_env_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_current_state_truth.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_dev_mode_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_pytest_wrapper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
@@ -1177,6 +1179,7 @@ Indexed active tracked paths: **1375**
 | `/tests/unit/test_image_embed_dino_diagnostics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_image_ocr_observability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_request_ledger.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ingest_request_watchdog_registry.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_staging_convergence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_status_route.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_submit_route.py` | Verification | Test, fixture, or verification asset. |
@@ -1189,6 +1192,7 @@ Indexed active tracked paths: **1375**
 | `/tests/unit/test_llm_client_activation_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_llm_client_endpoint_selection.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_media_containment_hardening.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_memory_commit_events.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_embedding_keying.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_ephemeral_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_migrated_loaders.py` | Verification | Test, fixture, or verification asset. |

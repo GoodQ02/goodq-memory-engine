@@ -42,7 +42,9 @@ REM Ensure existing API / Watchdog instances are closed first to prevent conflic
 powershell -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 REM Start API Server in a separate minimized window
+set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"
 start "GoodQ_API" /min cmd.exe /c "C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m api.server
+set "GOODQ_PREWARM_RETRIEVAL_MODELS="
 
 REM Start Ingestion Watchdog in a separate minimized window
 start "GoodQ_Watchdog" /min cmd.exe /c "C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m cli.watchdog

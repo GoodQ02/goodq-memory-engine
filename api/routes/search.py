@@ -12,6 +12,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import os
 from pathlib import Path
 import re
 import time
@@ -670,6 +671,40 @@ def get_search_engine():
         logger.info("[OK] Search engine initialized")
     
     return _search_engine
+
+
+def prewarm_search_engine() -> Dict[str, bool]:
+    """Load local query encoders into the API process before interactive use."""
+    engine = get_search_engine()
+    query = "GoodQ retrieval warmup"
+    encoders = {
+        "text": engine.encode_text_query,
+        "visual": engine.encode_text_for_visual_search,
+        "audio": engine.encode_text_for_audio_search,
+    }
+    results: Dict[str, bool] = {}
+    for modality, encode in encoders.items():
+        try:
+            encode(query)
+            results[modality] = True
+        except Exception as exc:
+            logger.warning(
+                "retrieval encoder prewarm unavailable modality=%s exc_type=%s",
+                modality,
+                type(exc).__name__,
+            )
+            results[modality] = False
+    logger.info("retrieval encoder prewarm complete results=%s", results)
+    return results
+
+
+async def _prewarm_search_engine_on_dev_startup() -> None:
+    if os.environ.get("GOODQ_PREWARM_RETRIEVAL_MODELS") != "1":
+        return
+    await asyncio.to_thread(prewarm_search_engine)
+
+
+router.add_event_handler("startup", _prewarm_search_engine_on_dev_startup)
 
 
 def get_data_loader():

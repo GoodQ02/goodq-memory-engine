@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 import os
@@ -12,6 +13,47 @@ import numpy as np
 import pytest
 
 from retrieval.multimodal_search import MultimodalSearchEngine
+
+
+def test_prewarm_search_engine_loads_each_query_encoder_once(monkeypatch):
+    from api.routes import search
+
+    calls = []
+
+    class FakeEngine:
+        def encode_text_query(self, query):
+            calls.append(("text", query))
+
+        def encode_text_for_visual_search(self, query):
+            calls.append(("visual", query))
+
+        def encode_text_for_audio_search(self, query):
+            calls.append(("audio", query))
+
+    monkeypatch.setattr(search, "get_search_engine", lambda: FakeEngine())
+
+    assert search.prewarm_search_engine() == {
+        "text": True,
+        "visual": True,
+        "audio": True,
+    }
+    assert calls == [
+        ("text", "GoodQ retrieval warmup"),
+        ("visual", "GoodQ retrieval warmup"),
+        ("audio", "GoodQ retrieval warmup"),
+    ]
+
+
+def test_dev_startup_prewarm_is_gated_by_the_dev_on_environment(monkeypatch):
+    from api.routes import search
+
+    calls = []
+    monkeypatch.setenv("GOODQ_PREWARM_RETRIEVAL_MODELS", "1")
+    monkeypatch.setattr(search, "prewarm_search_engine", lambda: calls.append(True))
+
+    asyncio.run(search._prewarm_search_engine_on_dev_startup())
+
+    assert calls == [True]
 
 
 _INSPECTOR_MODULE = "steps.common.model_cache_inspector"

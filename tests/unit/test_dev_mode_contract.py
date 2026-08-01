@@ -26,3 +26,9 @@ def test_windows_dev_mode_launchers_delegate_vllm_to_canonical_controls():
     assert 'call "%~dp0scripts\\stop_vllm_servers.bat"' in dev_off
     assert "validate_config_mapping" in dev_on
     assert "wsl --shutdown" in dev_off
+
+
+def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
+    dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
+
+    assert "goodq_prewarm_retrieval_models=1" in dev_on

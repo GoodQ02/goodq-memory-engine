@@ -218,7 +218,7 @@ def _build_epoch_override(cfg: Dict[str, Any], epoch: str, enable_scene_context:
             llm_cfg.get("vllm_model"),
             llm_cfg.get("model_id"),
             os.environ.get("GOODQ_WSL_MODEL_PATH"),
-            "meta-llama/Llama-3.2-1B-Instruct",
+            "/home/jdben/models/Qwen2.5-0.5B-Instruct",
         )
     ).strip()
 

@@ -28,6 +28,13 @@ def test_windows_dev_mode_launchers_delegate_vllm_to_canonical_controls():
     assert "wsl --shutdown" in dev_off
 
 
+def test_dev_off_keeps_loopback_qdrant_available_for_fast_dev_return():
+    dev_off = (REPO_ROOT / "dev_off.bat").read_text(encoding="utf-8").lower()
+
+    assert 'net stop "goodq_qdrant"' not in dev_off
+    assert "qdrant remains available" in dev_off
+
+
 def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
     dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
 

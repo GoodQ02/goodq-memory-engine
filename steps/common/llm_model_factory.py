@@ -26,13 +26,13 @@ def _build_llm_models(cfg: Dict[str, Any]) -> List[ModelConfig]:
     vllm_model_id = (
         llm_cfg.get("vllm_model")
         or os.environ.get("GOODQ_WSL_MODEL_PATH")
-        or "meta-llama/Llama-3.2-1B-Instruct"
+        or "/home/jdben/models/Qwen2.5-0.5B-Instruct"
     )
     ollama_model_id = llm_cfg.get("ollama_model", "phi4")
 
     models_list = [
         ModelConfig(
-            name="Llama-1B-Speed",
+            name="Qwen-0.5B-Speed",
             base_url=vllm_base,
             port=vllm_port,
             model_id=vllm_model_id,

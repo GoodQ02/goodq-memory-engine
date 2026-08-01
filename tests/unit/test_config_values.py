@@ -471,7 +471,7 @@ def test_build_llm_models_profile_injection(monkeypatch):
     })
     models = build_llm_models(cfg)
     assert len(models) == 2
-    assert models[0].name == "Llama-1B-Speed"
+    assert models[0].name == "Qwen-0.5B-Speed"
     assert models[1].name == "Llama3.2-Ollama"
     
     # 2. Ingest quality profile case

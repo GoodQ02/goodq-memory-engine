@@ -1907,6 +1907,16 @@ the failure is not currently visible.
   witness root, models remain external, promotion is disabled, and Qdrant is
   either a separate loopback endpoint or the established local endpoint with
   four fresh witness-named collections.
+- TurboQuant checkpoint (2026-08-01): the isolated one-scene candidate
+  completed with all four supported sidecar dimensions and an aggregate-only
+  A/B receipt. The first receipt exposed invalid FAISS `-1` filler IDs in the
+  baseline oracle; the corrected valid-hit receipt reached 7/9 exact queries
+  with zero fallbacks, but active SQLite sidecar scanning was slower than FAISS
+  HNSW and the text index has one FAISS ID without a matching SQLite sidecar.
+  Therefore full-movie re-ingestion is blocked. Next gate: separately design a
+  complete sidecar/index coverage invariant and a persistent compact candidate
+  index or cache that can be compared honestly to FAISS HNSW; do not run a
+  second scene or enable active TurboQuant until that gate passes.
 
 ### R-25 — Private integrated verification gate
 

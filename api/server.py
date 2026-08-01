@@ -99,6 +99,19 @@ def _resolve_api_bind_defaults() -> tuple[str, int]:
             "GOODQ_API_HOST wildcard binds are not allowed; use loopback or one "
             "exact private interface address"
         )
+    if host.lower() != "localhost":
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError as exc:
+            raise ValueError(
+                "GOODQ_API_HOST must be localhost, loopback, or one exact private "
+                "interface address"
+            ) from exc
+        if not (address.is_loopback or address.is_private):
+            raise ValueError(
+                "GOODQ_API_HOST must be localhost, loopback, or one exact private "
+                "interface address"
+            )
 
     raw_port = os.environ.get("GOODQ_API_PORT")
     port_value = raw_port if raw_port is not None else str(config_port)

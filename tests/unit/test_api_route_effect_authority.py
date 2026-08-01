@@ -1330,6 +1330,20 @@ def test_api_server_rejects_wildcard_bind(
         server._resolve_api_bind_defaults()
 
 
+@pytest.mark.parametrize("host", ("8.8.8.8", "api.example.test"))
+def test_api_server_rejects_nonlocal_explicit_bind(
+    monkeypatch: pytest.MonkeyPatch,
+    host: str,
+) -> None:
+    import api.server as server
+
+    monkeypatch.setenv("GOODQ_API_HOST", host)
+    monkeypatch.setenv("GOODQ_API_PORT", "30000")
+
+    with pytest.raises(ValueError, match=r"loopback,? or one exact private interface address"):
+        server._resolve_api_bind_defaults()
+
+
 def test_api_server_rejects_invalid_explicit_port(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

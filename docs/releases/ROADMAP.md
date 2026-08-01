@@ -1886,6 +1886,24 @@ the failure is not currently visible.
   authoritative copies, then repair producers or migrate history only under the
   existing manifest/rollback/approval gate.
 
+### R-24 — Establish an isolated Golden Witness
+
+- Priority: P1
+- Status: IN_PROGRESS
+- Repair: provide a read-only preflight and a separately approval-gated,
+  one-scene witness through the canonical ingestion interface. The witness must
+  keep every generated artifact below one new root, record exact input identity
+  and tool/device facts, and disable canonical-memory promotion.
+- Completion gate: preflight emits a receipt without creating a witness root;
+  a later explicit operator approval is required before one isolated execution;
+  the resulting transcript, multimodal artifacts, and factual scene summary are
+  reviewed before any follow-on decision.
+- Checkpoint evidence (2026-08-01): the initial preflight contract rejects a
+  model cache under the proposed artifact root, records supplied-input hashing
+  and stream metadata, resolves required tool bindings, and leaves the root
+  absent. The first local media preflight was read-only and did not authorize or
+  start an ingestion run.
+
 ### R-25 — Private integrated verification gate
 
 - Priority: P0

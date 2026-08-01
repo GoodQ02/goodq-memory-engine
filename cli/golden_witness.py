@@ -156,6 +156,53 @@ def prepare_witness_run(artifact_root: Path, input_path: Path) -> dict[str, Any]
     }
 
 
+def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) -> dict[str, Any]:
+    preflight = prepared_receipt.get("preflight")
+    config = preflight.get("config") if isinstance(preflight, Mapping) else None
+    paths = config.get("paths") if isinstance(config, Mapping) else None
+    models_cache = paths.get("models_cache") if isinstance(paths, Mapping) else None
+    if not isinstance(models_cache, str) or not models_cache:
+        raise WitnessAuthorityError("prepared receipt has no external model cache")
+
+    epoch_id = prepared_receipt.get("epoch_id")
+    if not isinstance(epoch_id, str) or not epoch_id:
+        raise WitnessAuthorityError("prepared receipt has no witness epoch identifier")
+    data_root = root / "data"
+    epoch_root = data_root / "epochs" / epoch_id
+    faiss_root = epoch_root / "faiss"
+    return {
+        "witness": {
+            "ingestion_isolation": True,
+            "promotion_enabled": False,
+            "artifact_root": str(root),
+        },
+        "paths": {
+            "data_root": str(data_root),
+            "db_dir": str(epoch_root),
+            "db_path": str(epoch_root / "memory.db"),
+            "knowledge_graph_db": str(epoch_root / "knowledge_graph.db"),
+            "processing": str(epoch_root / "processing"),
+            "log_dir": str(epoch_root / "logs"),
+            "output_directory": str(epoch_root / "output"),
+            "faiss_dir": str(faiss_root),
+            "faiss_audio_path": str(faiss_root / "audio.index"),
+            "faiss_index_path": str(faiss_root / "text.index"),
+            "faiss_clip_path": str(faiss_root / "clip.index"),
+            "faiss_dino_path": str(faiss_root / "dino.index"),
+            "clip_id_map_db": str(faiss_root / "clip-id-map.sqlite"),
+            "dino_id_map_db": str(faiss_root / "dino-id-map.sqlite"),
+            "clap_id_map_db": str(faiss_root / "clap-id-map.sqlite"),
+            "qdrant_storage": str(data_root / "qdrant"),
+            "watchdog_state_file": str(epoch_root / "logs" / "watchdog_state.json"),
+            "watchdog_lock_file": str(epoch_root / "logs" / "watchdog.lock"),
+            "import_inbox": str(data_root / "import_inbox"),
+            "ingest_requests": str(data_root / "ingest_requests"),
+            "processed": str(data_root / "processed"),
+            "failed": str(data_root / "failed"),
+            "models_cache": models_cache,
+        },
+        "qdrant": {"host": "http://127.0.0.1:6334"},
+    }
 def seal_prepared_receipt(prepared_receipt: Mapping[str, Any]) -> Path:
     """Persist one verified receipt below a fresh root without executing it."""
     if prepared_receipt.get("status") != "prepared":
@@ -180,9 +227,17 @@ def seal_prepared_receipt(prepared_receipt: Mapping[str, Any]) -> Path:
     if mutable_paths.get("receipt") != str(receipt_path):
         raise WitnessAuthorityError("prepared receipt path does not match the witness root")
 
+    runtime_config_path = root / "config" / "witness-config.json"
+    runtime_config = _isolated_runtime_snapshot(prepared_receipt, root)
     sealed = json.loads(json.dumps(dict(prepared_receipt)))
     sealed["status"] = "sealed"
+    sealed["runtime_config_path"] = str(runtime_config_path)
     root.mkdir(parents=True)
+    runtime_config_path.parent.mkdir()
+    runtime_config_path.write_text(
+        json.dumps(runtime_config, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     receipt_path.write_text(
         json.dumps(sealed, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

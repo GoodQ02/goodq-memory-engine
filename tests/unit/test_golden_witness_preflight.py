@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from cli import golden_witness
+from cli import run_ingestion
 
 
 def test_preflight_records_supplied_input_identity_without_creating_witness_root(
@@ -72,7 +73,7 @@ def test_prepare_witness_run_scopes_every_mutable_path_to_witness_root(
     assert artifact_root.exists() is False
 
 
-def test_seal_prepared_receipt_writes_only_the_verified_receipt(
+def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Sealing must be the first and only approved mutation before execution."""
@@ -89,7 +90,12 @@ def test_seal_prepared_receipt_writes_only_the_verified_receipt(
     receipt_path = golden_witness.seal_prepared_receipt(prepared)
 
     assert receipt_path == artifact_root / "prepared-receipt.json"
-    assert json.loads(receipt_path.read_text(encoding="utf-8"))["status"] == "sealed"
-    assert sorted(path.relative_to(artifact_root).as_posix() for path in artifact_root.rglob("*")) == [
-        "prepared-receipt.json"
+    sealed = json.loads(receipt_path.read_text(encoding="utf-8"))
+    config_path = artifact_root / "config" / "witness-config.json"
+    assert sealed["status"] == "sealed"
+    assert sealed["runtime_config_path"] == str(config_path)
+    assert run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)["witness"]["promotion_enabled"] is False
+    assert sorted(path.relative_to(artifact_root).as_posix() for path in artifact_root.rglob("*") if path.is_file()) == [
+        "config/witness-config.json",
+        "prepared-receipt.json",
     ]

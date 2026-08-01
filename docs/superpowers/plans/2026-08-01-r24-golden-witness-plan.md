@@ -166,6 +166,21 @@ their current configuration path.
 - [ ] Add the CLI option and fail-closed validation without starting services.
 - [ ] Run focused runner and R-24 regression tests, then commit.
 
+### Task 2C: Seal the runtime snapshot with the receipt
+
+**Files:**
+- Modify: `cli/golden_witness.py`
+- Modify: `tests/unit/test_golden_witness_preflight.py`
+
+The sealed plan now needs both the receipt and the runner snapshot. Produce
+exactly these two files below a new witness root. The snapshot must be accepted
+by the canonical runner's isolation validator before it is treated as sealed.
+Do not launch the separate Qdrant endpoint or invoke the runner in this task.
+
+- [ ] Write a failing consumer-validation test for the sealed snapshot.
+- [ ] Build the witness-owned paths and noncanonical loopback Qdrant endpoint.
+- [ ] Run focused validation and commit the sealed-plan artifact contract.
+
 ### Task 3: Operator-approved witness execution and acceptance report
 
 **Files:**

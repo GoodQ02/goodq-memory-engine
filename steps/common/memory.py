@@ -248,8 +248,37 @@ def _legacy_collision_hash(conn: sqlite3.Connection, hash_hex: str, modality: st
     return f"{hash_hex}:{modality or 'unknown'}"
 
 
+def embedding_persistence_allowed(cfg: Dict[str, Any]) -> bool:
+    """Allow isolated embedding writes only for an explicit contained witness."""
+    if not cfg.get("ingestion_isolation", False):
+        return True
+
+    witness = cfg.get("witness")
+    paths = cfg.get("paths")
+    if not isinstance(witness, dict) or not isinstance(paths, dict):
+        return False
+    if (
+        witness.get("ingestion_isolation") is not True
+        or witness.get("promotion_enabled") is not False
+        or witness.get("allow_sqlite_embeddings") is not True
+    ):
+        return False
+
+    artifact_root = witness.get("artifact_root")
+    db_path = paths.get("db_path")
+    if not isinstance(artifact_root, str) or not artifact_root.strip():
+        return False
+    if not isinstance(db_path, str) or not db_path.strip():
+        return False
+    try:
+        Path(db_path).resolve().relative_to(Path(artifact_root).resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def upsert_embedding(cfg: Dict[str, Any], hash_hex: str, faiss_id: Optional[int], source_path: str, modality: str, scene_id: Optional[str] = None, vector: Optional[List[float]] = None) -> None:
-    if cfg.get("ingestion_isolation", False):
+    if not embedding_persistence_allowed(cfg):
         return
 
     db_path = (cfg.get("paths", {}) or {}).get("db_path")

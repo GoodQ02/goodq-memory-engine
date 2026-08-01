@@ -594,6 +594,14 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
         sqlite_embeddings.append((args, kwargs))
 
     fake_memory.upsert_embedding = _fake_upsert_embedding
+    fake_memory.embedding_persistence_allowed = lambda cfg: (
+        not cfg.get("ingestion_isolation", False)
+        or (
+            cfg.get("witness", {}).get("ingestion_isolation") is True
+            and cfg.get("witness", {}).get("promotion_enabled") is False
+            and cfg.get("witness", {}).get("allow_sqlite_embeddings") is True
+        )
+    )
 
     fake_commit_events = types.ModuleType("steps.common.memory_commit_events")
     fake_commit_events.utc_now_iso = lambda: "2026-05-01T12:00:00+00:00"
@@ -702,6 +710,40 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     assert isolated_result["clap_meta"]["sqlite_embeddings_state"] == "not_applicable_isolated_epoch"
     assert len(emitted_events) == 1
     assert "sqlite_embeddings" not in emitted_events[0].targets
+
+    sqlite_embeddings.clear()
+    emitted_events.clear()
+    candidate_root = tmp_path / "witness"
+    approved_result = clap_step.audio_embed_clap(
+        {
+            "source_path": str(audio_path),
+            "scene_id": "scene-alpha",
+            "scene_index": 7,
+            "video_id": "video-alpha",
+            "video_hash": "hash-alpha",
+            "scene": {"start": 12.5, "end": 15.0, "duration": 2.5},
+            "audio_backend_effective": "wsl",
+        },
+        {
+            "ingestion_isolation": True,
+            "witness": {
+                "ingestion_isolation": True,
+                "promotion_enabled": False,
+                "artifact_root": str(candidate_root),
+                "allow_sqlite_embeddings": True,
+            },
+            "vad_enabled": False,
+            "paths": {
+                "faiss_audio_path": str(tmp_path / "faiss" / "audio.index"),
+                "db_path": str(candidate_root / "data" / "memory.db"),
+            },
+        },
+    )
+
+    assert len(sqlite_embeddings) == 1
+    assert approved_result["clap_meta"]["sqlite_embeddings_committed"] is True
+    assert approved_result["clap_meta"]["sqlite_embeddings_state"] == "committed"
+    assert emitted_events[0].targets["sqlite_embeddings"]["committed"] is True
 
 
 @pytest.mark.parametrize(

@@ -414,6 +414,8 @@ class FaissMemory(MemoryStore):
                 scores = D[0] if len(D) else []
                 out = []
                 for i, s in zip(ids, scores):
+                    if int(i) < 0:
+                        continue
                     out.append({"id": int(i), "score": float(s), "payload": {}})
             try:
                 from steps.common.memory_provenance import attach_provenance_to_hits

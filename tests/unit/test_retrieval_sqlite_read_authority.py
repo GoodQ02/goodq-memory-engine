@@ -302,6 +302,25 @@ def test_turboquant_candidate_query_falls_back_when_a_sidecar_is_incomplete(
     assert "_retrieval_route" not in hits[0]
 
 
+def test_faiss_query_omits_invalid_fillers_when_top_k_exceeds_index_size(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """FAISS sentinel -1 values are not valid retrieval hits."""
+    index_path = tmp_path / "text.index"
+    index_path.write_bytes(b"fixture")
+    _install_fake_faiss(monkeypatch, ids=(7, -1), scores=(0.1, float("inf")))
+    store = memory_stores.FaissMemory(
+        index_path=str(index_path),
+        dim=2,
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
+    )
+
+    hits = store.query([0.1, 0.2], top_k=5, retrieval_context="system.healthcheck")
+
+    assert [hit["id"] for hit in hits] == [7]
+
+
 def _write_capability_connect(
     real_connect: Callable[..., sqlite3.Connection],
 ) -> Callable[..., sqlite3.Connection]:

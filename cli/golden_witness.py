@@ -171,6 +171,7 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
     epoch_root = data_root / "epochs" / epoch_id
     faiss_root = epoch_root / "faiss"
     return {
+        "ingestion_isolation": True,
         "witness": {
             "ingestion_isolation": True,
             "promotion_enabled": False,
@@ -201,7 +202,15 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
             "failed": str(data_root / "failed"),
             "models_cache": models_cache,
         },
-        "qdrant": {"host": "http://127.0.0.1:6334"},
+        "qdrant": {
+            "host": "http://127.0.0.1:6333",
+            "collections": {
+                "clip": f"goodq_clip_{epoch_id}",
+                "dino": f"goodq_dino_{epoch_id}",
+                "text": f"goodq_text_{epoch_id}",
+                "audio": f"goodq_audio_{epoch_id}",
+            },
+        },
     }
 def seal_prepared_receipt(prepared_receipt: Mapping[str, Any]) -> Path:
     """Persist one verified receipt below a fresh root without executing it."""

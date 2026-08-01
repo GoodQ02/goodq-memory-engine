@@ -1904,8 +1904,9 @@ the failure is not currently visible.
   absent. The first local media preflight was read-only and did not authorize or
   start an ingestion run. The canonical runner now accepts an explicit witness
   snapshot only when every mutable runtime path remains below the declared
-  witness root, models remain external, promotion is disabled, and Qdrant is a
-  noncanonical loopback endpoint.
+  witness root, models remain external, promotion is disabled, and Qdrant is
+  either a separate loopback endpoint or the established local endpoint with
+  four fresh witness-named collections.
 
 ### R-25 — Private integrated verification gate
 

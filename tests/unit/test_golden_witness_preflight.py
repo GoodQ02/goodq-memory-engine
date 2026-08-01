@@ -94,7 +94,12 @@ def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     config_path = artifact_root / "config" / "witness-config.json"
     assert sealed["status"] == "sealed"
     assert sealed["runtime_config_path"] == str(config_path)
-    assert run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)["witness"]["promotion_enabled"] is False
+    runtime_cfg = run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)
+    assert runtime_cfg["witness"]["promotion_enabled"] is False
+    assert runtime_cfg["ingestion_isolation"] is True
+    assert runtime_cfg["qdrant"]["host"] == "http://127.0.0.1:6333"
+    assert set(runtime_cfg["qdrant"]["collections"]) == {"clip", "dino", "text", "audio"}
+    assert all("witness" in name for name in runtime_cfg["qdrant"]["collections"].values())
     assert sorted(path.relative_to(artifact_root).as_posix() for path in artifact_root.rglob("*") if path.is_file()) == [
         "config/witness-config.json",
         "prepared-receipt.json",

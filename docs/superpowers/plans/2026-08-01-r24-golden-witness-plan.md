@@ -157,10 +157,11 @@ directories, load models, access stores, or invoke the canonical runner.
 
 The historical R-24 planner projected a runner `--config` argument that the
 canonical runner did not accept. Add that option only for a JSON snapshot that
-declares witness isolation, disables promotion, keeps every mutable runtime path
-under the witness root, preserves the model cache outside it, and selects a
-noncanonical loopback Qdrant endpoint. Existing non-witness invocations keep
-their current configuration path.
+declares the existing top-level witness-isolation contract, disables promotion,
+keeps every mutable runtime path under the witness root, preserves the model
+cache outside it, and uses either a separate loopback Qdrant endpoint or the
+established local endpoint with four fresh witness-named collections. Existing
+non-witness invocations keep their current configuration path.
 
 - [ ] Write failing acceptance/rejection tests for isolated snapshot loading.
 - [ ] Add the CLI option and fail-closed validation without starting services.

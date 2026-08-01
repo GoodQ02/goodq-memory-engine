@@ -40,6 +40,7 @@ def _isolated_paths(root: Path) -> dict[str, str]:
 
 def _isolated_snapshot(root: Path, models_cache: Path) -> dict[str, object]:
     return {
+        "ingestion_isolation": True,
         "witness": {
             "ingestion_isolation": True,
             "promotion_enabled": False,
@@ -69,6 +70,21 @@ def test_isolated_runner_snapshot_accepts_only_witness_owned_mutable_paths(
     assert Path(cfg["paths"]["models_cache"]).resolve().is_relative_to(root.resolve()) is False
 
 
+def test_isolated_runner_snapshot_requires_the_runtime_isolation_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "witness"
+    snapshot = _isolated_snapshot(root, tmp_path / "shared-model-cache")
+    snapshot.pop("ingestion_isolation")
+    snapshot_path = root / "config" / "witness-config.json"
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
+
+    with pytest.raises(typer.BadParameter, match="ingestion_isolation=true"):
+        run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+
 def test_isolated_runner_snapshot_rejects_a_canonical_mutable_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -81,6 +97,53 @@ def test_isolated_runner_snapshot_rejects_a_canonical_mutable_path(
     monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
 
     with pytest.raises(typer.BadParameter, match="escapes witness root"):
+        run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+
+def test_isolated_runner_snapshot_allows_existing_qdrant_only_for_fresh_witness_collections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "witness"
+    snapshot = _isolated_snapshot(root, tmp_path / "shared-model-cache")
+    snapshot["qdrant"] = {
+        "host": "http://127.0.0.1:6333",
+        "collections": {
+            "clip": "goodq_clip_epoch_r24_witness",
+            "dino": "goodq_dino_epoch_r24_witness",
+            "text": "goodq_text_epoch_r24_witness",
+            "audio": "goodq_audio_epoch_r24_witness",
+        },
+    }
+    snapshot_path = root / "config" / "witness-config.json"
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
+
+    cfg = run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+    assert cfg["qdrant"]["host"] == "http://127.0.0.1:6333"
+
+
+def test_isolated_runner_snapshot_rejects_default_qdrant_collections_on_existing_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "witness"
+    snapshot = _isolated_snapshot(root, tmp_path / "shared-model-cache")
+    snapshot["qdrant"] = {
+        "host": "http://127.0.0.1:6333",
+        "collections": {
+            "clip": "goodq_clip_default",
+            "dino": "goodq_dino_default",
+            "text": "goodq_text_default",
+            "audio": "goodq_audio_default",
+        },
+    }
+    snapshot_path = root / "config" / "witness-config.json"
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
+
+    with pytest.raises(typer.BadParameter, match="fresh witness collections"):
         run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
 
 

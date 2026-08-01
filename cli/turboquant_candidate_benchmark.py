@@ -152,10 +152,21 @@ def compare_query_pack(
     }
 
 
-def write_benchmark_receipt(root: Path, receipt: dict[str, Any]) -> Path:
+def write_benchmark_receipt(
+    root: Path,
+    receipt: dict[str, Any],
+    *,
+    filename: str = "turboquant-ab-receipt.json",
+) -> Path:
     """Write one aggregate-only receipt below an existing candidate root."""
     resolved_root = root.resolve(strict=True)
-    path = resolved_root / "turboquant-ab-receipt.json"
+    path = resolved_root / filename
+    try:
+        path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise BenchmarkAuthorityError("benchmark receipt escapes witness root") from exc
+    if path.exists():
+        raise BenchmarkAuthorityError("benchmark receipt already exists")
     path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
@@ -170,7 +181,12 @@ _INDEX_PATHS = {
 }
 
 
-def run_benchmark_from_snapshot(snapshot_path: Path, *, top_k: int = 5) -> Path:
+def run_benchmark_from_snapshot(
+    snapshot_path: Path,
+    *,
+    top_k: int = 5,
+    receipt_filename: str = "turboquant-ab-receipt.json",
+) -> Path:
     """Run a candidate-only A/B comparison over one sealed witness snapshot."""
     snapshot = Path(snapshot_path).resolve(strict=True)
     config = json.loads(snapshot.read_text(encoding="utf-8"))
@@ -214,4 +230,4 @@ def run_benchmark_from_snapshot(snapshot_path: Path, *, top_k: int = 5) -> Path:
     )
     receipt["candidate_root"] = str(root)
     receipt["top_k"] = top_k
-    return write_benchmark_receipt(root, receipt)
+    return write_benchmark_receipt(root, receipt, filename=receipt_filename)

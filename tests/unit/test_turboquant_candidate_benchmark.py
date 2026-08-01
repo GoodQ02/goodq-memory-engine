@@ -98,3 +98,6 @@ def test_write_benchmark_receipt_stays_under_candidate_root(tmp_path: Path) -> N
     assert path == root / "turboquant-ab-receipt.json"
     assert path.is_file()
     assert "vector" not in path.read_text(encoding="utf-8")
+
+    with pytest.raises(turboquant_candidate_benchmark.BenchmarkAuthorityError):
+        turboquant_candidate_benchmark.write_benchmark_receipt(root, receipt)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -9,6 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from steps.common.atomic_io import atomic_write_json
+
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_VIDEO = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v"}
 SUPPORTED_AUDIO = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".wma"}
@@ -58,6 +62,7 @@ def load_watchdog_registry(watchdog_state_file: Path) -> Dict[str, Dict[str, Any
     try:
         return json.loads(watchdog_state_file.read_text(encoding="utf-8"))
     except Exception:
+        logger.warning("Watchdog registry could not be read; treating it as unavailable", exc_info=True)
         return {}
 
 

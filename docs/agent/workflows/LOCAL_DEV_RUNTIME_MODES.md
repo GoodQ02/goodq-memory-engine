@@ -16,14 +16,21 @@ Run `dev_on.bat` from the repository root.
 It performs these actions in order:
 
 1. Strictly validates the resolved GoodQ configuration.
-2. Starts the canonical vLLM controls and confirms loopback Qdrant is reachable.
-3. Replaces stale GoodQ API and watchdog processes, then starts fresh instances.
-4. Sets `GOODQ_PREWARM_RETRIEVAL_MODELS=1` only for the new API process.
-5. The API preloads the local text, CLIP, and CLAP query encoders once, so the
+2. Synchronizes only the three versioned WSL audio worker files when their
+   deployed hashes differ, then fails closed unless every deployed hash matches.
+3. Starts the canonical vLLM controls and confirms loopback Qdrant is reachable.
+4. Replaces stale GoodQ API and watchdog processes, then starts fresh instances.
+5. Sets `GOODQ_PREWARM_RETRIEVAL_MODELS=1` only for the new API process.
+6. The API preloads the local text, CLIP, and CLAP query encoders once, so the
    first interactive retrieval does not pay model-load latency.
 
 The pre-warm is fail-soft: an unavailable optional encoder is logged and does
 not prevent the API from starting. It uses pinned local model caches only.
+
+The WSL worker gate is not a general deployment or model installation step. It
+owns only `setup_cuda_env.sh`, `process_audio.py`, and `model_cache.py`; matching
+files are not rewritten. This prevents a strict audio run from accepting an
+importable but stale worker deployment.
 
 ## Dev Off
 

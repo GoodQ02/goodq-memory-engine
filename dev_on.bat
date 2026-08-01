@@ -20,6 +20,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo [DEV ON] Synchronizing verified WSL audio worker files...
+"%PYTHON_EXE%" scripts\sync_wsl_audio_worker.py --distro "%WSL_DISTRO%"
+if errorlevel 1 (
+    echo [ERROR] WSL audio worker deployment is not verified. Local Agent Mode was not started.
+    exit /b 1
+)
+
 echo [DEV ON] Starting canonical vLLM control...
 set "GOODQ_NO_PAUSE=1"
 call "%~dp0scripts\start_vllm_servers.bat"

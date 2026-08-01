@@ -202,6 +202,12 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
             "failed": str(data_root / "failed"),
             "models_cache": models_cache,
         },
+        "memory": {
+            "routing": {
+                "quantization_enabled": True,
+                "quantization_shadow_mode": False,
+            },
+        },
         "qdrant": {
             "host": "http://127.0.0.1:6333",
             "collections": {

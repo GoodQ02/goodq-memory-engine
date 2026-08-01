@@ -97,6 +97,10 @@ def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     runtime_cfg = run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)
     assert runtime_cfg["witness"]["promotion_enabled"] is False
     assert runtime_cfg["ingestion_isolation"] is True
+    assert runtime_cfg["memory"]["routing"] == {
+        "quantization_enabled": True,
+        "quantization_shadow_mode": False,
+    }
     assert runtime_cfg["qdrant"]["host"] == "http://127.0.0.1:6333"
     assert set(runtime_cfg["qdrant"]["collections"]) == {"clip", "dino", "text", "audio"}
     assert all("witness" in name for name in runtime_cfg["qdrant"]["collections"].values())

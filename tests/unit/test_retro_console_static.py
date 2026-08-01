@@ -207,3 +207,16 @@ def test_lan_status_denial_stops_polling_and_explains_read_only_mode() -> None:
         r"pollingTimeoutId = setTimeout\(pollStatus, currentPollInterval\);",
         polling,
     )
+
+
+def test_cognitive_scene_context_renders_persisted_values_as_text() -> None:
+    inspector = _function_source("renderInspector")
+    cognitive_context = inspector[
+        inspector.index("const evidenceList =") : inspector.index("const conflicts =")
+    ]
+
+    assert "innerHTML" not in cognitive_context
+    for value in ("kind", "ev.value || ev", "axis", "h.claim", "weight"):
+        assert f"textContent = {value}" in cognitive_context
+    assert "document.createTextNode(role)" in cognitive_context
+    assert "document.createTextNode(`${family}claim: `)" in cognitive_context

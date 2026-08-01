@@ -1825,6 +1825,10 @@ the failure is not currently visible.
   invokes local OS and WSL probes, so remote access stays denied. The Retro UI
   now surfaces that expected LAN read-only state and stops the denied polling
   loop instead of producing repeated opaque `403` traffic.
+- Retro scene-context rendering checkpoint (2026-08-01): persisted epistemic
+  evidence and arbitration values now render through native DOM text nodes,
+  rather than HTML parsing. A focused static regression oracle covers both
+  cognitive list paths while preserving their labels and styling.
 - Daily Hermes sub-gate: start/check OpenViking by default, support explicit
   `-SkipMemory` and `-RequireMemory`, check GoodQ without starting ingestion,
   and verify model, memory, MCP, and security canary state before Desktop opens.

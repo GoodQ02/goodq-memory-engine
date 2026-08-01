@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-07-31 -->
 
 # GoodQ4All API Reference
 
@@ -18,6 +18,66 @@ This is the current API reference for the supported local GoodQ4All runtime.
 - Read-only operator console: `GET /ui/operator_console_v1/`
 - Read-only envelope renderer: `GET /ui/justification_v1/`
 - `LAUNCH_GOODQ` does not start the API process by default
+
+## LAN Access Boundary
+
+Loopback remains the default and the canonical desktop remains the sole writer.
+When `GOODQ_API_HOST` is deliberately set to a non-loopback address, the API
+enforces this policy from the raw network peer and the exhaustive route-effect
+registry:
+
+- loopback requests keep their ordinary behavior and need no LAN credential;
+- non-loopback API, documentation, and mounted UI reads require HTTP Basic
+  authentication;
+- the username is the fixed non-secret value `goodq` and the password is the
+  private `GOODQ_LAN_API_TOKEN` value;
+- a missing, malformed, or incorrect client credential returns `401` without
+  invoking the route;
+- a missing, weak, or malformed server token returns `503` and records one
+  actionable configuration error without disclosing the token;
+- every non-passive operation returns `403` for a non-loopback peer even when
+  that peer supplied the correct LAN credential; and
+- CORS, Host, Origin, Referer, Forwarded, and X-Forwarded headers confer no
+  authority. Uvicorn proxy-header rewriting remains disabled.
+
+To opt in, create a strong random token, store it only as
+`GOODQ_LAN_API_TOKEN` in the uncommitted `.env.local`, set `GOODQ_API_HOST` to
+the desktop's intended LAN address, and restart the API. A browser will prompt
+for the username and token when opening a mounted UI. API clients must send the
+same values with HTTP Basic authentication without placing the token in a URL,
+log, checked-in file, or shell history.
+
+Use at least 32 bytes of cryptographic randomness for the token. A 64-character
+hex token is suitable. Surrounding whitespace, control characters, and shorter
+values are rejected. Wildcard listener values such as `0.0.0.0` and `::` are
+also rejected; configure one exact local address per process. If an exact
+non-loopback address or port is unavailable, startup fails instead of probing a
+different port that would no longer match the firewall boundary. Loopback-only
+startup retains its ordinary local fallback behavior.
+
+### LAN Failure Semantics and Operational Checks
+
+| Evidence | Meaning | Operator action |
+|---|---|---|
+| `401 LAN read authentication required` | The remote client omitted or supplied invalid Basic credentials. | Use username `goodq` and the private token without placing it in a URL, file, or log. |
+| `403 Non-passive API operations are restricted to the local operator` | A remote peer attempted a write, control, or trigger operation. | Perform the operation from the canonical desktop; do not weaken the boundary. |
+| Retro Console shows `Status: LAN READ-ONLY — operator telemetry requires loopback` | The authenticated LAN UI is working, but its `/api/status` probe is intentionally local-only because that handler executes operating-system and WSL health probes. | Continue using passive Explorer features over LAN. Open the loopback UI on the canonical desktop for operator telemetry; do not reclassify `/api/status` as a passive read. |
+| `503 LAN read access is unavailable because server authentication is not configured` | The server token is missing, weak, or malformed. | Correct the ignored private configuration and restart; inspect the API log for the non-sensitive reason. |
+| Connection timeout or refusal | The exact listener, firewall rule, client address, or Windows network profile no longer matches. | Verify the named client's current address and source-bound route, every effective inbound allow rule, the exact listener process, and the adapter's effective firewall profile. Do not add an Any/Public rule to make the symptom disappear. |
+| Startup exits with an API `CRITICAL` message | The requested host/port is invalid or unavailable. | Correct the exact bind or free the configured port; a non-loopback listener never falls back silently. |
+
+An exact allow rule does not contain a broader legacy allow rule. Enumerate all
+effective inbound rules for the program and port after firewall or network
+changes; a wider enabled rule defeats the intended isolation. DHCP address
+changes fail closed and require the named-client route and exact address rule to
+be reverified. Persistent firewall rules survive reboot, but the current manual
+API listener processes do not have a supervisor contract: after reboot, start
+one process per required exact address (including a separate loopback process)
+and repeat the listener, firewall, and boundary checks.
+
+The current API listener uses HTTP. Until a separately approved TLS or VPN
+termination is present, use the credential only on a trusted LAN and do not
+forward the port beyond that network.
 
 ## Canonical Endpoint Families
 

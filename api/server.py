@@ -3,6 +3,7 @@ import os
 import sys
 import pathlib
 import re
+import ipaddress
 from urllib.parse import unquote_plus
 
 
@@ -71,30 +72,69 @@ def _resolve_api_bind_defaults() -> tuple[str, int]:
                 if isinstance(host_value, str) and host_value.strip():
                     config_host = host_value.strip()
                 port_value = api_cfg.get("port")
-                try:
-                    if port_value not in (None, ""):
+                if port_value not in (None, ""):
+                    try:
                         config_port = int(port_value)
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                    except (TypeError, ValueError):
+                        print(
+                            "[api] [WARNING] Configured api.port is invalid; "
+                            "using default port 30000"
+                        )
+                        config_port = 30000
+    except Exception as exc:
+        print(
+            "[api] [WARNING] could not resolve API bind defaults from config; "
+            f"using loopback defaults ({type(exc).__name__})"
+        )
 
-    host = os.environ.get("GOODQ_API_HOST", config_host)
+    raw_host = os.environ.get("GOODQ_API_HOST")
+    host = raw_host if raw_host is not None else config_host
+    if host != host.strip():
+        raise ValueError("GOODQ_API_HOST must not contain surrounding whitespace")
+    host = host.strip()
+    if not host:
+        raise ValueError("GOODQ_API_HOST must not be empty")
+    if host in {"0.0.0.0", "::"}:
+        raise ValueError(
+            "GOODQ_API_HOST wildcard binds are not allowed; use loopback or one "
+            "exact private interface address"
+        )
+
+    raw_port = os.environ.get("GOODQ_API_PORT")
+    port_value = raw_port if raw_port is not None else str(config_port)
+    if port_value != port_value.strip():
+        raise ValueError("GOODQ_API_PORT must not contain surrounding whitespace")
     try:
-        port = int(os.environ.get("GOODQ_API_PORT", str(config_port)))
-    except Exception:
-        port = config_port
+        port = int(port_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("GOODQ_API_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("GOODQ_API_PORT must be between 1 and 65535")
     return host, port
 
 
 def _find_available_port(host: str, start_port: int) -> int:
     import socket
+    try:
+        is_loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        is_loopback = host.lower() == "localhost"
     for p in range(start_port, start_port + 100):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind((host, p))
                 return p
-        except OSError:
+        except OSError as exc:
+            if not is_loopback:
+                print(
+                    "[api] [ERROR] Configured non-loopback API endpoint is "
+                    "unavailable; refusing port fallback because listener and "
+                    "firewall scope must remain exact"
+                )
+                raise OSError(
+                    "Configured non-loopback API endpoint is unavailable; "
+                    "refusing port fallback"
+                ) from exc
             print(f"[api] [WARNING] Port {p} is occupied. Probing fallback port...")
             continue
     print(f"[api] [ERROR] Port exhaustion: All ports from {start_port} to {start_port + 99} are in use.")
@@ -128,10 +168,10 @@ def main() -> None:
         if not any(isinstance(f, TokenRedactingFilter) for f in logger_obj.filters):
             logger_obj.addFilter(TokenRedactingFilter())
 
-    host, start_port = _resolve_api_bind_defaults()
     try:
+        host, start_port = _resolve_api_bind_defaults()
         port = _find_available_port(host, start_port)
-    except OSError as e:
+    except (OSError, ValueError) as e:
         print(f"[api] [CRITICAL] {e}")
         sys.exit(1)
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections import Counter
 from contextlib import asynccontextmanager
 import importlib
+import json
+import logging
 import re
 import sys
 import types
@@ -126,6 +129,11 @@ except ModuleNotFoundError:
 requires_authority = pytest.mark.skipif(
     AUTHORITY is None,
     reason="api.route_effects is not implemented yet",
+)
+
+_TEST_LAN_TOKEN = "a" * 64
+_TEST_LAN_AUTHORIZATION = b"Basic " + base64.b64encode(
+    f"goodq:{_TEST_LAN_TOKEN}".encode("ascii")
 )
 
 
@@ -503,8 +511,11 @@ def test_registry_validator_rejects_duplicate_canonical_static_mounts(
 
 
 @requires_authority
-def test_installer_validates_wires_one_boundary_and_enforces_both_effect_classes() -> None:
+def test_installer_validates_wires_one_boundary_and_enforces_both_effect_classes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert AUTHORITY is not None
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
     invalid = _single_route_app("POST", "/unclassified")
     with pytest.raises(
         AUTHORITY.RouteEffectConfigurationError,
@@ -538,7 +549,11 @@ def test_installer_validates_wires_one_boundary_and_enforces_both_effect_classes
         for middleware in app.user_middleware
     ) == 1
 
-    with TestClient(app, client=("192.168.1.44", 50000)) as client:
+    with TestClient(
+        app,
+        client=("192.168.1.44", 50000),
+        headers={"Authorization": _TEST_LAN_AUTHORIZATION.decode("ascii")},
+    ) as client:
         assert client.get("/read").status_code == 200
         assert client.post("/mutate", json={"secret": "body"}).status_code == 403
 
@@ -589,7 +604,7 @@ def test_installer_revalidates_routes_at_startup_and_fails_closed_after_startup(
         runtime_app,
         registry={("GET", "/ok"): AUTHORITY.RouteEffect.PASSIVE_READ},
     )
-    runtime_client = TestClient(runtime_app, client=("192.168.1.44", 50000))
+    runtime_client = TestClient(runtime_app, client=("127.0.0.1", 50000))
     assert runtime_client.get("/ok").status_code == 200
 
     @runtime_app.post("/late")
@@ -671,7 +686,7 @@ def test_valid_original_lifespan_state_and_teardown_are_preserved() -> None:
         registry={("GET", "/read"): AUTHORITY.RouteEffect.PASSIVE_READ},
     )
 
-    with TestClient(app, client=("192.168.1.44", 50000)) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
         assert events == ["enter"]
         assert client.get("/read").json() == {"preserved": True}
 
@@ -808,7 +823,11 @@ NONPASSIVE_OPERATIONS = sorted(
 def test_remote_client_denied_before_body_or_downstream(
     method: str,
     template: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
+    caplog.set_level(logging.WARNING, logger="api.route_effects")
     app = _single_route_app(method, template)
     messages, downstream_calls, receive_calls = asyncio.run(
         _run_boundary(
@@ -820,6 +839,7 @@ def test_remote_client_denied_before_body_or_downstream(
                 method=method,
                 path=_sample_path(template),
                 client=("192.168.1.44", 50000),
+                headers=[(b"authorization", _TEST_LAN_AUTHORIZATION)],
             ),
         )
     )
@@ -828,6 +848,8 @@ def test_remote_client_denied_before_body_or_downstream(
     assert start["status"] == 403
     assert downstream_calls == 0
     assert receive_calls == 0
+    assert "denied non-passive operation" in caplog.text
+    assert f"{method} {template}" in caplog.text
 
 
 @requires_authority
@@ -842,7 +864,9 @@ def test_remote_client_denied_before_body_or_downstream(
 def test_loopback_client_variants_allow_effectful_operation(
     operation: tuple[str, str],
     client: tuple[str, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
     method, template = operation
     app = _single_route_app(method, template)
     messages, downstream_calls, receive_calls = asyncio.run(
@@ -903,7 +927,11 @@ def test_missing_or_malformed_client_is_nonlocal_for_effectful_operation(client:
         ("POST", "/api/search/temporal"),
     ],
 )
-def test_remote_client_can_reach_passive_get_and_post(operation: tuple[str, str]) -> None:
+def test_unauthenticated_remote_client_cannot_reach_passive_get_or_post(
+    operation: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
     method, template = operation
     app = _single_route_app(method, template)
     messages, downstream_calls, receive_calls = asyncio.run(
@@ -919,9 +947,162 @@ def test_remote_client_can_reach_passive_get_and_post(operation: tuple[str, str]
     )
 
     start = next(message for message in messages if message["type"] == "http.response.start")
+    assert start["status"] == 401
+    assert (b"www-authenticate", b'Basic realm="GoodQ LAN", charset="UTF-8"') in start[
+        "headers"
+    ]
+    assert downstream_calls == 0
+    assert receive_calls == 0
+
+
+@requires_authority
+@pytest.mark.parametrize(
+    "operation",
+    [
+        ("GET", "/api/health/summary"),
+        ("POST", "/api/search/temporal"),
+    ],
+)
+def test_authenticated_remote_client_can_reach_passive_get_and_post(
+    operation: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
+    method, template = operation
+    app = _single_route_app(method, template)
+    messages, downstream_calls, receive_calls = asyncio.run(
+        _run_boundary(
+            routes=app.routes,
+            registry={operation: _effect_registry()[operation]},
+            scope=_scope(
+                method=method,
+                path=_sample_path(template),
+                client=("192.168.1.44", 50000),
+                headers=[(b"authorization", _TEST_LAN_AUTHORIZATION)],
+            ),
+        )
+    )
+
+    start = next(message for message in messages if message["type"] == "http.response.start")
     assert start["status"] == 200
     assert downstream_calls == 1
     assert receive_calls == 0
+
+
+@requires_authority
+@pytest.mark.parametrize(
+    "authorization",
+    [
+        b"Basic " + base64.b64encode(b"goodq:wrong-token"),
+        b"Basic " + base64.b64encode(b"someone-else:test-lan-reader-token"),
+        b"Bearer test-lan-reader-token",
+        b"Basic not-base64!",
+    ],
+)
+def test_remote_passive_read_rejects_invalid_authorization(
+    authorization: bytes,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
+    caplog.set_level(logging.WARNING, logger="api.route_effects")
+    operation = ("GET", "/api/health/summary")
+    app = _single_route_app(*operation)
+    messages, downstream_calls, receive_calls = asyncio.run(
+        _run_boundary(
+            routes=app.routes,
+            registry={operation: _effect_registry()[operation]},
+            scope=_scope(
+                method=operation[0],
+                path=operation[1],
+                client=("192.168.1.44", 50000),
+                headers=[(b"authorization", authorization)],
+            ),
+        )
+    )
+
+    start = next(message for message in messages if message["type"] == "http.response.start")
+    assert start["status"] == 401
+    assert downstream_calls == 0
+    assert receive_calls == 0
+    assert "denied passive read because Basic credentials are missing or invalid" in caplog.text
+
+
+@requires_authority
+def test_remote_passive_read_fails_closed_when_lan_token_is_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.delenv("GOODQ_LAN_API_TOKEN", raising=False)
+    caplog.set_level(logging.ERROR, logger="api.route_effects")
+    operation = ("GET", "/api/health/summary")
+    app = _single_route_app(*operation)
+    messages, downstream_calls, receive_calls = asyncio.run(
+        _run_boundary(
+            routes=app.routes,
+            registry={operation: _effect_registry()[operation]},
+            scope=_scope(
+                method=operation[0],
+                path=operation[1],
+                client=("192.168.1.44", 50000),
+                headers=[(b"authorization", _TEST_LAN_AUTHORIZATION)],
+            ),
+        )
+    )
+
+    start = next(message for message in messages if message["type"] == "http.response.start")
+    body = next(message for message in messages if message["type"] == "http.response.body")
+    assert start["status"] == 503
+    assert json.loads(body["body"]) == {
+        "detail": "LAN read access is unavailable because server authentication is not configured"
+    }
+    assert downstream_calls == 0
+    assert receive_calls == 0
+    assert "GOODQ_LAN_API_TOKEN is missing" in caplog.text
+
+
+@requires_authority
+@pytest.mark.parametrize(
+    ("configured_token", "expected_log"),
+    [
+        ("too-short", "shorter than 32 bytes"),
+        (" " + _TEST_LAN_TOKEN, "surrounding whitespace"),
+        (_TEST_LAN_TOKEN + "\n", "surrounding whitespace"),
+    ],
+)
+def test_remote_passive_read_reports_invalid_server_token_configuration(
+    configured_token: str,
+    expected_log: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", configured_token)
+    caplog.set_level(logging.ERROR, logger="api.route_effects")
+    operation = ("GET", "/api/health/summary")
+    app = _single_route_app(*operation)
+
+    messages, downstream_calls, receive_calls = asyncio.run(
+        _run_boundary(
+            routes=app.routes,
+            registry={operation: _effect_registry()[operation]},
+            scope=_scope(
+                method=operation[0],
+                path=operation[1],
+                client=("192.168.1.44", 50000),
+                headers=[(b"authorization", _TEST_LAN_AUTHORIZATION)],
+            ),
+        )
+    )
+
+    start = next(message for message in messages if message["type"] == "http.response.start")
+    body = next(message for message in messages if message["type"] == "http.response.body")
+    assert start["status"] == 503
+    assert json.loads(body["body"]) == {
+        "detail": "LAN read access is unavailable because server authentication is not configured"
+    }
+    assert downstream_calls == 0
+    assert receive_calls == 0
+    assert expected_log in caplog.text
 
 
 @requires_authority
@@ -1049,14 +1230,24 @@ def test_framework_404_405_redirect_and_cors_preflight_are_preserved() -> None:
 
 
 @requires_authority
-def test_production_docs_openapi_and_static_mount_work_for_remote_client() -> None:
+def test_production_docs_openapi_and_static_mount_require_remote_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from api.main import app
 
-    with TestClient(app, client=("192.168.1.44", 50000)) as client:
-        docs = client.get("/docs")
-        redoc = client.get("/redoc")
-        schema = client.get("/openapi.json")
-        static = client.get("/ui/docs_static/swagger-ui.css")
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
+    with TestClient(
+        app,
+        client=("192.168.1.44", 50000),
+    ) as client:
+        assert client.get("/docs").status_code == 401
+        assert client.get("/openapi.json").status_code == 401
+        assert client.get("/ui/docs_static/swagger-ui.css").status_code == 401
+        headers = {"Authorization": _TEST_LAN_AUTHORIZATION.decode("ascii")}
+        docs = client.get("/docs", headers=headers)
+        redoc = client.get("/redoc", headers=headers)
+        schema = client.get("/openapi.json", headers=headers)
+        static = client.get("/ui/docs_static/swagger-ui.css", headers=headers)
 
     assert docs.status_code == 200
     assert "text/html" in docs.headers["content-type"]
@@ -1095,6 +1286,80 @@ def test_api_server_disables_proxy_header_rewriting_even_with_permissive_env(
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 30000
     assert captured["proxy_headers"] is False
+
+
+def test_non_loopback_server_refuses_port_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import socket
+
+    import api.server as server
+
+    attempted: list[tuple[str, int]] = []
+
+    class OccupiedSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def bind(self, address):
+            attempted.append(address)
+            raise OSError("occupied")
+
+    monkeypatch.setattr(socket, "socket", lambda *_args, **_kwargs: OccupiedSocket())
+
+    with pytest.raises(OSError, match="non-loopback API endpoint"):
+        server._find_available_port("192.0.2.10", 30000)
+
+    assert attempted == [("192.0.2.10", 30000)]
+    assert "refusing port fallback" in capsys.readouterr().out
+
+
+def test_api_server_rejects_wildcard_bind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import api.server as server
+
+    monkeypatch.setenv("GOODQ_API_HOST", "0.0.0.0")
+    monkeypatch.setenv("GOODQ_API_PORT", "30000")
+
+    with pytest.raises(ValueError, match="wildcard"):
+        server._resolve_api_bind_defaults()
+
+
+def test_api_server_rejects_invalid_explicit_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import api.server as server
+
+    monkeypatch.setenv("GOODQ_API_HOST", "127.0.0.1")
+    monkeypatch.setenv("GOODQ_API_PORT", "not-a-port")
+
+    with pytest.raises(ValueError, match="GOODQ_API_PORT must be an integer"):
+        server._resolve_api_bind_defaults()
+
+
+def test_api_server_reports_config_default_resolution_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import api.server as server
+    from steps.common import config_loader
+
+    def fail_load(_overrides):
+        raise RuntimeError("synthetic config failure")
+
+    monkeypatch.delenv("GOODQ_API_HOST", raising=False)
+    monkeypatch.delenv("GOODQ_API_PORT", raising=False)
+    monkeypatch.setattr(config_loader, "load_configs", fail_load)
+
+    assert server._resolve_api_bind_defaults() == ("127.0.0.1", 30000)
+    output = capsys.readouterr().out
+    assert "could not resolve API bind defaults from config" in output
+    assert "RuntimeError" in output
 
 
 def test_ingest_route_has_no_duplicate_client_locality_authority() -> None:

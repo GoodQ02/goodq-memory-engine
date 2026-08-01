@@ -188,3 +188,22 @@ def test_confirm_conflict_preserves_exact_terminal_state() -> None:
     assert 'conflictJob.state === "expired" || conflictJob.state === "failed"' in execution
     assert '"Summary confirmation expired. Start a new confirmed request."' in execution
     assert '"Summary authorization failed. Start a new confirmed request."' in execution
+
+
+def test_lan_status_denial_stops_polling_and_explains_read_only_mode() -> None:
+    api_get = _function_source("apiGet")
+    polling = _function_source("pollStatus")
+
+    assert "error.status = response.status;" in api_get
+    assert "let shouldContinuePolling = true;" in polling
+    assert "err.status === 403" in polling
+    assert "shouldContinuePolling = false;" in polling
+    assert (
+        'headerStatus.textContent = "Status: LAN READ-ONLY — operator telemetry requires loopback";'
+        in polling
+    )
+    assert re.search(
+        r"if \(shouldContinuePolling\)\s*\{\s*"
+        r"pollingTimeoutId = setTimeout\(pollStatus, currentPollInterval\);",
+        polling,
+    )

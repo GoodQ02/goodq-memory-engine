@@ -249,7 +249,9 @@
   async function apiGet(path) {
     const response = await fetch(path, { method: "GET" });
     if (!response.ok) {
-      throw new Error(`GET ${path} failed: ${response.status}`);
+      const error = new Error(`GET ${path} failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
@@ -4371,6 +4373,7 @@
   }
 
   async function pollStatus() {
+    let shouldContinuePolling = true;
     try {
       const statusPayload = await apiGet("/api/status") || {};
       const processing = statusPayload.processing || {};
@@ -4556,11 +4559,25 @@
         }
       }
     } catch (err) {
-      console.warn("Status polling error: ", err);
-      currentPollInterval = 3000;
+      if (err && err.status === 403) {
+        shouldContinuePolling = false;
+        const headerStatus = document.querySelector(".header-status");
+        if (headerStatus) {
+          headerStatus.classList.remove("wsl-frozen", "ingesting");
+          headerStatus.textContent = "Status: LAN READ-ONLY — operator telemetry requires loopback";
+        }
+        console.info("Status polling disabled: operator telemetry is restricted to loopback.");
+      } else {
+        console.warn("Status polling error: ", err);
+        currentPollInterval = 3000;
+      }
     } finally {
       if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
-      pollingTimeoutId = setTimeout(pollStatus, currentPollInterval);
+      if (shouldContinuePolling) {
+        pollingTimeoutId = setTimeout(pollStatus, currentPollInterval);
+      } else {
+        pollingTimeoutId = null;
+      }
     }
   }
 

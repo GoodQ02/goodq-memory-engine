@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from collections import Counter
 from contextlib import asynccontextmanager
 from enum import Enum
+import hmac
 import ipaddress
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -199,6 +203,10 @@ def _framework_endpoint_codes() -> dict[str, Any]:
 
 EXPECTED_FRAMEWORK_ENDPOINT_CODES = _framework_endpoint_codes()
 _INSTALL_SENTINEL = "_goodq_route_effect_authority_installed"
+_LAN_API_TOKEN_ENV = "GOODQ_LAN_API_TOKEN"
+_LAN_AUTH_USERNAME = b"goodq"
+_LAN_AUTH_CHALLENGE = 'Basic realm="GoodQ LAN", charset="UTF-8"'
+_MIN_LAN_API_TOKEN_BYTES = 32
 
 
 class RouteEffectConfigurationError(RuntimeError):
@@ -456,6 +464,54 @@ def is_loopback_client(client: Any) -> bool:
     return bool(mapped and mapped.is_loopback)
 
 
+def _configured_lan_api_token() -> tuple[bytes | None, str | None]:
+    raw_token = os.environ.get(_LAN_API_TOKEN_ENV)
+    if raw_token is None or raw_token == "":
+        return None, "missing"
+    if raw_token != raw_token.strip():
+        return None, "invalid due to surrounding whitespace"
+    try:
+        encoded_token = raw_token.encode("utf-8")
+    except UnicodeEncodeError:
+        return None, "not valid UTF-8"
+    if len(encoded_token) < _MIN_LAN_API_TOKEN_BYTES:
+        return None, f"shorter than {_MIN_LAN_API_TOKEN_BYTES} bytes"
+    if any(value < 0x21 or value == 0x7F for value in encoded_token):
+        return None, "invalid because it contains whitespace or control characters"
+    return encoded_token, None
+
+
+def _has_valid_lan_read_authorization(
+    scope: Scope,
+    *,
+    expected_token: bytes,
+) -> bool:
+    headers = scope.get("headers")
+    if not isinstance(headers, (tuple, list)):
+        return False
+    authorization_values = [
+        value
+        for name, value in headers
+        if isinstance(name, bytes)
+        and isinstance(value, bytes)
+        and name.lower() == b"authorization"
+    ]
+    if len(authorization_values) != 1:
+        return False
+
+    scheme, separator, encoded_credentials = authorization_values[0].partition(b" ")
+    if scheme.lower() != b"basic" or not separator or not encoded_credentials:
+        return False
+    try:
+        credentials = base64.b64decode(encoded_credentials, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    username, separator, supplied_token = credentials.partition(b":")
+    if not separator or username != _LAN_AUTH_USERNAME or not supplied_token:
+        return False
+    return hmac.compare_digest(supplied_token, expected_token)
+
+
 class RouteEffectBoundaryMiddleware:
     def __init__(
         self,
@@ -472,28 +528,32 @@ class RouteEffectBoundaryMiddleware:
             self._route_provider = lambda: routes
         self.registry = _normalize_registry(registry)
         self.expected_static_mounts = _expected_static_mounts_for_root(static_root)
+        self._reported_token_configuration_error: str | None = None
 
-    def _match_operation(self, scope: Scope) -> tuple[RouteOperation | None, str | None]:
+    def _match_operation(
+        self,
+        scope: Scope,
+    ) -> tuple[RouteOperation | None, str | None, bool]:
         method = str(scope.get("method") or "").upper()
         for route in self._route_provider():
             match, _child_scope = route.matches(scope)
             if match != Match.FULL:
                 continue
             if isinstance(route, APIRoute):
-                return (method, route.path), None
+                return (method, route.path), None, True
             infrastructure_error = _infrastructure_route_error(
                 route,
                 expected_static_mounts=self.expected_static_mounts,
             )
-            return None, infrastructure_error
-        return None, None
+            return None, infrastructure_error, infrastructure_error is None
+        return None, None, False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
 
-        operation, infrastructure_error = self._match_operation(scope)
+        operation, infrastructure_error, protected_read_surface = self._match_operation(scope)
         if infrastructure_error is not None:
             logger.error("API infrastructure route validation failed: %s", infrastructure_error)
             response = JSONResponse(
@@ -502,12 +562,12 @@ class RouteEffectBoundaryMiddleware:
             )
             await response(scope, receive, send)
             return
-        if operation is None:
+        if operation is None and not protected_read_surface:
             await self.app(scope, receive, send)
             return
 
-        effect = self.registry.get(operation)
-        if effect is None:
+        effect = self.registry.get(operation) if operation is not None else None
+        if operation is not None and effect is None:
             logger.error(
                 "API route effect configuration is incomplete for %s %s",
                 operation[0],
@@ -520,13 +580,64 @@ class RouteEffectBoundaryMiddleware:
             await response(scope, receive, send)
             return
 
-        if effect != RouteEffect.PASSIVE_READ and not is_loopback_client(scope.get("client")):
+        is_remote = not is_loopback_client(scope.get("client"))
+        if effect is not None and effect != RouteEffect.PASSIVE_READ and is_remote:
+            logger.warning(
+                "LAN API denied non-passive operation %s %s effect=%s",
+                operation[0],
+                operation[1],
+                effect.value,
+            )
             response = JSONResponse(
                 {"detail": "Non-passive API operations are restricted to the local operator"},
                 status_code=403,
             )
             await response(scope, receive, send)
             return
+
+        if protected_read_surface and is_remote:
+            expected_token, token_error = _configured_lan_api_token()
+            operation_label = (
+                f"{operation[0]} {operation[1]}"
+                if operation is not None
+                else "mounted read surface"
+            )
+            if token_error is not None:
+                if token_error != self._reported_token_configuration_error:
+                    logger.error(
+                        "LAN API read authentication is unavailable: %s is %s",
+                        _LAN_API_TOKEN_ENV,
+                        token_error,
+                    )
+                    self._reported_token_configuration_error = token_error
+                response = JSONResponse(
+                    {
+                        "detail": (
+                            "LAN read access is unavailable because server "
+                            "authentication is not configured"
+                        )
+                    },
+                    status_code=503,
+                )
+                await response(scope, receive, send)
+                return
+            self._reported_token_configuration_error = None
+            if not _has_valid_lan_read_authorization(
+                scope,
+                expected_token=expected_token,
+            ):
+                logger.warning(
+                    "LAN API denied passive read because Basic credentials are "
+                    "missing or invalid operation=%s",
+                    operation_label,
+                )
+                response = JSONResponse(
+                    {"detail": "LAN read authentication required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": _LAN_AUTH_CHALLENGE},
+                )
+                await response(scope, receive, send)
+                return
 
         await self.app(scope, receive, send)
 

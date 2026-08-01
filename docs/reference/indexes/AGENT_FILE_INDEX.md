@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1372**
+Indexed active tracked paths: **1375**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -106,6 +106,7 @@ Indexed active tracked paths: **1372**
 | `/api/server.py` | API | API or local control-plane implementation. |
 | `/api/utils/__init__.py` | API | API or local control-plane implementation. |
 | `/api/utils/action_jobs.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_evidence_pack.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_read_projection.py` | API | API or local control-plane implementation. |
 | `/api/utils/ingest_requests.py` | API | API or local control-plane implementation. |
 | `/api/utils/loaders.py` | API | API or local control-plane implementation. |
@@ -213,6 +214,7 @@ Indexed active tracked paths: **1372**
 | `/docs/agent/training_dataset_generator_specification.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` | Documentation | Active documentation or governance surface. |
+| `/docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/LAPTOP_TEST_AND_REPORT_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/AGENT_DECISION_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
@@ -1161,6 +1163,7 @@ Indexed active tracked paths: **1372**
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_epoch_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_evidence_pack.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_ledger.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_mutation_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_process_confirmation.py` | Verification | Test, fixture, or verification asset. |

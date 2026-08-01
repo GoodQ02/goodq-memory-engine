@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
@@ -142,6 +143,38 @@ def test_remote_client_cannot_prepare_mutating_request(
 
     assert response.status_code == 403
     assert list(runtime_paths["ingest_requests"].glob("*.json")) == []
+    assert list(runtime_paths["import_inbox"].iterdir()) == []
+
+
+def test_authenticated_remote_client_cannot_confirm_with_locally_minted_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lan_token = "b" * 64
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", lan_token)
+    local_client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
+    prepared = _prepare(local_client, "local.mp4", b"local").json()
+    remote_client = TestClient(
+        local_client.app,
+        client=("192.168.1.44", 50000),
+        headers={
+            "Authorization": "Basic "
+            + base64.b64encode(f"goodq:{lan_token}".encode("ascii")).decode("ascii")
+        },
+    )
+
+    response = remote_client.post(
+        "/api/ingest/submit",
+        json=_confirm_payload(prepared),
+    )
+
+    assert response.status_code == 403
+    request_record = json.loads(
+        (runtime_paths["ingest_requests"] / f"{prepared['request_id']}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert request_record["status"] == "pending_confirmation"
     assert list(runtime_paths["import_inbox"].iterdir()) == []
 
 

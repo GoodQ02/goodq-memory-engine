@@ -1790,16 +1790,41 @@ the failure is not currently visible.
 
 - Priority: P0
 - Status: OPEN
-- Repair: keep Qdrant, GoodQ API, OpenViking, Ollama, and model internals
-  loopback-only; disable or rebind default Ollama 11434; remove broad inbound
-  firewall authority; reserve 8900 for one remote Nanobot tunnel; audit auth,
-  redaction, rate limits, and retention for the 8901 monitor; design one future
-  authenticated household gateway instead of exposing raw services.
-- Completion gate: port/listener and firewall witnesses prove raw services are
-  unreachable from LAN devices; key-name parity passes; focused API/UI oracles
-  prove mounted household-facing projections expose logical references rather
-  than local paths. Destructive plaintext secret-backup removal remains a
-  separate approval gate.
+- Repair: keep Qdrant, OpenViking, Ollama, and model internals loopback-only;
+  permit an explicitly LAN-bound GoodQ API only through its server-side
+  authenticated read-only boundary, with the canonical desktop remaining the
+  sole writer; disable or rebind default Ollama 11434; remove broad inbound
+  firewall authority; reserve 8900 for one remote Nanobot tunnel; audit
+  redaction, rate limits, and retention for the 8901 monitor.
+- Completion gate: port/listener and firewall witnesses prove raw services
+  other than the governed GoodQ API are unreachable from LAN devices;
+  unauthenticated LAN reads and every LAN mutation/control/trigger are denied;
+  authenticated LAN reads and ordinary loopback writes pass; key-name parity
+  passes; focused API/UI oracles prove mounted household-facing projections
+  expose logical references rather than local paths. Destructive plaintext
+  secret-backup removal remains a separate approval gate.
+- Approved LAN API direction (2026-07-31): GOOD-CUBE desktop is canonical and
+  the sole writer. Laptops, phones, and Pi nodes may use the GoodQ API and its
+  mounted UI from the LAN only with authenticated read-only access. CORS and
+  client UI state are not authorization; the common raw-peer route-effect
+  boundary must enforce this policy before request bodies or downstream code.
+- LAN API hardening checkpoint (2026-07-31): the legacy enabled inbound rule
+  with Any profile, address, port, program, and edge traversal was proven to
+  defeat the two exact client rules and was disabled. Both approved laptops now
+  use separately source-bound, Private-profile rules on the proven ordinary
+  Ethernet listener; the alternate 2.5G path was observed matching only a
+  Public/Any-profile diagnostic rule despite the adapter reporting Private, so
+  that path remains closed. Server authentication misconfiguration now returns
+  `503` with a non-sensitive operator error, denied reads and operations are
+  logged, wildcard binds are rejected, and exact non-loopback port collisions
+  fail rather than falling back. Firewall rules are persistent, while listener
+  restart after reboot remains a manual verification gate.
+- LAN Retro UI status checkpoint (2026-07-31): authenticated desktop and phone
+  Explorer requests reached the mounted UI, passive video/timeline projections,
+  and media successfully. `/api/status` remains process-executing because it
+  invokes local OS and WSL probes, so remote access stays denied. The Retro UI
+  now surfaces that expected LAN read-only state and stops the denied polling
+  loop instead of producing repeated opaque `403` traffic.
 - Daily Hermes sub-gate: start/check OpenViking by default, support explicit
   `-SkipMemory` and `-RequireMemory`, check GoodQ without starting ingestion,
   and verify model, memory, MCP, and security canary state before Desktop opens.

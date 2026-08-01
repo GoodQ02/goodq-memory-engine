@@ -97,6 +97,7 @@ def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     runtime_cfg = run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)
     assert runtime_cfg["witness"]["promotion_enabled"] is False
     assert runtime_cfg["witness"]["allow_sqlite_embeddings"] is True
+    assert runtime_cfg["witness"]["allow_turboquant_active_retrieval"] is True
     assert runtime_cfg["ingestion_isolation"] is True
     assert runtime_cfg["memory"]["routing"] == {
         "quantization_enabled": True,

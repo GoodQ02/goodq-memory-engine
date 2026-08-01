@@ -149,6 +149,159 @@ def _seed_knowledge_graph(path: Path) -> None:
         connection.close()
 
 
+def test_turboquant_active_retrieval_requires_sealed_candidate_authority(
+    tmp_path: Path,
+) -> None:
+    """Active candidate retrieval is unavailable outside one sealed witness root."""
+    root = tmp_path / "witness"
+    database = root / "data" / "memory.db"
+    database.parent.mkdir(parents=True)
+    database.touch()
+    allowed = {
+        "ingestion_isolation": True,
+        "witness": {
+            "promotion_enabled": False,
+            "artifact_root": str(root),
+            "allow_turboquant_active_retrieval": True,
+        },
+    }
+
+    assert memory_stores._turboquant_active_allowed(allowed, str(database)) is True
+
+    for key_path, value in (
+        (("ingestion_isolation",), False),
+        (("witness", "promotion_enabled"), True),
+        (("witness", "allow_turboquant_active_retrieval"), False),
+    ):
+        cfg = json.loads(json.dumps(allowed))
+        target: dict[str, Any] = cfg
+        for key in key_path[:-1]:
+            target = target[key]
+        target[key_path[-1]] = value
+        assert memory_stores._turboquant_active_allowed(cfg, str(database)) is False
+
+    assert memory_stores._turboquant_active_allowed(
+        allowed, str(tmp_path / "canonical" / "memory.db")
+    ) is False
+
+
+def test_turboquant_candidate_query_exactly_reranks_complete_sidecars(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A sealed candidate may use sidecars only to select an exact-rerank pool."""
+    root = tmp_path / "witness"
+    database = root / "data" / "memory.db"
+    index_path = root / "faiss" / "clip.index"
+    database.parent.mkdir(parents=True)
+    index_path.parent.mkdir(parents=True)
+    _seed_memory_database(database)
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE embeddings ADD COLUMN vector BLOB")
+        connection.execute(
+            "UPDATE embeddings SET vector = ?, tq_indices = ?, tq_norm = ?, tq_qjl_sign = ?, tq_norm_residual = ? WHERE faiss_id = 7",
+            (
+                np.asarray([0.0, 0.0], dtype=np.float32).tobytes(),
+                np.asarray([0, 0], dtype=np.uint8).tobytes(),
+                1.0,
+                np.asarray([1, 1], dtype=np.int8).tobytes(),
+                0.0,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO embeddings (hash, faiss_id, modality, scene_id, vector, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "8",
+                8,
+                "clip",
+                "scene_0008",
+                np.asarray([1.0, 0.0], dtype=np.float32).tobytes(),
+                np.asarray([1, 1], dtype=np.uint8).tobytes(),
+                1.0,
+                np.asarray([1, 1], dtype=np.int8).tobytes(),
+                0.0,
+            ),
+        )
+        connection.commit()
+    index_path.write_bytes(b"fixture")
+    _install_fake_faiss(monkeypatch, ids=(8,), scores=(0.81,))
+    monkeypatch.setattr(
+        quantization.TurboQuantEncoder,
+        "estimate_inner_product",
+        lambda _self, _q, indices, *_args: float(indices[0]),
+    )
+    fake_provenance = types.ModuleType("steps.common.memory_provenance")
+    fake_provenance.attach_provenance_to_hits = lambda _db, _hits: None
+    monkeypatch.setitem(sys.modules, "steps.common.memory_provenance", fake_provenance)
+
+    store = memory_stores.FaissMemory(
+        index_path=str(index_path),
+        dim=2,
+        db_path=str(database),
+        cfg={
+            "ingestion_isolation": True,
+            "witness": {
+                "promotion_enabled": False,
+                "artifact_root": str(root),
+                "allow_turboquant_active_retrieval": True,
+            },
+        },
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
+    )
+
+    hits = store.query([0.1, 0.0], top_k=1, retrieval_context="system.healthcheck")
+
+    assert [hit["id"] for hit in hits] == [7]
+    assert [hit["score"] for hit in hits] == pytest.approx([0.01])
+    assert hits[0]["_retrieval_route"] == "turboquant_candidate_exact_rerank"
+
+
+def test_turboquant_candidate_query_falls_back_when_a_sidecar_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An incomplete sidecar must preserve the normal FAISS result."""
+    root = tmp_path / "witness"
+    database = root / "data" / "memory.db"
+    index_path = root / "faiss" / "clip.index"
+    database.parent.mkdir(parents=True)
+    index_path.parent.mkdir(parents=True)
+    _seed_memory_database(database)
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE embeddings ADD COLUMN vector BLOB")
+        connection.execute(
+            "UPDATE embeddings SET vector = ? WHERE faiss_id = 7",
+            (np.asarray([0.0, 0.0], dtype=np.float32).tobytes(),),
+        )
+        connection.commit()
+    index_path.write_bytes(b"fixture")
+    _install_fake_faiss(monkeypatch, ids=(7,), scores=(0.1,))
+    fake_provenance = types.ModuleType("steps.common.memory_provenance")
+    fake_provenance.attach_provenance_to_hits = lambda _db, _hits: None
+    monkeypatch.setitem(sys.modules, "steps.common.memory_provenance", fake_provenance)
+
+    store = memory_stores.FaissMemory(
+        index_path=str(index_path),
+        dim=2,
+        db_path=str(database),
+        cfg={
+            "ingestion_isolation": True,
+            "witness": {
+                "promotion_enabled": False,
+                "artifact_root": str(root),
+                "allow_turboquant_active_retrieval": True,
+            },
+        },
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
+    )
+
+    hits = store.query([0.1, 0.0], top_k=1, retrieval_context="system.healthcheck")
+
+    assert [hit["id"] for hit in hits] == [7]
+    assert hits[0]["score"] == pytest.approx(0.1)
+    assert "_retrieval_route" not in hits[0]
+
+
 def _write_capability_connect(
     real_connect: Callable[..., sqlite3.Connection],
 ) -> Callable[..., sqlite3.Connection]:

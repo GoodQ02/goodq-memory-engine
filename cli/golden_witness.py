@@ -177,6 +177,7 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
             "promotion_enabled": False,
             "artifact_root": str(root),
             "allow_sqlite_embeddings": True,
+            "allow_turboquant_active_retrieval": True,
         },
         "paths": {
             "data_root": str(data_root),

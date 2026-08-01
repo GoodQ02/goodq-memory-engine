@@ -82,3 +82,18 @@ def test_isolated_runner_snapshot_rejects_a_canonical_mutable_path(
 
     with pytest.raises(typer.BadParameter, match="escapes witness root"):
         run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+
+def test_isolated_runner_snapshot_rejects_an_escaped_faiss_index_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "witness"
+    snapshot = _isolated_snapshot(root, tmp_path / "shared-model-cache")
+    snapshot["paths"]["faiss_index_path"] = str(tmp_path / "canonical" / "text.index")
+    snapshot_path = root / "config" / "witness-config.json"
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
+
+    with pytest.raises(typer.BadParameter, match="escapes witness root"):
+        run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)

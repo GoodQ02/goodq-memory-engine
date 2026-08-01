@@ -132,6 +132,23 @@ git add cli/golden_witness.py tests/unit/test_golden_witness_preflight.py
 git commit -m "feat(r24): prepare contained witness receipt"
 ```
 
+### Task 2A: Seal the prepared receipt without execution
+
+**Files:**
+- Modify: `cli/golden_witness.py`
+- Modify: `tests/unit/test_golden_witness_preflight.py`
+
+The in-memory Task 2 receipt cannot safely be an execution input until it has
+been inspected and sealed. This bridge may create exactly one fresh witness
+root containing `prepared-receipt.json`; it must reject an existing root or any
+mutable path that escapes the root. It does not copy media, create processing
+directories, load models, access stores, or invoke the canonical runner.
+
+- [ ] Write a failing test proving that sealing creates only the receipt file.
+- [ ] Implement `seal_prepared_receipt(prepared_receipt) -> Path` with a
+  fresh-root and path-containment guard.
+- [ ] Run the focused preflight tests and commit the seal-only gate.
+
 ### Task 3: Operator-approved witness execution and acceptance report
 
 **Files:**

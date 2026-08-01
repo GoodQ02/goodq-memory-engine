@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -69,3 +70,26 @@ def test_prepare_witness_run_scopes_every_mutable_path_to_witness_root(
     assert receipt["runner"]["module"] == "cli.run_ingestion"
     assert receipt["promotion_enabled"] is False
     assert artifact_root.exists() is False
+
+
+def test_seal_prepared_receipt_writes_only_the_verified_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sealing must be the first and only approved mutation before execution."""
+    input_path = tmp_path / "known-input.mp4"
+    input_path.write_bytes(b"known witness input")
+    artifact_root = tmp_path / "witness"
+    monkeypatch.setattr(
+        golden_witness,
+        "_probe_stream_metadata",
+        lambda _path: {"format_name": "mov", "duration_seconds": 1.0},
+    )
+    prepared = golden_witness.prepare_witness_run(artifact_root, input_path)
+
+    receipt_path = golden_witness.seal_prepared_receipt(prepared)
+
+    assert receipt_path == artifact_root / "prepared-receipt.json"
+    assert json.loads(receipt_path.read_text(encoding="utf-8"))["status"] == "sealed"
+    assert sorted(path.relative_to(artifact_root).as_posix() for path in artifact_root.rglob("*")) == [
+        "prepared-receipt.json"
+    ]

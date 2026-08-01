@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 from steps.common.model_provisioner import resolve_models_root
@@ -154,3 +154,37 @@ def prepare_witness_run(artifact_root: Path, input_path: Path) -> dict[str, Any]
         "promotion_enabled": False,
         "ingestion_isolation": True,
     }
+
+
+def seal_prepared_receipt(prepared_receipt: Mapping[str, Any]) -> Path:
+    """Persist one verified receipt below a fresh root without executing it."""
+    if prepared_receipt.get("status") != "prepared":
+        raise WitnessAuthorityError("only a prepared witness receipt can be sealed")
+    artifact_root = prepared_receipt.get("artifact_root")
+    if not isinstance(artifact_root, str) or not artifact_root:
+        raise WitnessAuthorityError("prepared receipt has no artifact root")
+    root = Path(artifact_root).resolve()
+    if root.exists():
+        raise WitnessAuthorityError("witness root must be fresh and absent before sealing")
+
+    mutable_paths = prepared_receipt.get("mutable_paths")
+    if not isinstance(mutable_paths, Mapping):
+        raise WitnessAuthorityError("prepared receipt has no mutable path inventory")
+    for role, value in mutable_paths.items():
+        if not isinstance(value, str) or not value:
+            raise WitnessAuthorityError(f"mutable path {role!r} is invalid")
+        if not _is_within(Path(value).resolve(), root):
+            raise WitnessAuthorityError(f"mutable path {role!r} escapes the witness root")
+
+    receipt_path = root / "prepared-receipt.json"
+    if mutable_paths.get("receipt") != str(receipt_path):
+        raise WitnessAuthorityError("prepared receipt path does not match the witness root")
+
+    sealed = json.loads(json.dumps(dict(prepared_receipt)))
+    sealed["status"] = "sealed"
+    root.mkdir(parents=True)
+    receipt_path.write_text(
+        json.dumps(sealed, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return receipt_path

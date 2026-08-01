@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import logging
 import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+
+logger = logging.getLogger(__name__)
 
 
 _SCHEMA_SQL = """
@@ -269,6 +273,7 @@ def emit_memory_commit_events(cfg: Dict[str, Any], events: Sequence[Union[Memory
                     pass
         except Exception as exc:
             # Never block ingestion on observability writes.
+            logger.warning("Memory commit event SQLite persistence failed", exc_info=True)
             if debug:
                 try:
                     print(f"[VECTOR_DEBUG] commit_events.sqlite_failed err={exc}")
@@ -289,4 +294,4 @@ def emit_memory_commit_events(cfg: Dict[str, Any], events: Sequence[Union[Memory
             for ev in normalized:
                 f.write(json.dumps(ev.to_dict(), ensure_ascii=False) + "\n")
     except Exception:
-        return
+        logger.warning("Memory commit event JSONL mirror failed", exc_info=True)

@@ -1632,6 +1632,9 @@ the failure is not currently visible.
   raw exception text. These are explicit write-path diagnostics, not R-05-F1
   hidden mutations. Repair them as bounded logging seams while preserving
   fallback behavior; producer retention/migration remains R-23.
+- Commit-event observability checkpoint (2026-08-01): SQLite and optional JSONL
+  mirror failures now emit contextual warnings while preserving non-blocking
+  ingestion. Focused failure-path tests prove both write failures are visible.
 
 ### R-16 — Reconcile private development and public release Git state
 

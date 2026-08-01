@@ -46,3 +46,26 @@ def test_build_config_rejects_model_cache_inside_witness_root(
         match="model cache.*inside witness root",
     ):
         golden_witness.build_witness_config(artifact_root, tmp_path / "input.mp4")
+
+
+def test_prepare_witness_run_scopes_every_mutable_path_to_witness_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A prepared receipt must not point a later runner at canonical storage."""
+    input_path = tmp_path / "known-input.mp4"
+    input_path.write_bytes(b"known witness input")
+    artifact_root = tmp_path / "witness"
+    monkeypatch.setattr(
+        golden_witness,
+        "_probe_stream_metadata",
+        lambda _path: {"format_name": "mov", "duration_seconds": 1.0},
+    )
+
+    receipt = golden_witness.prepare_witness_run(artifact_root, input_path)
+
+    root = artifact_root.resolve()
+    for path in receipt["mutable_paths"].values():
+        Path(path).resolve().relative_to(root)
+    assert receipt["runner"]["module"] == "cli.run_ingestion"
+    assert receipt["promotion_enabled"] is False
+    assert artifact_root.exists() is False

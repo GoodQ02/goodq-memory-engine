@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from typing import Any
+from uuid import uuid4
 
 from steps.common.model_provisioner import resolve_models_root
 from steps.common.tool_resolver import ToolResolver
@@ -125,4 +126,31 @@ def preflight_witness(artifact_root: Path, input_path: Path) -> dict[str, Any]:
         "config": config,
         "tools": tools,
         "device_policy": _device_policy(),
+    }
+
+
+def prepare_witness_run(artifact_root: Path, input_path: Path) -> dict[str, Any]:
+    """Build a contained execution receipt without creating or running anything."""
+    root = Path(artifact_root).resolve()
+    preflight = preflight_witness(root, input_path)
+    run_id = f"r24-{uuid4().hex}"
+    epoch_id = f"epoch_witness_{run_id}"
+    mutable_paths = {
+        "workspace": str(root / "workspace"),
+        "output": str(root / "output"),
+        "processing": str(root / "processing"),
+        "config_snapshot": str(root / "config" / "witness-config.json"),
+        "receipt": str(root / "prepared-receipt.json"),
+    }
+    return {
+        "status": "prepared",
+        "run_id": run_id,
+        "epoch_id": epoch_id,
+        "artifact_root": str(root),
+        "input": preflight["input"],
+        "preflight": preflight,
+        "mutable_paths": mutable_paths,
+        "runner": {"module": "cli.run_ingestion"},
+        "promotion_enabled": False,
+        "ingestion_isolation": True,
     }

@@ -40,9 +40,11 @@ records only aggregate evidence below the witness root:
 
 The gate passes only if every query has identical final top-k IDs and scores
 within floating-point tolerance, no fallback occurs, and median active-route
-latency is not slower than the full-precision route. A performance miss or any
-retrieval mismatch pauses the staged movie workflow; it is not auto-tuned or
-promoted.
+latency is not slower than the full-precision route. The query pack is fixed
+and recorded before a run: one query per stored candidate vector plus at least
+one cross-vector query for every modality with two or more vectors. A
+performance miss or any retrieval mismatch pauses the staged movie workflow;
+it is not auto-tuned or promoted.
 
 ## Non-goals
 

@@ -31,6 +31,7 @@ TARGET_SUFFIXES = {
 
 EXCLUDED_DIR_NAMES = {
     ".git",
+    ".worktrees",
     ".gemini",
     ".agents",
     "brain",

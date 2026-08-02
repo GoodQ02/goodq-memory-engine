@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1379**
+Indexed active tracked paths: **1391**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -136,6 +136,7 @@ Indexed active tracked paths: **1379**
 | `/cli/content_state_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/control_recurrence_report.py` | CLI | Command-line operator surface. |
 | `/cli/diarization_outcome_reconciliation.py` | CLI | Command-line operator surface. |
+| `/cli/golden_witness.py` | CLI | Command-line operator surface. |
 | `/cli/goodq_doctor.py` | CLI | Command-line operator surface. |
 | `/cli/links.py` | CLI | Command-line operator surface. |
 | `/cli/list_inbox.py` | CLI | Command-line operator surface. |
@@ -162,6 +163,7 @@ Indexed active tracked paths: **1379**
 | `/cli/test_ingestion.py` | CLI | Command-line operator surface. |
 | `/cli/transcript_outcome_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/transcript_timestamp_reconciliation.py` | CLI | Command-line operator surface. |
+| `/cli/turboquant_candidate_benchmark.py` | CLI | Command-line operator surface. |
 | `/cli/ucf_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/ui_conduits_rollup.py` | CLI | Command-line operator surface. |
 | `/cli/watchdog.py` | CLI | Command-line operator surface. |
@@ -447,7 +449,11 @@ Indexed active tracked paths: **1379**
 | `/docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/ROADMAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/technical/ANALYTICS_PAGES_COMPLETE.md` | Documentation | Active documentation or governance surface. |
@@ -823,6 +829,7 @@ Indexed active tracked paths: **1379**
 | `/scripts/stop_vllm_servers.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/sync_env_local.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/sync_faiss_to_qdrant.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/sync_wsl_audio_worker.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/system_readiness_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/system_status_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_all_endpoints.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1156,6 +1163,7 @@ Indexed active tracked paths: **1379**
 | `/tests/unit/test_face_embed_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_id_mapping.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_lock.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_golden_witness_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_gpu_config_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
@@ -1186,6 +1194,7 @@ Indexed active tracked paths: **1379**
 | `/tests/unit/test_ingest_upload_hardening.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingestion_isolation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_installer_paths.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_isolated_embedding_persistence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_kg_realtime_relationship_enrichment.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_knowledge_graph_readonly.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_legacy_wsl_audio_bridge_compat.py` | Verification | Test, fixture, or verification asset. |
@@ -1238,6 +1247,7 @@ Indexed active tracked paths: **1379**
 | `/tests/unit/test_run_ingestion_audio_entity_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_content_state.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_input_file.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_run_ingestion_isolated_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_modality_status.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_progress_tracking.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_step_json_errors.py` | Verification | Test, fixture, or verification asset. |
@@ -1274,6 +1284,7 @@ Indexed active tracked paths: **1379**
 | `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_routes.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_sync_wsl_audio_worker.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_engine_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_route_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_stitch_confirmation.py` | Verification | Test, fixture, or verification asset. |
@@ -1292,6 +1303,7 @@ Indexed active tracked paths: **1379**
 | `/tests/unit/test_transcript_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_transcript_timestamp_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_turboquant.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_turboquant_candidate_benchmark.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_canonical_loader.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_promotion_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ui_conduits_audio_doctrine.py` | Verification | Test, fixture, or verification asset. |

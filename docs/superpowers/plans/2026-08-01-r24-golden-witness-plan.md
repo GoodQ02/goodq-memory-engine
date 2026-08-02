@@ -1,4 +1,12 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-08-02 -->
+
 # R-24 Golden Witness Implementation Plan
+
+> **Execution status (2026-08-02):** Historical implementation record. The
+> isolated-witness path and semantic acceptance completed; active TurboQuant
+> retrieval remains disabled pending its separate performance gate.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

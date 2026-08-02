@@ -1,4 +1,12 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-08-02 -->
+
 # R-24 TurboQuant Candidate Retrieval Implementation Plan
+
+> **Execution status (2026-08-02):** Historical experiment record. The
+> candidate did not meet the performance gate; it is not enabled for active
+> retrieval or authorized for corpus re-ingestion.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task.
 

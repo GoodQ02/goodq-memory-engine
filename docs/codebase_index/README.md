@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **418**
+Indexed active Python paths: **421**
 
 ## Repository root
 
@@ -87,6 +87,7 @@ Indexed active Python paths: **418**
 - `cli/content_state_reconciliation.py`
 - `cli/control_recurrence_report.py`
 - `cli/diarization_outcome_reconciliation.py`
+- `cli/golden_witness.py`
 - `cli/goodq_doctor.py`
 - `cli/links.py`
 - `cli/list_inbox.py`
@@ -112,6 +113,7 @@ Indexed active Python paths: **418**
 - `cli/test_ingestion.py`
 - `cli/transcript_outcome_reconciliation.py`
 - `cli/transcript_timestamp_reconciliation.py`
+- `cli/turboquant_candidate_benchmark.py`
 - `cli/ucf_promotion.py`
 - `cli/ui_conduits_rollup.py`
 - `cli/watchdog.py`
@@ -302,6 +304,7 @@ Indexed active Python paths: **418**
 - `scripts/show_phase2_enhancement.py`
 - `scripts/smoke_phase_a.py`
 - `scripts/sync_faiss_to_qdrant.py`
+- `scripts/sync_wsl_audio_worker.py`
 - `scripts/system_readiness_check.py`
 - `scripts/system_status_check.py`
 - `scripts/test_all_endpoints.py`

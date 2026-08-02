@@ -177,7 +177,7 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
             "promotion_enabled": False,
             "artifact_root": str(root),
             "allow_sqlite_embeddings": True,
-            "allow_turboquant_active_retrieval": True,
+            "allow_turboquant_active_retrieval": False,
         },
         "paths": {
             "data_root": str(data_root),
@@ -206,8 +206,8 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
         },
         "memory": {
             "routing": {
-                "quantization_enabled": True,
-                "quantization_shadow_mode": False,
+                "quantization_enabled": False,
+                "quantization_shadow_mode": True,
             },
         },
         "qdrant": {
@@ -218,6 +218,10 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
                 "text": f"goodq_text_{epoch_id}",
                 "audio": f"goodq_audio_{epoch_id}",
             },
+        },
+        "phase6": {
+            "clip_collection": f"goodq_clip_{epoch_id}",
+            "dino_collection": f"goodq_dino_{epoch_id}",
         },
     }
 def seal_prepared_receipt(prepared_receipt: Mapping[str, Any]) -> Path:

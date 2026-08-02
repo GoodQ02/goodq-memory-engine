@@ -1917,6 +1917,18 @@ the failure is not currently visible.
   complete sidecar/index coverage invariant and a persistent compact candidate
   index or cache that can be compared honestly to FAISS HNSW; do not run a
   second scene or enable active TurboQuant until that gate passes.
+- Strict audio and containment checkpoint (2026-08-02): a fresh scene-zero
+  witness completed with WSL audio, transcript, visual evidence, CLAP audio
+  embedding, isolated UCF frames, FAISS, and four candidate Qdrant collections.
+  The first completed receipt exposed a Phase 6 configuration propagation gap:
+  scene-level CLIP and DINO parity writes inherited shared default collection
+  names despite the sealed candidate collection map. The snapshot now pins the
+  Phase 6 names to the candidate map; focused isolation tests and a second
+  fresh scene proved the shared default counts unchanged while the candidate
+  received 2 CLIP, 2 DINO, 3 text, and 1 audio vector. TurboQuant stayed off.
+  The initial leaked default points and failed launch receipt remain preserved
+  evidence; they were not cleaned. Human review of the factual scene output is
+  still required before any follow-on decision.
 
 ### R-25 — Private integrated verification gate
 

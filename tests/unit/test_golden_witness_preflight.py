@@ -97,15 +97,17 @@ def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     runtime_cfg = run_ingestion.load_isolated_runtime_cfg_snapshot(config_path)
     assert runtime_cfg["witness"]["promotion_enabled"] is False
     assert runtime_cfg["witness"]["allow_sqlite_embeddings"] is True
-    assert runtime_cfg["witness"]["allow_turboquant_active_retrieval"] is True
+    assert runtime_cfg["witness"]["allow_turboquant_active_retrieval"] is False
     assert runtime_cfg["ingestion_isolation"] is True
     assert runtime_cfg["memory"]["routing"] == {
-        "quantization_enabled": True,
-        "quantization_shadow_mode": False,
+        "quantization_enabled": False,
+        "quantization_shadow_mode": True,
     }
     assert runtime_cfg["qdrant"]["host"] == "http://127.0.0.1:6333"
     assert set(runtime_cfg["qdrant"]["collections"]) == {"clip", "dino", "text", "audio"}
     assert all("witness" in name for name in runtime_cfg["qdrant"]["collections"].values())
+    assert runtime_cfg["phase6"]["clip_collection"] == runtime_cfg["qdrant"]["collections"]["clip"]
+    assert runtime_cfg["phase6"]["dino_collection"] == runtime_cfg["qdrant"]["collections"]["dino"]
     assert sorted(path.relative_to(artifact_root).as_posix() for path in artifact_root.rglob("*") if path.is_file()) == [
         "config/witness-config.json",
         "prepared-receipt.json",

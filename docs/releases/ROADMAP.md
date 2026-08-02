@@ -1889,7 +1889,7 @@ the failure is not currently visible.
 ### R-24 — Establish an isolated Golden Witness
 
 - Priority: P1
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Repair: provide a read-only preflight and a separately approval-gated,
   one-scene witness through the canonical ingestion interface. The witness must
   keep every generated artifact below one new root, record exact input identity
@@ -1927,8 +1927,18 @@ the failure is not currently visible.
   fresh scene proved the shared default counts unchanged while the candidate
   received 2 CLIP, 2 DINO, 3 text, and 1 audio vector. TurboQuant stayed off.
   The initial leaked default points and failed launch receipt remain preserved
-  evidence; they were not cleaned. Human review of the factual scene output is
-  still required before any follow-on decision.
+  evidence; they were not cleaned.
+- Verified witness evidence (2026-08-02): the operator semantically accepted
+  two independently sourced, fresh isolated scene-zero receipts. The second
+  witness exercised continuous dialogue across split-screen video calls,
+  multiple locations, phone handoffs, and an in-person convergence; it recorded
+  three speakers, a usable transcript, 79 isolated UCF frames, and successful
+  Phase 5 and Phase 6 completion. It emitted zero legacy scene-metadata
+  warnings after the isolation-startup repair, created only fresh candidate
+  collections (2 CLIP, 2 DINO, 3 text, 1 audio), and left shared default
+  collection counts unchanged. No witness was promoted. This closes R-24's
+  preflight, containment, multimodal execution, and human-semantic-review gate;
+  future witness runs remain separately approved and isolated.
 
 ### R-25 — Private integrated verification gate
 

@@ -13,7 +13,7 @@ first-run experience. It is not a second development authority.
 ## Candidate source
 
 - Private source branch: `dev`
-- Source revision: `ca5fbd83`
+- Source revision: `9886b36d`
 - Candidate branch: `codex/public-release-candidate`
 - Public branch target: `main` (not updated by preparing this candidate)
 
@@ -26,6 +26,8 @@ first-run experience. It is not a second development authority.
   control-recurrence outputs;
 - personal media, local memory stores, model caches, indexes, logs, and local
   configuration or credentials.
+- orphaned, host-specific launch helpers that are not part of the documented
+  public launcher contract.
 
 The exclusions remain preserved in private development. They are not deleted
 from the canonical project source.

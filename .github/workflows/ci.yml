@@ -28,7 +28,6 @@ on:
       - "dev_on.sh"
       - "dev_off.bat"
       - "dev_off.sh"
-      - "start_goodq_dev.ps1"
 
 jobs:
   bootstrap-baseline:

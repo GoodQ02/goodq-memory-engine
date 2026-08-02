@@ -55,6 +55,8 @@ def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard(
     assert "-node watchdog -state ready" in dev_on
     assert "-event final -state ready" in dev_on
     assert "if /i not \"%goodq_no_pause%\"==\"1\" pause" in dev_on
+    assert "watchdog_launch_log" in dev_on
+    assert "addseconds(15)" in dev_on
 
 
 def test_dev_off_reports_release_and_the_intentional_qdrant_retention():

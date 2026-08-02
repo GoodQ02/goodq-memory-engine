@@ -68,7 +68,9 @@ start "GoodQ_API" /min cmd.exe /c "C:\Users\jdben\miniconda3\condabin\conda.bat"
 set "GOODQ_PREWARM_RETRIEVAL_MODELS="
 
 REM Start Ingestion Watchdog in a separate minimized window
-start "GoodQ_Watchdog" /min cmd.exe /c "C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m cli.watchdog
+set "WATCHDOG_LAUNCH_LOG=%TEMP%\goodq_watchdog_launch.log"
+del /q "%WATCHDOG_LAUNCH_LOG%" >nul 2>&1
+start "GoodQ_Watchdog" /min cmd.exe /d /c ""C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m cli.watchdog 1>> "%WATCHDOG_LAUNCH_LOG%" 2>&1"
 
 echo [DEV ON] Local agent mode activated.
 echo vLLM endpoint:  http://127.0.0.1:38005/v1
@@ -80,9 +82,9 @@ if errorlevel 1 (
 )
 call :dashboard -Event node -Node API -State ready -Message "loopback endpoint is available"
 
-powershell -NoProfile -Command "Start-Sleep -Seconds 1; if (Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'cli.watchdog' }) { exit 0 }; exit 1"
+powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(15); do { if (Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'cli.watchdog' }) { exit 0 }; Start-Sleep -Seconds 1 } while ((Get-Date) -lt $deadline); Write-Error ('Watchdog did not stay running. launch_log=' + $env:WATCHDOG_LAUNCH_LOG); if (Test-Path -LiteralPath $env:WATCHDOG_LAUNCH_LOG) { Get-Content -LiteralPath $env:WATCHDOG_LAUNCH_LOG -Tail 12 | ForEach-Object { Write-Error $_ } }; exit 1"
 if errorlevel 1 (
-    call :dashboard -Event node -Node WATCHDOG -State blocked -Message "process did not become ready"
+    call :dashboard -Event node -Node WATCHDOG -State blocked -Message "process did not stay running; launch log is shown above"
     goto :blocked
 )
 call :dashboard -Event node -Node WATCHDOG -State ready -Message "ingestion monitor is running"

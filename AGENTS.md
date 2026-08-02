@@ -47,7 +47,7 @@ verification rules via `verify_agent_workspace.py`.
 
 ## Git Repository and Branch Governance (Anti-Drift)
 - **Private Development Authority**: `JoesDomingo/goodq4all` (`origin`) is the complete private development repository. Its canonical product branch is `dev`.
-- **Public Release Mirror**: `GoodQ02/goodq4all` is downstream-only. Its canonical product branch is `main`, and the separate public checkout is used for sanitization and independent release verification.
+- **Public Release Mirror**: `GoodQ02/goodq-memory-engine` is downstream-only. Its canonical product branch is `main`, and the separate public checkout is used for sanitization and independent release verification.
 - **Authority Rule**: Every functional correction must exist in private `dev` before public release. If a correction is discovered in the public checkout, apply and verify it in private development first. Public-only code is never authoritative.
 - **Allowed Non-Product Branches**: `gh-pages` is an infrastructure branch. Temporary Dependabot branches are automation branches. Short-lived local feature branches are allowed while work is active, but they must merge back to private `dev` or be discarded; they do not become release authorities.
 - **Anti-Drift Rule**: Do not create a long-lived public `dev` branch or any second product-development branch. Remove stale working or automation branches only after their ownership, merge state, and purpose have been verified.
@@ -147,10 +147,9 @@ Preferred escalation order:
 - docs/technical/LIB_COMPONENTS.md
 - docs/goodq4all_agent_status.md
 - docs/SYSTEM_SNAPSHOT.md
-- docs/archive/HANDOFF_BASEMENT_PHASE.md
 - Do not contradict these without explicit instruction.
-- Treat `docs/archive/HANDOFF_BASEMENT_PHASE.md` as a sealed basement-era record, not
-  the active scratchpad for new-agent restart state.
+- The public mirror deliberately omits private historical archives and runtime
+  evidence. See `docs/releases/PUBLIC_SANITIZATION_MANIFEST.md` for scope.
 
 ## Security and Data Handling
 - Secrets: `.env.local` only; never in logs, code, or docs.

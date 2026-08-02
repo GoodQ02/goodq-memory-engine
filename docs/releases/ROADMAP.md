@@ -38,7 +38,7 @@ this roadmap or the current canonical contract.
 
 1. JoesDomingo/goodq4all is the private development authority. Its canonical
    product branch is dev.
-2. GoodQ02/goodq4all is the downstream public release mirror. Its canonical
+2. GoodQ02/goodq-memory-engine is the downstream public release mirror. Its canonical
    product branch is main.
 3. Every functional correction must exist in private development before public
    release. A correction discovered publicly is repaired in private first.

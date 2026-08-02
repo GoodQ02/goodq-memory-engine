@@ -52,8 +52,8 @@ probes.
 
 ## What Does Not Live Here
 
-- Historical witness proofs. Those stay in `docs/testing/`, `docs/diagnostics/`,
-  `reports/`, or `docs/archive/`.
+- Historical witness proofs and generated runtime reports remain in private
+  development and are not part of the public mirror.
 - Large scratchpad narratives. Those should be converted into a workflow, a
   contract update, or an archived historical note.
 - New runtime architecture. Architecture still belongs under `docs/architecture/`

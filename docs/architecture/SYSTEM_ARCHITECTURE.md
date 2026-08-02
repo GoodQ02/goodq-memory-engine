@@ -204,14 +204,14 @@ See [PHASE6_MULTIMODAL_FUSION.md](PHASE6_MULTIMODAL_FUSION.md).
 
 ## TurboQuant Hybrid-Precision Vector Caching
 
-GoodQ4All employs an additive **sidecar vector cache** architecture to accelerate
-top-K candidate pre-filtering and pruning without losing precision. Qdrant is
-the canonical authoritative vector store for high-precision 32-bit floating
-point (`float32`) embeddings. When configured, FAISS is an optional local
-cache/projection/fallback; it is not joint vector authority. Performance-oriented
-pre-filtering is handled via lightweight **TurboQuant** fields (Lloyd-Max Polar
-Quantization + Johnson-Lindenstrauss residual projections) stored directly in
-SQLite as sidecar columns (`tq_indices`, `tq_norm`, `tq_qjl_sign`).
+GoodQ4All supports an additive **TurboQuant sidecar experiment**; it is not the
+default retrieval route. Qdrant is the canonical authoritative vector store for
+high-precision 32-bit floating point (`float32`) embeddings. When configured,
+FAISS is an optional local cache/projection/fallback; it is not joint vector
+authority. An explicitly approved candidate may store TurboQuant fields
+(Lloyd-Max Polar Quantization + Johnson-Lindenstrauss residual projections) in
+SQLite sidecar columns (`tq_indices`, `tq_norm`, `tq_qjl_sign`) and must pass an
+equivalence-and-latency gate before use.
 
 ```mermaid
 graph TD
@@ -219,13 +219,14 @@ graph TD
     B --> C["Raw float32 Vectors"]
     C --> D[("Qdrant<br>(Authoritative Vector Store)")]
     C -.->|optional configured projection| E[("FAISS<br>(Cache / Fallback)")]
-    C --> F["TurboQuant Encoder<br>(PolarQuant + QJL)"]
-    F --> G["SQLite Sidecar Columns<br>(tq_indices, tq_norm, tq_qjl_sign)"]
+    C -.->|candidate only| F["TurboQuant Encoder<br>(PolarQuant + QJL)"]
+    F -.-> G["SQLite Sidecar Columns<br>(tq_indices, tq_norm, tq_qjl_sign)"]
     
     subgraph "Retrieval Path"
-        H["User Text/Audio Query"] --> I["First-Stage Filtering<br>(SQLite Sidecar Scan)"]
-        I --> J["Top-K Candidate Pruning"]
-        J --> K["Qdrant float32 Re-ranking<br>(Optional FAISS Fallback)"]
+        H["User Text/Audio Query"] --> K["Qdrant float32 Retrieval<br>(Optional FAISS Fallback)"]
+        H -.->|candidate only| I["SQLite Sidecar Scan"]
+        I -.-> J["Candidate Pruning"]
+        J -.-> K
         K --> L["Final Ordered Memory Results"]
     end
 ```

@@ -96,6 +96,7 @@ zenml_store/
 ~*
 .tmp.driveupload/
 processing/
+processing_onboarding/
 
 # ===== WINDOWS =====
 Thumbs.db
@@ -271,9 +272,6 @@ GoodQ4All_Setup_*.exe
 # ===== DEVELOPER SECURITY KEYS & TEMP BUILD FILES =====
 scripts/install/dev_private_key.hex
 scripts/install/go_bin/
-
-# ===== PUBLIC ONBOARDING DEMO FIXTURE =====
-!samples/onboarding_fixture.mp4
 
 # ===== AGENT CHECKPOINTS =====
 .goodq-mini-agent/

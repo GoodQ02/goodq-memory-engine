@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **421**
+Indexed active Python paths: **420**
 
 ## Repository root
 
@@ -159,10 +159,6 @@ Indexed active Python paths: **421**
 
 - `pipelines/__init__.py`
 - `pipelines/direct_ingestion.py`
-
-## reports
-
-- `reports/seinfeld_experiment/umap/generate_umap_clip_text.py`
 
 ## retrieval
 

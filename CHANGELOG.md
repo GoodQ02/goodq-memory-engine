@@ -8,8 +8,8 @@ This changelog tracks public-facing GoodQ4All milestones and release-readiness
 checkpoints.
 
 It is intentionally lightweight. Historical phase-by-phase notes, internal
-audits, and archived release artifacts remain under [`docs/archive/`](docs/archive/)
-and related canonical docs.
+audits, and generated release artifacts remain in private development; the
+public mirror ships only portable source and public-facing documentation.
 
 ## [Unreleased]
 

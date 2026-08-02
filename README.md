@@ -21,9 +21,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/doc-drift-lint.yml/badge.svg" alt="Doc Drift Linter" /></a>
-  <a href="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml"><img src="https://github.com/GoodQ02/goodq4all/actions/workflows/dependency-review.yml/badge.svg" alt="Dependency Review" /></a>
+  <a href="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/ci.yml"><img src="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/doc-drift-lint.yml"><img src="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/doc-drift-lint.yml/badge.svg" alt="Doc Drift Linter" /></a>
+  <a href="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/dependency-review.yml"><img src="https://github.com/GoodQ02/goodq-memory-engine/actions/workflows/dependency-review.yml/badge.svg" alt="Dependency Review" /></a>
   <a href="https://context7.com/goodq02/goodq4all"><img src="https://img.shields.io/badge/Context7-Verified-059669?style=flat" alt="Context7 Verified" /></a>
 </p>
 
@@ -39,28 +39,10 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
 
 ### 🎬 From Media to Memory
 
-*   **Get This Level of Local Control (Unified Operator UI):**
-    <p align="center">
-      <a href="samples/assets/ui_onboarding_walkthrough.mp4">
-        <img src="samples/assets/ui_onboarding_walkthrough.gif" alt="UI Onboarding Walkthrough" width="850" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);" />
-      </a>
-      <br />
-      <em>Click the preview above to watch the high-fidelity onboarding video.</em>
-    </p>
-
-*   **From Video Quality as Low as This: (Raw Media Inputs):**
-    <table width="100%" border="0" cellspacing="0" cellpadding="10">
-      <tr>
-        <td align="center" width="50%" style="border: none;">
-          <img src="samples/assets/nasa_descent.gif" alt="Neil Armstrong Descent" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" /><br />
-          <small><em>Apollo 11 Moon Walk (nasa_descent.gif)</em></small>
-        </td>
-        <td align="center" width="50%" style="border: none;">
-          <img src="samples/assets/nasa_launch.gif" alt="Rocket Launch" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" /><br />
-          <small><em>Saturn V Launch (nasa_launch.gif)</em></small>
-        </td>
-      </tr>
-    </table>
+No media fixture is bundled with this repository. For a local smoke, use a
+short clip you own or are licensed to process. The existing
+`scripts/bootstrap_onboarding.py` helper is an operator workflow, not an
+approved public fixture contract.
 
 *   **Using This All-in-One Installer (Unified Windows Installer):**
     <p align="center">
@@ -101,14 +83,19 @@ To run large-parameter local models safely on consumer hardware (e.g. RTX 4070 T
 *   **Local Agent Stack (`MiniAgentClient`)**: Gated LLM reasoning and local tool execution through zero-dependency policy enforcement middleware, loading schemas, policies, and contracts dynamically from the version-controlled `agents/stack/` directory.
 *   **Endpoint Fallback Orchestration**: Automatically falls back from the primary local vLLM server (`prefer_speed`, running Qwen2.5) to a local Ollama service (`prefer_quality`, running Phi-4) or a CPU-safe model variant when VRAM thresholds are breached.
 
-### 3. TurboQuant Hybrid Vector Caching
-High-precision 32-bit floating point embeddings are persisted in Qdrant and FAISS. For rapid candidate filtering, GoodQ4All uses **TurboQuant**—an SQLite sidecar caching technology employing Lloyd-Max Polar Quantization and Johnson-Lindenstrauss residual projections.
-*   **Performance:** Achieves sub-millisecond candidate pre-filtering.
-*   **Accuracy:** 100% search accuracy is maintained by performing the final rank scoring on the uncompressed raw float32 vectors.
+### 3. Experimental TurboQuant Sidecar Caching
+High-precision float32 embeddings remain persisted in Qdrant and FAISS.
+**TurboQuant** is an optional SQLite sidecar experiment for candidate filtering;
+it is not enabled as the default retrieval path. Any activation must first
+demonstrate equivalent valid hits and no latency regression against the active
+Qdrant/FAISS baseline on the target corpus.
 
 > [!NOTE]
 > **Hybrid Precision Caching Model**:
-> GoodQ4All uses an additive **sidecar vector cache** architecture. High-precision 32-bit floating point (`float32`) embeddings remain the authoritative truth of the system, stored in Qdrant and FAISS. Performance-oriented query pre-filtering is handled via lightweight **TurboQuant** fields (Lloyd-Max Polar Quantization + Johnson–Lindenstrauss residual corrections) stored in SQLite. This ensures zero data loss, guarantees rollback capability, and cuts memory usage.
+> **Optional sidecar model:** TurboQuant fields are additive only. Authoritative
+> float32 vectors remain in Qdrant and FAISS, and a sidecar experiment must
+> fail closed to normal retrieval when coverage, validity, or measured latency
+> is insufficient.
 
 ### 4. Adaptive Hardware Profiles
 The pipeline dynamically adjusts its computational needs to match your system specs:
@@ -133,18 +120,11 @@ If you are developing, customizing the pipeline, or running from source:
 <summary><b>Developer Source Setup Steps (Advanced)</b></summary>
 <br />
 
-#### 1. Developer Onboarding Video
-<p align="center">
-  <a href="samples/assets/install_walkthrough.mp4">
-    <img src="samples/assets/install_walkthrough.gif" alt="Developer Onboarding Walkthrough" width="850" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);" />
-  </a>
-</p>
-
-#### 2. Step-by-Step Developer Installation
+#### Step-by-Step Developer Installation
 
 | Step | Type or do this | Demo frame |
 | --- | --- | --- |
-| 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq4all.git` | <a href="samples/assets/demo-steps/01-clone-official-source.jpg"><img src="samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
+| 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq-memory-engine.git` | <a href="samples/assets/demo-steps/01-clone-official-source.jpg"><img src="samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
 | 2 | Enter the project cabin:<br>`cd goodq4all` | <a href="samples/assets/demo-steps/02-enter-project-cabin.jpg"><img src="samples/assets/demo-steps/02-enter-project-cabin.jpg" alt="Enter the GoodQ4All project folder" width="300" /></a> |
 | 3 | Run the bootstrap installer:<br>`python scripts/bootstrap_install.py`<br><sub>CPU-safe first-run variant: `python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch`.</sub> | <a href="samples/assets/demo-steps/03-bootstrap-installer.jpg"><img src="samples/assets/demo-steps/03-bootstrap-installer.jpg" alt="Run the bootstrap installer" width="300" /></a> |
 | 4 | Customize local config:<br>edit the bootstrap-created `.env.local` when using local model, cache, or provider settings. | <a href="samples/assets/demo-steps/04-env-local-root.jpg"><img src="samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |
@@ -171,9 +151,8 @@ GoodQ4All ships with two local operator console variants:
 *   Guided demo: [`docs/guides/DEMO.md`](docs/guides/DEMO.md)
 *   First run: [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md)
 *   Install: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
-*   Historical quickstart: [`docs/archive/guides/install/QUICKSTART.md`](docs/archive/guides/install/QUICKSTART.md)
 *   Clean memory start: [`docs/guides/CLEAN_MEMORY_START.md`](docs/guides/CLEAN_MEMORY_START.md)
-*   Historical privacy guide: [`docs/archive/guides/general/PRIVACY.md`](docs/archive/guides/general/PRIVACY.md)
+*   Public release scope: [`docs/releases/PUBLIC_SANITIZATION_MANIFEST.md`](docs/releases/PUBLIC_SANITIZATION_MANIFEST.md)
 
 ### Technical Details
 *   Architecture: [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)

@@ -110,7 +110,6 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
-- [SCRIPT_REGISTRY.md](../../archive/docs/bootstrap/SCRIPT_REGISTRY.md)
 - [HANDOFF_BASEMENT_PHASE.md](../archive/HANDOFF_BASEMENT_PHASE.md)
 - [ARTIFACT_LOCATION_CONTRACT.md](../archive/technical/ARTIFACT_LOCATION_CONTRACT.md)
 - [PIPELINE_RESTORATION_BACKLOG.md](../archive/technical/PIPELINE_RESTORATION_BACKLOG.md)

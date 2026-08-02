@@ -1,7 +1,8 @@
 """
 GoodQ4All - Onboarding Ingestion Bootstrap Script
-Downloads a 100% public domain NASA video of the Apollo 11 moon landing,
-transcodes it, sets up the onboarding sandbox, and runs the pipeline.
+Fetches a bounded segment of an official NASA briefing, transcodes it, sets up
+the onboarding sandbox, and runs the pipeline. The clip is generated locally
+and remains ignored; it is not distributed with the repository.
 """
 from __future__ import annotations
 
@@ -17,7 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-COMMONS_URL = "https://upload.wikimedia.org/wikipedia/commons/a/a6/Apollo_11_Landing_-_first_steps_on_the_moon.ogv"
+NASA_ASSET_ID = "20230830_OSIRIS_Briefing_hbr"
+NASA_SOURCE_TITLE = "Press Conference - OSIRIS-REx Sample Return"
+NASA_SOURCE_URL = (
+    "https://images-assets.nasa.gov/video/20230830_OSIRIS_Briefing_hbr/"
+    "20230830_OSIRIS_Briefing_hbr~medium.mp4"
+)
+CLIP_START_SECONDS = 0
+CLIP_DURATION_SECONDS = 180
 FIXTURE_PATH = REPO_ROOT / "samples" / "onboarding_fixture.mp4"
 INBOX_DIR = REPO_ROOT / "logs" / "inbox_onboarding"
 WORKSPACE_DIR = REPO_ROOT / "processing_onboarding"
@@ -43,31 +51,34 @@ def get_ffmpeg_exe() -> str:
 
 
 def ensure_fixture():
-    """Download and transcode the public domain Apollo 11 clip using ffmpeg."""
+    """Fetch and transcode the bounded NASA briefing segment using ffmpeg."""
     if FIXTURE_PATH.is_file() and FIXTURE_PATH.stat().st_size > 10000:
         print(f"[BOOTSTRAP] Onboarding fixture already exists at: {FIXTURE_PATH}")
         return True
 
-    print("[BOOTSTRAP] Onboarding fixture not found. Downloading public domain Apollo 11 clip from Wikimedia Commons...")
+    print(f"[BOOTSTRAP] Onboarding fixture not found. Fetching NASA asset: {NASA_SOURCE_TITLE}")
+    print(f"[BOOTSTRAP] Asset ID: {NASA_ASSET_ID}")
     FIXTURE_PATH.parent.mkdir(parents=True, exist_ok=True)
     
     ffmpeg_exe = get_ffmpeg_exe()
     
-    # We transcode the first 20 seconds to H.264/AAC MP4.
-    # Set a custom user_agent to bypass Wikimedia's automated request blocker.
+    # Seek the remote source before decoding, then create a bounded H.264/AAC
+    # local clip. The generated output remains ignored by version control.
     cmd = [
         ffmpeg_exe, "-y",
-        "-user_agent", "GoodQOnboardingBot/1.0 (contact: admin@goodq.ai)",
-        "-ss", "00:00:00",
-        "-i", COMMONS_URL,
-        "-t", "20",
+        "-ss", str(CLIP_START_SECONDS),
+        "-i", NASA_SOURCE_URL,
+        "-t", str(CLIP_DURATION_SECONDS),
         "-c:v", "libx264",
         "-c:a", "aac",
         str(FIXTURE_PATH)
     ]
     
     try:
-        print(f"[BOOTSTRAP] Executing: {' '.join(cmd)}")
+        print(
+            "[BOOTSTRAP] Creating a "
+            f"{CLIP_DURATION_SECONDS}-second local smoke clip from {NASA_SOURCE_TITLE}."
+        )
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0 and FIXTURE_PATH.exists() and FIXTURE_PATH.stat().st_size > 10000:
             print(f"[BOOTSTRAP] Successful transcode. Saved to {FIXTURE_PATH} ({FIXTURE_PATH.stat().st_size} bytes)")

@@ -2,7 +2,7 @@
   "manifest_version": "1.0.0",
   "schema_version": "1.0.0",
   "release_tag": "v1.0.0-models",
-  "primary_base_url": "https://github.com/GoodQ02/goodq4all/releases/download/v1.0.0-models",
+  "primary_base_url": "https://github.com/GoodQ02/goodq-memory-engine/releases/download/v1.0.0-models",
   "mirror_base_urls": [
     "https://mirror1.goodq.ai/models/v1.0.0",
     "https://backblaze.goodq.ai/models"

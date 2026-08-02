@@ -45,6 +45,7 @@ def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard(
     dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
 
     assert "dev_mode_dashboard.ps1" in dev_on
+    assert "pwsh -noprofile" in dev_on
     assert "-event start" in dev_on
     assert "-node config -state ready" in dev_on
     assert '-node "wsl audio" -state ready' in dev_on
@@ -60,6 +61,7 @@ def test_dev_off_reports_release_and_the_intentional_qdrant_retention():
     dev_off = (REPO_ROOT / "dev_off.bat").read_text(encoding="utf-8").lower()
 
     assert "dev_mode_dashboard.ps1" in dev_off
+    assert "pwsh -noprofile" in dev_off
     assert "-event start" in dev_off
     assert "-node vllm -state released" in dev_off
     assert '-node "wsl audio" -state released' in dev_off

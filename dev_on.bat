@@ -95,7 +95,7 @@ set "DEV_ON_EXIT_CODE=1"
 goto :finish
 
 :dashboard
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dev_mode_dashboard.ps1" -Mode dev-on %*
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dev_mode_dashboard.ps1" -Mode dev-on %*
 exit /b %errorlevel%
 
 :finish

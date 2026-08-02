@@ -611,10 +611,12 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             e,
                         )
         # Upsert generic embedding metadata for recall
+        from steps.common.memory import embedding_persistence_allowed
         isolated_epoch = bool(cfg.get("ingestion_isolation", False))
-        embedding_ok = None if isolated_epoch else False
-        embedding_reason = "not_applicable_isolated_epoch" if isolated_epoch else None
-        if not isolated_epoch:
+        embeddings_allowed = embedding_persistence_allowed(cfg)
+        embedding_ok = False if embeddings_allowed else None
+        embedding_reason = None if embeddings_allowed else "not_applicable_isolated_epoch"
+        if embeddings_allowed:
             try:
                 from steps.common.memory import upsert_embedding
                 scene_id = item.get("scene_id") or item.get("scene_index")
@@ -654,7 +656,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "faiss": {"attempted": True, "committed": bool(faiss_ok), "ref": index_path, "reason": None if faiss_ok else "write_failed"},
                         "qdrant": {"attempted": bool(qdrant_attempted), "committed": bool(qdrant_ok), "ref": qdrant_collection, "reason": qdrant_reason},
                         "sqlite_map": {"attempted": bool(map_db), "committed": bool(map_ok), "ref": map_db, "reason": map_reason},
-                        **({} if isolated_epoch else {"sqlite_embeddings": {
+                        **({} if not embeddings_allowed else {"sqlite_embeddings": {
                             "attempted": True,
                             "committed": bool(embedding_ok),
                             "ref": (cfg.get("paths", {}) or {}).get("db_path"),
@@ -693,7 +695,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             "sqlite_map_attempted": bool(map_db),
             "sqlite_map_committed": bool(map_ok),
             "sqlite_embeddings_committed": embedding_ok,
-            "sqlite_embeddings_state": "not_applicable_isolated_epoch" if isolated_epoch else "committed" if embedding_ok else "failed",
+            "sqlite_embeddings_state": "not_applicable_isolated_epoch" if not embeddings_allowed else "committed" if embedding_ok else "failed",
         }
         run_id = _resolve_run_id(item, cfg)
         if run_id:

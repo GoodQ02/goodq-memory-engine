@@ -7,7 +7,7 @@ import json
 import logging
 import re
 
-from steps.common.memory import upsert_embedding, to_faiss_id
+from steps.common.memory import embedding_persistence_allowed, upsert_embedding, to_faiss_id
 from steps.common.faiss_utils import create_hnsw_id_index
 from steps.common.memory_router import MemoryRouter
 from steps.common.memory_stores import build_text_stores
@@ -838,9 +838,10 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         # Persist mapping for recall/linking (FAISS id if available is not tracked here)
         isolated_epoch = bool(cfg.get("ingestion_isolation", False))
-        embedding_ok = None if isolated_epoch else False
-        embedding_reason = "not_applicable_isolated_epoch" if isolated_epoch else None
-        if not isolated_epoch:
+        embeddings_allowed = embedding_persistence_allowed(cfg)
+        embedding_ok = False if embeddings_allowed else None
+        embedding_reason = None if embeddings_allowed else "not_applicable_isolated_epoch"
+        if embeddings_allowed:
             try:
                 scene_id = _coerce_scene_identity(item)
                 upsert_embedding(cfg, payload["id"], to_faiss_id(payload["id"]), item.get("source_path", ""), item.get("modality", ""), scene_id=scene_id, vector=payload["vector"])
@@ -899,7 +900,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 elif not ok:
                     reason = "insert_failed_or_filtered"
                 targets[str(target)] = {"attempted": bool(present), "committed": bool(ok), "ref": ref, "reason": reason, "count": 1}
-            if not isolated_epoch:
+            if embeddings_allowed:
                 targets["sqlite_embeddings"] = {
                     "attempted": True,
                     "committed": bool(embedding_ok),

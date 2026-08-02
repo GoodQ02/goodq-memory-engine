@@ -110,6 +110,33 @@
           "after": "State flags + Fail-Build outside block"
         }
       ]
+    },
+    {
+      "id": "corr_006_r24_phase6_witness_collection_containment",
+      "date": "2026-08-02",
+      "issue": "The sealed R-24 witness map scoped qdrant.collections, but Phase 6 inherited its separate CLIP and DINO collection names from the base configuration, sending scene parity vectors to shared default collections.",
+      "target_scenes": ["scene_0000"],
+      "source_material": {
+        "file_name": "01x01 - Good News, Bad News.mp4",
+        "description": "Local, isolated scene-zero Golden Witness source."
+      },
+      "failed_attempts": [
+        "The first completed strict-audio witness used a receipt without Phase 6 collection overrides; shared default collection point counts increased."
+      ],
+      "solution": "The isolated receipt generator now pins Phase 6 CLIP and DINO collection names to the same fresh candidate names as qdrant.collections, and the receipt contract asserts that equivalence.",
+      "notable_results": "The fresh rerun completed strict WSL audio and all modality artifacts while shared default collection counts stayed unchanged; candidate collections received 2 CLIP, 2 DINO, 3 text, and 1 audio vector.",
+      "variables_changed": [
+        {
+          "name": "phase6_collection_selection",
+          "before": "Inherited shared default names",
+          "after": "Sealed fresh candidate collection names"
+        },
+        {
+          "name": "turboquant_active_retrieval",
+          "before": "Enabled in the historical witness snapshot",
+          "after": "Disabled pending a separate performance gate"
+        }
+      ]
     }
   ]
 }

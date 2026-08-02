@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import re
 import typer
+from urllib.parse import urlparse
 
 from steps.common.config_loader import get_runtime_paths, load_configs
 from steps.common.config_redaction import redact_config
@@ -302,6 +303,105 @@ def _load_runtime_cfg_snapshot(cfg_json: Optional[Path] = None) -> Dict[str, Any
                 e,
             )
     return base_cfg if isinstance(base_cfg, dict) else {}
+
+
+_WITNESS_MUTABLE_PATH_KEYS = (
+    "data_root",
+    "db_dir",
+    "db_path",
+    "knowledge_graph_db",
+    "processing",
+    "log_dir",
+    "output_directory",
+    "faiss_dir",
+    "faiss_audio_path",
+    "faiss_index_path",
+    "faiss_clip_path",
+    "faiss_dino_path",
+    "clip_id_map_db",
+    "dino_id_map_db",
+    "clap_id_map_db",
+    "qdrant_storage",
+    "watchdog_state_file",
+    "watchdog_lock_file",
+    "import_inbox",
+    "ingest_requests",
+    "processed",
+    "failed",
+)
+
+
+def _is_path_within(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _validate_isolated_witness_runtime_config(cfg: Dict[str, Any], snapshot_path: Path) -> None:
+    if cfg.get("ingestion_isolation") is not True:
+        raise typer.BadParameter("isolated runner config requires ingestion_isolation=true")
+    witness = cfg.get("witness")
+    if not isinstance(witness, dict) or witness.get("ingestion_isolation") is not True:
+        raise typer.BadParameter("isolated runner config requires witness.ingestion_isolation=true")
+    if witness.get("promotion_enabled") is not False:
+        raise typer.BadParameter("isolated runner config requires witness.promotion_enabled=false")
+    artifact_root = witness.get("artifact_root")
+    if not isinstance(artifact_root, str) or not artifact_root.strip():
+        raise typer.BadParameter("isolated runner config requires witness.artifact_root")
+    root = Path(artifact_root).resolve()
+    if not _is_path_within(snapshot_path.resolve(), root):
+        raise typer.BadParameter("isolated runner config must be stored inside the witness root")
+
+    paths = cfg.get("paths")
+    if not isinstance(paths, dict):
+        raise typer.BadParameter("isolated runner config requires runtime paths")
+    for key in _WITNESS_MUTABLE_PATH_KEYS:
+        value = paths.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise typer.BadParameter(f"isolated runner config is missing paths.{key}")
+        if not _is_path_within(Path(value).resolve(), root):
+            raise typer.BadParameter(f"paths.{key} escapes witness root")
+    models_cache = paths.get("models_cache")
+    if not isinstance(models_cache, str) or not models_cache.strip():
+        raise typer.BadParameter("isolated runner config is missing paths.models_cache")
+    if _is_path_within(Path(models_cache).resolve(), root):
+        raise typer.BadParameter("paths.models_cache must stay outside the witness root")
+
+    qdrant = cfg.get("qdrant")
+    host = qdrant.get("host") if isinstance(qdrant, dict) else None
+    parsed = urlparse(host) if isinstance(host, str) else None
+    if not parsed or parsed.hostname not in {"127.0.0.1", "localhost"} or parsed.port is None:
+        raise typer.BadParameter("isolated runner config requires a loopback Qdrant endpoint")
+    collections = qdrant.get("collections") if isinstance(qdrant, dict) else None
+    required_collections = {"clip", "dino", "text", "audio"}
+    if not isinstance(collections, dict) or set(collections) != required_collections:
+        raise typer.BadParameter("isolated runner config requires four fresh witness collections")
+    names = list(collections.values())
+    if (
+        len(set(names)) != len(required_collections)
+        or any(not isinstance(name, str) or "witness" not in name for name in names)
+    ):
+        raise typer.BadParameter("isolated runner config requires four fresh witness collections")
+
+
+def load_isolated_runtime_cfg_snapshot(cfg_json: Path) -> Dict[str, Any]:
+    """Load an explicit witness snapshot and reject any canonical-storage path."""
+    snapshot_path = Path(cfg_json).resolve()
+    if not snapshot_path.is_file():
+        raise typer.BadParameter(f"Isolated runner config not found: {snapshot_path}")
+    try:
+        parsed = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise typer.BadParameter("Isolated runner config must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise typer.BadParameter("Isolated runner config must be a JSON object")
+    base_cfg = load_configs({})
+    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    _deep_merge_dicts(cfg, parsed)
+    _validate_isolated_witness_runtime_config(cfg, snapshot_path)
+    return cfg
 
 
 def _resolve_models_dir(
@@ -2476,6 +2576,18 @@ def _progressive_checkpoint_cleanup_ready(
         processing_dir=processing_dir,
     )
     return verified == expected
+
+
+def _resolve_existing_scene_state(
+    cfg: Dict[str, Any],
+    scene_id: str,
+) -> Tuple[Dict[str, Any], Dict[str, bool]]:
+    """Return reusable scene state without legacy-store reads for isolated runs."""
+    if cfg.get('ingestion_isolation', False):
+        return {}, {'keyframe': False, 'audio': False}
+    existing_meta = get_scene_meta(cfg, scene_id) or {}
+    materialized = scene_has_materialized(cfg, scene_id, ['keyframe', 'audio'])
+    return existing_meta, materialized
 
 
 def _get_checkpoint_scene_meta(
@@ -7712,6 +7824,7 @@ def _filter_scenes_by_selection(
 def run(
     input_dir: Optional[Path] = typer.Option(None, help='Directory containing videos to ingest'),
     input_file: Optional[Path] = typer.Option(None, help='One explicit video file to ingest'),
+    config: Optional[Path] = typer.Option(None, '--config', help='Validated isolated witness config snapshot'),
     output: Optional[Path] = typer.Option(None, help='Path to write JSON results'),
     workspace: Optional[Path] = typer.Option(None, help='Workspace directory for artifacts'),
     max_videos: int = typer.Option(0, help='Maximum number of videos to process (0 = all)'),
@@ -7740,6 +7853,8 @@ def run(
         input_dir = getattr(input_dir, 'default', None)
     if input_file is not None and not isinstance(input_file, Path):
         input_file = getattr(input_file, 'default', None)
+    if config is not None and not isinstance(config, Path):
+        config = getattr(config, 'default', None)
 
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
@@ -7758,7 +7873,7 @@ def run(
         raise typer.BadParameter("--scene-indices is mutually exclusive with --scene-start-index/--scene-end-index")
     parsed_scene_indices = _parse_scene_indices(scene_indices)
 
-    base_cfg = load_configs({})
+    base_cfg = load_isolated_runtime_cfg_snapshot(config) if config is not None else load_configs({})
     cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
     cfg['progressive_chunk_overlap'] = chunk_overlap
@@ -8328,10 +8443,10 @@ def run(
 
                 scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
 
-                existing_meta = await asyncio.to_thread(get_scene_meta, cfg, scene_id)
-                existing_meta = existing_meta or {}
-                materialized = await asyncio.to_thread(
-                    scene_has_materialized, cfg, scene_id, ['keyframe', 'audio']
+                existing_meta, materialized = await asyncio.to_thread(
+                    _resolve_existing_scene_state,
+                    cfg,
+                    scene_id,
                 )
 
                 frame_info: Optional[Dict[str, Any]] = None

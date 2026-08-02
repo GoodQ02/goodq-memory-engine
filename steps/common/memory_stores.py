@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory import to_faiss_id
@@ -20,6 +21,24 @@ from steps.common.retrieval_events import (
 from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
+
+
+def _turboquant_active_allowed(cfg: Dict[str, Any], db_path: str) -> bool:
+    """Return whether one sealed witness may activate candidate-only retrieval."""
+    try:
+        witness = cfg.get("witness", {})
+        if cfg.get("ingestion_isolation") is not True:
+            return False
+        if witness.get("promotion_enabled") is not False:
+            return False
+        if witness.get("allow_turboquant_active_retrieval") is not True:
+            return False
+        root = Path(witness["artifact_root"]).resolve(strict=True)
+        database = Path(db_path).resolve(strict=True)
+        database.relative_to(root)
+        return database.is_file()
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 class EphemeralMemory(MemoryStore):
@@ -205,6 +224,115 @@ class FaissMemory(MemoryStore):
     def _store_ref(self) -> Optional[str]:
         return os.path.basename(self.index_path) if self.index_path else None
 
+    def _candidate_modalities(self) -> tuple[str, ...]:
+        """Map one established FAISS index to its SQLite embedding modalities."""
+        name = Path(self.index_path).stem.lower()
+        if name == "audio":
+            return ("audio",)
+        if name == "clip":
+            return ("clip",)
+        if name == "dino":
+            return ("dino",)
+        if name == "text":
+            return ("text", "audio_transcript", "frame_text")
+        return ()
+
+    def _turboquant_candidate_hits(
+        self, query_vector: List[float], top_k: int
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Return a sealed-candidate exact rerank, or None to preserve FAISS."""
+        if not self.cfg or not self.db_path:
+            return None
+        if not _turboquant_active_allowed(self.cfg, self.db_path):
+            return None
+        try:
+            import numpy as np  # type: ignore
+            from steps.common.quantization import TurboQuantEncoder
+
+            query = np.asarray(query_vector, dtype=np.float32)
+            if query.ndim != 1 or query.size != self.dim:
+                return None
+            connection = sqlite_read_authority.open_sqlite_read_connection(self.db_path)
+            try:
+                modalities = self._candidate_modalities()
+                if not modalities:
+                    return None
+                placeholders = ",".join("?" for _ in modalities)
+                rows = connection.execute(
+                    f"""
+                    SELECT faiss_id, vector, tq_indices, tq_norm, tq_qjl_sign, tq_norm_residual
+                    FROM embeddings
+                    WHERE faiss_id IS NOT NULL AND vector IS NOT NULL AND modality IN ({placeholders})
+                    """,
+                    modalities,
+                ).fetchall()
+            finally:
+                connection.close()
+
+            candidates: list[tuple[int, Any, Any, float, Any, float]] = []
+            for row in rows:
+                faiss_id, vector_blob, indices_blob, norm, sign_blob, residual = row
+                vector = np.frombuffer(vector_blob, dtype=np.float32)
+                if vector.size != self.dim:
+                    continue
+                if (
+                    indices_blob is None
+                    or norm is None
+                    or sign_blob is None
+                    or residual is None
+                ):
+                    logger.warning(
+                        "TurboQuant candidate retrieval fallback: incomplete_sidecar"
+                    )
+                    return None
+                indices = np.frombuffer(indices_blob, dtype=np.uint8)
+                signs = np.frombuffer(sign_blob, dtype=np.int8)
+                if indices.size != self.dim or signs.size != self.dim:
+                    logger.warning(
+                        "TurboQuant candidate retrieval fallback: malformed_sidecar"
+                    )
+                    return None
+                candidates.append(
+                    (int(faiss_id), vector, indices, float(norm), signs, float(residual))
+                )
+            if not candidates:
+                return None
+
+            encoder = TurboQuantEncoder()
+            query_norm_squared = float(np.dot(query, query))
+            approximate: list[tuple[float, tuple[int, Any, Any, float, Any, float]]] = []
+            for candidate in candidates:
+                faiss_id, _vector, indices, norm, signs, residual = candidate
+                estimate = encoder.estimate_inner_product(
+                    query, indices, norm, signs, residual
+                )
+                distance = query_norm_squared + norm * norm - 2.0 * float(estimate)
+                approximate.append((distance, candidate))
+            pool_size = min(len(approximate), max(top_k * 4, top_k))
+            pool = sorted(approximate, key=lambda item: item[0])[:pool_size]
+            exact = sorted(
+                (
+                    (float(np.sum((query - candidate[1]) ** 2)), candidate[0])
+                    for _estimate, candidate in pool
+                ),
+                key=lambda item: item[0],
+            )[:top_k]
+            return [
+                {
+                    "id": faiss_id,
+                    "score": score,
+                    "payload": {},
+                    "_retrieval_route": "turboquant_candidate_exact_rerank",
+                }
+                for score, faiss_id in exact
+            ]
+        except Exception as exc:
+            logger.warning(
+                "TurboQuant candidate retrieval fallback: exc_type=%s",
+                type(exc).__name__,
+            )
+            return None
+
     def _load_index(self):
         import faiss  # type: ignore
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
@@ -278,13 +406,17 @@ class FaissMemory(MemoryStore):
         try:
             import faiss  # type: ignore
             import numpy as np  # type: ignore
-            index = faiss.read_index(self.index_path)
-            D, I = index.search(np.array([query_vector], dtype="float32"), k=top_k)
-            ids = I[0] if len(I) else []
-            scores = D[0] if len(D) else []
-            out = []
-            for i, s in zip(ids, scores):
-                out.append({"id": int(i), "score": float(s), "payload": {}})
+            out = self._turboquant_candidate_hits(query_vector, top_k)
+            if out is None:
+                index = faiss.read_index(self.index_path)
+                D, I = index.search(np.array([query_vector], dtype="float32"), k=top_k)
+                ids = I[0] if len(I) else []
+                scores = D[0] if len(D) else []
+                out = []
+                for i, s in zip(ids, scores):
+                    if int(i) < 0:
+                        continue
+                    out.append({"id": int(i), "score": float(s), "payload": {}})
             try:
                 from steps.common.memory_provenance import attach_provenance_to_hits
 

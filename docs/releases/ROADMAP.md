@@ -1886,6 +1886,60 @@ the failure is not currently visible.
   authoritative copies, then repair producers or migrate history only under the
   existing manifest/rollback/approval gate.
 
+### R-24 — Establish an isolated Golden Witness
+
+- Priority: P1
+- Status: VERIFIED
+- Repair: provide a read-only preflight and a separately approval-gated,
+  one-scene witness through the canonical ingestion interface. The witness must
+  keep every generated artifact below one new root, record exact input identity
+  and tool/device facts, and disable canonical-memory promotion.
+- Completion gate: preflight emits a receipt without creating a witness root;
+  a later explicit operator approval is required before one isolated execution;
+  the resulting transcript, multimodal artifacts, and factual scene summary are
+  reviewed before any follow-on decision.
+- Checkpoint evidence (2026-08-01): the initial preflight contract rejects a
+  model cache under the proposed artifact root, records supplied-input hashing
+  and stream metadata, resolves required tool bindings, and leaves the root
+  absent. The first local media preflight was read-only and did not authorize or
+  start an ingestion run. The canonical runner now accepts an explicit witness
+  snapshot only when every mutable runtime path remains below the declared
+  witness root, models remain external, promotion is disabled, and Qdrant is
+  either a separate loopback endpoint or the established local endpoint with
+  four fresh witness-named collections.
+- TurboQuant checkpoint (2026-08-01): the isolated one-scene candidate
+  completed with all four supported sidecar dimensions and an aggregate-only
+  A/B receipt. The first receipt exposed invalid FAISS `-1` filler IDs in the
+  baseline oracle; the corrected valid-hit receipt reached 7/9 exact queries
+  with zero fallbacks, but active SQLite sidecar scanning was slower than FAISS
+  HNSW and the text index has one FAISS ID without a matching SQLite sidecar.
+  Therefore full-movie re-ingestion is blocked. Next gate: separately design a
+  complete sidecar/index coverage invariant and a persistent compact candidate
+  index or cache that can be compared honestly to FAISS HNSW; do not run a
+  second scene or enable active TurboQuant until that gate passes.
+- Strict audio and containment checkpoint (2026-08-02): a fresh scene-zero
+  witness completed with WSL audio, transcript, visual evidence, CLAP audio
+  embedding, isolated UCF frames, FAISS, and four candidate Qdrant collections.
+  The first completed receipt exposed a Phase 6 configuration propagation gap:
+  scene-level CLIP and DINO parity writes inherited shared default collection
+  names despite the sealed candidate collection map. The snapshot now pins the
+  Phase 6 names to the candidate map; focused isolation tests and a second
+  fresh scene proved the shared default counts unchanged while the candidate
+  received 2 CLIP, 2 DINO, 3 text, and 1 audio vector. TurboQuant stayed off.
+  The initial leaked default points and failed launch receipt remain preserved
+  evidence; they were not cleaned.
+- Verified witness evidence (2026-08-02): the operator semantically accepted
+  two independently sourced, fresh isolated scene-zero receipts. The second
+  witness exercised continuous dialogue across split-screen video calls,
+  multiple locations, phone handoffs, and an in-person convergence; it recorded
+  three speakers, a usable transcript, 79 isolated UCF frames, and successful
+  Phase 5 and Phase 6 completion. It emitted zero legacy scene-metadata
+  warnings after the isolation-startup repair, created only fresh candidate
+  collections (2 CLIP, 2 DINO, 3 text, 1 audio), and left shared default
+  collection counts unchanged. No witness was promoted. This closes R-24's
+  preflight, containment, multimodal execution, and human-semantic-review gate;
+  future witness runs remain separately approved and isolated.
+
 ### R-25 — Private integrated verification gate
 
 - Priority: P0

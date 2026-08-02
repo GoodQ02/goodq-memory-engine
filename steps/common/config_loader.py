@@ -309,7 +309,11 @@ def validate_config_mapping(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
     return validated.model_dump()
 
 
-def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def load_configs(
+    overrides: Dict[str, Any] | None = None,
+    *,
+    include_local: bool = True,
+) -> Dict[str, Any]:
     """
     Load and validate the canonical GoodQ4All configuration.
     Uses Pydantic validation to ensure schema compliance.
@@ -349,7 +353,7 @@ def load_configs(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     raw_cfg = _normalize_paths(_read_yaml(unified_config_path))
 
     local_config_path = os.path.join(base_dir, "config.local.yaml")
-    if os.path.isfile(local_config_path):
+    if include_local and os.path.isfile(local_config_path):
         local_cfg = _normalize_paths(_read_yaml(local_config_path))
         if isinstance(local_cfg, dict):
             _deep_merge(raw_cfg, local_cfg)

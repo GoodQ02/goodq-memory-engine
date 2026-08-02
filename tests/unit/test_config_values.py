@@ -328,7 +328,7 @@ def test_validated_config_preserves_llm_runtime_contract():
 
 
 def test_default_config_loads_11434_ollama_url():
-    result = load_configs()
+    result = load_configs(include_local=False)
     llm = result.get("llm", {})
     assert llm.get("ollama_url") == "http://127.0.0.1:11434/v1"
 
@@ -511,7 +511,7 @@ def test_epoch_environment_binding_projects_one_runtime_authority(monkeypatch, t
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("GOODQ_EPOCH_ID", epoch_id)
 
-    result = load_configs({})
+    result = load_configs({}, include_local=False)
 
     assert Path(result["paths"]["db_path"]).parent.name == epoch_id
     assert Path(result["paths"]["processing"]).name == "processing"

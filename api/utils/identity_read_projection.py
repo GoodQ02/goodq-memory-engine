@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from api.utils.media_projection import frame_endpoint
+from steps.common.platform_config import PlatformHelper
 
 
 _IDENTITY_ARTIFACTS = {
@@ -25,7 +26,7 @@ def identity_data_path(cfg: Mapping[str, Any]) -> Path:
     if env_path:
         path = Path(env_path)
         return path.parent if path.suffix.lower() in {".yaml", ".yml", ".json"} else path
-    return Path(os.environ.get("GOODQ_DATA_ROOT", "L:/_DATA")) / "GoodQ_Data" / "identity"
+    return PlatformHelper.get_data_root() / "GoodQ_Data" / "identity"
 
 
 def configured_epoch_id(cfg: Mapping[str, Any]) -> str | None:

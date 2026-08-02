@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from lib import identity_resolver
 from lib.identity_resolver import IdentityResolver
 
 
@@ -111,3 +112,19 @@ def test_roster_path_accepts_the_canonical_roster_file_contract(
         match.person_id
         for match in resolver.resolve_query_entities("Gracie")
     ] == ["person-grace"]
+
+
+def test_identity_resolver_uses_platform_data_root_without_local_override(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("GOODQ_IDENTITY_PATH", raising=False)
+    monkeypatch.setattr(
+        identity_resolver.PlatformHelper,
+        "get_data_root",
+        lambda: tmp_path,
+    )
+
+    resolver = IdentityResolver(enabled=True)
+
+    assert resolver._roster_path == tmp_path / "GoodQ_Data" / "identity" / "family_roster.yaml"

@@ -12,6 +12,7 @@ from api.utils.identity_read_projection import (
     _context_frame,
     _representative_frame,
     epoch_authority_projection,
+    identity_data_path,
     project_face_cluster_images,
 )
 
@@ -27,6 +28,20 @@ def _write_identity_artifacts(identity_root: Path, epoch_id: str) -> None:
     (identity_root / "name_mentions.json").write_text(
         json.dumps({"epoch_id": epoch_id, "mentions": {}}), encoding="utf-8"
     )
+
+
+def test_identity_data_path_uses_platform_data_root_without_local_override(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("GOODQ_DATA_ROOT", raising=False)
+    monkeypatch.delenv("GOODQ_IDENTITY_PATH", raising=False)
+    monkeypatch.setattr(
+        "api.utils.identity_read_projection.PlatformHelper.get_data_root",
+        lambda: tmp_path,
+    )
+
+    assert identity_data_path({}) == tmp_path / "GoodQ_Data" / "identity"
 
 
 def test_same_epoch_read_projection_is_ready(tmp_path: Path) -> None:

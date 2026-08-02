@@ -24,9 +24,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from steps.common.platform_config import PlatformHelper
+
 log = logging.getLogger(__name__)
 
-DEFAULT_IDENTITY_PATH = "L:/_DATA/GoodQ_Data/identity"
 DEFAULT_ROSTER_NAME   = "family_roster.yaml"
 
 
@@ -61,7 +62,8 @@ class IdentityResolver:
         self._enabled = enabled
         configured_roster_path = Path(
             roster_path
-            or os.environ.get("GOODQ_IDENTITY_PATH", DEFAULT_IDENTITY_PATH)
+            or os.environ.get("GOODQ_IDENTITY_PATH")
+            or PlatformHelper.get_data_root() / "GoodQ_Data" / "identity"
         )
         self._roster_path = (
             configured_roster_path

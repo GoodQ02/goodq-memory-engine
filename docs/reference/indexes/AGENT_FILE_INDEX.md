@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1393**
+Indexed active tracked paths: **1398**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -452,9 +452,12 @@ Indexed active tracked paths: **1393**
 | `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-02-dev-mode-operator-dashboard-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-02-oh-my-posh-baseline-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/technical/ANALYTICS_PAGES_COMPLETE.md` | Documentation | Active documentation or governance surface. |
@@ -685,6 +688,7 @@ Indexed active tracked paths: **1393**
 | `/scripts/dev/run_pytest.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/dev/run_r18_validator_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/dev/run_runtime_evidence.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/dev_mode_dashboard.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnose_gpu_issue.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnose_gpu_pipeline.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnose_transcription.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1152,6 +1156,7 @@ Indexed active tracked paths: **1393**
 | `/tests/unit/test_crash_family_env_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_current_state_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_contract.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_dev_mode_dashboard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_pytest_wrapper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |

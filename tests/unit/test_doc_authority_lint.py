@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,20 @@ def test_metadata_check_exempts_skill_frontmatter(tmp_path: Path) -> None:
     assert [(item.code, item.path) for item in findings] == [
         ("DOC_METADATA", "docs/guide.md")
     ]
+
+
+def test_metadata_check_skips_gitignored_local_markdown(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _write(tmp_path / ".gitignore", "ORIGINAL_REQUEST.md\n")
+    _write(tmp_path / "ORIGINAL_REQUEST.md", "# Local handoff artifact\n")
+    _write(
+        tmp_path / "README.md",
+        "<!-- DOC_BADGE: OPERATIONAL -->\n"
+        "<!-- DOC_STATUS: ACTIVE -->\n"
+        "<!-- DOC_LAST_VERIFIED: 2026-08-02 -->\n\n# Readme\n",
+    )
+
+    assert lint.check_metadata(tmp_path) == []
 
 
 def test_metadata_check_rejects_invalid_duplicate_values_and_dates(tmp_path: Path) -> None:

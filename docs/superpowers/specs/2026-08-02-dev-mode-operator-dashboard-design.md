@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: HISTORICAL_REFERENCE -->
+<!-- DOC_LAST_VERIFIED: 2026-08-02 -->
+
 # Dev Mode Operator Dashboard Design
 
 ## Purpose

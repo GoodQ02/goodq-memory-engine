@@ -228,13 +228,54 @@ class Finding:
 
 
 def _active_markdown(repo_root: Path) -> list[Path]:
-    root_docs = [path for path in repo_root.glob("*.md") if path.is_file()]
+    root_docs = [
+        path
+        for path in repo_root.glob("*.md")
+        if path.is_file()
+    ]
     docs = [
         path
         for path in (repo_root / "docs").rglob("*.md")
-        if path.is_file() and "archive" not in path.relative_to(repo_root).parts
+        if (
+            path.is_file()
+            and "archive" not in path.relative_to(repo_root).parts
+        )
     ] if (repo_root / "docs").is_dir() else []
-    return sorted(root_docs + docs)
+    candidates = root_docs + docs
+    ignored = _git_ignored_paths(repo_root, candidates)
+    return sorted(path for path in candidates if path not in ignored)
+
+
+def _git_ignored_paths(repo_root: Path, paths: list[Path]) -> set[Path]:
+    """Ignore only local Markdown artifacts Git explicitly excludes.
+
+    A non-Git test fixture or an unavailable Git executable remains fully
+    checked.  Tracked documentation is never skipped by ``git check-ignore``.
+    """
+    if not paths:
+        return set()
+    try:
+        relative_paths = [path.relative_to(repo_root).as_posix() for path in paths]
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "check-ignore", "-z", "--stdin"],
+            check=False,
+            capture_output=True,
+            input=("\0".join(relative_paths) + "\0").encode("utf-8"),
+        )
+    except OSError:
+        return set()
+    if result.returncode not in (0, 1):
+        return set()
+    ignored_relative = {
+        value.decode("utf-8", errors="strict")
+        for value in result.stdout.split(b"\0")
+        if value
+    }
+    return {
+        path
+        for path in paths
+        if path.relative_to(repo_root).as_posix() in ignored_relative
+    }
 
 
 def _relative(path: Path, repo_root: Path) -> str:

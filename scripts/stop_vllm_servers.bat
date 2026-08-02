@@ -21,4 +21,8 @@ echo.
 echo vLLM systemd service, keepalive anchor, and stale manual vLLM processes cleared.
 echo Ollama remains running if started separately.
 echo.
+
+REM Cleanup is idempotent: an absent process is already the intended result.
+REM Callers such as dev_off.bat verify the endpoint is actually unavailable.
 if /I not "%GOODQ_NO_PAUSE%"=="1" pause
+exit /b 0

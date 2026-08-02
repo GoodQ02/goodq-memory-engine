@@ -90,3 +90,4 @@ def test_vllm_stop_launcher_clears_the_windows_side_keepalive_client():
 
     assert "get-ciminstance win32_process" in launcher
     assert "goodq-vllm-keepalive" in launcher
+    assert "exit /b 0" in launcher

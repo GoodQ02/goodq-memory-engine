@@ -14,6 +14,12 @@ from pathlib import Path
 import pytest
 
 
+pytest.importorskip(
+    "goodq_mini_agent",
+    reason="goodq_mini_agent is an optional private policy-engine integration",
+)
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / "cli" / "ucf_promotion.py"
 SUPERSEDED_RUNNERS = (

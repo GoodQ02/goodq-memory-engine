@@ -122,6 +122,10 @@ def test_wsl_audio_probe_is_not_blocked_by_unrelated_vllm_timeout(tmp_path: Path
     runtime = _load_runtime_route_module(repo_root, monkeypatch, tmp_path / "memory.db")
     runtime._WSL_WORKSPACE = "/home/goodq/goodq_audio"
 
+    # The test owns its configured target instead of inheriting a workstation
+    # override that may not exist in the public BASELINE environment.
+    monkeypatch.setenv("GOODQ_WSL_DISTRO", "Ubuntu-22.04")
+
     monkeypatch.setattr("shutil.which", lambda name: "wsl.exe" if name == "wsl" else None)
 
     def _completed(args: list[str], stdout: str = "", returncode: int = 0):

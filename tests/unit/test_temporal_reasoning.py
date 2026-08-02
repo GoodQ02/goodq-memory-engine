@@ -1,4 +1,5 @@
 from __future__ import annotations
+import base64
 import json
 import sqlite3
 from pathlib import Path
@@ -11,11 +12,17 @@ from steps.common.config_loader import load_configs, get_runtime_paths
 from retrieval.temporal_reasoning import temporal_search
 
 client = TestClient(app)
+_TEST_LAN_TOKEN = "a" * 64
+_TEST_LAN_HEADERS = {
+    "Authorization": "Basic "
+    + base64.b64encode(f"goodq:{_TEST_LAN_TOKEN}".encode("ascii")).decode("ascii")
+}
 
 @pytest.fixture(autouse=True)
 def setup_test_databases(monkeypatch, tmp_path):
     # Set GOODQ_DATA_ROOT to the temporary path to isolate configurations
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", _TEST_LAN_TOKEN)
     
     # Setup directory structure for mock epoch
     epoch_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_2025_12_22"
@@ -235,7 +242,7 @@ def test_temporal_search_endpoint():
         "grouping": "semantic_episode"
     }
     
-    response = client.post("/api/search/temporal", json=payload)
+    response = client.post("/api/search/temporal", json=payload, headers=_TEST_LAN_HEADERS)
     assert response.status_code == 200
     
     data = response.json()
@@ -263,7 +270,7 @@ def test_temporal_search_empty_filters():
     payload = {
         "max_results": 10
     }
-    response = client.post("/api/search/temporal", json=payload)
+    response = client.post("/api/search/temporal", json=payload, headers=_TEST_LAN_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data["results"], list)

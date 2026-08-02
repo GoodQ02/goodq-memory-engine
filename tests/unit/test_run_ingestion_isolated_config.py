@@ -47,7 +47,15 @@ def _isolated_snapshot(root: Path, models_cache: Path) -> dict[str, object]:
             "artifact_root": str(root),
         },
         "paths": {**_isolated_paths(root), "models_cache": str(models_cache)},
-        "qdrant": {"host": "http://127.0.0.1:6334"},
+        "qdrant": {
+            "host": "http://127.0.0.1:6334",
+            "collections": {
+                "clip": "goodq_clip_epoch_r24_witness",
+                "dino": "goodq_dino_epoch_r24_witness",
+                "text": "goodq_text_epoch_r24_witness",
+                "audio": "goodq_audio_epoch_r24_witness",
+            },
+        },
     }
 
 
@@ -138,6 +146,21 @@ def test_isolated_runner_snapshot_rejects_default_qdrant_collections_on_existing
             "audio": "goodq_audio_default",
         },
     }
+    snapshot_path = root / "config" / "witness-config.json"
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    monkeypatch.setattr(run_ingestion, "load_configs", lambda _overrides: {})
+
+    with pytest.raises(typer.BadParameter, match="fresh witness collections"):
+        run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+
+def test_isolated_runner_snapshot_rejects_missing_collections_on_any_loopback_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "witness"
+    snapshot = _isolated_snapshot(root, tmp_path / "shared-model-cache")
+    snapshot["qdrant"] = {"host": "http://127.0.0.1:6334"}
     snapshot_path = root / "config" / "witness-config.json"
     snapshot_path.parent.mkdir(parents=True)
     snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")

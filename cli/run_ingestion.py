@@ -374,17 +374,16 @@ def _validate_isolated_witness_runtime_config(cfg: Dict[str, Any], snapshot_path
     parsed = urlparse(host) if isinstance(host, str) else None
     if not parsed or parsed.hostname not in {"127.0.0.1", "localhost"} or parsed.port is None:
         raise typer.BadParameter("isolated runner config requires a loopback Qdrant endpoint")
-    if parsed.port == 6333:
-        collections = qdrant.get("collections") if isinstance(qdrant, dict) else None
-        required_collections = {"clip", "dino", "text", "audio"}
-        if not isinstance(collections, dict) or set(collections) != required_collections:
-            raise typer.BadParameter("existing Qdrant endpoint requires four fresh witness collections")
-        names = list(collections.values())
-        if (
-            len(set(names)) != len(required_collections)
-            or any(not isinstance(name, str) or "witness" not in name for name in names)
-        ):
-            raise typer.BadParameter("existing Qdrant endpoint requires four fresh witness collections")
+    collections = qdrant.get("collections") if isinstance(qdrant, dict) else None
+    required_collections = {"clip", "dino", "text", "audio"}
+    if not isinstance(collections, dict) or set(collections) != required_collections:
+        raise typer.BadParameter("isolated runner config requires four fresh witness collections")
+    names = list(collections.values())
+    if (
+        len(set(names)) != len(required_collections)
+        or any(not isinstance(name, str) or "witness" not in name for name in names)
+    ):
+        raise typer.BadParameter("isolated runner config requires four fresh witness collections")
 
 
 def load_isolated_runtime_cfg_snapshot(cfg_json: Path) -> Dict[str, Any]:

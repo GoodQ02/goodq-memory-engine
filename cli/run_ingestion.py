@@ -2579,6 +2579,18 @@ def _progressive_checkpoint_cleanup_ready(
     return verified == expected
 
 
+def _resolve_existing_scene_state(
+    cfg: Dict[str, Any],
+    scene_id: str,
+) -> Tuple[Dict[str, Any], Dict[str, bool]]:
+    """Return reusable scene state without legacy-store reads for isolated runs."""
+    if cfg.get('ingestion_isolation', False):
+        return {}, {'keyframe': False, 'audio': False}
+    existing_meta = get_scene_meta(cfg, scene_id) or {}
+    materialized = scene_has_materialized(cfg, scene_id, ['keyframe', 'audio'])
+    return existing_meta, materialized
+
+
 def _get_checkpoint_scene_meta(
     cfg: Dict[str, Any],
     scene_id: str,
@@ -8432,10 +8444,10 @@ def run(
 
                 scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
 
-                existing_meta = await asyncio.to_thread(get_scene_meta, cfg, scene_id)
-                existing_meta = existing_meta or {}
-                materialized = await asyncio.to_thread(
-                    scene_has_materialized, cfg, scene_id, ['keyframe', 'audio']
+                existing_meta, materialized = await asyncio.to_thread(
+                    _resolve_existing_scene_state,
+                    cfg,
+                    scene_id,
                 )
 
                 frame_info: Optional[Dict[str, Any]] = None

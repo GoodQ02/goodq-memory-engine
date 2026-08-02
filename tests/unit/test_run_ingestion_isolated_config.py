@@ -160,3 +160,21 @@ def test_isolated_runner_snapshot_rejects_an_escaped_faiss_index_path(
 
     with pytest.raises(typer.BadParameter, match="escapes witness root"):
         run_ingestion.load_isolated_runtime_cfg_snapshot(snapshot_path)
+
+
+def test_isolated_scene_start_does_not_read_legacy_scene_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _unexpected_legacy_read(*_args, **_kwargs):
+        raise AssertionError("isolated scene startup must not read legacy memory.db metadata")
+
+    monkeypatch.setattr(run_ingestion, "get_scene_meta", _unexpected_legacy_read)
+    monkeypatch.setattr(run_ingestion, "scene_has_materialized", _unexpected_legacy_read)
+
+    existing_meta, materialized = run_ingestion._resolve_existing_scene_state(
+        {"ingestion_isolation": True},
+        "scene-1",
+    )
+
+    assert existing_meta == {}
+    assert materialized == {"keyframe": False, "audio": False}

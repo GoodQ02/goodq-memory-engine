@@ -59,6 +59,8 @@ def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard(
     assert "api_launch_log" in dev_on
     assert "addseconds(60)" in dev_on
     assert "addseconds(15)" in dev_on
+    assert dev_on.index('start "goodq_api"') < dev_on.index("addseconds(60)")
+    assert dev_on.index("addseconds(60)") < dev_on.index('start "goodq_watchdog"')
 
 
 def test_dev_off_reports_release_and_the_intentional_qdrant_retention():

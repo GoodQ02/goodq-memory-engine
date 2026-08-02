@@ -7,6 +7,7 @@ WSL_USER="${GOODQ_WSL_USER:-${SUDO_USER:-$(whoami)}}"
 WSL_HOME="/home/${WSL_USER}"
 VLLM_HOME="${GOODQ_WSL_VLLM_HOME:-${WSL_HOME}/vllm_server}"
 MODEL_PATH="${GOODQ_WSL_MODEL_PATH:-${WSL_HOME}/models/Qwen2.5-0.5B-Instruct}"
+SERVED_MODEL_NAME="${GOODQ_VLLM_SERVED_MODEL_NAME:-goodq-qwen-speed}"
 VLLM_HOST="${GOODQ_WSL_VLLM_HOST:-127.0.0.1}"
 VLLM_PORT="${GOODQ_WSL_VLLM_PORT:-38005}"
 VLLM_GPU_MEMORY_UTILIZATION="${GOODQ_WSL_VLLM_GPU_MEMORY_UTILIZATION:-0.7}"
@@ -61,7 +62,7 @@ WorkingDirectory=${VLLM_HOME}
 Environment="PATH=${VLLM_HOME}/venv/bin:/usr/local/cuda-12.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="CUDA_HOME=/usr/local/cuda-12.1"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --host ${VLLM_HOST} --port ${VLLM_PORT} --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION} --max-model-len ${VLLM_MAX_MODEL_LEN} --kv-cache-dtype ${VLLM_KV_CACHE_DTYPE}
+ExecStart=${VLLM_HOME}/venv/bin/python -m vllm.entrypoints.openai.api_server --model ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --host ${VLLM_HOST} --port ${VLLM_PORT} --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION} --max-model-len ${VLLM_MAX_MODEL_LEN} --kv-cache-dtype ${VLLM_KV_CACHE_DTYPE}
 Restart=on-failure
 RestartSec=10
 KillMode=mixed
@@ -76,6 +77,7 @@ EOF
 echo "Service file created: /etc/systemd/system/vllm-llama1b.service"
 echo "Service user: ${WSL_USER}"
 echo "Model: ${MODEL_PATH}"
+echo "Served model name: ${SERVED_MODEL_NAME}"
 echo "Endpoint: http://${VLLM_HOST}:${VLLM_PORT}/v1"
 echo ""
 

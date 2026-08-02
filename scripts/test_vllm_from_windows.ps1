@@ -27,7 +27,7 @@ try {
     # The connectivity test above already reports the failure.
 }
 if (-not $modelId) {
-    $modelId = if ($env:GOODQ_WSL_MODEL_PATH) { $env:GOODQ_WSL_MODEL_PATH } else { "/home/jdben/models/Qwen2.5-0.5B-Instruct" }
+    $modelId = if ($env:GOODQ_VLLM_SERVED_MODEL_NAME) { $env:GOODQ_VLLM_SERVED_MODEL_NAME } else { "goodq-qwen-speed" }
 }
 $body = @{
     model = $modelId

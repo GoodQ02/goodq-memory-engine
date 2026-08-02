@@ -76,9 +76,10 @@ Hermes and the vLLM speed fallback are separate local services. Before changing
 a configured model ID, compare the configured value with the live server's
 `/v1/models` response and make one tiny completion against the advertised ID.
 
-The current speed fallback is named `Qwen-0.5B-Speed`. Its value is controlled
-by `GOODQ_WSL_MODEL_PATH` when supplied; otherwise the configured Qwen local
-path is used. A reachable endpoint alone is not sufficient: a stale model ID
+The current speed fallback is named `Qwen-0.5B-Speed`. Its portable client ID
+is `goodq-qwen-speed`, controlled by `GOODQ_VLLM_SERVED_MODEL_NAME`. The WSL
+installer alone resolves `GOODQ_WSL_MODEL_PATH`; that physical path is not a
+client contract. A reachable endpoint alone is not sufficient: a stale model ID
 causes completion requests to fail even when `/v1/models` succeeds.
 
 ## Minimal Verification

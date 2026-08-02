@@ -17,14 +17,14 @@ def _base_config() -> dict:
 
 
 def test_vllm_speed_fallback_defaults_to_the_active_qwen_service(monkeypatch) -> None:
-    monkeypatch.delenv("GOODQ_WSL_MODEL_PATH", raising=False)
+    monkeypatch.delenv("GOODQ_VLLM_SERVED_MODEL_NAME", raising=False)
     cfg = _base_config()
     del cfg["llm"]["vllm_model"]
 
     model = next(model for model in build_llm_models(cfg) if model.backend == "vllm")
 
     assert model.name == "Qwen-0.5B-Speed"
-    assert model.model_id == "/home/jdben/models/Qwen2.5-0.5B-Instruct"
+    assert model.model_id == "goodq-qwen-speed"
 
 
 def test_gpu_enhanced_profile_selects_configured_hermes_model(monkeypatch) -> None:

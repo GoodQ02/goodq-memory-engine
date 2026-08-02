@@ -64,7 +64,9 @@ powershell -NoProfile -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPor
 
 REM Start API Server in a separate minimized window
 set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"
-start "GoodQ_API" /min cmd.exe /c "C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m api.server
+set "API_LAUNCH_LOG=%TEMP%\goodq_api_launch.log"
+del /q "%API_LAUNCH_LOG%" >nul 2>&1
+start "GoodQ_API" /min cmd.exe /d /c ""C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m api.server 1>> "%API_LAUNCH_LOG%" 2>&1"
 set "GOODQ_PREWARM_RETRIEVAL_MODELS="
 
 REM Start Ingestion Watchdog in a separate minimized window
@@ -75,9 +77,9 @@ start "GoodQ_Watchdog" /min cmd.exe /d /c ""C:\Users\jdben\miniconda3\condabin\c
 echo [DEV ON] Local agent mode activated.
 echo vLLM endpoint:  http://127.0.0.1:38005/v1
 echo GoodQ API:      http://127.0.0.1:30000
-powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(30); do { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:30000/ | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
+powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(60); do { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:30000/ | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); Write-Error ('API did not become ready. launch_log=' + $env:API_LAUNCH_LOG); if (Test-Path -LiteralPath $env:API_LAUNCH_LOG) { Get-Content -LiteralPath $env:API_LAUNCH_LOG -Tail 12 | ForEach-Object { Write-Error $_ } }; exit 1"
 if errorlevel 1 (
-    call :dashboard -Event node -Node API -State blocked -Message "loopback endpoint did not become ready"
+    call :dashboard -Event node -Node API -State blocked -Message "loopback endpoint did not become ready; launch log is shown above"
     goto :blocked
 )
 call :dashboard -Event node -Node API -State ready -Message "loopback endpoint is available"

@@ -56,6 +56,8 @@ def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard(
     assert "-event final -state ready" in dev_on
     assert "if /i not \"%goodq_no_pause%\"==\"1\" pause" in dev_on
     assert "watchdog_launch_log" in dev_on
+    assert "api_launch_log" in dev_on
+    assert "addseconds(60)" in dev_on
     assert "addseconds(15)" in dev_on
 
 

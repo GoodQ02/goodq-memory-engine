@@ -41,6 +41,21 @@ def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
     assert "goodq_prewarm_retrieval_models=1" in dev_on
 
 
+def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard():
+    dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
+
+    assert "dev_mode_dashboard.ps1" in dev_on
+    assert "-event start" in dev_on
+    assert "-node config -state ready" in dev_on
+    assert '-node "wsl audio" -state ready' in dev_on
+    assert "-node vllm -state ready" in dev_on
+    assert "-node qdrant -state ready" in dev_on
+    assert "-node api -state ready" in dev_on
+    assert "-node watchdog -state ready" in dev_on
+    assert "-event final -state ready" in dev_on
+    assert "if /i not \"%goodq_no_pause%\"==\"1\" pause" in dev_on
+
+
 def test_vllm_launcher_waits_for_the_advertised_speed_endpoint_not_only_systemd():
     launcher = (REPO_ROOT / "scripts" / "start_vllm_servers.bat").read_text(encoding="utf-8").lower()
 

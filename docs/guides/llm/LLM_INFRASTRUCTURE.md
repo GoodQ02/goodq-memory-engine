@@ -72,8 +72,8 @@ sudo systemctl status vllm-llama1b
 ```
 
 On Windows, prefer `scripts/start_vllm_servers.bat` for operator sessions. It
-starts the systemd service and a single named `goodq-vllm-keepalive` process so
-WSL does not tear down while the model warms up.
+starts the systemd service and a single Windows-side `wsl.exe` client named
+`goodq-vllm-keepalive` so WSL does not tear down while the model warms up.
 
 On the primary workstation, the Windows Task Scheduler task
 `GoodQ4All vLLM WSL Startup` may call this wrapper at user logon. Treat that as
@@ -87,7 +87,8 @@ Use:
 ### Windows Convenience Launcher
 
 Use `scripts/start_vllm_servers.bat` if you want a Windows wrapper for the current systemd-backed primary endpoint.
-Use `scripts/stop_vllm_servers.bat` to stop the service and clear the keepalive anchor.
+Use `scripts/stop_vllm_servers.bat` to stop the service and clear the Windows-side
+keepalive anchor.
 
 The older `scripts/start_llm_servers.bat` launcher has been retired with the direct-start multi-model chain it depended on.
 

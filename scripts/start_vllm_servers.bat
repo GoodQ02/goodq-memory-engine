@@ -23,10 +23,10 @@ echo WSL is running
 echo Starting vLLM via systemd...
 wsl -d %GOODQ_WSL_DISTRO% -u root -- systemctl start vllm-llama1b
 
-REM WSL may tear down when no user-side process remains. Keep one lightweight,
-REM named anchor alive so the systemd vLLM service can finish warmup and serve.
+REM WSL tears down the VM when its last Windows wsl.exe client exits. Keep one
+REM lightweight Windows-side anchor alive so systemd vLLM can finish warmup.
 echo Starting WSL keepalive anchor...
-wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "pgrep -f '[g]oodq-vllm-keepalive' >/dev/null || (nohup bash -c 'exec -a goodq-vllm-keepalive sleep infinity' >/dev/null 2>&1 &)"
+start "GoodQ WSL keepalive" /min wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "exec -a goodq-vllm-keepalive sleep infinity"
 
 REM Ollama is an optional fallback. Start it when installed, but do not make the
 REM primary vLLM path depend on it.

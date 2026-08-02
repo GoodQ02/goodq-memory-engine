@@ -10,7 +10,7 @@
 
 **Network note:** The canonical service binds to `127.0.0.1`, not `0.0.0.0`. Do not reintroduce broad bindings for local operator convenience.
 
-**WSL lifetime note:** systemd starts the service when WSL starts. On this workstation, Windows callers should use `scripts/start_vllm_servers.bat` so a single named `goodq-vllm-keepalive` process keeps WSL alive while vLLM warms and serves.
+**WSL lifetime note:** systemd starts the service when WSL starts. On this workstation, Windows callers should use `scripts/start_vllm_servers.bat` so a single named Windows-side `wsl.exe` client (`goodq-vllm-keepalive`) keeps WSL alive while vLLM warms and serves.
 
 **Placeholder note:** For the current open bootstrap model, resolve `<wsl_model_path>` to the WSL-visible model directory, for example `/home/<wsl_user>/models/Qwen2.5-0.5B-Instruct`.
 

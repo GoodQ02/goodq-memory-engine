@@ -44,6 +44,14 @@ def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
 def test_vllm_launcher_waits_for_the_advertised_speed_endpoint_not_only_systemd():
     launcher = (REPO_ROOT / "scripts" / "start_vllm_servers.bat").read_text(encoding="utf-8").lower()
 
+    assert 'start "goodq wsl keepalive" /min wsl -d %goodq_wsl_distro%' in launcher
     assert "http://127.0.0.1:38005/v1/models" in launcher
     assert "addseconds(90)" in launcher
     assert "vllm speed endpoint did not become ready" in launcher
+
+
+def test_vllm_stop_launcher_clears_the_windows_side_keepalive_client():
+    launcher = (REPO_ROOT / "scripts" / "stop_vllm_servers.bat").read_text(encoding="utf-8").lower()
+
+    assert "get-ciminstance win32_process" in launcher
+    assert "goodq-vllm-keepalive" in launcher

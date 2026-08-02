@@ -12,6 +12,9 @@ echo.
 wsl -d %GOODQ_WSL_DISTRO% -u root -- systemctl stop vllm-llama1b
 wsl -d %GOODQ_WSL_DISTRO% -u root -- pkill -KILL -f "[v]llm.entrypoints.openai.api_server"
 wsl -d %GOODQ_WSL_DISTRO% -u root -- pkill -KILL -f "[V]LLM::EngineCore"
+
+REM The persistent anchor is a Windows wsl.exe client, not just a Linux child.
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'Name=''wsl.exe''' | Where-Object { $_.CommandLine -match 'goodq-vllm-keepalive' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 wsl -d %GOODQ_WSL_DISTRO% -- pkill -KILL -f "[g]oodq-vllm-keepalive"
 
 echo.

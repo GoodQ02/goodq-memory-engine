@@ -70,7 +70,7 @@ removed from active Qdrant storage; the four active July authority collections
 remain green with their original counts (audio 1,453; CLIP 2,913; DINO 2,913;
 text 4,292). The durable execution receipt, including the plan SHA-256,
 snapshot names, deleted collection names, and after-state assertion, is
-[`R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json`](evidence/R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json).
+The detailed private development receipt is intentionally not included in the public release.
 
 No corpus, SQLite store, graph, FAISS index, runtime configuration, or active
 July Qdrant collection changed. Snapshot retention is a separate future policy

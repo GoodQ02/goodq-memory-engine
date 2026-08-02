@@ -1,0 +1,13 @@
+{
+  "authority": {"collections": {"audio": "goodq_audio_epoch_public_release_candidate", "clip": "goodq_clip_epoch_public_release_candidate", "dino": "goodq_dino_epoch_public_release_candidate", "text": "goodq_text_epoch_public_release_candidate"}, "config_source": "sanitized_public_release_receipt", "epoch_id": "epoch_public_release_candidate", "profile": "PUBLIC_RELEASE_CANDIDATE"},
+  "captured_at_utc": "2026-08-02T00:00:00Z",
+  "completion": {"context_frames": 0, "distinct_videos": 0, "failed_media": 0, "import_inbox_media": 0, "media_sources": 0, "processed_media": 0, "promotion_status": {}},
+  "configured_runtime": {"api": {"endpoint": "http://127.0.0.1:30000", "loopback_only": true}, "ollama": {"endpoint": null, "location": "not_configured", "model": null}, "qdrant": {"endpoint": "http://127.0.0.1:6333", "loopback_only": true}, "vllm": {"endpoint": null, "location": "not_configured", "model": null}},
+  "evidence_id": "eb137833bb4fa5dd",
+  "historical_evidence": [],
+  "limitations": ["This is a sanitized public release receipt, not a private corpus or runtime snapshot.", "Private media, corpus counts, paths, and operational receipts are intentionally omitted.", "The public candidate must be configured and verified by each operator before ingesting media."],
+  "observed_services": {"goodq_api": {"state": "not_probed"}, "ollama": {"state": "not_probed"}, "qdrant": {"state": "running_loopback"}, "vllm": {"state": "not_probed"}, "wsl": {"state": "not_probed"}},
+  "persistence": {"faiss": {"files": [], "indexes": 0}, "knowledge_graph": {"edges": 0, "event_nodes": 0, "events": 0, "media_nodes": 0, "node_media": 0, "nodes": 0}, "memory": {"embeddings": 0, "links": 0, "retrieval_events": 0, "scenes": 0, "segments": 0}, "qdrant": {"collections": {"audio": {"dimensions": 0, "name": "goodq_audio_epoch_public_release_candidate", "points_count": 0, "status": "green"}, "clip": {"dimensions": 0, "name": "goodq_clip_epoch_public_release_candidate", "points_count": 0, "status": "green"}, "dino": {"dimensions": 0, "name": "goodq_dino_epoch_public_release_candidate", "points_count": 0, "status": "green"}, "text": {"dimensions": 0, "name": "goodq_text_epoch_public_release_candidate", "points_count": 0, "status": "green"}}, "non_authority_collection_count": 0, "state": "running_loopback"}, "ucf": {"transitions": 0, "validated_transitions": 0}},
+  "repository": {"commit": "9886b36d", "dirty": false},
+  "schema_version": 1
+}

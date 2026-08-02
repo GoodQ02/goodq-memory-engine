@@ -36,23 +36,12 @@ evidence.
 
 ## Evidence Snapshot
 
-- File: `docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json`
-- Evidence ID: `2923b9a7ca972db2`
-- Captured at: `2026-07-11T13:08:29Z`
-- Active epoch: `epoch_2026_07_05_home_memory_clean_01`
-- Profile: `GPU_ENHANCED`
-- Media sources / distinct videos / processed media: **12 / 12 / 12**
-- UCF context frames / promoted frames: **75,094 / 75,094**
-- Import inbox / failed media: **0 / 0**
-- Materialized scenes / segments: **1,648 / 16,535**
-- Memory embeddings / links: **8,736 / 42,800**
-- Knowledge-graph nodes / edges: **93,293 / 1,928,045**
-- Qdrant: exact four current collections, all green; audio **1,453 x
-  512**, clip **2,913 x 768**, dino **2,913 x 1,024**, text **4,292 x
-  384**
+- Private runtime evidence and corpus-specific measurements are retained in
+  private development. They are deliberately omitted from the public mirror.
 
-Service observations are deliberately narrow. The GoodQ API TCP probe timed
-out and did not claim application health. Qdrant was reachable on loopback.
+Service observations are deliberately narrow; public releases should use their
+own local verification receipts rather than inheriting another operator's
+runtime evidence.
 The configured non-loopback vLLM endpoint was withheld and not contacted.
 GoodQ Ollama was reachable with no model reported loaded. WSL was not queried.
 

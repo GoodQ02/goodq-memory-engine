@@ -14,7 +14,7 @@ Use these surfaces instead:
 - [Current state](agent/CURRENT_STATE.md) for the human-readable projection.
 - [Current state JSON](agent/current_state.json) for the machine-readable
   projection.
-- [Current-state evidence](diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json)
+- [Current-state evidence](diagnostics/evidence/PUBLIC_REDACTED_RELEASE_EVIDENCE_2026-08-02.json)
   for the validated evidence source behind both projections.
 - [ROADMAP](releases/ROADMAP.md) for future work and open gaps.
 - [Documentation authority map](bootstrap/doc_authority_map.md) for precedence.

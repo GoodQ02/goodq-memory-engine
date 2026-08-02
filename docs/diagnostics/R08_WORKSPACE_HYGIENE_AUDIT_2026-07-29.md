@@ -47,7 +47,7 @@ ignored cache residue were removed. The observed free-space increase was
 5,316.78 MB. Git now reports six registered worktrees.
 
 The exact paths, heads, cache paths, and before/after free-space values are in
-[`R08_WORKSPACE_PRUNE_RECEIPT_2026-07-29T205240Z.json`](evidence/R08_WORKSPACE_PRUNE_RECEIPT_2026-07-29T205240Z.json).
+The detailed private development receipt is intentionally not included in the public release.
 
 ## Preserved worktrees
 

@@ -1,28 +1,28 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-29 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-02 -->
 
 # GoodQ RAG Context Pack
 
-Generated from evidence `615a7c4bbcb84c87` captured at
-`2026-07-29T205357Z`. This is the portable read-only contract for
+Generated from evidence `eb137833bb4fa5dd` captured at
+`2026-08-02T00:00:00Z`. This is the portable read-only contract for
 GoodQ retrieval agents. Runtime snapshots and local agent configuration do not
 override this epoch authority.
 
 ## Active Authority
 
-- Epoch: `epoch_2026_07_05_home_memory_clean_01`
-- Lifecycle: `complete_and_fully_promoted`; capture proves complete and fully promoted; do not ingest or promote this scope again.
+- Epoch: `epoch_public_release_candidate`
+- Lifecycle: `not_proven_complete_or_fully_promoted`; not proven complete or fully promoted; do not infer lifecycle readiness from this pack.
 - SQLite authority: epoch-scoped `memory.db`, `knowledge_graph.db`, and
   `ucf/ucf_ledger.db` below `GOODQ_DATA_ROOT`.
 - Qdrant authority: the exact four collections below.
 
 | Collection | Modality | Dimensions | Points at capture |
 |---|---|---:|---:|
-| `goodq_audio_epoch_2026_07_05_home_memory_clean_01` | audio | 512 | 1,453 |
-| `goodq_clip_epoch_2026_07_05_home_memory_clean_01` | clip | 768 | 2,913 |
-| `goodq_dino_epoch_2026_07_05_home_memory_clean_01` | dino | 1024 | 2,913 |
-| `goodq_text_epoch_2026_07_05_home_memory_clean_01` | text | 384 | 4,292 |
+| `goodq_audio_epoch_public_release_candidate` | audio | 0 | 0 |
+| `goodq_clip_epoch_public_release_candidate` | clip | 0 | 0 |
+| `goodq_dino_epoch_public_release_candidate` | dino | 0 | 0 |
+| `goodq_text_epoch_public_release_candidate` | text | 0 | 0 |
 
 ## Agent Read Boundary
 
@@ -56,7 +56,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-epoch_id = "epoch_2026_07_05_home_memory_clean_01"
+epoch_id = "epoch_public_release_candidate"
 epoch_root = Path(os.environ["GOODQ_DATA_ROOT"]) / "GoodQ_Data" / "epochs" / epoch_id
 db_path = epoch_root / "memory.db"
 wal_path = Path(f"{db_path}-wal")
@@ -79,7 +79,7 @@ connection.close()
 ## Safe Qdrant Pattern
 
 The active text collection at this capture is
-`goodq_text_epoch_2026_07_05_home_memory_clean_01`. Agents should still discover it through bridge
+`goodq_text_epoch_public_release_candidate`. Agents should still discover it through bridge
 `collections` rather than hard-code it in prompts. Payload sampling and search
 must set `with_vector=false` and use a small explicit limit.
 

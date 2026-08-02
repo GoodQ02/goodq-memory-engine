@@ -1,26 +1,24 @@
 {
   "authority": {
     "collections": {
-      "audio": "goodq_audio_epoch_2026_07_05_home_memory_clean_01",
-      "clip": "goodq_clip_epoch_2026_07_05_home_memory_clean_01",
-      "dino": "goodq_dino_epoch_2026_07_05_home_memory_clean_01",
-      "text": "goodq_text_epoch_2026_07_05_home_memory_clean_01"
+      "audio": "goodq_audio_epoch_public_release_candidate",
+      "clip": "goodq_clip_epoch_public_release_candidate",
+      "dino": "goodq_dino_epoch_public_release_candidate",
+      "text": "goodq_text_epoch_public_release_candidate"
     },
-    "config_source": "sanitized_resolved_config",
-    "epoch_id": "epoch_2026_07_05_home_memory_clean_01",
-    "profile": "GPU_ENHANCED"
+    "config_source": "sanitized_public_release_receipt",
+    "epoch_id": "epoch_public_release_candidate",
+    "profile": "PUBLIC_RELEASE_CANDIDATE"
   },
-  "captured_at_utc": "2026-07-29T205357Z",
+  "captured_at_utc": "2026-08-02T00:00:00Z",
   "completion": {
-    "context_frames": 75094,
-    "distinct_videos": 12,
+    "context_frames": 0,
+    "distinct_videos": 0,
     "failed_media": 0,
     "import_inbox_media": 0,
-    "media_sources": 12,
-    "processed_media": 12,
-    "promotion_status": {
-      "promoted": 75094
-    }
+    "media_sources": 0,
+    "processed_media": 0,
+    "promotion_status": {}
   },
   "configured_runtime": {
     "api": {
@@ -28,139 +26,96 @@
       "loopback_only": true
     },
     "ollama": {
-      "endpoint": "http://127.0.0.1:11434/v1",
-      "location": "loopback",
-      "model": "llama3.2:latest"
+      "endpoint": null,
+      "location": "not_configured",
+      "model": null
     },
     "qdrant": {
       "endpoint": "http://127.0.0.1:6333",
       "loopback_only": true
     },
     "vllm": {
-      "endpoint": "http://127.0.0.1:38005/v1",
-      "location": "loopback",
-      "model": "Llama-3.2-1B-Instruct"
+      "endpoint": null,
+      "location": "not_configured",
+      "model": null
     }
   },
-  "evidence_id": "615a7c4bbcb84c87",
-  "generated_from": "docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T205357Z.json",
-  "historical_evidence": [
-    {
-      "label": "July promotion witness",
-      "path": "docs/agent/birth_certificate.md"
-    },
-    {
-      "label": "June family-film pilot",
-      "path": "docs/agent/UCF_CLEAN_REINGEST_VERIFICATION_REPORT.md"
-    },
-    {
-      "label": "sealed basement-era handoff",
-      "path": "docs/archive/HANDOFF_BASEMENT_PHASE.md"
-    }
-  ],
+  "evidence_id": "eb137833bb4fa5dd",
+  "generated_from": "docs/diagnostics/evidence/PUBLIC_REDACTED_RELEASE_EVIDENCE_2026-08-02.json",
+  "historical_evidence": [],
   "lifecycle": {
-    "complete_and_fully_promoted": true,
-    "context_frames": 75094,
+    "complete_and_fully_promoted": false,
+    "context_frames": 0,
     "non_promoted_frames": 0,
-    "promoted_frames": 75094,
-    "state": "complete_and_fully_promoted"
+    "promoted_frames": 0,
+    "state": "not_proven_complete_or_fully_promoted"
   },
   "limitations": [
-    "Service observations are a point-in-time snapshot and do not start stopped services.",
-    "WSL was intentionally not probed because that can change runtime state.",
-    "Configured loopback URLs show routing intent; listener bindings were not independently audited.",
-    "Historical lifecycle events were not reconstructed; the ledger is reported as found.",
-    "Hermes, OpenViking, and Nanobot are GOOD-CUBE-local adapters, not GoodQ epoch authority."
+    "This is a sanitized public release receipt, not a private corpus or runtime snapshot.",
+    "Private media, corpus counts, paths, and operational receipts are intentionally omitted.",
+    "The public candidate must be configured and verified by each operator before ingesting media."
   ],
   "observed_services": {
     "goodq_api": {
-      "health": "not_probed",
-      "probe": "tcp_only",
-      "state": "tcp_reachable"
+      "state": "not_probed"
     },
     "ollama": {
-      "loaded_models": [],
-      "state": "reachable",
-      "version": "0.32.5"
+      "state": "not_probed"
     },
     "qdrant": {
       "state": "running_loopback"
     },
     "vllm": {
-      "error_class": "ConnectionRefusedError",
-      "models": [],
-      "state": "stopped_or_unavailable"
+      "state": "not_probed"
     },
     "wsl": {
-      "reason": "passive current-state capture does not start or query WSL",
       "state": "not_probed"
     }
   },
   "persistence": {
     "faiss": {
-      "files": [
-        {
-          "bytes": 9752995,
-          "name": "faiss_clip.index"
-        },
-        {
-          "bytes": 12735907,
-          "name": "faiss_dino.index"
-        },
-        {
-          "bytes": 3377043,
-          "name": "goodq_audio_epoch_2026_07_05_home_memory_clean_01.index"
-        },
-        {
-          "bytes": 7777375,
-          "name": "faiss_text.index"
-        }
-      ],
-      "indexes": 4
+      "files": [],
+      "indexes": 0
     },
     "knowledge_graph": {
-      "edges": 1929056,
+      "edges": 0,
       "event_nodes": 0,
       "events": 0,
-      "media_nodes": 2914,
-      "node_media": 19449,
-      "nodes": 93308
+      "media_nodes": 0,
+      "node_media": 0,
+      "nodes": 0
     },
     "memory": {
-      "embeddings": 8736,
-      "links": 42800,
-      "retrieval_events": 53580,
-      "scenes": 1648,
-      "segments": 16535
+      "embeddings": 0,
+      "links": 0,
+      "retrieval_events": 0,
+      "scenes": 0,
+      "segments": 0
     },
     "qdrant": {
       "collections": {
         "audio": {
-          "dimensions": 512,
-          "identity_only_sample": true,
-          "name": "goodq_audio_epoch_2026_07_05_home_memory_clean_01",
-          "points_count": 1453,
+          "dimensions": 0,
+          "name": "goodq_audio_epoch_public_release_candidate",
+          "points_count": 0,
           "status": "green"
         },
         "clip": {
-          "dimensions": 768,
-          "identity_only_sample": true,
-          "name": "goodq_clip_epoch_2026_07_05_home_memory_clean_01",
-          "points_count": 2913,
+          "dimensions": 0,
+          "name": "goodq_clip_epoch_public_release_candidate",
+          "points_count": 0,
           "status": "green"
         },
         "dino": {
-          "dimensions": 1024,
-          "identity_only_sample": true,
-          "name": "goodq_dino_epoch_2026_07_05_home_memory_clean_01",
-          "points_count": 2913,
+          "dimensions": 0,
+          "name": "goodq_dino_epoch_public_release_candidate",
+          "points_count": 0,
           "status": "green"
         },
         "text": {
-          "dimensions": 384,
-          "identity_only_sample": true,
-          "name": "goodq_text_epoch_2026_07_05_home_memory_clean_01",
-          "points_count": 4292,
+          "dimensions": 0,
+          "name": "goodq_text_epoch_public_release_candidate",
+          "points_count": 0,
           "status": "green"
         }
       },
@@ -168,12 +123,12 @@
       "state": "running_loopback"
     },
     "ucf": {
-      "transitions": 1,
-      "validated_transitions": 1
+      "transitions": 0,
+      "validated_transitions": 0
     }
   },
   "repository": {
-    "commit": "fbe6843b",
+    "commit": "9886b36d",
     "dirty": false
   },
   "schema_version": 2

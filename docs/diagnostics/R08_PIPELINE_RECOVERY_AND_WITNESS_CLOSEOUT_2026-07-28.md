@@ -96,7 +96,7 @@ timings, vector IDs, and store receipts; it does not reproduce source dialogue.
 
 ## Verification surfaces
 
-- `docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json`
+- private development evidence receipt (not included in the public mirror)
 - `docs/agent/CURRENT_STATE.md`
 - `docs/agent/current_state.json`
 - `docs/GOODQ_RAG_CONTEXT_PACK.md`

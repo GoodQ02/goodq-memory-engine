@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-01 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-02 -->
 
 # Local Dev Runtime Modes
 
@@ -33,6 +33,16 @@ owns only `setup_cuda_env.sh`, `process_audio.py`, and `model_cache.py`; matchin
 files are not rewritten. This prevents a strict audio run from accepting an
 importable but stale worker deployment.
 
+### Operator Receipt
+
+Dev On displays a compact, check-driven `BUILD MODE` receipt as it verifies
+configuration, WSL audio, vLLM, Qdrant, the API, and the watchdog. A blocked
+node names the first failed boundary and its reason; the launcher does not
+claim readiness after a failed check.
+
+The receipt remains open until the operator closes it. Status text is the
+authoritative signal; color is a supporting aid only.
+
 ## Dev Off
 
 Run `dev_off.bat` from the repository root.
@@ -44,6 +54,13 @@ allocator caches and VRAM without deleting model files, indexes, or data.
 Qdrant intentionally remains running on loopback. It uses no GPU and avoids a
 database-service restart when returning to development. It is not a remote
 access surface by virtue of remaining local.
+
+Dev Off displays an `OPEN DESKTOP` receipt after it verifies that vLLM, WSL,
+the API, and the watchdog have released. It then confirms retained loopback
+Qdrant and prints an informational `nvidia-smi` process/memory snapshot when
+the utility is available. Remaining display or game allocation is not a Dev
+Off failure; the meaningful condition is that GoodQ-owned GPU compute has
+stopped. The receipt remains open until the operator closes it.
 
 Do not use a global GPU reset or kill unrelated desktop processes to reclaim
 display-managed VRAM. Those operations can disrupt the active desktop and are

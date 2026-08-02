@@ -41,6 +41,14 @@ def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
     assert "goodq_prewarm_retrieval_models=1" in dev_on
 
 
+def test_dev_on_uses_its_resolved_interpreter_not_a_named_developer_profile():
+    dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
+
+    assert "c:\\users\\jdben" not in dev_on
+    assert '"%python_exe%" -m api.server' in dev_on
+    assert '"%python_exe%" -m cli.watchdog' in dev_on
+
+
 def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard():
     dev_on = (REPO_ROOT / "dev_on.bat").read_text(encoding="utf-8").lower()
 

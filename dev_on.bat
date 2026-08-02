@@ -66,7 +66,7 @@ REM Start API Server in a separate minimized window
 set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"
 set "API_LAUNCH_LOG=%TEMP%\goodq_api_launch.log"
 del /q "%API_LAUNCH_LOG%" >nul 2>&1
-start "GoodQ_API" /min cmd.exe /d /c ""C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m api.server 1>> "%API_LAUNCH_LOG%" 2>&1"
+start "GoodQ_API" /min cmd.exe /d /c ""%PYTHON_EXE%" -m api.server 1>> "%API_LAUNCH_LOG%" 2>&1"
 set "GOODQ_PREWARM_RETRIEVAL_MODELS="
 
 echo [DEV ON] Local agent mode activated.
@@ -82,7 +82,7 @@ call :dashboard -Event node -Node API -State ready -Message "loopback endpoint i
 REM Start the watchdog only after API readiness to avoid concurrent conda-run temp-file contention.
 set "WATCHDOG_LAUNCH_LOG=%TEMP%\goodq_watchdog_launch.log"
 del /q "%WATCHDOG_LAUNCH_LOG%" >nul 2>&1
-start "GoodQ_Watchdog" /min cmd.exe /d /c ""C:\Users\jdben\miniconda3\condabin\conda.bat" run --no-capture-output -n goodq_core python -m cli.watchdog 1>> "%WATCHDOG_LAUNCH_LOG%" 2>&1"
+start "GoodQ_Watchdog" /min cmd.exe /d /c ""%PYTHON_EXE%" -m cli.watchdog 1>> "%WATCHDOG_LAUNCH_LOG%" 2>&1"
 
 powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(15); do { if (Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'cli.watchdog' }) { exit 0 }; Start-Sleep -Seconds 1 } while ((Get-Date) -lt $deadline); Write-Error ('Watchdog did not stay running. launch_log=' + $env:WATCHDOG_LAUNCH_LOG); if (Test-Path -LiteralPath $env:WATCHDOG_LAUNCH_LOG) { Get-Content -LiteralPath $env:WATCHDOG_LAUNCH_LOG -Tail 12 | ForEach-Object { Write-Error $_ } }; exit 1"
 if errorlevel 1 (

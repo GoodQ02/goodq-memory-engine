@@ -24,6 +24,10 @@ It performs these actions in order:
 5. Sets `GOODQ_PREWARM_RETRIEVAL_MODELS=1` only for the new API process.
 6. The API preloads the local text, CLIP, and CLAP query encoders once, so the
    first interactive retrieval does not pay model-load latency.
+7. Starts API before watchdog. These are intentionally serialized because two
+   concurrent `conda run` launches can contend for Conda's temporary activation
+   file. Each launch writes a bounded diagnostic log under `%TEMP%`; on failure,
+   Dev On prints the relevant log tail before marking the node blocked.
 
 The pre-warm is fail-soft: an unavailable optional encoder is logged and does
 not prevent the API from starting. It uses pinned local model caches only.

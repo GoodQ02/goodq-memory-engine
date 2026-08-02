@@ -56,6 +56,22 @@ def test_dev_on_reports_real_service_transitions_through_the_operator_dashboard(
     assert "if /i not \"%goodq_no_pause%\"==\"1\" pause" in dev_on
 
 
+def test_dev_off_reports_release_and_the_intentional_qdrant_retention():
+    dev_off = (REPO_ROOT / "dev_off.bat").read_text(encoding="utf-8").lower()
+
+    assert "dev_mode_dashboard.ps1" in dev_off
+    assert "-event start" in dev_off
+    assert "-node vllm -state released" in dev_off
+    assert '-node "wsl audio" -state released' in dev_off
+    assert "-node api -state released" in dev_off
+    assert "-node watchdog -state released" in dev_off
+    assert "-node qdrant -state retained" in dev_off
+    assert "nvidia-smi" in dev_off
+    assert '-node "nvidia-smi" -state check' in dev_off
+    assert "-event final -state ready" in dev_off
+    assert "if /i not \"%goodq_no_pause%\"==\"1\" pause" in dev_off
+
+
 def test_vllm_launcher_waits_for_the_advertised_speed_endpoint_not_only_systemd():
     launcher = (REPO_ROOT / "scripts" / "start_vllm_servers.bat").read_text(encoding="utf-8").lower()
 

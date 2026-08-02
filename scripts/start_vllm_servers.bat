@@ -26,7 +26,12 @@ wsl -d %GOODQ_WSL_DISTRO% -u root -- systemctl start vllm-llama1b
 REM WSL tears down the VM when its last Windows wsl.exe client exits. Keep one
 REM lightweight Windows-side anchor alive so systemd vLLM can finish warmup.
 echo Starting WSL keepalive anchor...
-start "GoodQ WSL keepalive" /min wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "exec -a goodq-vllm-keepalive sleep infinity"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'Name=''wsl.exe''' | Where-Object { $_.CommandLine -match 'goodq-vllm-keepalive' } | Select-Object -First 1 | ForEach-Object { exit 0 }; exit 1"
+if errorlevel 1 (
+    start "GoodQ WSL keepalive" /min wsl -d %GOODQ_WSL_DISTRO% -- bash -lc "exec -a goodq-vllm-keepalive sleep infinity"
+) else (
+    echo Reusing existing WSL keepalive anchor.
+)
 
 REM Ollama is an optional fallback. Start it when installed, but do not make the
 REM primary vLLM path depend on it.

@@ -44,6 +44,8 @@ def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():
 def test_vllm_launcher_waits_for_the_advertised_speed_endpoint_not_only_systemd():
     launcher = (REPO_ROOT / "scripts" / "start_vllm_servers.bat").read_text(encoding="utf-8").lower()
 
+    assert "reusing existing wsl keepalive anchor" in launcher
+    assert "get-ciminstance win32_process" in launcher
     assert 'start "goodq wsl keepalive" /min wsl -d %goodq_wsl_distro%' in launcher
     assert "http://127.0.0.1:38005/v1/models" in launcher
     assert "addseconds(90)" in launcher

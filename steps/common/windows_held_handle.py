@@ -602,6 +602,31 @@ class WindowsHeldHandleBackend:
             self._raise_call_error(last_error)
         return token
 
+    def open_directory(self, path: str) -> object:
+        """Open one projected directory by pathname while retaining its handle."""
+        if self._exited or not path:
+            _raise("observation_failed")
+        token = self._reserve()
+        try:
+            handle = self._kernel32.CreateFileW(
+                path,
+                self._FILE_LIST_DIRECTORY | self._FILE_READ_ATTRIBUTES,
+                self._FILE_SHARE_READ,
+                None,
+                self._OPEN_EXISTING,
+                self._FILE_FLAG_OPEN_REPARSE_POINT | self._FILE_FLAG_BACKUP_SEMANTICS,
+                None,
+            )
+        except BaseException:
+            self._discard_reservation(token)
+            raise
+        token._raw = handle
+        if self._failed_handle(handle):
+            last_error = self._last_error()
+            self._discard_reservation(token)
+            self._raise_call_error(last_error)
+        return token
+
     def volume_filesystem(self, handle: object) -> str:
         raw = self._raw(handle)
         volume_name = self._ctypes.create_unicode_buffer(261)

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1392**
+Indexed active tracked paths: **1393**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -447,6 +447,7 @@ Indexed active tracked paths: **1392**
 | `/docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md` | Documentation | Active documentation or governance surface. |
+| `/docs/releases/R24_GOLDEN_WITNESS_RELEASE_CANDIDATE_2026-08-02.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/ROADMAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |

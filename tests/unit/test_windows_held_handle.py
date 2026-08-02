@@ -245,6 +245,7 @@ def test_backend_public_method_surface_is_exact(
         "close",
         "enumerate_directory",
         "hash_file",
+        "open_directory",
         "open_by_id",
         "open_root",
         "read_file_bounded",
@@ -2615,11 +2616,7 @@ def test_native_open_by_id_maps_incompatible_writer_as_sharing_conflict(
         with module.WindowsHeldHandleBackend() as backend:
             volume = backend.open_root(f"{tmp_path.drive}\\")
             filesystem = backend.volume_filesystem(volume)
-            parent = volume
-            for component in tmp_path.parts[1:]:
-                entries = backend.enumerate_directory(parent, filesystem)
-                entry = next(item for item in entries if item.name == component)
-                parent = backend.open_by_id(volume, entry, directory=True)
+            parent = backend.open_directory(str(tmp_path))
             entries = backend.enumerate_directory(parent, filesystem)
             target_entry = next(item for item in entries if item.name == target.name)
 
@@ -2646,11 +2643,7 @@ def test_native_read_file_bounded_proves_eof_and_enforces_cap(
     with module.WindowsHeldHandleBackend() as backend:
         volume = backend.open_root(f"{tmp_path.drive}\\")
         filesystem = backend.volume_filesystem(volume)
-        parent = volume
-        for component in tmp_path.parts[1:]:
-            entries = backend.enumerate_directory(parent, filesystem)
-            entry = next(item for item in entries if item.name == component)
-            parent = backend.open_by_id(volume, entry, directory=True)
+        parent = backend.open_directory(str(tmp_path))
         entries = backend.enumerate_directory(parent, filesystem)
         entry_by_name = {entry.name: entry for entry in entries}
         member_before_cap = backend.open_by_id(
@@ -2699,11 +2692,7 @@ def test_native_read_security_descriptor_is_detached_and_self_relative(
     with module.WindowsHeldHandleBackend(access_profile=access_profile) as backend:
         volume = backend.open_root(f"{tmp_path.drive}\\")
         filesystem = backend.volume_filesystem(volume)
-        parent = volume
-        for component in tmp_path.parts[1:]:
-            entries = backend.enumerate_directory(parent, filesystem)
-            entry = next(item for item in entries if item.name == component)
-            parent = backend.open_by_id(volume, entry, directory=True)
+        parent = backend.open_directory(str(tmp_path))
         entries = backend.enumerate_directory(parent, filesystem)
         target_entry = next(item for item in entries if item.name == target.name)
         member = backend.open_by_id(volume, target_entry, directory=False)

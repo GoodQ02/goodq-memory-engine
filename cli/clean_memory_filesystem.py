@@ -930,6 +930,20 @@ def _windows_find(
     return exact[0] if exact else None
 
 
+def _open_windows_projected_directory(
+    api: WindowsHeldHandleBackend,
+    *,
+    volume_handle: object,
+    entry: WindowsDirectoryEntry,
+    path: str,
+) -> object:
+    """Prefer the projected namespace path; retain legacy fake-backend support."""
+    opener = getattr(api, "open_directory", None)
+    if callable(opener):
+        return opener(path)
+    return api.open_by_id(volume_handle, entry, directory=True)
+
+
 def _windows_validate_scope_entries(
     entries: tuple[WindowsDirectoryEntry, ...],
     *,
@@ -1009,9 +1023,9 @@ def _windows_observe_file(
 def _observe_windows_backend(
     projection: _Projection,
 ) -> tuple[str, tuple[FilesystemTargetEvidence, ...]]:
-    # OpenFileById is volume-global. Held parents plus before/after membership
-    # bind each ID to its projected name, but platform-level ID reuse remains a
-    # bounded theoretical race; this backend never degrades to pathname opens.
+    # Keep every opened directory handle. Windows may resolve an otherwise valid
+    # file ID through an AppContainer namespace alias, so projected path opens
+    # are used for the authority chain and snapshots reject reparse boundaries.
     components = _absolute_components(projection.epoch_root, flavor="windows")
     root = f"{components[0]}\\"
     with _load_windows_backend() as api:
@@ -1026,10 +1040,10 @@ def _observe_windows_backend(
             require_stream_contract=True,
         )
         current_handle = root_handle
+        current_path = root
         for component in components[1:]:
             entries = api.enumerate_directory(current_handle, filesystem)
             membership = _windows_membership(entries)
-            directories.append(_WindowsDirectory(current_handle, membership))
             entry = _windows_find(entries, component)
             if entry is None:
                 if _windows_membership(
@@ -1041,7 +1055,13 @@ def _observe_windows_backend(
                 _raise("redirected_boundary")
             if not entry.is_directory:
                 _raise("unexpected_entry_type")
-            child_handle = api.open_by_id(root_handle, entry, directory=True)
+            current_path = f"{current_path}{component}\\"
+            child_handle = _open_windows_projected_directory(
+                api,
+                volume_handle=root_handle,
+                entry=entry,
+                path=current_path,
+            )
             child_state = api.snapshot(
                 child_handle,
                 filesystem=filesystem,

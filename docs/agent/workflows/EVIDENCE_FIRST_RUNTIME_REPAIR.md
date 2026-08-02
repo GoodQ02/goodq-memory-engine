@@ -155,3 +155,15 @@ The pass is ready to commit when:
   candidate-visible, and speaker-aligned evidence do not mean the same thing.
 - Audio emotion rankings can be useful without promoted labels; do not hide
   ranked scores just because no label cleared the promotion threshold.
+
+## Release-Triage and Delegation Discipline
+
+- Keep exactly one mutating seam active. Stop a broad validation run at its
+  first deterministic failure; diagnose that failure before continuing.
+- Delegate only independent evidence questions. Treat every delegated result as
+  a claim until the lead rechecks the relevant source, diff, and focused test.
+- Record policy or release gaps in the authoritative ledger; do not normalize
+  the codebase merely to make a release checklist look complete.
+- Split large delivery work into bounded phases: diagnose, repair, private
+  promotion, public sanitization, then publication. Preserve the handoff and
+  rollback boundary between phases.

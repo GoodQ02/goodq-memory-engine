@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1399**
+Indexed active tracked paths: **1335**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -261,6 +261,7 @@ Indexed active tracked paths: **1399**
 | `/docs/bootstrap/INSTALL_BOOTSTRAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md` | Documentation | Active documentation or governance surface. |
+| `/docs/bootstrap/PUBLIC_FIXTURE_MANIFEST.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md` | Documentation | Active documentation or governance surface. |
@@ -372,16 +373,7 @@ Indexed active tracked paths: **1399**
 | `/docs/diagnostics/R22_HERMES_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/R22_HERMES_ROUTING_PORT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
 | `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T185504Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T191044Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T202515Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T204005Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T205357Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/R08_WORKSPACE_PRUNE_RECEIPT_2026-07-29T205240Z.json` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/evidence/PUBLIC_REDACTED_RELEASE_EVIDENCE_2026-08-02.json` | Documentation | Active documentation or governance surface. |
 | `/docs/goodq4all_agent_status.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CONSOLIDATION_EXPLAINED.md` | Documentation | Active documentation or governance surface. |
@@ -447,17 +439,14 @@ Indexed active tracked paths: **1399**
 | `/docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md` | Documentation | Active documentation or governance surface. |
-| `/docs/releases/R24_GOLDEN_WITNESS_RELEASE_CANDIDATE_2026-08-02.md` | Documentation | Active documentation or governance surface. |
+| `/docs/releases/PUBLIC_SANITIZATION_MANIFEST.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/ROADMAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-02-dev-mode-operator-dashboard-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-02-oh-my-posh-baseline-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/technical/ANALYTICS_PAGES_COMPLETE.md` | Documentation | Active documentation or governance surface. |
@@ -557,50 +546,7 @@ Indexed active tracked paths: **1399**
 | `/lib/summary_aggregator.py` | Core library | Core memory, control, or persistence implementation. |
 | `/pipelines/__init__.py` | Repository root | Root-level project or runtime surface. |
 | `/pipelines/direct_ingestion.py` | Repository root | Root-level project or runtime surface. |
-| `/processing_onboarding/_resolved_config.json` | Repository root | Root-level project or runtime surface. |
 | `/pytest.ini` | Repository root | Root-level project or runtime surface. |
-| `/reports/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/control_recurrence/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/control_recurrence/20260424_182406_season2_fresh_witness.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/llm_audit_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/embedding_health_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/entity_analysis_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/experiment_summary.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/kg_structure_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/post_witness_analytics_metrics_2026-03-09.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/scene_segmentation_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/semantic_pattern_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/artifact_manifest.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/ingestion_stderr.log` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/optional_step_failures.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/per_episode_coverage.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_metrics_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_optional_status_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_stderr_2026-03-10.log` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/resolved_config_snapshot.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/resolved_config_snapshot_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/retrieval_anchor_checks.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.svg` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10_metadata.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_labeled_2026-03-10.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_labeled_2026-03-10.svg` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/semantic_comparison_metrics_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/semantic_comparison_report_2026-03-10.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/witness_metrics.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/generate_umap_clip_text.py` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text_coords.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text_meta.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/ui_audit/RELEASE_ADDENDUM.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/ui_surface_audits/2026-05-19-pipeline-surface-audit.md` | Repository root | Root-level project or runtime surface. |
 | `/requirements-baseline-lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/__init__.py` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/multimodal_search.py` | Repository root | Root-level project or runtime surface. |
@@ -623,21 +569,12 @@ Indexed active tracked paths: **1399**
 | `/samples/assets/demo-steps/08-proof-recorded.jpg` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/goodq4all-demo-endcard.jpg` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/goodq4all-demo-poster.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/install_walkthrough.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/install_walkthrough.mp4` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/manifest.json` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/nasa_descent.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/nasa_launch.gif` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/one_click_installer_mockup.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-git-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-multicolor-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-white-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/retro_console_preview.png` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough.mp4` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough_raw.mp4` | Repository root | Root-level project or runtime surface. |
 | `/samples/ingestion/anger_elimination.pdf` | Repository root | Root-level project or runtime surface. |
-| `/samples/onboarding_fixture.mp4` | Repository root | Root-level project or runtime surface. |
 | `/scripts/INSTALL_AUDIO_DIARIZE_ENV.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/INSTALL_WSL2_AUDIO.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/PIN_MODEL_VERSIONS.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -874,7 +811,6 @@ Indexed active tracked paths: **1399**
 | `/scripts/wsl2_quick_install.sh` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/wsl_audio_preflight.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/setup.py` | Repository root | Root-level project or runtime surface. |
-| `/start_goodq_dev.ps1` | Repository root | Root-level project or runtime surface. |
 | `/steps/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/audio_wsl2_bridge.py` | Pipeline | Pipeline processing step or shared step utility. |

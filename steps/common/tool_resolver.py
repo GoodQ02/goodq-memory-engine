@@ -122,10 +122,11 @@ class ToolResolver:
             ]
         else:
             program_files = os.environ.get("ProgramFiles", "C:/Program Files")
-            typical_paths = [
-                Path(program_files) / "Tesseract-OCR" / "tesseract.exe",
-                Path(program_files) / "Git" / "mingw64" / "bin" / "pdftotext.exe",
-            ]
+            windows_fallbacks = {
+                "tesseract": [Path(program_files) / "Tesseract-OCR" / "tesseract.exe"],
+                "pdftotext": [Path(program_files) / "Git" / "mingw64" / "bin" / "pdftotext.exe"],
+            }
+            typical_paths = windows_fallbacks.get(name, [])
 
         for p in typical_paths:
             if p.exists():

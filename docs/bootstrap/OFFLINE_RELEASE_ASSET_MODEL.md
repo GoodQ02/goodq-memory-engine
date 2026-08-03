@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_CONTRACT -->
-<!-- DOC_LAST_VERIFIED: 2026-05-13 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-03 -->
 
 # Offline Release Asset Model
 
@@ -123,6 +123,14 @@ The wheelhouse is derived from the canonical Conda and step-env dependency
 inputs, not from an ad hoc copy of `vendor/`. The release manifest must identify
 the Python ABI, platform tag, exact package set, and no-index install probe
 result.
+
+Externally released wheels that are not available from the standard package
+index, such as `goodq-mini-agent`, are acquired once while online from their
+manifest-pinned source URL, verified against the manifest SHA256, and placed in
+the wheelhouse. The requirements lock then uses its normal version pin, so the
+offline resolver uses only the verified local wheel. Do not leave a direct URL
+requirement in the baseline lock: pip would attempt to fetch it during an
+offline build.
 
 ## Linux / WSL Wheelhouse
 

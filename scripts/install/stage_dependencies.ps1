@@ -59,6 +59,9 @@ foreach ($prop in $Manifest.toolchains.psobject.properties) {
 foreach ($prop in $Manifest.dependencies.psobject.properties) {
     $Artifacts += $Manifest.dependencies.$($prop.Name)
 }
+$DeclaredWheelArtifacts = @($Manifest.wheels.wheelhouse | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_.source_url) -and -not [string]::IsNullOrWhiteSpace($_.sha256)
+})
 
 if ($Mode -eq "Acquire") {
     # Phase 1: Download external binaries and runtimes
@@ -144,6 +147,29 @@ if ($Mode -eq "Acquire") {
     if (-not (Test-Path $wheelsDir)) {
         New-Item -ItemType Directory -Path $wheelsDir -Force | Out-Null
     }
+
+    foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
+        $wheelName = Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf
+        $wheelPath = Join-Path $wheelsDir $wheelName
+        Write-Host "Checking declared wheel artifact: $($wheelArtifact.artifact_id)..." -ForegroundColor Cyan
+        if (Test-Path $wheelPath) {
+            $currentHash = Get-FileSHA256 $wheelPath
+            if ($currentHash -eq $wheelArtifact.sha256.ToLower()) {
+                Write-Host "  Cached wheel matches expected SHA256." -ForegroundColor Green
+                continue
+            }
+            Remove-Item $wheelPath -Force
+        }
+        Write-Host "  Downloading declared wheel from $($wheelArtifact.source_url)..." -ForegroundColor Yellow
+        (New-Object System.Net.WebClient).DownloadFile($wheelArtifact.source_url, $wheelPath)
+        $downloadedHash = Get-FileSHA256 $wheelPath
+        if ($downloadedHash -ne $wheelArtifact.sha256.ToLower()) {
+            Remove-Item $wheelPath -Force
+            Write-Error "Declared wheel artifact hash mismatch: $($wheelArtifact.artifact_id)"
+        }
+        Write-Host "  [OK] Declared wheel artifact staged and verified." -ForegroundColor Green
+    }
+
     Write-Host "Staging python wheels offline via pip download..." -ForegroundColor Cyan
     $reqFile = [System.IO.Path]::GetFullPath("..\..\requirements-baseline-lock.txt")
     
@@ -152,7 +178,7 @@ if ($Mode -eq "Acquire") {
     $success = $false
     while (-not $success -and $retryCount -lt 5) {
         Write-Host "  Running pip download (Attempt $($retryCount + 1) of 5)..." -ForegroundColor Yellow
-        pip download --timeout 120 --dest $wheelsDir --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cu121 -r $reqFile
+        pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cu121 -r $reqFile
         if ($LASTEXITCODE -eq 0) {
             $success = $true
         } else {
@@ -199,6 +225,23 @@ if ($Mode -eq "Acquire") {
         Write-Host "  [OK] Wheelhouse contains $count offline wheel files." -ForegroundColor Green
     }
 
+    foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
+        $wheelName = Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf
+        $wheelPath = Join-Path $wheelsDir $wheelName
+        if (-not (Test-Path $wheelPath)) {
+            Write-Host "  [ERROR] Declared wheel artifact missing: $wheelName" -ForegroundColor Red
+            $VerificationFailed = $true
+            continue
+        }
+        $wheelHash = Get-FileSHA256 $wheelPath
+        if ($wheelHash -ne $wheelArtifact.sha256.ToLower()) {
+            Write-Host "  [ERROR] Declared wheel artifact hash mismatch: $wheelName" -ForegroundColor Red
+            $VerificationFailed = $true
+        } else {
+            Write-Host "  [OK] Declared wheel artifact hash matches: $wheelName" -ForegroundColor Green
+        }
+    }
+
     # Cross-reference wheelhouse against lockfile
     $AbsoluteCacheDir = [System.IO.Path]::GetFullPath($CacheDir)
     $lockfilePath = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\requirements-baseline-lock.txt"))
@@ -229,7 +272,7 @@ if ($Mode -eq "Acquire") {
     Write-Host "Performing transitive closure dry-run check..." -ForegroundColor Cyan
     $TempErrorFile = [System.IO.Path]::GetTempFileName()
     $StagedWheelsDir = [System.IO.Path]::GetFullPath($wheelsDir)
-    $PipArgs = @("-m", "pip", "install", "--dry-run", "--no-index", "--find-links=$StagedWheelsDir", "-r", "$lockfilePath")
+    $PipArgs = @("-m", "pip", "install", "--dry-run", "--ignore-installed", "--no-index", "--find-links=$StagedWheelsDir", "-r", "$lockfilePath")
     
     $pythonExe = "python"
     if ($env:GOODQ_DEV_PYTHON) {
@@ -241,6 +284,10 @@ if ($Mode -eq "Acquire") {
     Write-Host "  Using Python executable: $pythonExe" -ForegroundColor Yellow
     Write-Host "  Using Wheels Dir: $StagedWheelsDir" -ForegroundColor Yellow
     Write-Host "  Using Lockfile Path: $lockfilePath" -ForegroundColor Yellow
+    $pythonVersion = (& $pythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
+    if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.10") {
+        Write-Error "Offline closure verification requires CPython 3.10; resolved '$pythonExe' reports '$pythonVersion'."
+    }
     
     $ProcessParams = @{
         FilePath = $pythonExe

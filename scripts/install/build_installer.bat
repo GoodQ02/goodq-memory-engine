@@ -64,9 +64,24 @@ if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
 )
+
+:: Create a fresh private staging tree before signing. The tracked source
+:: manifest and signature remain untouched throughout the release build.
+if exist "staged" rmdir /s /q "staged"
+if errorlevel 1 (
+    echo [ERROR] Failed to clear the previous staging directory.
+    exit /b 24
+)
+mkdir "staged\configs"
+copy /y "..\..\configs\model_download_manifest.json" "staged\configs\model_download_manifest.json" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to stage the model download manifest.
+    exit /b 25
+)
+
 :: 3a. Sign manifest in release mode (verifies key matches launcher, signs, round-trip verifies)
 echo Signing model download manifest with release key...
-go_compiler\go\bin\go.exe run sign_manifest.go --mode release
+go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Manifest signing failed. Key mismatch or signing error.
     exit /b 10
@@ -74,7 +89,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 3b. Independent verify-only gate (reads back the written signature and verifies)
 echo Verifying manifest signature independently...
-go_compiler\go\bin\go.exe run sign_manifest.go --verify-only
+go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Independent signature verification failed. Do not package.
     exit /b 11
@@ -99,12 +114,6 @@ echo [OK] Supervising Go Launcher compiled successfully.
 
 :: 5. Copy and Stage Checked-out Binaries from Local Cache
 echo Extracting and staging components from verified cache...
-if exist "staged" rmdir /s /q "staged"
-if errorlevel 1 (
-    echo [ERROR] Failed to clear the previous staging directory.
-    exit /b 24
-)
-mkdir "staged"
 if not exist "staged\qdrant" mkdir "staged\qdrant"
 if not exist "staged\qdrant\config" mkdir "staged\qdrant\config"
 if not exist "staged\nssm" mkdir "staged\nssm"

@@ -10,10 +10,20 @@ echo.
 
 for %%I in ("%~dp0") do set "BUILD_ROOT=%%~fI"
 for %%I in ("%BUILD_ROOT%\..\..") do set "REPO_ROOT=%%~fI"
+for /f "usebackq delims=" %%I in (`conda run -n goodq_core python -c "import sys; print(sys.executable)"`) do set "GOODQ_DEV_PYTHON=%%I"
+if "%GOODQ_DEV_PYTHON%"=="" (
+    echo [BLOCKED] Could not resolve the private goodq_core CPython 3.10 interpreter.
+    goto :failed
+)
+"%GOODQ_DEV_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 10) else 1)"
+if errorlevel 1 (
+    echo [BLOCKED] goodq_core is not the CPython 3.10 installer target.
+    goto :failed
+)
 
-for /f %%I in ('powershell -NoProfile -Command "[DateTime]::Now.ToString('yyyyMMdd_HHmmss')"') do set "RUN_ID=%%I"
 if "%GOODQ_RELEASE_OUTPUT_ROOT%"=="" (
-    set "GOODQ_RELEASE_OUTPUT_ROOT=%USERPROFILE%\OneDrive\One_Domingo\GoodQ4All_CleanInstall_Verification\baseline_installer_%RUN_ID%"
+    echo [BLOCKED] Missing release output. Set GOODQ_RELEASE_OUTPUT_ROOT to an external empty directory.
+    goto :failed
 )
 
 for /f "tokens=2 delims== " %%I in ('findstr /b /c:"GOODQ_VERSION =" "%REPO_ROOT%\goodq_version.py"') do set "EXPECTED_VERSION=%%~I"

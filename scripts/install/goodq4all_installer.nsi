@@ -96,7 +96,9 @@ runtime_ok:
   File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
 
   SetOutPath "$INSTDIR\configs"
-  File /r /x "config.local.yaml" "..\..\configs\*.*"
+  File /r /x "config.local.yaml" /x "model_download_manifest.json" /x "model_download_manifest.json.sig" "..\..\configs\*.*"
+  File "staged\configs\model_download_manifest.json"
+  File "staged\configs\model_download_manifest.json.sig"
 
   SetOutPath "$INSTDIR\api"
   File /r "..\..\api\*.*"

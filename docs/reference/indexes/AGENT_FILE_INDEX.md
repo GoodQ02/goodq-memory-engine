@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1399**
+Indexed active tracked paths: **1404**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -453,6 +453,7 @@ Indexed active tracked paths: **1399**
 | `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-03-public-baseline-installer-v2.5.8.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
@@ -751,12 +752,14 @@ Indexed active tracked paths: **1399**
 | `/scripts/install/launcher_unix.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/run_offline_release_build.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sandbox_env_setup.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sign_manifest.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/smoke_test_restore.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/stage_dependencies.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sync_nsi_version.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/versioninfo.json` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_audio_deps_retry.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_gpu_support.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1131,6 +1134,7 @@ Indexed active tracked paths: **1399**
 | `/tests/unit/test_build_face_clusters_start_gate.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ci_locked_baseline.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |
@@ -1201,6 +1205,7 @@ Indexed active tracked paths: **1399**
 | `/tests/unit/test_ingest_upload_hardening.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingestion_isolation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_installer_paths.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_installer_release_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_isolated_embedding_persistence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_kg_realtime_relationship_enrichment.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_knowledge_graph_readonly.py` | Verification | Test, fixture, or verification asset. |

@@ -208,3 +208,54 @@ def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() ->
     assert "verify_release_asset.ps1" in launcher
     assert "offline_build.log" in launcher
     assert "offline_build_receipt.txt" in launcher
+
+
+def test_mini_agent_dependency_is_resolved_from_the_verified_offline_cache() -> None:
+    lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+    stager = (REPO_ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "goodq-mini-agent==0.1.1" in lockfile
+    assert "goodq-mini-agent @ https://" not in lockfile
+    assert "Declared wheel artifact" in stager
+    assert "--ignore-installed" in stager
+
+
+def test_offline_dependency_closure_uses_the_cp310_installer_target() -> None:
+    launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+    stager = (REPO_ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "GOODQ_DEV_PYTHON" in launcher
+    assert "Offline closure verification requires CPython 3.10" in stager
+
+
+def test_offline_launcher_requires_an_operator_selected_output_root() -> None:
+    launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "One_Domingo" not in launcher
+    assert "GOODQ_RELEASE_OUTPUT_ROOT" in launcher
+    assert "Missing release output" in launcher
+
+
+def test_release_signing_uses_a_staged_manifest_not_the_tracked_checkout() -> None:
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+    signer = (REPO_ROOT / "scripts" / "install" / "sign_manifest.go").read_text(encoding="utf-8")
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--manifest-path staged\\configs\\model_download_manifest.json" in builder
+    assert "--signature-path staged\\configs\\model_download_manifest.json.sig" in builder
+    assert 'File "staged\\configs\\model_download_manifest.json"' in installer
+    assert 'File "staged\\configs\\model_download_manifest.json.sig"' in installer
+    assert 'flag.String("manifest-path"' in signer
+    assert 'flag.String("signature-path"' in signer

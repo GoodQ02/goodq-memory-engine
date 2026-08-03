@@ -42,6 +42,8 @@ func extractEmbeddedPublicKey(launcherPath string) (string, error) {
 func main() {
 	mode := flag.String("mode", "release", "Operation mode: 'release' (sign with existing key), 'dev-init' (generate new keypair)")
 	verifyOnly := flag.Bool("verify-only", false, "Verify existing manifest signature without signing")
+	manifestPathFlag := flag.String("manifest-path", "", "Manifest path to sign or verify (defaults to the tracked source manifest)")
+	signaturePathFlag := flag.String("signature-path", "", "Signature path to write or verify (defaults to the tracked source signature)")
 	flag.Parse()
 
 	fmt.Printf("[SIGNER] Running manifest signing tool (mode=%s, verify-only=%v)...\n", *mode, *verifyOnly)
@@ -51,6 +53,12 @@ func main() {
 	launcherSourcePath := "LAUNCH_GOODQ.go"
 	manifestPath := filepath.Join("..", "..", "configs", "model_download_manifest.json")
 	signaturePath := filepath.Join("..", "..", "configs", "model_download_manifest.json.sig")
+	if *manifestPathFlag != "" {
+		manifestPath = *manifestPathFlag
+	}
+	if *signaturePathFlag != "" {
+		signaturePath = *signaturePathFlag
+	}
 
 	// --- Dev-Init Mode: Generate new keypair and exit ---
 	if *mode == "dev-init" {

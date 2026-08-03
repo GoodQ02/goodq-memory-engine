@@ -24,7 +24,7 @@ dependencies:
   - imageio-ffmpeg=0.6.0
   - pip:
       - -e .
-      - "goodq-mini-agent @ https://github.com/GoodQ02/goodq-mini-agent/releases/download/v0.1.1/goodq_mini_agent-0.1.1-py3-none-any.whl#sha256=0f73ea4a3ee3b934c6d77c89c2810edcd6ceab1a13a5534bb59b54afe3f4506e"
+      - "goodq-mini-agent==0.1.1"
       - transformers==5.4.0
       - sentence-transformers==5.3.0
       - qdrant-client==1.17.1

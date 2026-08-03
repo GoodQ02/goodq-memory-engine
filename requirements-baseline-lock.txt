@@ -20,4 +20,4 @@ faster-whisper==1.2.1
 faiss-cpu==1.9.0
 psutil==7.2.2
 huggingface-hub==1.8.0
-goodq-mini-agent @ https://github.com/GoodQ02/goodq-mini-agent/releases/download/v0.1.1/goodq_mini_agent-0.1.1-py3-none-any.whl#sha256=0f73ea4a3ee3b934c6d77c89c2810edcd6ceab1a13a5534bb59b54afe3f4506e
+goodq-mini-agent==0.1.1

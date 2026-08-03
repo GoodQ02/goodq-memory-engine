@@ -432,6 +432,19 @@
         "platform_tag": "win_amd64",
         "gpu_lane": "any",
         "required": true
+      },
+      {
+        "artifact_id": "goodq_mini_agent_py3_none_any",
+        "name": "goodq-mini-agent",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "py3",
+        "platform_tag": "any",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://github.com/GoodQ02/goodq-mini-agent/releases/download/v0.1.1/goodq_mini_agent-0.1.1-py3-none-any.whl",
+        "sha256": "0f73ea4a3ee3b934c6d77c89c2810edcd6ceab1a13a5534bb59b54afe3f4506e",
+        "license": "MIT",
+        "notes": "Cache this independently published wheel before offline installation."
       }
     ]
   }

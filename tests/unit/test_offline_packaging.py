@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -35,10 +36,7 @@ class TestManifestWheelCoverage:
             line = line.strip()
             if not line or line.startswith("#") or line.startswith("--"):
                 continue
-            # Parse 'package==version' or 'package==version+cpu'
-            name = re.split(r"[=<>!~]", line)[0].strip().lower()
-            if name:
-                packages.append(name)
+            packages.append(Requirement(line).name.lower())
         return packages
 
     @pytest.fixture()

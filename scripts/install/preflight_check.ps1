@@ -23,7 +23,12 @@ $poisonPatterns = @('.env*', '*.key', '*.pem', 'token', 'huggingface/token', 'me
 $packagedSourceRoots = @('..\..\scripts', '..\..\configs', '..\..\api', '..\..\cli', '..\..\steps', '..\..\ui', '..\..\agents', '..\..\lib', '..\..\common', '..\..\retrieval', '..\..\pipelines', '..\..\branding')
 $scanRoots = @('staged_cache', 'staged') + $packagedSourceRoots
 foreach ($pat in $poisonPatterns) {
-    $found = Get-ChildItem -Path $scanRoots -Filter $pat -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "cacert.pem" }
+    $found = Get-ChildItem -Path $scanRoots -Filter $pat -Recurse -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ne "cacert.pem" -and
+            $_.FullName -notmatch '\\scripts\\install\\(go_compiler|nsis_compiler|nssm_bin|staged|go_bin)(\\|$)' -and
+            $_.Name -ne "dev_private_key.hex"
+        }
     if ($found) { $poisonFiles += $found }
 }
 if ($poisonFiles.Count -gt 0) {

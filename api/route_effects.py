@@ -589,10 +589,11 @@ class RouteEffectBoundaryMiddleware:
         is_remote = not is_loopback_client(scope.get("client"))
         if effect is not None and effect != RouteEffect.PASSIVE_READ and is_remote:
             logger.warning(
-                "LAN API denied non-passive operation %s %s effect=%s",
+                "LAN API denied non-passive operation %s %s effect=%s client=%r",
                 operation[0],
                 operation[1],
                 effect.value,
+                scope.get("client"),
             )
             response = JSONResponse(
                 {"detail": "Non-passive API operations are restricted to the local operator"},

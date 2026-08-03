@@ -850,6 +850,7 @@ def test_remote_client_denied_before_body_or_downstream(
     assert receive_calls == 0
     assert "denied non-passive operation" in caplog.text
     assert f"{method} {template}" in caplog.text
+    assert "client=('192.168.1.44', 50000)" in caplog.text
 
 
 @requires_authority

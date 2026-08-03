@@ -99,14 +99,18 @@ echo [OK] Supervising Go Launcher compiled successfully.
 
 :: 5. Copy and Stage Checked-out Binaries from Local Cache
 echo Extracting and staging components from verified cache...
-if not exist "staged" mkdir "staged"
+if exist "staged" rmdir /s /q "staged"
+if errorlevel 1 (
+    echo [ERROR] Failed to clear the previous staging directory.
+    exit /b 24
+)
+mkdir "staged"
 if not exist "staged\qdrant" mkdir "staged\qdrant"
 if not exist "staged\qdrant\config" mkdir "staged\qdrant\config"
 if not exist "staged\nssm" mkdir "staged\nssm"
 if not exist "staged\runtime" mkdir "staged\runtime"
 if not exist "staged\binaries" mkdir "staged\binaries"
 if not exist "staged\wheels" mkdir "staged\wheels"
-if not exist "staged\wsl" mkdir "staged\wsl"
 
 :: Copy from staged_cache to staging folder
 copy /y "staged_cache\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
@@ -139,19 +143,6 @@ copy /y staged\nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.e
 
 copy /y "staged_cache\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
 copy /y "staged_cache\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul
-
-:: Copy cuBLAS DLLs from verified staged_cache
-echo Staging cuBLAS DLLs from verified cache...
-if not exist "staged_cache\runtime\cublas64_12.dll" (
-    echo [ERROR] cublas64_12.dll missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
-    exit /b 6
-)
-if not exist "staged_cache\runtime\cublasLt64_12.dll" (
-    echo [ERROR] cublasLt64_12.dll missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
-    exit /b 7
-)
-copy /y "staged_cache\runtime\cublas64_12.dll" "staged\runtime\" >nul
-copy /y "staged_cache\runtime\cublasLt64_12.dll" "staged\runtime\" >nul
 
 :: Copy certifi CA bundle from verified staged_cache
 echo Staging certifi CA bundle from verified cache...

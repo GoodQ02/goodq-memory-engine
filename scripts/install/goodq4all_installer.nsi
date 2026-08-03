@@ -41,18 +41,15 @@ RequestExecutionLevel admin
 
 ; Component selection variables
 Var AlwaysOnService
-Var GpuEnhancedMode
 Var WslStatus
 Var GpuStatus
 Var COMMONAPPDATA
-Var WslTarPath
 
 Function .onInit
   SetShellVarContext all
   StrCpy $AlwaysOnService 0
-  StrCpy $GpuEnhancedMode 0
-  StrCpy $WslStatus "skipped_wsl_unavailable"
-  StrCpy $GpuStatus "skipped"
+  StrCpy $WslStatus "not_packaged"
+  StrCpy $GpuStatus "not_packaged"
 FunctionEnd
 
 Section "Base Application (Required)" SecBase
@@ -196,6 +193,8 @@ runtime_ok:
     DetailPrint "Personal Mode selected. Qdrant will start on-demand under LAUNCH_GOODQ.exe."
   ${EndIf}
 
+  ; Optional WSL/GPU packaging is intentionally excluded from the public BASELINE.
+  !if 0
   ; --- STATE 8: WSL pre-baked distro import ---
   DetailPrint "Step 8/12: Configuring WSL2 audio compute environment..."
   ; Stage wsl distro folder
@@ -268,9 +267,10 @@ wsl_tar_found:
   StrCpy $WslStatus "imported"
 
 wsl_done:
+  !endif
 
-  ; --- STATE 9: merge and verify model zips (non-fatal) ---
-  DetailPrint "Step 9/12: Extracting and registering pre-staged model packs..."
+  ; --- STATE 8: register optional model packs (non-fatal) ---
+  DetailPrint "Step 8/11: Registering pre-staged model packs..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
@@ -293,12 +293,12 @@ wsl_done:
   DetailPrint "System health readiness test completed with code $0."
   */
 
-  ; --- STATE 11: write install receipt ---
-  DetailPrint "Step 11/12: Writing installation receipt..."
+  ; --- STATE 10: write install receipt ---
+  DetailPrint "Step 10/11: Writing installation receipt..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService" --wsl-status "$WslStatus" --baseline-status "ok" --gpu-enhanced-status "$GpuStatus"'
 
-  ; --- STATE 12: shortcuts & uninstaller ---
-  DetailPrint "Step 12/12: Completing installation shortcuts..."
+  ; --- STATE 11: shortcuts & uninstaller ---
+  DetailPrint "Step 11/11: Completing installation shortcuts..."
   SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\GoodQ4All"
   CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
@@ -319,10 +319,12 @@ Section /o "Always-On Background Service" SecService
   StrCpy $AlwaysOnService 1
 SectionEnd
 
+!if 0
 Section /o "GPU-Accelerated WSL2 Audio" SecGpu
   StrCpy $GpuEnhancedMode 1
   StrCpy $GpuStatus "ok"
 SectionEnd
+!endif
 
 ; Uninstaller Section
 Section "Uninstall"

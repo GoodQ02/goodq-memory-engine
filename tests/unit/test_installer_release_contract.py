@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -94,3 +98,100 @@ def test_release_asset_verifier_reports_an_empty_asset_directory(tmp_path: Path)
 
     assert result.returncode == 1
     assert "Release asset set must contain exactly" in result.stderr
+
+
+def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) -> None:
+    installer = asset_root / "GoodQ4All_Setup_2.5.8.exe"
+    launcher = asset_root / "LAUNCH_GOODQ.exe"
+    installer.write_bytes(b"installer")
+    launcher.write_bytes(b"launcher")
+    manifest = {
+        "product_version": "2.5.8",
+        "source_commit": "12f577e9",
+        "source_tree_clean": True,
+        "profile": "BASELINE",
+        "excluded_optional_components": ["wsl_audio", "local_llm_serving", "gpu_enhanced"],
+        "sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
+        "launcher_sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
+    }
+    if source_note is not None:
+        manifest["source_note"] = source_note
+    manifest_path = asset_root / "GoodQ4All_Setup_2.5.8.release_manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    checksum_lines = [
+        f"{manifest['sha256']} *{installer.name}",
+        f"{manifest['launcher_sha256']} *{launcher.name}",
+        f"{hashlib.sha256(manifest_path.read_bytes()).hexdigest()} *{manifest_path.name}",
+    ]
+    (asset_root / "GoodQ4All_Setup_2.5.8.sha256").write_text("\n".join(checksum_lines), encoding="ascii")
+
+
+def _run_asset_verifier(asset_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "scripts" / "install" / "verify_release_asset.ps1"),
+            "-AssetRoot",
+            str(asset_root),
+            "-ExpectedVersion",
+            "2.5.8",
+            "-ExpectedCommit",
+            "12f577e9",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_release_asset_verifier_rejects_a_nested_payload(tmp_path: Path) -> None:
+    _write_asset_fixture(tmp_path)
+    nested = tmp_path / "hidden_payload"
+    nested.mkdir()
+    (nested / "goodq_audio_wsl.tar").write_bytes(b"not allowed")
+
+    result = _run_asset_verifier(tmp_path)
+
+    assert result.returncode == 1
+    assert "Release asset set must contain exactly" in result.stderr
+
+
+@pytest.mark.parametrize("private_path", [r"C:\Users\jdben\private-build", r"c:/users/jdben/private-build"])
+def test_release_asset_verifier_rejects_a_normal_windows_user_path(
+    tmp_path: Path, private_path: str
+) -> None:
+    _write_asset_fixture(tmp_path, source_note=private_path)
+
+    result = _run_asset_verifier(tmp_path)
+
+    assert result.returncode == 1
+    assert "Manifest contains private token" in result.stderr
+
+
+def test_baseline_installer_omits_wsl_and_gpu_payload_paths() -> None:
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert '!if 0\n  ; --- STATE 8: WSL pre-baked distro import ---' in installer
+    assert '!if 0\nSection /o "GPU-Accelerated WSL2 Audio"' in installer
+    assert 'File /nonfatal "staged\\wsl\\goodq_audio_wsl.tar"' in installer
+    assert 'mkdir "staged\\wsl"' not in builder
+    assert "cublas64_12.dll" not in builder
+
+
+def test_preflight_scans_every_source_root_packaged_by_nsis() -> None:
+    preflight = (REPO_ROOT / "scripts" / "install" / "preflight_check.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    for source_root in ("api", "cli", "steps", "ui", "agents", "lib", "common", "retrieval", "pipelines"):
+        assert f"..\\..\\{source_root}" in preflight
+    assert "Get-ChildItem -Path $scanRoots" in preflight

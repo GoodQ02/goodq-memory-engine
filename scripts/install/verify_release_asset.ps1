@@ -7,12 +7,29 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace("-", "").ToLowerInvariant()
+        } finally {
+            $sha256.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 $assetRoot = [System.IO.Path]::GetFullPath($AssetRoot)
 $installerName = "GoodQ4All_Setup_$ExpectedVersion.exe"
 $manifestName = "GoodQ4All_Setup_$ExpectedVersion.release_manifest.json"
 $checksumName = "GoodQ4All_Setup_$ExpectedVersion.sha256"
 $expectedNames = @($installerName, "LAUNCH_GOODQ.exe", $manifestName, $checksumName) | Sort-Object
-$actualNames = @(Get-ChildItem -File $assetRoot | Select-Object -ExpandProperty Name | Sort-Object)
+$actualNames = @(Get-ChildItem -File -Recurse $assetRoot | ForEach-Object {
+    $_.FullName.Substring($assetRoot.Length).TrimStart([char[]]'\\')
+} | Sort-Object)
 if (Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames) {
     throw "Release asset set must contain exactly: $($expectedNames -join ', ')"
 }
@@ -23,19 +40,32 @@ if ($manifest.product_version -ne $ExpectedVersion) { throw "Manifest version do
 if ($ExpectedCommit -and $manifest.source_commit -ne $ExpectedCommit) { throw "Manifest commit does not match $ExpectedCommit" }
 if (-not $manifest.source_tree_clean) { throw "Manifest does not prove a clean source tree" }
 if ($manifest.profile -ne "BASELINE") { throw "Manifest profile is not BASELINE" }
-if (@($manifest.excluded_optional_components) -notcontains "wsl_audio") { throw "Manifest must exclude WSL audio" }
-if (@($manifest.excluded_optional_components) -notcontains "local_llm_serving") { throw "Manifest must exclude local LLM serving" }
+if (-not (@($manifest.excluded_optional_components) -contains "wsl_audio")) { throw "Manifest must exclude WSL audio" }
+if (-not (@($manifest.excluded_optional_components) -contains "local_llm_serving")) { throw "Manifest must exclude local LLM serving" }
+if (-not (@($manifest.excluded_optional_components) -contains "gpu_enhanced")) { throw "Manifest must exclude GPU enhanced mode" }
 
-$installerHash = (Get-FileHash (Join-Path $assetRoot $installerName) -Algorithm SHA256).Hash.ToLower()
-$launcherHash = (Get-FileHash (Join-Path $assetRoot "LAUNCH_GOODQ.exe") -Algorithm SHA256).Hash.ToLower()
+$installerHash = Get-Sha256Hex (Join-Path $assetRoot $installerName)
+$launcherHash = Get-Sha256Hex (Join-Path $assetRoot "LAUNCH_GOODQ.exe")
 if ($manifest.sha256 -ne $installerHash) { throw "Installer SHA256 does not match manifest" }
 if ($manifest.launcher_sha256 -ne $launcherHash) { throw "Launcher SHA256 does not match manifest" }
-$checksumText = Get-Content (Join-Path $assetRoot $checksumName) -Raw
-foreach ($pair in @("$installerHash *$installerName", "$launcherHash *LAUNCH_GOODQ.exe")) {
-    if ($checksumText -notmatch [regex]::Escape($pair)) { throw "Checksum file lacks $pair" }
+$manifestHash = Get-Sha256Hex $manifestPath
+$expectedChecksumLines = @(
+    "$installerHash *$installerName",
+    "$launcherHash *LAUNCH_GOODQ.exe",
+    "$manifestHash *$manifestName"
+) | Sort-Object
+$actualChecksumLines = @(Get-Content (Join-Path $assetRoot $checksumName) |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ } |
+    Sort-Object)
+if (Compare-Object -ReferenceObject $expectedChecksumLines -DifferenceObject $actualChecksumLines) {
+    throw "Checksum file must contain exactly the installer, launcher, and manifest hashes"
 }
 $serializedManifest = Get-Content $manifestPath -Raw
-foreach ($privateToken in @('C:\\Users\\', 'L:\\', 'OneDrive', 'GOODCUBE', 'GoodQ_Data')) {
-    if ($serializedManifest -match [regex]::Escape($privateToken)) { throw "Manifest contains private token $privateToken" }
+$normalizedManifest = $serializedManifest.Replace('\\', '\').Replace('/', '\').ToLowerInvariant()
+foreach ($privateToken in @('c:\users\', 'l:\', 'onedrive', 'goodcube', 'goodq_data')) {
+    if ($normalizedManifest.Contains($privateToken)) {
+        throw "Manifest contains private token $privateToken"
+    }
 }
 [pscustomobject]@{ pass = $true; version = $ExpectedVersion; source_commit = $manifest.source_commit; assets = $actualNames } | ConvertTo-Json -Depth 3

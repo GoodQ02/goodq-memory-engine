@@ -17,11 +17,13 @@ if (-not (Test-Path $ResolvedManifestPath)) {
     Fail-Build "Manifest missing at $ResolvedManifestPath!" 1
 }
 
-Write-Host "Checking for poison payloads in staging directories..." -ForegroundColor Cyan
+Write-Host "Checking for poison payloads in staging and packaged source directories..." -ForegroundColor Cyan
 $poisonFiles = @()
-$poisonPatterns = @('.env.local', '*.key', '*.pem', 'token', 'huggingface/token', 'memory.db', 'knowledge_graph.db')
+$poisonPatterns = @('.env*', '*.key', '*.pem', 'token', 'huggingface/token', 'memory.db', 'knowledge_graph.db', '*.sqlite', '*.sqlite3')
+$packagedSourceRoots = @('..\..\scripts', '..\..\configs', '..\..\api', '..\..\cli', '..\..\steps', '..\..\ui', '..\..\agents', '..\..\lib', '..\..\common', '..\..\retrieval', '..\..\pipelines', '..\..\branding')
+$scanRoots = @('staged_cache', 'staged') + $packagedSourceRoots
 foreach ($pat in $poisonPatterns) {
-    $found = Get-ChildItem -Path 'staged_cache', 'staged' -Filter $pat -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "cacert.pem" }
+    $found = Get-ChildItem -Path $scanRoots -Filter $pat -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "cacert.pem" }
     if ($found) { $poisonFiles += $found }
 }
 if ($poisonFiles.Count -gt 0) {

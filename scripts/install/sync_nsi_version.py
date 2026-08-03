@@ -1,108 +1,86 @@
+"""Synchronize or verify installer metadata against ``GOODQ_VERSION``."""
+
+from __future__ import annotations
+
+import argparse
 import json
-import os
 import re
+import sys
+from pathlib import Path
 
-# Resolve paths
-script_dir = os.path.dirname(os.path.abspath(__file__))
-version_py_path = os.path.join(script_dir, "..", "..", "goodq_version.py")
-nsi_path = os.path.join(script_dir, "goodq4all_installer.nsi")
-version_json_path = os.path.join(script_dir, "versioninfo.json")
 
-# 1. Read canonical version
-with open(version_py_path, "r", encoding="utf-8") as f:
-    version_py = f.read()
+SCRIPT_DIR = Path(__file__).resolve().parent
+VERSION_PATH = SCRIPT_DIR.parent.parent / "goodq_version.py"
+NSI_PATH = SCRIPT_DIR / "goodq4all_installer.nsi"
+VERSION_INFO_PATH = SCRIPT_DIR / "versioninfo.json"
 
-version_match = re.search(r'GOODQ_VERSION\s*=\s*\"([^\"]+)\"', version_py)
-if not version_match:
-    raise ValueError("Could not find GOODQ_VERSION in goodq_version.py")
 
-v = version_match.group(1)
-# Handle optional 'v' prefix if present
-clean_v = v.lstrip('v')
-p = clean_v.split('.')
-major = int(p[0])
-minor = int(p[1])
-patch_part = p[2] if len(p) > 2 else "0"
-patch_match = re.match(r'^(\d+)', patch_part)
-patch = int(patch_match.group(1)) if patch_match else 0
+def _canonical_version() -> tuple[str, int, int, int]:
+    version_py = VERSION_PATH.read_text(encoding="utf-8")
+    match = re.search(r'GOODQ_VERSION\s*=\s*"([^"]+)"', version_py)
+    if match is None:
+        raise ValueError("Could not find GOODQ_VERSION in goodq_version.py")
+    version = match.group(1)
+    parts = version.lstrip("v").split(".")
+    patch_match = re.match(r"^(\d+)", parts[2] if len(parts) > 2 else "0")
+    return version, int(parts[0]), int(parts[1]), int(patch_match.group(1) if patch_match else 0)
 
-print(f"Canonical version resolved: {v} (Clean: {clean_v}, Major: {major}, Minor: {minor}, Patch: {patch})")
 
-# 2. Update goodq4all_installer.nsi
-if os.path.exists(nsi_path):
-    with open(nsi_path, "r", encoding="utf-8") as f:
-        nsi_content = f.read()
-    
-    # Replace OutFile "..\..\GoodQ4All_Setup_*.exe"
-    nsi_content, count1 = re.subn(
-        r'OutFile\s+"[^"]+GoodQ4All_Setup_[^"]+\.exe"', 
-        lambda m: f'OutFile "..\\..\\GoodQ4All_Setup_{v}.exe"', 
-        nsi_content
+def _synchronized_nsi(content: str, version: str) -> str:
+    replacements = (
+        (r'OutFile\s+"[^"]+GoodQ4All_Setup_[^"]+\.exe"', f'OutFile "..\\..\\GoodQ4All_Setup_{version}.exe"'),
+        (
+            r'!define\s+MUI_WELCOMEPAGE_TITLE\s+"[^"]+Offline Installer"',
+            f'!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v{version} Offline Installer"',
+        ),
+        (r'"DisplayVersion"\s+"[^"]+"', f'"DisplayVersion" "{version}"'),
     )
-    if count1 == 0:
-        print("[ERROR] OutFile pattern not found or replaced.")
-        import sys
-        sys.exit(2)
-    
-    # Replace MUI_WELCOMEPAGE_TITLE
-    nsi_content, count2 = re.subn(
-        r'!define\s+MUI_WELCOMEPAGE_TITLE\s+"[^"]+Offline Installer"', 
-        f'!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v{v} Offline Installer"', 
-        nsi_content
-    )
-    if count2 == 0:
-        print("[ERROR] MUI_WELCOMEPAGE_TITLE pattern not found or replaced.")
-        import sys
-        sys.exit(2)
-    
-    # Replace DisplayVersion
-    nsi_content, count3 = re.subn(
-        r'"DisplayVersion"\s+"[^"]+"', 
-        f'"DisplayVersion" "{v}"', 
-        nsi_content
-    )
-    if count3 == 0:
-        print("[ERROR] DisplayVersion pattern not found or replaced.")
-        import sys
-        sys.exit(2)
-    
-    try:
-        with open(nsi_path, "w", encoding="utf-8", newline="\r\n") as f:
-            f.write(nsi_content)
-        print("[OK] goodq4all_installer.nsi version synced successfully.")
-    except Exception as e:
-        print(f"[ERROR] Failed to write nsi file: {e}")
-        import sys
-        sys.exit(2)
-else:
-    print("[ERROR] goodq4all_installer.nsi not found.")
-    import sys
-    sys.exit(2)
+    for pattern, replacement in replacements:
+        content, count = re.subn(pattern, lambda _match: replacement, content)
+        if count != 1:
+            raise ValueError(f"Expected exactly one installer metadata match for {pattern!r}, found {count}")
+    return content
 
-# 3. Update versioninfo.json
-if os.path.exists(version_json_path):
-    with open(version_json_path, "r", encoding="utf-8") as f:
-        vi = json.load(f)
-    
-    vi['FixedFileInfo']['FileVersion'].update({
-        'Major': major,
-        'Minor': minor,
-        'Patch': patch,
-        'Build': 0
-    })
-    vi['FixedFileInfo']['ProductVersion'].update({
-        'Major': major,
-        'Minor': minor,
-        'Patch': patch,
-        'Build': 0
-    })
-    vi['StringFileInfo']['FileVersion'] = f"{v}.0"
-    vi['StringFileInfo']['ProductVersion'] = f"{v}.0"
-    
-    with open(version_json_path, "w", encoding="utf-8") as f:
-        json.dump(vi, f, indent=2)
-    print("[OK] versioninfo.json version synced successfully.")
-else:
-    print("[ERROR] versioninfo.json not found.")
-    import sys
-    sys.exit(2)
+
+def _synchronized_version_info(info: dict[str, object], version: str, major: int, minor: int, patch: int) -> dict[str, object]:
+    result = json.loads(json.dumps(info))
+    fixed = result["FixedFileInfo"]
+    for key in ("FileVersion", "ProductVersion"):
+        fixed[key].update({"Major": major, "Minor": minor, "Patch": patch, "Build": 0})
+    strings = result["StringFileInfo"]
+    strings["FileVersion"] = f"{version}.0"
+    strings["ProductVersion"] = f"{version}.0"
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="report metadata drift without writing files")
+    args = parser.parse_args()
+
+    version, major, minor, patch = _canonical_version()
+    current_nsi = NSI_PATH.read_text(encoding="utf-8")
+    current_info = json.loads(VERSION_INFO_PATH.read_text(encoding="utf-8"))
+    expected_nsi = _synchronized_nsi(current_nsi, version)
+    expected_info = _synchronized_version_info(current_info, version, major, minor, patch)
+    nsi_stale = expected_nsi != current_nsi
+    info_stale = expected_info != current_info
+
+    if args.check:
+        if nsi_stale or info_stale:
+            stale = ", ".join(name for name, value in (("NSIS", nsi_stale), ("versioninfo", info_stale)) if value)
+            print(f"[ERROR] Installer metadata out of sync with GOODQ_VERSION {version}: {stale}")
+            return 1
+        print(f"[OK] Installer metadata matches GOODQ_VERSION {version}")
+        return 0
+
+    if nsi_stale:
+        NSI_PATH.write_text(expected_nsi, encoding="utf-8", newline="\r\n")
+    if info_stale:
+        VERSION_INFO_PATH.write_text(json.dumps(expected_info, indent=2) + "\n", encoding="utf-8")
+    print(f"[OK] Installer metadata synchronized with GOODQ_VERSION {version}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

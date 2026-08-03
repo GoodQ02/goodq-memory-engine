@@ -526,6 +526,7 @@ class RouteEffectBoundaryMiddleware:
         routes: Sequence[Any] | Callable[[], Sequence[Any]],
         registry: Mapping[RouteOperation, RouteEffect | str],
         static_root: str | Path = _DEFAULT_UI_ROOT,
+        client_is_loopback: Callable[[Any], bool] = is_loopback_client,
     ) -> None:
         self.app = app
         if callable(routes):
@@ -534,6 +535,7 @@ class RouteEffectBoundaryMiddleware:
             self._route_provider = lambda: routes
         self.registry = _normalize_registry(registry)
         self.expected_static_mounts = _expected_static_mounts_for_root(static_root)
+        self._client_is_loopback = client_is_loopback
         self._reported_token_configuration_error: str | None = None
 
     def _match_operation(
@@ -586,7 +588,7 @@ class RouteEffectBoundaryMiddleware:
             await response(scope, receive, send)
             return
 
-        is_remote = not is_loopback_client(scope.get("client"))
+        is_remote = not self._client_is_loopback(scope.get("client"))
         if effect is not None and effect != RouteEffect.PASSIVE_READ and is_remote:
             logger.warning(
                 "LAN API denied non-passive operation %s %s effect=%s client=%r",
@@ -654,6 +656,7 @@ def install_route_effect_authority(
     *,
     registry: Mapping[RouteOperation, RouteEffect | str] = ROUTE_EFFECTS,
     static_root: str | Path = _DEFAULT_UI_ROOT,
+    client_is_loopback: Callable[[Any], bool] = is_loopback_client,
 ) -> None:
     if getattr(app.state, _INSTALL_SENTINEL, False):
         raise RouteEffectConfigurationError("route effect authority is already installed")
@@ -697,5 +700,6 @@ def install_route_effect_authority(
         routes=lambda: app.routes,
         registry=normalized,
         static_root=static_root,
+        client_is_loopback=client_is_loopback,
     )
     setattr(app.state, _INSTALL_SENTINEL, True)

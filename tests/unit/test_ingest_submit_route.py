@@ -71,6 +71,8 @@ def _client(
                 ("GET", "/api/ingest/status/{request_id}"),
             )
         },
+        client_is_loopback=lambda client: isinstance(client, (tuple, list))
+        and client[0] == "127.0.0.1",
     )
     return (
         TestClient(app, client=("127.0.0.1", 50000)),

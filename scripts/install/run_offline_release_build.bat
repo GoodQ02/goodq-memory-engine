@@ -38,6 +38,8 @@ if "%EXPECTED_COMMIT%"=="" (
 )
 
 if not exist "%GOODQ_RELEASE_OUTPUT_ROOT%" mkdir "%GOODQ_RELEASE_OUTPUT_ROOT%"
+set "ASSET_ROOT=%GOODQ_RELEASE_OUTPUT_ROOT%\assets"
+if not exist "%ASSET_ROOT%" mkdir "%ASSET_ROOT%"
 set "BUILD_LOG=%GOODQ_RELEASE_OUTPUT_ROOT%\offline_build.log"
 set "RECEIPT=%GOODQ_RELEASE_OUTPUT_ROOT%\offline_build_receipt.txt"
 
@@ -55,7 +57,7 @@ if errorlevel 1 (
 
 echo [2/3] Building the baseline installer from the local cache...
 set "GOODQ_INSTALLER_BUILD_ROOT=%BUILD_ROOT%"
-set "GOODQ_INSTALLER_OUTPUT_ROOT=%GOODQ_RELEASE_OUTPUT_ROOT%"
+set "GOODQ_INSTALLER_OUTPUT_ROOT=%ASSET_ROOT%"
 call .\build_installer.bat >> "%BUILD_LOG%" 2>&1
 if errorlevel 1 (
     echo [FAILED] Build stopped. See:
@@ -65,7 +67,7 @@ if errorlevel 1 (
 )
 
 echo [3/3] Verifying the exact release asset receipt...
-powershell -NoProfile -ExecutionPolicy Bypass -File .\verify_release_asset.ps1 -AssetRoot "%GOODQ_RELEASE_OUTPUT_ROOT%" -ExpectedVersion "%EXPECTED_VERSION%" -ExpectedCommit "%EXPECTED_COMMIT%" > "%RECEIPT%" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\verify_release_asset.ps1 -AssetRoot "%ASSET_ROOT%" -ExpectedVersion "%EXPECTED_VERSION%" -ExpectedCommit "%EXPECTED_COMMIT%" > "%RECEIPT%" 2>&1
 if errorlevel 1 (
     echo [FAILED] Asset verification did not pass. See:
     echo          %RECEIPT%
@@ -76,8 +78,8 @@ popd
 
 echo.
 echo [READY] Offline baseline installer build and verification passed.
-echo         Assets and receipts are in:
-echo         %GOODQ_RELEASE_OUTPUT_ROOT%
+echo         Assets are in: %ASSET_ROOT%
+echo         Receipt and log are in: %GOODQ_RELEASE_OUTPUT_ROOT%
 echo.
 echo You may reconnect to the internet now, then return to Codex for review.
 pause

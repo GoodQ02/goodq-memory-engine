@@ -210,6 +210,16 @@ def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() ->
     assert "offline_build_receipt.txt" in launcher
 
 
+def test_offline_release_launcher_separates_release_assets_from_diagnostic_receipts() -> None:
+    launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'set "ASSET_ROOT=%GOODQ_RELEASE_OUTPUT_ROOT%\\assets"' in launcher
+    assert 'set "GOODQ_INSTALLER_OUTPUT_ROOT=%ASSET_ROOT%"' in launcher
+    assert '-AssetRoot "%ASSET_ROOT%"' in launcher
+
+
 def test_mini_agent_dependency_is_resolved_from_the_verified_offline_cache() -> None:
     lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
     stager = (REPO_ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(

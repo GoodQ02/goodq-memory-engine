@@ -195,3 +195,16 @@ def test_preflight_scans_every_source_root_packaged_by_nsis() -> None:
     for source_root in ("api", "cli", "steps", "ui", "agents", "lib", "common", "retrieval", "pipelines"):
         assert f"..\\..\\{source_root}" in preflight
     assert "Get-ChildItem -Path $scanRoots" in preflight
+
+
+def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() -> None:
+    launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "preflight_check.ps1" in launcher
+    assert "GOODQ_BYPASS_NETWORK_CHECK" not in launcher
+    assert "build_installer.bat" in launcher
+    assert "verify_release_asset.ps1" in launcher
+    assert "offline_build.log" in launcher
+    assert "offline_build_receipt.txt" in launcher

@@ -44,16 +44,18 @@ To prevent siloing or accidental leakage (e.g. jamming all packages into `setup.
   - Can include optional client extensions in `extras_require` (e.g., local audio fallback dependencies like `faster-whisper`), but the base package must remain extremely lightweight.
 
 ### 2. `environment.yml` & `environment.gpu.yml`
-- **Scope**: Canonical local orchestration environments and CI baseline specifications.
+- **Scope**: Canonical local orchestration environment specifications.
 - **Rules**:
   - `environment.yml` is the authoritative definition of the CPU-safe `BASELINE` local orchestration runtime.
   - `environment.gpu.yml` defines the `GPU_ENHANCED` extension layer (adding CUDA-backed throughput packages like PyTorch CUDA and FAISS GPU).
-  - Any core CLI dependency listed in `setup.py`'s `install_requires` **must also** be present in `environment.yml` to ensure CI baseline verification runs on a complete super-set of the package requirements.
+  - Any core CLI dependency listed in `setup.py`'s `install_requires` **must also** be present in `environment.yml` so the development specification remains a complete super-set of package requirements.
 
 ### 3. `requirements-baseline-lock.txt` & `environment-baseline-lock.yml`
 - **Scope**: Pinned reproducibility snapshots.
 - **Rules**:
   - These lockfiles represent the exact, frozen environment states verified on green CI builds.
+  - GitHub Actions creates `goodq_core` from `environment-baseline-lock.yml`; it does not resolve the broad development specifications in `environment.yml`.
+  - CI prints a concise runtime version receipt and runs `pip check` before verification so any future dependency drift is visible at the environment boundary.
   - Developers must update these lockfiles in lock-step whenever dependencies in definition files (`environment.yml` or `setup.py`) are modified.
   - Updates must be verified via automated lints to ensure they comply with constraints (such as `fastapi<0.137.0`).
 

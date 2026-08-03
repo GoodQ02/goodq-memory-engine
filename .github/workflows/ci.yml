@@ -51,7 +51,13 @@ jobs:
         with:
           activate-environment: goodq_core
           auto-activate: false
-          environment-file: environment.yml
+          environment-file: environment-baseline-lock.yml
+
+      - name: Runtime version receipt
+        shell: pwsh
+        run: |
+          conda run -n goodq_core python -c "import importlib.metadata as metadata, json, sys; names = ('fastapi', 'starlette', 'httpx', 'pydantic', 'pytest'); print(json.dumps({'python': sys.version.split()[0], **{name: metadata.version(name) for name in names}}, sort_keys=True))"
+          conda run -n goodq_core python -m pip check
 
       - name: Documentation drift lint
         shell: pwsh

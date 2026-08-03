@@ -259,3 +259,13 @@ def test_release_signing_uses_a_staged_manifest_not_the_tracked_checkout() -> No
     assert 'File "staged\\configs\\model_download_manifest.json.sig"' in installer
     assert 'flag.String("manifest-path"' in signer
     assert 'flag.String("signature-path"' in signer
+
+
+def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None:
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'copy /y "staged_cache\\host_tools\\nssm.zip" "staged\\nssm.zip" >nul' in builder
+    assert "NSSM archive is missing from the verified cache" in builder
+    assert "NSSM executable was not produced by the verified archive" in builder

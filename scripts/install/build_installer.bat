@@ -146,9 +146,21 @@ del staged\get-pip.py
 copy /y "staged_cache\db\qdrant.zip" "staged\qdrant.zip" >nul
 %PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
 
-copy /y "staged_cache\build_tools\nssm.zip" "staged\nssm.zip" >nul
+copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul
+if errorlevel 1 (
+    echo [ERROR] NSSM archive is missing from the verified cache.
+    exit /b 100
+)
 %PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\nssm.zip' -DestinationPath 'staged\nssm_bin' -Force"
+if errorlevel 1 (
+    echo [ERROR] Failed to extract the verified NSSM archive.
+    exit /b 101
+)
 copy /y staged\nssm_bin\nssm-2.24-103-gdee49fc\win64\nssm.exe staged\nssm\nssm.exe >nul
+if errorlevel 1 (
+    echo [ERROR] NSSM executable was not produced by the verified archive.
+    exit /b 102
+)
 
 copy /y "staged_cache\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
 copy /y "staged_cache\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul

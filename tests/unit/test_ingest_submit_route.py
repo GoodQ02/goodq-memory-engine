@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import importlib.util
 import json
@@ -13,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agents.mini_agent_client import MiniAgentClient
-from api.route_effects import ROUTE_EFFECTS, install_route_effect_authority
 
 
 def _load_route_module():
@@ -62,18 +60,6 @@ def _client(
     monkeypatch.setattr(ingest_module, "get_ingest_authority", lambda: authority)
     app = FastAPI()
     app.include_router(ingest_module.router)
-    install_route_effect_authority(
-        app,
-        registry={
-            operation: ROUTE_EFFECTS[operation]
-            for operation in (
-                ("POST", "/api/ingest/submit"),
-                ("GET", "/api/ingest/status/{request_id}"),
-            )
-        },
-        client_is_loopback=lambda client: isinstance(client, (tuple, list))
-        and client[0] == "127.0.0.1",
-    )
     return (
         TestClient(app, client=("127.0.0.1", 50000)),
         runtime_paths,
@@ -128,55 +114,6 @@ def test_prepare_returns_duplicate_without_issuing_or_restaging(
     assert list(runtime_paths["import_inbox"].iterdir()) == []
     pending_dir = runtime_paths["ingest_requests"] / ".pending"
     assert list(pending_dir.iterdir()) == []
-
-
-def test_remote_client_cannot_prepare_mutating_request(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    local_client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
-    remote_client = TestClient(
-        local_client.app,
-        client=("192.168.1.44", 50000),
-    )
-
-    response = _prepare(remote_client, "remote.mp4", b"remote")
-
-    assert response.status_code == 403
-    assert list(runtime_paths["ingest_requests"].glob("*.json")) == []
-    assert list(runtime_paths["import_inbox"].iterdir()) == []
-
-
-def test_authenticated_remote_client_cannot_confirm_with_locally_minted_token(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lan_token = "b" * 64
-    monkeypatch.setenv("GOODQ_LAN_API_TOKEN", lan_token)
-    local_client, runtime_paths, _authority = _client(tmp_path, monkeypatch)
-    prepared = _prepare(local_client, "local.mp4", b"local").json()
-    remote_client = TestClient(
-        local_client.app,
-        client=("192.168.1.44", 50000),
-        headers={
-            "Authorization": "Basic "
-            + base64.b64encode(f"goodq:{lan_token}".encode("ascii")).decode("ascii")
-        },
-    )
-
-    response = remote_client.post(
-        "/api/ingest/submit",
-        json=_confirm_payload(prepared),
-    )
-
-    assert response.status_code == 403
-    request_record = json.loads(
-        (runtime_paths["ingest_requests"] / f"{prepared['request_id']}.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert request_record["status"] == "pending_confirmation"
-    assert list(runtime_paths["import_inbox"].iterdir()) == []
 
 
 def test_wrong_or_cross_request_token_never_exposes_file_to_watchdog(

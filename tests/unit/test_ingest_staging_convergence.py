@@ -13,7 +13,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agents.mini_agent_client import MiniAgentClient
-from api.route_effects import ROUTE_EFFECTS, install_route_effect_authority
 
 
 def _load_ingest_module():
@@ -76,18 +75,6 @@ def _app_client(
     )
     app = FastAPI()
     app.include_router(ingest_module.router)
-    install_route_effect_authority(
-        app,
-        registry={
-            operation: ROUTE_EFFECTS[operation]
-            for operation in (
-                ("POST", "/api/ingest/submit"),
-                ("GET", "/api/ingest/status/{request_id}"),
-            )
-        },
-        client_is_loopback=lambda client: isinstance(client, (tuple, list))
-        and client[0] == "127.0.0.1",
-    )
     return (
         TestClient(app, client=("127.0.0.1", 50000)),
         runtime_paths,

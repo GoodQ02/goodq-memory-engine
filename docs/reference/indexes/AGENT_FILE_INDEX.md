@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1335**
+Indexed active tracked paths: **1336**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -1067,6 +1067,7 @@ Indexed active tracked paths: **1335**
 | `/tests/unit/test_build_face_clusters_start_gate.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ci_locked_baseline.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |

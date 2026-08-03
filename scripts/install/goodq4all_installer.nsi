@@ -8,7 +8,13 @@
 !include "FileFunc.nsh"
 
 Name "GoodQ4All"
-OutFile "..\..\GoodQ4All_Setup_2.5.8.exe"
+!ifndef GOODQ_INSTALLER_OUTPUT_ROOT
+!define GOODQ_INSTALLER_OUTPUT_ROOT "..\.."
+!endif
+!ifndef GOODQ_LAUNCHER_PATH
+!define GOODQ_LAUNCHER_PATH "..\..\LAUNCH_GOODQ.exe"
+!endif
+OutFile "${GOODQ_INSTALLER_OUTPUT_ROOT}\GoodQ4All_Setup_2.5.8.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -82,7 +88,7 @@ runtime_ok:
   ; --- STATE 4: install app ---
   DetailPrint "Step 4/12: Copying application binaries and codefiles..."
   SetOutPath "$INSTDIR"
-  File "..\..\LAUNCH_GOODQ.exe"
+  File "${GOODQ_LAUNCHER_PATH}"
   File "..\..\goodq_version.py"
   File "..\..\requirements-baseline-lock.txt"
   

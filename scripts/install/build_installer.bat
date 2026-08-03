@@ -6,7 +6,24 @@ echo ==============================================
 echo GoodQ4All Offline Installer Compilation Runner
 echo ==============================================
 
-cd "%~dp0"
+if "%GOODQ_INSTALLER_BUILD_ROOT%"=="" (
+    echo [ERROR] Missing private build input: GOODQ_INSTALLER_BUILD_ROOT.
+    exit /b 20
+)
+if "%GOODQ_INSTALLER_OUTPUT_ROOT%"=="" (
+    echo [ERROR] Missing release output: GOODQ_INSTALLER_OUTPUT_ROOT.
+    exit /b 21
+)
+for %%I in ("%GOODQ_INSTALLER_BUILD_ROOT%") do set "BUILD_ROOT=%%~fI"
+for %%I in ("%GOODQ_INSTALLER_OUTPUT_ROOT%") do set "OUTPUT_ROOT=%%~fI"
+for %%F in ("go_compiler\go\bin\go.exe" "nsis_compiler\nsis-3.09\makensis.exe" "staged_cache" "dev_private_key.hex") do (
+    if not exist "%BUILD_ROOT%\%%~F" (
+        echo [ERROR] Missing private build input: %BUILD_ROOT%\%%~F
+        exit /b 22
+    )
+)
+if not exist "%OUTPUT_ROOT%" mkdir "%OUTPUT_ROOT%"
+cd /d "%BUILD_ROOT%"
 
 :: Resolve PowerShell command (pwsh preferred, fallback to powershell)
 where pwsh >nul 2>nul
@@ -73,8 +90,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 4b. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor offline...
-if exist "..\..\LAUNCH_GOODQ.exe" del "..\..\LAUNCH_GOODQ.exe"
-go_compiler\go\bin\go.exe build -o ..\..\LAUNCH_GOODQ.exe LAUNCH_GOODQ.go launcher_windows.go
+go_compiler\go\bin\go.exe build -o "%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" LAUNCH_GOODQ.go launcher_windows.go
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
     exit /b 4
@@ -146,12 +162,8 @@ if not exist "staged_cache\runtime\cacert.pem" (
 if not exist "staged\vendor\certifi" mkdir "staged\vendor\certifi"
 copy /y "staged_cache\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nul
 
-:: Copy wheels and WSL distro tar if present
+:: Copy wheels for the CPU-safe baseline. WSL audio remains an optional upgrade.
 xcopy /s /e /y "staged_cache\wheels" "staged\wheels" >nul
-if exist "staged_cache\wsl\goodq_audio_wsl.tar" (
-    if not exist "..\..\dist" mkdir "..\..\dist"
-    copy /y "staged_cache\wsl\goodq_audio_wsl.tar" "..\..\dist\goodq_audio_wsl.tar" >nul
-)
 
 
 :: Stage Qdrant Config
@@ -181,7 +193,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 6. Compile NSIS Setup Package Offline
 echo Compiling final NSIS Setup Installer package...
-nsis_compiler\nsis-3.09\makensis.exe goodq4all_installer.nsi
+nsis_compiler\nsis-3.09\makensis.exe /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" goodq4all_installer.nsi
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile NSIS installer.
     exit /b 5
@@ -189,10 +201,14 @@ if %ERRORLEVEL% neq 0 (
 
 :: 7. Write Release Manifest
 echo Generating release manifest and signatures...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Release manifest generation failed.
+    exit /b 23
+)
 
 echo ==============================================
 echo [OK] Installer compilation successfully complete.
-echo Output binary staged at project root directory.
+echo Output assets staged at %OUTPUT_ROOT%.
 echo ==============================================
 echo Done.

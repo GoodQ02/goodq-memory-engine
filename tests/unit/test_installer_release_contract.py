@@ -51,3 +51,46 @@ def test_installer_template_names_the_canonical_stable_version() -> None:
 
     assert "GoodQ4All_Setup_2.5.8.exe" in source
     assert "2.5.8-rc" not in source
+
+
+def test_private_builder_declares_its_input_and_output_boundaries() -> None:
+    source = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "GOODQ_INSTALLER_BUILD_ROOT" in source
+    assert "Missing private build input" in source
+    assert "GOODQ_INSTALLER_OUTPUT_ROOT" in source
+
+
+def test_release_asset_verifier_defines_the_baseline_asset_set() -> None:
+    verifier = REPO_ROOT / "scripts" / "install" / "verify_release_asset.ps1"
+
+    assert verifier.exists()
+    source = verifier.read_text(encoding="utf-8")
+    assert "GoodQ4All_Setup_$ExpectedVersion.exe" in source
+    assert "LAUNCH_GOODQ.exe" in source
+    assert "goodq_audio_wsl" not in source
+
+
+def test_release_asset_verifier_reports_an_empty_asset_directory(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "scripts" / "install" / "verify_release_asset.ps1"),
+            "-AssetRoot",
+            str(tmp_path),
+            "-ExpectedVersion",
+            "2.5.8",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Release asset set must contain exactly" in result.stderr

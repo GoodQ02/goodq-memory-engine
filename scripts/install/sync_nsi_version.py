@@ -28,7 +28,10 @@ def _canonical_version() -> tuple[str, int, int, int]:
 
 def _synchronized_nsi(content: str, version: str) -> str:
     replacements = (
-        (r'OutFile\s+"[^"]+GoodQ4All_Setup_[^"]+\.exe"', f'OutFile "..\\..\\GoodQ4All_Setup_{version}.exe"'),
+        (
+            r'OutFile\s+"[^"]+GoodQ4All_Setup_[^"]+\.exe"',
+            f'OutFile "${{GOODQ_INSTALLER_OUTPUT_ROOT}}\\GoodQ4All_Setup_{version}.exe"',
+        ),
         (
             r'!define\s+MUI_WELCOMEPAGE_TITLE\s+"[^"]+Offline Installer"',
             f'!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v{version} Offline Installer"',

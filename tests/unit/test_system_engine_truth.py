@@ -146,7 +146,11 @@ def test_collect_engine_details_reports_qdrant_as_vector_db(monkeypatch) -> None
             return _Response(200, {"result": {"collections": [{"name": "goodq_text"}]}})
         raise RuntimeError(f"unexpected request: {url}")
 
-    monkeypatch.setattr(runtime_route.requests, "get", _fake_get)
+    monkeypatch.setattr(
+        runtime_route,
+        "build_qdrant_session",
+        lambda _host: types.SimpleNamespace(get=_fake_get),
+    )
 
     engines = runtime_route._collect_engine_details()
 

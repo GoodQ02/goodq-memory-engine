@@ -30,20 +30,6 @@ def _load_route_module():
 
 ingest_module = _load_route_module()
 
-
-@pytest.fixture(autouse=True)
-def _treat_starlette_testclient_as_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep local-ingest tests local on Starlette versions using testclient."""
-    from api import route_effects
-
-    original = route_effects.is_loopback_client
-    monkeypatch.setattr(
-        route_effects,
-        "is_loopback_client",
-        lambda client: client == ("testclient", 50000) or original(client),
-    )
-
-
 def _runtime_paths(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "ingest_requests": tmp_path / "ingest_requests",

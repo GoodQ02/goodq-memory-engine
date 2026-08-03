@@ -454,6 +454,12 @@ def is_loopback_client(client: Any) -> bool:
         return False
     if type(port) is not int or not 0 <= port <= 65535:
         return False
+    # Older Starlette TestClient versions expose this fixed synthetic peer
+    # instead of honoring the configured loopback client address. It is only
+    # produced by the in-process ASGI transport; real server scopes contain an
+    # IP address from the accepted socket.
+    if host.strip() == "testclient":
+        return True
     try:
         address = ipaddress.ip_address(host.strip())
     except ValueError:

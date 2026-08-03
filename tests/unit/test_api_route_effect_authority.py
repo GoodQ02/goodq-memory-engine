@@ -859,6 +859,7 @@ def test_remote_client_denied_before_body_or_downstream(
         (("POST", "/api/ingest/submit"), ("127.0.0.1", 50000)),
         (("POST", "/api/ingest/submit"), ("::1", 50000)),
         (("POST", "/api/ingest/submit"), ("::ffff:127.0.0.1", 50000)),
+        (("POST", "/api/ingest/submit"), ("testclient", 50000)),
     ],
 )
 def test_loopback_client_variants_allow_effectful_operation(

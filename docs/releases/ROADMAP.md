@@ -1958,14 +1958,16 @@ These items preserve unfinished intent from the plans this roadmap replaces.
 ### V-01 — Portable follower witness
 
 - Status: IN PROGRESS
-- Verified build evidence (2026-08-04): an offline baseline artifact built from
-  private `dev` commit `d83ccb43` passed its exact version, commit, asset-set,
-  and SHA-256 receipt checks. The candidate includes the pinned LGPL
-  FFmpeg/FFprobe payload, visible first-use model-fetch status, and the durable
-  remote-witness runner. The earlier GR-16 install remains historical evidence;
-  this new artifact has not yet been installed there.
-- Re-entry gate: GR-16 finishes restarting, then receives the exact four-file
-  release asset set after transfer hashes match.
+- Verified install evidence (2026-08-04): the offline baseline artifact built
+  from private `dev` commit `d83ccb43` passed exact version, commit, asset-set,
+  and SHA-256 receipt checks; GR-16 received the four-file set with matching
+  transfer hashes, a clean install exited zero, and its installed offline suite
+  and restore smoke passed. The package includes pinned LGPL FFmpeg/FFprobe and
+  visible first-use model-fetch status.
+- Active repair: GR-16 proved that its OpenSSH server ends ordinary detached
+  child processes when the client disconnects. The source launcher now uses a
+  temporary Windows Task Scheduler task; rebuild and redeploy that repair before
+  claiming the remote-witness runner is validated.
 - Completion: a fresh install passes the offline suite and restore smoke; one
   non-promoting scene-zero witness, launched through the remote receipt runner,
   reaches `runner_finished` with a terminal audio-transcription ledger result;

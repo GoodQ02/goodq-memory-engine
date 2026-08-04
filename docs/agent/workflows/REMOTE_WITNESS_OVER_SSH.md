@@ -7,8 +7,10 @@
 ## Purpose
 
 Run one isolated, non-promoting witness on an approved follower without making
-the SSH client responsible for the worker lifetime. The remote process writes a
-durable receipt beside the witness root so an interrupted SSH session is an
+the SSH client responsible for the worker lifetime. On Windows, the launcher
+uses a temporary Task Scheduler job because OpenSSH can otherwise terminate an
+ordinary detached child when its client disconnects. The remote process writes
+a durable receipt beside the witness root so an interrupted SSH session is an
 observable transport event, not an ambiguous pipeline result.
 
 ## Scope and invariants
@@ -50,7 +52,8 @@ observable transport event, not an ambiguous pipeline result.
 
 The receipt is atomically replaced at each phase:
 
-- `launch_requested` / `launcher_started`: detached remote worker accepted.
+- `launch_requested` / `launcher_started`: durable remote worker accepted. On
+  Windows, the latter records the temporary scheduler task and worker path.
 - `preflight_started` / `preflight_sealed`: isolated root passed its strict
   checks and its prepared receipt was sealed.
 - `runner_started`: records runner PID, command, and combined scene log path.

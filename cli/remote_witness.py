@@ -78,6 +78,45 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
         return 1
 
 
+def _scheduled_task_name(root: Path) -> str:
+    """Return a task name that is stable for one fresh witness root."""
+    token = "".join(character if character.isalnum() else "-" for character in root.name)
+    return f"GoodQ4All-RemoteWitness-{token}".rstrip("-")
+
+
+def _launch_with_task_scheduler(command: list[str], root: Path) -> tuple[str, Path]:
+    """Launch a Windows witness outside the OpenSSH session job.
+
+    Windows OpenSSH can terminate ordinary detached children when the SSH client
+    disconnects.  A scheduled task is owned by Task Scheduler instead, which
+    gives the witness a durable execution boundary on approved follower hosts.
+    """
+    task_name = _scheduled_task_name(root)
+    worker_path = root.parent / f"{root.name}.remote-runner.cmd"
+    worker_path.parent.mkdir(parents=True, exist_ok=True)
+    worker_path.write_text(
+        "@echo off\r\n" + subprocess.list2cmdline(command) + "\r\nexit /b %ERRORLEVEL%\r\n",
+        encoding="utf-8",
+    )
+    task_command = f'cmd.exe /d /c "{worker_path}"'
+    subprocess.run(
+        [
+            "schtasks.exe", "/Create", "/TN", task_name, "/TR", task_command,
+            "/SC", "ONCE", "/ST", "23:59", "/RL", "HIGHEST", "/F",
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["schtasks.exe", "/Run", "/TN", task_name],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return task_name, worker_path
+
+
 def launch(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> Path:
     root = artifact_root.resolve()
     receipt = receipt_path(root)
@@ -87,9 +126,24 @@ def launch(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> P
     }
     state = _update(receipt, state, "launch_requested")
     command = [sys.executable, "-m", "cli.remote_witness", "execute", "--artifact-root", str(root), "--input-file", str(input_file), "--scene-indices", scene_indices]
-    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    process = subprocess.Popen(command, creationflags=flags, close_fds=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    _update(receipt, state, "launcher_started", launcher_pid=process.pid, command=command)
+    try:
+        if os.name == "nt":
+            task_name, worker_path = _launch_with_task_scheduler(command, root)
+            _update(
+                receipt,
+                state,
+                "launcher_started",
+                command=command,
+                scheduler_task=task_name,
+                scheduler_worker=str(worker_path),
+            )
+        else:
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            process = subprocess.Popen(command, creationflags=flags, close_fds=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _update(receipt, state, "launcher_started", launcher_pid=process.pid, command=command)
+    except Exception as exc:
+        _update(receipt, state, "failed", error=f"{type(exc).__name__}: {exc}", finished_at=_now())
+        raise
     return receipt
 
 

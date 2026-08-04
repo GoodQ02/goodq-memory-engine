@@ -1968,6 +1968,17 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   child processes when the client disconnects. The source launcher now uses a
   temporary Windows Task Scheduler task; rebuild and redeploy that repair before
   claiming the remote-witness runner is validated.
+- Verified runtime evidence (2026-08-04): the rebuilt `75b5b8f9` artifact was
+  clean-installed on GR-16 after a four-of-four hash-verified transfer. Its
+  offline suite and Qdrant restore smoke passed, and the scheduler-backed
+  scene-zero witness reached `runner_finished` with exit code zero. The sealed
+  receipt proves CPU policy, isolation, and promotion disabled.
+- Remaining acceptance gap: audio transcription completed without text and the
+  optional CLAP embedding step failed because the baseline ships Torch 2.5.1
+  while the cached legacy `pytorch_model.bin` now requires Torch 2.6 or newer.
+  Decide whether the public baseline should bundle the Audio Standard model pack
+  or retain audio as a separately provisioned capability; repair the Torch/CLAP
+  compatibility seam without weakening the loader security guard.
 - Completion: a fresh install passes the offline suite and restore smoke; one
   non-promoting scene-zero witness, launched through the remote receipt runner,
   reaches `runner_finished` with a terminal audio-transcription ledger result;

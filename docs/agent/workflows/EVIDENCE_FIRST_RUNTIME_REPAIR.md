@@ -143,6 +143,19 @@ The pass is ready to commit when:
 - optional gaps are labeled as optional or historical, not hidden
 - agent-facing docs no longer point a fresh agent toward the stale hypothesis
 
+## Loop-Exit Guard
+
+After the operator approves a named next action, the next update must contain
+one of three things: the executed action and its evidence, a newly discovered
+blocker with its source, or one materially narrower action needed to clear that
+blocker. Do not restate the approved plan as progress.
+
+If two consecutive updates repeat the same intended action without new
+evidence, stop the active loop. Reconcile the current branch, latest receipt,
+and owning contract; then publish one checkpoint with: completed work, the
+single unresolved seam, and the next verification gate. Resume only from that
+checkpoint.
+
 ## Common Traps
 
 - Plain environment checks can be false negatives if the pipeline uses a

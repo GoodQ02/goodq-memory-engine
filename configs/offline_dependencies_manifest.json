@@ -79,6 +79,25 @@
       "rollback_action": "remove target directory",
       "notes": "Qdrant Vector Database engine"
     },
+    "ffmpeg": {
+      "artifact_id": "ffmpeg_windows_lgpl_shared_zip",
+      "pack_id": "runtime_media",
+      "required": true,
+      "kind": "zip",
+      "source_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-03-14-02/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip",
+      "source_version": "n8.1.2-34-g9b6c8969e0",
+      "source_commit": "9b6c8969e0",
+      "cache_path": "staged_cache/external/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip",
+      "target_path": "scripts/install/staged/ffmpeg/",
+      "sha256": "8d252cb9d6fc0d206c7d02128d822a1b62007943f44d85e4f8a8d19b305465e9",
+      "size_bytes": 70508881,
+      "license": "LGPL-2.1-or-later",
+      "redistribution_status": "allowed",
+      "install_action": "extract",
+      "verify_action": "staged\\ffmpeg\\ffmpeg.exe -version; staged\\ffmpeg\\ffprobe.exe -version",
+      "rollback_action": "remove target directory",
+      "notes": "Pinned BtbN LGPL shared Windows build; package ffmpeg, ffprobe, runtime DLLs, and LICENSE.txt."
+    },
     "nssm": {
       "artifact_id": "nssm_windows_zip",
       "pack_id": "runtime_db",

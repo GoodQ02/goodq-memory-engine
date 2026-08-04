@@ -118,6 +118,7 @@ if not exist "staged\qdrant" mkdir "staged\qdrant"
 if not exist "staged\qdrant\config" mkdir "staged\qdrant\config"
 if not exist "staged\nssm" mkdir "staged\nssm"
 if not exist "staged\runtime" mkdir "staged\runtime"
+if not exist "staged\ffmpeg" mkdir "staged\ffmpeg"
 if not exist "staged\binaries" mkdir "staged\binaries"
 if not exist "staged\wheels" mkdir "staged\wheels"
 
@@ -145,6 +146,42 @@ del staged\get-pip.py
 
 copy /y "staged_cache\db\qdrant.zip" "staged\qdrant.zip" >nul
 %PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
+
+copy /y "staged_cache\external\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip" "staged\ffmpeg.zip" >nul
+if errorlevel 1 (
+    echo [ERROR] FFmpeg archive is missing from the verified cache.
+    exit /b 103
+)
+%PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\ffmpeg.zip' -DestinationPath 'staged\ffmpeg_archive' -Force"
+if errorlevel 1 (
+    echo [ERROR] Failed to extract the verified FFmpeg archive.
+    exit /b 104
+)
+xcopy /s /e /i /y "staged\ffmpeg_archive\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1\bin" "staged\ffmpeg" >nul
+copy /y "staged\ffmpeg_archive\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1\LICENSE.txt" "staged\ffmpeg\LICENSE.txt" >nul
+(
+echo FFmpeg source and build information
+echo https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-08-03-14-02
+echo https://github.com/FFmpeg/FFmpeg
+) > "staged\ffmpeg\SOURCE_URL.txt"
+if not exist "staged\ffmpeg\ffmpeg.exe" (
+    echo [ERROR] FFmpeg executable was not produced by the verified archive.
+    exit /b 105
+)
+if not exist "staged\ffmpeg\ffprobe.exe" (
+    echo [ERROR] FFprobe executable was not produced by the verified archive.
+    exit /b 106
+)
+staged\ffmpeg\ffmpeg.exe -version >nul
+if errorlevel 1 (
+    echo [ERROR] Staged FFmpeg runtime could not execute.
+    exit /b 107
+)
+staged\ffmpeg\ffprobe.exe -version >nul
+if errorlevel 1 (
+    echo [ERROR] Staged FFprobe runtime could not execute.
+    exit /b 108
+)
 
 copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul
 if errorlevel 1 (

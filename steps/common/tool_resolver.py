@@ -6,6 +6,10 @@ from typing import Dict, Any
 
 class ToolResolver:
     @staticmethod
+    def _project_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    @staticmethod
     def resolve_tool(name: str) -> Dict[str, Any]:
         """
         Resolve standard tools like ffmpeg, tesseract, pdftotext, qdrant
@@ -78,13 +82,15 @@ class ToolResolver:
                     }
 
         # Check: Bundled tools
-        project_root = Path(__file__).resolve().parents[2]
+        project_root = ToolResolver._project_root()
         bundled_binary = f"{name}.exe" if sys.platform == "win32" else name
         bundled_candidates = [
             project_root / "vendor" / bundled_binary,
             project_root / "vendor" / name / "bin" / bundled_binary,
             project_root / "vendor" / "qdrant" / bundled_binary,
         ]
+        if name in {"ffmpeg", "ffprobe"}:
+            bundled_candidates.append(project_root / "ffmpeg" / bundled_binary)
         for c in bundled_candidates:
             if c.exists():
                 return {

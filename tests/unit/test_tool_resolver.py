@@ -35,3 +35,18 @@ def test_windows_pdftotext_fallback_does_not_satisfy_ffmpeg(monkeypatch, tmp_pat
 
     assert result["found"] is False
     assert result["path"] is None
+
+
+def test_installed_ffmpeg_directory_resolves_the_bundled_runtime(monkeypatch, tmp_path):
+    project_root = tmp_path / "installed"
+    ffmpeg = project_root / "ffmpeg" / "ffmpeg.exe"
+    ffmpeg.parent.mkdir(parents=True)
+    ffmpeg.write_text("stub", encoding="utf-8")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    monkeypatch.setattr(ToolResolver, "_project_root", staticmethod(lambda: project_root))
+
+    result = ToolResolver.resolve_tool("ffmpeg")
+
+    assert result["found"] is True
+    assert result["path"].endswith("/ffmpeg/ffmpeg.exe")

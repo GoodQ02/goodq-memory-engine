@@ -92,6 +92,9 @@ runtime_ok:
   SetOutPath "$INSTDIR\qdrant"
   File "staged\qdrant\qdrant.exe"
 
+  SetOutPath "$INSTDIR\ffmpeg"
+  File /r "staged\ffmpeg\*.*"
+
   SetOutPath "$INSTDIR\scripts"
   File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
 

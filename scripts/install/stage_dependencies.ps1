@@ -21,11 +21,19 @@ function Get-FileSHA256 {
     return (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLower()
 }
 
-# Resolve paths
+# Resolve paths relative to this script, never the caller's working directory.
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-cd $ScriptDir
-
-$ResolvedManifestPath = [System.IO.Path]::GetFullPath($ManifestPath)
+$ResolvedCacheDir = if ([System.IO.Path]::IsPathRooted($CacheDir)) {
+    [System.IO.Path]::GetFullPath($CacheDir)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $ScriptDir $CacheDir))
+}
+$ResolvedManifestPath = if ([System.IO.Path]::IsPathRooted($ManifestPath)) {
+    [System.IO.Path]::GetFullPath($ManifestPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $ScriptDir $ManifestPath))
+}
+$CacheDir = $ResolvedCacheDir
 if (-not (Test-Path $ResolvedManifestPath)) {
     Write-Error "Manifest not found at $ResolvedManifestPath"
 }

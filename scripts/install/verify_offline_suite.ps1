@@ -24,6 +24,10 @@ $criticalFiles = @(
     "LAUNCH_GOODQ.exe",
     "goodq_version.py",
     "qdrant\qdrant.exe",
+    "ffmpeg\ffmpeg.exe",
+    "ffmpeg\ffprobe.exe",
+    "ffmpeg\LICENSE.txt",
+    "ffmpeg\SOURCE_URL.txt",
     "configs\config.yaml",
     "configs\model_download_manifest.json",
     "configs\model_download_manifest.json.sig"
@@ -40,6 +44,25 @@ foreach ($f in $criticalFiles) {
 }
 if (-not $gate1.pass) { $results.pass = $false }
 $results.gates += $gate1
+
+# --- Gate 1b: Bundled Media Runtime ---
+$gate1b = @{ name = "media_runtime"; pass = $true; errors = @() }
+foreach ($tool in @("ffmpeg", "ffprobe")) {
+    $toolPath = Join-Path $InstallDir ("ffmpeg\{0}.exe" -f $tool)
+    try {
+        & $toolPath -version *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "exit code $LASTEXITCODE"
+        }
+        Write-Host "  [OK]   Bundled $tool runtime executes" -ForegroundColor Green
+    } catch {
+        $gate1b.pass = $false
+        $gate1b.errors += "Bundled $tool runtime failed: $_"
+        Write-Host "  [FAIL] Bundled $tool runtime failed: $_" -ForegroundColor Red
+    }
+}
+if (-not $gate1b.pass) { $results.pass = $false }
+$results.gates += $gate1b
 
 # --- Gate 2: Launcher Manifest Verification ---
 $gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }

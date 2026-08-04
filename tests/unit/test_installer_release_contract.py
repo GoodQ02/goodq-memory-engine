@@ -279,3 +279,44 @@ def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None
     assert 'copy /y "staged_cache\\host_tools\\nssm.zip" "staged\\nssm.zip" >nul' in builder
     assert "NSSM archive is missing from the verified cache" in builder
     assert "NSSM executable was not produced by the verified archive" in builder
+
+
+def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> None:
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'staged_cache\\external\\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip' in builder
+    assert 'staged\\ffmpeg\\ffmpeg.exe -version >nul' in builder
+    assert 'staged\\ffmpeg\\ffprobe.exe -version >nul' in builder
+    assert 'staged\\ffmpeg\\SOURCE_URL.txt' in builder
+    assert 'File /r "staged\\ffmpeg\\*.*"' in installer
+    assert '"ffmpeg\\ffmpeg.exe"' in verifier
+    assert '"ffmpeg\\ffprobe.exe"' in verifier
+
+
+def test_dependency_stager_resolves_its_manifest_and_cache_from_its_own_location() -> None:
+    stager = (REPO_ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Join-Path $ScriptDir $ManifestPath" in stager
+    assert "Join-Path $ScriptDir $CacheDir" in stager
+
+
+def test_ffmpeg_release_source_is_pinned_and_declares_redistribution_metadata() -> None:
+    manifest = json.loads(
+        (REPO_ROOT / "configs" / "offline_dependencies_manifest.json").read_text(encoding="utf-8")
+    )
+    ffmpeg = manifest["dependencies"]["ffmpeg"]
+
+    assert "/releases/download/autobuild-2026-08-03-14-02/" in ffmpeg["source_url"]
+    assert "latest" not in ffmpeg["source_url"]
+    assert ffmpeg["license"] == "LGPL-2.1-or-later"
+    assert ffmpeg["redistribution_status"] == "allowed"

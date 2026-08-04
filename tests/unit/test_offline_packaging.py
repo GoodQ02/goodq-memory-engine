@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,29 @@ class TestVersionReceipt:
             "sandbox_env_setup.py still contains hardcoded version '1.0.0'. "
             "It should read from goodq_version.py dynamically."
         )
+
+
+def test_audio_pack_verify_honors_explicit_requested_pack(tmp_path: Path):
+    """Audio readiness checks must not silently verify core instead."""
+    script = ROOT / "scripts" / "install" / "sandbox_env_setup.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--packs",
+            "audio_standard",
+            "--verify-only",
+            "--data-dir",
+            str(tmp_path / "data"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 6
+    assert "Processing pack: Audio Standard Pack" in result.stdout
+    assert "Core Memory Pack" not in result.stdout
 
 
 class TestManifestWheelCoverage:

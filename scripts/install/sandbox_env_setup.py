@@ -207,7 +207,7 @@ def hydrate_wheelhouse(runtime_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="GoodQ4All Sandboxed Hydration and Downloader")
-    parser.add_argument("--packs", default="core", help="Comma-separated model packs to download")
+    parser.add_argument("--packs", default="core_memory", help="Comma-separated model packs to download or verify")
     parser.add_argument("--data-dir", default="C:\\ProgramData\\GoodQ4All", help="Authoritative data root")
     parser.add_argument("--verify-only", action="store_true", help="Perform checksum checks without downloading")
     parser.add_argument("--cache-dir", default=None, help="Local directory to check for model files/chunks before downloading")
@@ -276,8 +276,10 @@ def main() -> None:
                     if candidate_zip or candidate_chunk:
                         if p_key not in selected_pack_keys:
                             selected_pack_keys.append(p_key)
-    if args.verify_only:
-        # Verification runs over all registered/installed packs
+    if args.verify_only and not selected_pack_keys:
+        # Without an explicit selection, verify all registered packs. An
+        # explicit --packs selection is an operator contract and must not be
+        # replaced by the registry fallback.
         registry_path = data_root / ".model_packs_installed.json"
         if registry_path.exists():
             with open(registry_path, "r", encoding="utf-8") as f:

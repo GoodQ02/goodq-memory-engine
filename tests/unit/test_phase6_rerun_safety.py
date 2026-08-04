@@ -63,6 +63,19 @@ def test_resolve_ffmpeg_accepts_directory_override(monkeypatch, tmp_path: Path) 
     assert tool_paths.resolve_ffmpeg(cfg) == str(ffmpeg_exe)
 
 
+def test_resolve_ffmpeg_uses_the_installed_bundled_runtime_before_imageio(monkeypatch, tmp_path: Path) -> None:
+    bundled = tmp_path / ("ffmpeg.exe" if tool_paths.os.name == "nt" else "ffmpeg")
+    bundled.write_text("stub", encoding="utf-8")
+
+    monkeypatch.setattr(tool_paths.shutil, "which", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "steps.common.tool_resolver.ToolResolver.resolve_tool",
+        lambda _name: {"found": True, "path": str(bundled)},
+    )
+
+    assert tool_paths.resolve_ffmpeg({}) == str(bundled)
+
+
 def test_extract_frame_at_timestamp_reuses_existing_frame(monkeypatch, tmp_path: Path) -> None:
     output_path = tmp_path / "scene_0009_frame_00.jpg"
     output_path.write_bytes(b"existing-frame")

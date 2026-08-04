@@ -80,6 +80,24 @@ def resolve_ffmpeg(cfg: Dict[str, Any]) -> Optional[str]:
     if ffmpeg_path:
         return ffmpeg_path
 
+    # The offline installer bundles FFmpeg below the project root. Reuse the
+    # canonical resolver so the runner executes the same binary witness
+    # preflight already proved, rather than silently selecting another fallback.
+    try:
+        from steps.common.tool_resolver import ToolResolver
+
+        bundled = ToolResolver.resolve_tool("ffmpeg")
+        bundled_path = bundled.get("path") if isinstance(bundled, dict) else None
+        if isinstance(bundled_path, str) and os.path.isfile(bundled_path):
+            return bundled_path
+    except Exception as exc:
+        logger.debug(
+            "tool_paths debug: bundled_ffmpeg_resolution_failed operation=%s exc_type=%s exc=%s",
+            "resolve_ffmpeg",
+            type(exc).__name__,
+            exc,
+        )
+
     # Python-package fallback: imageio-ffmpeg bundles a platform-appropriate binary.
     try:
         import imageio_ffmpeg

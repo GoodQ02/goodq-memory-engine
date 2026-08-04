@@ -20,6 +20,12 @@ from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
 
+
+def _emit_first_use_model_status(message: str) -> None:
+    """Make on-demand model provisioning visible in an operator console."""
+    print(f"[MODEL] {message}", flush=True)
+    logger.info(message)
+
 # Fallback registry matching configs/model_registry.yaml and bootstrap fallback list
 _FALLBACK_REGISTRY = {
     "Salesforce/blip-image-captioning-base": {
@@ -679,6 +685,10 @@ def ensure_model_cached(
                 for attempt in range(1, attempts + 1):
                     attempts_made = attempt
                     try:
+                        _emit_first_use_model_status(
+                            f"First-use fetch: downloading external model '{repo_id}' "
+                            f"(attempt {attempt}/{attempts}); this can take a few minutes."
+                        )
                         logger.info(f"Downloading external model '{repo_id}' from '{source_url}' (attempt {attempt}/{attempts})...")
                         req = urllib.request.Request(source_url, headers={"User-Agent": "Mozilla/5.0"})
                         with urllib.request.urlopen(req, timeout=120) as response, open(temp_target, "wb") as handle:
@@ -713,6 +723,7 @@ def ensure_model_cached(
                     attempts_made=attempts_made
                 )
                 msg = f"External model {repo_id} downloaded successfully"
+                _emit_first_use_model_status(f"First-use fetch complete: {repo_id} is cached locally.")
                 logger.info(msg)
                 log_download_event(msg, repo_id)
                 return res
@@ -975,6 +986,10 @@ def ensure_model_cached(
             for attempt in range(1, attempts + 1):
                 attempts_made = attempt
                 try:
+                    _emit_first_use_model_status(
+                        f"First-use fetch: downloading model '{repo_id}' "
+                        f"(attempt {attempt}/{attempts}); this can take a few minutes."
+                    )
                     logger.info(f"Downloading model '{repo_id}' snapshot (attempt {attempt}/{attempts})...")
                     from huggingface_hub import snapshot_download
                     
@@ -1029,6 +1044,7 @@ def ensure_model_cached(
                 attempts_made=attempts_made
             )
             msg = f"Model {repo_id} downloaded successfully (revision={res.revision}, files={len(files_downloaded)})"
+            _emit_first_use_model_status(f"First-use fetch complete: {repo_id} is cached locally.")
             logger.info(msg)
             log_download_event(msg, repo_id)
             return res

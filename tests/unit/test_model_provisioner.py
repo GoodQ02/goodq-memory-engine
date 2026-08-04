@@ -22,10 +22,17 @@ from steps.common.model_provisioner import (
     resolve_models_root,
     resolve_hf_token,
     verify_snapshot_files,
-    ModelProvisionResult
+    ModelProvisionResult,
+    _emit_first_use_model_status,
 )
 from scripts.login_hf import update_env_local
 from scripts.utils.banned_token_lint import redact_token
+
+
+def test_first_use_model_status_is_visible_to_operator(capsys):
+    _emit_first_use_model_status("First-use fetch: downloading model 'example/model'.")
+
+    assert "[MODEL] First-use fetch: downloading model 'example/model'." in capsys.readouterr().out
 
 
 def test_cached_model(tmp_path, monkeypatch):

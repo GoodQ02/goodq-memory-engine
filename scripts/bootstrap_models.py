@@ -528,7 +528,17 @@ def load_registry(repo_root: Path) -> Dict | None:
     return None
 
 
-def build_wanted_models(registry: Dict | None) -> List[str]:
+def build_wanted_models(registry: Dict | None, profile: str = "all") -> List[str]:
+    """Return the pinned Hugging Face models for one explicit bootstrap profile.
+
+    ``baseline`` is intentionally limited to the installer baseline.  Audio is
+    a separately requested capability: it must never become an accidental
+    first-launch download merely because the host can run CPU models.
+    """
+    valid_profiles = {"all", "baseline", "audio_standard"}
+    if profile not in valid_profiles:
+        raise ValueError(f"Unknown bootstrap profile '{profile}'. Expected one of: {', '.join(sorted(valid_profiles))}.")
+
     if isinstance(registry, dict):
         huggingface_models = registry.get("huggingface_models")
         if isinstance(huggingface_models, dict):
@@ -541,12 +551,21 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
                 # Ollama tags are served by Ollama and must never be sent to
                 # Hugging Face snapshot_download.
                 if "/" in repo_id and ":" not in repo_id:
+                    modalities = model_info.get("modalities") or []
+                    scopes = model_info.get("tier_scope") or []
+                    is_audio = "audio" in modalities
+                    if profile == "baseline" and "baseline" not in scopes:
+                        continue
+                    if profile == "audio_standard" and not (is_audio and "cpu_only" in scopes):
+                        continue
+                    if profile != "all" and model_info.get("gated", False):
+                        continue
                     wanted.append(repo_id)
             if wanted:
                 return wanted
 
     # Fallback list if registry is unavailable
-    return [
+    fallback = [
         "Salesforce/blip-image-captioning-base",
         "nlpconnect/vit-gpt2-image-captioning",
         "openai/clip-vit-base-patch16",
@@ -565,6 +584,18 @@ def build_wanted_models(registry: Dict | None) -> List[str]:
         "distilbert-base-uncased-finetuned-sst-2-english",
         "snakers4/silero-vad",
     ]
+    if profile == "baseline":
+        return fallback[:5]
+    if profile == "audio_standard":
+        return [
+            "laion/clap-htsat-unfused",
+            "Systran/faster-whisper-medium",
+            "Systran/faster-whisper-tiny",
+            "superb/hubert-large-superb-er",
+            "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
+            "facebook/wav2vec2-base-960h",
+        ]
+    return fallback
 
 
 def resolve_models_root() -> Path:
@@ -691,6 +722,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--progress-path", help="Write machine-readable progress JSON to this path")
     parser.add_argument("--retries", type=int, default=_default_retry_count(), help="Retries for transient download failures")
     parser.add_argument("--first-launch", "--open-only", dest="first_launch", action="store_true", help="Only filter and download required non-gated models")
+    parser.add_argument(
+        "--profile",
+        choices=("all", "baseline", "audio_standard"),
+        default="all",
+        help="Explicit model capability to provision. Baseline excludes optional audio; audio_standard provisions CPU audio models.",
+    )
     return parser.parse_args()
 
 
@@ -736,7 +773,8 @@ def main() -> None:
     else:
         print("[bootstrap] WARNING: model_registry.yaml not found, using latest versions")
 
-    wanted = build_wanted_models(registry)
+    profile = getattr(args, "profile", "all")
+    wanted = build_wanted_models(registry, profile=profile)
 
     # Filter wanted models if first launch is active
     if getattr(args, "first_launch", False):
@@ -777,7 +815,8 @@ def main() -> None:
     progress_path.parent.mkdir(parents=True, exist_ok=True)
 
     results: List[Dict[str, Any]] = []
-    total_assets = len(wanted) + 1
+    includes_yolo = profile != "audio_standard"
+    total_assets = len(wanted) + (1 if includes_yolo else 0)
     progress_state: Dict[str, Any] = {
         "status": "in_progress",
         "models_dir": str(models_root),
@@ -902,50 +941,51 @@ def main() -> None:
 
             write_report("in_progress", current_model=repo_id)
 
-        emit_progress(
-            current_model="yolov8n.pt",
-            current_index=total_assets,
-            current_attempt=1,
-            last_event="asset_started",
-            completed_count=len(results),
-        )
-        yolo_res = download_yolo_n(
-            retries=args.retries,
-            progress_label=f"{total_assets}/{total_assets}",
-            progress_cb=emit_progress,
-        )
-        yolo_res["repo_id"] = "yolo_v8n"
-        _, yolo_metadata = lookup_model("yolo_v8n")
-        yolo_classification = yolo_metadata.get("classification", "REQUIRED_FIRST_LAUNCH")
-        yolo_res["classification"] = yolo_classification
-        results.append(yolo_res)
+        if includes_yolo:
+            emit_progress(
+                current_model="yolov8n.pt",
+                current_index=total_assets,
+                current_attempt=1,
+                last_event="asset_started",
+                completed_count=len(results),
+            )
+            yolo_res = download_yolo_n(
+                retries=args.retries,
+                progress_label=f"{total_assets}/{total_assets}",
+                progress_cb=emit_progress,
+            )
+            yolo_res["repo_id"] = "yolo_v8n"
+            _, yolo_metadata = lookup_model("yolo_v8n")
+            yolo_classification = yolo_metadata.get("classification", "REQUIRED_FIRST_LAUNCH")
+            yolo_res["classification"] = yolo_classification
+            results.append(yolo_res)
 
-        emit_progress(
-            current_model="yolov8n.pt",
-            current_index=total_assets,
-            current_attempt=yolo_res.get("attempts"),
-            last_event="asset_completed",
-            completed_count=len(results),
-        )
+            emit_progress(
+                current_model="yolov8n.pt",
+                current_index=total_assets,
+                current_attempt=yolo_res.get("attempts"),
+                last_event="asset_completed",
+                completed_count=len(results),
+            )
 
-        if yolo_res.get("status") == "error":
-            yolo_tier_scope = yolo_metadata.get("tier_scope", [])
-            is_yolo_active = any(scope in active_scopes for scope in yolo_tier_scope)
-            enforce_yolo_fatal = is_yolo_active and yolo_metadata.get("failure_behavior") == "FATAL_HALT"
-            
-            if enforce_yolo_fatal:
-                err_msg = f"Required asset yolov8n.pt failed to download: {yolo_res.get('error')}"
-                _log(f"[ERROR] {err_msg}")
-                write_report("failed", current_model="yolov8n.pt", fatal_error=err_msg, final_status="failed")
-                emit_progress(
-                    status="failed",
-                    last_event="fatal_error",
-                    last_error=err_msg,
-                    completed_count=len(results),
-                )
-                sys.exit(1)
-            else:
-                _log(f"[WARN] Optional or inactive asset yolov8n.pt failed to download: {yolo_res.get('error')}. Skipping since it is non-fatal for active scopes.")
+            if yolo_res.get("status") == "error":
+                yolo_tier_scope = yolo_metadata.get("tier_scope", [])
+                is_yolo_active = any(scope in active_scopes for scope in yolo_tier_scope)
+                enforce_yolo_fatal = is_yolo_active and yolo_metadata.get("failure_behavior") == "FATAL_HALT"
+
+                if enforce_yolo_fatal:
+                    err_msg = f"Required asset yolov8n.pt failed to download: {yolo_res.get('error')}"
+                    _log(f"[ERROR] {err_msg}")
+                    write_report("failed", current_model="yolov8n.pt", fatal_error=err_msg, final_status="failed")
+                    emit_progress(
+                        status="failed",
+                        last_event="fatal_error",
+                        last_error=err_msg,
+                        completed_count=len(results),
+                    )
+                    sys.exit(1)
+                else:
+                    _log(f"[WARN] Optional or inactive asset yolov8n.pt failed to download: {yolo_res.get('error')}. Skipping since it is non-fatal for active scopes.")
 
         write_report("complete", current_model=None, final_status="success")
         emit_progress(

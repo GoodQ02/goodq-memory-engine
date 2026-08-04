@@ -130,6 +130,40 @@ def test_build_wanted_models_excludes_ollama_tags():
     ]
 
 
+def test_bootstrap_profiles_keep_optional_audio_out_of_baseline_launch():
+    from scripts import bootstrap_models
+
+    registry = {
+        "huggingface_models": {
+            "caption": {
+                "repo_id": "Salesforce/blip-image-captioning-base",
+                "modalities": ["vision"],
+                "tier_scope": ["baseline", "cpu_only"],
+                "gated": False,
+            },
+            "clap": {
+                "repo_id": "laion/clap-htsat-unfused",
+                "modalities": ["audio"],
+                "tier_scope": ["cpu_only", "gpu_enhanced"],
+                "gated": False,
+            },
+            "diarization": {
+                "repo_id": "pyannote/speaker-diarization-3.1",
+                "modalities": ["audio"],
+                "tier_scope": ["wsl_audio"],
+                "gated": True,
+            },
+        }
+    }
+
+    assert bootstrap_models.build_wanted_models(registry, profile="baseline") == [
+        "Salesforce/blip-image-captioning-base"
+    ]
+    assert bootstrap_models.build_wanted_models(registry, profile="audio_standard") == [
+        "laion/clap-htsat-unfused"
+    ]
+
+
 def test_model_registry_revisions_do_not_use_placeholder_hashes():
     import yaml
 

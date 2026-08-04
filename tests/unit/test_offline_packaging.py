@@ -50,6 +50,33 @@ def test_audio_pack_verify_honors_explicit_requested_pack(tmp_path: Path):
     assert "Core Memory Pack" not in result.stdout
 
 
+def test_cpu_baseline_stager_uses_cpu_pytorch_index() -> None:
+    stager = ROOT / "scripts" / "install" / "stage_dependencies.ps1"
+    content = stager.read_text(encoding="utf-8")
+
+    assert "https://download.pytorch.org/whl/cpu" in content
+    assert "https://download.pytorch.org/whl/cu121" not in content
+
+
+def test_cpu_torch_wheels_are_hash_pinned() -> None:
+    manifest_path = ROOT / "configs" / "offline_dependencies_manifest.json"
+    wheels = json.loads(manifest_path.read_text(encoding="utf-8"))["wheels"]["wheelhouse"]
+    torch_wheels = [wheel for wheel in wheels if wheel["name"] in {"torch", "torchvision", "torchaudio"}]
+
+    assert len(torch_wheels) == 3
+    assert all(wheel["gpu_lane"] == "cpu" for wheel in torch_wheels)
+    assert all(wheel.get("source_url") and wheel.get("sha256") for wheel in torch_wheels)
+
+
+def test_installer_ships_explicit_audio_standard_launcher() -> None:
+    launcher = ROOT / "scripts" / "install" / "INSTALL_AUDIO_STANDARD.bat"
+    installer = ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
+
+    assert "--profile audio_standard" in launcher.read_text(encoding="utf-8")
+    assert "audio_standard_report.json" in launcher.read_text(encoding="utf-8")
+    assert 'Install Audio Standard.lnk' in installer.read_text(encoding="utf-8")
+
+
 class TestManifestWheelCoverage:
     """Verify offline_dependencies_manifest.json covers lockfile packages."""
 

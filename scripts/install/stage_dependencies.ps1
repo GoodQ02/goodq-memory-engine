@@ -9,7 +9,8 @@ param(
     [string]$Mode,
 
     [string]$CacheDir = "staged_cache",
-    [string]$ManifestPath = "..\..\configs\offline_dependencies_manifest.json"
+    [string]$ManifestPath = "..\..\configs\offline_dependencies_manifest.json",
+    [string]$PythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -157,7 +158,7 @@ if ($Mode -eq "Acquire") {
     }
 
     foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
-        $wheelName = Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf
+        $wheelName = [Uri]::UnescapeDataString((Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf))
         $wheelPath = Join-Path $wheelsDir $wheelName
         Write-Host "Checking declared wheel artifact: $($wheelArtifact.artifact_id)..." -ForegroundColor Cyan
         if (Test-Path $wheelPath) {
@@ -186,7 +187,7 @@ if ($Mode -eq "Acquire") {
     $success = $false
     while (-not $success -and $retryCount -lt 5) {
         Write-Host "  Running pip download (Attempt $($retryCount + 1) of 5)..." -ForegroundColor Yellow
-        pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cu121 -r $reqFile
+        pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cpu -r $reqFile
         if ($LASTEXITCODE -eq 0) {
             $success = $true
         } else {
@@ -234,7 +235,7 @@ if ($Mode -eq "Acquire") {
     }
 
     foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
-        $wheelName = Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf
+        $wheelName = [Uri]::UnescapeDataString((Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf))
         $wheelPath = Join-Path $wheelsDir $wheelName
         if (-not (Test-Path $wheelPath)) {
             Write-Host "  [ERROR] Declared wheel artifact missing: $wheelName" -ForegroundColor Red
@@ -282,19 +283,26 @@ if ($Mode -eq "Acquire") {
     $StagedWheelsDir = [System.IO.Path]::GetFullPath($wheelsDir)
     $PipArgs = @("-m", "pip", "install", "--dry-run", "--ignore-installed", "--no-index", "--find-links=$StagedWheelsDir", "-r", "$lockfilePath")
     
-    $pythonExe = "python"
-    if ($env:GOODQ_DEV_PYTHON) {
+    $pythonExe = $PythonExe
+    if (-not $pythonExe -and $env:GOODQ_DEV_PYTHON) {
         $pythonExe = $env:GOODQ_DEV_PYTHON
-    } elseif ($env:CONDA_PREFIX) {
+    } elseif (-not $pythonExe -and $env:CONDA_PREFIX) {
         $pythonExe = Join-Path $env:CONDA_PREFIX "python.exe"
     }
+
+    if (-not $pythonExe) {
+        Write-Host "  [INFO] No CPython 3.10 verifier was supplied; full wheel closure is verified by build_installer.bat after it creates the bundled runtime." -ForegroundColor Yellow
+        $pythonExe = $null
+    }
     
-    Write-Host "  Using Python executable: $pythonExe" -ForegroundColor Yellow
     Write-Host "  Using Wheels Dir: $StagedWheelsDir" -ForegroundColor Yellow
     Write-Host "  Using Lockfile Path: $lockfilePath" -ForegroundColor Yellow
-    $pythonVersion = (& $pythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
-    if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.10") {
-        Write-Error "Offline closure verification requires CPython 3.10; resolved '$pythonExe' reports '$pythonVersion'."
+    if ($pythonExe) {
+        Write-Host "  Using Python executable: $pythonExe" -ForegroundColor Yellow
+        $pythonVersion = (& $pythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
+        if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.10") {
+            Write-Error "Offline closure verification requires CPython 3.10; resolved '$pythonExe' reports '$pythonVersion'."
+        }
     }
     
     $ProcessParams = @{
@@ -307,6 +315,7 @@ if ($Mode -eq "Acquire") {
     }
     
     try {
+        if (-not $pythonExe) { return }
         $Process = Start-Process @ProcessParams
         $ExitCode = $Process.ExitCode
         

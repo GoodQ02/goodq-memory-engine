@@ -281,7 +281,7 @@ wsl_done:
   ${If} $0 != 0
     DetailPrint "Model pack setup returned code $0. Models will be downloaded on first launch."
     IfSilent model_pack_skip
-    MessageBox MB_OK|MB_ICONINFORMATION "Model packs were not found alongside the installer.$\r$\n$\r$\nThe application will download required models (~830 MB) on first launch via LAUNCH_GOODQ.exe.$\r$\n$\r$\nYou can also place model pack files next to the installer and re-run to install offline."
+    MessageBox MB_OK|MB_ICONINFORMATION "Model packs were not found alongside the installer.$\r$\n$\r$\nThe application will download the baseline model cache on first launch via LAUNCH_GOODQ.exe.$\r$\nOptional Audio Standard models are installed separately and never download silently.$\r$\n$\r$\nYou can also place model pack files next to the installer and re-run to install offline."
     model_pack_skip:
   ${EndIf}
 
@@ -307,6 +307,7 @@ wsl_done:
   SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\GoodQ4All"
   CreateShortcut "$SMPROGRAMS\GoodQ4All\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
+  CreateShortcut "$SMPROGRAMS\GoodQ4All\Install Audio Standard.lnk" "$INSTDIR\scripts\install\INSTALL_AUDIO_STANDARD.bat"
   CreateShortcut "$DESKTOP\GoodQ4All.lnk" "$INSTDIR\LAUNCH_GOODQ.exe" "" "$INSTDIR\branding\favicon.ico" 0
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -352,6 +353,7 @@ preserve_wsl_distro:
 
   ; Delete Program Files directories
   Delete "$INSTDIR\LAUNCH_GOODQ.exe"
+  Delete "$INSTDIR\scripts\install\INSTALL_AUDIO_STANDARD.bat"
   Delete "$INSTDIR\goodq_version.py"
   Delete "$INSTDIR\requirements-baseline-lock.txt"
   Delete "$INSTDIR\uninstall.exe"

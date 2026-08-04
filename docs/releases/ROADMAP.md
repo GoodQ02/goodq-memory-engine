@@ -1979,6 +1979,13 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   Decide whether the public baseline should bundle the Audio Standard model pack
   or retain audio as a separately provisioned capability; repair the Torch/CLAP
   compatibility seam without weakening the loader security guard.
+- Audio provisioning closure in progress (2026-08-04): the CPU baseline lock
+  now pins the Torch 2.6.0 / TorchVision 0.21.0 / TorchAudio 2.6.0 trio with
+  hash-pinned Windows wheels. Baseline first launch is explicitly limited to
+  baseline models; Audio Standard is a separate receipt-producing post-install
+  action. The staged CPython 3.10 offline closure resolved successfully. A
+  fresh offline rebuild and follower witness remain required before this item
+  is complete.
 - Completion: a fresh install passes the offline suite and restore smoke; one
   non-promoting scene-zero witness, launched through the remote receipt runner,
   reaches `runner_finished` with a terminal audio-transcription ledger result;

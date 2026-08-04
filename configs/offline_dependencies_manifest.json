@@ -273,22 +273,26 @@
   "wheels": {
     "wheelhouse": [
       {
-        "artifact_id": "torch_win_cp310_cuda",
+        "artifact_id": "torch_win_cp310_cpu",
         "pack_id": "windows_wheelhouse",
         "python_tag": "cp310",
         "platform_tag": "win_amd64",
-        "gpu_lane": "cuda121",
+        "gpu_lane": "cpu",
         "required": true,
-        "name": "torch"
+        "name": "torch",
+        "source_url": "https://download.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp310-cp310-win_amd64.whl",
+        "sha256": "6e22f0b13db8d53e55bcb3b46c9dd4b6676d1c44051b56753e745cec3075b333"
       },
       {
-        "artifact_id": "torchaudio_win_cp310_cuda",
+        "artifact_id": "torchaudio_win_cp310_cpu",
         "pack_id": "windows_wheelhouse",
         "python_tag": "cp310",
         "platform_tag": "win_amd64",
-        "gpu_lane": "cuda121",
+        "gpu_lane": "cpu",
         "required": true,
-        "name": "torchaudio"
+        "name": "torchaudio",
+        "source_url": "https://download.pytorch.org/whl/cpu/torchaudio-2.6.0%2Bcpu-cp310-cp310-win_amd64.whl",
+        "sha256": "a38f6c413a83bc1089d4eecd0acd88e8190df6e0c4423ee45ba59cc0a8001324"
       },
       {
         "artifact_id": "transformers_win_cp310",
@@ -444,13 +448,15 @@
         "required": true
       },
       {
-        "artifact_id": "torchvision_win_cp310",
+        "artifact_id": "torchvision_win_cp310_cpu",
         "name": "torchvision",
         "pack_id": "windows_wheelhouse",
         "python_tag": "cp310",
         "platform_tag": "win_amd64",
-        "gpu_lane": "any",
-        "required": true
+        "gpu_lane": "cpu",
+        "required": true,
+        "source_url": "https://download.pytorch.org/whl/cpu/torchvision-0.21.0%2Bcpu-cp310-cp310-win_amd64.whl",
+        "sha256": "554ca0f5948ac89911299f8bfb6f23936d867387ea213ab235adc2814b510d0c"
       },
       {
         "artifact_id": "goodq_mini_agent_py3_none_any",

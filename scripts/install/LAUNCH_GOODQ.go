@@ -182,12 +182,12 @@ func main() {
 		}
 	}
 
-	fmt.Println("[LAUNCHER] Bootstrapping model cache (First-Launch required models only)...")
+	fmt.Println("[LAUNCHER] Bootstrapping baseline model cache (optional audio is installed separately)...")
 	bootstrapScript := filepath.Join(programFilesDir, "scripts", "bootstrap_models.py")
 	bootstrapReportPath := filepath.Join(logsDir, "bootstrap_models_report.json")
 	bootstrapProgressPath := filepath.Join(logsDir, "bootstrap_models_progress.json")
 	bootstrapCmd := exec.Command(pythonExe, bootstrapScript,
-		"--first-launch",
+		"--profile", "baseline",
 		"--report-path", bootstrapReportPath,
 		"--progress-path", bootstrapProgressPath,
 	)

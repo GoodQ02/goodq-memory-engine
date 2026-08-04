@@ -276,7 +276,7 @@ wsl_done:
 
   ; --- STATE 8: register optional model packs (non-fatal) ---
   DetailPrint "Step 8/11: Registering pre-staged model packs..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --local-only --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
   Pop $0
   ${If} $0 != 0
     DetailPrint "Model pack setup returned code $0. Models will be downloaded on first launch."

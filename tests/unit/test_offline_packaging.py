@@ -50,6 +50,37 @@ def test_audio_pack_verify_honors_explicit_requested_pack(tmp_path: Path):
     assert "Core Memory Pack" not in result.stdout
 
 
+def test_installer_model_pack_setup_never_falls_back_to_retired_remote_urls() -> None:
+    installer = ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
+    content = installer.read_text(encoding="utf-8")
+
+    assert "sandbox_env_setup.py\" --packs core_memory --local-only" in content
+
+
+def test_local_only_model_pack_setup_refuses_remote_download(tmp_path: Path):
+    script = ROOT / "scripts" / "install" / "sandbox_env_setup.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--packs",
+            "core_memory",
+            "--local-only",
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--cache-dir",
+            str(tmp_path / "empty-cache"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 6
+    assert "No remote model-pack download was attempted" in result.stderr
+
+
 def test_cpu_baseline_stager_uses_cpu_pytorch_index() -> None:
     stager = ROOT / "scripts" / "install" / "stage_dependencies.ps1"
     content = stager.read_text(encoding="utf-8")

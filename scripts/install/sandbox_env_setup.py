@@ -210,6 +210,7 @@ def main() -> None:
     parser.add_argument("--packs", default="core_memory", help="Comma-separated model packs to download or verify")
     parser.add_argument("--data-dir", default="C:\\ProgramData\\GoodQ4All", help="Authoritative data root")
     parser.add_argument("--verify-only", action="store_true", help="Perform checksum checks without downloading")
+    parser.add_argument("--local-only", action="store_true", help="Hydrate only verified pack files already present in --cache-dir; never contact a model-pack URL")
     parser.add_argument("--cache-dir", default=None, help="Local directory to check for model files/chunks before downloading")
     parser.add_argument("--write-receipt", action="store_true", help="Write installation receipt to data directory")
     parser.add_argument("--install-dir", default="", help="Directory where GoodQ4All is installed")
@@ -365,6 +366,13 @@ def main() -> None:
                     sys.exit(5)
                 final_file.unlink(missing_ok=True)
                 continue
+
+            if args.local_only:
+                _err(
+                    f"Local-only pack setup could not find a verified '{file_info['name']}' in the supplied cache. "
+                    "No remote model-pack download was attempted."
+                )
+                sys.exit(6)
 
             # Download chunks
             chunks_paths = []

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1404**
+Indexed active tracked paths: **1408**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -150,6 +150,7 @@ Indexed active tracked paths: **1404**
 | `/cli/persistent_store_alignment_audit.py` | CLI | Command-line operator surface. |
 | `/cli/print_config.py` | CLI | Command-line operator surface. |
 | `/cli/recovery_promotion.py` | CLI | Command-line operator surface. |
+| `/cli/remote_witness.py` | CLI | Command-line operator surface. |
 | `/cli/retrieve.py` | CLI | Command-line operator surface. |
 | `/cli/run_ingestion.py` | CLI | Command-line operator surface. |
 | `/cli/signature_backfill_batch_execute.py` | CLI | Command-line operator surface. |
@@ -220,6 +221,8 @@ Indexed active tracked paths: **1404**
 | `/docs/agent/workflows/LAPTOP_TEST_AND_REPORT_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/LOCAL_DEV_RUNTIME_MODES.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md` | Documentation | Active documentation or governance surface. |
+| `/docs/agent/workflows/PORTABLE_FOLLOWER_RELEASE_VALIDATION.md` | Documentation | Active documentation or governance surface. |
+| `/docs/agent/workflows/REMOTE_WITNESS_OVER_SSH.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/AGENT_DECISION_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/AGENT_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/ARCHITECTURE_REFERENCE.md` | Documentation | Active documentation or governance surface. |
@@ -1246,6 +1249,7 @@ Indexed active tracked paths: **1404**
 | `/tests/unit/test_qdrant_loopback_transport.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_recovery_promotion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_remote_witness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_context_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_faiss_store_ref_privacy_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_model_cache_authority.py` | Verification | Test, fixture, or verification asset. |

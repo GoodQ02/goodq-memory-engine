@@ -66,3 +66,18 @@ looks absent, stale, or partially proven. The short pattern is:
 4. validate with a focused test
 5. rerun a fresh scene-first probe
 6. update current-state docs so the next agent does not chase the stale theory
+
+## Portable Follower Validation
+
+For an approved SSH follower, keep the release and witness boundaries separate:
+
+1. Verify the offline asset receipt and transfer hashes before installation.
+2. Preserve approved removal, installation, offline-suite, and restore-smoke
+   evidence; a fresh installer exit alone is not a clean-baseline proof.
+3. Launch one isolated non-promoting scene through `cli.remote_witness` on the
+   follower, then read its durable receipt after SSH reconnects.
+4. Treat `runner_finished` plus terminal audio ledger evidence as the scene
+   gate. An SSH timeout, a quiet cold model fetch, or a pending audio step is
+   not a pass.
+5. Update `docs/releases/ROADMAP.md` and the applicable workflow with verified
+   state; do not hand-edit generated current-state projections.

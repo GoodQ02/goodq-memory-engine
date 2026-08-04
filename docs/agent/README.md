@@ -37,6 +37,8 @@ probes.
 - `workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md`: targeted runtime repair loop for capability gaps where config, API, persistence, and UI evidence must be reconciled before broad reruns.
 - `workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md`: evidence-bound identity, relationship, and scene retrieval for the local Hermes agent.
 - `workflows/LOCAL_DEV_RUNTIME_MODES.md`: paired Dev On/Dev Off service posture, encoder pre-warm, local model identity checks, and GPU-memory recovery rules.
+- `workflows/PORTABLE_FOLLOWER_RELEASE_VALIDATION.md`: clean follower install, receipt preservation, and one-scene validation without canonical promotion.
+- `workflows/REMOTE_WITNESS_OVER_SSH.md`: durable follower-side scene runner and reconnectable receipt protocol for approved SSH targets.
 
 ## What Lives Here
 

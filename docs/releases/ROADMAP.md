@@ -1957,10 +1957,19 @@ These items preserve unfinished intent from the plans this roadmap replaces.
 
 ### V-01 — Portable follower witness
 
-- Status: DEFERRED
-- Re-entry gate: follower laptop access and an approved installer build.
-- Completion: install, one-scene ingest, retrieval, and report pass without
-  workstation-specific paths.
+- Status: IN PROGRESS
+- Verified build evidence (2026-08-04): an offline baseline artifact built from
+  private `dev` commit `d83ccb43` passed its exact version, commit, asset-set,
+  and SHA-256 receipt checks. The candidate includes the pinned LGPL
+  FFmpeg/FFprobe payload, visible first-use model-fetch status, and the durable
+  remote-witness runner. The earlier GR-16 install remains historical evidence;
+  this new artifact has not yet been installed there.
+- Re-entry gate: GR-16 finishes restarting, then receives the exact four-file
+  release asset set after transfer hashes match.
+- Completion: a fresh install passes the offline suite and restore smoke; one
+  non-promoting scene-zero witness, launched through the remote receipt runner,
+  reaches `runner_finished` with a terminal audio-transcription ledger result;
+  retrieval and an operator report then pass without workstation-specific paths.
 
 ### V-02 — Watchdog interruption witness
 

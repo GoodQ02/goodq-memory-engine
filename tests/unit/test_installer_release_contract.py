@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -299,6 +300,17 @@ def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> N
     assert 'File /r "staged\\ffmpeg\\*.*"' in installer
     assert '"ffmpeg\\ffmpeg.exe"' in verifier
     assert '"ffmpeg\\ffprobe.exe"' in verifier
+
+
+def test_uninstaller_removes_all_packaged_tool_directories() -> None:
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    packaged_roots = set(re.findall(r'SetOutPath "\\$INSTDIR\\\\([^"\\\\]+)"', installer))
+    removed_roots = set(re.findall(r'RMDir /r "\\$INSTDIR\\\\([^"\\\\]+)"', installer))
+
+    assert packaged_roots <= removed_roots
 
 
 def test_dependency_stager_resolves_its_manifest_and_cache_from_its_own_location() -> None:

@@ -100,7 +100,7 @@ try {
     Write-Host "[2/4] Running the existing physical-offline preflight and build..." -ForegroundColor Cyan
     $env:GOODQ_AUTO_NETWORK_TOGGLE = "1"
     $env:CONDA_EXE = $CondaExe
-    & cmd.exe /d /c ('"{0}"' -f $BuildScript)
+    & $BuildScript
     $buildExitCode = $LASTEXITCODE
     $receipt.build_exit_code = $buildExitCode
     Write-Receipt $receipt

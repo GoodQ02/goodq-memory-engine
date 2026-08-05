@@ -240,6 +240,8 @@ def test_network_containment_wrapper_leaves_adapters_enabled_and_removes_its_rul
     assert "Enable-NetAdapter" not in wrapper
     assert "CondaExe" in wrapper
     assert 'CONDA_EXE = $CondaExe' in wrapper
+    assert "& $BuildScript" in wrapper
+    assert "cmd.exe /d /c" not in wrapper
     assert "interpreter_bindings.bat" in launcher
     assert 'set "GOODQ_DEV_PYTHON=%GOODQ_CONDA_ROOT%\\envs\\%GOODQ_CONDA_ENV%\\python.exe"' in launcher
     bindings = (REPO_ROOT / "scripts" / "_lib" / "interpreter_bindings.bat").read_text(encoding="utf-8")

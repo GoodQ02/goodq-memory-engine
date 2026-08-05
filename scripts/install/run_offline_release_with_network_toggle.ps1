@@ -88,6 +88,7 @@ if ($DryRun) {
 $ruleCreated = $false
 $buildExitCode = 1
 $restored = $false
+$previousOutputRoot = $env:GOODQ_RELEASE_OUTPUT_ROOT
 try {
     Write-Host "[1/4] Applying a temporary outbound containment rule (adapters remain enabled)..." -ForegroundColor Cyan
     New-NetFirewallRule -Name $receipt.firewall_rule_name -DisplayName $receipt.firewall_rule_name `
@@ -100,6 +101,7 @@ try {
     Write-Host "[2/4] Running the existing physical-offline preflight and build..." -ForegroundColor Cyan
     $env:GOODQ_AUTO_NETWORK_TOGGLE = "1"
     $env:CONDA_EXE = $CondaExe
+    $env:GOODQ_RELEASE_OUTPUT_ROOT = $OutputRoot
     & $BuildScript
     $buildExitCode = $LASTEXITCODE
     $receipt.build_exit_code = $buildExitCode
@@ -107,6 +109,11 @@ try {
 }
 finally {
     Remove-Item Env:GOODQ_AUTO_NETWORK_TOGGLE -ErrorAction SilentlyContinue
+    if ($null -eq $previousOutputRoot) {
+        Remove-Item Env:GOODQ_RELEASE_OUTPUT_ROOT -ErrorAction SilentlyContinue
+    } else {
+        $env:GOODQ_RELEASE_OUTPUT_ROOT = $previousOutputRoot
+    }
     if ($ruleCreated) {
         Write-Host "[3/4] Removing the exact temporary containment rule..." -ForegroundColor Cyan
         Remove-NetFirewallRule -Name $receipt.firewall_rule_name -PolicyStore ActiveStore -ErrorAction Stop

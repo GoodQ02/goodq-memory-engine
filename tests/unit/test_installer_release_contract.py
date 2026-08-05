@@ -228,6 +228,13 @@ def test_network_containment_wrapper_leaves_adapters_enabled_and_removes_its_rul
     assert 'GOODQ_AUTO_NETWORK_TOGGLE%' in launcher
     assert "Disable-NetAdapter" not in wrapper
     assert "Enable-NetAdapter" not in wrapper
+    assert "CondaExe" in wrapper
+    assert 'CONDA_EXE = $CondaExe' in wrapper
+    assert "interpreter_bindings.bat" in launcher
+    assert 'set "GOODQ_DEV_PYTHON=%GOODQ_CONDA_ROOT%\\envs\\%GOODQ_CONDA_ENV%\\python.exe"' in launcher
+    bindings = (REPO_ROOT / "scripts" / "_lib" / "interpreter_bindings.bat").read_text(encoding="utf-8")
+    assert 'if /I "%%~xI"==".bat"' in bindings
+    assert "Scripts\\conda.exe" in bindings
 
 
 def test_offline_release_launcher_separates_release_assets_from_diagnostic_receipts() -> None:

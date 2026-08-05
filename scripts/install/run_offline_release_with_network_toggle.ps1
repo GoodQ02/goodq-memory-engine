@@ -4,6 +4,7 @@ param(
     [string]$BuildScript,
     [Parameter(Mandatory)]
     [string]$OutputRoot,
+    [string]$CondaExe = $env:CONDA_EXE,
     [switch]$ElevatedRelaunch,
     [switch]$DryRun
 )
@@ -14,6 +15,21 @@ function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Resolve-CondaLauncher {
+    param([string]$Candidate)
+    if ([string]::IsNullOrWhiteSpace($Candidate) -or -not (Test-Path -LiteralPath $Candidate)) {
+        throw "A full Conda launcher path is required before temporary network containment starts."
+    }
+    $resolved = (Resolve-Path -LiteralPath $Candidate).Path
+    if ([IO.Path]::GetExtension($resolved) -ieq ".bat") {
+        $executable = Join-Path (Split-Path $resolved -Parent) "..\Scripts\conda.exe"
+        if (Test-Path -LiteralPath $executable) {
+            return (Resolve-Path -LiteralPath $executable).Path
+        }
+    }
+    return $resolved
 }
 
 function Write-Receipt {
@@ -34,6 +50,7 @@ function Test-PublicConnectivity {
 if (-not (Test-Path -LiteralPath $BuildScript)) {
     throw "Offline build script is missing: $BuildScript"
 }
+$CondaExe = Resolve-CondaLauncher $CondaExe
 
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $receipt = @{
@@ -52,7 +69,8 @@ if (-not $DryRun -and -not (Test-Administrator)) {
     Write-Host "[INFO] Administrator approval is required only to add and remove the temporary outbound firewall rule." -ForegroundColor Cyan
     $process = Start-Process -FilePath "powershell.exe" -Verb RunAs -Wait -PassThru -ArgumentList @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath,
-        "-BuildScript", $BuildScript, "-OutputRoot", $OutputRoot, "-ElevatedRelaunch"
+        "-BuildScript", $BuildScript, "-OutputRoot", $OutputRoot,
+        "-CondaExe", $CondaExe, "-ElevatedRelaunch"
     )
     exit $process.ExitCode
 }
@@ -81,6 +99,7 @@ try {
 
     Write-Host "[2/4] Running the existing physical-offline preflight and build..." -ForegroundColor Cyan
     $env:GOODQ_AUTO_NETWORK_TOGGLE = "1"
+    $env:CONDA_EXE = $CondaExe
     & cmd.exe /d /c ('"{0}"' -f $BuildScript)
     $buildExitCode = $LASTEXITCODE
     $receipt.build_exit_code = $buildExitCode

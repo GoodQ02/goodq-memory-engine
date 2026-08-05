@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1409**
+Indexed active tracked paths: **1410**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -757,6 +757,7 @@ Indexed active tracked paths: **1409**
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_build.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/run_offline_release_with_network_toggle.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sandbox_env_setup.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sign_manifest.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/smoke_test_restore.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |

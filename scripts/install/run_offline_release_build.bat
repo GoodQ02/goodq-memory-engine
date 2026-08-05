@@ -10,9 +10,20 @@ echo.
 
 for %%I in ("%~dp0") do set "BUILD_ROOT=%%~fI"
 for %%I in ("%BUILD_ROOT%\..\..") do set "REPO_ROOT=%%~fI"
-for /f "usebackq delims=" %%I in (`conda run -n goodq_core python -c "import sys; print(sys.executable)"`) do set "GOODQ_DEV_PYTHON=%%I"
+call "%REPO_ROOT%\scripts\_lib\interpreter_bindings.bat"
+if "%CONDA_EXE%"=="" (
+    echo [BLOCKED] Could not resolve the private Conda launcher.
+    goto :failed
+)
+for %%I in ("%CONDA_EXE%") do set "GOODQ_CONDA_SCRIPTS=%%~dpI"
+for %%I in ("%GOODQ_CONDA_SCRIPTS%..") do set "GOODQ_CONDA_ROOT=%%~fI"
+set "GOODQ_DEV_PYTHON=%GOODQ_CONDA_ROOT%\envs\%GOODQ_CONDA_ENV%\python.exe"
 if "%GOODQ_DEV_PYTHON%"=="" (
     echo [BLOCKED] Could not resolve the private goodq_core CPython 3.10 interpreter.
+    goto :failed
+)
+if not exist "%GOODQ_DEV_PYTHON%" (
+    echo [BLOCKED] Could not find the private %GOODQ_CONDA_ENV% CPython interpreter.
     goto :failed
 )
 "%GOODQ_DEV_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 10) else 1)"

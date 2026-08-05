@@ -11,7 +11,12 @@ if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=goodq_core"
 set "PYTHONNOUSERSITE=1"
 
 if defined CONDA_EXE (
-  if exist "%CONDA_EXE%" goto :eof
+  if exist "%CONDA_EXE%" (
+    for %%I in ("%CONDA_EXE%") do (
+      if /I "%%~xI"==".bat" if exist "%%~dpI..\Scripts\conda.exe" set "CONDA_EXE=%%~dpI..\Scripts\conda.exe"
+    )
+    goto :eof
+  )
 )
 
 if exist "%USERPROFILE%\miniconda3\Scripts\conda.exe" (

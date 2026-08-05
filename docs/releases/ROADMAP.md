@@ -1986,6 +1986,15 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   rule in `finally`, and probes restored connectivity. Offline preflight uses
   a bounded public TCP egress probe rather than a cacheable DNS lookup. It
   never disables or re-enables Windows network adapters.
+- GR-16 rerun evidence (2026-08-05): the current release completed its clean
+  install, installed offline suite, and disposable Qdrant restore smoke. A
+  fresh, non-promoting scene-zero witness sealed its input, CPU policy, bundled
+  FFmpeg, and isolated paths, then stopped before ingestion because the
+  connect-based loopback probe timed out even though no Qdrant listener owned
+  the port. Private `dev` commit `9daedd1f` replaces that probe with the
+  capability the runner actually requires: an exclusive loopback bind, with
+  focused witness and installer-contract tests passing. Rebuild and redeploy
+  this repair before rerunning the sealed scene from a new root.
 - Remaining acceptance gap: rebuild the offline baseline from that private
   commit, clean-install it on GR-16, and rerun the same non-promoting
   scene-zero witness. The acceptance receipt must show terminal audio and

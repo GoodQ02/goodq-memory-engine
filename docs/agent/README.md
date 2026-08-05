@@ -39,6 +39,7 @@ probes.
 - `workflows/LOCAL_DEV_RUNTIME_MODES.md`: paired Dev On/Dev Off service posture, encoder pre-warm, local model identity checks, and GPU-memory recovery rules.
 - `workflows/PORTABLE_FOLLOWER_RELEASE_VALIDATION.md`: clean follower install, receipt preservation, and one-scene validation without canonical promotion.
 - `workflows/REMOTE_WITNESS_OVER_SSH.md`: durable follower-side scene runner and reconnectable receipt protocol for approved SSH targets.
+- `workflows/MANAGED_OFFLINE_RELEASE_BUILD.md`: UAC-gated temporary-firewall release build and receipt protocol that preserves Windows adapter state.
 
 ## What Lives Here
 

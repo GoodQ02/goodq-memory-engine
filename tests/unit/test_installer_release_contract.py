@@ -211,6 +211,25 @@ def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() ->
     assert "offline_build_receipt.txt" in launcher
 
 
+def test_network_containment_wrapper_leaves_adapters_enabled_and_removes_its_rule() -> None:
+    wrapper = (REPO_ROOT / "scripts" / "install" / "run_offline_release_with_network_toggle.ps1").read_text(
+        encoding="utf-8"
+    )
+    launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "New-NetFirewallRule" in wrapper
+    assert "Remove-NetFirewallRule" in wrapper
+    assert "PolicyStore ActiveStore" in wrapper
+    assert "finally" in wrapper
+    assert "network-toggle-receipt.json" in wrapper
+    assert '$env:GOODQ_AUTO_NETWORK_TOGGLE = "1"' in wrapper
+    assert 'GOODQ_AUTO_NETWORK_TOGGLE%' in launcher
+    assert "Disable-NetAdapter" not in wrapper
+    assert "Enable-NetAdapter" not in wrapper
+
+
 def test_offline_release_launcher_separates_release_assets_from_diagnostic_receipts() -> None:
     launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
         encoding="utf-8"

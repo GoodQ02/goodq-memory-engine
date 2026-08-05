@@ -1980,6 +1980,11 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   in the baseline lock and manifest, stages their CPython 3.10 transitive
   closure, and starts/stops the bundled Qdrant under the witness root. The
   stager verifies all artifact hashes and the exact lock closure before build.
+- Operator containment (2026-08-04): the desktop offline-build launcher now
+  uses an elevation-gated, uniquely named outbound firewall rule in the active
+  policy store. It records the pre/post adapter snapshot, removes only that
+  rule in `finally`, and probes restored connectivity. It never disables or
+  re-enables Windows network adapters.
 - Remaining acceptance gap: rebuild the offline baseline from that private
   commit, clean-install it on GR-16, and rerun the same non-promoting
   scene-zero witness. The acceptance receipt must show terminal audio and

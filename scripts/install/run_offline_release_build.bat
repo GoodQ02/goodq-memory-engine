@@ -82,11 +82,13 @@ echo         Assets are in: %ASSET_ROOT%
 echo         Receipt and log are in: %GOODQ_RELEASE_OUTPUT_ROOT%
 echo.
 echo You may reconnect to the internet now, then return to Codex for review.
+if "%GOODQ_AUTO_NETWORK_TOGGLE%"=="1" exit /b 0
 pause
 exit /b 0
 
 :failed
 echo.
 echo The release build did not complete. Leave this window open for the receipt.
+if "%GOODQ_AUTO_NETWORK_TOGGLE%"=="1" exit /b 1
 pause
 exit /b 1

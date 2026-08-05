@@ -467,7 +467,8 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     }
             else:
                 return {"clap_meta": {"status": "error", "reason": "inference_failed", "error": str(infer_exc)}}
-        feats = out.detach().cpu().numpy().astype("float32")
+        features = getattr(out, "pooler_output", out)
+        feats = features.detach().cpu().numpy().astype("float32")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_audio_path")
         if not index_path:
             try:

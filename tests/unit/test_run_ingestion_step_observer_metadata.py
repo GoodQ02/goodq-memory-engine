@@ -62,6 +62,42 @@ class _RecorderObserver:
         return _stop
 
 
+@pytest.mark.parametrize(
+    ("worker_result", "expected_status"),
+    [
+        (None, "invalid_worker_result"),
+        ("not-json", "invalid_worker_result"),
+        ({}, "no_transcript_output"),
+    ],
+)
+def test_local_transcription_result_always_has_terminal_metadata(worker_result, expected_status):
+    run_ingestion = _load_run_ingestion_module()
+
+    normalized = run_ingestion._normalize_local_transcription_result(worker_result)
+
+    assert normalized["transcript"] is None
+    assert normalized["transcript_meta"]["status"] == expected_status
+    assert normalized["transcript_meta"]["engine"] == "goodq_audio_transcribe"
+
+
+def test_local_transcription_result_preserves_worker_failure_metadata():
+    run_ingestion = _load_run_ingestion_module()
+    worker_result = {
+        "transcript": None,
+        "transcript_meta": {
+            "status": "failed",
+            "engine": "hybrid_whisper",
+            "model": "medium",
+            "device": "cpu",
+            "reason": "no_speech_detected",
+        },
+    }
+
+    normalized = run_ingestion._normalize_local_transcription_result(worker_result)
+
+    assert normalized == worker_result
+
+
 class _FakePopenSuccess:
     def __init__(self, *args, **kwargs):
         self.pid = 4242

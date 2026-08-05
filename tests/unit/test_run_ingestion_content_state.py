@@ -128,7 +128,32 @@ def test_transcript_outcome_keeps_successful_empty_output_unclassified():
 
     assert outcome == {
         "transcript_outcome": "unclassified",
-        "transcript_outcome_reason": "no_explicit_speech_or_quality_outcome",
+        "transcript_outcome_reason": "worker_success_empty_transcript",
+    }
+
+
+def test_transcript_outcome_marks_missing_worker_output_as_runtime_failure():
+    run_ingestion = _load_run_ingestion_module()
+
+    outcome = run_ingestion._derive_transcript_outcome(
+        {
+            "path": "audio/scene_0001.wav",
+            "data": {
+                "transcript": None,
+                "transcript_meta": {
+                    "status": "no_transcript_output",
+                    "engine": "goodq_audio_transcribe",
+                    "reason": "worker_result_missing_transcript_meta",
+                },
+            },
+        },
+        audio_error=None,
+        audio_backend_fields={"audio_backend_effective": "none", "audio_backend_effective_reason": "windows_no_transcript"},
+    )
+
+    assert outcome == {
+        "transcript_outcome": "runtime_failure",
+        "transcript_outcome_reason": "transcript_meta_no_transcript_output",
     }
 
 

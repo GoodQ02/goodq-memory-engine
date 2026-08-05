@@ -1502,6 +1502,34 @@ def _offset_local_audio_result_to_scene(result: Any, scene_start: float) -> Any:
     return normalized
 
 
+def _normalize_local_transcription_result(result: Any) -> Dict[str, Any]:
+    """Preserve a terminal audio outcome even when a worker returns no payload."""
+    if not isinstance(result, dict):
+        return {
+            "transcript": None,
+            "transcript_meta": {
+                "status": "invalid_worker_result",
+                "engine": "goodq_audio_transcribe",
+                "reason": "worker_result_not_a_mapping",
+            },
+        }
+
+    normalized = dict(result)
+    normalized.setdefault("transcript", None)
+    transcript_meta = normalized.get("transcript_meta")
+    if isinstance(transcript_meta, dict):
+        return normalized
+
+    has_transcript = isinstance(normalized.get("transcript"), str) and bool(normalized["transcript"].strip())
+    has_segments = isinstance(normalized.get("segments"), list) and bool(normalized["segments"])
+    normalized["transcript_meta"] = {
+        "status": "success" if has_transcript or has_segments else "no_transcript_output",
+        "engine": "goodq_audio_transcribe",
+        "reason": "worker_result_missing_transcript_meta",
+    }
+    return normalized
+
+
 def _infer_audio_backend_fields(
     audio_info: Optional[Dict[str, Any]],
     *,
@@ -3499,12 +3527,23 @@ def _derive_transcript_outcome(
         if isinstance(meta, dict):
             transcript_meta = meta
             break
-    if str(transcript_meta.get('status') or '').strip().lower() in {'error', 'failed', 'failure'}:
+    transcript_status = str(transcript_meta.get('status') or '').strip().lower()
+    if transcript_status in {'error', 'failed', 'failure'}:
         return {'transcript_outcome': 'runtime_failure', 'transcript_outcome_reason': 'transcript_meta_error'}
+    if transcript_status in {'invalid_worker_result', 'no_transcript_output'}:
+        return {
+            'transcript_outcome': 'runtime_failure',
+            'transcript_outcome_reason': f'transcript_meta_{transcript_status}',
+        }
 
     for candidate in candidates:
         if _extract_transcript_text(candidate) or _has_meaningful_audio_segments(_extract_segments(candidate)):
             return {'transcript_outcome': 'transcript_available', 'transcript_outcome_reason': 'transcript_or_segments_present'}
+    if transcript_status == 'success':
+        return {
+            'transcript_outcome': 'unclassified',
+            'transcript_outcome_reason': 'worker_success_empty_transcript',
+        }
     return {
         'transcript_outcome': 'unclassified',
         'transcript_outcome_reason': 'no_explicit_speech_or_quality_outcome',
@@ -6636,6 +6675,7 @@ def _process_audio(
                     os.environ.pop('GOODQ_REQUIRE_WSL_AUDIO', None)
                 else:
                     os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = prior_require_wsl_audio
+            local_result = _normalize_local_transcription_result(local_result)
             if isinstance(local_result, dict):
                 local_result = _offset_local_audio_result_to_scene(local_result, start)
                 item.update(local_result)
@@ -7375,6 +7415,7 @@ async def _process_audio_async(
                 else:
                     os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = prior_require_wsl_audio
             
+            local_result = _normalize_local_transcription_result(local_result)
             if isinstance(local_result, dict):
                 local_result = _offset_local_audio_result_to_scene(local_result, start)
                 item.update(local_result)

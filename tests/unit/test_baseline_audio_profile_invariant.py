@@ -542,6 +542,10 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
         def numpy(self):
             return np.array([[0.25, 0.5, 0.75]], dtype="float32")
 
+    class _FakeModelOutput:
+        def __init__(self, pooler_output):
+            self.pooler_output = pooler_output
+
     class _FakeProcessor:
         def __call__(self, **_kwargs):
             return {"input_features": _FakeInputFeatures()}
@@ -549,7 +553,7 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     class _FakeModel:
         def get_audio_features(self, *, input_features):
             assert isinstance(input_features, _FakeInputFeatures)
-            return _FakeFeatures()
+            return _FakeModelOutput(_FakeFeatures())
 
     qdrant_points = []
     emitted_events = []

@@ -1031,3 +1031,18 @@ def test_step_runner_meta_outcome_surfaces_optional_structured_error():
     assert error == "CUDA out of memory"
     assert extra is not None
     assert extra["reason"] == "image_caption_error"
+
+
+def test_step_runner_surfaces_failed_local_transcription_metadata():
+    from cli.step_runner import _derive_step_log_outcome
+
+    status, error, extra = _derive_step_log_outcome(
+        "audio_transcribe_local",
+        {"transcript_meta": {"status": "failed", "engine": "hybrid_whisper"}},
+        verbose=False,
+    )
+
+    assert status == "error"
+    assert error == "audio_transcribe_local failed"
+    assert extra is not None
+    assert extra["reason"] == "audio_transcribe_local_failed"

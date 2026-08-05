@@ -7,6 +7,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(errors="replace")
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 _PATH_FALLBACK_WARNED = False
 
 _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
+    "audio_transcribe_local": "transcript_meta",
     "audio_embed_clap": "clap_meta",
     "audio_emotion": "audio_emotion_meta",
     "emotion_classify": "emotion_meta",
@@ -37,7 +39,14 @@ _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
     "sentiment": "sentiment_meta",
 }
 
-_META_ERROR_STATUSES = {"error"}
+_META_ERROR_STATUSES = {
+    "error",
+    "failed",
+    "failure",
+    "invalid_worker_result",
+    "no_transcript_output",
+    "model_unavailable",
+}
 _META_SKIPPED_STATUSES = {
     "dependency_missing",
     "no_file",
@@ -97,6 +106,31 @@ def _emit_subprocess_env_fingerprint(step_name: str) -> None:
 def load_cfg(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     from steps.common.config_loader import load_configs
     return load_configs(overrides or {})
+
+
+def _overlay_config(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    resolved = copy.deepcopy(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(resolved.get(key), dict):
+            resolved[key] = _overlay_config(resolved[key], value)
+        else:
+            resolved[key] = copy.deepcopy(value)
+    return resolved
+
+
+def load_step_config(cfg_path: str | Path | None, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Load canonical defaults, then overlay a step-specific config projection."""
+    cfg = load_cfg(overrides)
+    if not cfg_path or not os.path.isfile(cfg_path):
+        return cfg
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            projection = json.load(f)
+    except json.JSONDecodeError:
+        return cfg
+    if not isinstance(projection, dict):
+        raise ValueError(f"Step config must be a JSON object: {cfg_path}")
+    return _overlay_config(cfg, projection)
 
 
 def _save_memory_context(step_name: str, item: Dict[str, Any] | None, results: Dict[str, Any], cfg: Dict[str, Any]) -> None:
@@ -368,16 +402,7 @@ def main() -> None:
         with open(args.overrides, "r", encoding="utf-8") as f:
             overrides = json.load(f)
 
-    if args.cfg and os.path.isfile(args.cfg):
-        # Try JSON first, fallback to YAML loading
-        try:
-            with open(args.cfg, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        except json.JSONDecodeError:
-            # Not JSON, load using config_loader which handles YAML
-            cfg = load_cfg(overrides)
-    else:
-        cfg = load_cfg(overrides)
+    cfg = load_step_config(args.cfg, overrides)
     
     # Initialize GPU management for this step
     try:

@@ -198,6 +198,16 @@ def test_preflight_scans_every_source_root_packaged_by_nsis() -> None:
     assert "Get-ChildItem -Path $scanRoots" in preflight
 
 
+def test_preflight_proves_public_egress_instead_of_trusting_dns_cache() -> None:
+    preflight = (REPO_ROOT / "scripts" / "install" / "preflight_check.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "System.Net.Sockets.TcpClient" in preflight
+    assert "1.1.1.1" in preflight
+    assert "GetHostAddresses" not in preflight
+
+
 def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() -> None:
     launcher = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
         encoding="utf-8"

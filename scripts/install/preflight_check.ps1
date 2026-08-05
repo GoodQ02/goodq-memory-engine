@@ -61,18 +61,26 @@ if ($env:GOODQ_BYPASS_NETWORK_CHECK -eq "1") {
     Write-Host "[BYPASS] Physical network containment check bypassed for development compilation." -ForegroundColor Yellow
 } else {
     Write-Host "Verifying physical network containment..." -ForegroundColor Cyan
+    # DNS can resolve from a local cache after outbound traffic is blocked.  A
+    # bounded direct TCP attempt proves actual public egress instead.
     $networkActive = $false
+    $client = New-Object System.Net.Sockets.TcpClient
     try {
-        $res = [System.Net.Dns]::GetHostAddresses('github.com')
-        $networkActive = $true
+        $attempt = $client.BeginConnect('1.1.1.1', 443, $null, $null)
+        if ($attempt.AsyncWaitHandle.WaitOne(2000)) {
+            $client.EndConnect($attempt)
+            $networkActive = $true
+        }
     } catch {
-        # Expected failure in offline environment
+        # Expected failure while physical or firewall containment is active.
+    } finally {
+        $client.Dispose()
     }
 
     if ($networkActive) {
-        Fail-Build "Network adapter is active. Physical containment block not detected at OS-level." 13
+        Fail-Build "Public TCP egress is still available. Offline containment has not been proven." 13
     } else {
-        Write-Host "[OK] Host system is verified offline." -ForegroundColor Green
+        Write-Host "[OK] Public TCP egress is blocked; host is verified offline." -ForegroundColor Green
     }
 }
 

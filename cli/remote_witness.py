@@ -7,6 +7,7 @@ record even when preflight rejects the root or an SSH client disconnects.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import socket
@@ -61,17 +62,22 @@ def _qdrant_binary() -> Path:
 
 
 def _assert_qdrant_port_is_free() -> None:
+    """Prove that the witness can bind its isolated loopback Qdrant port.
+
+    A connect probe can time out when endpoint protection silently drops a
+    loopback SYN even though no process owns the port.  Binding is the actual
+    capability the witness requires, and reports an occupied port directly.
+    """
     try:
-        with socket.create_connection(("127.0.0.1", 6333), timeout=0.25):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 6333))
+    except OSError as exc:
+        address_in_use = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", errno.EADDRINUSE)}
+        if exc.errno in address_in_use:
             raise WitnessRuntimeError(
                 "isolated witness requires loopback Qdrant port 6333, but it is already in use"
-            )
-    except ConnectionRefusedError:
-        return
-    except TimeoutError as exc:
-        raise WitnessRuntimeError("could not determine whether isolated Qdrant port 6333 is free") from exc
-    except OSError as exc:
-        raise WitnessRuntimeError("could not inspect isolated Qdrant port 6333") from exc
+            ) from exc
+        raise WitnessRuntimeError("could not bind isolated Qdrant port 6333") from exc
 
 
 def _wait_for_qdrant(process: subprocess.Popen[Any], timeout_seconds: float = 20.0) -> None:

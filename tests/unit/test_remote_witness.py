@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import errno
 import socket
 from pathlib import Path
 
@@ -72,13 +73,50 @@ def test_execute_owns_and_stops_isolated_qdrant(monkeypatch, tmp_path: Path):
     assert stopped == [qdrant]
 
 
-def test_qdrant_port_probe_reports_an_inspection_error(monkeypatch):
+def test_qdrant_port_probe_accepts_a_successful_loopback_bind(monkeypatch):
+    bound = []
+
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def bind(self, address):
+            bound.append(address)
+
+    monkeypatch.setattr(remote_witness.socket, "socket", lambda *_args: Probe())
+
+    remote_witness._assert_qdrant_port_is_free()
+
+    assert bound == [("127.0.0.1", 6333)]
+
+
+def test_qdrant_port_probe_reports_an_occupied_port(monkeypatch):
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def bind(self, _address):
+            raise OSError(errno.EADDRINUSE, "address already in use")
+
+    monkeypatch.setattr(remote_witness.socket, "socket", lambda *_args: Probe())
+
+    with pytest.raises(remote_witness.WitnessRuntimeError, match="already in use"):
+        remote_witness._assert_qdrant_port_is_free()
+
+
+def test_qdrant_port_probe_reports_a_bind_error(monkeypatch):
     def raise_socket_error(*_args, **_kwargs):
         raise OSError("socket unavailable")
 
-    monkeypatch.setattr(remote_witness.socket, "create_connection", raise_socket_error)
+    monkeypatch.setattr(remote_witness.socket, "socket", raise_socket_error)
 
-    with pytest.raises(remote_witness.WitnessRuntimeError, match="could not inspect"):
+    with pytest.raises(remote_witness.WitnessRuntimeError, match="could not bind"):
         remote_witness._assert_qdrant_port_is_free()
 
 

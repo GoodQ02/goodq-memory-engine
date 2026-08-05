@@ -470,6 +470,30 @@
         "sha256": "0f73ea4a3ee3b934c6d77c89c2810edcd6ceab1a13a5534bb59b54afe3f4506e",
         "license": "MIT",
         "notes": "Cache this independently published wheel before offline installation."
+      },
+      {
+        "artifact_id": "librosa_py3_none_any",
+        "name": "librosa",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "py3",
+        "platform_tag": "any",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://files.pythonhosted.org/packages/8c/8a/2d231b35456506b7c98b3ab9bbf07917b205fed8615d2e59e976ab497fff/librosa-0.10.2.post1-py3-none-any.whl",
+        "sha256": "dc882750e8b577a63039f25661b7e39ec4cfbacc99c1cffba666cd664fb0a7a0",
+        "license": "ISC"
+      },
+      {
+        "artifact_id": "soundfile_py2_py3_none_win_amd64",
+        "name": "soundfile",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "py2.py3",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://files.pythonhosted.org/packages/50/ff/26a4ee48d0b66625a4e4028a055b9f25bc9d7c7b2d17d21a45137621a50d/soundfile-0.12.1-py2.py3-none-win_amd64.whl",
+        "sha256": "0d86924c00b62552b650ddd28af426e3ff2d4dc2e9047dae5b3d8452e0a49a77",
+        "license": "BSD-3-Clause"
       }
     ]
   }

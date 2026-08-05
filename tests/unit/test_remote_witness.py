@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,8 @@ def test_execute_persists_terminal_receipt(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
     monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: type("Qdrant", (), {"pid": 24})())
+    monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda *_: None)
 
     class Process:
         pid = 42
@@ -42,6 +45,41 @@ def test_execute_records_preflight_failure(monkeypatch, tmp_path: Path):
     receipt = json.loads(remote_witness.receipt_path(root).read_text(encoding="utf-8"))
     assert receipt["phase"] == "failed"
     assert "ffmpeg unavailable" in receipt["error"]
+
+
+def test_execute_owns_and_stops_isolated_qdrant(monkeypatch, tmp_path: Path):
+    root = tmp_path / "witness"
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"clip")
+    sealed = root / "prepared-receipt.json"
+    qdrant = type("Qdrant", (), {"pid": 24})()
+    stopped = []
+
+    monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
+    monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: qdrant)
+    monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda process: stopped.append(process))
+
+    class Process:
+        pid = 42
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(remote_witness.subprocess, "Popen", lambda *_, **__: Process())
+
+    assert remote_witness.execute(root, source) == 0
+    assert stopped == [qdrant]
+
+
+def test_qdrant_port_probe_reports_an_inspection_error(monkeypatch):
+    def raise_socket_error(*_args, **_kwargs):
+        raise OSError("socket unavailable")
+
+    monkeypatch.setattr(remote_witness.socket, "create_connection", raise_socket_error)
+
+    with pytest.raises(remote_witness.WitnessRuntimeError, match="could not inspect"):
+        remote_witness._assert_qdrant_port_is_free()
 
 
 def test_launch_uses_task_scheduler_on_windows(monkeypatch, tmp_path: Path):

@@ -9,13 +9,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from cli.golden_witness import prepare_witness_run, seal_prepared_receipt
+
+
+class WitnessRuntimeError(RuntimeError):
+    """Raised when the isolated runtime cannot be made ready."""
 
 
 def _now() -> str:
@@ -43,6 +51,95 @@ def _update(path: Path, payload: dict[str, Any], phase: str, **fields: Any) -> d
     return payload
 
 
+def _qdrant_binary() -> Path:
+    install_root = Path(sys.executable).resolve().parent.parent
+    name = "qdrant.exe" if os.name == "nt" else "qdrant"
+    binary = install_root / "qdrant" / name
+    if not binary.is_file():
+        raise WitnessRuntimeError(f"isolated witness Qdrant binary is missing: {binary}")
+    return binary
+
+
+def _assert_qdrant_port_is_free() -> None:
+    try:
+        with socket.create_connection(("127.0.0.1", 6333), timeout=0.25):
+            raise WitnessRuntimeError(
+                "isolated witness requires loopback Qdrant port 6333, but it is already in use"
+            )
+    except ConnectionRefusedError:
+        return
+    except TimeoutError as exc:
+        raise WitnessRuntimeError("could not determine whether isolated Qdrant port 6333 is free") from exc
+    except OSError as exc:
+        raise WitnessRuntimeError("could not inspect isolated Qdrant port 6333") from exc
+
+
+def _wait_for_qdrant(process: subprocess.Popen[Any], timeout_seconds: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise WitnessRuntimeError(f"isolated Qdrant exited during startup with code {process.returncode}")
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:6333/readyz", timeout=1) as response:
+                if response.status == 200:
+                    return
+        except (urllib.error.URLError, TimeoutError):
+            time.sleep(0.2)
+    raise WitnessRuntimeError("isolated Qdrant did not become ready on loopback port 6333")
+
+
+def _start_isolated_qdrant(root: Path) -> subprocess.Popen[Any]:
+    """Start one witness-owned Qdrant that writes only below ``root``."""
+    _assert_qdrant_port_is_free()
+    storage = root / "data" / "qdrant"
+    storage.mkdir(parents=True, exist_ok=True)
+    config_path = root / "config" / "qdrant-witness.yaml"
+    config_path.write_text(
+        "\n".join(
+            (
+                "storage:",
+                f"  storage_path: {storage.as_posix()}",
+                f"  snapshots_path: {(storage / 'snapshots').as_posix()}",
+                "service:",
+                "  host: 127.0.0.1",
+                "  http_port: 6333",
+                "  grpc_port: 6334",
+                "telemetry_disabled: true",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    log_handle = (root / "qdrant-witness.log").open("w", encoding="utf-8")
+    process = subprocess.Popen(
+        [str(_qdrant_binary()), "--config-path", str(config_path)],
+        cwd=str(storage),
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        env={**os.environ, "QDRANT__TELEMETRY_DISABLED": "true"},
+    )
+    setattr(process, "_goodq_log_handle", log_handle)
+    try:
+        _wait_for_qdrant(process)
+    except Exception:
+        _stop_isolated_qdrant(process)
+        raise
+    return process
+
+
+def _stop_isolated_qdrant(process: subprocess.Popen[Any]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+    log_handle = getattr(process, "_goodq_log_handle", None)
+    if log_handle is not None:
+        log_handle.close()
+
+
 def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> int:
     root = artifact_root.resolve()
     input_path = input_file.resolve(strict=True)
@@ -67,10 +164,21 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
             "--config", str(config_path), "--output", str(root / "output"),
             "--workspace", str(root / "workspace"), "--scene-indices", scene_indices, "--verbose",
         ]
-        with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
-            process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, text=True)
-            state = _update(receipt, state, "runner_started", runner_pid=process.pid, command=command)
-            exit_code = process.wait()
+        qdrant = _start_isolated_qdrant(root)
+        try:
+            with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+                process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, text=True)
+                state = _update(
+                    receipt,
+                    state,
+                    "runner_started",
+                    runner_pid=process.pid,
+                    qdrant_pid=qdrant.pid,
+                    command=command,
+                )
+                exit_code = process.wait()
+        finally:
+            _stop_isolated_qdrant(qdrant)
         _update(receipt, state, "runner_finished", runner_exit_code=exit_code, finished_at=_now())
         return int(exit_code)
     except Exception as exc:

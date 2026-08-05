@@ -180,14 +180,24 @@ if ($Mode -eq "Acquire") {
     }
 
     Write-Host "Staging python wheels offline via pip download..." -ForegroundColor Cyan
-    $reqFile = [System.IO.Path]::GetFullPath("..\..\requirements-baseline-lock.txt")
+    $reqFile = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\requirements-baseline-lock.txt"))
+    $targetPython = $PythonExe
+    if (-not $targetPython) {
+        $candidate = Join-Path $ScriptDir "staged\runtime\python.exe"
+        if (Test-Path $candidate) {
+            $targetPython = $candidate
+        }
+    }
+    if (-not $targetPython -or -not (Test-Path $targetPython)) {
+        Write-Error "Offline wheel staging requires the extracted CPython 3.10 installer runtime. Supply -PythonExe or stage runtime\\python.exe first."
+    }
     
     # Run pip download securely with retries
     $retryCount = 0
     $success = $false
     while (-not $success -and $retryCount -lt 5) {
         Write-Host "  Running pip download (Attempt $($retryCount + 1) of 5)..." -ForegroundColor Yellow
-        pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --python-version 3.10 --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cpu -r $reqFile
+        & $targetPython -m pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cpu -r $reqFile
         if ($LASTEXITCODE -eq 0) {
             $success = $true
         } else {

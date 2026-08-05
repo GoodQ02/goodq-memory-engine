@@ -1973,19 +1973,18 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   offline suite and Qdrant restore smoke passed, and the scheduler-backed
   scene-zero witness reached `runner_finished` with exit code zero. The sealed
   receipt proves CPU policy, isolation, and promotion disabled.
-- Remaining acceptance gap: audio transcription completed without text and the
-  optional CLAP embedding step failed because the baseline ships Torch 2.5.1
-  while the cached legacy `pytorch_model.bin` now requires Torch 2.6 or newer.
-  Decide whether the public baseline should bundle the Audio Standard model pack
-  or retain audio as a separately provisioned capability; repair the Torch/CLAP
-  compatibility seam without weakening the loader security guard.
-- Audio provisioning closure in progress (2026-08-04): the CPU baseline lock
-  now pins the Torch 2.6.0 / TorchVision 0.21.0 / TorchAudio 2.6.0 trio with
-  hash-pinned Windows wheels. Baseline first launch is explicitly limited to
-  baseline models; Audio Standard is a separate receipt-producing post-install
-  action. The staged CPython 3.10 offline closure resolved successfully. A
-  fresh offline rebuild and follower witness remain required before this item
-  is complete.
+- Active repair (2026-08-04): the follower receipt exposed two baseline
+  packaging seams before a full scene witness could be claimed: CLAP imports
+  require `librosa` and `soundfile`, and the remote witness runner must own an
+  isolated loopback Qdrant lifecycle. Private `dev` now pins the audio imports
+  in the baseline lock and manifest, stages their CPython 3.10 transitive
+  closure, and starts/stops the bundled Qdrant under the witness root. The
+  stager verifies all artifact hashes and the exact lock closure before build.
+- Remaining acceptance gap: rebuild the offline baseline from that private
+  commit, clean-install it on GR-16, and rerun the same non-promoting
+  scene-zero witness. The acceptance receipt must show terminal audio and
+  CLAP ledger results plus isolated Qdrant persistence; optional WSL audio and
+  local LLM serving remain out of the baseline scope.
 - Completion: a fresh install passes the offline suite and restore smoke; one
   non-promoting scene-zero witness, launched through the remote receipt runner,
   reaches `runner_finished` with a terminal audio-transcription ledger result;

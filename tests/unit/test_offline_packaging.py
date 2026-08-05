@@ -89,6 +89,12 @@ def test_cpu_baseline_stager_uses_cpu_pytorch_index() -> None:
     assert "https://download.pytorch.org/whl/cu121" not in content
 
 
+def test_stager_resolves_the_baseline_lock_from_its_own_directory() -> None:
+    stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
+
+    assert 'Join-Path $ScriptDir "..\\..\\requirements-baseline-lock.txt"' in stager
+
+
 def test_cpu_torch_wheels_are_hash_pinned() -> None:
     manifest_path = ROOT / "configs" / "offline_dependencies_manifest.json"
     wheels = json.loads(manifest_path.read_text(encoding="utf-8"))["wheels"]["wheelhouse"]
@@ -106,6 +112,14 @@ def test_installer_ships_explicit_audio_standard_launcher() -> None:
     assert "--profile audio_standard" in launcher.read_text(encoding="utf-8")
     assert "audio_standard_report.json" in launcher.read_text(encoding="utf-8")
     assert 'Install Audio Standard.lnk' in installer.read_text(encoding="utf-8")
+
+
+def test_baseline_lock_covers_the_clap_runtime_imports() -> None:
+    """A baseline witness must not reach CLAP and then discover librosa is absent."""
+    lockfile = (ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+
+    assert "librosa==0.10.2.post1" in lockfile
+    assert "soundfile==0.12.1" in lockfile
 
 
 class TestManifestWheelCoverage:

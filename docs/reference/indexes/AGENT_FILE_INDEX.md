@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1408**
+Indexed active tracked paths: **1409**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -748,6 +748,7 @@ Indexed active tracked paths: **1408**
 | `/scripts/implement_comprehensive_vad.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/init_qdrant_collections.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/inspect_db.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/INSTALL_AUDIO_STANDARD.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/LAUNCH_GOODQ.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/build_installer.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_manifest.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |

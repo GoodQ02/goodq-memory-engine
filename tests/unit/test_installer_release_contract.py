@@ -243,6 +243,8 @@ def test_offline_dependency_closure_uses_the_cp310_installer_target() -> None:
 
     assert "GOODQ_DEV_PYTHON" in launcher
     assert "Offline closure verification requires CPython 3.10" in stager
+    assert 'Join-Path $ScriptDir "staged\\runtime\\python.exe"' in stager
+    assert "& $targetPython -m pip download" in stager
 
 
 def test_offline_launcher_requires_an_operator_selected_output_root() -> None:

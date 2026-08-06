@@ -2007,6 +2007,18 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   all completed. The sealed scene manifest reports Windows audio with no
   downgrade and Phase 6 complete. Optional WSL audio and local LLM serving
   remain explicitly outside this BASELINE acceptance scope.
+- Active follower deployment (2026-08-06): the managed offline build from
+  private `dev` commit `6ef7a94e` passed its four-file receipt and temporary
+  outbound-containment cleanup. Its immediate restoration probe was delayed,
+  but the exact firewall rule was absent, adapter state was unchanged, and a
+  fresh public TCP probe succeeded. GS-32 received a four-of-four
+  hash-verified transfer under a new validation root. Before its clean
+  replacement, an obsolete silent installer and its wheel-install Python child
+  were found holding the prior program tree; their exact process evidence was
+  preserved, the obsolete tree was stopped under the approved replacement
+  scope, and only the GoodQ program and data roots were removed. The new
+  installer then exited zero. Do not claim GS-32 acceptance until its installed
+  offline suite, restore smoke, and fresh bounded scene witness are recorded.
 
 ### V-02 — Watchdog interruption witness
 

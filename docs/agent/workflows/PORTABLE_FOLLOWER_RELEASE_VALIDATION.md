@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-05 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-06 -->
 
 # Portable Follower Release Validation
 
@@ -27,6 +27,12 @@ applies to named followers such as GR-16 and GS-32.
    validation root, remove the approved roots once, and verify each exact path
    is absent before staging the new release. Do not sweep unrelated user files
    or repositories.
+6. Before removal, snapshot any active GoodQ installer, scheduled task, or
+   runtime process. An old silent installer can keep its bundled Python wheel
+   phase alive and lock the program tree. Do not overlap it with a replacement.
+   If it is confirmed obsolete and its stop is approved, retain before/after
+   process evidence, stop that exact process tree, then verify the approved
+   roots are absent before launching the new installer.
 
 ## Installation and baseline gates
 
@@ -62,7 +68,8 @@ applies to named followers such as GR-16 and GS-32.
 
 ## Completion record
 
-Keep the build receipt, pre-removal manifest when applicable, transfer-hash
-result, installer exit, offline-suite result, restore-smoke result, remote
-receipt, sealed witness receipt, and a short operator finding together. Do not
-promote the witness or broaden ingestion as part of this workflow.
+Keep the build receipt, pre-removal manifest and active-process snapshot when
+applicable, transfer-hash result, installer exit, offline-suite result,
+restore-smoke result, remote receipt, sealed witness receipt, and a short
+operator finding together. Do not promote the witness or broaden ingestion as
+part of this workflow.

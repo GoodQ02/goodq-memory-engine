@@ -2019,6 +2019,13 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   scope, and only the GoodQ program and data roots were removed. The new
   installer then exited zero. Do not claim GS-32 acceptance until its installed
   offline suite, restore smoke, and fresh bounded scene witness are recorded.
+- Update handoff (2026-08-06): GS-32's installed offline suite and disposable
+  Qdrant restore smoke both passed. The sealed scene-zero witness is active at
+  `runner_started` under its fresh validation root, using the installed
+  scheduler-backed runner and `--step-timeout 600`. Resume by reading its
+  durable status/receipt first; do not relaunch, restage, or clean the witness
+  root. Acceptance remains gated on `runner_finished` plus terminal audio
+  ledger evidence.
 
 ### V-02 — Watchdog interruption witness
 

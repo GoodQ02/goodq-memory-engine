@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1410**
+Indexed active tracked paths: **1412**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -220,6 +220,7 @@ Indexed active tracked paths: **1410**
 | `/docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/LAPTOP_TEST_AND_REPORT_PROTOCOL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/LOCAL_DEV_RUNTIME_MODES.md` | Documentation | Active documentation or governance surface. |
+| `/docs/agent/workflows/MANAGED_OFFLINE_RELEASE_BUILD.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/PORTABLE_FOLLOWER_RELEASE_VALIDATION.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/REMOTE_WITNESS_OVER_SSH.md` | Documentation | Active documentation or governance surface. |
@@ -1297,6 +1298,7 @@ Indexed active tracked paths: **1410**
 | `/tests/unit/test_signature_backfill_execute.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_signature_backfill_plan.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_signature_backfill_serial_run.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_step_runner_config_overlay.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_step_runner_openmp_guard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |

@@ -1957,7 +1957,7 @@ These items preserve unfinished intent from the plans this roadmap replaces.
 
 ### V-01 — Portable follower witness
 
-- Status: IN PROGRESS
+- Status: VERIFIED
 - Verified install evidence (2026-08-04): the offline baseline artifact built
   from private `dev` commit `d83ccb43` passed exact version, commit, asset-set,
   and SHA-256 receipt checks; GR-16 received the four-file set with matching
@@ -1995,15 +1995,18 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   capability the runner actually requires: an exclusive loopback bind, with
   focused witness and installer-contract tests passing. Rebuild and redeploy
   this repair before rerunning the sealed scene from a new root.
-- Remaining acceptance gap: rebuild the offline baseline from that private
-  commit, clean-install it on GR-16, and rerun the same non-promoting
-  scene-zero witness. The acceptance receipt must show terminal audio and
-  CLAP ledger results plus isolated Qdrant persistence; optional WSL audio and
-  local LLM serving remain out of the baseline scope.
-- Completion: a fresh install passes the offline suite and restore smoke; one
-  non-promoting scene-zero witness, launched through the remote receipt runner,
-  reaches `runner_finished` with a terminal audio-transcription ledger result;
-  retrieval and an operator report then pass without workstation-specific paths.
+- Verified completion (2026-08-06): the managed offline build from private
+  `dev` commit `435ee473` passed its exact artifact receipt and restored host
+  connectivity after its temporary outbound-containment rule was removed. A
+  four-of-four hash-verified transfer was clean-installed on GR-16 after the
+  previous program and data roots were removed. The installed offline suite and
+  disposable Qdrant restore smoke passed. A new non-promoting scene-zero
+  witness then reached `runner_finished` with exit code zero. Its terminal
+  audio ledger is `ok` using `hybrid_whisper` on CPU (12 chunks, 48 segments,
+  and 1,868 transcript characters); CLAP, Qdrant, FAISS, and SQLite commits
+  all completed. The sealed scene manifest reports Windows audio with no
+  downgrade and Phase 6 complete. Optional WSL audio and local LLM serving
+  remain explicitly outside this BASELINE acceptance scope.
 
 ### V-02 — Watchdog interruption witness
 

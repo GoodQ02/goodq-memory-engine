@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+import sys
+import types
+
+from steps.audio_transcribe import step
+
+
+def test_windows_cpu_model_load_uses_one_ctranslate_thread(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeWhisperModel:
+        def __init__(self, model_id: str, **kwargs: object) -> None:
+            captured["model_id"] = model_id
+            captured.update(kwargs)
+
+    fake_module = types.ModuleType("faster_whisper")
+    fake_module.WhisperModel = FakeWhisperModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+    monkeypatch.setattr(step.os, "name", "nt")
+    step._FW_CACHE.clear()
+
+    step._load_fw_model("cached-model", "cpu", "int8")
+
+    assert captured["model_id"] == "cached-model"
+    assert captured["device"] == "cpu"
+    assert captured["num_workers"] == 1
+    assert captured["cpu_threads"] == 1

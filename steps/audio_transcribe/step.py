@@ -98,8 +98,11 @@ def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minut
             # Use optimized compute type from config
             compute_type = gpu_config.compute_type
         
-        # CTranslate2 multi-threading (num_workers > 1) on Windows with CUDA is prone to silent deadlocks
+        # CTranslate2 multi-threading (num_workers > 1) on Windows with CUDA is prone to silent deadlocks.
+        # The CPU default also uses several OpenMP threads; on Windows that can
+        # stall a first local transcription after the model has loaded.
         num_workers_val = 1 if (os.name == "nt" or device != "cuda") else 2
+        cpu_threads_val = 1 if (os.name == "nt" and device == "cpu") else 0
         
         logger.info(f"[TRANSCRIBE] Loading Whisper model '{model_id}' on {device} ({compute_type}) with num_workers={num_workers_val}...")
         load_start = time.time()
@@ -109,6 +112,7 @@ def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minut
             device=device, 
             compute_type=compute_type,
             num_workers=num_workers_val,
+            cpu_threads=cpu_threads_val,
         )
         
         load_time = time.time() - load_start

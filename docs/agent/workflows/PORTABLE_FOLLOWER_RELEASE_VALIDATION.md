@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-04 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-05 -->
 
 # Portable Follower Release Validation
 
@@ -21,6 +21,12 @@ applies to named followers such as GR-16 and GS-32.
 4. If an old install must be removed, enumerate exact program and data roots,
    obtain approval, and retain the removal result. Never infer a clean baseline
    from a successful installer exit alone.
+5. If the follower also holds an obsolete GoodQ release bundle, validation
+   cache, or development snapshot, include only its exact approved roots in a
+   compact pre-removal manifest. Preserve that manifest beneath the new
+   validation root, remove the approved roots once, and verify each exact path
+   is absent before staging the new release. Do not sweep unrelated user files
+   or repositories.
 
 ## Installation and baseline gates
 
@@ -56,7 +62,7 @@ applies to named followers such as GR-16 and GS-32.
 
 ## Completion record
 
-Keep the build receipt, transfer-hash result, installer exit, offline-suite
-result, restore-smoke result, remote receipt, sealed witness receipt, and a
-short operator finding together. Do not promote the witness or broaden
-ingestion as part of this workflow.
+Keep the build receipt, pre-removal manifest when applicable, transfer-hash
+result, installer exit, offline-suite result, restore-smoke result, remote
+receipt, sealed witness receipt, and a short operator finding together. Do not
+promote the witness or broaden ingestion as part of this workflow.

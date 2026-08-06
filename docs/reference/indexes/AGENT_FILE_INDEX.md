@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1412**
+Indexed active tracked paths: **1413**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -1129,6 +1129,7 @@ Indexed active tracked paths: **1412**
 | `/tests/unit/test_audio_bridge_native.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_segment_timeline_normalization.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_speaker_merge_step.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_transcribe_windows_cpu_threads.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_banned_token_lint.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_baseline_audio_profile_invariant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_hardening.py` | Verification | Test, fixture, or verification asset. |

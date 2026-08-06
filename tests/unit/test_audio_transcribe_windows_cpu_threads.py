@@ -18,6 +18,11 @@ def test_windows_cpu_model_load_uses_one_ctranslate_thread(monkeypatch):
     fake_module.WhisperModel = FakeWhisperModel
     monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
     monkeypatch.setattr(step.os, "name", "nt")
+    monkeypatch.setattr(
+        step,
+        "get_audio_gpu_optimizer",
+        lambda: (_ for _ in ()).throw(AssertionError("CPU path must not create GPU optimizer")),
+    )
     step._FW_CACHE.clear()
 
     step._load_fw_model("cached-model", "cpu", "int8")

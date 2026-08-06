@@ -84,8 +84,9 @@ def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minut
     try:
         from faster_whisper import WhisperModel  # type: ignore
         
-        # Initialize GPU optimizer
-        optimizer = get_audio_gpu_optimizer()
+        # CPU baseline must not initialize the GPU optimizer: that path imports
+        # and probes Torch even though no CUDA work will be performed.
+        optimizer = get_audio_gpu_optimizer() if device == "cuda" else None
         
         # Configure GPU for transcription
         if device == "cuda":
@@ -714,9 +715,6 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     # Windows processing
     logger.info(f"[TRANSCRIBE] Using Windows processing")
     
-    # Initialize GPU optimizer
-    optimizer = get_audio_gpu_optimizer()
-
     cfg_audio = (cfg.get("audio", {}) or {})
     tx_cfg = (cfg_audio.get("transcribe", {}) or {})
     chunk_seconds = float(tx_cfg.get("chunk_seconds") or 10)
@@ -739,6 +737,7 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
 
     device, device_probe = _detect_transcription_device()
     logger.info("[TRANSCRIBE] Device selected=%s via=%s", device, device_probe)
+    optimizer = get_audio_gpu_optimizer() if device == "cuda" else None
     
     model_id = str(tx_cfg.get("model") or "medium")
     

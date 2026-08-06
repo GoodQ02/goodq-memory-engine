@@ -2026,6 +2026,17 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   durable status/receipt first; do not relaunch, restage, or clean the witness
   root. Acceptance remains gated on `runner_finished` plus terminal audio
   ledger evidence.
+- CPU fallback repair (2026-08-06): GS-32's witness reached `runner_finished`
+  with an honest terminal audio failure after `audio_transcribe_local` exceeded
+  the 600-second witness bound. This was not an installer drift: installed
+  source/config hashes matched private `dev`, the cached medium model loaded in
+  16.6 seconds, and direct one-thread CPU inference produced a transcript but
+  took 137.0 seconds for ten seconds of audio. The same private-dev contract
+  took 19.2 seconds. Private `dev` now retains `num_workers=1` for the Windows
+  deadlock guard while using four bounded CTranslate2 CPU inference threads;
+  the source benchmark completed the same input in 7.3 seconds. Rebuild from
+  the verified private commit, then rerun only the existing GS-32 sealed
+  scene-zero witness from a fresh validation root.
 
 ### V-02 — Watchdog interruption witness
 

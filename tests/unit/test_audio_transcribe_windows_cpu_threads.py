@@ -6,7 +6,7 @@ import types
 from steps.audio_transcribe import step
 
 
-def test_windows_cpu_model_load_uses_one_ctranslate_thread(monkeypatch):
+def test_windows_cpu_model_load_uses_bounded_ctranslate_threads(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeWhisperModel:
@@ -30,4 +30,4 @@ def test_windows_cpu_model_load_uses_one_ctranslate_thread(monkeypatch):
     assert captured["model_id"] == "cached-model"
     assert captured["device"] == "cpu"
     assert captured["num_workers"] == 1
-    assert captured["cpu_threads"] == 1
+    assert captured["cpu_threads"] == 4

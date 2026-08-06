@@ -2037,6 +2037,19 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   the source benchmark completed the same input in 7.3 seconds. Rebuild from
   the verified private commit, then rerun only the existing GS-32 sealed
   scene-zero witness from a fresh validation root.
+- Pause checkpoint (2026-08-06): private `dev` is pushed at `23735149` with
+  the Windows CPU transcription repair and its focused regression coverage.
+  The managed offline build passed from that exact commit with a four-asset
+  receipt, temporary outbound containment removed, unchanged adapter state, and
+  restored public connectivity. GOOD-CUBE now has hash-verified SSH aliases
+  for GS-32 and GR-16; both followers expose authenticated Codex app-server
+  support, share the synced agent-workflow workspace, and have the portable
+  operational skills added without replacing any local skill or configuration.
+  The only active release gate is to clean-replace GS-32 with this exact asset
+  set under a fresh validation root, rerun its installed offline suite and
+  restore smoke, then run one newly sealed scene-zero witness. Require a
+  terminal transcript ledger and `runner_finished`; do not reuse the earlier
+  timed-out witness root or promote any follower evidence.
 
 ### V-02 — Watchdog interruption witness
 

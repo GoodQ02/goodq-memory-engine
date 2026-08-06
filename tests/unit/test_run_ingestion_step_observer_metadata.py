@@ -98,6 +98,28 @@ def test_local_transcription_result_preserves_worker_failure_metadata():
     assert normalized == worker_result
 
 
+def test_local_transcription_result_unwraps_successful_async_step_outputs():
+    run_ingestion = _load_run_ingestion_module()
+    worker_result = {
+        "step_name": "audio_transcribe_local",
+        "status": "ok",
+        "outputs": {
+            "transcript": "A real transcript from the worker.",
+            "segments": [{"start": 0.0, "end": 1.0, "text": "A real transcript from the worker."}],
+            "transcript_meta": {
+                "status": "ok",
+                "engine": "hybrid_whisper",
+                "device": "cpu",
+            },
+        },
+    }
+
+    normalized = run_ingestion._normalize_local_transcription_result(worker_result)
+
+    assert normalized == worker_result["outputs"]
+    assert normalized["transcript_meta"]["status"] == "ok"
+
+
 class _FakePopenSuccess:
     def __init__(self, *args, **kwargs):
         self.pid = 4242

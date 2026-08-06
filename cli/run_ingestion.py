@@ -1514,6 +1514,14 @@ def _normalize_local_transcription_result(result: Any) -> Dict[str, Any]:
             },
         }
 
+    # _run_step_async returns a lifecycle envelope while the synchronous runner
+    # returns the worker payload directly.  Normalize against the payload in
+    # both cases; otherwise a successful transcript nested under ``outputs``
+    # is mistaken for an empty worker result and replaced with a false failure.
+    async_outputs = result.get("outputs")
+    if result.get("step_name") == "audio_transcribe_local" and isinstance(async_outputs, dict):
+        result = async_outputs
+
     normalized = dict(result)
     normalized.setdefault("transcript", None)
     transcript_meta = normalized.get("transcript_meta")

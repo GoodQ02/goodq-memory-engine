@@ -37,6 +37,11 @@ observable transport event, not an ambiguous pipeline result.
      --scene-indices 0
    ```
 
+   The runner caps each child ingestion step at 600 seconds. This is a
+   witness-only containment boundary; it does not change the production
+   ingestion default for long scenes. A timed-out step must produce a terminal
+   runner receipt and is not a passing witness.
+
 4. Reconnect at any time and read the remote receipt:
 
    ```powershell

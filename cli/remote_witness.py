@@ -169,6 +169,7 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
             sys.executable, "-m", "cli.run_ingestion", "--input-file", str(input_path),
             "--config", str(config_path), "--output", str(root / "output"),
             "--workspace", str(root / "workspace"), "--scene-indices", scene_indices, "--verbose",
+            "--step-timeout", "600",
         ]
         qdrant = _start_isolated_qdrant(root)
         try:

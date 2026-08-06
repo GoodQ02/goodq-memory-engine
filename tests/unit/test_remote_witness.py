@@ -36,6 +36,34 @@ def test_execute_persists_terminal_receipt(monkeypatch, tmp_path: Path):
     assert receipt["runner_pid"] == 42
 
 
+def test_execute_bounds_each_isolated_witness_step(monkeypatch, tmp_path: Path):
+    root = tmp_path / "witness"
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"clip")
+    sealed = root / "prepared-receipt.json"
+    captured = {}
+
+    monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
+    monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: type("Qdrant", (), {"pid": 24})())
+    monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda *_: None)
+
+    class Process:
+        pid = 43
+
+        def wait(self):
+            return 0
+
+    def _popen(command, **_kwargs):
+        captured["command"] = command
+        return Process()
+
+    monkeypatch.setattr(remote_witness.subprocess, "Popen", _popen)
+
+    assert remote_witness.execute(root, source) == 0
+    assert captured["command"][-2:] == ["--step-timeout", "600"]
+
+
 def test_execute_records_preflight_failure(monkeypatch, tmp_path: Path):
     root = tmp_path / "witness"
     source = tmp_path / "clip.mp4"

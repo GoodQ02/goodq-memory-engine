@@ -754,12 +754,14 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     logger.info("[TRANSCRIBE] Device selected=%s via=%s", device, device_probe)
     optimizer = get_audio_gpu_optimizer() if device == "cuda" else None
     
-    # Smart model selection: on CPU baseline, machines with fewer than 16
+    # Smart model selection: on CPU baseline, machines with fewer than 20
     # logical processors use 'small' instead of 'medium'.  Whisper medium
-    # takes ~507s on a 10-core i7-13620H (0.24x realtime) vs ~184s for
-    # small (0.65x realtime) on the same hardware, while transcript quality
-    # is nearly identical for memory/search use cases.  An explicit config
-    # value in audio.transcribe.model always takes precedence.
+    # takes ~507s on a 10-core/16-thread i7-13620H (0.24x realtime) vs ~184s
+    # for small (0.65x realtime) on the same hardware, while transcript
+    # quality is nearly identical for memory/search use cases.  An explicit
+    # config value in audio.transcribe.model always takes precedence.
+    # Threshold 20 catches laptop-class CPUs (i7-13620H=16 threads) while
+    # keeping desktop-class CPUs (GOOD-CUBE=28 threads) on medium.
     import multiprocessing
     _logical_cpus = multiprocessing.cpu_count()
     _explicit_model = tx_cfg.get("model")
@@ -769,7 +771,7 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     elif device != "cpu":
         model_id = "medium"
         _model_reason = "gpu_default"
-    elif _logical_cpus < 16:
+    elif _logical_cpus < 20:
         model_id = "small"
         _model_reason = f"cpu_auto_cores={_logical_cpus}"
     else:

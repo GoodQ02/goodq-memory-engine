@@ -754,23 +754,28 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     logger.info("[TRANSCRIBE] Device selected=%s via=%s", device, device_probe)
     optimizer = get_audio_gpu_optimizer() if device == "cuda" else None
     
-    # Smart model selection: on CPU baseline, machines with fewer than 20
-    # logical processors use 'small' instead of 'medium'.  Whisper medium
-    # takes ~507s on a 10-core/16-thread i7-13620H (0.24x realtime) vs ~184s
-    # for small (0.65x realtime) on the same hardware, while transcript
-    # quality is nearly identical for memory/search use cases.  An explicit
-    # config value in audio.transcribe.model always takes precedence.
-    # Threshold 20 catches laptop-class CPUs (i7-13620H=16 threads) while
-    # keeping desktop-class CPUs (GOOD-CUBE=28 threads) on medium.
+    # Smart model selection based on CPU count.  An explicit config value
+    # in audio.transcribe.model always takes precedence.
+    #
+    # Machines with fewer than 20 logical CPUs (laptop-class, e.g. i7-13620H
+    # with 16 threads) use 'small' regardless of device.  Reasons:
+    #
+    # 1. CPU baseline: medium takes ~507s vs ~184s for small on these CPUs,
+    #    and transcript quality is nearly identical for memory/search.
+    # 2. GPU on laptops (6 GB RTX 3060/4050): medium (1.5 GB) competes for
+    #    VRAM with other pipeline models.  On GS-32, the CUDA path with
+    #    medium caused WhisperModel() to hang for 1600+ seconds due to
+    #    symlink resolution and HF hub metadata issues on Windows.
+    #    small (0.5 GB) loads reliably in ~2s on the same hardware.
+    #
+    # Desktop-class machines (>=20 CPUs, e.g. GOOD-CUBE with 28 threads)
+    # keep medium on both CPU and GPU.
     import multiprocessing
     _logical_cpus = multiprocessing.cpu_count()
     _explicit_model = tx_cfg.get("model")
     if _explicit_model:
         model_id = str(_explicit_model)
         _model_reason = "config_explicit"
-    elif device != "cpu":
-        model_id = "medium"
-        _model_reason = "gpu_default"
     elif _logical_cpus < 20:
         model_id = "small"
         _model_reason = f"cpu_auto_cores={_logical_cpus}"

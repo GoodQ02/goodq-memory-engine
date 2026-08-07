@@ -103,6 +103,12 @@ def _load_fw_model(model_id: str, device: str, compute_type: str, duration_minut
         # deadlocks, so keep one model worker.  CPU inference itself needs a
         # bounded number of intra-op threads: one thread made a 120-second
         # baseline witness exceed its bounded runtime on a follower host.
+        #
+        # On Intel hybrid architectures (P-core + E-core, 12th/13th/14th gen),
+        # raising cpu_threads beyond the P-core count causes CTranslate2 to
+        # schedule onto much slower E-cores, producing a 40%+ regression.
+        # Cap at 4 threads which fits safely within the P-core pool on all
+        # tested follower hardware (i7-13620H: 6P+4E).
         num_workers_val = 1 if (os.name == "nt" or device != "cuda") else 2
         cpu_threads_val = 4 if (os.name == "nt" and device == "cpu") else 0
         
@@ -748,7 +754,31 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     logger.info("[TRANSCRIBE] Device selected=%s via=%s", device, device_probe)
     optimizer = get_audio_gpu_optimizer() if device == "cuda" else None
     
-    model_id = str(tx_cfg.get("model") or "medium")
+    # Smart model selection: on CPU baseline, machines with fewer than 16
+    # logical processors use 'small' instead of 'medium'.  Whisper medium
+    # takes ~507s on a 10-core i7-13620H (0.24x realtime) vs ~184s for
+    # small (0.65x realtime) on the same hardware, while transcript quality
+    # is nearly identical for memory/search use cases.  An explicit config
+    # value in audio.transcribe.model always takes precedence.
+    import multiprocessing
+    _logical_cpus = multiprocessing.cpu_count()
+    _explicit_model = tx_cfg.get("model")
+    if _explicit_model:
+        model_id = str(_explicit_model)
+        _model_reason = "config_explicit"
+    elif device != "cpu":
+        model_id = "medium"
+        _model_reason = "gpu_default"
+    elif _logical_cpus < 16:
+        model_id = "small"
+        _model_reason = f"cpu_auto_cores={_logical_cpus}"
+    else:
+        model_id = "medium"
+        _model_reason = f"cpu_auto_cores={_logical_cpus}"
+    logger.info(
+        "[TRANSCRIBE] Model selected=%s reason=%s logical_cpus=%s device=%s",
+        model_id, _model_reason, _logical_cpus, device,
+    )
     
     # Get GPU config and optimal compute type
     if device == "cuda":

@@ -278,6 +278,29 @@ huggingface_models:
     token_env: null
     failure_behavior: FATAL_HALT
 
+  faster_whisper_small:
+    repo_id: Systran/faster-whisper-small
+    revision: 536b0662742c02347bc0e980a01041f333bce120
+    model_type: speech-to-text
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      CTranslate2: yes
+    quantization: [FP16, INT8]
+    vram_estimate_gb: 0.5
+    load_policy: concurrent_safe
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+    tier_scope: [cpu_only, gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+
   faster_whisper_tiny:
     repo_id: Systran/faster-whisper-tiny
     revision: main

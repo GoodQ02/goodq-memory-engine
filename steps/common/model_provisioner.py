@@ -136,6 +136,15 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
     },
+    "Systran/faster-whisper-small": {
+        "key": "faster_whisper_small",
+        "tier_scope": ["cpu_only", "gpu_enhanced"],
+        "classification": "REQUIRED_FIRST_LAUNCH",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "FATAL_HALT"
+    },
     "Systran/faster-whisper-large-v3": {
         "key": "faster_whisper_large_v3",
         "tier_scope": ["gpu_enhanced"],

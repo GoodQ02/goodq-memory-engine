@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-06 -->
 
 # GoodQ4All Agent Operating Protocol
 

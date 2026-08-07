@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_CURRENT_STATE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-29 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-07 -->
 
 # GoodQ4All Current Agent State
 
-Generated from evidence `615a7c4bbcb84c87` captured at
-`2026-07-29T205357Z`. Do not hand-edit this file; regenerate it with
+Generated from evidence `517f707b8e533873` captured at
+`2026-08-07T02:33:35Z`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
 ## Authority
@@ -63,13 +63,13 @@ column says so.
 | goodq_api | `tcp_reachable` |
 | ollama | `reachable` |
 | qdrant | `running_loopback` |
-| vllm | `stopped_or_unavailable` |
+| vllm | `reachable` |
 | wsl | `not_probed` |
 
 - Configured GoodQ API: `http://127.0.0.1:30000`
 - Configured Qdrant: `http://127.0.0.1:6333`
 - Configured vLLM: `http://127.0.0.1:38005/v1` (loopback) with model
-  `Llama-3.2-1B-Instruct`
+  `Qwen2.5-0.5B-Instruct`
 - Configured GoodQ Ollama: `http://127.0.0.1:11434/v1` (loopback) with model
   `llama3.2:latest`
 - Hermes/Gemma on the GOOD-CUBE toolbelt is a separate local agent runtime and

@@ -1,11 +1,11 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-29 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-07 -->
 
 # GoodQ RAG Context Pack
 
-Generated from evidence `615a7c4bbcb84c87` captured at
-`2026-07-29T205357Z`. This is the portable read-only contract for
+Generated from evidence `517f707b8e533873` captured at
+`2026-08-07T02:33:35Z`. This is the portable read-only contract for
 GoodQ retrieval agents. Runtime snapshots and local agent configuration do not
 override this epoch authority.
 

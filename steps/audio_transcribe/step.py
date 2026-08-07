@@ -795,6 +795,11 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     models_root = _resolve_models_root()
     os.environ.setdefault("HF_HOME", os.environ.get("HF_HOME") or models_root)
     os.environ.setdefault("TORCH_HOME", os.environ.get("TORCH_HOME") or models_root)
+    # Prevent faster-whisper / huggingface_hub from making blocking network
+    # calls during model loading.  The model is already provisioned locally
+    # via ensure_model_cached(); any hub connectivity attempt is a regression
+    # risk that can hang for 1600+ seconds on installed follower nodes.
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
     
     use_fw = True
     if whisper_cli and whisper_model_path and os.path.isfile(str(whisper_cli)) and os.path.isfile(str(whisper_model_path)):

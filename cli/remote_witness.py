@@ -23,6 +23,21 @@ from typing import Any
 from cli.golden_witness import prepare_witness_run, seal_prepared_receipt
 
 
+def _cpu_aware_step_timeout() -> int:
+    """Return a per-step timeout in seconds appropriate for this machine.
+
+    Machines with fewer than 20 logical CPUs (laptop-class, e.g. i7-13620H
+    with 16 threads) need a longer timeout because Whisper transcription on
+    the ``small`` model takes ~184s isolated but ~600s+ under concurrent
+    pipeline load due to Intel hybrid P/E-core CPU contention.
+
+    Desktop-class machines (>= 20 logical CPUs) keep the original 600s.
+    """
+    import multiprocessing
+    cpus = multiprocessing.cpu_count()
+    return 900 if cpus < 20 else 600
+
+
 class WitnessRuntimeError(RuntimeError):
     """Raised when the isolated runtime cannot be made ready."""
 
@@ -169,7 +184,7 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
             sys.executable, "-m", "cli.run_ingestion", "--input-file", str(input_path),
             "--config", str(config_path), "--output", str(root / "output"),
             "--workspace", str(root / "workspace"), "--scene-indices", scene_indices, "--verbose",
-            "--step-timeout", "600",
+            "--step-timeout", str(_cpu_aware_step_timeout()),
         ]
         qdrant = _start_isolated_qdrant(root)
         try:

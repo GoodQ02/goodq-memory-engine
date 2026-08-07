@@ -917,7 +917,9 @@ class WatchdogProcessor:
         start_time = time.time()
 
         # Per-step timeout for conda runner (10 minutes)
-        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+        import multiprocessing as _mp
+        _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         cfg = self._build_run_config("watchdog_audio_ingest", run_id=run_id)
         item: Dict[str, Any] = {
@@ -1083,7 +1085,9 @@ class WatchdogProcessor:
         logger.info(f"[SYMBOL]️ Asset: {image_path.name}")
         start_time = time.time()
 
-        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+        import multiprocessing as _mp
+        _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         cfg = self._build_run_config("watchdog_image_ingest", run_id=run_id)
         item: Dict[str, Any] = {
@@ -1183,7 +1187,9 @@ class WatchdogProcessor:
         logger.info(f"[SYMBOL] Asset: {doc_path.name}")
         start_time = time.time()
 
-        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(600_000)
+        import multiprocessing as _mp
+        _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
+        os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         modality = 'pdf' if ext == '.pdf' else 'text'
         cfg = self._build_run_config("watchdog_document_ingest", run_id=run_id)

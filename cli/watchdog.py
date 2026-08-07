@@ -1086,7 +1086,7 @@ class WatchdogProcessor:
         start_time = time.time()
 
         import multiprocessing as _mp
-        _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
+        _step_timeout_ms = 1_800_000 if _mp.cpu_count() < 20 else 600_000
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         cfg = self._build_run_config("watchdog_image_ingest", run_id=run_id)
@@ -1188,7 +1188,7 @@ class WatchdogProcessor:
         start_time = time.time()
 
         import multiprocessing as _mp
-        _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
+        _step_timeout_ms = 1_800_000 if _mp.cpu_count() < 20 else 600_000
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         modality = 'pdf' if ext == '.pdf' else 'text'

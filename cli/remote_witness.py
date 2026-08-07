@@ -27,15 +27,22 @@ def _cpu_aware_step_timeout() -> int:
     """Return a per-step timeout in seconds appropriate for this machine.
 
     Machines with fewer than 20 logical CPUs (laptop-class, e.g. i7-13620H
-    with 16 threads) need a longer timeout because Whisper transcription on
-    the ``small`` model takes ~184s isolated but ~600s+ under concurrent
-    pipeline load due to Intel hybrid P/E-core CPU contention.
+    with 16 threads) need the full production timeout because the
+    audio_transcribe step's lifecycle (model provisioning, loading,
+    transcription, and output) under concurrent pipeline load takes
+    >900s for a 120s clip on the small model.
 
-    Desktop-class machines (>= 20 logical CPUs) keep the original 600s.
+    Evidence:
+    - Run 1: 600s timeout → timed out at 600.1s
+    - Run 2: 900s timeout → timed out at 900.1s
+    - Isolated benchmark: 184s (transcription only, no lifecycle overhead)
+    - Concurrent penalty: ~5x due to Intel hybrid P/E-core contention
+
+    Desktop-class machines (>= 20 logical CPUs) keep 600s.
     """
     import multiprocessing
     cpus = multiprocessing.cpu_count()
-    return 900 if cpus < 20 else 600
+    return 1800 if cpus < 20 else 600
 
 
 class WitnessRuntimeError(RuntimeError):

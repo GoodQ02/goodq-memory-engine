@@ -64,6 +64,23 @@ def _detect_transcription_device() -> Tuple[str, str]:
         import ctranslate2  # type: ignore
 
         if int(ctranslate2.get_cuda_device_count()) > 0:
+            # CTranslate2 can detect the GPU via the CUDA runtime (part of
+            # the display driver), but actual inference requires cuBLAS.
+            # Verify that cuBLAS is loadable before declaring CUDA ready;
+            # a missing cuBLAS causes a RuntimeError on the first
+            # model.transcribe() call which corrupts CTranslate2 internal
+            # state and deadlocks all subsequent calls.
+            import ctypes
+            _cublas_name = "cublas64_12.dll" if os.name == "nt" else "libcublas.so.12"
+            try:
+                ctypes.CDLL(_cublas_name)
+            except OSError:
+                logger.warning(
+                    "[TRANSCRIBE] CTranslate2 detects CUDA but %s is not loadable; "
+                    "falling back to CPU to avoid inference deadlock",
+                    _cublas_name,
+                )
+                return "cpu", f"ctranslate2_cublas_missing:{_cublas_name}"
             return "cuda", f"ctranslate2:{getattr(ctranslate2, '__version__', 'unknown')}"
     except Exception as e:
         logger.debug(

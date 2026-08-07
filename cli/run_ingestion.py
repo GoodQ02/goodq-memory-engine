@@ -4239,6 +4239,7 @@ def _run_step(
             process = subprocess.Popen(
                 cmd,
                 cwd=str(REPO_ROOT),
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -5269,6 +5270,7 @@ def _extract_keyframe(
     stop_heartbeat = (lambda: None)
     process = subprocess.Popen(
         cmd,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -5353,6 +5355,7 @@ def _extract_audio_chunk(
     stop_heartbeat = (lambda: None)
     process = subprocess.Popen(
         cmd,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

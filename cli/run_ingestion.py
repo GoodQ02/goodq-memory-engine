@@ -683,7 +683,15 @@ SUBPROCESS_THREAD_CAP_ENV: Dict[str, str] = {
     'NUMEXPR_MAX_THREADS': '1',
     'TOKENIZERS_PARALLELISM': 'false',
 }
-SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS: Set[str] = {'audio_embed_clap'}
+# CTranslate2 (used by faster-whisper in audio_transcribe_local) initializes
+# OpenMP thread pools during DLL load.  On hybrid P/E-core Intel CPUs
+# (12th-14th gen) in non-interactive sessions (scheduled tasks / Session 0),
+# the OpenMP runtime deadlocks during thread-pool topology detection unless
+# OMP_NUM_THREADS is pre-set in the inherited subprocess environment.
+SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS: Set[str] = {
+    'audio_embed_clap',
+    'audio_transcribe_local',
+}
 SUBPROCESS_AUDIO_OPENMP_GUARD_ENV: Dict[str, str] = {
     'KMP_DUPLICATE_LIB_OK': 'TRUE',
     'OMP_NUM_THREADS': '1',

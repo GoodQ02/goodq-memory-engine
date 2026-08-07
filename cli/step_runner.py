@@ -64,6 +64,7 @@ _EMBEDDING_EMISSION_BY_STEP = {
 }
 OPENMP_GUARD_STEPS = {
     "audio_embed_clap",
+    "audio_transcribe_local",
     "image_embed_clip",
     "image_embed_dino",
     "scene_visual_embeddings",

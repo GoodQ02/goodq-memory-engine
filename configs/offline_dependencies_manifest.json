@@ -400,7 +400,7 @@
         "python_tag": "cp310",
         "platform_tag": "win_amd64",
         "gpu_lane": "any",
-        "required": true
+        "required": false
       },
       {
         "artifact_id": "imageio_ffmpeg_win_cp310",

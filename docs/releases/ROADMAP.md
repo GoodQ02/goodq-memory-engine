@@ -2014,6 +2014,13 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   their pinned upstream model cards. Invalid optional-service revision strings
   were replaced by upstream-resolved immutable commits, with a contract test
   that keeps the runtime registry and payload catalog aligned.
+- Third-pass evidence (2026-08-08): the reproducibility audit now reconciles
+  catalog, sealed vault, installer manifest, staged source cache, and the
+  generated 94-package wheelhouse SBOM. It reports 23 catalog-confirmed sealed
+  model/data sources and no missing required baseline artifact. Silero VAD and
+  VADER were sealed from their exact upstream sources; the nonexistent
+  Faster-Whisper Turbo reference is explicitly excluded rather than replaced.
+  Agreement-gated sources remain held pending acceptance receipts.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

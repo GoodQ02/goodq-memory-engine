@@ -46,6 +46,34 @@ source snapshot at its upstream Apache-2.0 revision
 contract digest is
 `8957f7fa1d73158a57785676cf1b99aa4401bfdfe6cf8263b32b75608089dc5b`.
 
+The third-pass reconciliation also sealed the exact upstream MIT source
+snapshots for `DeepSeek-R1-Distill-Qwen-7B` and `DeepSeek-R1-Distill-Qwen-14B`.
+Their source-manifest contract digests are respectively
+`aafaefa746f8d70904314f89bf1503c47ba1f84f83118d71e6eacc0a7cad9762` and
+`17274f99d607fd0775cf9bc9eac38b56e7e8c69a9d7cde4b0e640e4d9236fb54`.
+They remain source-vault evidence only until independent pack compatibility
+and clean-install gates are satisfied.
+
+The same pass sealed Silero VAD at commit
+`7a176cc294a2c40615458e50895ed9703782638d`
+(`3da369f472e752fea0ba238e9f5777bc8674de751715f7f8fe31d77a03600c25`)
+and the VADER 3.3.2 source distribution
+(`49b76a8c4dab5c59e2a3406c50e8a0cc134f449b5fef2d1ca917afe32f877ad8`).
+The catalog's former `Systran/faster-whisper-large-v3-turbo` record is now
+explicitly excluded: that upstream repository does not exist, and no
+third-party substitute is accepted by this ledger.
+
+### Third-Pass Closure Receipt
+
+The reproducibility audit now reconciles the catalog, installer manifest,
+staged cache, and sealed vault in one machine-readable receipt. At this
+checkpoint it confirms 23 sealed model or data snapshots, a complete 94-package
+wheelhouse closure, and no missing required installer artifact. The only held
+model records are agreement-gated sources (Gemma, the three Pyannote models,
+and Qwen2.5-VL-3B); their absence is intentional until an acceptance receipt
+exists. `pytest` is not a baseline runtime dependency and is therefore optional
+in the installer artifact manifest.
+
 The vault admission preflight rejects any public pack that is not both eligible
 and sealed. It rejects personal-only and agreement-gated sources from public
 packs, and requires a local acceptance receipt before an agreement-gated source

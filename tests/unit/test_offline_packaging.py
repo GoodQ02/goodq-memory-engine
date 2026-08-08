@@ -109,7 +109,7 @@ def test_wheel_acquisition_never_leaves_a_partial_file_at_the_final_name() -> No
     stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
 
     assert "DestinationPath.partial" in stager
-    assert "Move-Item -LiteralPath $temporaryPath -Destination $destinationPath -Force" in stager
+    assert "Move-Item -LiteralPath $temporaryPath -Destination $DestinationPath -Force" in stager
     assert "Downloaded artifact is empty" in stager
 
 

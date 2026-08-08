@@ -2001,6 +2001,12 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   pinned DINOv2 base source, and records an obsolete unversioned Pyannote alias
   plus an unlicensed Cardiff development utility as excluded references rather
   than silently treating either as a pack candidate.
+- Verification boundary (2026-08-08): the vault/catalog focused suite passed,
+  but the repository-wide suite reported 3,996 passing tests and 11 failures
+  in existing CLAP, bootstrap-report, mini-agent lock, WSL offline-audio, and
+  retrieval-cache seams. Those failures do not exercise the vault code or
+  catalog contract and remain separate repair work; V-06 must not claim a
+  repository-wide green suite until their owners resolve them.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

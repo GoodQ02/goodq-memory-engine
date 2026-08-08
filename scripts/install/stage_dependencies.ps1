@@ -65,7 +65,7 @@ function Invoke-VerifiedDownload {
         $curl = Get-Command curl.exe -ErrorAction Stop
         & $curl.Source --fail --location --retry 3 --connect-timeout 30 --output $temporaryPath -- $Url
         if ($LASTEXITCODE -ne 0) {
-            throw "curl.exe failed with exit code $LASTEXITCODE: $Url"
+            throw "curl.exe failed with exit code $($LASTEXITCODE): $Url"
         }
         if (-not (Test-Path $temporaryPath) -or (Get-Item -LiteralPath $temporaryPath).Length -le 0) {
             throw "Downloaded artifact is empty: $Url"

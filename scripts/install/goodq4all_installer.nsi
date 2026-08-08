@@ -194,10 +194,15 @@ vcredist_install:
   ${EndIf}
 vcredist_verify:
   StrCpy $InstallStage "vc_runtime_verify"
-  IfFileExists "$SYSDIR\VCRUNTIME140.dll" +3 0
+  ; A 32-bit NSIS process may be redirected between System32 and SysWOW64.
+  ; Verify the same authoritative x64 runtime marker used for reuse instead.
+  SetRegView 64
+  ReadRegDWORD $1 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" "Installed"
+  ${If} $1 != 1
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: VC++ Redistributable runtime verification failed."
     Abort
+  ${EndIf}
 
   ; The engine is machine-wide. Reuse a working prior install so a repair or
   ; upgrade does not relaunch its nested NSIS setup and block unattended work.

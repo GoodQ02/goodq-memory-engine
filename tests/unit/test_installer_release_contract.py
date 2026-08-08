@@ -383,7 +383,9 @@ def test_baseline_installer_reuses_a_verified_vc_runtime() -> None:
     assert 'ReadRegDWORD $0 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64" "Installed"' in installer
     assert "vcredist_install:" in installer
     assert "vcredist_verify:" in installer
-    assert 'IfFileExists "$SYSDIR\\VCRUNTIME140.dll"' in installer
+    assert 'ReadRegDWORD $1 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64" "Installed"' in installer
+    assert "${If} $1 != 1" in installer
+    assert 'IfFileExists "$SYSDIR\\VCRUNTIME140.dll"' not in installer
 
 
 def test_baseline_installer_persists_its_terminal_failure_stage() -> None:

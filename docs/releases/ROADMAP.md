@@ -2021,6 +2021,10 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   VADER were sealed from their exact upstream sources; the nonexistent
   Faster-Whisper Turbo reference is explicitly excluded rather than replaced.
   Agreement-gated sources remain held pending acceptance receipts.
+- Personal-source evidence (2026-08-08): the pinned Qwen2.5-VL-3B snapshot
+  was sealed only after an explicit personal-use acceptance receipt was
+  recorded against the upstream Qwen Research License page. Its catalog status
+  is `personal_only`; public and sanitized pack admission remain denied.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

@@ -86,6 +86,12 @@ and sealed. It rejects personal-only and agreement-gated sources from public
 packs, and requires a local acceptance receipt before an agreement-gated source
 may enter a personal target.
 
+The pinned Qwen2.5-VL-3B source is now sealed under an explicit personal-use
+acceptance receipt and the upstream Qwen Research License page. It remains
+`personal_only`: no baseline, public, or sanitized pack may admit it. The vault
+copy exists solely as an immutable source input for a later personal installer
+whose compatibility contract matches the pinned revision.
+
 ### Reference-Audit Additions
 
 The catalog is also checked against the runtime fallback registry and literal
@@ -150,7 +156,7 @@ wheel metadata license evidence must appear in the generated SBOM.
 | Gemma-family runtime | the active configuration's access policy conflicts with the current upstream card metadata; no exact artifact decision has been sealed | user-provisioned optional feature only until reconciled |
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
 | YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
-| `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License permits only a separately accepted, non-commercial path | personal agreement-gated pack only; never baseline/public |
+| `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License; personal acceptance receipt and immutable source snapshot are recorded | personal source only; never baseline/public |
 | FaceNet pretrained weights | package source is permissive, but the inherited pretrained-weight provenance is not yet sealed as redistributable | user-provisioned optional feature only |
 | Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |
 | NRC Emotion Lexicon and acquired NRC collection | official terms prohibit redistribution | personal source archive only; do not bundle |

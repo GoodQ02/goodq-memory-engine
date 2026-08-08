@@ -97,7 +97,7 @@ runtime_ok:
   File /r "staged\ffmpeg\*.*"
 
   SetOutPath "$INSTDIR\scripts"
-  File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
+  File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "staged_cache" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
 
   SetOutPath "$INSTDIR\configs"
   File /r /x "config.local.yaml" /x "model_download_manifest.json" /x "model_download_manifest.json.sig" "..\..\configs\*.*"
@@ -204,11 +204,24 @@ tesseract_verify:
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
   SetOutPath "$INSTDIR\wheels"
   File /r "staged\wheels\*.*"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links="$INSTDIR\wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
+  IfFileExists "$INSTDIR\wheels\pytesseract-0.3.10-py3-none-any.whl" wheelhouse_ready wheelhouse_missing
+wheelhouse_missing:
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "Error: Required offline wheelhouse artifact is missing."
+  Abort
+wheelhouse_ready:
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links=file:///$INSTDIR\wheels -r "$INSTDIR\requirements-baseline-lock.txt"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Offline Python package installation failed. Code $0"
+    Abort
+  ${EndIf}
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -c "import pytesseract; print(pytesseract.__version__)"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Installed Python OCR binding verification failed. Code $0"
     Abort
   ${EndIf}
 
@@ -329,6 +342,12 @@ wsl_done:
   ; --- STATE 10: write install receipt ---
   DetailPrint "Step 10/11: Writing installation receipt..."
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService" --wsl-status "$WslStatus" --baseline-status "ok" --gpu-enhanced-status "$GpuStatus"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Failed to write installation receipt. Code $0"
+    Abort
+  ${EndIf}
 
   ; --- STATE 11: shortcuts & uninstaller ---
   DetailPrint "Step 11/11: Completing installation shortcuts..."

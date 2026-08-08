@@ -363,6 +363,18 @@ def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> No
     assert "import pytesseract" in verifier
 
 
+def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() -> None:
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    assert '/x "staged_cache"' in installer
+    assert 'File /r "staged\\wheels\\*.*"' in installer
+    assert '--find-links=file:///$INSTDIR\\wheels' in installer
+    assert 'import pytesseract; print(pytesseract.__version__)' in installer
+    assert 'Error: Failed to write installation receipt. Code $0' in installer
+
+
 def test_uninstaller_removes_all_packaged_tool_directories() -> None:
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"

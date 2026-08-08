@@ -20,9 +20,12 @@ duplicate distributions, a direct lock mismatch, malformed wheel metadata, or
 missing license evidence. The compiled installer carries that receipt beside
 the lockfile and wheelhouse it installs.
 
-This gate is verified by focused contract tests. It becomes release evidence
-only after a fresh online acquisition produces the SBOM and a managed offline
-build records it in the final asset manifest.
+This gate is verified by focused contract tests. A fresh acquisition on
+2026-08-08 produced a 94-wheel, 496 MB closure with SHA-256
+`a35ddf4cf54977ff0de13ebae36f9fdecc87bcf0e62bde8443557c1594d1a372`.
+The stager's offline dry-run and compliance audit both passed. A managed
+offline build must still record the SBOM in a final asset manifest before this
+becomes a release artifact.
 
 ## 1. Eligible After Artifact Verification
 
@@ -69,4 +72,3 @@ runtime configuration currently marks it `allowed`.
 2. Generate a manifest of exact files, sizes, hashes, licenses, and notices.
 3. Build the optional payload independently from the CPU-safe baseline.
 4. Verify clean install and one isolated scene with no model download.
-

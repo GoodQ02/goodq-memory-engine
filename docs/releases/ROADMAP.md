@@ -1962,11 +1962,13 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   empty directory and seals the staged closure with a generated SBOM before
   compilation. The gate rejects duplicate wheels, direct-lock mismatches, and
   wheels without license evidence. The installer carries the generated receipt.
-- Remaining gate: perform one fresh online staging acquisition, then prove the
-  generated SBOM and resulting managed-offline asset manifest agree. Model
-  payload packaging remains a separate decision after every pending model has
-  an explicit redistribution disposition in the offline payload eligibility
-  ledger.
+  Fresh acquisition produced a 94-wheel closure whose SHA-256 is
+  `a35ddf4cf54977ff0de13ebae36f9fdecc87bcf0e62bde8443557c1594d1a372`;
+  the stager's offline closure check and compliance audit both passed.
+- Remaining gate: prove that generated SBOM and the resulting managed-offline
+  asset manifest agree. Model payload packaging remains a separate decision
+  after every pending model has an explicit redistribution disposition in the
+  offline payload eligibility ledger.
 
 ### V-01 — Portable follower witness
 

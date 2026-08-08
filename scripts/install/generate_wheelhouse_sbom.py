@@ -34,7 +34,10 @@ def _sha256(path: Path) -> str:
 def _wheel_record(path: Path) -> dict[str, object]:
     try:
         with ZipFile(path) as archive:
-            metadata_names = sorted(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+            metadata_names = sorted(
+                name for name in archive.namelist()
+                if name.endswith(".dist-info/METADATA") and "/" not in name.split(".dist-info/", 1)[0]
+            )
             if len(metadata_names) != 1:
                 raise ValueError("expected exactly one .dist-info/METADATA file")
             metadata = BytesParser(policy=default).parsebytes(archive.read(metadata_names[0]))
@@ -48,7 +51,8 @@ def _wheel_record(path: Path) -> dict[str, object]:
             license_classifier = next((item for item in classifiers if item.startswith("License ::")), None)
             license_files = sorted(
                 name for name in archive.namelist()
-                if ".dist-info/licenses/" in name.lower() or name.lower().endswith(".dist-info/license")
+                if (".dist-info/licenses/" in name.lower() or name.lower().endswith(".dist-info/license"))
+                and "/" not in name.split(".dist-info/", 1)[0]
             )
     except (BadZipFile, OSError, ValueError) as exc:
         raise ValueError(f"{path.name}: {exc}") from exc

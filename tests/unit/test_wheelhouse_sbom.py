@@ -58,3 +58,26 @@ def test_wheelhouse_sbom_rejects_duplicate_distribution_versions(tmp_path: Path)
     assert result.returncode == 2
     assert "duplicate distribution" in result.stderr
     assert not output.exists()
+
+
+def test_wheelhouse_sbom_uses_top_level_metadata_when_a_wheel_vendors_dependencies(tmp_path: Path) -> None:
+    wheelhouse = tmp_path / "wheels"
+    wheelhouse.mkdir()
+    wheel = wheelhouse / "demo-1.0.0-py3-none-any.whl"
+    _wheel(wheelhouse, wheel.name, "demo", "1.0.0")
+    with ZipFile(wheel, "a") as archive:
+        archive.writestr(
+            "demo/_vendor/nested-2.0.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: nested\nVersion: 2.0.0\nLicense-Expression: MIT\n",
+        )
+    output = tmp_path / "wheelhouse-sbom.json"
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--wheelhouse", str(wheelhouse), "--output", str(output)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8"))["packages"][0]["name"] == "demo"

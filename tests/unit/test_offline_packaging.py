@@ -111,6 +111,7 @@ def test_wheel_acquisition_never_leaves_a_partial_file_at_the_final_name() -> No
     assert "DestinationPath.partial" in stager
     assert "Move-Item -LiteralPath $temporaryPath -Destination $DestinationPath -Force" in stager
     assert "Downloaded artifact is empty" in stager
+    assert "curl.exe" in stager
 
 
 def test_installer_generates_and_ships_a_strict_wheelhouse_sbom() -> None:

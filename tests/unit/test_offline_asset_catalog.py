@@ -33,6 +33,8 @@ def _registry_asset_ids() -> set[str]:
     return {
         *dict(registry.get("huggingface_models", {})),
         *dict(registry.get("external_models", {})),
+        *dict(registry.get("lexicons", {})),
+        *dict(registry.get("system_tools", {})),
     }
 
 

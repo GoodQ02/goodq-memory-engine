@@ -16,6 +16,23 @@ The signed baseline model manifest intentionally declares no downloadable model
 packs. It is not a deferred catalog: an optional pack may replace it only with
 a complete release artifact manifest.
 
+## Personal Source Vault
+
+The complete non-code runtime inventory is tracked in
+`configs/offline_asset_catalog.yaml`. It covers every active model-registry
+and installer payload reference, including optional lexicons and system tools.
+Its status records source-disposition intent only; no record becomes a pack
+input until its exact source snapshot, terms, hashes, and compatibility manifest
+are sealed.
+
+The first sealed source snapshot is the `nrc_lexicon_collection` personal
+archive, revision `downloaded-20260808`, source-manifest SHA-256
+`55a75f624d513d97933b87cfc08807aed11d09a0eeb13e6397f73bfc039b6487`.
+It retains the complete acquired NRC collection and its official access-page
+terms evidence, while deduplicating one byte-identical source archive. This is
+preservation evidence only: its component-level terms still govern use, and it
+cannot enter a public pack.
+
 ## Build Gate
 
 The installer builder now creates `wheelhouse-sbom.json` from the exact staged
@@ -65,10 +82,10 @@ wheel metadata license evidence must appear in the generated SBOM.
 | Gemma-family runtime | the active configuration's access policy conflicts with the current upstream card metadata; no exact artifact decision has been sealed | user-provisioned optional feature only until reconciled |
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
 | YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
-| `Qwen/Qwen2.5-VL-3B-Instruct` | current source metadata has no explicit model license field | do not bundle without an explicit source license |
+| `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License permits only a separately accepted, non-commercial path | personal agreement-gated pack only; never baseline/public |
 | FaceNet pretrained weights | package source is permissive, but the inherited pretrained-weight provenance is not yet sealed as redistributable | user-provisioned optional feature only |
 | Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |
-| NRC Emotion Lexicon | research-use terms are not a baseline redistribution grant | do not bundle |
+| NRC Emotion Lexicon and acquired NRC collection | official terms prohibit redistribution | personal source archive only; do not bundle |
 | VADER lexicon | runtime dependency is small, but its exact artifact and notice have not been sealed into the release contract | acquire on demand until that proof exists |
 | Historical release suites and old wheel caches | stale evidence and potential duplication | preserved outside active release inputs |
 

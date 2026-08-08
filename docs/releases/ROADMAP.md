@@ -1980,6 +1980,27 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   asset manifest agree, then separately approve an optional-model payload
   design or an explicit canonical-desktop upgrade workflow.
 
+### V-06 — Immutable personal source-vault foundation
+
+- Status: IN_PROGRESS
+- Finding: prior release staging mixed real artifacts, partial downloads, and
+  unverified model-pack scaffolding. The baseline has no approved model payload,
+  but future offline installers require a reproducible, terms-aware source
+  archive before packaging can be considered.
+- Repair: maintain one append-only personal source vault, with per-snapshot
+  raw-source hashes, captured terms, duplicate records, immutable seals, and a
+  catalog that covers every active registry and installer asset reference.
+- Evidence (2026-08-08): `nrc_lexicon_collection` revision
+  `downloaded-20260808` was sealed and independently verified with source
+  manifest SHA-256 `55a75f624d513d97933b87cfc08807aed11d09a0eeb13e6397f73bfc039b6487`.
+  One byte-identical source duplicate was removed only after the seal verified.
+  The new catalog coverage gate passed for all registered model, lexicon, system
+  tool, and installer payload identifiers.
+- Completion gate: each source is classified from its exact upstream terms,
+  eligible sources have a sealed source snapshot and compatibility manifest,
+  and every personal/public pack admission is denied unless those records agree.
+- Public impact: PRIVATE_ONLY until a separate, sanitized pack-release gate.
+
 ### V-01 — Portable follower witness
 
 - Status: VERIFIED

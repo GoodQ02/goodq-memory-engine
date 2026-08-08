@@ -63,6 +63,13 @@ The catalog's former `Systran/faster-whisper-large-v3-turbo` record is now
 explicitly excluded: that upstream repository does not exist, and no
 third-party substitute is accepted by this ledger.
 
+Authenticated source intake resolved all three pinned Pyannote references.
+The diarization and segmentation sources are MIT but retain the upstream
+contact gate, so they are sealed personal-only records. WeSpeaker is sealed
+with its upstream CC-BY-4.0 attribution condition and remains a candidate for
+a separately attributed optional pack. No access token or contact data is
+stored in the catalog or vault.
+
 ### Third-Pass Closure Receipt
 
 The reproducibility audit now reconciles the catalog, installer manifest,

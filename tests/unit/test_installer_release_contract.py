@@ -354,6 +354,9 @@ def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> No
 
     assert "pytesseract==0.3.10" in lockfile
     assert 'tesseract_setup.exe" /S' in installer
+    assert 'IfFileExists "$PROGRAMFILES64\\Tesseract-OCR\\tesseract.exe" tesseract_verify tesseract_install' in installer
+    assert 'tesseract_install:' in installer
+    assert 'tesseract_verify:' in installer
     assert "${AndIf} $0 != 2" in installer
     assert 'File "verify_offline_suite.ps1"' in installer
     assert "Tesseract-OCR\\tesseract.exe" in verifier

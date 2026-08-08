@@ -173,6 +173,10 @@ runtime_ok:
     Abort
   ${EndIf}
 
+  ; The engine is machine-wide. Reuse a working prior install so a repair or
+  ; upgrade does not relaunch its nested NSIS setup and block unattended work.
+  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" tesseract_verify tesseract_install
+tesseract_install:
   DetailPrint "Installing bundled Tesseract OCR prerequisite..."
   nsExec::ExecToLog '"$INSTDIR\binaries\tesseract_setup.exe" /S'
   Pop $0
@@ -183,6 +187,7 @@ runtime_ok:
     MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR installation failed. Code $0"
     Abort
   ${EndIf}
+tesseract_verify:
   IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" +3 0
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR executable was not installed."

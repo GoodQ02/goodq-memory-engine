@@ -40,9 +40,10 @@ applies to named followers such as GR-16 and GS-32.
    follower before execution.
 2. Install the verified setup executable. Preserve its exit code and install
    receipt.
-3. Run the installed offline suite and the Qdrant restore smoke. The offline
-   suite verifies bundled media tools plus the required OCR engine and Python
-   binding; both gates must pass before a scene is staged.
+3. Run `verify_offline_suite.ps1` from the installed program root, then run the
+   Qdrant restore smoke. The offline suite verifies bundled media tools plus
+   the required OCR engine and Python binding; both gates must pass before a
+   scene is staged. If that script is absent, the installer is incomplete.
 4. Confirm the installed runtime exposes both commands:
 
    ```powershell

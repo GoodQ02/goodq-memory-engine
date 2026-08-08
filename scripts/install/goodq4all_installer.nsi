@@ -88,6 +88,7 @@ runtime_ok:
   File "${GOODQ_LAUNCHER_PATH}"
   File "..\..\goodq_version.py"
   File "..\..\requirements-baseline-lock.txt"
+  File "verify_offline_suite.ps1"
   
   SetOutPath "$INSTDIR\qdrant"
   File "staged\qdrant\qdrant.exe"
@@ -177,6 +178,7 @@ runtime_ok:
   Pop $0
   DetailPrint "Tesseract OCR setup completed. exit code = $0"
   ${If} $0 != 0
+  ${AndIf} $0 != 2
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR installation failed. Code $0"
     Abort

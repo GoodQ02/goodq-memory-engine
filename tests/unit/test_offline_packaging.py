@@ -104,6 +104,15 @@ def test_wheel_staging_replaces_stale_cache_and_payload_before_download() -> Non
     assert 'rmdir /s /q "staged\\wheels"' in builder
 
 
+def test_wheel_acquisition_never_leaves_a_partial_file_at_the_final_name() -> None:
+    """An interrupted download must not masquerade as a valid staged wheel."""
+    stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
+
+    assert "DestinationPath.partial" in stager
+    assert "Move-Item -LiteralPath $temporaryPath -Destination $destinationPath -Force" in stager
+    assert "Downloaded artifact is empty" in stager
+
+
 def test_installer_generates_and_ships_a_strict_wheelhouse_sbom() -> None:
     """The compiled installer must carry the verified wheel closure it installs."""
     builder = (ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")

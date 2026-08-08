@@ -51,6 +51,34 @@ function Ensure-Directory {
     }
 }
 
+function Invoke-VerifiedDownload {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [Parameter(Mandatory=$true)][string]$DestinationPath,
+        [Parameter(Mandatory=$true)][string]$ExpectedSha256
+    )
+
+    Ensure-Directory $DestinationPath
+    $temporaryPath = "$DestinationPath.partial"
+    Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+    try {
+        $client = New-Object System.Net.WebClient
+        $client.Headers.Add("User-Agent", "GoodQ4All-Release-Stager/1.0")
+        $client.DownloadFile($Url, $temporaryPath)
+        if (-not (Test-Path $temporaryPath) -or (Get-Item -LiteralPath $temporaryPath).Length -le 0) {
+            throw "Downloaded artifact is empty: $Url"
+        }
+        $actualSha256 = Get-FileSHA256 $temporaryPath
+        if ($actualSha256 -ne $ExpectedSha256.ToLower()) {
+            throw "SHA256 mismatch for downloaded artifact (got $actualSha256, expected $ExpectedSha256): $Url"
+        }
+        Move-Item -LiteralPath $temporaryPath -Destination $DestinationPath -Force
+    } catch {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host " GoodQ4All Dependency Stager: Mode = $Mode" -ForegroundColor Cyan
 Write-Host "==============================================" -ForegroundColor Cyan
@@ -129,16 +157,7 @@ if ($Mode -eq "Acquire") {
                 Copy-Item -Path $localSrcPath -Destination $destPath -Force
             } else {
                 Write-Host "  Downloading from $($art.source_url)..." -ForegroundColor Yellow
-                $wc = New-Object System.Net.WebClient
-                $wc.Headers.Add("User-Agent", "Wget")
-                try {
-                    $wc.DownloadFile($art.source_url, $destPath)
-                } catch {
-                    Write-Host "    Download failed with default UA. Retrying with browser UA..." -ForegroundColor Yellow
-                    $wc2 = New-Object System.Net.WebClient
-                    $wc2.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    $wc2.DownloadFile($art.source_url, $destPath)
-                }
+                Invoke-VerifiedDownload -Url $art.source_url -DestinationPath $destPath -ExpectedSha256 $art.sha256
             }
             
             $downloadedHash = Get-FileSHA256 $destPath
@@ -173,12 +192,7 @@ if ($Mode -eq "Acquire") {
             Remove-Item $wheelPath -Force
         }
         Write-Host "  Downloading declared wheel from $($wheelArtifact.source_url)..." -ForegroundColor Yellow
-        (New-Object System.Net.WebClient).DownloadFile($wheelArtifact.source_url, $wheelPath)
-        $downloadedHash = Get-FileSHA256 $wheelPath
-        if ($downloadedHash -ne $wheelArtifact.sha256.ToLower()) {
-            Remove-Item $wheelPath -Force
-            Write-Error "Declared wheel artifact hash mismatch: $($wheelArtifact.artifact_id)"
-        }
+        Invoke-VerifiedDownload -Url $wheelArtifact.source_url -DestinationPath $wheelPath -ExpectedSha256 $wheelArtifact.sha256
         Write-Host "  [OK] Declared wheel artifact staged and verified." -ForegroundColor Green
     }
 

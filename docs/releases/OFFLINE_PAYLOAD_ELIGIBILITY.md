@@ -33,6 +33,11 @@ terms evidence, while deduplicating one byte-identical source archive. This is
 preservation evidence only: its component-level terms still govern use, and it
 cannot enter a public pack.
 
+The vault admission preflight rejects any public pack that is not both eligible
+and sealed. It rejects personal-only and agreement-gated sources from public
+packs, and requires a local acceptance receipt before an agreement-gated source
+may enter a personal target.
+
 ## Build Gate
 
 The installer builder now creates `wheelhouse-sbom.json` from the exact staged

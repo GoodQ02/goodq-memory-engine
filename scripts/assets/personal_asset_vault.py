@@ -29,6 +29,14 @@ class SnapshotResult:
     manifest_sha256: str
 
 
+@dataclass(frozen=True)
+class AdmissionResult:
+    """The explicit allow/deny result for one installer-pack target."""
+
+    allowed: bool
+    reason: str
+
+
 def _canonical_json(value: object) -> str:
     return json.dumps(value, indent=2, sort_keys=True) + "\n"
 
@@ -254,6 +262,58 @@ def cleanup_duplicates(source_dir: Path, seal_path: Path) -> list[str]:
         duplicate_path.unlink()
         removed.append(duplicate)
     return removed
+
+
+def build_acquisition_plan(record: dict[str, object]) -> dict[str, object]:
+    """Validate a candidate acquisition before any network or pack operation."""
+
+    required = (
+        "asset_id",
+        "source",
+        "revision",
+        "license_class",
+        "vault_scope",
+        "hardware_profile",
+        "expected_terms",
+    )
+    for field in required:
+        if not str(record.get(field) or "").strip():
+            raise VaultError(f"acquisition record requires {field}")
+    revision = str(record["revision"])
+    if revision.casefold() in {"latest", "main", "master", "unpinned"}:
+        raise VaultError("acquisition record requires an immutable revision")
+    return {field: record[field] for field in required}
+
+
+def evaluate_pack_admission(
+    catalog: dict[str, object], *, asset_id: str, distribution: str
+) -> AdmissionResult:
+    """Decide whether a catalogued asset may enter a named distribution target."""
+
+    if distribution not in {"public", "personal"}:
+        raise VaultError(f"unsupported distribution target: {distribution}")
+    assets = catalog.get("assets", {})
+    if not isinstance(assets, dict) or not isinstance(assets.get(asset_id), dict):
+        return AdmissionResult(False, "asset is absent from the catalog")
+    record = assets[asset_id]
+    status = str(record.get("status") or "")
+    if status == "excluded":
+        return AdmissionResult(False, "asset is excluded by its source disposition")
+    if distribution == "public":
+        if status == "personal_only":
+            return AdmissionResult(False, "personal_only assets cannot enter public packs")
+        if status == "agreement_gated":
+            return AdmissionResult(False, "agreement_gated assets cannot enter public packs")
+        if status != "eligible":
+            return AdmissionResult(False, "asset has no eligible public disposition")
+    elif status == "agreement_gated" and not record.get("acceptance_receipt"):
+        return AdmissionResult(False, "agreement_gated personal assets require an acceptance receipt")
+
+    if not record.get("sealed_manifest_sha256"):
+        return AdmissionResult(False, "asset does not have a sealed source snapshot")
+    if not record.get("expected_terms"):
+        return AdmissionResult(False, "asset does not declare expected_terms")
+    return AdmissionResult(True, "sealed source and terms evidence satisfy admission")
 
 
 def _parser() -> argparse.ArgumentParser:

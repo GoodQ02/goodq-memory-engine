@@ -93,3 +93,13 @@ def test_catalog_covers_every_registry_and_installer_asset() -> None:
     for asset_id, record in assets.items():
         assert REQUIRED_FIELDS <= set(record), asset_id
         assert record["status"] in VALID_STATUSES, asset_id
+
+
+def test_catalog_and_runtime_registry_share_exact_model_sources_and_revisions() -> None:
+    catalog = _load_yaml(CATALOG_PATH)
+    registry = _load_yaml(REGISTRY_PATH)
+    assets = dict(catalog["assets"])
+
+    for asset_id, record in dict(registry.get("huggingface_models", {})).items():
+        assert assets[asset_id]["source"] == record["repo_id"], asset_id
+        assert assets[asset_id]["revision"] == record["revision"], asset_id

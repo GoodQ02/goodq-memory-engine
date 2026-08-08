@@ -2007,6 +2007,13 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   retrieval-cache seams. Those failures do not exercise the vault code or
   catalog contract and remain separate repair work; V-06 must not claim a
   repository-wide green suite until their owners resolve them.
+- Second-pass evidence (2026-08-08): a reusable Hugging Face intake command
+  now verifies the exact upstream file set before it copies a source snapshot
+  into the vault. Eighteen permissively licensed cache snapshots, including
+  Whisper, CLAP, vision, captioning, and CPU-audio models, are sealed with
+  their pinned upstream model cards. Invalid optional-service revision strings
+  were replaced by upstream-resolved immutable commits, with a contract test
+  that keeps the runtime registry and payload catalog aligned.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

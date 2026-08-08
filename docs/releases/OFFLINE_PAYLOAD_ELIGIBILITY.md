@@ -33,6 +33,13 @@ terms evidence, while deduplicating one byte-identical source archive. This is
 preservation evidence only: its component-level terms still govern use, and it
 cannot enter a public pack.
 
+The second-pass cache reconciliation sealed `clap_audio` at revision
+`8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`, with source-manifest contract
+digest `45e415f43fd637523253e60714b3330fd2344e420566706ab44d0950f84796e0`.
+All ten upstream members were present after the pinned model card and
+`.gitattributes` were retrieved. This proves a preserved source snapshot, not
+pack compatibility or a release decision.
+
 The vault admission preflight rejects any public pack that is not both eligible
 and sealed. It rejects personal-only and agreement-gated sources from public
 packs, and requires a local acceptance receipt before an agreement-gated source
@@ -48,6 +55,10 @@ alias from an obsolete WSL setup script, and a Cardiff multilabel development
 utility whose upstream model card does not publish a license field. Both are
 explicitly excluded from all packs until their owning paths and source terms
 are reconciled.
+
+The same reconciliation corrected a one-character Pyannote segmentation
+revision transcription error in the catalog. The runtime registry already held
+the valid immutable commit; the catalog now agrees with it.
 
 ## Build Gate
 

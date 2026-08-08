@@ -295,6 +295,13 @@ def main() -> None:
     for pack_key in selected_pack_keys:
         pack_manifest = manifest["model_packs"].get(pack_key)
         if not pack_manifest:
+            mode = str(manifest.get("distribution", {}).get("mode") or "unknown")
+            if mode == "none":
+                _err(
+                    f"Selected pack '{pack_key}' is not published in this baseline. "
+                    "No remote model-pack download was attempted."
+                )
+                sys.exit(6)
             _err(f"Selected pack '{pack_key}' is not defined in manifest.")
             sys.exit(1)
         packs_to_process.append((pack_key, pack_manifest))

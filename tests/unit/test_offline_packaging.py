@@ -46,15 +46,15 @@ def test_audio_pack_verify_honors_explicit_requested_pack(tmp_path: Path):
         check=False,
     )
     assert result.returncode == 6
-    assert "Processing pack: Audio Standard Pack" in result.stdout
-    assert "Core Memory Pack" not in result.stdout
+    assert "not published in this baseline" in result.stderr
 
 
 def test_installer_model_pack_setup_never_falls_back_to_retired_remote_urls() -> None:
     installer = ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
     content = installer.read_text(encoding="utf-8")
 
-    assert "sandbox_env_setup.py\" --packs core_memory --local-only" in content
+    assert "No model payload is published with this baseline" in content
+    assert "sandbox_env_setup.py\" --packs core_memory --local-only" not in content
 
 
 def test_local_only_model_pack_setup_refuses_remote_download(tmp_path: Path):
@@ -78,7 +78,7 @@ def test_local_only_model_pack_setup_refuses_remote_download(tmp_path: Path):
     )
 
     assert result.returncode == 6
-    assert "No remote model-pack download was attempted" in result.stderr
+    assert "not published in this baseline" in result.stderr
 
 
 def test_cpu_baseline_stager_uses_cpu_pytorch_index() -> None:

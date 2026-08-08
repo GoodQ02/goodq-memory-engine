@@ -325,6 +325,19 @@ def test_release_signing_uses_a_staged_manifest_not_the_tracked_checkout() -> No
     assert 'flag.String("signature-path"' in signer
 
 
+def test_baseline_model_manifest_contains_no_unverified_payload_scaffold() -> None:
+    """A baseline release must not advertise model files it cannot reproduce."""
+    manifest = json.loads(
+        (REPO_ROOT / "configs" / "model_download_manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert manifest["distribution"]["mode"] == "none"
+    assert manifest["model_packs"] == {}
+    serialized = json.dumps(manifest, sort_keys=True)
+    assert "mirror_base_urls" not in serialized
+    assert "sha256" not in serialized
+
+
 def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None:
     builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
         encoding="utf-8"

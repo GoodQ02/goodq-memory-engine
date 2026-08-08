@@ -1972,6 +1972,10 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   release-admission disposition in the offline payload eligibility ledger.
   Permissive source candidates remain optional and require exact artifact,
   notice, hash, and clean-install evidence before a payload is designed.
+- Evidence (2026-08-08): the legacy signed download manifest advertised
+  unverified model archives and placeholder checksums. It now declares an
+  explicit no-payload baseline, so no release can offer a model pack before a
+  complete artifact receipt exists.
 - Re-entry gate: prove that generated SBOM and the resulting managed-offline
   asset manifest agree, then separately approve an optional-model payload
   design or an explicit canonical-desktop upgrade workflow.

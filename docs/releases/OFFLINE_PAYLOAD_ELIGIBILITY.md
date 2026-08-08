@@ -12,6 +12,10 @@ redistribution decision. A repository configuration claim is not license
 evidence. A payload enters a release only after its exact artifact, revision,
 license evidence, and SHA-256 receipt are verified.
 
+The signed baseline model manifest intentionally declares no downloadable model
+packs. It is not a deferred catalog: an optional pack may replace it only with
+a complete release artifact manifest.
+
 ## Build Gate
 
 The installer builder now creates `wheelhouse-sbom.json` from the exact staged

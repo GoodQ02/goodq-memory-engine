@@ -375,16 +375,9 @@ wsl_tar_found:
 wsl_done:
   !endif
 
-  ; --- STATE 8: register optional model packs (non-fatal) ---
-  DetailPrint "Step 8/11: Registering pre-staged model packs..."
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --packs core_memory --local-only --data-dir "$COMMONAPPDATA\GoodQ4All" --cache-dir "$EXEDIR"'
-  Pop $0
-  ${If} $0 != 0
-    DetailPrint "Model pack setup returned code $0. Models will be downloaded on first launch."
-    IfSilent model_pack_skip
-    MessageBox MB_OK|MB_ICONINFORMATION "Model packs were not found alongside the installer.$\r$\n$\r$\nThe application will download the baseline model cache on first launch via LAUNCH_GOODQ.exe.$\r$\nOptional Audio Standard models are installed separately and never download silently.$\r$\n$\r$\nYou can also place model pack files next to the installer and re-run to install offline."
-    model_pack_skip:
-  ${EndIf}
+  ; --- STATE 8: explicit baseline model-payload boundary ---
+  DetailPrint "Step 8/11: No model payload is published with this baseline."
+  DetailPrint "Optional model packs require their own complete signed artifact receipt."
 
   ; --- STATE 10: run health check ---
   /*

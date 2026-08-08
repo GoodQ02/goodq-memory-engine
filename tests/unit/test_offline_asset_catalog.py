@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
+import re
 
 import yaml
 
@@ -11,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "configs" / "offline_asset_catalog.yaml"
 REGISTRY_PATH = REPO_ROOT / "configs" / "model_registry.yaml"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
+FALLBACK_REGISTRY_PATH = REPO_ROOT / "steps" / "common" / "model_provisioner.py"
 VALID_STATUSES = {"eligible", "agreement_gated", "personal_only", "excluded"}
 REQUIRED_FIELDS = {
     "kind",
@@ -58,12 +61,35 @@ def _installer_asset_ids() -> set[str]:
     }
 
 
+def _fallback_model_sources() -> set[str]:
+    tree = ast.parse(FALLBACK_REGISTRY_PATH.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == "_FALLBACK_REGISTRY" for target in node.targets):
+            return {source for source in ast.literal_eval(node.value) if "/" in source}
+    raise AssertionError("_FALLBACK_REGISTRY is absent")
+
+
+def _literal_from_pretrained_sources() -> set[str]:
+    pattern = re.compile(r"from_pretrained\(\s*['\"]([^'\"]+/[^'\"]+)['\"]")
+    sources: set[str] = set()
+    for root in (REPO_ROOT / "steps", REPO_ROOT / "scripts"):
+        for path in root.rglob("*.py"):
+            if path.is_relative_to(REPO_ROOT / "scripts" / "install" / "staged" / "vendor"):
+                continue
+            sources.update(pattern.findall(path.read_text(encoding="utf-8")))
+    return sources
+
+
 def test_catalog_covers_every_registry_and_installer_asset() -> None:
     catalog = _load_yaml(CATALOG_PATH)
     assets = dict(catalog["assets"])
     expected = _registry_asset_ids() | _installer_asset_ids()
 
     assert expected <= set(assets)
+    assert _fallback_model_sources() <= {record["source"] for record in assets.values()}
+    assert _literal_from_pretrained_sources() <= {record["source"] for record in assets.values()}
     for asset_id, record in assets.items():
         assert REQUIRED_FIELDS <= set(record), asset_id
         assert record["status"] in VALID_STATUSES, asset_id

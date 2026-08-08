@@ -38,6 +38,17 @@ and sealed. It rejects personal-only and agreement-gated sources from public
 packs, and requires a local acceptance receipt before an agreement-gated source
 may enter a personal target.
 
+### Reference-Audit Additions
+
+The catalog is also checked against the runtime fallback registry and literal
+production `from_pretrained` calls. That audit added `facebook/dinov2-base` as
+an Apache-2.0 candidate pinned to `f9e44c814b77203eaa57a6bdbbd535f21ede1415`.
+It also records two non-admissible legacy references: an unversioned Pyannote
+alias from an obsolete WSL setup script, and a Cardiff multilabel development
+utility whose upstream model card does not publish a license field. Both are
+explicitly excluded from all packs until their owning paths and source terms
+are reconciled.
+
 ## Build Gate
 
 The installer builder now creates `wheelhouse-sbom.json` from the exact staged

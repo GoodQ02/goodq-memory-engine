@@ -1996,6 +1996,11 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   One byte-identical source duplicate was removed only after the seal verified.
   The new catalog coverage gate passed for all registered model, lexicon, system
   tool, and installer payload identifiers.
+- Evidence (2026-08-08): a second static pass covers the runtime fallback
+  registry and literal production model-loader calls. It added the independently
+  pinned DINOv2 base source, and records an obsolete unversioned Pyannote alias
+  plus an unlicensed Cardiff development utility as excluded references rather
+  than silently treating either as a pack candidate.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

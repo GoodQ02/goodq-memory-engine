@@ -221,10 +221,12 @@ tesseract_install:
   ${EndIf}
 tesseract_verify:
   StrCpy $InstallStage "tesseract_verify"
-  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" +3 0
+  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" tesseract_command_verify tesseract_missing
+tesseract_missing:
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR executable was not installed."
     Abort
+tesseract_command_verify:
   nsExec::ExecToLog '"$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" --version'
   Pop $0
   ${If} $0 != 0

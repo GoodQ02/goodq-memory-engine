@@ -45,7 +45,7 @@ BOOTSTRAP_ASSETS = REPO_ROOT / "scripts" / "bootstrap_assets.ps1"
 MODEL_SNAPSHOTS = {
     "Salesforce/blip-image-captioning-base": "models--Salesforce--blip-image-captioning-base",
     "nlpconnect/vit-gpt2-image-captioning": "models--nlpconnect--vit-gpt2-image-captioning",
-    "openai/clip-vit-base-patch16": "models--openai--clip-vit-base-patch16",
+    "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K": "models--laion--CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
     "facebook/dinov2-base": "models--facebook--dinov2-base",
     "sentence-transformers/all-MiniLM-L6-v2": "models--sentence-transformers--all-MiniLM-L6-v2",
     "laion/clap-htsat-unfused": "models--laion--clap-htsat-unfused",

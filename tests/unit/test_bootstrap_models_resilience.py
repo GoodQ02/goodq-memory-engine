@@ -180,6 +180,54 @@ def test_model_registry_revisions_do_not_use_placeholder_hashes():
         assert not re.fullmatch(r"(.)\1{39}", revision), f"{model_key} uses a placeholder revision: {revision}"
 
 
+def test_baseline_registry_uses_a_pinned_permissive_emotion_model_and_no_symbolic_revisions():
+    """Release-baseline model selection must not drift with a provider branch."""
+    import yaml
+
+    registry_path = Path(__file__).resolve().parents[2] / "configs" / "model_registry.yaml"
+    models = (yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}).get("huggingface_models", {})
+
+    assert models["emotion_classify_model"]["repo_id"] == "cardiffnlp/twitter-roberta-base-emotion-latest"
+    assert models["emotion_classify_model"]["revision"] == "415620c4fbc8bd82b82b9fd46642fcec6519d537"
+    assert models["silero_vad"]["revision"] == "7a176cc294a2c40615458e50895ed9703782638d"
+    assert models["clip_vit"]["repo_id"] == "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
+    assert models["clip_vit"]["revision"] == "84c9828e63dc9a9351d1fe637c346d4c1c4db341"
+    for key in ("faster_whisper_tiny", "hubert_emotion", "bert_ner", "sentiment_model"):
+        assert re.fullmatch(r"[0-9a-f]{40}", models[key]["revision"]), f"{key} must use an immutable revision"
+
+
+def test_clip_step_persists_the_registry_model_identity_not_a_legacy_tag():
+    """New vectors must identify the exact model selected by the provisioner."""
+    clip_step = (
+        Path(__file__).resolve().parents[2] / "steps" / "image_embed_clip" / "step.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"model_tag": provision_result.repo_id' in clip_step
+    assert '"vector_model_tag": _CLIP["model_tag"]' in clip_step
+
+
+def test_active_baseline_paths_do_not_reintroduce_retired_clip_or_emotion_models():
+    """Registry replacements must propagate into active provisioning and ingestion paths."""
+    active_paths = (
+        "steps/common/model_provisioner.py",
+        "steps/video/scene_visual_embeddings.py",
+        "steps/video/scene_embedder.py",
+        "cli/run_ingestion.py",
+        "cli/memory.py",
+        "scripts/bootstrap_models.py",
+        "scripts/cache_readiness_check.py",
+        "configs/open_config.yaml",
+    )
+    retired = (
+        "openai/clip-vit-large-patch14",
+        "openai/clip-vit-base-patch16",
+        "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+    )
+    for relative_path in active_paths:
+        text = (Path(__file__).resolve().parents[2] / relative_path).read_text(encoding="utf-8")
+        assert not any(model_id in text for model_id in retired), relative_path
+
+
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
     monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))

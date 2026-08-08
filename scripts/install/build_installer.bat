@@ -120,7 +120,12 @@ if not exist "staged\nssm" mkdir "staged\nssm"
 if not exist "staged\runtime" mkdir "staged\runtime"
 if not exist "staged\ffmpeg" mkdir "staged\ffmpeg"
 if not exist "staged\binaries" mkdir "staged\binaries"
-if not exist "staged\wheels" mkdir "staged\wheels"
+if exist "staged\wheels" rmdir /s /q "staged\wheels"
+if exist "staged\wheels" (
+    echo [ERROR] Could not clear stale staged wheelhouse.
+    exit /b 9
+)
+mkdir "staged\wheels"
 
 :: Copy from staged_cache to staging folder
 copy /y "staged_cache\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
@@ -213,6 +218,16 @@ copy /y "staged_cache\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nu
 
 :: Copy wheels for the CPU-safe baseline. WSL audio remains an optional upgrade.
 xcopy /s /e /y "staged_cache\wheels" "staged\wheels" >nul
+
+:: Seal the exact wheel closure before any installer payload is compiled.
+:: The SBOM rejects duplicate packages, unlocked direct requirements, and
+:: wheels without license evidence.
+echo Sealing strict wheelhouse SBOM...
+staged\runtime\python.exe ..\..\scripts\install\generate_wheelhouse_sbom.py --wheelhouse "staged\wheels" --requirements ..\..\requirements-baseline-lock.txt --output "staged\wheelhouse-sbom.json"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Strict wheelhouse SBOM gate failed. Resolve staged dependency evidence before rebuilding.
+    exit /b 98
+)
 
 
 :: Stage Qdrant Config

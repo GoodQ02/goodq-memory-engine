@@ -6131,7 +6131,7 @@ def _log_visual_to_ucf_ledger(
                 t_end=frame_timestamp,
                 modality='video',
                 worker_name='image_embed_clip',
-                model_tag=clip_meta.get('model', 'openai/clip-vit-large-patch14'),
+                model_tag=clip_meta.get('model', 'laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K'),
                 confidence=1.0,
                 spatial_region=None,
                 spatial_space='normalized_yxyx_top_left',
@@ -6139,7 +6139,7 @@ def _log_visual_to_ucf_ledger(
                 vector_backend=vector_backend,
                 vector_collection=vector_collection,
                 vector_dim=vector_dim,
-                vector_model_tag=clip_meta.get('model', 'openai/clip-vit-large-patch14'),
+                vector_model_tag=clip_meta.get('model', 'laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K'),
                 source_artifact_id=scene_id,
                 raw_ref=raw_ref_str,
                 payload=payload,
@@ -6305,7 +6305,7 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                 clip_payload = {
                     "embedding_id": clip_id,
                     "embedding_source": "scene_visual_embeddings_clip",
-                    "engine": "openai/clip-vit-large-patch14",
+                    "engine": "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
                     "qdrant_collection": clip_collection,
                 }
                 atomic_write_json(clip_raw_ref_path, clip_payload)
@@ -6319,7 +6319,7 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     t_end=t_end,
                     modality="video",
                     worker_name="scene_visual_embeddings_clip",
-                    model_tag="openai/clip-vit-large-patch14",
+                    model_tag="laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
                     confidence=1.0,
                     source_artifact_id=scene_id,
                     raw_ref=clip_raw_ref_str,
@@ -6328,7 +6328,7 @@ def _log_scene_visual_embeddings_to_ucf_ledger(
                     vector_key=clip_id,
                     vector_backend=qdrant_enabled and "qdrant" or "faiss",
                     vector_dim=768,
-                    vector_model_tag="openai/clip-vit-large-patch14",
+                    vector_model_tag="laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
                     vector_collection=clip_collection,
                 )
 

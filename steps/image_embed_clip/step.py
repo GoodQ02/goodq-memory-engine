@@ -30,7 +30,7 @@ from steps.common.memory import ensure_id_map_table_schema
 
 
 
-_CLIP = {"model": None, "proc": None, "device": "cpu"}
+_CLIP = {"model": None, "proc": None, "device": "cpu", "model_tag": None}
 
 
 def _debug_env() -> None:
@@ -85,7 +85,9 @@ def _load() -> None:
         
         proc = CLIPProcessor.from_pretrained(model_id, local_files_only=True)
         model = CLIPModel.from_pretrained(model_id, local_files_only=True).to(device).eval()
-        _CLIP.update({"model": model, "proc": proc, "device": device})
+        _CLIP.update(
+            {"model": model, "proc": proc, "device": device, "model_tag": provision_result.repo_id}
+        )
         logger.info(f"[OK] CLIP model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {str(e)}")
@@ -172,7 +174,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "scene_id": scene_id,
                         "scene_hash": h,
                         "worker_name": "image_embed_clip",
-                        "vector_model_tag": "openai/clip-vit-large-patch14",
+                        "vector_model_tag": _CLIP["model_tag"],
                         "modality": "video",
                         "ucf_frame_id": None,
                         "source_path": path,
@@ -216,7 +218,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         (
                             faiss_id, h, path, datetime.utcnow().isoformat(),
                             epoch_id, video_hash, scene_id, h,
-                            "image_embed_clip", "openai/clip-vit-large-patch14", "video"
+                            "image_embed_clip", _CLIP["model_tag"], "video"
                         ),
                     )
                 map_ok = True
@@ -272,7 +274,7 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             "provenance_version": 1,
             "component": "image_embed_clip",
             "step": "image_embed_clip",
-            "model": "openai/clip-vit-base-patch16",
+            "model": _CLIP["model_tag"],
             "embedding_id": h,
             "faiss_committed": True,
             "qdrant_attempted": bool(qdrant_attempted),

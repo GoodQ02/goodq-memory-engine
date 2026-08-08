@@ -369,7 +369,7 @@ def test_new_models_provisioning(tmp_path, monkeypatch):
     assert "model.pt" in res_vad.files_checked
 
     # 2. Emotion Classify Model
-    emo_cache_dir = tmp_path / "hub" / "models--cardiffnlp--twitter-roberta-base-emotion-multilabel-latest"
+    emo_cache_dir = tmp_path / "hub" / "models--cardiffnlp--twitter-roberta-base-emotion-latest"
     emo_snapshots = emo_cache_dir / "snapshots" / "emo_rev"
     emo_snapshots.mkdir(parents=True, exist_ok=True)
     (emo_snapshots / "config.json").write_text("{}", encoding="utf-8")

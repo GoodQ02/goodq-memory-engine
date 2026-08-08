@@ -182,7 +182,7 @@ def _write_scene_faiss_points(
                     for row in provenance_rows:
                         if modality == "clip" or "clip" in map_table:
                             worker_name = "image_embed_clip"
-                            vector_model_tag = "openai/clip-vit-large-patch14"
+                            vector_model_tag = "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
                         elif modality == "dino" or "dino" in map_table:
                             worker_name = "image_embed_dino"
                             vector_model_tag = "facebook/dinov2-large"
@@ -451,7 +451,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             _stage10_18_debug("clip_device_probe_error:", f"{type(e).__name__}: {e}")
         _stage10_18_debug("clip_device:", clip_device)
         _stage10_18_debug("clip_batch_size:", batch_size)
-        _stage10_18_debug("clip_model_id:", "openai/clip-vit-base-patch16")
+        _stage10_18_debug("clip_model_id:", "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K")
         
         logger.info("[PHASE6] Generating CLIP embeddings")
         clip_embeddings = embed_scene_frames(scene_frames, model_type='clip', batch_size=batch_size)

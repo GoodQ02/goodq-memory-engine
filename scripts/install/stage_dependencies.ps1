@@ -153,9 +153,12 @@ if ($Mode -eq "Acquire") {
 
     # Phase 2: Stage python wheels offline
     $wheelsDir = Join-Path $CacheDir "wheels"
-    if (-not (Test-Path $wheelsDir)) {
-        New-Item -ItemType Directory -Path $wheelsDir -Force | Out-Null
+    # A release wheelhouse is an exact closure, never an accumulation of prior
+    # staging attempts.  Leave every other verified cache artifact intact.
+    if (Test-Path $wheelsDir) {
+        Remove-Item -LiteralPath $wheelsDir -Recurse -Force
     }
+    New-Item -ItemType Directory -Path $wheelsDir -Force | Out-Null
 
     foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
         $wheelName = [Uri]::UnescapeDataString((Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf))

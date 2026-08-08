@@ -236,7 +236,7 @@ def _populate_id_map_from_embeddings(paths: Dict[str, Any]) -> Dict[str, Any]:
                 worker_name = "audio_embed_clap"
                 modality = "audio"
             elif filt_mod == "clip":
-                model_tag = "openai/clip-vit-large-patch14"
+                model_tag = "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
                 worker_name = "image_embed_clip"
                 modality = "video"
             elif filt_mod == "dino":

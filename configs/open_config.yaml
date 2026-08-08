@@ -59,7 +59,7 @@ models:
   local:
     whisper_model: large-v3
     dino_model: facebook/dinov2-base
-    clip_model: openai/clip-vit-large-patch14
+    clip_model: laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K
     
   # Cloud models (API-based)
   cloud:

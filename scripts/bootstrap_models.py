@@ -568,7 +568,7 @@ def build_wanted_models(registry: Dict | None, profile: str = "all") -> List[str
     fallback = [
         "Salesforce/blip-image-captioning-base",
         "nlpconnect/vit-gpt2-image-captioning",
-        "openai/clip-vit-base-patch16",
+        "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
         "facebook/dinov2-base",
         "sentence-transformers/all-MiniLM-L6-v2",
         "laion/clap-htsat-unfused",
@@ -580,7 +580,7 @@ def build_wanted_models(registry: Dict | None, profile: str = "all") -> List[str
         "superb/hubert-large-superb-er",
         "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
         "facebook/wav2vec2-base-960h",
-        "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+        "cardiffnlp/twitter-roberta-base-emotion-latest",
         "distilbert-base-uncased-finetuned-sst-2-english",
         "snakers4/silero-vad",
     ]

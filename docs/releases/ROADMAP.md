@@ -1955,6 +1955,19 @@ the failure is not currently visible.
 
 These items preserve unfinished intent from the plans this roadmap replaces.
 
+### V-05 — Offline payload eligibility closure
+
+- Status: IN_PROGRESS
+- Evidence (2026-08-08): the installer now rebuilds its wheel cache from an
+  empty directory and seals the staged closure with a generated SBOM before
+  compilation. The gate rejects duplicate wheels, direct-lock mismatches, and
+  wheels without license evidence. The installer carries the generated receipt.
+- Remaining gate: perform one fresh online staging acquisition, then prove the
+  generated SBOM and resulting managed-offline asset manifest agree. Model
+  payload packaging remains a separate decision after every pending model has
+  an explicit redistribution disposition in the offline payload eligibility
+  ledger.
+
 ### V-01 — Portable follower witness
 
 - Status: VERIFIED

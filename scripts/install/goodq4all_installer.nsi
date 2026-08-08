@@ -238,6 +238,8 @@ tesseract_command_verify:
   ; --- STATE 6: copy local wheelhouse & install offline ---
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
   StrCpy $InstallStage "wheelhouse_stage"
+  SetOutPath "$INSTDIR"
+  File "staged\wheelhouse-sbom.json"
   SetOutPath "$INSTDIR\wheels"
   File /r "staged\wheels\*.*"
   IfFileExists "$INSTDIR\wheels\pytesseract-0.3.10-py3-none-any.whl" wheelhouse_ready wheelhouse_missing

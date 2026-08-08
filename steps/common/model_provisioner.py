@@ -46,7 +46,7 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "WARN_DEGRADED"
     },
-    "openai/clip-vit-large-patch14": {
+    "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K": {
         "key": "clip_vit",
         "tier_scope": ["cpu_only", "gpu_enhanced"],
         "classification": "REQUIRED_FIRST_LAUNCH",
@@ -54,15 +54,6 @@ _FALLBACK_REGISTRY = {
         "requires_token": False,
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
-    },
-    "openai/clip-vit-base-patch16": {
-        "key": "clip_vit_base",
-        "tier_scope": ["cpu_only", "gpu_enhanced"],
-        "classification": "DEV_TEST_ONLY",
-        "gated": False,
-        "requires_token": False,
-        "token_env": None,
-        "failure_behavior": "WARN_DEGRADED"
     },
     "facebook/dinov2-large": {
         "key": "dinov2",
@@ -253,7 +244,7 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
     },
-    "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest": {
+    "cardiffnlp/twitter-roberta-base-emotion-latest": {
         "key": "emotion_classify_model",
         "tier_scope": ["baseline", "cpu_only", "gpu_enhanced"],
         "classification": "REQUIRED_FIRST_LAUNCH",

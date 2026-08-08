@@ -494,6 +494,19 @@
         "source_url": "https://files.pythonhosted.org/packages/50/ff/26a4ee48d0b66625a4e4028a055b9f25bc9d7c7b2d17d21a45137621a50d/soundfile-0.12.1-py2.py3-none-win_amd64.whl",
         "sha256": "0d86924c00b62552b650ddd28af426e3ff2d4dc2e9047dae5b3d8452e0a49a77",
         "license": "BSD-3-Clause"
+      },
+      {
+        "artifact_id": "pytesseract_py3_none_any",
+        "name": "pytesseract",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "py3",
+        "platform_tag": "any",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://files.pythonhosted.org/packages/c5/54/ec007336f38d2d4ce61f3544af3e6855dacbf04a1ac8294f10cabe81146f/pytesseract-0.3.10-py3-none-any.whl",
+        "sha256": "8f22cc98f765bf13517ead0c70effedb46c153540d25783e04014f28b55a5fc6",
+        "license": "Apache-2.0",
+        "redistribution_status": "allowed"
       }
     ]
   }

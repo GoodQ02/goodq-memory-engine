@@ -95,6 +95,25 @@ def test_stager_resolves_the_baseline_lock_from_its_own_directory() -> None:
     assert 'Join-Path $ScriptDir "..\\..\\requirements-baseline-lock.txt"' in stager
 
 
+def test_wheel_staging_replaces_stale_cache_and_payload_before_download() -> None:
+    """A release build may not inherit arbitrary wheels from a prior staging run."""
+    stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
+    builder = (ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
+
+    assert 'Remove-Item -LiteralPath $wheelsDir -Recurse -Force' in stager
+    assert 'rmdir /s /q "staged\\wheels"' in builder
+
+
+def test_installer_generates_and_ships_a_strict_wheelhouse_sbom() -> None:
+    """The compiled installer must carry the verified wheel closure it installs."""
+    builder = (ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
+    installer = (ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
+
+    assert "generate_wheelhouse_sbom.py" in builder
+    assert "--requirements ..\\..\\requirements-baseline-lock.txt" in builder
+    assert 'File "staged\\wheelhouse-sbom.json"' in installer
+
+
 def test_cpu_torch_wheels_are_hash_pinned() -> None:
     manifest_path = ROOT / "configs" / "offline_dependencies_manifest.json"
     wheels = json.loads(manifest_path.read_text(encoding="utf-8"))["wheels"]["wheelhouse"]

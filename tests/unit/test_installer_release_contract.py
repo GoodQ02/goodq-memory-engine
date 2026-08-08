@@ -375,6 +375,17 @@ def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() 
     assert 'Error: Failed to write installation receipt. Code $0' in installer
 
 
+def test_baseline_installer_reuses_a_verified_vc_runtime() -> None:
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'ReadRegDWORD $0 HKLM "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64" "Installed"' in installer
+    assert "vcredist_install:" in installer
+    assert "vcredist_verify:" in installer
+    assert 'IfFileExists "$SYSDIR\\VCRUNTIME140.dll"' in installer
+
+
 def test_uninstaller_removes_all_packaged_tool_directories() -> None:
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"

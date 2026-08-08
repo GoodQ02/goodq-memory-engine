@@ -162,6 +162,14 @@ runtime_ok:
   SetOutPath "$INSTDIR\binaries"
   File "staged\binaries\vc_redist.x64.exe"
   File "staged\binaries\tesseract_setup.exe"
+  ; The VC runtime is machine-wide. Reuse a healthy x64 runtime so a follower
+  ; repair does not relaunch a GUI bootstrapper during an unattended install.
+  SetRegView 64
+  ReadRegDWORD $0 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" "Installed"
+  ${If} $0 == 1
+    Goto vcredist_verify
+  ${EndIf}
+vcredist_install:
   nsExec::ExecToLog '"$INSTDIR\binaries\vc_redist.x64.exe" /q /norestart'
   Pop $0
   DetailPrint "VC++ Redistributable setup completed. exit code = $0"
@@ -172,6 +180,11 @@ runtime_ok:
     MessageBox MB_OK|MB_ICONSTOP "Error: VC++ Redistributable installation failed. Code $0"
     Abort
   ${EndIf}
+vcredist_verify:
+  IfFileExists "$SYSDIR\VCRUNTIME140.dll" +3 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: VC++ Redistributable runtime verification failed."
+    Abort
 
   ; The engine is machine-wide. Reuse a working prior install so a repair or
   ; upgrade does not relaunch its nested NSIS setup and block unattended work.

@@ -17,7 +17,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -64,7 +64,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -87,7 +87,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -133,7 +133,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -271,7 +271,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -294,7 +294,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -317,7 +317,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -340,7 +340,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -363,7 +363,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -386,7 +386,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
@@ -478,7 +478,7 @@ huggingface_models:
       requires_license_acceptance: false
       commercial_use: allowed
       redistribution: allowed
-    tier_scope: [cpu_only, gpu_enhanced]
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false

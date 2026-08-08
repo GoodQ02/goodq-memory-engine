@@ -172,6 +172,27 @@ runtime_ok:
     Abort
   ${EndIf}
 
+  DetailPrint "Installing bundled Tesseract OCR prerequisite..."
+  nsExec::ExecToLog '"$INSTDIR\binaries\tesseract_setup.exe" /S'
+  Pop $0
+  DetailPrint "Tesseract OCR setup completed. exit code = $0"
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR installation failed. Code $0"
+    Abort
+  ${EndIf}
+  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" +3 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR executable was not installed."
+    Abort
+  nsExec::ExecToLog '"$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" --version'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR verification failed. Code $0"
+    Abort
+  ${EndIf}
+
   ; --- STATE 6: copy local wheelhouse & install offline ---
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
   SetOutPath "$INSTDIR\wheels"

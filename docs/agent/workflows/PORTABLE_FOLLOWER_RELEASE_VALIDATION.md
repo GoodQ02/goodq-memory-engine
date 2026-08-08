@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-06 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-08 -->
 
 # Portable Follower Release Validation
 
@@ -40,8 +40,9 @@ applies to named followers such as GR-16 and GS-32.
    follower before execution.
 2. Install the verified setup executable. Preserve its exit code and install
    receipt.
-3. Run the installed offline suite and the Qdrant restore smoke. Both must
-   pass before a scene is staged.
+3. Run the installed offline suite and the Qdrant restore smoke. The offline
+   suite verifies bundled media tools plus the required OCR engine and Python
+   binding; both gates must pass before a scene is staged.
 4. Confirm the installed runtime exposes both commands:
 
    ```powershell
@@ -62,9 +63,10 @@ applies to named followers such as GR-16 and GS-32.
 4. For a cold model load, preserve `[MODEL]` progress output and the model
    download log. A silent client is not evidence of a hang while the remote
    receipt or model status continues to advance.
-5. Inspect the sealed receipt, scene ledger, and combined scene log. Audio
-   transcription requires a terminal result; `pending` is incomplete evidence,
-   not a pass.
+5. Inspect the sealed receipt, scene ledger, combined scene log, and the
+   ingestion result file at `output/results.json` under the witness root.
+   Audio transcription requires a terminal result; `pending` is incomplete
+   evidence, not a pass.
 
 ## Completion record
 

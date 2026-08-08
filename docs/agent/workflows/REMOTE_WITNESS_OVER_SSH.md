@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-04 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-08 -->
 
 # Remote Witness over SSH
 
@@ -50,8 +50,10 @@ observable transport event, not an ambiguous pipeline result.
    ```
 
 5. When the receipt reaches `runner_finished`, inspect the sealed receipt,
-   scene ledger, and `scene-zero.log`. If it reaches `failed`, repair the
-   owning seam before another scene attempt.
+   scene ledger, `scene-zero.log`, and the file `output/results.json` beneath
+   the witness root. The last file is the ingestion CLI result artifact; it is
+   never the output directory itself. If the receipt reaches `failed`, repair
+   the owning seam before another scene attempt.
 
 ## Receipt contract
 

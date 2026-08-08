@@ -189,7 +189,7 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
         state = _update(receipt, state, "preflight_sealed", sealed_receipt=str(sealed_path), log_path=str(log_path))
         command = [
             sys.executable, "-m", "cli.run_ingestion", "--input-file", str(input_path),
-            "--config", str(config_path), "--output", str(root / "output"),
+            "--config", str(config_path), "--output", str(root / "output" / "results.json"),
             "--workspace", str(root / "workspace"), "--scene-indices", scene_indices, "--verbose",
             "--step-timeout", str(_cpu_aware_step_timeout()),
         ]

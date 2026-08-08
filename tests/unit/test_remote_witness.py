@@ -62,6 +62,8 @@ def test_execute_bounds_each_isolated_witness_step(monkeypatch, tmp_path: Path):
 
     assert remote_witness.execute(root, source) == 0
     assert captured["command"][-2:] == ["--step-timeout", "600"]
+    output_index = captured["command"].index("--output")
+    assert captured["command"][output_index + 1] == str(root / "output" / "results.json")
 
 
 def test_execute_records_preflight_failure(monkeypatch, tmp_path: Path):

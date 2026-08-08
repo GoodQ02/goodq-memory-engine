@@ -64,6 +64,35 @@ foreach ($tool in @("ffmpeg", "ffprobe")) {
 if (-not $gate1b.pass) { $results.pass = $false }
 $results.gates += $gate1b
 
+# --- Gate 1c: OCR Runtime ---
+$gate1c = @{ name = "ocr_runtime"; pass = $true; errors = @() }
+$pythonPath = Join-Path $InstallDir "runtime\python.exe"
+$tesseractPath = Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"
+try {
+    & $pythonPath -c "import pytesseract; print(pytesseract.__version__)" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "pytesseract import returned exit code $LASTEXITCODE"
+    }
+    Write-Host "  [OK]   Python pytesseract binding imports" -ForegroundColor Green
+} catch {
+    $gate1c.pass = $false
+    $gate1c.errors += "Python pytesseract binding failed: $_"
+    Write-Host "  [FAIL] Python pytesseract binding failed: $_" -ForegroundColor Red
+}
+try {
+    & $tesseractPath --version *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "exit code $LASTEXITCODE"
+    }
+    Write-Host "  [OK]   Tesseract OCR runtime executes" -ForegroundColor Green
+} catch {
+    $gate1c.pass = $false
+    $gate1c.errors += "Tesseract OCR runtime failed: $_"
+    Write-Host "  [FAIL] Tesseract OCR runtime failed: $_" -ForegroundColor Red
+}
+if (-not $gate1c.pass) { $results.pass = $false }
+$results.gates += $gate1c
+
 # --- Gate 2: Launcher Manifest Verification ---
 $gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }
 $launcherPath = Join-Path $InstallDir "LAUNCH_GOODQ.exe"

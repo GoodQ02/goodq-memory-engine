@@ -343,6 +343,21 @@ def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> N
     assert '"ffmpeg\\ffprobe.exe"' in verifier
 
 
+def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> None:
+    lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pytesseract==0.3.10" in lockfile
+    assert 'tesseract_setup.exe" /S' in installer
+    assert "Tesseract-OCR\\tesseract.exe" in verifier
+    assert "import pytesseract" in verifier
+
+
 def test_uninstaller_removes_all_packaged_tool_directories() -> None:
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"

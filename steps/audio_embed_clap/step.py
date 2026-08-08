@@ -405,70 +405,124 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     vad_exc,
                 )
         
-        try:
-            wave_data, sr = librosa.load(audio_path_to_use, sr=48000, mono=True)
-        except Exception as decode_exc:
-            logger.warning(
-                "audio_embed_clap decode failed source_path=%s exc_type=%s exc=%s",
-                audio_path_to_use,
-                type(decode_exc).__name__,
-                decode_exc,
-            )
-            return {"clap_meta": {"status": "skipped", "reason": "audio_decode_failed", "error": str(decode_exc)}}
-        if wave_data is None or len(wave_data) == 0:
-            return {"clap_meta": {"status": "skipped", "reason": "audio_empty"}}
-        if not np.isfinite(wave_data).all():
-            return {"clap_meta": {"status": "skipped", "reason": "invalid_audio"}}
-        if float(np.max(np.abs(wave_data))) <= 1e-5:
-            return {"clap_meta": {"status": "skipped", "reason": "audio_silent"}}
+        # ── Chunked inference ──────────────────────────────────────────
+        # CLAP HTSAT processes fixed 10-second windows (max_length_s=10
+        # in preprocessor_config.json).  Feeding a full 120s waveform
+        # forces the feature extractor to compute mel-spectrograms for
+        # the entire duration, then truncate to 10s — wasting >90% of
+        # the CPU work.  Instead, iterate 10s chunks with 2s overlap,
+        # skip silent chunks via RMS energy gating, and mean-pool the
+        # per-chunk embeddings.
+        import soundfile as sf
 
-        def _run_inference() -> Any:
-            batch = _CLAP["proc"](raw_speech=wave_data, sampling_rate=48000, return_tensors="pt")
+        _CHUNK_SEC = 10.0   # CLAP's native window size
+        _STRIDE_SEC = 8.0   # 2s overlap between chunks
+        _RMS_FLOOR = 1e-4   # Skip chunks below this RMS energy
+
+        try:
+            sf_info = sf.info(audio_path_to_use)
+            total_duration_s = sf_info.frames / float(sf_info.samplerate)
+        except Exception as info_exc:
+            logger.warning(
+                "audio_embed_clap sf.info failed source_path=%s exc=%s",
+                audio_path_to_use, info_exc,
+            )
+            return {"clap_meta": {"status": "skipped", "reason": "audio_info_failed", "error": str(info_exc)}}
+
+        if total_duration_s < _MIN_AUDIO_DURATION_SEC:
+            return {"clap_meta": {"status": "skipped", "reason": "audio_too_short", "duration_sec": round(total_duration_s, 4)}}
+
+        def _infer_chunk(wave_chunk: "np.ndarray") -> "torch.Tensor":
+            """Run CLAP inference on a single <=10s waveform chunk."""
+            batch = _CLAP["proc"](raw_speech=wave_chunk, sampling_rate=48000, return_tensors="pt")
             input_features = batch.get("input_features")
             if input_features is None:
-                raise RuntimeError("CLAP processor did not return input_features for audio")
-            input_features = input_features.to(_CLAP["device"])  # type: ignore[attr-defined]
-            if _CLAP["device"] == "cuda":
-                with torch.amp.autocast("cuda"):
-                    return _CLAP["model"].get_audio_features(input_features=input_features)
-            return _CLAP["model"].get_audio_features(input_features=input_features)
-
-        try:
-            out = _run_inference()
-        except Exception as infer_exc:
-            logger.warning(
-                "audio_embed_clap inference failed device=%s source_path=%s exc_type=%s exc=%s",
-                _CLAP.get("device"),
-                path,
-                type(infer_exc).__name__,
-                infer_exc,
-            )
-            if _CLAP.get("device") == "cuda" and _should_retry_on_cpu(infer_exc):
-                clear_cache()
-                retry_ok, retry_error = _load("cpu")
-                if retry_ok:
-                    try:
-                        out = _run_inference()
-                    except Exception as retry_exc:
-                        return {
-                            "clap_meta": {
-                                "status": "error",
-                                "reason": "cpu_retry_failed",
-                                "error": str(retry_exc),
-                            }
-                        }
+                raise RuntimeError("CLAP processor did not return input_features")
+            input_features = input_features.to(_CLAP["device"])
+            with torch.no_grad():
+                if _CLAP["device"] == "cuda":
+                    with torch.amp.autocast("cuda"):
+                        out = _CLAP["model"].get_audio_features(input_features=input_features)
                 else:
-                    return {
-                        "clap_meta": {
-                            "status": "error",
-                            "reason": "retry_model_load_failed",
-                            "error": retry_error or str(infer_exc),
-                        }
-                    }
-            else:
-                return {"clap_meta": {"status": "error", "reason": "inference_failed", "error": str(infer_exc)}}
-        features = getattr(out, "pooler_output", out)
-        feats = features.detach().cpu().numpy().astype("float32")
+                    out = _CLAP["model"].get_audio_features(input_features=input_features)
+            return getattr(out, "pooler_output", out).detach().cpu()
+
+        chunk_embeddings: list = []
+        chunks_processed = 0
+        chunks_skipped_silent = 0
+        cuda_failed = False
+        offset_s = 0.0
+
+        while offset_s < total_duration_s:
+            if (total_duration_s - offset_s) < 1.0:
+                break  # skip sub-second tail
+
+            try:
+                wave_chunk, _sr = librosa.load(
+                    audio_path_to_use, sr=48000, mono=True,
+                    offset=offset_s, duration=_CHUNK_SEC,
+                )
+            except Exception as chunk_exc:
+                logger.debug("audio_embed_clap chunk decode failed offset=%.1f exc=%s", offset_s, chunk_exc)
+                offset_s += _STRIDE_SEC
+                continue
+
+            if wave_chunk is None or len(wave_chunk) == 0:
+                offset_s += _STRIDE_SEC
+                continue
+
+            # RMS energy gate — skip silent/near-silent chunks
+            rms = float(np.sqrt(np.mean(wave_chunk ** 2)))
+            if rms < _RMS_FLOOR:
+                chunks_skipped_silent += 1
+                offset_s += _STRIDE_SEC
+                continue
+
+            # Inference with CUDA→CPU fallback on first failure
+            try:
+                if cuda_failed:
+                    raise RuntimeError("CUDA previously failed, using CPU")
+                emb = _infer_chunk(wave_chunk)
+                chunk_embeddings.append(emb)
+                chunks_processed += 1
+            except Exception as infer_exc:
+                if _CLAP.get("device") == "cuda" and not cuda_failed and _should_retry_on_cpu(infer_exc):
+                    logger.warning(
+                        "audio_embed_clap CUDA chunk failed offset=%.1f exc=%s; retrying on CPU",
+                        offset_s, infer_exc,
+                    )
+                    clear_cache()
+                    retry_ok, retry_error = _load("cpu")
+                    if retry_ok:
+                        cuda_failed = True
+                        try:
+                            emb = _infer_chunk(wave_chunk)
+                            chunk_embeddings.append(emb)
+                            chunks_processed += 1
+                        except Exception as retry_exc:
+                            logger.warning("audio_embed_clap CPU retry failed offset=%.1f exc=%s", offset_s, retry_exc)
+                    else:
+                        logger.warning("audio_embed_clap CPU reload failed: %s", retry_error)
+                else:
+                    logger.warning("audio_embed_clap chunk inference failed offset=%.1f exc=%s", offset_s, infer_exc)
+
+            offset_s += _STRIDE_SEC
+
+        logger.info(
+            "audio_embed_clap chunked inference done chunks_processed=%d "
+            "chunks_skipped_silent=%d total_duration=%.1fs device=%s",
+            chunks_processed, chunks_skipped_silent, total_duration_s, _CLAP.get("device"),
+        )
+
+        if not chunk_embeddings:
+            return {"clap_meta": {"status": "skipped", "reason": "no_active_audio_chunks",
+                                  "total_duration_s": round(total_duration_s, 2),
+                                  "chunks_skipped_silent": chunks_skipped_silent}}
+
+        # Mean-pool chunk embeddings into a single 512-dim vector
+        stacked = torch.cat(chunk_embeddings, dim=0)  # (N, 512)
+        pooled = stacked.mean(dim=0, keepdim=True)     # (1, 512)
+        feats = pooled.numpy().astype("float32")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_audio_path")
         if not index_path:
             try:

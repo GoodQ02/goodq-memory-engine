@@ -58,6 +58,18 @@ def test_installer_template_names_the_canonical_stable_version() -> None:
     assert "2.5.8-rc" not in source
 
 
+def test_installer_refuses_to_collide_with_existing_canonical_data_or_service() -> None:
+    """A baseline installer must not silently adopt the desktop's live stores."""
+    source = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'IfFileExists "$COMMONAPPDATA\\GoodQ4All\\GoodQ_Data\\*.*" existing_canonical_install' in source
+    assert 'sc query "GoodQ_Qdrant"' in source
+    assert "existing_canonical_install:" in source
+    assert "will not replace a canonical installation" in source
+
+
 def test_private_builder_declares_its_input_and_output_boundaries() -> None:
     source = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
         encoding="utf-8"

@@ -53,6 +53,26 @@ Function .onInit
   StrCpy $GpuStatus "not_packaged"
   StrCpy $COMMONAPPDATA $APPDATA
   StrCpy $InstallStage "initialization"
+
+  ; A baseline install is intentionally a clean-target contract.  It must not
+  ; overwrite the desktop's canonical data root or adopt its Qdrant service.
+  ; A future upgrade workflow may make that migration explicit and evidenced.
+  IfFileExists "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\*.*" existing_canonical_install
+  IfFileExists "$COMMONAPPDATA\GoodQ4All\runtime_config.json" existing_canonical_install
+  nsExec::ExecToLog 'sc query "GoodQ_Qdrant"'
+  Pop $0
+  ${If} $0 == 0
+    Goto existing_canonical_install
+  ${EndIf}
+  Goto clean_target_confirmed
+
+existing_canonical_install:
+  DetailPrint "Existing canonical GoodQ state detected. Baseline install aborted before changes."
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "Existing GoodQ data or service detected.$\r$\n$\r$\nThis baseline installer will not replace a canonical installation. Use a clean validation target or an explicit upgrade workflow."
+  Abort
+
+clean_target_confirmed:
 FunctionEnd
 
 Function .onInstFailed

@@ -1957,18 +1957,24 @@ These items preserve unfinished intent from the plans this roadmap replaces.
 
 ### V-05 — Offline payload eligibility closure
 
-- Status: IN_PROGRESS
+- Status: VERIFIED
 - Evidence (2026-08-08): the installer now rebuilds its wheel cache from an
   empty directory and seals the staged closure with a generated SBOM before
   compilation. The gate rejects duplicate wheels, direct-lock mismatches, and
   wheels without license evidence. The installer carries the generated receipt.
   Fresh acquisition produced a 94-wheel closure whose SHA-256 is
   `a35ddf4cf54977ff0de13ebae36f9fdecc87bcf0e62bde8443557c1594d1a372`;
-  the stager's offline closure check and compliance audit both passed.
-- Remaining gate: prove that generated SBOM and the resulting managed-offline
-  asset manifest agree. Model payload packaging remains a separate decision
-  after every pending model has an explicit redistribution disposition in the
-  offline payload eligibility ledger.
+  the stager's offline closure check and compliance audit both passed. The
+  installer now also aborts before changes when it detects canonical desktop
+  data or the canonical Qdrant service; the baseline contract is clean-target
+  only until an explicit upgrade design is approved.
+- Evidence (2026-08-08): every previously pending model now has an explicit
+  release-admission disposition in the offline payload eligibility ledger.
+  Permissive source candidates remain optional and require exact artifact,
+  notice, hash, and clean-install evidence before a payload is designed.
+- Re-entry gate: prove that generated SBOM and the resulting managed-offline
+  asset manifest agree, then separately approve an optional-model payload
+  design or an explicit canonical-desktop upgrade workflow.
 
 ### V-01 — Portable follower witness
 

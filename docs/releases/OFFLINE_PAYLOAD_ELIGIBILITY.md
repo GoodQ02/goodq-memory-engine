@@ -38,6 +38,17 @@ bundled by the baseline installer today.
 | Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | baseline VAD candidate |
 | CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | baseline candidate |
 | Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | baseline candidate |
+| Captioning | `Salesforce/blip-image-captioning-base` | model card BSD-3-Clause declaration | optional vision payload candidate |
+| Captioning | `nlpconnect/vit-gpt2-image-captioning` | model card Apache-2.0 declaration | optional payload candidate; require loader compatibility proof |
+| Visual embedding | `facebook/dinov2-base` and `facebook/dinov2-large` | model cards Apache-2.0 declarations | optional payload candidates |
+| Text embedding | `sentence-transformers/all-MiniLM-L6-v2` | model card Apache-2.0 declaration | optional payload candidate |
+| Audio embedding | `laion/clap-htsat-unfused` | model card Apache-2.0 declaration | optional payload candidate |
+| Transcription | `openai/whisper-large-v3` | model card Apache-2.0 declaration | optional payload candidate |
+| Transcription | `Systran/faster-whisper-{tiny,small,medium,large-v3}` | model cards MIT declarations | optional payload candidates |
+| Audio enrichment | `superb/hubert-large-superb-er`, `facebook/wav2vec2-base-960h`, and `ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition` | model cards Apache-2.0 declarations | optional payload candidates |
+| Text enrichment | `dslim/bert-base-NER` and `distilbert-base-uncased-finetuned-sst-2-english` | model cards MIT and Apache-2.0 declarations | optional payload candidates |
+| Local multimodal service | `Qwen/Qwen2.5-VL-7B-Instruct` | model card Apache-2.0 declaration | optional service payload candidate |
+| Local reasoning service | `deepseek-ai/DeepSeek-R1-Distill-Qwen-{7B,14B}` | model cards MIT declarations | optional service payload candidates |
 
 Every Python wheel remains eligible only per-build: its actual file hash and
 wheel metadata license evidence must appear in the generated SBOM.
@@ -47,24 +58,25 @@ wheel metadata license evidence must appear in the generated SBOM.
 | Component | Reason | Disposition |
 |---|---|---|
 | Pyannote diarization, segmentation, and speaker models | token-gated and license acceptance required | user-provisioned optional feature only |
-| Gemma-family gated runtime | token-gated and restricted terms | user-provisioned optional feature only |
+| Gemma-family runtime | the active configuration's access policy conflicts with the current upstream card metadata; no exact artifact decision has been sealed | user-provisioned optional feature only until reconciled |
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
 | YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
+| `Qwen/Qwen2.5-VL-3B-Instruct` | current source metadata has no explicit model license field | do not bundle without an explicit source license |
+| FaceNet pretrained weights | package source is permissive, but the inherited pretrained-weight provenance is not yet sealed as redistributable | user-provisioned optional feature only |
+| Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |
+| NRC Emotion Lexicon | research-use terms are not a baseline redistribution grant | do not bundle |
+| VADER lexicon | runtime dependency is small, but its exact artifact and notice have not been sealed into the release contract | acquire on demand until that proof exists |
 | Historical release suites and old wheel caches | stale evidence and potential duplication | preserved outside active release inputs |
 
-## 3. Pending Individual Disposition
+## 3. Disposition Closure
 
-The following are intentionally **not** implicitly approved for a full offline
-model payload. They need a source-and-artifact review before being added to a
-future optional package: BLIP, ViT-GPT2, DINOv2, MiniLM, CLAP, Whisper and
-faster-whisper variants, HuBERT, Wav2Vec2, BERT NER, DistilBERT sentiment,
-Qwen, DeepSeek, FaceNet, Whisper GGML, NRC, and VADER.
-
-For each, the required decision record is: upstream owner, exact revision and
-files, model-weight license and notices, access/gating status, checksum,
-redistribution conclusion, package size, and baseline-versus-optional scope.
-No model from this list may be folded into the baseline merely because its
-runtime configuration currently marks it `allowed`.
+There are no implicit model-payload approvals left. Every formerly pending
+component is now either an artifact-verification candidate or excluded from
+the current baseline. “Eligible” is not a shipping decision: the payload
+designer must still record the upstream owner, exact revision and files,
+license notice, access state, checksum, package size, and clean-install proof.
+No model may enter the baseline merely because runtime configuration marks it
+`allowed`.
 
 ## Re-entry Gate for Full Offline Model Payload Design
 

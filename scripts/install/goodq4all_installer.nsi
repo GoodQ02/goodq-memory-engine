@@ -247,7 +247,7 @@ wheelhouse_missing:
   Abort
 wheelhouse_ready:
   StrCpy $InstallStage "wheelhouse_install"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links=file:///$INSTDIR\wheels -r "$INSTDIR\requirements-baseline-lock.txt"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links="file:///$INSTDIR/wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2

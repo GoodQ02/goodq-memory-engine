@@ -373,7 +373,7 @@ def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() 
 
     assert '/x "staged_cache"' in installer
     assert 'File /r "staged\\wheels\\*.*"' in installer
-    assert '--find-links=file:///$INSTDIR\\wheels' in installer
+    assert '--find-links="file:///$INSTDIR/wheels"' in installer
     assert 'import pytesseract; print(pytesseract.__version__)' in installer
     assert 'Error: Failed to write installation receipt. Code $0' in installer
 

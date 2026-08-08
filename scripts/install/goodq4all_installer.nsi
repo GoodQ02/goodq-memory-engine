@@ -44,12 +44,22 @@ Var AlwaysOnService
 Var WslStatus
 Var GpuStatus
 Var COMMONAPPDATA
+Var InstallStage
 
 Function .onInit
   SetShellVarContext all
   StrCpy $AlwaysOnService 0
   StrCpy $WslStatus "not_packaged"
   StrCpy $GpuStatus "not_packaged"
+  StrCpy $COMMONAPPDATA $APPDATA
+  StrCpy $InstallStage "initialization"
+FunctionEnd
+
+Function .onInstFailed
+  ; Silent installs otherwise return only NSIS exit code 2. Preserve the last
+  ; owned state so a remote or unattended validation can report the cause.
+  CreateDirectory "$COMMONAPPDATA\GoodQ4All"
+  WriteINIStr "$COMMONAPPDATA\GoodQ4All\install_failure.ini" "installation" "stage" "$InstallStage"
 FunctionEnd
 
 Section "Base Application (Required)" SecBase
@@ -74,6 +84,7 @@ Section "Base Application (Required)" SecBase
 
   ; --- STATE 3: verify runtime ---
   DetailPrint "Step 3/12: Verifying isolated Python runtime..."
+  StrCpy $InstallStage "runtime_verify"
   IfFileExists "$INSTDIR\runtime\python.exe" runtime_ok runtime_fail
 runtime_fail:
   IfSilent +2
@@ -159,6 +170,7 @@ runtime_ok:
 
   ; --- STATE 5: install VC++ Redistributable ---
   DetailPrint "Step 5/12: Installing VC++ Runtime prerequisites..."
+  StrCpy $InstallStage "vc_runtime_stage"
   SetOutPath "$INSTDIR\binaries"
   File "staged\binaries\vc_redist.x64.exe"
   File "staged\binaries\tesseract_setup.exe"
@@ -181,6 +193,7 @@ vcredist_install:
     Abort
   ${EndIf}
 vcredist_verify:
+  StrCpy $InstallStage "vc_runtime_verify"
   IfFileExists "$SYSDIR\VCRUNTIME140.dll" +3 0
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: VC++ Redistributable runtime verification failed."
@@ -188,6 +201,7 @@ vcredist_verify:
 
   ; The engine is machine-wide. Reuse a working prior install so a repair or
   ; upgrade does not relaunch its nested NSIS setup and block unattended work.
+  StrCpy $InstallStage "tesseract_stage"
   IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" tesseract_verify tesseract_install
 tesseract_install:
   DetailPrint "Installing bundled Tesseract OCR prerequisite..."
@@ -201,6 +215,7 @@ tesseract_install:
     Abort
   ${EndIf}
 tesseract_verify:
+  StrCpy $InstallStage "tesseract_verify"
   IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" +3 0
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR executable was not installed."
@@ -215,6 +230,7 @@ tesseract_verify:
 
   ; --- STATE 6: copy local wheelhouse & install offline ---
   DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
+  StrCpy $InstallStage "wheelhouse_stage"
   SetOutPath "$INSTDIR\wheels"
   File /r "staged\wheels\*.*"
   IfFileExists "$INSTDIR\wheels\pytesseract-0.3.10-py3-none-any.whl" wheelhouse_ready wheelhouse_missing
@@ -223,6 +239,7 @@ wheelhouse_missing:
   MessageBox MB_OK|MB_ICONSTOP "Error: Required offline wheelhouse artifact is missing."
   Abort
 wheelhouse_ready:
+  StrCpy $InstallStage "wheelhouse_install"
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links=file:///$INSTDIR\wheels -r "$INSTDIR\requirements-baseline-lock.txt"'
   Pop $0
   ${If} $0 != 0
@@ -230,6 +247,7 @@ wheelhouse_ready:
     MessageBox MB_OK|MB_ICONSTOP "Error: Offline Python package installation failed. Code $0"
     Abort
   ${EndIf}
+  StrCpy $InstallStage "ocr_binding_verify"
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -c "import pytesseract; print(pytesseract.__version__)"'
   Pop $0
   ${If} $0 != 0
@@ -354,6 +372,7 @@ wsl_done:
 
   ; --- STATE 10: write install receipt ---
   DetailPrint "Step 10/11: Writing installation receipt..."
+  StrCpy $InstallStage "install_receipt"
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService" --wsl-status "$WslStatus" --baseline-status "ok" --gpu-enhanced-status "$GpuStatus"'
   Pop $0
   ${If} $0 != 0

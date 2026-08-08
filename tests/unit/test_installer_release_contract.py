@@ -386,6 +386,20 @@ def test_baseline_installer_reuses_a_verified_vc_runtime() -> None:
     assert 'IfFileExists "$SYSDIR\\VCRUNTIME140.dll"' in installer
 
 
+def test_baseline_installer_persists_its_terminal_failure_stage() -> None:
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Var InstallStage" in installer
+    assert 'StrCpy $InstallStage "runtime_verify"' in installer
+    assert 'StrCpy $InstallStage "vc_runtime_verify"' in installer
+    assert 'StrCpy $InstallStage "tesseract_verify"' in installer
+    assert 'StrCpy $InstallStage "wheelhouse_stage"' in installer
+    assert "Function .onInstFailed" in installer
+    assert 'WriteINIStr "$COMMONAPPDATA\\GoodQ4All\\install_failure.ini" "installation" "stage" "$InstallStage"' in installer
+
+
 def test_uninstaller_removes_all_packaged_tool_directories() -> None:
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"

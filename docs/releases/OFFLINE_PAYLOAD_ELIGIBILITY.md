@@ -40,6 +40,12 @@ All ten upstream members were present after the pinned model card and
 `.gitattributes` were retrieved. This proves a preserved source snapshot, not
 pack compatibility or a release decision.
 
+The same second pass completed and verified the full `Qwen2.5-VL-7B-Instruct`
+source snapshot at its upstream Apache-2.0 revision
+`cc594898137f460bfe9f0759e9844b3ce807cfb5`. Its sealed source-manifest
+contract digest is
+`8957f7fa1d73158a57785676cf1b99aa4401bfdfe6cf8263b32b75608089dc5b`.
+
 The vault admission preflight rejects any public pack that is not both eligible
 and sealed. It rejects personal-only and agreement-gated sources from public
 packs, and requires a local acceptance receipt before an agreement-gated source

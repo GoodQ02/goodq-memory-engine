@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.assets.personal_asset_vault import VaultError, seal_snapshot
+from steps.common.model_provisioner import resolve_hf_token
 
 
 def cache_key(source: str) -> str:
@@ -73,7 +74,8 @@ def verify_or_hydrate_snapshot(
 ) -> tuple[Path, list[str], list[str]]:
     """Verify one snapshot against upstream, hydrating its exact revision only if allowed."""
 
-    api = HfApi()
+    token = resolve_hf_token(source)
+    api = HfApi(token=token)
     expected = api.list_repo_files(source, revision=revision)
     snapshot = find_snapshot(models_root, source, revision)
     observed = snapshot_members(snapshot) if snapshot else []
@@ -84,6 +86,7 @@ def verify_or_hydrate_snapshot(
             revision=revision,
             cache_dir=models_root,
             local_files_only=False,
+            token=token,
         )
         snapshot = find_snapshot(models_root, source, revision)
         observed = snapshot_members(snapshot) if snapshot else []
@@ -111,12 +114,14 @@ def seal_hf_snapshot(
     """Hydrate the pinned model-card evidence, verify all files, then immutably seal."""
 
     snapshot = find_snapshot(models_root, source, revision)
+    token = resolve_hf_token(source)
     if fetch_missing or snapshot is None or not (snapshot / "README.md").is_file():
         hf_hub_download(
             repo_id=source,
             filename="README.md",
             revision=revision,
             cache_dir=models_root,
+            token=token,
         )
     snapshot, _, _ = verify_or_hydrate_snapshot(
         source=source,

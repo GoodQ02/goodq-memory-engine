@@ -21,8 +21,9 @@ from typing import Iterable
 
 # Payload packs live beside the small NSIS bootstrap, so their boundary is a
 # delivery constraint rather than an NSIS data-block limit.  It must admit the
-# largest sealed public GPU model shard (currently DeepSeek 14B at ~8.12 GiB).
-DEFAULT_MAX_PACK_BYTES = 10 * 1024 * 1024 * 1024
+# largest sealed public GPU model member (currently Gemma 4 12B at ~22.28 GiB)
+# without splitting a signed model file across independently verified packs.
+DEFAULT_MAX_PACK_BYTES = 32 * 1024 * 1024 * 1024
 SCHEMA_VERSION = 1
 
 

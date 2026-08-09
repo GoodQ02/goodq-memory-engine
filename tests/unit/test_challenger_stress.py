@@ -54,14 +54,13 @@ def test_resolve_wsl_distro_stress_encodings(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime.subprocess, "run", timeout_run)
     assert runtime._resolve_wsl_distro() == "Ubuntu"
 
-def test_bootstrap_models_yolo_mapping(monkeypatch, tmp_path):
-    """Verify that yolov8n.pt is correctly mapped to yolo_v8n in bootstrap_models."""
+def test_bootstrap_models_report_has_no_retired_object_detector_mapping(monkeypatch, tmp_path):
+    """Bootstrap covers Hugging Face models only; sealed detectors are installer assets."""
     from scripts import bootstrap_models
     
     # We will invoke _build_report with simulated results
     results = [
         {"repo_id": "laion/clap-htsat-unfused", "status": "ok"},
-        {"asset": "yolov8n.pt", "status": "ok"},
     ]
     
     # Mock lookup_model to see what gets requested
@@ -83,7 +82,7 @@ def test_bootstrap_models_yolo_mapping(monkeypatch, tmp_path):
     report = bootstrap_models._build_report(
         models_root=tmp_path,
         registry_loaded=True,
-        pinned_models_count=2,
+        pinned_models_count=1,
         retries=1,
         auth={"hf_token": None, "hf_source": None, "pyannote_token": None, "pyannote_source": None, "hf_present": False, "pyannote_present": False},
         results=results,
@@ -91,8 +90,7 @@ def test_bootstrap_models_yolo_mapping(monkeypatch, tmp_path):
         progress_path=tmp_path / "progress.json"
     )
     
-    assert "yolo_v8n" in looked_up
-    assert "yolov8n.pt" not in looked_up
+    assert looked_up == ["laion/clap-htsat-unfused"]
     
 def test_bootstrap_verify_detect_goodq_audio_distro(monkeypatch):
     """Verify bootstrap_verify._detect_wsl_distro finds GoodQ_Audio_Distro."""

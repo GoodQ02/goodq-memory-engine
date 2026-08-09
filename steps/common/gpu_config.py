@@ -67,7 +67,7 @@ def configure_gpu(step_name=None, force_fraction=None):
         "text_embed": 0.15,              # Sentence transformers
         "image_embed_clip": 0.25,        # CLIP ViT
         "image_embed_dino": 0.25,        # DINOv2
-        "object_detect": 0.25,           # YOLO
+        "object_detect": 0.25,           # OpenCV DNN
         "object_track_yolo": 0.25,       # YOLO tracking
         "image_caption": 0.20,           # BLIP or similar
         "audio_embed_clap": 0.20,        # CLAP audio embeddings

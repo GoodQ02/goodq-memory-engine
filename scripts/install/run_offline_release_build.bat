@@ -36,6 +36,14 @@ if "%GOODQ_RELEASE_OUTPUT_ROOT%"=="" (
     echo [BLOCKED] Missing release output. Set GOODQ_RELEASE_OUTPUT_ROOT to an external empty directory.
     goto :failed
 )
+if "%GOODQ_ASSET_VAULT_ROOT%"=="" (
+    echo [BLOCKED] Missing sealed asset vault. Set GOODQ_ASSET_VAULT_ROOT before the offline build.
+    goto :failed
+)
+if not exist "%GOODQ_ASSET_VAULT_ROOT%" (
+    echo [BLOCKED] Sealed asset vault is unavailable: %GOODQ_ASSET_VAULT_ROOT%
+    goto :failed
+)
 
 for /f "tokens=2 delims== " %%I in ('findstr /b /c:"GOODQ_VERSION =" "%REPO_ROOT%\goodq_version.py"') do set "EXPECTED_VERSION=%%~I"
 for /f %%I in ('git -C "%REPO_ROOT%" rev-parse HEAD') do set "EXPECTED_COMMIT=%%I"

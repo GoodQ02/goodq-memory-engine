@@ -83,32 +83,10 @@ def test_object_detect_reports_diagnostics_on_python_error(monkeypatch, tmp_path
     image_path = tmp_path / "scene_0013.jpg"
     image_path.write_bytes(b"fake")
 
-    class _FakeImage:
-        size = (576, 432)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return None
-
-    torch_mod = types.ModuleType("torch")
-    torch_mod.cuda = types.SimpleNamespace(
-        is_available=lambda: True,
-        memory_allocated=lambda: 1024 * 1024,
-        memory_reserved=lambda: 2 * 1024 * 1024,
-        max_memory_allocated=lambda: 3 * 1024 * 1024,
-    )
-
-    pil_mod = types.ModuleType("PIL")
-    pil_mod.Image = types.SimpleNamespace(open=lambda _path: _FakeImage())
-
-    monkeypatch.setitem(sys.modules, "torch", torch_mod)
-    monkeypatch.setitem(sys.modules, "PIL", pil_mod)
-    monkeypatch.setattr(module, "_load_yolo", lambda _cfg: False)
-    monkeypatch.setattr(module, "_YOLO", object())
-    monkeypatch.setattr(module, "_YOLO_DEVICE", "cuda")
-    monkeypatch.setattr(module, "_run_yolo", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("synthetic detect failure")))
+    runtime = module.DetectorRuntime(model_id="opencv_nanodet", device="cpu", net=object())
+    monkeypatch.setattr(module, "_select_model_id", lambda _cfg: "opencv_nanodet")
+    monkeypatch.setattr(module, "_load_detector", lambda _cfg: runtime)
+    monkeypatch.setattr(module, "_detect_with_runtime", lambda *_args: (_ for _ in ()).throw(RuntimeError("synthetic detect failure")))
     monkeypatch.setattr(module.GPUManager, "clear_cache", lambda: None)
 
     result = module.object_detect({"source_path": str(image_path)}, {})

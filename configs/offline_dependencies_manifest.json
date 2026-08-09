@@ -331,6 +331,18 @@
         "required": true
       },
       {
+        "artifact_id": "opencv_python_headless_win_cp310",
+        "name": "opencv-python-headless",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp37-abi3",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://files.pythonhosted.org/packages/4a/90/b338326131ccb2aaa3c2c85d00f41822c0050139a4bfe723cfd95455bd2d/opencv_python_headless-4.13.0.92-cp37-abi3-win_amd64.whl",
+        "sha256": "77a82fe35ddcec0f62c15f2ba8a12ecc2ed4207c17b0902c7a3151ae29f37fb6",
+        "license": "Apache-2.0"
+      },
+      {
         "artifact_id": "pandas_win_cp310",
         "name": "pandas",
         "pack_id": "windows_wheelhouse",

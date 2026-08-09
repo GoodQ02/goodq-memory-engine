@@ -18,7 +18,7 @@ echo   - Audio transcription (Faster Whisper)
 echo   - Face embedding (OpenCV YuNet/SFace)
 echo   - Emotion classification (RoBERTa)
 echo   - Image embeddings (CLIP, DINO)
-echo   - Object detection/tracking (YOLO)
+echo   - Object tracking (GPU-enabled when configured)
 echo.
 echo NOTE: This requires ~5GB download and ~15GB disk space for CUDA libraries
 echo.
@@ -131,25 +131,12 @@ echo ✓ Text embedding environment configured
 echo.
 
 echo ================================================================================
-echo  Step 6/7: Object Detection Environment
+echo  Step 6/7: Object Detection Environment (OpenCV Zoo packs; no PyTorch)
 echo ================================================================================
 echo.
 "%CONDA_EXE%" run -n goodq_object_detect python --version >nul 2>&1 || goto :error
 
-"%CONDA_EXE%" run -n goodq_object_detect pip list | findstr torch
-if errorlevel 1 (
-    echo PyTorch not required for this step, skipping...
-) else (
-    echo Removing CPU-only PyTorch...
-    "%CONDA_EXE%" run -n goodq_object_detect pip uninstall -y torch torchvision
-    
-    echo Installing PyTorch 2.3.1 with CUDA 12.1...
-    "%CONDA_EXE%" run -n goodq_object_detect pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
-    
-    echo Testing CUDA availability...
-    "%CONDA_EXE%" run -n goodq_object_detect python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available!'; print(f'✓ CUDA {torch.version.cuda} available on {torch.cuda.get_device_name(0)}')"
-    if errorlevel 1 goto :error
-)
+echo OpenCV Zoo detection is packaged independently of the PyTorch GPU setup.
 
 echo ✓ Object detection environment configured
 echo.

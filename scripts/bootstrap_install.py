@@ -117,7 +117,7 @@ SUPPORTED_STEP_ENVS: tuple[StepEnvSpec, ...] = (
         "envs/object_detect/requirements.txt",
         "envs/locks/object_detect.lock.txt",
         "object detection",
-        ("torch", "torchvision", "ultralytics", "cv2", "numpy"),
+        ("cv2", "numpy"),
     ),
     StepEnvSpec(
         "goodq_face_embed",

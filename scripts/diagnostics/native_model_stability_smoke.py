@@ -28,12 +28,12 @@ TARGETS: dict[str, dict[str, Any]] = {
     "object_detect": {
         "env": "goodq_object_detect",
         "step": "object_detect",
-        "component": "YOLO",
-        "model": "ultralytics/yolov8n",
-        "loader": "yolo",
-        "imports": ["torch", "torchvision", "ultralytics", "numpy", "PIL"],
-        "packages": ["torch", "torchvision", "torchaudio", "ultralytics", "numpy", "pillow"],
-        "model_candidates": ["models/yolov8n.pt", "yolov8n.pt"],
+        "component": "OpenCV DNN object detection",
+        "model": "opencv_zoo/object_detection_nanodet_2022nov.onnx",
+        "loader": "opencv_dnn",
+        "imports": ["cv2", "numpy"],
+        "packages": ["opencv-python-headless", "numpy"],
+        "model_candidates": ["opencv_zoo/object_detection_nanodet_2022nov.onnx"],
     },
     "image_caption": {
         "env": "goodq_image_caption",
@@ -207,12 +207,12 @@ def _try_model_load(target, allow_downloads):
     hf_source = _resolve_hf_snapshot(models_root, model, target.get("required_files", []))
     started = time.perf_counter()
     try:
-        if loader == "yolo" or step == "object_detect":
+        if loader == "opencv_dnn" or step == "object_detect":
             if local_path is None and not allow_downloads:
                 return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}
-            from ultralytics import YOLO
+            import cv2
 
-            YOLO(str(local_path or model))
+            cv2.dnn.readNet(str(local_path or model))
         elif loader == "clap" or step == "audio_embed_clap":
             if hf_source is None and not allow_downloads:
                 return {"attempted": False, "status": "missing_model_cache", "elapsed_ms": 0.0}

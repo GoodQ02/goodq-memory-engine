@@ -130,7 +130,7 @@ ENV_CONFIG: List[Dict[str, str]] = [
     {"name": "goodq_video_scene_detect", "python": "3.12", "req": "envs/video_scene_detect/requirements.txt", "torch": "cu121"},
     {"name": "goodq_face_embed", "python": "3.12", "req": "envs/face_embed/requirements.txt", "torch": "cu121"},
     {"name": "goodq_image_caption", "python": "3.12", "req": "envs/image_caption/requirements.txt", "torch": "cu121"},
-    {"name": "goodq_object_detect", "python": "3.12", "req": "envs/object_detect/requirements.txt", "torch": "cu121"},
+    {"name": "goodq_object_detect", "python": "3.12", "req": "envs/object_detect/requirements.txt", "torch": false},
     {"name": "goodq_object_track", "python": "3.12", "req": "envs/object_track_yolo/requirements.txt", "torch": "cu121"},
 
     # Audio
@@ -162,7 +162,7 @@ FAISS_ENV_NAMES = {
 }
 TORCH_ENV_NAMES = {cfg["name"] for cfg in [
     {"name": "goodq_video_scene_detect"}, {"name": "goodq_face_embed"}, {"name": "goodq_image_caption"},
-    {"name": "goodq_object_detect"}, {"name": "goodq_object_track"}, {"name": "goodq_audio_diarize"},
+    {"name": "goodq_object_track"}, {"name": "goodq_audio_diarize"},
     {"name": "goodq_audio_transcribe"}, {"name": "goodq_audio_emotion"}, {"name": "goodq_audio_embed"},
     {"name": "goodq_text_embed"}, {"name": "goodq_tagger"}, {"name": "goodq_sentiment"},
     {"name": "goodq_emotion_classify"},

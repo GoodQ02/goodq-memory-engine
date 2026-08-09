@@ -325,17 +325,17 @@ def test_release_signing_uses_a_staged_manifest_not_the_tracked_checkout() -> No
     assert 'flag.String("signature-path"' in signer
 
 
-def test_baseline_model_manifest_contains_no_unverified_payload_scaffold() -> None:
-    """A baseline release must not advertise model files it cannot reproduce."""
+def test_baseline_model_manifest_contains_only_verified_object_detection_payloads() -> None:
+    """The baseline must carry NanoDet and reject any unsealed detector payload."""
     manifest = json.loads(
         (REPO_ROOT / "configs" / "model_download_manifest.json").read_text(encoding="utf-8")
     )
 
-    assert manifest["distribution"]["mode"] == "none"
-    assert manifest["model_packs"] == {}
-    serialized = json.dumps(manifest, sort_keys=True)
-    assert "mirror_base_urls" not in serialized
-    assert "sha256" not in serialized
+    assert manifest["distribution"]["mode"] == "sealed_local_packs"
+    assert set(manifest["model_packs"]) == {"object_detection_cpu", "object_detection_gpu"}
+    assert manifest["model_packs"]["object_detection_cpu"]["required"] is True
+    assert manifest["model_packs"]["object_detection_gpu"]["required"] is False
+    assert all(item["sha256"] for pack in manifest["model_packs"].values() for item in pack["assets"])
 
 
 def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None:
@@ -366,6 +366,22 @@ def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> N
     assert 'File /r "staged\\ffmpeg\\*.*"' in installer
     assert '"ffmpeg\\ffmpeg.exe"' in verifier
     assert '"ffmpeg\\ffprobe.exe"' in verifier
+
+
+def test_baseline_installer_stages_and_verifies_the_sealed_object_detection_pack() -> None:
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
+    lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+
+    assert "stage_object_detection_pack.py" in builder
+    assert "GOODQ_ASSET_VAULT_ROOT" in builder
+    assert 'File /r "staged\\model_packs\\object_detection_cpu\\*.*"' in installer
+    assert 'File /r "staged\\model_packs\\object_detection_gpu\\*.*"' in installer
+    assert "opencv-python-headless==4.13.0.92" in lockfile
+
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(encoding="utf-8")
+    assert "object_detection_yolox_2022nov.onnx" in verifier
+    assert "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063" in verifier
 
 
 def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> None:

@@ -87,12 +87,14 @@ def _synthesize_readiness_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
     external = registry.get("external_models", {}) or {}
     lexicons = registry.get("lexicons", {}) or {}
 
-    yolo_info = external.get("yolo_v8n", {}) or {}
+    nanodet_info = external.get("opencv_nanodet", {}) or {}
+    yolox_info = external.get("opencv_yolox", {}) or {}
     whisper_info = external.get("whisper_ggml_large_v3", {}) or {}
     nrc_info = lexicons.get("nrc_emotion", {}) or {}
 
     models_cfg = {
-        "yolo_model_path": str(models_root / yolo_info.get("local_path", "")) if yolo_info.get("local_path") else "",
+        "object_detection_cpu_model": str(models_root / nanodet_info.get("local_path", "")) if nanodet_info.get("local_path") else "",
+        "object_detection_gpu_model": str(models_root / yolox_info.get("local_path", "")) if yolox_info.get("local_path") else "",
         "whisper_ggml_model": str(models_root / whisper_info.get("local_path", "")) if whisper_info.get("local_path") else "",
         "lexicons": {
             "nrc_emotion_dir": str(models_root / nrc_info.get("local_path", "")) if nrc_info.get("local_path") else "",
@@ -306,7 +308,8 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
     check_path("poppler_bin", tools_cfg.get("poppler_bin"), must_exist=False)
 
     models_cfg = cfg.get("models", {})
-    check_path("yolo_model", models_cfg.get("yolo_model_path"))
+    check_path("object_detection_cpu_model", models_cfg.get("object_detection_cpu_model"))
+    check_path("object_detection_gpu_model", models_cfg.get("object_detection_gpu_model"), must_exist=False)
     check_path("whisper_model", models_cfg.get("whisper_ggml_model"), must_exist=False)
     lex_cfg = models_cfg.get("lexicons", {})
     check_path("nrc_emotion_dir", lex_cfg.get("nrc_emotion_dir"), must_exist=False)

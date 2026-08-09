@@ -1,10 +1,41 @@
 {
-  "manifest_version": "2.0.0",
-  "schema_version": "2.0.0",
-  "release_tag": "baseline-no-model-payload",
+  "manifest_version": "2.1.0",
+  "schema_version": "2.1.0",
+  "release_tag": "sealed-opencv-object-detection-packs",
   "distribution": {
-    "mode": "none",
-    "reason": "The CPU-safe baseline ships no downloadable model packs. Optional packs are published only from a complete, signed artifact manifest with exact source revisions, licenses, notices, file hashes, and clean-install evidence."
+    "mode": "sealed_local_packs",
+    "reason": "The installer carries only source-vault-sealed, hash-verified object-detection assets. No first-use model download is permitted."
   },
-  "model_packs": {}
+  "model_packs": {
+    "object_detection_cpu": {
+      "required": true,
+      "description": "Sealed NanoDet CPU-safe object detection baseline.",
+      "assets": [
+        {
+          "asset_id": "opencv_nanodet",
+          "source_file": "object_detection_nanodet_2022nov.onnx",
+          "target_path": "models/opencv_zoo/object_detection_nanodet_2022nov.onnx",
+          "sha256": "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186",
+          "size_bytes": 3800954,
+          "license": "Apache-2.0",
+          "source_url": "https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet"
+        }
+      ]
+    },
+    "object_detection_gpu": {
+      "required": false,
+      "description": "Sealed YOLOX GPU-preferred object detection capability with NanoDet CPU fallback.",
+      "assets": [
+        {
+          "asset_id": "opencv_yolox",
+          "source_file": "object_detection_yolox_2022nov.onnx",
+          "target_path": "models/opencv_zoo/object_detection_yolox_2022nov.onnx",
+          "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063",
+          "size_bytes": 35858002,
+          "license": "Apache-2.0",
+          "source_url": "https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_yolox"
+        }
+      ]
+    }
+  }
 }

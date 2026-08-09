@@ -5,6 +5,7 @@ torch==2.6.0+cpu
 torchvision==0.21.0+cpu
 torchaudio==2.6.0+cpu
 numpy==2.2.6
+opencv-python-headless==4.13.0.92
 pandas==2.3.3
 pyyaml==6.0.3
 python-dotenv==1.2.2

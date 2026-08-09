@@ -30,7 +30,11 @@ $criticalFiles = @(
     "ffmpeg\SOURCE_URL.txt",
     "configs\config.yaml",
     "configs\model_download_manifest.json",
-    "configs\model_download_manifest.json.sig"
+    "configs\model_download_manifest.json.sig",
+    "models\model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx",
+    "models\model_packs\object_detection_cpu\PACK_MANIFEST.json",
+    "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx",
+    "models\model_packs\object_detection_gpu\PACK_MANIFEST.json"
 )
 foreach ($f in $criticalFiles) {
     $fullPath = Join-Path $InstallDir $f
@@ -92,6 +96,32 @@ try {
 }
 if (-not $gate1c.pass) { $results.pass = $false }
 $results.gates += $gate1c
+
+# --- Gate 1d: Sealed object-detection baseline ---
+$gate1d = @{ name = "object_detection_payload"; pass = $true; errors = @() }
+$nanodetPath = Join-Path $InstallDir "models\model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"
+$expectedNanoDet = "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186"
+$yoloxPath = Join-Path $InstallDir "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx"
+$expectedYoloX = "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"
+try {
+    if ((Get-FileHash -LiteralPath $nanodetPath -Algorithm SHA256).Hash.ToLower() -ne $expectedNanoDet) {
+        throw "NanoDet SHA256 mismatch"
+    }
+    & $pythonPath -c "import cv2; cv2.dnn.readNet(r'$nanodetPath'); print('NanoDet ready')" *> $null
+    if ($LASTEXITCODE -ne 0) { throw "OpenCV DNN could not load NanoDet" }
+    if ((Get-FileHash -LiteralPath $yoloxPath -Algorithm SHA256).Hash.ToLower() -ne $expectedYoloX) {
+        throw "YOLOX SHA256 mismatch"
+    }
+    & $pythonPath -c "import cv2; cv2.dnn.readNet(r'$yoloxPath'); print('YOLOX ready')" *> $null
+    if ($LASTEXITCODE -ne 0) { throw "OpenCV DNN could not load YOLOX" }
+    Write-Host "  [OK]   Sealed NanoDet and YOLOX payloads verify and load" -ForegroundColor Green
+} catch {
+    $gate1d.pass = $false
+    $gate1d.errors += "Object-detection baseline failed: $_"
+    Write-Host "  [FAIL] Object-detection baseline failed: $_" -ForegroundColor Red
+}
+if (-not $gate1d.pass) { $results.pass = $false }
+$results.gates += $gate1d
 
 # --- Gate 2: Launcher Manifest Verification ---
 $gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }

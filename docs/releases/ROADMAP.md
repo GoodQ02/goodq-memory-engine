@@ -60,6 +60,15 @@ Paths resolve through configuration authority, environment abstractions,
 platform helpers, or explicit operator input. Public examples are generic and
 redacted. A repair is not complete if it works only on the present machine.
 
+## Active Release Checkpoint: Sealed Object Detection
+
+The active detector migration replaces the former restricted external runtime
+with sealed OpenCV Zoo NanoDet CPU and YOLOX GPU-enhanced capability packs.
+Private development evidence confirms the pinned source-vault seals, OpenCV DNN
+model loading, real CPU and GPU-path inference, explicit GPU-to-CPU fallback,
+and focused installer contracts. The remaining release gate is a fresh managed
+offline installer build followed by one isolated scene on a clean target.
+
 ## Status Vocabulary
 
 - OPEN: evidence confirms work remains.

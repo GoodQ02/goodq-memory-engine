@@ -12,9 +12,10 @@ redistribution decision. A repository configuration claim is not license
 evidence. A payload enters a release only after its exact artifact, revision,
 license evidence, and SHA-256 receipt are verified.
 
-The signed baseline model manifest intentionally declares no downloadable model
-packs. It is not a deferred catalog: an optional pack may replace it only with
-a complete release artifact manifest.
+The signed baseline model manifest ships two sealed OpenCV Zoo object-detection
+packs: NanoDet for CPU baseline and YOLOX for GPU-enhanced installations. Each
+contains one pinned ONNX artifact, its Apache-2.0 notice, a SHA-256 receipt,
+and a compatibility manifest. No model is downloaded at first use.
 
 ## Personal Source Vault
 
@@ -140,11 +141,13 @@ becomes a release artifact.
 ## 1. Eligible After Artifact Verification
 
 These sources have a pinned revision and an explicit permissive upstream model
-license. They are candidates for a future optional model payload; they are not
-bundled by the baseline installer today.
+license. They are candidates for a future optional model payload unless the
+Scope column explicitly says the capability is already bundled.
 
 | Component | Pinned source | License evidence | Scope |
 |---|---|---|---|
+| Object detection | OpenCV Zoo NanoDet (`47534e27c9851bb1128ccc0102f1145e27f23f98`) | upstream Apache-2.0 | sealed CPU baseline pack |
+| Object detection | OpenCV Zoo YOLOX (`47534e27c9851bb1128ccc0102f1145e27f23f98`) | upstream Apache-2.0 | sealed GPU-enhanced pack |
 | Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | baseline VAD candidate |
 | CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | baseline candidate |
 | Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | baseline candidate; 11-label multilabel semantics verified from sealed config |
@@ -169,7 +172,7 @@ wheel metadata license evidence must appear in the generated SBOM.
 |---|---|---|
 | Pyannote diarization, segmentation, and speaker models | token-gated and license acceptance required | user-provisioned optional feature only |
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
-| YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
+| Retired external object detector | distribution boundary incompatible with the permissive baseline | permanently excluded; replaced by sealed OpenCV Zoo packs |
 | `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License; personal acceptance receipt and immutable source snapshot are recorded | personal source only; never baseline/public |
 | Retired unsealed face weights | removed from the supported pipeline; see the canonical face-engine policy | permanently excluded |
 | Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |

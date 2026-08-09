@@ -127,7 +127,7 @@ import sys
 sys.path.insert(0, 'L:/goodq4all')
 
 item = {'source_path': 'L:/goodq4all/test_data/sample_frame.jpg'}
-cfg = {'models': {'yolo_model_path': 'yolov8n.pt'}}
+cfg = {'models': {'object_detection': 'sealed_opencv_zoo'}}
 
 from steps.object_detect.step import object_detect
 result = object_detect(item, cfg)

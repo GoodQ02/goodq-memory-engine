@@ -253,18 +253,6 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
     },
-    "yolo_v8n": {
-        "key": "yolo_v8n",
-        "is_external": True,
-        "local_path": "yolo/yolov8n.pt",
-        "source_url": "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt",
-        "tier_scope": ["cpu_only", "gpu_enhanced"],
-        "classification": "REQUIRED_FIRST_LAUNCH",
-        "gated": False,
-        "requires_token": False,
-        "token_env": None,
-        "failure_behavior": "FATAL_HALT"
-    },
 }
 
 def redact_sensitive_info(text: str, repo_id: Optional[str] = None) -> str:

@@ -102,8 +102,9 @@ Status: PASSED - All models properly pinned!
 - Emotion Recognition: HuBERT, Wav2Vec2
 - NER: BERT-NER
 
-### External Assets (2)
-- YOLOv8n: SHA256 verified ✓
+### External Assets (3)
+- OpenCV Zoo NanoDet: sealed CPU capability pack ✓
+- OpenCV Zoo YOLOX: sealed GPU capability pack ✓
 - Whisper GGML: Optional (not required)
 
 ### System Tools (3)

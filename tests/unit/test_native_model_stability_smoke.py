@@ -45,7 +45,7 @@ def test_classifies_import_failure_before_model_load():
         "return_code": 0,
         "timeout": False,
         "probe": {
-            "imports": [{"module": "ultralytics", "ok": False, "error_type": "ImportError"}],
+            "imports": [{"module": "cv2", "ok": False, "error_type": "ImportError"}],
             "model_load": {"attempted": False, "status": "not_requested"},
         },
     }
@@ -93,7 +93,7 @@ def test_no_model_load_is_default():
 def test_model_load_targets_record_runtime_like_loaders():
     smoke = _load_module()
 
-    assert smoke.TARGETS["object_detect"]["loader"] == "yolo"
+    assert smoke.TARGETS["object_detect"]["loader"] == "opencv_dnn"
     assert smoke.TARGETS["image_caption"]["loader"] == "blip"
     assert smoke.TARGETS["image_embed_dino"]["loader"] == "auto_model"
     assert smoke.TARGETS["audio_embed_clap"]["loader"] == "clap"

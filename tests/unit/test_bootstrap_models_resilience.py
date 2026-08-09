@@ -381,11 +381,6 @@ def test_main_writes_incremental_progress_and_partial_report(monkeypatch, tmp_pa
             "attempts": "1",
         }
 
-    def fake_yolo(**kwargs):
-        live_progress = json.loads(progress_path.read_text(encoding="utf-8"))
-        assert live_progress["current_model"] == "yolov8n.pt"
-        return {"asset": "yolov8n.pt", "status": "ok", "path": str(models_root / "yolo" / "yolov8n.pt"), "attempts": "1"}
-
     monkeypatch.setattr(bootstrap_models, "parse_args", lambda: Namespace(report_path=str(report_path), progress_path=str(progress_path), retries=1))
     monkeypatch.setattr(bootstrap_models, "load_registry", lambda repo_root: registry)
     monkeypatch.setattr(bootstrap_models, "resolve_models_root", lambda: models_root)
@@ -404,17 +399,16 @@ def test_main_writes_incremental_progress_and_partial_report(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(bootstrap_models, "load_dotenv", None)
     monkeypatch.setattr(bootstrap_models, "snapshot", fake_snapshot)
-    monkeypatch.setattr(bootstrap_models, "download_yolo_n", fake_yolo)
 
     bootstrap_models.main()
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     progress = json.loads(progress_path.read_text(encoding="utf-8"))
     assert report["status"] == "complete"
-    assert report["completed_count"] == 3
-    assert len(report["results"]) == 3
+    assert report["completed_count"] == 2
+    assert len(report["results"]) == 2
     assert progress["status"] == "complete"
-    assert progress["completed_count"] == 3
+    assert progress["completed_count"] == 2
     assert progress["current_model"] is None
     assert progress["last_event"] == "bootstrap_complete"
 

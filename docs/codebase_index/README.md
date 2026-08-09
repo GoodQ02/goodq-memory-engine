@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **427**
+Indexed active Python paths: **425**
 
 ## Repository root
 
@@ -193,7 +193,6 @@ Indexed active Python paths: **427**
 - `scripts/audit_all_exceptions.py`
 - `scripts/audit_codebase.py`
 - `scripts/audit_llm.py`
-- `scripts/audit_vision_gpu.py`
 - `scripts/audit_vision_pipeline.py`
 - `scripts/benchmark_vllm_quantization.py`
 - `scripts/bootstrap_install.py`
@@ -276,7 +275,6 @@ Indexed active Python paths: **427**
 - `scripts/monitor_ingestion_realtime.py`
 - `scripts/monitor_processing.py`
 - `scripts/optimize_config.py`
-- `scripts/optimize_vision_gpu.py`
 - `scripts/phase2_completion_report.py`
 - `scripts/phase2_embedding_analysis.py`
 - `scripts/phase2_fixes.py`

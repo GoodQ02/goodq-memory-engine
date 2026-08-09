@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1429**
+Indexed active tracked paths: **1427**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -432,6 +432,7 @@ Indexed active tracked paths: **1429**
 | `/docs/reference/API.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/CLI-REFERENCE.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/DEPENDENCIES.md` | Documentation | Active documentation or governance surface. |
+| `/docs/reference/FACE_EMBEDDING_POLICY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/GPU_CAPABILITY_MATRIX.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/PLATFORM_SUPPORT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/WSL_AUDIO_RUNTIME.md` | Documentation | Active documentation or governance surface. |
@@ -677,7 +678,6 @@ Indexed active tracked paths: **1429**
 | `/scripts/audit_all_exceptions.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_codebase.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_llm.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/audit_vision_gpu.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_vision_pipeline.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/benchmark_vllm_quantization.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/bootstrap_install.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -794,7 +794,6 @@ Indexed active tracked paths: **1429**
 | `/scripts/monitoring/monitor_ingestion.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/monitoring/monitor_live.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/optimize_config.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/optimize_vision_gpu.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/phase2_completion_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/phase2_embedding_analysis.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/phase2_fixes.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -825,7 +824,6 @@ Indexed active tracked paths: **1429**
 | `/scripts/run_control_agent.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/run_gpu_optimization_tests.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/run_vision_audit.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/run_vision_optimization.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/scientific_benchmark.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/season3_feature_ladder.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/seg_p5_authoritative_compare.py` | Tooling | Operator, validation, bootstrap, or development utility. |

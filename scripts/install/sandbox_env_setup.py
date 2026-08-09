@@ -296,7 +296,7 @@ def main() -> None:
         pack_manifest = manifest["model_packs"].get(pack_key)
         if not pack_manifest:
             mode = str(manifest.get("distribution", {}).get("mode") or "unknown")
-            if mode == "none":
+            if mode in {"none", "sealed_local_packs"}:
                 _err(
                     f"Selected pack '{pack_key}' is not published in this baseline. "
                     "No remote model-pack download was attempted."

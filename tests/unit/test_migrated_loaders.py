@@ -229,56 +229,25 @@ def test_tagger_governed_loading(tmp_path, monkeypatch):
 
 
 def test_object_detect_governed_loading(tmp_path, monkeypatch):
-    """Verify that steps/object_detect/step.py loads YOLO model via ensure_model_cached."""
-    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
-    
-    # Setup mock cached yolo_v8n file
-    yolo_file = tmp_path / "yolo" / "yolov8n.pt"
-    yolo_file.parent.mkdir(parents=True, exist_ok=True)
-    yolo_file.write_bytes(b"\x00" * 2000)
-    
-    # Mock config loader to enable offline mode
-    import steps.common.config_loader
-    monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda *args: {"verification": {"offline_mode": True}})
-    
-    yolo_init_calls = []
-    
-    class MockYOLO:
-        def __init__(self, model_path):
-            yolo_init_calls.append(model_path)
-        def predict(self, source, device, verbose):
-            class MockTensor:
-                def __getitem__(self, idx):
-                    return self
-                def tolist(self):
-                    return [10.0, 20.0, 100.0, 200.0]
-            class MockBox:
-                def __init__(self):
-                    self.xyxy = MockTensor()
-                    self.conf = [0.9]
-                    self.cls = [0]
-            class MockResult:
-                def __init__(self):
-                    self.boxes = [MockBox()]
-                    self.names = {0: "person"}
-            return [MockResult()]
-            
-    ultralytics_mock = types.ModuleType("ultralytics")
-    ultralytics_mock.YOLO = MockYOLO
-    monkeypatch.setitem(sys.modules, "ultralytics", ultralytics_mock)
-    
-    from steps.object_detect.step import _YOLO, object_detect
-    # Reset _YOLO cache
-    import steps.object_detect.step
-    steps.object_detect.step._YOLO = None
-    
-    # Create mock source image file
-    src_file = tmp_path / "frame.jpg"
-    src_file.write_bytes(b"")
-    
-    cfg = {}
-    res = object_detect({"source_path": str(src_file)}, cfg)
-    print("DEBUG_RES:", res)
-    assert res["objects"][0]["label"] == "person"
-    assert len(yolo_init_calls) == 1
-    assert Path(yolo_init_calls[0]) == yolo_file.absolute()
+    """The step uses the sealed OpenCV runtime and preserves the objects contract."""
+    from steps.object_detect import step
+
+    source = tmp_path / "frame.jpg"
+    source.write_bytes(b"frame")
+    runtime = step.DetectorRuntime(model_id="opencv_nanodet", device="cpu", net=object())
+    monkeypatch.setattr(step, "_load_detector", lambda _cfg: runtime)
+    monkeypatch.setattr(
+        step,
+        "_detect_with_runtime",
+        lambda _runtime, _source: [{"bbox": [10.0, 20.0, 100.0, 200.0], "label": "person", "score": 0.9}],
+    )
+
+    result = step.object_detect({"source_path": str(source)}, {})
+
+    assert result["objects"][0]["label"] == "person"
+    assert result["detect_meta"] == {
+        "status": "ok",
+        "engine": "opencv-dnn",
+        "model": "opencv_nanodet",
+        "device": "cpu",
+    }

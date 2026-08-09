@@ -5966,7 +5966,7 @@ def _log_visual_to_ucf_ledger(
                     t_end=frame_timestamp + 0.001 * idx,
                     modality='video',
                     worker_name='object_detect',
-                    model_tag='yolov8n',
+                    model_tag=str((item.get('detect_meta') or {}).get('model') or 'unknown_object_detector'),
                     confidence=score,
                     spatial_region=spatial_region,
                     spatial_space='normalized_yxyx_top_left',

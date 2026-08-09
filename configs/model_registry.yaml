@@ -612,20 +612,37 @@ huggingface_models:
     failure_behavior: WARN_DEGRADED
 
 external_models:
-  yolo_v8n:
-    name: YOLOv8n Object Detection
-    source_url: https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt
-    version: 8.2.0
-    sha256: f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36
-    local_path: yolo/yolov8n.pt
-    file_size_bytes: 6549796
+  opencv_nanodet:
+    name: OpenCV Zoo NanoDet Object Detection
+    source_url: https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx
+    version: opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98
+    sha256: 4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186
+    local_path: model_packs/object_detection_cpu/models/opencv_zoo/object_detection_nanodet_2022nov.onnx
+    file_size_bytes: 3800954
     model_type: object-detection
-    tier_scope: [cpu_only, gpu_enhanced]
+    acquisition_policy: bundled_only
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
     classification: REQUIRED_FIRST_LAUNCH
     gated: false
     requires_token: false
     token_env: null
     failure_behavior: FATAL_HALT
+
+  opencv_yolox:
+    name: OpenCV Zoo YOLOX Object Detection
+    source_url: https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_yolox/object_detection_yolox_2022nov.onnx
+    version: opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98
+    sha256: c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063
+    local_path: model_packs/object_detection_gpu/models/opencv_zoo/object_detection_yolox_2022nov.onnx
+    file_size_bytes: 35858002
+    model_type: object-detection
+    acquisition_policy: bundled_only
+    tier_scope: [gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
 
   opencv_yunet:
     name: OpenCV Zoo YuNet Face Detection

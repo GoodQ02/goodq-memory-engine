@@ -5,7 +5,6 @@ import json
 import os
 import sys
 import time
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -30,7 +29,6 @@ except Exception:  # pragma: no cover
 DEFAULT_DOWNLOAD_RETRIES = 4
 
 from steps.common.model_provisioner import lookup_model
-YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
 _HF_TOKEN_CANDIDATES = ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACE_TOKEN")
 _PLACEHOLDER_TOKENS = {
     "your_huggingface_token_here",
@@ -313,8 +311,6 @@ def _build_report(
         repo_id = r.get("repo_id") or r.get("name") or r.get("model") or r.get("asset")
         if repo_id and "@" in repo_id:
             repo_id = repo_id.split("@", 1)[0]
-        if repo_id == "yolov8n.pt":
-            repo_id = "yolo_v8n"
         status_val = r.get("status")
         
         _, metadata = lookup_model(repo_id)
@@ -453,66 +449,6 @@ def snapshot(
             "error": res.error or "provisioning failed",
             "attempts": str(getattr(res, "attempts_made", 1))
         }
-
-
-def download_yolo_n(
-    *,
-    retries: int = DEFAULT_DOWNLOAD_RETRIES,
-    progress_label: str = "",
-    progress_cb: Callable[..., None] | None = None,
-) -> Dict[str, str]:
-    # Ultralytics yolov8n.pt hosted in GH assets; cache into models/yolo
-    target = Path(os.environ.get("TORCH_HOME") or os.environ.get("HF_HOME") or ".") / "yolo" / "yolov8n.pt"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and target.stat().st_size > 1024 * 1024:
-        return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "true"}
-    attempts = max(int(retries), 1)
-    label = f"[bootstrap] [{progress_label}] " if progress_label else "[bootstrap] "
-    temp_target = target.with_suffix(".tmp")
-    for attempt in range(1, attempts + 1):
-        started = time.time()
-        try:
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="asset_download_started")
-            _log(f"{label}downloading yolov8n.pt (attempt {attempt}/{attempts})")
-            with urllib.request.urlopen(YOLO_URL, timeout=120) as response, open(temp_target, "wb") as handle:
-                total = int(response.headers.get("Content-Length", "0") or "0")
-                downloaded = 0
-                next_marker = 25
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    handle.write(chunk)
-                    downloaded += len(chunk)
-                    if total > 0:
-                        percent = int((downloaded / total) * 100)
-                        while percent >= next_marker and next_marker <= 100:
-                            if progress_cb:
-                                progress_cb(current_attempt=attempt, last_event=f"asset_download_{next_marker}pct")
-                            _log(f"{label}yolov8n.pt {next_marker}%")
-                            next_marker += 25
-            os.replace(temp_target, target)
-            elapsed_sec = round(time.time() - started, 1)
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="asset_ready")
-            _log(f"{label}ready yolov8n.pt ({elapsed_sec:.1f}s)")
-            return {"asset": "yolov8n.pt", "status": "ok", "path": str(target), "cached": "false", "attempts": str(attempt), "elapsed_sec": elapsed_sec}
-        except Exception as exc:  # pragma: no cover
-            detail = str(exc)
-            try:
-                temp_target.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if attempt < attempts and _is_transient_download_error(detail):
-                if progress_cb:
-                    progress_cb(current_attempt=attempt, last_event="transient_retry", last_error=detail)
-                _log(f"{label}transient failure for yolov8n.pt: {detail}. Retrying...")
-                _retry_pause(attempt)
-                continue
-            if progress_cb:
-                progress_cb(current_attempt=attempt, last_event="asset_error", last_error=detail)
-            return {"asset": "yolov8n.pt", "status": "error", "error": detail, "attempts": str(attempt)}
 
 
 def load_registry(repo_root: Path) -> Dict | None:
@@ -802,7 +738,6 @@ def main() -> None:
         repo_id = mid.split('@')[0] if '@' in mid else mid
         _, metadata = lookup_model(repo_id)
         _log(f"Model: {repo_id} | Revision: {metadata.get('revision') or 'default'} | Gated: {metadata.get('gated', False)} | Required: {metadata.get('required', True)}")
-    _log("Model: yolov8n.pt | Source: GitHub | Gated: False | Required: True")
     _log("[bootstrap] --------------------------------")
 
     log_dir = resolve_bootstrap_log_dir(repo_root)
@@ -815,8 +750,7 @@ def main() -> None:
     progress_path.parent.mkdir(parents=True, exist_ok=True)
 
     results: List[Dict[str, Any]] = []
-    includes_yolo = profile != "audio_standard"
-    total_assets = len(wanted) + (1 if includes_yolo else 0)
+    total_assets = len(wanted)
     progress_state: Dict[str, Any] = {
         "status": "in_progress",
         "models_dir": str(models_root),
@@ -940,52 +874,6 @@ def main() -> None:
                     _log(f"[WARN] Optional or inactive model {repo_id} failed to download: {result.get('error')}. Skipping since it is non-fatal for active scopes.")
 
             write_report("in_progress", current_model=repo_id)
-
-        if includes_yolo:
-            emit_progress(
-                current_model="yolov8n.pt",
-                current_index=total_assets,
-                current_attempt=1,
-                last_event="asset_started",
-                completed_count=len(results),
-            )
-            yolo_res = download_yolo_n(
-                retries=args.retries,
-                progress_label=f"{total_assets}/{total_assets}",
-                progress_cb=emit_progress,
-            )
-            yolo_res["repo_id"] = "yolo_v8n"
-            _, yolo_metadata = lookup_model("yolo_v8n")
-            yolo_classification = yolo_metadata.get("classification", "REQUIRED_FIRST_LAUNCH")
-            yolo_res["classification"] = yolo_classification
-            results.append(yolo_res)
-
-            emit_progress(
-                current_model="yolov8n.pt",
-                current_index=total_assets,
-                current_attempt=yolo_res.get("attempts"),
-                last_event="asset_completed",
-                completed_count=len(results),
-            )
-
-            if yolo_res.get("status") == "error":
-                yolo_tier_scope = yolo_metadata.get("tier_scope", [])
-                is_yolo_active = any(scope in active_scopes for scope in yolo_tier_scope)
-                enforce_yolo_fatal = is_yolo_active and yolo_metadata.get("failure_behavior") == "FATAL_HALT"
-
-                if enforce_yolo_fatal:
-                    err_msg = f"Required asset yolov8n.pt failed to download: {yolo_res.get('error')}"
-                    _log(f"[ERROR] {err_msg}")
-                    write_report("failed", current_model="yolov8n.pt", fatal_error=err_msg, final_status="failed")
-                    emit_progress(
-                        status="failed",
-                        last_event="fatal_error",
-                        last_error=err_msg,
-                        completed_count=len(results),
-                    )
-                    sys.exit(1)
-                else:
-                    _log(f"[WARN] Optional or inactive asset yolov8n.pt failed to download: {yolo_res.get('error')}. Skipping since it is non-fatal for active scopes.")
 
         write_report("complete", current_model=None, final_status="success")
         emit_progress(

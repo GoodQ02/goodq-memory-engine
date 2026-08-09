@@ -17,7 +17,7 @@ and related canonical docs.
 
 ### Added
 - **Dynamic WSL Distro Resolution**: Converted static WSL distro to dynamic check that scans registered distros and prefers "GoodQ_Audio_Distro" if found.
-- **Model Bootstrap Report Count Alignment**: Resolved model repo_id with additional fallback keys, handled revision split, mapped yolov8n.pt to yolo_v8n, and populated repo_id in bootstrap results.
+- **Model Bootstrap Report Count Alignment**: Historical bootstrap key alignment was superseded by the sealed OpenCV Zoo object-detection capability-pack contract.
 
 ### Fixed
 - **Version Bump**: Aligned software version to v2.5.8-rc5 across the codebase.

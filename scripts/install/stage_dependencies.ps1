@@ -60,10 +60,11 @@ function Invoke-VerifiedDownload {
 
     Ensure-Directory $DestinationPath
     $temporaryPath = "$DestinationPath.partial"
-    Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+    # Preserve a verified-in-progress partial across transient connection resets.
+    # The final artifact is still admitted only after its full SHA-256 matches.
     try {
         $curl = Get-Command curl.exe -ErrorAction Stop
-        & $curl.Source --fail --location --retry 3 --connect-timeout 30 --output $temporaryPath -- $Url
+        & $curl.Source --fail --location --continue-at - --retry 5 --retry-all-errors --retry-max-time 1800 --connect-timeout 30 --output $temporaryPath -- $Url
         if ($LASTEXITCODE -ne 0) {
             throw "curl.exe failed with exit code $($LASTEXITCODE): $Url"
         }
@@ -76,7 +77,9 @@ function Invoke-VerifiedDownload {
         }
         Move-Item -LiteralPath $temporaryPath -Destination $DestinationPath -Force
     } catch {
-        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Write-Warning "Preserving resumable partial after transfer failure: $temporaryPath"
+        }
         throw
     }
 }

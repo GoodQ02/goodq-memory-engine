@@ -1,8 +1,4 @@
 # Canonical reproducible install recipe: ../locks/object_detect.lock.txt
-# Keep these direct-install hints aligned with the lock's base Torch lane.
-torch==2.5.1
-torchvision==0.20.1
-ultralytics==8.2.103
-opencv-python-headless==4.10.0.84
+# OpenCV DNN consumes the sealed Apache-2.0 ONNX assets directly.
+opencv-python-headless==4.13.0.92
 numpy==1.26.4
-Pillow==10.2.0

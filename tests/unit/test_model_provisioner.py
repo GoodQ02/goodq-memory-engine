@@ -440,47 +440,18 @@ def test_external_models_offline_missing(tmp_path, monkeypatch):
     """Verify offline missing behavior for external models."""
     monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
 
-    res = ensure_model_cached("yolo_v8n", offline=True)
-    assert res.status == "offline_missing"
-    assert "yolo_v8n" in res.error
+    res = ensure_model_cached("opencv_nanodet", offline=True)
+    assert res.status == "bundled_missing"
+    assert "opencv_nanodet" in res.error
 
 
-def test_external_models_online_download(tmp_path, monkeypatch):
-    """Verify online download behavior for external models."""
+def test_bundled_models_never_download_on_first_use(tmp_path, monkeypatch):
+    """Object-detection capability assets are installer-owned, not fetched at runtime."""
     monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
     monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
     monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
 
-    download_calls = []
-
-    class MockResponse:
-        def __init__(self):
-            self.data = b"\x00" * 2000
-        def read(self, amt=None):
-            if amt is None:
-                d = self.data
-                self.data = b""
-                return d
-            else:
-                d = self.data[:amt]
-                self.data = self.data[amt:]
-                return d
-        def __enter__(self):
-            return self
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            pass
-
-    def mock_urlopen(req, timeout=None):
-        url = req.full_url if hasattr(req, "full_url") else req
-        download_calls.append(url)
-        return MockResponse()
-
-    import urllib.request
-    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
-
-    res = ensure_model_cached("yolo_v8n", offline=False)
-    assert res.status == "downloaded"
-    assert "yolov8n.pt" in res.files_checked
-    assert len(download_calls) == 1
-    assert "yolov8n.pt" in download_calls[0]
+    res = ensure_model_cached("opencv_nanodet", offline=False)
+    assert res.status == "bundled_missing"
+    assert "no network download" in res.error
 

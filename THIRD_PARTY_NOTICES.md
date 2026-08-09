@@ -32,14 +32,24 @@ This notice is a public-facing summary, not legal advice.
   license metadata is preserved in the corresponding `*.dist-info/licenses/` or
   `LICENSE` files under [`vendor/`](vendor/).
 
+### OpenCV Zoo Object-Detection Packs
+
+- Purpose: sealed NanoDet CPU and YOLOX GPU-enhanced object detection.
+- Source: the pinned OpenCV Zoo revision recorded in
+  [`configs/model_registry.yaml`](configs/model_registry.yaml).
+- License: Apache-2.0. Each installer pack carries the applicable source notice
+  and a SHA-256 compatibility receipt.
+- Runtime: OpenCV DNN; the packs do not acquire weights from the network.
+
 ## Model and Asset Downloads
 
 Canonical model and asset references live in
 [`configs/model_registry.yaml`](configs/model_registry.yaml).
 
-GoodQ4All does **not** redistribute ML model weights through the public branch.
-Weights and optional assets are downloaded from upstream providers into the local
-model cache at install/bootstrap time.
+GoodQ4All redistributes only capability packs whose exact source artifacts,
+license notices, compatibility manifests, and SHA-256 receipts are verified.
+All other model weights remain upstream-acquired or user-provisioned according
+to their registry policy.
 
 Representative upstream model families referenced by the registry include:
 

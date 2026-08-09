@@ -64,6 +64,18 @@ if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
 )
+if "%GOODQ_ASSET_VAULT_ROOT%"=="" (
+    echo [ERROR] Missing sealed asset vault: set GOODQ_ASSET_VAULT_ROOT before building.
+    exit /b 26
+)
+if not exist "%GOODQ_ASSET_VAULT_ROOT%" (
+    echo [ERROR] Sealed asset vault does not exist: %GOODQ_ASSET_VAULT_ROOT%
+    exit /b 27
+)
+if "%GOODQ_DEV_PYTHON%"=="" (
+    echo [ERROR] Missing CPython staging interpreter: GOODQ_DEV_PYTHON.
+    exit /b 28
+)
 
 :: Create a fresh private staging tree before signing. The tracked source
 :: manifest and signature remain untouched throughout the release build.
@@ -77,6 +89,15 @@ copy /y "..\..\configs\model_download_manifest.json" "staged\configs\model_downl
 if errorlevel 1 (
     echo [ERROR] Failed to stage the model download manifest.
     exit /b 25
+)
+
+:: Stage the sealed OpenCV Zoo CPU and GPU detection packs.  This boundary
+:: verifies the immutable vault snapshots before a model file enters staging.
+echo Staging sealed OpenCV object-detection capability packs...
+"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\stage_object_detection_pack.py --vault-root "%GOODQ_ASSET_VAULT_ROOT%" --staging-root "staged\model_packs"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Object-detection capability pack staging failed.
+    exit /b 29
 )
 
 :: 3a. Sign manifest in release mode (verifies key matches launcher, signs, round-trip verifies)

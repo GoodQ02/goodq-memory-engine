@@ -180,6 +180,13 @@ runtime_ok:
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
+  ; Sealed NanoDet baseline payload and optional GPU YOLOX capability are
+  ; verified from the immutable source vault before the compiler reaches NSIS.
+  SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_cpu"
+  File /r "staged\model_packs\object_detection_cpu\*.*"
+  SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_gpu"
+  File /r "staged\model_packs\object_detection_gpu\*.*"
+
   ; Write default config to ProgramData
   SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"
   File "staged\qdrant\config\qdrant_config.yaml"
@@ -375,9 +382,8 @@ wsl_tar_found:
 wsl_done:
   !endif
 
-  ; --- STATE 8: explicit baseline model-payload boundary ---
-  DetailPrint "Step 8/11: No model payload is published with this baseline."
-  DetailPrint "Optional model packs require their own complete signed artifact receipt."
+  ; --- STATE 8: sealed object-detection capability packs ---
+  DetailPrint "Step 8/11: Sealed NanoDet baseline payload and YOLOX GPU capability staged."
 
   ; --- STATE 10: run health check ---
   /*

@@ -49,11 +49,11 @@ def test_audio_pack_verify_honors_explicit_requested_pack(tmp_path: Path):
     assert "not published in this baseline" in result.stderr
 
 
-def test_installer_model_pack_setup_never_falls_back_to_retired_remote_urls() -> None:
+def test_installer_model_pack_setup_installs_only_packaged_sealed_assets() -> None:
     installer = ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
     content = installer.read_text(encoding="utf-8")
 
-    assert "No model payload is published with this baseline" in content
+    assert "Sealed NanoDet baseline payload" in content
     assert "sandbox_env_setup.py\" --packs core_memory --local-only" not in content
 
 
@@ -112,6 +112,10 @@ def test_wheel_acquisition_never_leaves_a_partial_file_at_the_final_name() -> No
     assert "Move-Item -LiteralPath $temporaryPath -Destination $DestinationPath -Force" in stager
     assert "Downloaded artifact is empty" in stager
     assert "curl.exe" in stager
+    assert "--continue-at" in stager
+    assert "--retry-all-errors" in stager
+    assert "--retry-max-time" in stager
+    assert "Preserving resumable partial" in stager
     assert "$LASTEXITCODE:" not in stager
 
 

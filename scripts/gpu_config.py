@@ -13,7 +13,7 @@ GPU_MEMORY_LIMITS = {
     "goodq_emotion_classify": 0.18,  # Emotion classification
     "goodq_face_embed": 0.20,  # Face embeddings
     "goodq_image_caption": 0.20,  # BLIP captioning / shared image env
-    "goodq_object_detect": 0.25,  # Object detection (YOLO)
+    "goodq_object_detect": 0.25,  # Object detection (OpenCV DNN)
     "goodq_ocr": 0.20,  # OCR
     "goodq_text_embed": 0.15,  # Text embeddings
 }

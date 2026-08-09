@@ -84,7 +84,7 @@ $envs = @(
     @{ name="goodq_video_scene_detect"; py="3.12"; req="envs/video_scene_detect/requirements.txt"; torch=$true; faiss=$false },
     @{ name="goodq_face_embed"; py="3.12"; req="envs/face_embed/requirements.txt"; torch=$true; faiss=$false },
     @{ name="goodq_image_caption"; py="3.12"; req="envs/image_caption/requirements.txt"; torch=$true; faiss=$true },
-    @{ name="goodq_object_detect"; py="3.12"; req="envs/object_detect/requirements.txt"; torch=$true; faiss=$false },
+      @{ name="goodq_object_detect"; py="3.12"; req="envs/object_detect/requirements.txt"; torch=$false; faiss=$false },
     @{ name="goodq_object_track"; py="3.12"; req="envs/object_track_yolo/requirements.txt"; torch=$true; faiss=$false },
     @{ name="goodq_audio_diarize"; py="3.12"; req="envs/audio_diarize/requirements.txt"; torch=$true; faiss=$false },
     @{ name="goodq_audio_transcribe"; py="3.12"; req="envs/audio_transcribe/requirements.txt"; torch=$true; faiss=$false },

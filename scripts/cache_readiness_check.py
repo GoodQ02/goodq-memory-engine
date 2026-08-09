@@ -59,7 +59,8 @@ MODEL_SNAPSHOTS = {
     "Systran/faster-whisper-tiny": "models--Systran--faster-whisper-tiny",
 }
 
-YOLO_PATH = Path("yolo/yolov8n.pt")
+NANODET_PATH = Path("model_packs/object_detection_cpu/models/opencv_zoo/object_detection_nanodet_2022nov.onnx")
+YOLOX_PATH = Path("model_packs/object_detection_gpu/models/opencv_zoo/object_detection_yolox_2022nov.onnx")
 LEXICON_PATH = Path("lexicons/NRC-Emotion-Lexicon")
 DATASET_ROOT = Path("hf/datasets")
 
@@ -118,7 +119,8 @@ def build_inventory(models_dir: Path) -> List[CacheItem]:
     hub_root = models_dir / "hub"
     for model_id, folder in MODEL_SNAPSHOTS.items():
         items.append(CacheItem(name=model_id, path=hub_root / folder, kind="model"))
-    items.append(CacheItem(name="yolov8n.pt", path=models_dir / YOLO_PATH, kind="asset"))
+    items.append(CacheItem(name="OpenCV Zoo NanoDet", path=models_dir / NANODET_PATH, kind="asset"))
+    items.append(CacheItem(name="OpenCV Zoo YOLOX", path=models_dir / YOLOX_PATH, kind="asset", optional=True))
     items.append(CacheItem(name="NRC-Emotion-Lexicon", path=models_dir / LEXICON_PATH, kind="asset", optional=True))
     items.append(CacheItem(name="HF datasets cache", path=models_dir / DATASET_ROOT, kind="dataset", optional=True))
     return items

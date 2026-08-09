@@ -14,9 +14,10 @@ import hashlib
 import json
 import shutil
 import sys
+import time
 import zipfile
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 # Payload packs live beside the small NSIS bootstrap, so their boundary is a
@@ -24,6 +25,8 @@ from typing import Iterable
 # largest sealed public GPU model member (currently Gemma 4 12B at ~22.28 GiB)
 # without splitting a signed model file across independently verified packs.
 DEFAULT_MAX_PACK_BYTES = 32 * 1024 * 1024 * 1024
+COPY_CHUNK_BYTES = 16 * 1024 * 1024
+DEFAULT_HEARTBEAT_SECONDS = 30.0
 SCHEMA_VERSION = 1
 
 
@@ -31,11 +34,32 @@ class PayloadPackError(RuntimeError):
     """Raised when an offline payload pack cannot be safely produced or applied."""
 
 
-def sha256(path: Path) -> str:
+def _format_bytes(value: int) -> str:
+    return f"{value / 1024**3:.2f} GiB"
+
+
+def sha256(
+    path: Path,
+    *,
+    progress: Callable[[str], None] | None = None,
+    heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+) -> str:
+    if heartbeat_seconds < 0:
+        raise ValueError("heartbeat interval must not be negative")
     digest = hashlib.sha256()
+    total_bytes = path.stat().st_size
+    copied_bytes = 0
+    last_heartbeat = time.monotonic()
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        for chunk in iter(lambda: handle.read(COPY_CHUNK_BYTES), b""):
             digest.update(chunk)
+            copied_bytes += len(chunk)
+            if progress and time.monotonic() - last_heartbeat >= heartbeat_seconds:
+                progress(
+                    f"[PAYLOAD] hash heartbeat: {path.name} "
+                    f"{_format_bytes(copied_bytes)} / {_format_bytes(total_bytes)}"
+                )
+                last_heartbeat = time.monotonic()
     return digest.hexdigest()
 
 
@@ -87,9 +111,49 @@ def _split(entries: list[tuple[Path, str]], max_pack_bytes: int) -> list[list[tu
     return groups
 
 
-def build(*, staging_root: Path, output_root: Path, version: str, profile: str, max_pack_bytes: int) -> Path:
+def _write_member(
+    archive: zipfile.ZipFile,
+    source: Path,
+    archive_name: str,
+    *,
+    progress: Callable[[str], None],
+    heartbeat_seconds: float,
+) -> None:
+    total_bytes = source.stat().st_size
+    copied_bytes = 0
+    last_heartbeat = time.monotonic()
+    progress(f"[PAYLOAD] copying: {archive_name} ({_format_bytes(total_bytes)})")
+    info = zipfile.ZipInfo.from_file(source, arcname=archive_name)
+    info.compress_type = zipfile.ZIP_STORED
+    with source.open("rb") as source_handle, archive.open(info, mode="w", force_zip64=True) as destination:
+        for chunk in iter(lambda: source_handle.read(COPY_CHUNK_BYTES), b""):
+            destination.write(chunk)
+            copied_bytes += len(chunk)
+            if time.monotonic() - last_heartbeat >= heartbeat_seconds:
+                progress(
+                    f"[PAYLOAD] copy heartbeat: {archive_name} "
+                    f"{_format_bytes(copied_bytes)} / {_format_bytes(total_bytes)}"
+                )
+                last_heartbeat = time.monotonic()
+    progress(f"[PAYLOAD] copied: {archive_name} ({_format_bytes(copied_bytes)})")
+
+
+def build(
+    *,
+    staging_root: Path,
+    output_root: Path,
+    version: str,
+    profile: str,
+    max_pack_bytes: int,
+    progress: Callable[[str], None] | None = None,
+    heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+) -> Path:
+    if heartbeat_seconds < 0:
+        raise ValueError("heartbeat interval must not be negative")
+    report = progress or (lambda _message: None)
     entries = _entries(staging_root)
     groups = _split(entries, max_pack_bytes)
+    report(f"[PAYLOAD] plan: {len(groups)} pack(s), {len(entries)} file(s)")
     pack_root = output_root / "payloads"
     if pack_root.exists():
         shutil.rmtree(pack_root)
@@ -98,18 +162,39 @@ def build(*, staging_root: Path, output_root: Path, version: str, profile: str, 
     for index, group in enumerate(groups, start=1):
         filename = f"GoodQ4All_{version}_{profile.lower()}_payload_{index:03d}.zip"
         pack_path = pack_root / filename
+        group_bytes = sum(source.stat().st_size for source, _archive_name in group)
+        report(
+            f"[PAYLOAD] writing pack {index}/{len(groups)}: {filename} "
+            f"({len(group)} member(s), {_format_bytes(group_bytes)})"
+        )
         with zipfile.ZipFile(pack_path, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
             for source, archive_name in group:
-                archive.write(source, archive_name)
+                _write_member(
+                    archive,
+                    source,
+                    archive_name,
+                    progress=report,
+                    heartbeat_seconds=heartbeat_seconds,
+                )
         if pack_path.stat().st_size > max_pack_bytes:
             raise PayloadPackError(f"pack exceeds bounded size after archive creation: {pack_path}")
+        report(f"[PAYLOAD] hashing pack {index}/{len(groups)}: {filename}")
+        pack_sha256 = sha256(
+            pack_path,
+            progress=report,
+            heartbeat_seconds=heartbeat_seconds,
+        )
         records.append(
             {
                 "path": f"payloads/{filename}",
-                "sha256": sha256(pack_path),
+                "sha256": pack_sha256,
                 "size_bytes": pack_path.stat().st_size,
                 "member_count": len(group),
             }
+        )
+        report(
+            f"[PAYLOAD] completed pack {index}/{len(groups)}: {filename} "
+            f"({_format_bytes(pack_path.stat().st_size)})"
         )
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -208,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
                     version=args.version,
                     profile=args.profile,
                     max_pack_bytes=args.max_pack_bytes,
+                    progress=lambda message: print(message, flush=True),
                 )
             )
         else:

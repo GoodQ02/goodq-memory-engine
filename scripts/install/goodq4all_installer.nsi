@@ -178,8 +178,10 @@ runtime_ok:
   SetOutPath "$INSTDIR\pipelines"
   File /r "..\..\pipelines\*.*"
 
-  SetOutPath "$INSTDIR\vendor"
-  File /r "staged\vendor\*.*"
+  ; Large, sealed runtime payloads are intentionally not embedded in this
+  ; NSIS bootstrap.  They remain as signed ZIP packs beside Setup.exe and are
+  ; verified before extraction below.  This keeps the bootstrap inside NSIS's
+  ; supported data-block boundary without reducing the offline CPU profile.
 
   SetOutPath "$INSTDIR\branding"
   File /r "..\..\branding\*.*"
@@ -196,10 +198,26 @@ runtime_ok:
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
-  ; Profile-selected model and lexicon payloads were copied only from sealed
-  ; source snapshots into the runtime layout model_provisioner consumes.
-  SetOutPath "$COMMONAPPDATA\GoodQ4All\models"
-  File /r /x "selected_capabilities.json" "staged\models\*.*"
+  ; Verify the signed external payload manifest, then extract every bounded
+  ; local pack.  This is intentionally before wheel installation and model
+  ; verification so a partial or moved release bundle fails at its boundary.
+  DetailPrint "Step 5/12: Verifying and extracting signed offline payload packs..."
+  StrCpy $InstallStage "payload_pack_verify"
+  nsExec::ExecToLog '"$INSTDIR\LAUNCH_GOODQ.exe" --verify-release-payload "$EXEDIR"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Signed offline payload verification failed. Keep every release asset together and retry. Code $0"
+    Abort
+  ${EndIf}
+  StrCpy $InstallStage "payload_pack_extract"
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\release_payload_packs.py" apply --bundle-root "$EXEDIR" --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: Signed offline payload extraction failed. Code $0"
+    Abort
+  ${EndIf}
 
   ; Write default config to ProgramData
   SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"
@@ -209,8 +227,8 @@ runtime_ok:
   DetailPrint "Configuring folder permissions for standard users..."
   nsExec::ExecToLog 'icacls "$COMMONAPPDATA\GoodQ4All" /grant *S-1-5-32-545:(OI)(CI)M /T /C'
 
-  ; --- STATE 5: install VC++ Redistributable ---
-  DetailPrint "Step 5/12: Installing VC++ Runtime prerequisites..."
+  ; --- STATE 6: install VC++ Redistributable ---
+  DetailPrint "Step 6/12: Installing VC++ Runtime prerequisites..."
   StrCpy $InstallStage "vc_runtime_stage"
   SetOutPath "$INSTDIR\binaries"
   File "staged\binaries\vc_redist.x64.exe"
@@ -276,13 +294,11 @@ tesseract_command_verify:
     Abort
   ${EndIf}
 
-  ; --- STATE 6: copy local wheelhouse & install offline ---
-  DetailPrint "Step 6/12: Staging wheelhouse and installing Python packages..."
+  ; --- STATE 7: install local wheelhouse ---
+  DetailPrint "Step 7/12: Installing Python packages from signed offline payload..."
   StrCpy $InstallStage "wheelhouse_stage"
   SetOutPath "$INSTDIR"
   File "staged\wheelhouse-sbom.json"
-  SetOutPath "$INSTDIR\wheels"
-  File /r "staged\wheels\*.*"
   IfFileExists "$INSTDIR\wheels\pytesseract-0.3.10-py3-none-any.whl" wheelhouse_ready wheelhouse_missing
 wheelhouse_missing:
   IfSilent +2

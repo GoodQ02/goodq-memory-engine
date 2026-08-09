@@ -70,6 +70,17 @@ and payload paths after install. The remaining release gate is a fresh managed
 offline CPU build followed by a clean-target install and one isolated scene
 with no model download.
 
+Evidence (2026-08-09): the complete CPU staging boundary is approximately
+25 GB, so the legacy NSIS compiler failed only at its final single-datablock
+memory-map step after cache, license, signing, and profile gates passed. The
+release now uses a small NSIS bootstrap plus bounded external ZIP payload packs.
+The bootstrap verifies the signed payload manifest and every pack hash before
+extracting vendor dependencies, wheelhouse, or sealed models, and writes an
+applied-payload receipt. Focused installer contracts pass and a real bootstrap
+compiler probe passes; the next gate is one fresh managed offline build and
+release-asset verification using this layout. Do not shrink the CPU profile to
+work around the NSIS limit.
+
 The profile preflight additionally rejects catalog-only model candidates before
 staging. This closes the first complete-CPU-payload build finding: a sealed
 `dinov2-base` reference had been selected even though the active ingestion

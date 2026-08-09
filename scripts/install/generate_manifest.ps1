@@ -24,6 +24,34 @@ $installerPath = Join-Path $assetRoot $installerName
 $launcherPath = Join-Path $assetRoot "LAUNCH_GOODQ.exe"
 if (-not (Test-Path $installerPath)) { throw "Installer executable not found at $installerPath" }
 if (-not (Test-Path $launcherPath)) { throw "Launcher executable not found at $launcherPath" }
+$payloadManifestName = "GoodQ4All_Setup_$productVersion.payload_manifest.json"
+$payloadManifestPath = Join-Path $assetRoot $payloadManifestName
+$payloadSignatureName = "$payloadManifestName.sig"
+$payloadSignaturePath = Join-Path $assetRoot $payloadSignatureName
+if (-not (Test-Path $payloadManifestPath)) { throw "Payload manifest not found at $payloadManifestPath" }
+if (-not (Test-Path $payloadSignaturePath)) { throw "Payload manifest signature not found at $payloadSignaturePath" }
+try {
+    $payloadManifest = Get-Content $payloadManifestPath -Raw | ConvertFrom-Json
+    $payloadPacks = @($payloadManifest.packs)
+} catch {
+    throw "Payload manifest is unreadable: $_"
+}
+if ($payloadManifest.schema_version -ne 1 -or $payloadPacks.Count -lt 1) {
+    throw "Payload manifest must declare schema version 1 and at least one pack"
+}
+$payloadPackRecords = @()
+foreach ($pack in $payloadPacks) {
+    $relativePath = [string]$pack.path
+    if ([string]::IsNullOrWhiteSpace($relativePath) -or [IO.Path]::IsPathRooted($relativePath) -or $relativePath -match '(^|[\\/])\.\.([\\/]|$)') {
+        throw "Payload manifest contains an unsafe pack path: $relativePath"
+    }
+    $packPath = Join-Path $assetRoot $relativePath
+    if (-not (Test-Path -LiteralPath $packPath -PathType Leaf)) { throw "Payload pack is missing: $relativePath" }
+    $actualHash = (Get-FileHash -LiteralPath $packPath -Algorithm SHA256).Hash.ToLower()
+    if ($actualHash -ne ([string]$pack.sha256).ToLower()) { throw "Payload pack hash mismatch: $relativePath" }
+    if ((Get-Item -LiteralPath $packPath).Length -ne [int64]$pack.size_bytes) { throw "Payload pack size mismatch: $relativePath" }
+    $payloadPackRecords += [ordered]@{ path = $relativePath; sha256 = $actualHash; size_bytes = [int64]$pack.size_bytes }
+}
 
 $sourceCommit = (git -C $repoRoot rev-parse HEAD).Trim()
 $dirtyFiles = git -C $repoRoot status --porcelain
@@ -37,6 +65,11 @@ $manifest = [ordered]@{
     sha256 = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash.ToLower()
     launcher_filename = "LAUNCH_GOODQ.exe"
     launcher_sha256 = (Get-FileHash -Path $launcherPath -Algorithm SHA256).Hash.ToLower()
+    payload_manifest_filename = $payloadManifestName
+    payload_manifest_sha256 = (Get-FileHash -Path $payloadManifestPath -Algorithm SHA256).Hash.ToLower()
+    payload_manifest_signature_filename = $payloadSignatureName
+    payload_manifest_signature_sha256 = (Get-FileHash -Path $payloadSignaturePath -Algorithm SHA256).Hash.ToLower()
+    payload_packs = $payloadPackRecords
     product_version = $productVersion
     source_commit = $sourceCommit
     source_tree_clean = $true
@@ -47,9 +80,12 @@ $manifest = [ordered]@{
 $manifestPath = Join-Path $assetRoot "GoodQ4All_Setup_$productVersion.release_manifest.json"
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
 $checksumPath = Join-Path $assetRoot "GoodQ4All_Setup_$productVersion.sha256"
-@(
-    "$($manifest.sha256) *$installerName"
-    "$($manifest.launcher_sha256) *LAUNCH_GOODQ.exe"
-    "$((Get-FileHash -Path $manifestPath -Algorithm SHA256).Hash.ToLower()) *$(Split-Path -Leaf $manifestPath)"
-) | Set-Content -Path $checksumPath -Encoding ascii
+$checksumEntries = Get-ChildItem -LiteralPath $assetRoot -File -Recurse |
+    Where-Object { $_.FullName -ne $checksumPath } |
+    ForEach-Object {
+        $relativePath = $_.FullName.Substring($assetRoot.Length).TrimStart([char[]]'\\').Replace('\', '/')
+        "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower()) *$relativePath"
+    } |
+    Sort-Object
+$checksumEntries | Set-Content -Path $checksumPath -Encoding ascii
 Write-Host "[OK] Release manifest and checksums generated in $assetRoot" -ForegroundColor Green

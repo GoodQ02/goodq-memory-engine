@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,7 +24,17 @@ const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af96781
 
 func main() {
 	verifyManifestOnly := flag.Bool("verify-manifest-only", false, "Verify manifest signature and exit without starting services")
+	verifyReleasePayload := flag.String("verify-release-payload", "", "Verify signed external release payload packs in this bundle root and exit")
 	flag.Parse()
+
+	if *verifyReleasePayload != "" {
+		if err := verifyReleasePayloadBundle(*verifyReleasePayload); err != nil {
+			fmt.Printf("[LAUNCHER] [ERROR] Release payload verification failed: %s\n", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("[LAUNCHER] [OK] Signed release payload packs verified successfully.")
+		return
+	}
 
 	if *verifyManifestOnly {
 		// Self-test mode: verify every signed install capability receipt and exit.
@@ -431,6 +443,72 @@ func verifyInstalledManifests(programFilesDir string) error {
 		manifestPath := filepath.Join(programFilesDir, "configs", name)
 		if err := verifyManifestSignature(manifestPath, manifestPath+".sig"); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+type releasePayloadManifest struct {
+	SchemaVersion int `json:"schema_version"`
+	Packs         []struct {
+		Path      string `json:"path"`
+		SHA256    string `json:"sha256"`
+		SizeBytes int64  `json:"size_bytes"`
+	} `json:"packs"`
+}
+
+func verifyReleasePayloadBundle(bundleRoot string) error {
+	root, err := filepath.Abs(bundleRoot)
+	if err != nil {
+		return fmt.Errorf("resolve bundle root: %w", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "GoodQ4All_Setup_*.payload_manifest.json"))
+	if err != nil || len(matches) != 1 {
+		return fmt.Errorf("expected exactly one release payload manifest in %s", root)
+	}
+	manifestPath := matches[0]
+	if err := verifyManifestSignature(manifestPath, manifestPath+".sig"); err != nil {
+		return fmt.Errorf("payload manifest signature: %w", err)
+	}
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("read payload manifest: %w", err)
+	}
+	var manifest releasePayloadManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return fmt.Errorf("parse payload manifest: %w", err)
+	}
+	if manifest.SchemaVersion != 1 || len(manifest.Packs) == 0 {
+		return fmt.Errorf("payload manifest has unsupported schema or no packs")
+	}
+	for _, pack := range manifest.Packs {
+		relative := filepath.Clean(pack.Path)
+		if pack.Path == "" || filepath.IsAbs(relative) || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+			return fmt.Errorf("unsafe payload pack path: %q", pack.Path)
+		}
+		if len(pack.SHA256) != 64 {
+			return fmt.Errorf("payload pack lacks SHA256: %s", pack.Path)
+		}
+		packPath := filepath.Join(root, relative)
+		info, err := os.Stat(packPath)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("payload pack missing: %s", pack.Path)
+		}
+		if info.Size() != pack.SizeBytes {
+			return fmt.Errorf("payload pack size mismatch: %s", pack.Path)
+		}
+		handle, err := os.Open(packPath)
+		if err != nil {
+			return fmt.Errorf("open payload pack %s: %w", pack.Path, err)
+		}
+		digest := sha256.New()
+		_, copyErr := io.Copy(digest, handle)
+		closeErr := handle.Close()
+		if copyErr != nil || closeErr != nil {
+			return fmt.Errorf("hash payload pack: %s", pack.Path)
+		}
+		if hex.EncodeToString(digest.Sum(nil)) != pack.SHA256 {
+			return fmt.Errorf("payload pack SHA256 mismatch: %s", pack.Path)
 		}
 	}
 	return nil

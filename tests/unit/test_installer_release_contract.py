@@ -110,7 +110,7 @@ def test_release_asset_verifier_reports_an_empty_asset_directory(tmp_path: Path)
     )
 
     assert result.returncode == 1
-    assert "Release asset set must contain exactly" in result.stderr
+    assert "Release manifest is missing" in result.stderr
 
 
 def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) -> None:
@@ -118,6 +118,26 @@ def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) ->
     launcher = asset_root / "LAUNCH_GOODQ.exe"
     installer.write_bytes(b"installer")
     launcher.write_bytes(b"launcher")
+    payload_dir = asset_root / "payloads"
+    payload_dir.mkdir()
+    payload_pack = payload_dir / "payload_001.zip"
+    payload_pack.write_bytes(b"payload")
+    payload_manifest_path = asset_root / "GoodQ4All_Setup_2.5.8.payload_manifest.json"
+    payload_manifest = {
+        "schema_version": 1,
+        "product_version": "2.5.8",
+        "profile": "PUBLIC_CPU_BASELINE",
+        "packs": [
+            {
+                "path": "payloads/payload_001.zip",
+                "sha256": hashlib.sha256(payload_pack.read_bytes()).hexdigest(),
+                "size_bytes": payload_pack.stat().st_size,
+            }
+        ],
+    }
+    payload_manifest_path.write_text(json.dumps(payload_manifest), encoding="utf-8")
+    payload_signature_path = asset_root / "GoodQ4All_Setup_2.5.8.payload_manifest.json.sig"
+    payload_signature_path.write_text("signature", encoding="ascii")
     manifest = {
         "product_version": "2.5.8",
         "source_commit": "12f577e9",
@@ -126,15 +146,20 @@ def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) ->
         "excluded_optional_components": ["wsl_audio", "local_llm_serving", "gpu_enhanced"],
         "sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
         "launcher_sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
+        "payload_manifest_filename": payload_manifest_path.name,
+        "payload_manifest_sha256": hashlib.sha256(payload_manifest_path.read_bytes()).hexdigest(),
+        "payload_manifest_signature_filename": payload_signature_path.name,
+        "payload_manifest_signature_sha256": hashlib.sha256(payload_signature_path.read_bytes()).hexdigest(),
+        "payload_packs": payload_manifest["packs"],
     }
     if source_note is not None:
         manifest["source_note"] = source_note
     manifest_path = asset_root / "GoodQ4All_Setup_2.5.8.release_manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     checksum_lines = [
-        f"{manifest['sha256']} *{installer.name}",
-        f"{manifest['launcher_sha256']} *{launcher.name}",
-        f"{hashlib.sha256(manifest_path.read_bytes()).hexdigest()} *{manifest_path.name}",
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()} *{path.relative_to(asset_root).as_posix()}"
+        for path in sorted(asset_root.rglob("*"))
+        if path.is_file() and path.name != "GoodQ4All_Setup_2.5.8.sha256"
     ]
     (asset_root / "GoodQ4All_Setup_2.5.8.sha256").write_text("\n".join(checksum_lines), encoding="ascii")
 
@@ -163,7 +188,7 @@ def _run_asset_verifier(asset_root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_release_asset_verifier_rejects_a_nested_payload(tmp_path: Path) -> None:
+def test_release_asset_verifier_rejects_an_undeclared_nested_payload(tmp_path: Path) -> None:
     _write_asset_fixture(tmp_path)
     nested = tmp_path / "hidden_payload"
     nested.mkdir()
@@ -173,6 +198,64 @@ def test_release_asset_verifier_rejects_a_nested_payload(tmp_path: Path) -> None
 
     assert result.returncode == 1
     assert "Release asset set must contain exactly" in result.stderr
+
+
+def test_release_payload_packs_are_bounded_and_apply_only_to_declared_targets(tmp_path: Path) -> None:
+    staging = tmp_path / "staged"
+    (staging / "vendor").mkdir(parents=True)
+    (staging / "vendor" / "runtime.bin").write_bytes(b"v" * 400)
+    (staging / "wheels").mkdir()
+    (staging / "wheels" / "wheel.whl").write_bytes(b"w" * 400)
+    (staging / "wheelhouse-sbom.json").write_text("s" * 400, encoding="utf-8")
+    (staging / "models" / "hub").mkdir(parents=True)
+    (staging / "models" / "hub" / "model.bin").write_bytes(b"m" * 400)
+    output = tmp_path / "assets"
+    script = REPO_ROOT / "scripts" / "install" / "release_payload_packs.py"
+    build = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "build",
+            "--staging-root",
+            str(staging),
+            "--output-root",
+            str(output),
+            "--version",
+            "2.5.8",
+            "--profile",
+            "PUBLIC_CPU_BASELINE",
+            "--max-pack-bytes",
+            "650",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert build.returncode == 0, build.stderr
+    payload_manifest = json.loads((output / "GoodQ4All_Setup_2.5.8.payload_manifest.json").read_text())
+    assert len(payload_manifest["packs"]) >= 2
+    assert all(pack["size_bytes"] <= 650 for pack in payload_manifest["packs"])
+
+    apply = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "apply",
+            "--bundle-root",
+            str(output),
+            "--install-dir",
+            str(tmp_path / "install"),
+            "--data-dir",
+            str(tmp_path / "data"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert apply.returncode == 0, apply.stderr
+    assert (tmp_path / "install" / "vendor" / "runtime.bin").read_bytes() == b"v" * 400
+    assert (tmp_path / "data" / "models" / "hub" / "model.bin").read_bytes() == b"m" * 400
+    assert (tmp_path / "data" / "payload_install_receipt.json").is_file()
 
 
 @pytest.mark.parametrize("private_path", [r"C:\Users\jdben\private-build", r"c:/users/jdben/private-build"])
@@ -358,7 +441,9 @@ def test_cpu_profile_stages_every_selected_model_and_lexicon_from_the_sealed_vau
     assert "stage_object_detection_pack.py" not in builder
     assert "selected_capabilities.json" in builder
     assert "selected_capabilities.json.sig" in builder
-    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' in installer
+    assert "release_payload_packs.py" in builder
+    assert "--verify-release-payload" in installer
+    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' not in installer
     assert 'File "staged\\configs\\selected_capabilities.json"' in installer
     assert "verify_profile_model_payload.py" in verifier
 
@@ -421,7 +506,9 @@ def test_installer_profile_controls_the_sealed_object_detection_payload() -> Non
     assert "GOODQ_ASSET_VAULT_ROOT" in builder
     assert "GOODQ_INSTALLER_PROFILE" in builder
     assert "/DGOODQ_INSTALLER_PROFILE=" in builder
-    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' in installer
+    assert "release_payload_packs.py" in builder
+    assert "payload_pack_extract" in installer
+    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' not in installer
     assert "Unknown GOODQ_INSTALLER_PROFILE" in installer
     assert 'File "staged\\configs\\installer_profile.txt"' in installer
     assert "opencv-python-headless==4.13.0.92" in lockfile
@@ -477,7 +564,7 @@ def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() 
     )
 
     assert '/x "staged_cache"' in installer
-    assert 'File /r "staged\\wheels\\*.*"' in installer
+    assert 'File /r "staged\\wheels\\*.*"' not in installer
     assert '--find-links="file:///$INSTDIR/wheels"' in installer
     assert 'import pytesseract; print(pytesseract.__version__)' in installer
     assert 'Error: Failed to write installation receipt. Code $0' in installer

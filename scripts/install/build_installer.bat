@@ -328,7 +328,34 @@ if %ERRORLEVEL% neq 0 (
     exit /b 99
 )
 
-:: 6. Compile NSIS Setup Package Offline
+:: 6. Materialize bounded external payload packs.  Complete offline profiles
+:: exceed NSIS's embedded data-block limit, so the bootstrap remains small and
+:: every large payload is signed and kept beside Setup.exe.
+for /f "tokens=2 delims== " %%I in ('findstr /b /c:"GOODQ_VERSION =" "..\..\goodq_version.py"') do set "GOODQ_PRODUCT_VERSION=%%~I"
+if "%GOODQ_PRODUCT_VERSION%"=="" (
+    echo [ERROR] Could not resolve canonical product version for payload packs.
+    exit /b 113
+)
+echo Building bounded signed offline payload packs...
+"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\release_payload_packs.py build --staging-root "staged" --output-root "%OUTPUT_ROOT%" --version "%GOODQ_PRODUCT_VERSION%" --profile "%GOODQ_INSTALLER_PROFILE%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Bounded payload pack build failed.
+    exit /b 114
+)
+set "GOODQ_PAYLOAD_MANIFEST=%OUTPUT_ROOT%\GoodQ4All_Setup_%GOODQ_PRODUCT_VERSION%.payload_manifest.json"
+set "GOODQ_PAYLOAD_SIGNATURE=%GOODQ_PAYLOAD_MANIFEST%.sig"
+go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Payload manifest signing failed.
+    exit /b 115
+)
+go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Payload manifest signature verification failed.
+    exit /b 116
+)
+
+:: 7. Compile NSIS Setup Package Offline
 echo Compiling final NSIS Setup Installer package...
 nsis_compiler\nsis-3.09\makensis.exe /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" /DGOODQ_INSTALLER_PROFILE="%GOODQ_INSTALLER_PROFILE%" goodq4all_installer.nsi
 if %ERRORLEVEL% neq 0 (
@@ -336,7 +363,7 @@ if %ERRORLEVEL% neq 0 (
     exit /b 5
 )
 
-:: 7. Write Release Manifest
+:: 8. Write Release Manifest
 echo Generating release manifest and signatures...
 %PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (

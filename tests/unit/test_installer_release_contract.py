@@ -396,6 +396,20 @@ def test_installer_profile_controls_the_sealed_object_detection_payload() -> Non
     assert "Unknown installer profile in verification target" in verifier
 
 
+def test_offline_verifier_reads_object_detection_packs_from_programdata() -> None:
+    """The verifier must inspect the same writable model root used by NSIS."""
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$COMMONAPPDATA\\GoodQ4All\\models\\model_packs\\object_detection_cpu' in installer
+    assert 'Join-Path $env:ProgramData "GoodQ4All\\models"' in verifier
+    assert 'Join-Path $InstallDir "models\\model_packs\\object_detection_cpu' not in verifier
+
+
 def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> None:
     lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(

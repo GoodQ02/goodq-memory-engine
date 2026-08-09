@@ -27,6 +27,7 @@ if ($Profile -notin @("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AI
     throw "Unknown installer profile in verification target: $Profile"
 }
 $results.profile = $Profile
+$modelPackRoot = Join-Path $env:ProgramData "GoodQ4All\models"
 
 # --- Gate 1: File Integrity ---
 $gate1 = @{ name = "file_integrity"; pass = $true; errors = @() }
@@ -42,17 +43,17 @@ $criticalFiles = @(
     "configs\config.yaml",
     "configs\model_download_manifest.json",
     "configs\model_download_manifest.json.sig",
-    "models\model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx",
-    "models\model_packs\object_detection_cpu\PACK_MANIFEST.json"
+    (Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"),
+    (Join-Path $modelPackRoot "model_packs\object_detection_cpu\PACK_MANIFEST.json")
 )
 if ($Profile -ne "PUBLIC_CPU_BASELINE") {
     $criticalFiles += @(
-        "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx",
-        "models\model_packs\object_detection_gpu\PACK_MANIFEST.json"
+        (Join-Path $modelPackRoot "model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx"),
+        (Join-Path $modelPackRoot "model_packs\object_detection_gpu\PACK_MANIFEST.json")
     )
 }
 foreach ($f in $criticalFiles) {
-    $fullPath = Join-Path $InstallDir $f
+    $fullPath = if ([IO.Path]::IsPathRooted($f)) { $f } else { Join-Path $InstallDir $f }
     if (-not (Test-Path $fullPath)) {
         $gate1.pass = $false
         $gate1.errors += "Missing: $f"
@@ -114,9 +115,9 @@ $results.gates += $gate1c
 
 # --- Gate 1d: Sealed object-detection baseline ---
 $gate1d = @{ name = "object_detection_payload"; pass = $true; errors = @() }
-$nanodetPath = Join-Path $InstallDir "models\model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"
+$nanodetPath = Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"
 $expectedNanoDet = "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186"
-$yoloxPath = Join-Path $InstallDir "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx"
+$yoloxPath = Join-Path $modelPackRoot "model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx"
 $expectedYoloX = "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063"
 try {
     if ((Get-FileHash -LiteralPath $nanodetPath -Algorithm SHA256).Hash.ToLower() -ne $expectedNanoDet) {

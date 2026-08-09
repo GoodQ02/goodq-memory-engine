@@ -518,7 +518,12 @@ def test_audio_embed_clap_qdrant_payload_without_run_id_does_not_claim_current_r
     assert "run_id" not in payload
 
 
-def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("structured_output", [False, True])
+def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(
+    monkeypatch,
+    tmp_path: Path,
+    structured_output: bool,
+) -> None:
     monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
     monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
     from steps.audio_embed_clap import step as clap_step
@@ -542,6 +547,11 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
         def numpy(self):
             return np.array([[0.25, 0.5, 0.75]], dtype="float32")
 
+        def mean(self, *, dim, keepdim):
+            assert dim == 0
+            assert keepdim is True
+            return self
+
     class _FakeModelOutput:
         def __init__(self, pooler_output):
             self.pooler_output = pooler_output
@@ -553,7 +563,8 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
     class _FakeModel:
         def get_audio_features(self, *, input_features):
             assert isinstance(input_features, _FakeInputFeatures)
-            return _FakeModelOutput(_FakeFeatures())
+            features = _FakeFeatures()
+            return _FakeModelOutput(features) if structured_output else features
 
     qdrant_points = []
     emitted_events = []
@@ -579,9 +590,23 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
         def add(self, feats):
             self.ntotal += len(feats)
 
+    class _NoGrad:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
     fake_torch = types.ModuleType("torch")
+    fake_torch.no_grad = _NoGrad
+    fake_torch.cat = lambda chunks, *, dim: chunks[0]
     fake_librosa = types.ModuleType("librosa")
-    fake_librosa.load = lambda _path, sr, mono: (np.array([0.1, -0.2], dtype="float32"), sr)
+    fake_librosa.load = lambda _path, sr, mono, **_kwargs: (
+        np.array([0.1, -0.2], dtype="float32"),
+        sr,
+    )
+    fake_soundfile = types.ModuleType("soundfile")
+    fake_soundfile.info = lambda _path: types.SimpleNamespace(frames=16000, samplerate=16000)
 
     fake_faiss = types.ModuleType("faiss")
     fake_faiss.IndexHNSWFlat = _FakeIndex
@@ -619,6 +644,7 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
 
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setitem(sys.modules, "soundfile", fake_soundfile)
     monkeypatch.setitem(sys.modules, "faiss", fake_faiss)
     monkeypatch.setitem(sys.modules, "steps.text_embed.step", fake_text_step)
     monkeypatch.setitem(sys.modules, "steps.common.memory", fake_memory)
@@ -654,7 +680,7 @@ def test_audio_embed_clap_runtime_upsert_sends_qdrant_provenance(monkeypatch, tm
         },
     )
 
-    assert result["clap_meta"]["status"] == "ok"
+    assert result["clap_meta"]["status"] == "ok", result
     assert result["clap_meta"]["component"] == "audio_embed_clap"
     assert result["clap_meta"]["step"] == "audio_embed_clap"
     assert result["clap_meta"]["model"] == "laion/clap-htsat-unfused"

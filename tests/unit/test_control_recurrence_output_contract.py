@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from lib.control_recurrence_recommendations import build_recommendation_draft_from_report
-from lib.control_recurrence_report import build_control_recurrence_comparison, build_control_recurrence_report
+from lib.control_recurrence_report import (
+    build_control_recurrence_comparison,
+    build_control_recurrence_report,
+    render_markdown_report,
+)
 from lib.control_recurrence_trend import build_control_recurrence_trend
 
 
@@ -192,6 +196,31 @@ def test_single_run_recurrence_report_contract_includes_observer_sections(tmp_pa
     )
     assert report["report"]["control_agent"] == "not_activated"
     assert report["report"]["auto_healing"] == "not_enabled"
+
+
+def test_recurrence_report_reads_capability_receipt_without_reclassification(tmp_path: Path) -> None:
+    reports_root, run_root = _write_fixture_run(
+        tmp_path,
+        "contract_receipt",
+        runtime_run_id="runtime-receipt",
+        video_id="video-receipt",
+        step_rows=[],
+    )
+    _write_json(
+        run_root / "capability_receipt.json",
+        {
+            "schema_version": 1,
+            "outcome": "degraded",
+            "summary": {"optional_skips": 2, "required_core_failures": 0},
+        },
+    )
+
+    report = build_control_recurrence_report(run_id=run_root.name, reports_root=reports_root)
+
+    assert report["capability_outcome"]["status"] == "degraded"
+    assert report["capability_outcome"]["source"] == "capability_receipt.json"
+    assert report["capability_outcome"]["summary"]["optional_skips"] == 2
+    assert "## Capability Outcome" in render_markdown_report(report)
 
 
 def test_comparison_recurrence_report_contract_includes_latency_and_coverage_delta(tmp_path: Path) -> None:

@@ -75,6 +75,66 @@ class _EpisodeScope:
     output_item_index: Optional[int] = None
 
 
+def _load_capability_outcome(run_roots: Sequence[Path]) -> tuple[Dict[str, Any], List[str], List[str]]:
+    """Read terminal capability receipts without deriving a competing outcome."""
+
+    receipts: List[Dict[str, Any]] = []
+    files_read: List[str] = []
+    warnings: List[str] = []
+    for run_root in run_roots:
+        path = run_root / "capability_receipt.json"
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            warnings.append(f"capability_receipt_unreadable: {path}: {exc}")
+            continue
+        if not isinstance(payload, dict):
+            warnings.append(f"capability_receipt_malformed: {path}")
+            continue
+        files_read.append(str(path))
+        receipts.append(payload)
+
+    if not receipts:
+        return (
+            {
+                "status": "not_available",
+                "source": "capability_receipt.json",
+                "summary": {},
+                "warnings": ["receipt_missing"],
+            },
+            files_read,
+            warnings,
+        )
+
+    if len(receipts) == 1:
+        receipt = receipts[0]
+        return (
+            {
+                "status": str(receipt.get("outcome") or "unknown"),
+                "source": "capability_receipt.json",
+                "summary": receipt.get("summary") if isinstance(receipt.get("summary"), dict) else {},
+                "warnings": [],
+            },
+            files_read,
+            warnings,
+        )
+
+    ordered_statuses = [str(receipt.get("outcome") or "unknown") for receipt in receipts]
+    status = "failed" if "failed" in ordered_statuses else "degraded" if "degraded" in ordered_statuses else "completed"
+    return (
+        {
+            "status": status,
+            "source": "capability_receipt.json",
+            "summary": {"receipt_count": len(receipts), "outcomes": ordered_statuses},
+            "warnings": ["multiple_receipts_aggregated"],
+        },
+        files_read,
+        warnings,
+    )
+
+
 def build_control_recurrence_report(
     *,
     run_root: str | Path | None = None,
@@ -124,6 +184,10 @@ def build_control_recurrence_report(
         files_read.extend(episode_files)
         warnings.extend(episode_warnings)
         health_by_episode.append(episode_health)
+
+    capability_outcome, capability_files, capability_warnings = _load_capability_outcome(run_roots)
+    files_read.extend(capability_files)
+    warnings.extend(capability_warnings)
 
     step_paths = _dedupe_paths(e.step_runs_path for e in episodes if e.step_runs_path is not None)
     step_run_scope = {
@@ -219,6 +283,7 @@ def build_control_recurrence_report(
         "top_repeated_failure_families": family_rows,
         "optional_enrichment_skips": optional_skips,
         "optional_enrichment_coverage": optional_coverage,
+        "capability_outcome": capability_outcome,
         "recovered_vs_unrecovered_failures": recovery_counts,
         "scenes_affected": affected,
         "phase6_qdrant_truth": phase6_health,
@@ -970,6 +1035,7 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     latency = report.get("step_latency_summary") if isinstance(report, dict) else {}
     environment_summary = report.get("environment_summary") if isinstance(report, dict) else {}
     optional_coverage = report.get("optional_enrichment_coverage") if isinstance(report, dict) else {}
+    capability_outcome = report.get("capability_outcome") if isinstance(report, dict) else {}
     run_id = _single_report_run_id(report)
 
     lines: List[str] = []
@@ -998,6 +1064,8 @@ def _render_markdown_single(report: Dict[str, Any]) -> str:
     lines.extend(_markdown_environment_summary(environment_summary))
     lines.append("")
     lines.extend(_markdown_optional_enrichment_coverage(optional_coverage))
+    lines.append("")
+    lines.extend(_markdown_capability_outcome(capability_outcome))
     lines.append("")
     lines.extend(_markdown_recovery_counts(recovery))
     lines.append("")
@@ -1222,6 +1290,22 @@ def _markdown_step_latency_delta(delta: Dict[str, Any]) -> List[str]:
             f"{int(row.get('candidate_count') or 0)} | {_format_ms_cell(row.get('p95_delta_ms'))} | "
             f"{_format_ms_cell(row.get('max_delta_ms'))} | {_md_cell(row.get('trend_status'))} |"
         )
+    return lines
+
+
+def _markdown_capability_outcome(outcome: Dict[str, Any]) -> List[str]:
+    lines = ["## Capability Outcome"]
+    if not isinstance(outcome, dict):
+        lines.append("Capability receipt is unavailable.")
+        return lines
+    lines.append(f"Status: {outcome.get('status') or 'unknown'}")
+    lines.append(f"Source: {outcome.get('source') or 'capability_receipt.json'}")
+    summary = outcome.get("summary") if isinstance(outcome.get("summary"), dict) else {}
+    for key in ("required_core_failures", "optional_skips", "optional_errors", "recovered_fallbacks"):
+        if key in summary:
+            lines.append(f"{key.replace('_', ' ').capitalize()}: {int(summary.get(key) or 0)}")
+    for warning in outcome.get("warnings") or []:
+        lines.append(f"Warning: {_md_text(warning)}")
     return lines
 
 

@@ -183,6 +183,13 @@ required environment payloads, and required runtime model cache. It must not
 silently include optional corpus, eval, reference, synthetic debug, private
 media, or memory snapshot packs.
 
+The installer profile is an explicit build input. `PUBLIC_CPU_BASELINE` stages
+only the sealed CPU object-detection pack; `PUBLIC_GPU_ENHANCED` and
+`PERSONAL_AIR_GAP` add the sealed GPU pack. The selected profile is written
+into the installed configuration and is consumed by post-install verification.
+Any later model family needs its own sealed stager before it may be described
+as bundled by a profile.
+
 Installer inclusion is a separate decision from NAS storage, cloud-bank storage,
 offline bundle staging, and local operator cache placement.
 

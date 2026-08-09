@@ -14,6 +14,20 @@ Name "GoodQ4All"
 !ifndef GOODQ_LAUNCHER_PATH
 !define GOODQ_LAUNCHER_PATH "..\..\LAUNCH_GOODQ.exe"
 !endif
+!ifndef GOODQ_INSTALLER_PROFILE
+!define GOODQ_INSTALLER_PROFILE "PUBLIC_CPU_BASELINE"
+!endif
+!if "${GOODQ_INSTALLER_PROFILE}" == "PUBLIC_CPU_BASELINE"
+!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
+!else if "${GOODQ_INSTALLER_PROFILE}" == "PUBLIC_GPU_ENHANCED"
+!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
+!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU
+!else if "${GOODQ_INSTALLER_PROFILE}" == "PERSONAL_AIR_GAP"
+!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
+!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU
+!else
+!error "Unknown GOODQ_INSTALLER_PROFILE: ${GOODQ_INSTALLER_PROFILE}"
+!endif
 OutFile "${GOODQ_INSTALLER_OUTPUT_ROOT}\GoodQ4All_Setup_2.5.8.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
@@ -134,6 +148,7 @@ runtime_ok:
   File /r /x "config.local.yaml" /x "model_download_manifest.json" /x "model_download_manifest.json.sig" "..\..\configs\*.*"
   File "staged\configs\model_download_manifest.json"
   File "staged\configs\model_download_manifest.json.sig"
+  File "staged\configs\installer_profile.txt"
 
   SetOutPath "$INSTDIR\api"
   File /r "..\..\api\*.*"
@@ -180,12 +195,16 @@ runtime_ok:
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
-  ; Sealed NanoDet baseline payload and optional GPU YOLOX capability are
-  ; verified from the immutable source vault before the compiler reaches NSIS.
+  ; Each selected pack is verified from the immutable source vault before the
+  ; compiler reaches NSIS. A CPU profile must never carry the GPU YOLOX pack.
+!ifdef GOODQ_INCLUDE_OBJECT_DETECTION_CPU
   SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_cpu"
   File /r "staged\model_packs\object_detection_cpu\*.*"
+!endif
+!ifdef GOODQ_INCLUDE_OBJECT_DETECTION_GPU
   SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_gpu"
   File /r "staged\model_packs\object_detection_gpu\*.*"
+!endif
 
   ; Write default config to ProgramData
   SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"

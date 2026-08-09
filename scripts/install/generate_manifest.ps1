@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$AssetRoot,
-    [string]$ExpectedVersion
+    [string]$ExpectedVersion,
+    [ValidateSet("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")]
+    [string]$Profile = "PUBLIC_CPU_BASELINE"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,8 +40,8 @@ $manifest = [ordered]@{
     product_version = $productVersion
     source_commit = $sourceCommit
     source_tree_clean = $true
-    profile = "BASELINE"
-    excluded_optional_components = @("wsl_audio", "local_llm_serving", "gpu_enhanced")
+    profile = $Profile
+    excluded_optional_components = if ($Profile -eq "PUBLIC_CPU_BASELINE") { @("wsl_audio", "local_llm_serving", "gpu_enhanced") } else { @("wsl_audio", "local_llm_serving") }
     status = "verified_offline"
 }
 $manifestPath = Join-Path $assetRoot "GoodQ4All_Setup_$productVersion.release_manifest.json"

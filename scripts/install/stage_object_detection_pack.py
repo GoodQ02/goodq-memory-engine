@@ -50,20 +50,30 @@ def _snapshot_for(vault_root: Path, asset_id: str, revision: str) -> Path:
     return candidates[0]
 
 
-def stage_pack(*, vault_root: Path, staging_root: Path) -> dict[str, Any]:
-    """Materialize the two sealed OpenCV packs into a fresh staging root."""
+def stage_pack(
+    *, vault_root: Path, staging_root: Path, pack_ids: tuple[str, ...] = ("object_detection_cpu", "object_detection_gpu")
+) -> dict[str, Any]:
+    """Materialize only the profile-selected sealed OpenCV packs into staging."""
 
     catalog = _read_yaml(REPO_ROOT / "configs" / "offline_asset_catalog.yaml")
     registry = _read_yaml(REPO_ROOT / "configs" / "model_registry.yaml").get("external_models", {})
     manifest = _read_json(REPO_ROOT / "configs" / "model_download_manifest.json")
     packs = manifest.get("model_packs", {})
-    if set(packs) != {"object_detection_cpu", "object_detection_gpu"}:
+    expected_pack_assets = {
+        "object_detection_cpu": "opencv_nanodet",
+        "object_detection_gpu": "opencv_yolox",
+    }
+    if set(packs) != set(expected_pack_assets):
         raise PackStageError("model manifest must declare exactly the sealed object-detection packs")
+    selected_pack_ids = tuple(dict.fromkeys(pack_ids))
+    if not selected_pack_ids or set(selected_pack_ids) - set(expected_pack_assets):
+        raise PackStageError("only the sealed object-detection CPU/GPU packs may be staged")
 
     if staging_root.exists():
         shutil.rmtree(staging_root)
     staged: list[dict[str, Any]] = []
-    for pack_id, expected_asset_id in (("object_detection_cpu", "opencv_nanodet"), ("object_detection_gpu", "opencv_yolox")):
+    for pack_id in selected_pack_ids:
+        expected_asset_id = expected_pack_assets[pack_id]
         pack = packs[pack_id]
         assets = list(pack.get("assets", []))
         if len(assets) != 1 or assets[0].get("asset_id") != expected_asset_id:
@@ -113,9 +123,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="stage sealed OpenCV object-detection capability packs")
     parser.add_argument("--vault-root", type=Path, required=True)
     parser.add_argument("--staging-root", type=Path, required=True)
+    parser.add_argument(
+        "--pack-id",
+        action="append",
+        choices=("object_detection_cpu", "object_detection_gpu"),
+        help="sealed object-detection pack to stage; defaults to both for direct legacy use",
+    )
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(stage_pack(vault_root=args.vault_root, staging_root=args.staging_root), indent=2, sort_keys=True))
+        print(
+            json.dumps(
+                stage_pack(
+                    vault_root=args.vault_root,
+                    staging_root=args.staging_root,
+                    pack_ids=tuple(args.pack_id or ("object_detection_cpu", "object_detection_gpu")),
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
     except (OSError, ValueError, PackStageError) as exc:
         print(f"object-detection pack staging failed: {exc}", file=sys.stderr)
         return 2

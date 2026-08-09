@@ -11,11 +11,22 @@
     Defaults to $env:ProgramFiles\GoodQ4All
 #>
 param(
-    [string]$InstallDir = "$env:ProgramFiles\GoodQ4All"
+    [string]$InstallDir = "$env:ProgramFiles\GoodQ4All",
+    [ValidateSet("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")]
+    [string]$Profile = ""
 )
 
 $ErrorActionPreference = "Stop"
 $results = @{ gates = @(); pass = $true; install_dir = $InstallDir }
+$profilePath = Join-Path $InstallDir "configs\installer_profile.txt"
+if (-not $Profile -and (Test-Path -LiteralPath $profilePath)) {
+    $Profile = (Get-Content -LiteralPath $profilePath -Raw).Trim()
+}
+if (-not $Profile) { $Profile = "PUBLIC_CPU_BASELINE" }
+if ($Profile -notin @("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")) {
+    throw "Unknown installer profile in verification target: $Profile"
+}
+$results.profile = $Profile
 
 # --- Gate 1: File Integrity ---
 $gate1 = @{ name = "file_integrity"; pass = $true; errors = @() }
@@ -32,10 +43,14 @@ $criticalFiles = @(
     "configs\model_download_manifest.json",
     "configs\model_download_manifest.json.sig",
     "models\model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx",
-    "models\model_packs\object_detection_cpu\PACK_MANIFEST.json",
-    "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx",
-    "models\model_packs\object_detection_gpu\PACK_MANIFEST.json"
+    "models\model_packs\object_detection_cpu\PACK_MANIFEST.json"
 )
+if ($Profile -ne "PUBLIC_CPU_BASELINE") {
+    $criticalFiles += @(
+        "models\model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx",
+        "models\model_packs\object_detection_gpu\PACK_MANIFEST.json"
+    )
+}
 foreach ($f in $criticalFiles) {
     $fullPath = Join-Path $InstallDir $f
     if (-not (Test-Path $fullPath)) {
@@ -109,12 +124,16 @@ try {
     }
     & $pythonPath -c "import cv2; cv2.dnn.readNet(r'$nanodetPath'); print('NanoDet ready')" *> $null
     if ($LASTEXITCODE -ne 0) { throw "OpenCV DNN could not load NanoDet" }
-    if ((Get-FileHash -LiteralPath $yoloxPath -Algorithm SHA256).Hash.ToLower() -ne $expectedYoloX) {
-        throw "YOLOX SHA256 mismatch"
+    if ($Profile -ne "PUBLIC_CPU_BASELINE") {
+        if ((Get-FileHash -LiteralPath $yoloxPath -Algorithm SHA256).Hash.ToLower() -ne $expectedYoloX) {
+            throw "YOLOX SHA256 mismatch"
+        }
+        & $pythonPath -c "import cv2; cv2.dnn.readNet(r'$yoloxPath'); print('YOLOX ready')" *> $null
+        if ($LASTEXITCODE -ne 0) { throw "OpenCV DNN could not load YOLOX" }
+        Write-Host "  [OK]   Sealed NanoDet and YOLOX payloads verify and load" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK]   Sealed NanoDet payload verifies and loads (CPU profile)" -ForegroundColor Green
     }
-    & $pythonPath -c "import cv2; cv2.dnn.readNet(r'$yoloxPath'); print('YOLOX ready')" *> $null
-    if ($LASTEXITCODE -ne 0) { throw "OpenCV DNN could not load YOLOX" }
-    Write-Host "  [OK]   Sealed NanoDet and YOLOX payloads verify and load" -ForegroundColor Green
 } catch {
     $gate1d.pass = $false
     $gate1d.errors += "Object-detection baseline failed: $_"

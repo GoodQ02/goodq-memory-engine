@@ -3,7 +3,9 @@ param(
     [string]$AssetRoot,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedVersion,
-    [string]$ExpectedCommit
+    [string]$ExpectedCommit,
+    [ValidateSet("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")]
+    [string]$ExpectedProfile = "PUBLIC_CPU_BASELINE"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,10 +41,10 @@ $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.product_version -ne $ExpectedVersion) { throw "Manifest version does not match $ExpectedVersion" }
 if ($ExpectedCommit -and $manifest.source_commit -ne $ExpectedCommit) { throw "Manifest commit does not match $ExpectedCommit" }
 if (-not $manifest.source_tree_clean) { throw "Manifest does not prove a clean source tree" }
-if ($manifest.profile -ne "BASELINE") { throw "Manifest profile is not BASELINE" }
+if ($manifest.profile -ne $ExpectedProfile) { throw "Manifest profile is not $ExpectedProfile" }
 if (-not (@($manifest.excluded_optional_components) -contains "wsl_audio")) { throw "Manifest must exclude WSL audio" }
 if (-not (@($manifest.excluded_optional_components) -contains "local_llm_serving")) { throw "Manifest must exclude local LLM serving" }
-if (-not (@($manifest.excluded_optional_components) -contains "gpu_enhanced")) { throw "Manifest must exclude GPU enhanced mode" }
+if ($ExpectedProfile -eq "PUBLIC_CPU_BASELINE" -and -not (@($manifest.excluded_optional_components) -contains "gpu_enhanced")) { throw "CPU baseline manifest must exclude GPU enhanced mode" }
 
 $installerHash = Get-Sha256Hex (Join-Path $assetRoot $installerName)
 $launcherHash = Get-Sha256Hex (Join-Path $assetRoot "LAUNCH_GOODQ.exe")

@@ -42,6 +42,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="validate only; do not write an artifact")
     parser.add_argument(
+        "--profile",
+        help="validate this exact installer profile in addition to the complete contract",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=REPO_ROOT / "reports" / "capability_matrix.json",
@@ -61,6 +65,8 @@ def main() -> int:
         profile: resolve_profile_assets(catalog, profile_contract, profile)
         for profile in sorted(dict(profile_contract.get("profiles") or {}))
     }
+    if args.profile and args.profile not in profile_selections:
+        raise ValueError(f"unknown installer profile: {args.profile}")
     matrix["profile_selections"] = profile_selections
     if args.check:
         print(

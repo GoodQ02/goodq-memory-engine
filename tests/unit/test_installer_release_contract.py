@@ -122,7 +122,7 @@ def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) ->
         "product_version": "2.5.8",
         "source_commit": "12f577e9",
         "source_tree_clean": True,
-        "profile": "BASELINE",
+        "profile": "PUBLIC_CPU_BASELINE",
         "excluded_optional_components": ["wsl_audio", "local_llm_serving", "gpu_enhanced"],
         "sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
         "launcher_sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
@@ -154,6 +154,8 @@ def _run_asset_verifier(asset_root: Path) -> subprocess.CompletedProcess[str]:
             "2.5.8",
             "-ExpectedCommit",
             "12f577e9",
+            "-ExpectedProfile",
+            "PUBLIC_CPU_BASELINE",
         ],
         capture_output=True,
         text=True,
@@ -231,6 +233,7 @@ def test_offline_release_launcher_requires_real_preflight_and_asset_receipt() ->
     assert "verify_release_asset.ps1" in launcher
     assert "offline_build.log" in launcher
     assert "offline_build_receipt.txt" in launcher
+    assert "-ExpectedProfile" in launcher
 
 
 def test_network_containment_wrapper_leaves_adapters_enabled_and_removes_its_rule() -> None:
@@ -368,20 +371,29 @@ def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> N
     assert '"ffmpeg\\ffprobe.exe"' in verifier
 
 
-def test_baseline_installer_stages_and_verifies_the_sealed_object_detection_pack() -> None:
+def test_installer_profile_controls_the_sealed_object_detection_payload() -> None:
     builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
     lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
 
     assert "stage_object_detection_pack.py" in builder
     assert "GOODQ_ASSET_VAULT_ROOT" in builder
+    assert "GOODQ_INSTALLER_PROFILE" in builder
+    assert "GOODQ_OBJECT_DETECTION_PACK_ARGS" in builder
+    assert "/DGOODQ_INSTALLER_PROFILE=" in builder
     assert 'File /r "staged\\model_packs\\object_detection_cpu\\*.*"' in installer
     assert 'File /r "staged\\model_packs\\object_detection_gpu\\*.*"' in installer
+    assert "!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU" in installer
+    assert "!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU" in installer
+    assert 'File "staged\\configs\\installer_profile.txt"' in installer
     assert "opencv-python-headless==4.13.0.92" in lockfile
 
     verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(encoding="utf-8")
     assert "object_detection_yolox_2022nov.onnx" in verifier
     assert "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063" in verifier
+    assert 'if ($Profile -ne "PUBLIC_CPU_BASELINE")' in verifier
+    assert "installer_profile.txt" in verifier
+    assert "Unknown installer profile in verification target" in verifier
 
 
 def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> None:

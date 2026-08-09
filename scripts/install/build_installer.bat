@@ -76,6 +76,24 @@ if "%GOODQ_DEV_PYTHON%"=="" (
     echo [ERROR] Missing CPython staging interpreter: GOODQ_DEV_PYTHON.
     exit /b 28
 )
+if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
+if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" (
+    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu"
+) else if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" (
+    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu --pack-id object_detection_gpu"
+) else if /I "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
+    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu --pack-id object_detection_gpu"
+) else (
+    echo [ERROR] Unknown installer profile: %GOODQ_INSTALLER_PROFILE%
+    exit /b 30
+)
+
+echo Validating installer profile: %GOODQ_INSTALLER_PROFILE%
+"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\build_capability_matrix.py --check --profile "%GOODQ_INSTALLER_PROFILE%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Installer profile contract validation failed.
+    exit /b 31
+)
 
 :: Create a fresh private staging tree before signing. The tracked source
 :: manifest and signature remain untouched throughout the release build.
@@ -90,11 +108,12 @@ if errorlevel 1 (
     echo [ERROR] Failed to stage the model download manifest.
     exit /b 25
 )
+> "staged\configs\installer_profile.txt" echo %GOODQ_INSTALLER_PROFILE%
 
 :: Stage the sealed OpenCV Zoo CPU and GPU detection packs.  This boundary
 :: verifies the immutable vault snapshots before a model file enters staging.
 echo Staging sealed OpenCV object-detection capability packs...
-"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\stage_object_detection_pack.py --vault-root "%GOODQ_ASSET_VAULT_ROOT%" --staging-root "staged\model_packs"
+"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\stage_object_detection_pack.py --vault-root "%GOODQ_ASSET_VAULT_ROOT%" --staging-root "staged\model_packs" %GOODQ_OBJECT_DETECTION_PACK_ARGS%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Object-detection capability pack staging failed.
     exit /b 29
@@ -278,7 +297,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 6. Compile NSIS Setup Package Offline
 echo Compiling final NSIS Setup Installer package...
-nsis_compiler\nsis-3.09\makensis.exe /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" goodq4all_installer.nsi
+nsis_compiler\nsis-3.09\makensis.exe /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" /DGOODQ_INSTALLER_PROFILE="%GOODQ_INSTALLER_PROFILE%" goodq4all_installer.nsi
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile NSIS installer.
     exit /b 5
@@ -286,7 +305,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 7. Write Release Manifest
 echo Generating release manifest and signatures...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%"
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Release manifest generation failed.
     exit /b 23

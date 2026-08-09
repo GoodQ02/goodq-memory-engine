@@ -44,6 +44,7 @@ if not exist "%GOODQ_ASSET_VAULT_ROOT%" (
     echo [BLOCKED] Sealed asset vault is unavailable: %GOODQ_ASSET_VAULT_ROOT%
     goto :failed
 )
+if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
 
 for /f "tokens=2 delims== " %%I in ('findstr /b /c:"GOODQ_VERSION =" "%REPO_ROOT%\goodq_version.py"') do set "EXPECTED_VERSION=%%~I"
 for /f %%I in ('git -C "%REPO_ROOT%" rev-parse HEAD') do set "EXPECTED_COMMIT=%%I"
@@ -74,7 +75,7 @@ if errorlevel 1 (
     goto :failed
 )
 
-echo [2/3] Building the baseline installer from the local cache...
+echo [2/3] Building the %GOODQ_INSTALLER_PROFILE% installer from the local cache...
 set "GOODQ_INSTALLER_BUILD_ROOT=%BUILD_ROOT%"
 set "GOODQ_INSTALLER_OUTPUT_ROOT=%ASSET_ROOT%"
 call .\build_installer.bat >> "%BUILD_LOG%" 2>&1
@@ -86,7 +87,7 @@ if errorlevel 1 (
 )
 
 echo [3/3] Verifying the exact release asset receipt...
-powershell -NoProfile -ExecutionPolicy Bypass -File .\verify_release_asset.ps1 -AssetRoot "%ASSET_ROOT%" -ExpectedVersion "%EXPECTED_VERSION%" -ExpectedCommit "%EXPECTED_COMMIT%" > "%RECEIPT%" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\verify_release_asset.ps1 -AssetRoot "%ASSET_ROOT%" -ExpectedVersion "%EXPECTED_VERSION%" -ExpectedCommit "%EXPECTED_COMMIT%" -ExpectedProfile "%GOODQ_INSTALLER_PROFILE%" > "%RECEIPT%" 2>&1
 if errorlevel 1 (
     echo [FAILED] Asset verification did not pass. See:
     echo          %RECEIPT%

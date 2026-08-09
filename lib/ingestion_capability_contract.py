@@ -145,6 +145,62 @@ def validate_profile_selection(matrix: dict[str, Any], profile: str) -> list[str
     return selected_ids
 
 
+def resolve_profile_assets(
+    catalog: dict[str, Any],
+    profile_contract: dict[str, Any],
+    profile: str,
+) -> list[str]:
+    """Resolve one profile's sealed, policy-permitted catalog asset IDs."""
+
+    assets = catalog.get("assets") if isinstance(catalog.get("assets"), dict) else catalog
+    profiles = profile_contract.get("profiles") if isinstance(profile_contract.get("profiles"), dict) else {}
+    if not isinstance(assets, dict) or not isinstance(profiles, dict):
+        raise ValueError("catalog and profile contract must contain mappings")
+
+    def _packs(name: str, seen: set[str]) -> list[str]:
+        if name in seen:
+            raise ValueError(f"profile inheritance cycle: {name}")
+        record = profiles.get(name)
+        if not isinstance(record, dict):
+            raise ValueError(f"unknown installer profile: {name}")
+        parent = record.get("extends")
+        inherited = _packs(str(parent), seen | {name}) if parent else []
+        return inherited + [str(pack) for pack in record.get("include_packs") or []]
+
+    profile_record = profiles.get(profile)
+    if not isinstance(profile_record, dict):
+        raise ValueError(f"unknown installer profile: {profile}")
+    distribution = str(profile_record.get("distribution") or "")
+    pack_scopes = set(_packs(profile, set()))
+    excluded_assets = {str(asset_id) for asset_id in profile_record.get("exclude_assets") or []}
+    selected: list[str] = []
+    for asset_id, record in sorted(assets.items()):
+        if (
+            not isinstance(record, dict)
+            or str(asset_id) in excluded_assets
+            or str(record.get("pack_scope") or "") not in pack_scopes
+        ):
+            continue
+        manifest_seal = record.get("sealed_manifest_sha256")
+        source_seal = record.get("source_artifact_sha256")
+        build_time_seal = record.get("seal_mode") == "build_time_sbom"
+        if not (
+            isinstance(manifest_seal, str)
+            and len(manifest_seal) == 64
+            or isinstance(source_seal, str)
+            and len(source_seal) == 64
+            or build_time_seal
+        ):
+            raise ValueError(f"profile selects unsealed asset: {profile}:{asset_id}")
+        if distribution == "public" and (
+            record.get("status") != "eligible"
+            or record.get("vault_scope") != "personal_and_distributable"
+        ):
+            raise ValueError(f"public profile selects non-distributable asset: {profile}:{asset_id}")
+        selected.append(str(asset_id))
+    return selected
+
+
 def _normalize_capability(row: dict[str, Any]) -> dict[str, Any]:
     step = str(row.get("step") or "").strip()
     policy = RUNTIME_CAPABILITY_POLICIES.get(step)

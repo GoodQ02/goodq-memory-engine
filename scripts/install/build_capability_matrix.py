@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 from lib.ingestion_capability_contract import (
     RUNTIME_CAPABILITY_POLICIES,
     build_capability_matrix,
+    resolve_profile_assets,
 )
 
 
@@ -50,13 +51,22 @@ def main() -> int:
 
     registry = _flatten_registry(_load_yaml(REPO_ROOT / "configs" / "model_registry.yaml"))
     catalog = _load_yaml(REPO_ROOT / "configs" / "offline_asset_catalog.yaml")
+    profile_contract = _load_yaml(REPO_ROOT / "configs" / "installer_profile_contract.yaml")
     matrix = build_capability_matrix(
         registry=registry,
         catalog=catalog,
         runtime_policies=RUNTIME_CAPABILITY_POLICIES,
     )
+    profile_selections = {
+        profile: resolve_profile_assets(catalog, profile_contract, profile)
+        for profile in sorted(dict(profile_contract.get("profiles") or {}))
+    }
+    matrix["profile_selections"] = profile_selections
     if args.check:
-        print(f"capability matrix check passed: runtime_steps={len(matrix['runtime_steps'])}")
+        print(
+            "capability matrix check passed: "
+            f"runtime_steps={len(matrix['runtime_steps'])} profiles={len(profile_selections)}"
+        )
         return 0
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(matrix, indent=2, sort_keys=True) + "\n", encoding="utf-8")

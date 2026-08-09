@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 import yaml
+from lib.ingestion_capability_contract import resolve_profile_assets
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +16,7 @@ REGISTRY_PATH = REPO_ROOT / "configs" / "model_registry.yaml"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
 FALLBACK_REGISTRY_PATH = REPO_ROOT / "steps" / "common" / "model_provisioner.py"
 PROFILE_CONFIG_PATH = REPO_ROOT / "configs" / "models_config.yaml"
+INSTALLER_PROFILE_CONTRACT_PATH = REPO_ROOT / "configs" / "installer_profile_contract.yaml"
 LEGACY_WSL_SETUP_PATH = REPO_ROOT / "scripts" / "setup_wsl2_audio.py"
 THIRD_PARTY_NOTICES_PATH = REPO_ROOT / "THIRD_PARTY_NOTICES.md"
 VALID_STATUSES = {"eligible", "agreement_gated", "personal_only", "excluded"}
@@ -106,6 +108,26 @@ def test_catalog_and_runtime_registry_share_exact_model_sources_and_revisions() 
     for asset_id, record in dict(registry.get("huggingface_models", {})).items():
         assert assets[asset_id]["source"] == record["repo_id"], asset_id
         assert assets[asset_id]["revision"] == record["revision"], asset_id
+
+
+def test_installer_profiles_select_only_sealed_and_permitted_assets() -> None:
+    catalog = _load_yaml(CATALOG_PATH)
+    profiles = _load_yaml(INSTALLER_PROFILE_CONTRACT_PATH)
+
+    cpu_assets = resolve_profile_assets(catalog, profiles, "PUBLIC_CPU_BASELINE")
+    gpu_assets = resolve_profile_assets(catalog, profiles, "PUBLIC_GPU_ENHANCED")
+    personal_assets = resolve_profile_assets(catalog, profiles, "PERSONAL_AIR_GAP")
+    records = dict(catalog["assets"])
+
+    assert set(cpu_assets) <= set(gpu_assets)
+    assert set(gpu_assets) <= set(personal_assets)
+    assert all(
+        records[asset_id]["status"] == "eligible"
+        and records[asset_id]["vault_scope"] == "personal_and_distributable"
+        for asset_id in gpu_assets
+    )
+    assert "qwen2_5_vl_3b" not in gpu_assets
+    assert "qwen2_5_vl_3b" in personal_assets
 
 
 def test_invalid_faster_whisper_turbo_scaffold_is_absent_from_active_configuration() -> None:

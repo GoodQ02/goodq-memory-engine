@@ -1,0 +1,31 @@
+# Declarative installer profile authority.  Selection is resolved from the
+# sealed asset catalog; no installer may add an undeclared payload.
+schema_version: 1
+profiles:
+  PUBLIC_CPU_BASELINE:
+    distribution: public
+    include_packs:
+      - core_cpu
+      - vision_cpu
+      - audio_cpu
+      - object_detection_cpu
+      - face_identity_cpu
+      - ocr_cpu
+      - document_cpu
+      - service_cpu
+  PUBLIC_GPU_ENHANCED:
+    distribution: public
+    extends: PUBLIC_CPU_BASELINE
+    exclude_assets:
+      - qwen2_5_vl_3b
+    include_packs:
+      - audio_gpu
+      - object_detection_gpu
+      - local_vlm_gpu
+      - local_llm_gpu
+  PERSONAL_AIR_GAP:
+    distribution: personal
+    extends: PUBLIC_GPU_ENHANCED
+    acceptance_required: true
+    include_packs:
+      - audio_optional

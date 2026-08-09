@@ -5,6 +5,7 @@ import pytest
 from lib.ingestion_capability_contract import (
     build_capability_matrix,
     build_capability_receipt,
+    resolve_profile_assets,
     validate_profile_selection,
 )
 
@@ -175,3 +176,32 @@ def test_public_profile_rejects_explicit_personal_asset_selection() -> None:
 
     with pytest.raises(ValueError, match="public profile selects non-distributable asset"):
         validate_profile_selection(matrix, "PUBLIC_GPU_ENHANCED")
+
+
+def test_public_gpu_profile_is_a_cpu_superset_and_requires_sealed_assets() -> None:
+    catalog = {
+        "assets": {
+            "core": _eligible_asset(pack_scope="core_cpu"),
+            "cpu_vision": _eligible_asset(pack_scope="vision_cpu"),
+            "gpu_vision": _eligible_asset(pack_scope="vision_gpu", hardware_profile="gpu"),
+        }
+    }
+    profiles = {
+        "profiles": {
+            "PUBLIC_CPU_BASELINE": {
+                "distribution": "public",
+                "include_packs": ["core_cpu", "vision_cpu"],
+            },
+            "PUBLIC_GPU_ENHANCED": {
+                "distribution": "public",
+                "extends": "PUBLIC_CPU_BASELINE",
+                "include_packs": ["vision_gpu"],
+            },
+        }
+    }
+
+    cpu_assets = resolve_profile_assets(catalog, profiles, "PUBLIC_CPU_BASELINE")
+    gpu_assets = resolve_profile_assets(catalog, profiles, "PUBLIC_GPU_ENHANCED")
+
+    assert set(cpu_assets) <= set(gpu_assets)
+    assert gpu_assets == ["core", "cpu_vision", "gpu_vision"]

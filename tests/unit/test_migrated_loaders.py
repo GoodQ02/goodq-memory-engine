@@ -108,19 +108,23 @@ if _VENDOR_DIR.exists() and str(_VENDOR_DIR) not in sys.path:
 
 def test_emotion_classify_safetensors_autodetect(tmp_path, monkeypatch):
     """Verify that steps/emotion_classify/step.py checks for model.safetensors and uses the correct use_safetensors flag."""
-    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
-    
-    # 1. Setup mock cached model without safetensors (has pytorch_model.bin)
-    repo_cache_dir = tmp_path / "hub" / "models--cardiffnlp--twitter-roberta-base-emotion-multilabel-latest"
-    snapshots_dir = repo_cache_dir / "snapshots" / "30a56d88e47e493f08f93c786d49c526550b55b9"
-    snapshots_dir.mkdir(parents=True, exist_ok=True)
-    (snapshots_dir / "config.json").write_text("{}", encoding="utf-8")
-    (snapshots_dir / "pytorch_model.bin").write_bytes(b"\x00")
-    
-    # Write refs/main
-    refs_dir = repo_cache_dir / "refs"
-    refs_dir.mkdir(parents=True, exist_ok=True)
-    (refs_dir / "main").write_text("30a56d88e47e493f08f93c786d49c526550b55b9", encoding="utf-8")
+    from steps.common.model_provisioner import ModelProvisionResult
+
+    model_root = tmp_path / "cardiff"
+    model_root.mkdir()
+    (model_root / "pytorch_model.bin").write_bytes(b"\x00")
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *args, **kwargs: ModelProvisionResult(
+            status="cached",
+            repo_id="cardiffnlp/twitter-roberta-base-emotion-latest",
+            revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
+            local_path=str(model_root),
+            gated=False,
+            required=True,
+            elapsed_seconds=0.1,
+        ),
+    )
     
     # Mock config loader to enable offline mode
     import steps.common.config_loader
@@ -145,6 +149,10 @@ def test_emotion_classify_safetensors_autodetect(tmp_path, monkeypatch):
                     return self
                 def eval(self):
                     return self
+                config = types.SimpleNamespace(
+                    id2label={"0": "anger", "1": "joy"},
+                    problem_type="multi_label_classification",
+                )
             return EvalModel()
             
     import sys
@@ -166,7 +174,7 @@ def test_emotion_classify_safetensors_autodetect(tmp_path, monkeypatch):
     
     # 2. Setup mock cached model WITH safetensors
     _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu", "error": None})
-    (snapshots_dir / "model.safetensors").write_bytes(b"\x00")
+    (model_root / "model.safetensors").write_bytes(b"\x00")
     tokenizer_calls.clear()
     model_calls.clear()
     

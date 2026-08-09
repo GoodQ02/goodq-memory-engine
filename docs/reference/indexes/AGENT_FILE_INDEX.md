@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1414**
+Indexed active tracked paths: **1429**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -184,6 +184,7 @@ Indexed active tracked paths: **1414**
 | `/configs/model_download_manifest.json.sig` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_registry.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/models_config.yaml` | Configuration | Configuration, schema, or runtime profile. |
+| `/configs/offline_asset_catalog.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/offline_dependencies_manifest.json` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/open_config.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/paths.py` | Configuration | Configuration, schema, or runtime profile. |
@@ -452,6 +453,7 @@ Indexed active tracked paths: **1414**
 | `/docs/reference/quick-refs/QUICK_REFERENCE_CARD.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md` | Documentation | Active documentation or governance surface. |
+| `/docs/releases/OFFLINE_PAYLOAD_ELIGIBILITY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/R24_GOLDEN_WITNESS_RELEASE_CANDIDATE_2026-08-02.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/ROADMAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
@@ -459,11 +461,13 @@ Indexed active tracked paths: **1414**
 | `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-03-public-baseline-installer-v2.5.8.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-08-personal-asset-vault.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-02-dev-mode-operator-dashboard-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-02-oh-my-posh-baseline-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-08-personal-asset-vault-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/technical/ANALYTICS_PAGES_COMPLETE.md` | Documentation | Active documentation or governance surface. |
@@ -664,6 +668,10 @@ Indexed active tracked paths: **1414**
 | `/scripts/analyze_unified_kg.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/apply_performance_fixes.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/apply_scene_summaries.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/assets/__init__.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/assets/hf_snapshot_intake.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/assets/offline_reproducibility_audit.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/assets/personal_asset_vault.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_monitor.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_all_exceptions.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -754,6 +762,7 @@ Indexed active tracked paths: **1414**
 | `/scripts/install/LAUNCH_GOODQ.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/build_installer.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_manifest.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/generate_wheelhouse_sbom.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/goodq4all_installer.nsi` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_unix.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1173,6 +1182,7 @@ Indexed active tracked paths: **1414**
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_doc_authority_lint.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_emotion_classify_semantics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_logging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_episode_reference_eval.py` | Verification | Test, fixture, or verification asset. |
@@ -1187,6 +1197,7 @@ Indexed active tracked paths: **1414**
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hermes_llm_policy.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_hf_snapshot_intake.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_human_perceived_quality_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
@@ -1232,14 +1243,17 @@ Indexed active tracked paths: **1414**
 | `/tests/unit/test_narrative_summarization.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_native_model_stability_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_non_action_contract_smoke.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_offline_asset_catalog.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_mode_challenger.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_mode_robustness_challenger.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_mode_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_packaging.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_offline_reproducibility_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_operator_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_optional_vision_observability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_overview_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_persistent_store_alignment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_personal_asset_vault.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_phase6_audio_artifact_path_unified.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_phase6_critical_integrity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_phase6_exception_persists_false.py` | Verification | Test, fixture, or verification asset. |
@@ -1343,6 +1357,7 @@ Indexed active tracked paths: **1414**
 | `/tests/unit/test_watchdog_registry_deadlock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_safety.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_stage_coverage.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wheelhouse_sbom.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_held_handle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_security_mechanics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_cache_authority.py` | Verification | Test, fixture, or verification asset. |

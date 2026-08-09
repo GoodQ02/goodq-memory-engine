@@ -1,5 +1,5 @@
-<!-- DOC_BADGE: DESIGN -->
-<!-- DOC_STATUS: APPROVED_FOR_PLANNING -->
+<!-- DOC_BADGE: EXPERIMENTAL -->
+<!-- DOC_STATUS: DRAFT_REVIEW -->
 <!-- DOC_LAST_VERIFIED: 2026-08-08 -->
 
 # Personal Asset Vault Design

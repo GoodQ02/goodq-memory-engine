@@ -2024,6 +2024,16 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   Faster-Whisper Turbo candidate was removed from every active selection and
   provisioning surface rather than retained as excluded scaffolding.
   Agreement-gated sources remain held pending acceptance receipts.
+- Emotion-semantics evidence (2026-08-08): the active Cardiff model's sealed
+  configuration proved an 11-label multilabel contract, while the ingestion
+  step had retained an unrelated 28-label list and truncated its output to five
+  rows. The repair now derives labels from `config.id2label`, validates output
+  cardinality, retains every score through Phase 6, and records model versus
+  NRC-lexicon provenance. Cached verified model inference remains available
+  offline. The obsolete Cardiff utility/catalog path was removed, with an
+  absence guard and an offline sealed-snapshot CPU smoke receipt. Existing
+  corpus emotion records remain historical and require a separately approved
+  reprocess before they can claim the repaired semantics.
 - Personal-source evidence (2026-08-08): the pinned Qwen2.5-VL-3B snapshot
   was sealed only after an explicit personal-use acceptance receipt was
   recorded against the upstream Qwen Research License page. Its catalog status

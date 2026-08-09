@@ -86,9 +86,10 @@ def test_emotion_classify_gpu():
         
         # Load model
         print("\nLoading model...")
-        model_name = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device).eval()
+        model_name = "cardiffnlp/twitter-roberta-base-emotion-latest"
+        revision = "415620c4fbc8bd82b82b9fd46642fcec6519d537"
+        tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision)
+        model = AutoModelForSequenceClassification.from_pretrained(model_name, revision=revision).to(device).eval()
         
         # Test with sample text
         test_text = "This is a test of emotion classification on GPU acceleration with a longer sentence to simulate real usage."

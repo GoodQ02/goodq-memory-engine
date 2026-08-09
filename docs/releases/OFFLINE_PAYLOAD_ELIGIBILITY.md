@@ -1,5 +1,5 @@
 <!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: ACTIVE_RELEASE_GATE -->
+<!-- DOC_STATUS: ACTIVE_RELEASE_REFERENCE -->
 <!-- DOC_LAST_VERIFIED: 2026-08-08 -->
 
 # Offline Payload Eligibility Ledger
@@ -147,7 +147,7 @@ bundled by the baseline installer today.
 |---|---|---|---|
 | Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | baseline VAD candidate |
 | CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | baseline candidate |
-| Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | baseline candidate |
+| Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | baseline candidate; 11-label multilabel semantics verified from sealed config |
 | Captioning | `Salesforce/blip-image-captioning-base` | model card BSD-3-Clause declaration | optional vision payload candidate |
 | Captioning | `nlpconnect/vit-gpt2-image-captioning` | model card Apache-2.0 declaration | optional payload candidate; require loader compatibility proof |
 | Visual embedding | `facebook/dinov2-base` and `facebook/dinov2-large` | model cards Apache-2.0 declarations | optional payload candidates |

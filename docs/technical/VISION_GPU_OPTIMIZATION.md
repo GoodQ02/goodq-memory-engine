@@ -32,10 +32,10 @@ Comprehensive audit and optimization of the GoodQ4All vision processing pipeline
 - **Status:** ✅ GPU-accelerated with centralized config
 
 ### 2. **Emotion Classification** (`goodq_emotion_classify`)
-- **Model:** Cardiff NLP RoBERTa (twitter-roberta-base-emotion-multilabel-latest)
+- **Model:** Cardiff NLP RoBERTa (`twitter-roberta-base-emotion-latest`, pinned)
 - **GPU Memory:** 18% allocation
 - **Features:**
-  - 28 emotion categories
+  - 11 model-defined emotion categories
   - Multi-label classification
   - Works with transcript, OCR, or captions
 - **Status:** ✅ GPU-accelerated with AMP (Automatic Mixed Precision)

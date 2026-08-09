@@ -901,9 +901,9 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
         "steps.common.model_provisioner.ensure_model_cached",
         lambda *args, **kwargs: ModelProvisionResult(
             status="cached",
-            repo_id="cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
-            revision="30a56d88e47e493f08f93c786d49c526550b55b9",
-            local_path="cardiffnlp/twitter-roberta-base-emotion-multilabel-latest",
+            repo_id="cardiffnlp/twitter-roberta-base-emotion-latest",
+            revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
+            local_path="cardiffnlp/twitter-roberta-base-emotion-latest",
             gated=False,
             required=True,
             elapsed_seconds=0.1
@@ -936,6 +936,11 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
             return cls()
 
     class FakeModel:
+        config = types.SimpleNamespace(
+            id2label={"0": "anger", "1": "joy"},
+            problem_type="multi_label_classification",
+        )
+
         @classmethod
         def from_pretrained(cls, name, **kwargs):
             model_kwargs.update(kwargs)

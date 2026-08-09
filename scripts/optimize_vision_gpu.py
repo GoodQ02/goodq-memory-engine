@@ -136,7 +136,7 @@ print(f"[OK] FaceNet loaded on {device}")
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-multilabel-latest').to(device)
+model = AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-latest', revision='415620c4fbc8bd82b82b9fd46642fcec6519d537').to(device)
 print(f"[OK] Emotion model loaded on {device}")
 """
     elif "object_detect" in env_name:
@@ -258,8 +258,8 @@ import time
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-multilabel-latest').to(device).eval()
-tok = AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-multilabel-latest')
+model = AutoModelForSequenceClassification.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-latest', revision='415620c4fbc8bd82b82b9fd46642fcec6519d537').to(device).eval()
+tok = AutoTokenizer.from_pretrained('cardiffnlp/twitter-roberta-base-emotion-latest', revision='415620c4fbc8bd82b82b9fd46642fcec6519d537')
 
 text = "This is a test of emotion classification on GPU acceleration"
 inputs = tok(text, return_tensors='pt').to(device)

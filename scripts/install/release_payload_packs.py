@@ -19,7 +19,10 @@ from pathlib import Path
 from typing import Iterable
 
 
-DEFAULT_MAX_PACK_BYTES = 1900 * 1024 * 1024
+# Payload packs live beside the small NSIS bootstrap, so their boundary is a
+# delivery constraint rather than an NSIS data-block limit.  It must admit the
+# largest sealed public GPU model shard (currently DeepSeek 14B at ~8.12 GiB).
+DEFAULT_MAX_PACK_BYTES = 10 * 1024 * 1024 * 1024
 SCHEMA_VERSION = 1
 
 

@@ -467,6 +467,19 @@ def test_cpu_profile_stages_the_catalogued_document_tool() -> None:
     assert "document_runtime" in verifier
 
 
+def test_offline_verifier_uses_current_payload_contract_and_poppler_exit_code() -> None:
+    """Installed validation must not require retired pack scaffolding or reject Poppler stderr."""
+
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "verify_profile_model_payload.py" in verifier
+    assert "PACK_MANIFEST.json" not in verifier
+    assert "Start-Process -FilePath $pdftotextPath" in verifier
+    assert "-RedirectStandardError" in verifier
+
+
 def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None:
     builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
         encoding="utf-8"

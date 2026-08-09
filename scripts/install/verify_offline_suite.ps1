@@ -46,13 +46,11 @@ $criticalFiles = @(
     "configs\selected_capabilities.json",
     "configs\selected_capabilities.json.sig",
     "poppler\pdftotext.exe",
-    (Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"),
-    (Join-Path $modelPackRoot "model_packs\object_detection_cpu\PACK_MANIFEST.json")
+    (Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx")
 )
 if ($Profile -ne "PUBLIC_CPU_BASELINE") {
     $criticalFiles += @(
-        (Join-Path $modelPackRoot "model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx"),
-        (Join-Path $modelPackRoot "model_packs\object_detection_gpu\PACK_MANIFEST.json")
+        (Join-Path $modelPackRoot "model_packs\object_detection_gpu\models\opencv_zoo\object_detection_yolox_2022nov.onnx")
     )
 }
 foreach ($f in $criticalFiles) {
@@ -90,16 +88,26 @@ $results.gates += $gate1b
 # --- Gate 1bb: Bundled Document Runtime ---
 $gate1bb = @{ name = "document_runtime"; pass = $true; errors = @() }
 $pdftotextPath = Join-Path $InstallDir "poppler\pdftotext.exe"
+$pdftotextStdout = Join-Path ([IO.Path]::GetTempPath()) ("goodq4all-pdftotext-{0}.stdout" -f [guid]::NewGuid())
+$pdftotextStderr = Join-Path ([IO.Path]::GetTempPath()) ("goodq4all-pdftotext-{0}.stderr" -f [guid]::NewGuid())
 try {
-    & $pdftotextPath -v *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "exit code $LASTEXITCODE"
+    $pdftotextProcess = Start-Process -FilePath $pdftotextPath -ArgumentList "-v" -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $pdftotextStdout -RedirectStandardError $pdftotextStderr
+    if ($pdftotextProcess.ExitCode -ne 0) {
+        $diagnostic = if (Test-Path -LiteralPath $pdftotextStderr) {
+            (Get-Content -LiteralPath $pdftotextStderr -Raw).Trim()
+        } else {
+            "no stderr captured"
+        }
+        throw "exit code $($pdftotextProcess.ExitCode): $diagnostic"
     }
     Write-Host "  [OK]   Bundled Poppler pdftotext runtime executes" -ForegroundColor Green
 } catch {
     $gate1bb.pass = $false
     $gate1bb.errors += "Bundled Poppler pdftotext runtime failed: $_"
     Write-Host "  [FAIL] Bundled Poppler pdftotext runtime failed: $_" -ForegroundColor Red
+} finally {
+    Remove-Item -LiteralPath $pdftotextStdout, $pdftotextStderr -Force -ErrorAction SilentlyContinue
 }
 if (-not $gate1bb.pass) { $results.pass = $false }
 $results.gates += $gate1bb

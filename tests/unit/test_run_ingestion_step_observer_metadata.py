@@ -210,6 +210,46 @@ def _write_cfg(tmp_path: Path, *, host: dict | None = None) -> Path:
     return cfg_json
 
 
+def test_finalize_capability_receipt_writes_degraded_receipt_from_current_run_evidence(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "step_runs.jsonl").write_text(
+        json.dumps(
+            {
+                "run_id": "receipt-run",
+                "step": "audio_embed_clap",
+                "status": "error",
+                "error": "model unavailable",
+                "extra": {"optional": True, "reason": "optional_step_failed"},
+                "scene_id": "scene-1",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        run_ingestion,
+        "_CURRENT_RUN_CONTEXT",
+        {"id": "receipt-run", "warnings": [{"code": "optional_step_failed"}]},
+    )
+    output = tmp_path / "output" / "scene_ingest_results.json"
+
+    receipt = run_ingestion._finalize_capability_receipt(
+        terminal_status="completed",
+        cfg={"paths": {"log_dir": str(log_dir)}, "host": {"profile": "BASELINE"}},
+        results=[{"scenes": [{"scene_id": "scene-1"}]}],
+        output=output,
+    )
+
+    persisted = json.loads((output.parent / "capability_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["outcome"] == "degraded"
+    assert persisted["capabilities_by_step"]["audio_embed_clap"]["reason"] == "optional_step_failed"
+
+
 def test_base_env_enforces_python_no_user_site(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     cfg_json = _write_cfg(tmp_path)

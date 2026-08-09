@@ -45,6 +45,11 @@ from steps.common.tag_utils import (
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
+from lib.ingestion_capability_contract import (
+    RUNTIME_CAPABILITY_POLICIES,
+    build_capability_receipt,
+    render_capability_receipt,
+)
 from lib.observability.observer import PipelineObserver
 from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
@@ -3797,6 +3802,93 @@ def _atomic_write_json(path: Path, data: Any, *, indent: Optional[int] = 2) -> N
     tmp = Path(str(path) + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding='utf-8')
     os.replace(tmp, path)
+
+
+def _capability_receipt_profile(cfg: Dict[str, Any]) -> str:
+    host = cfg.get("host") if isinstance(cfg, dict) else None
+    configured = host.get("profile") if isinstance(host, dict) else None
+    profile = str(configured or os.getenv("GOODQ_HOST_PROFILE") or "BASELINE").strip().upper()
+    if profile in {"GPU_ENHANCED", "PUBLIC_GPU_ENHANCED"}:
+        return "PUBLIC_GPU_ENHANCED"
+    if profile == "PERSONAL_AIR_GAP":
+        return profile
+    return "PUBLIC_CPU_BASELINE"
+
+
+def _read_current_run_capability_rows(cfg: Dict[str, Any], run_id: str) -> list[dict[str, Any]]:
+    paths_cfg = cfg.get("paths") if isinstance(cfg, dict) else None
+    log_dir = paths_cfg.get("log_dir") if isinstance(paths_cfg, dict) else None
+    if not isinstance(log_dir, str) or not log_dir.strip():
+        return []
+    path = Path(log_dir) / "step_runs.jsonl"
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if (
+                isinstance(row, dict)
+                and str(row.get("run_id") or "") == run_id
+                and str(row.get("step") or "") in RUNTIME_CAPABILITY_POLICIES
+            ):
+                rows.append(row)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("[CAPABILITY] Unable to read current step evidence path=%s error=%s", path, exc)
+    return rows
+
+
+def _flatten_scene_outputs(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scenes: list[dict[str, Any]] = []
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        nested_scenes = result.get("scenes")
+        if isinstance(nested_scenes, list):
+            scenes.extend(scene for scene in nested_scenes if isinstance(scene, dict))
+    return scenes
+
+
+def _finalize_capability_receipt(
+    *,
+    terminal_status: str,
+    cfg: Dict[str, Any],
+    results: list[dict[str, Any]],
+    output: Path,
+) -> dict[str, Any]:
+    """Persist the sole terminal capability receipt from existing run evidence."""
+
+    run_context = _CURRENT_RUN_CONTEXT if isinstance(_CURRENT_RUN_CONTEXT, dict) else {}
+    run_id = str(run_context.get("id") or "unknown_run")
+    paths_cfg = cfg.get("paths") if isinstance(cfg, dict) else {}
+    log_dir = paths_cfg.get("log_dir") if isinstance(paths_cfg, dict) else None
+    step_path = Path(log_dir) / "step_runs.jsonl" if isinstance(log_dir, str) and log_dir.strip() else None
+    receipt_path = output.parent / "capability_receipt.json"
+    evidence_paths = {
+        "results": str(output),
+        "receipt": str(receipt_path),
+    }
+    if step_path is not None:
+        evidence_paths["step_runs"] = str(step_path)
+
+    receipt = build_capability_receipt(
+        run_id=run_id,
+        profile=_capability_receipt_profile(cfg),
+        terminal_status=terminal_status,
+        step_rows=_read_current_run_capability_rows(cfg, run_id),
+        warnings=list(run_context.get("warnings") or []),
+        scenes=_flatten_scene_outputs(results),
+        evidence_paths=evidence_paths,
+    )
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_json(receipt_path, receipt, indent=2)
+    typer.echo(
+        render_capability_receipt(receipt),
+        err=receipt["outcome"] == "failed",
+    )
+    return receipt
 
 
 def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
@@ -8066,6 +8158,12 @@ def run(
 
     if not videos:
         typer.echo('No videos found to process.')
+        _finalize_capability_receipt(
+            terminal_status="completed",
+            cfg=cfg,
+            results=[],
+            output=output,
+        )
         if observer:
             observer.step_end("pipeline.ingestion", metadata={"status": "no_videos"})
         if _PIPELINE_OBSERVER is not None:
@@ -9541,6 +9639,12 @@ def run(
             typer.echo(f'  - Incorrect file path', err=True)
             typer.echo(f'  - FFmpeg not available or broken', err=True)
             _persist_results_artifact()
+            _finalize_capability_receipt(
+                terminal_status="failed",
+                cfg=cfg,
+                results=results,
+                output=output,
+            )
             if PROGRESS_TRACKING_AVAILABLE:
                 finish_processing("failed")
             raise typer.Exit(code=1)
@@ -9574,6 +9678,13 @@ def run(
                     typer.echo("="*80 + "\n")
         except Exception as e:
             typer.echo(f"[WARNING] Final report generation skipped (non-fatal): {e}", err=True)
+
+    _finalize_capability_receipt(
+        terminal_status="completed",
+        cfg=cfg,
+        results=results,
+        output=output,
+    )
 
     if observer:
         observer.step_end(

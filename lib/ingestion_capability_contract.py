@@ -9,29 +9,27 @@ from typing import Any
 CAPABILITY_SCHEMA_VERSION = 1
 
 RUNTIME_CAPABILITY_POLICIES: dict[str, dict[str, Any]] = {
-    "audio_transcribe_local": {
-        "classification": "core_required",
-        "status_surface": "transcript_meta",
-    },
-    "image_ocr": {
-        "classification": "enhancement_optional",
-        "status_surface": "ocr_meta",
-    },
-    "object_detect": {
-        "classification": "enhancement_optional",
-        "status_surface": "object_meta",
-    },
-    "audio_embed_clap": {
-        "classification": "enhancement_optional",
-        "status_surface": "clap_meta",
-    },
-    "local_vlm": {
-        "classification": "profile_optional",
-        "status_surface": "local_vlm_meta",
-    },
+    "audio_transcribe_local": {"classification": "core_required", "status_surface": "transcript_meta", "asset_ids": ["faster_whisper_medium"]},
+    "image_ocr": {"classification": "enhancement_optional", "status_surface": "ocr_meta", "asset_ids": ["tesseract"]},
+    "image_caption": {"classification": "enhancement_optional", "status_surface": "caption_meta", "asset_ids": ["blip_caption", "vit_gpt2_caption"]},
+    "object_detect": {"classification": "enhancement_optional", "status_surface": "object_meta", "asset_ids": ["opencv_nanodet", "opencv_yolox"]},
+    "face_embed": {"classification": "enhancement_optional", "status_surface": "face_meta", "asset_ids": ["opencv_yunet", "opencv_sface"]},
+    "image_embed_dino": {"classification": "enhancement_optional", "status_surface": "dino_meta", "asset_ids": ["dinov2"]},
+    "image_embed_clip": {"classification": "enhancement_optional", "status_surface": "clip_meta", "asset_ids": ["clip_vit"]},
+    "tagger": {"classification": "enhancement_optional", "status_surface": "tagger_meta", "asset_ids": ["bert_ner"]},
+    "audio_metadata": {"classification": "enhancement_optional", "status_surface": "audio_meta", "asset_ids": []},
+    "audio_speaker_merge": {"classification": "profile_optional", "status_surface": "speaker_meta", "asset_ids": ["pyannote_diarization", "pyannote_segmentation", "pyannote_wespeaker"]},
+    "audio_music_events": {"classification": "enhancement_optional", "status_surface": "music_meta", "asset_ids": []},
+    "audio_time_hints": {"classification": "enhancement_optional", "status_surface": "time_hints", "asset_ids": []},
+    "audio_emotion": {"classification": "enhancement_optional", "status_surface": "emotion_meta", "asset_ids": ["hubert_emotion", "wav2vec2_emotion"]},
+    "sentiment": {"classification": "enhancement_optional", "status_surface": "sentiment_meta", "asset_ids": ["sentiment_model", "vader_lexicon"]},
+    "emotion_classify": {"classification": "enhancement_optional", "status_surface": "emotion_classify_meta", "asset_ids": ["emotion_classify_model"]},
+    "audio_embed_clap": {"classification": "enhancement_optional", "status_surface": "clap_meta", "asset_ids": ["clap_audio"]},
+    "local_vlm": {"classification": "profile_optional", "status_surface": "local_vlm_meta", "asset_ids": ["qwen2_5_vl_7b", "qwen2_5_vl_3b"]},
 }
 
 _NON_FAILURE_STATUSES = {"ok", "completed", "not_applicable"}
+_RUNTIME_CLASSIFICATIONS = {"core_required", "enhancement_optional", "profile_optional", "gated_personal", "excluded"}
 
 
 def build_capability_receipt(
@@ -80,6 +78,71 @@ def render_capability_receipt(receipt: dict[str, Any]) -> str:
             fallbacks=summary.get("recovered_fallbacks", 0),
         )
     )
+
+
+def build_capability_matrix(
+    *,
+    registry: dict[str, Any],
+    catalog: dict[str, Any],
+    runtime_policies: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Reconcile declared runtime paths with registry and catalog evidence."""
+
+    catalog_assets = catalog.get("assets") if isinstance(catalog.get("assets"), dict) else catalog
+    if not isinstance(catalog_assets, dict):
+        raise ValueError("catalog assets must be a mapping")
+    runtime_steps: dict[str, dict[str, Any]] = {}
+    for step, policy in sorted(runtime_policies.items()):
+        classification = str(policy.get("classification") or "")
+        status_surface = policy.get("status_surface")
+        if classification not in _RUNTIME_CLASSIFICATIONS:
+            raise ValueError(f"invalid runtime classification for {step}: {classification or 'missing'}")
+        if not isinstance(status_surface, str) or not status_surface.strip():
+            raise ValueError(f"runtime status surface missing for {step}")
+        asset_ids = [str(asset_id) for asset_id in policy.get("asset_ids") or []]
+        registry_record = registry.get(step)
+        if isinstance(registry_record, dict) and str(registry_record.get("classification") or "") == "REQUIRED_FIRST_LAUNCH":
+            if classification != "core_required":
+                raise ValueError(f"runtime classification conflict for {step}")
+        for asset_id in asset_ids:
+            catalog_record = catalog_assets.get(asset_id)
+            if not isinstance(catalog_record, dict):
+                raise ValueError(f"runtime asset absent from catalog: {step}:{asset_id}")
+            registry_asset = registry.get(asset_id)
+            if isinstance(registry_asset, dict):
+                expected_source = registry_asset.get("repo_id")
+                if expected_source:
+                    if catalog_record.get("source") != expected_source:
+                        raise ValueError(f"registry/catalog source mismatch for {asset_id}")
+                    if registry_asset.get("revision") and catalog_record.get("revision") != registry_asset.get("revision"):
+                        raise ValueError(f"registry/catalog revision mismatch for {asset_id}")
+        runtime_steps[step] = {
+            "classification": classification,
+            "status_surface": status_surface,
+            "asset_ids": asset_ids,
+        }
+    return {
+        "schema_version": CAPABILITY_SCHEMA_VERSION,
+        "runtime_steps": runtime_steps,
+        "assets": {str(key): dict(value) for key, value in sorted(catalog_assets.items()) if isinstance(value, dict)},
+        "profile_selections": {},
+    }
+
+
+def validate_profile_selection(matrix: dict[str, Any], profile: str) -> list[str]:
+    """Reject explicit public selections that contain non-distributable assets."""
+
+    selected = (matrix.get("profile_selections") or {}).get(profile) or []
+    assets = matrix.get("assets") if isinstance(matrix.get("assets"), dict) else {}
+    selected_ids = [str(asset_id) for asset_id in selected]
+    if str(profile).startswith("PUBLIC_"):
+        for asset_id in selected_ids:
+            record = assets.get(asset_id)
+            if not isinstance(record, dict):
+                raise ValueError(f"profile selects absent asset: {profile}:{asset_id}")
+            if record.get("status") != "eligible" or record.get("vault_scope") != "personal_and_distributable":
+                raise ValueError(f"public profile selects non-distributable asset: {profile}:{asset_id}")
+    return selected_ids
 
 
 def _normalize_capability(row: dict[str, Any]) -> dict[str, Any]:

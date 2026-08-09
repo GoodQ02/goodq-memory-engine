@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from lib.ingestion_capability_contract import build_capability_receipt
+from lib.ingestion_capability_contract import (
+    build_capability_matrix,
+    build_capability_receipt,
+    validate_profile_selection,
+)
 
 
 def test_optional_skip_is_degraded_not_core_failure() -> None:
@@ -112,3 +116,62 @@ def test_unknown_runtime_step_is_rejected() -> None:
             scenes=[],
             evidence_paths={},
         )
+
+
+def _eligible_asset(**overrides: object) -> dict[str, object]:
+    record: dict[str, object] = {
+        "source": "example/asset",
+        "revision": "revision-1",
+        "status": "eligible",
+        "vault_scope": "personal_and_distributable",
+        "hardware_profile": "cpu_gpu",
+        "sealed_manifest_sha256": "a" * 64,
+    }
+    record.update(overrides)
+    return record
+
+
+def test_matrix_rejects_required_registry_as_optional_runtime_path() -> None:
+    with pytest.raises(ValueError, match="runtime classification conflict"):
+        build_capability_matrix(
+            registry={"caption": {"classification": "REQUIRED_FIRST_LAUNCH"}},
+            catalog={"caption": _eligible_asset()},
+            runtime_policies={
+                "caption": {
+                    "classification": "enhancement_optional",
+                    "status_surface": "caption_meta",
+                    "asset_ids": ["caption"],
+                }
+            },
+        )
+
+
+def test_matrix_rejects_runtime_asset_absent_from_catalog() -> None:
+    with pytest.raises(ValueError, match="runtime asset absent from catalog"):
+        build_capability_matrix(
+            registry={},
+            catalog={},
+            runtime_policies={
+                "audio_transcribe_local": {
+                    "classification": "core_required",
+                    "status_surface": "transcript_meta",
+                    "asset_ids": ["missing_transcriber"],
+                }
+            },
+        )
+
+
+def test_public_profile_rejects_explicit_personal_asset_selection() -> None:
+    matrix = {
+        "assets": {
+            "private_model": {
+                "status": "personal_only",
+                "vault_scope": "personal",
+                "hardware_profile": "gpu",
+            }
+        },
+        "profile_selections": {"PUBLIC_GPU_ENHANCED": ["private_model"]},
+    }
+
+    with pytest.raises(ValueError, match="public profile selects non-distributable asset"):
+        validate_profile_selection(matrix, "PUBLIC_GPU_ENHANCED")

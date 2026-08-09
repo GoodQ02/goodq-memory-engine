@@ -61,8 +61,8 @@ authentication before download.
 
 Current examples in [`configs/model_registry.yaml`](configs/model_registry.yaml):
 
-- `pyannote/speaker-diarization`
-- `pyannote/segmentation`
+- `pyannote/speaker-diarization-3.1`
+- `pyannote/segmentation-3.0`
 
 These require the operator to supply their own token (for example
 `PYANNOTE_TOKEN`) and accept upstream access terms directly with the provider.

@@ -99,19 +99,19 @@ def test_build_wanted_models_uses_registry_repo_ids():
     registry = {
         "huggingface_models": {
             "pyannote_diarization": {
-                "repo_id": "pyannote/speaker-diarization",
-                "revision": "25bcc7e3631933a02af5ee39379797d704aee3f8",
+                "repo_id": "pyannote/speaker-diarization-3.1",
+                "revision": "84fd25912480287da0247647c3d2b4853cb3ee5d",
             },
             "pyannote_segmentation": {
-                "repo_id": "pyannote/segmentation",
-                "revision": "660b9e20307a2b0cdb400d0f80aadc04a701fc54",
+                "repo_id": "pyannote/segmentation-3.0",
+                "revision": "e66f3d3b9eb0873085418a7b813d3b369bf160bb",
             },
         }
     }
 
     wanted = bootstrap_models.build_wanted_models(registry)
 
-    assert wanted == ["pyannote/speaker-diarization", "pyannote/segmentation"]
+    assert wanted == ["pyannote/speaker-diarization-3.1", "pyannote/segmentation-3.0"]
     assert all("@" not in model_id for model_id in wanted)
 
 

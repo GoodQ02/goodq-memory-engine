@@ -374,10 +374,24 @@ class AudioProcessor:
         
         # Load models
         self.whisper = WhisperModel("large-v3", device=self.device, compute_type="float16")
-        self.diarization = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization",
-            use_auth_token=None
-        )
+        diarization_token = os.getenv("PYANNOTE_TOKEN") or os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+        if not diarization_token:
+            raise RuntimeError(
+                "Pyannote diarization requires PYANNOTE_TOKEN after accepting the "
+                "pyannote/speaker-diarization-3.1 access terms."
+            )
+        try:
+            self.diarization = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-3.1",
+                use_auth_token=diarization_token,
+            )
+        except TypeError as auth_error:
+            if "use_auth_token" not in str(auth_error) or "unexpected keyword" not in str(auth_error):
+                raise
+            self.diarization = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-3.1",
+                token=diarization_token,
+            )
         if self.device == "cuda":
             self.diarization.to(torch.device("cuda"))
             

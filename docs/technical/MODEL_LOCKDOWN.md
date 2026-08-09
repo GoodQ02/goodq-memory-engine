@@ -224,9 +224,9 @@ External models are verified using SHA256 hashes:
 For models requiring authentication:
 
 ```yaml
-model_key:
-  repo_id: "pyannote/speaker-diarization"
-  revision: "..."
+pyannote_diarization:
+  repo_id: "pyannote/speaker-diarization-3.1"
+  revision: "84fd25912480287da0247647c3d2b4853cb3ee5d"
   requires_auth: true
   auth_token_env: "PYANNOTE_TOKEN"
 ```

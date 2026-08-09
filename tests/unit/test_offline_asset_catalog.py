@@ -15,6 +15,8 @@ REGISTRY_PATH = REPO_ROOT / "configs" / "model_registry.yaml"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
 FALLBACK_REGISTRY_PATH = REPO_ROOT / "steps" / "common" / "model_provisioner.py"
 PROFILE_CONFIG_PATH = REPO_ROOT / "configs" / "models_config.yaml"
+LEGACY_WSL_SETUP_PATH = REPO_ROOT / "scripts" / "setup_wsl2_audio.py"
+THIRD_PARTY_NOTICES_PATH = REPO_ROOT / "THIRD_PARTY_NOTICES.md"
 VALID_STATUSES = {"eligible", "agreement_gated", "personal_only", "excluded"}
 REQUIRED_FIELDS = {
     "kind",
@@ -117,3 +119,24 @@ def test_invalid_faster_whisper_turbo_scaffold_is_absent_from_active_configurati
         text = path.read_text(encoding="utf-8")
         assert retired_repo not in text, path
         assert retired_key not in text, path
+
+
+def test_unpinned_pyannote_aliases_are_absent_from_active_configuration() -> None:
+    """Only the pinned 3.1/3.0 Pyannote chain may remain selectable or documented."""
+
+    retired_aliases = (
+        re.compile(r"pyannote/speaker-diarization(?!-3\.1)"),
+        re.compile(r"pyannote/segmentation(?!-3\.0)"),
+    )
+    active_paths = (
+        CATALOG_PATH,
+        REGISTRY_PATH,
+        FALLBACK_REGISTRY_PATH,
+        LEGACY_WSL_SETUP_PATH,
+        THIRD_PARTY_NOTICES_PATH,
+    )
+
+    for path in active_paths:
+        text = path.read_text(encoding="utf-8")
+        for retired_alias in retired_aliases:
+            assert retired_alias.search(text) is None, path

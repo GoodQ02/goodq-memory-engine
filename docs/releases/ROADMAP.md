@@ -1998,9 +1998,11 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   tool, and installer payload identifiers.
 - Evidence (2026-08-08): a second static pass covers the runtime fallback
   registry and literal production model-loader calls. It added the independently
-  pinned DINOv2 base source, and records an obsolete unversioned Pyannote alias
-  plus an unlicensed Cardiff development utility as excluded references rather
-  than silently treating either as a pack candidate.
+  pinned DINOv2 base source. The obsolete unversioned Pyannote alias was later
+  removed from the catalog, documented setup helper, fixture, and notices; only
+  the pinned Pyannote 3.1/segmentation 3.0 chain remains. The unlicensed Cardiff
+  development utility remains explicitly excluded rather than silently treated
+  as a pack candidate.
 - Verification boundary (2026-08-08): the vault/catalog focused suite passed,
   but the repository-wide suite reported 3,996 passing tests and 11 failures
   in existing CLAP, bootstrap-report, mini-agent lock, WSL offline-audio, and

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-08-06 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-09 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -60,14 +60,15 @@ Paths resolve through configuration authority, environment abstractions,
 platform helpers, or explicit operator input. Public examples are generic and
 redacted. A repair is not complete if it works only on the present machine.
 
-## Active Release Checkpoint: Sealed Object Detection
+## Active Release Checkpoint: Complete CPU Offline Payload
 
-The active detector migration replaces the former restricted external runtime
-with sealed OpenCV Zoo NanoDet CPU and YOLOX GPU-enhanced capability packs.
-Private development evidence confirms the pinned source-vault seals, OpenCV DNN
-model loading, real CPU and GPU-path inference, explicit GPU-to-CPU fallback,
-and focused installer contracts. The remaining release gate is a fresh managed
-offline installer build followed by one isolated scene on a clean target.
+The public CPU baseline must carry every legally distributable capability that
+the CPU profile declares: runtime tools, document/media tooling, models, and
+lexicons. The installer now stages selected sealed snapshots into the real
+runtime cache layout, signs their capability receipt, and validates the receipt
+and payload paths after install. The remaining release gate is a fresh managed
+offline CPU build followed by a clean-target install and one isolated scene
+with no model download.
 
 ## Status Vocabulary
 

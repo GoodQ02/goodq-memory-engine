@@ -264,7 +264,6 @@ Indexed active Python paths: **426**
 - `scripts/inspect_db.py`
 - `scripts/install/generate_wheelhouse_sbom.py`
 - `scripts/install/sandbox_env_setup.py`
-- `scripts/install/stage_object_detection_pack.py`
 - `scripts/install/sync_nsi_version.py`
 - `scripts/install_pipeline_wsl.py`
 - `scripts/install_vision_gpu.py`

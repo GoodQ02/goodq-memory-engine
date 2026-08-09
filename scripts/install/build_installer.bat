@@ -77,13 +77,7 @@ if "%GOODQ_DEV_PYTHON%"=="" (
     exit /b 28
 )
 if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
-if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" (
-    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu"
-) else if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" (
-    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu --pack-id object_detection_gpu"
-) else if /I "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
-    set "GOODQ_OBJECT_DETECTION_PACK_ARGS=--pack-id object_detection_cpu --pack-id object_detection_gpu"
-) else (
+if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
     echo [ERROR] Unknown installer profile: %GOODQ_INSTALLER_PROFILE%
     exit /b 30
 )
@@ -110,13 +104,18 @@ if errorlevel 1 (
 )
 > "staged\configs\installer_profile.txt" echo %GOODQ_INSTALLER_PROFILE%
 
-:: Stage the sealed OpenCV Zoo CPU and GPU detection packs.  This boundary
-:: verifies the immutable vault snapshots before a model file enters staging.
-echo Staging sealed OpenCV object-detection capability packs...
-"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\stage_object_detection_pack.py --vault-root "%GOODQ_ASSET_VAULT_ROOT%" --staging-root "staged\model_packs" %GOODQ_OBJECT_DETECTION_PACK_ARGS%
+:: Stage every profile-selected model from immutable source snapshots directly
+:: into the runtime cache layout consumed by model_provisioner.
+echo Staging sealed profile capability payloads...
+"%GOODQ_DEV_PYTHON%" ..\..\scripts\install\stage_profile_model_packs.py --vault-root "%GOODQ_ASSET_VAULT_ROOT%" --staging-root "staged\models" --profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Object-detection capability pack staging failed.
+    echo [ERROR] Profile capability pack staging failed.
     exit /b 29
+)
+copy /y "staged\models\selected_capabilities.json" "staged\configs\selected_capabilities.json" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to stage the selected capability receipt.
+    exit /b 32
 )
 
 :: 3a. Sign manifest in release mode (verifies key matches launcher, signs, round-trip verifies)
@@ -133,6 +132,18 @@ go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path sta
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Independent signature verification failed. Do not package.
     exit /b 11
+)
+
+echo Signing selected capability receipt with release key...
+go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Capability receipt signing failed.
+    exit /b 33
+)
+go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Capability receipt signature verification failed.
+    exit /b 34
 )
 
 :: 4a. Sync versioninfo.json and goodq4all_installer.nsi from canonical goodq_version.py
@@ -159,6 +170,7 @@ if not exist "staged\qdrant\config" mkdir "staged\qdrant\config"
 if not exist "staged\nssm" mkdir "staged\nssm"
 if not exist "staged\runtime" mkdir "staged\runtime"
 if not exist "staged\ffmpeg" mkdir "staged\ffmpeg"
+if not exist "staged\poppler" mkdir "staged\poppler"
 if not exist "staged\binaries" mkdir "staged\binaries"
 if exist "staged\wheels" rmdir /s /q "staged\wheels"
 if exist "staged\wheels" (
@@ -226,6 +238,27 @@ staged\ffmpeg\ffprobe.exe -version >nul
 if errorlevel 1 (
     echo [ERROR] Staged FFprobe runtime could not execute.
     exit /b 108
+)
+
+copy /y "staged_cache\external\poppler.zip" "staged\poppler.zip" >nul
+if errorlevel 1 (
+    echo [ERROR] Poppler archive is missing from the verified cache.
+    exit /b 109
+)
+%PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\poppler.zip' -DestinationPath 'staged\poppler_archive' -Force"
+if errorlevel 1 (
+    echo [ERROR] Failed to extract the verified Poppler archive.
+    exit /b 110
+)
+xcopy /s /e /i /y "staged\poppler_archive\poppler-24.08.0\Library\bin" "staged\poppler" >nul
+if not exist "staged\poppler\pdftotext.exe" (
+    echo [ERROR] Poppler pdftotext executable was not produced by the verified archive.
+    exit /b 111
+)
+staged\poppler\pdftotext.exe -v >nul
+if errorlevel 1 (
+    echo [ERROR] Staged Poppler pdftotext runtime could not execute.
+    exit /b 112
 )
 
 copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul

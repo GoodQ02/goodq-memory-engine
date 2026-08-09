@@ -774,7 +774,6 @@ Indexed active tracked paths: **1430**
 | `/scripts/install/sign_manifest.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/smoke_test_restore.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/stage_dependencies.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/install/stage_object_detection_pack.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sync_nsi_version.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |

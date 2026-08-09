@@ -17,16 +17,12 @@ Name "GoodQ4All"
 !ifndef GOODQ_INSTALLER_PROFILE
 !define GOODQ_INSTALLER_PROFILE "PUBLIC_CPU_BASELINE"
 !endif
-!if "${GOODQ_INSTALLER_PROFILE}" == "PUBLIC_CPU_BASELINE"
-!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
-!else if "${GOODQ_INSTALLER_PROFILE}" == "PUBLIC_GPU_ENHANCED"
-!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
-!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU
-!else if "${GOODQ_INSTALLER_PROFILE}" == "PERSONAL_AIR_GAP"
-!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU
-!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU
-!else
+!if "${GOODQ_INSTALLER_PROFILE}" != "PUBLIC_CPU_BASELINE"
+!if "${GOODQ_INSTALLER_PROFILE}" != "PUBLIC_GPU_ENHANCED"
+!if "${GOODQ_INSTALLER_PROFILE}" != "PERSONAL_AIR_GAP"
 !error "Unknown GOODQ_INSTALLER_PROFILE: ${GOODQ_INSTALLER_PROFILE}"
+!endif
+!endif
 !endif
 OutFile "${GOODQ_INSTALLER_OUTPUT_ROOT}\GoodQ4All_Setup_2.5.8.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
@@ -141,6 +137,9 @@ runtime_ok:
   SetOutPath "$INSTDIR\ffmpeg"
   File /r "staged\ffmpeg\*.*"
 
+  SetOutPath "$INSTDIR\poppler"
+  File /r "staged\poppler\*.*"
+
   SetOutPath "$INSTDIR\scripts"
   File /r /x "go_compiler" /x "nsis_compiler" /x "nssm_bin" /x "staged" /x "staged_cache" /x "go_bin" /x "dev_private_key.hex" "..\..\scripts\*.*"
 
@@ -148,6 +147,8 @@ runtime_ok:
   File /r /x "config.local.yaml" /x "model_download_manifest.json" /x "model_download_manifest.json.sig" "..\..\configs\*.*"
   File "staged\configs\model_download_manifest.json"
   File "staged\configs\model_download_manifest.json.sig"
+  File "staged\configs\selected_capabilities.json"
+  File "staged\configs\selected_capabilities.json.sig"
   File "staged\configs\installer_profile.txt"
 
   SetOutPath "$INSTDIR\api"
@@ -195,16 +196,10 @@ runtime_ok:
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
-  ; Each selected pack is verified from the immutable source vault before the
-  ; compiler reaches NSIS. A CPU profile must never carry the GPU YOLOX pack.
-!ifdef GOODQ_INCLUDE_OBJECT_DETECTION_CPU
-  SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_cpu"
-  File /r "staged\model_packs\object_detection_cpu\*.*"
-!endif
-!ifdef GOODQ_INCLUDE_OBJECT_DETECTION_GPU
-  SetOutPath "$COMMONAPPDATA\GoodQ4All\models\model_packs\object_detection_gpu"
-  File /r "staged\model_packs\object_detection_gpu\*.*"
-!endif
+  ; Profile-selected model and lexicon payloads were copied only from sealed
+  ; source snapshots into the runtime layout model_provisioner consumes.
+  SetOutPath "$COMMONAPPDATA\GoodQ4All\models"
+  File /r /x "selected_capabilities.json" "staged\models\*.*"
 
   ; Write default config to ProgramData
   SetOutPath "$COMMONAPPDATA\GoodQ4All\qdrant\config"

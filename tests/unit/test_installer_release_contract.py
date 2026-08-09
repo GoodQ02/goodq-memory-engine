@@ -329,7 +329,7 @@ def test_release_signing_uses_a_staged_manifest_not_the_tracked_checkout() -> No
 
 
 def test_baseline_model_manifest_contains_only_verified_object_detection_payloads() -> None:
-    """The baseline must carry NanoDet and reject any unsealed detector payload."""
+    """The legacy detector manifest remains a signed subset of the full profile receipt."""
     manifest = json.loads(
         (REPO_ROOT / "configs" / "model_download_manifest.json").read_text(encoding="utf-8")
     )
@@ -339,6 +339,47 @@ def test_baseline_model_manifest_contains_only_verified_object_detection_payload
     assert manifest["model_packs"]["object_detection_cpu"]["required"] is True
     assert manifest["model_packs"]["object_detection_gpu"]["required"] is False
     assert all(item["sha256"] for pack in manifest["model_packs"].values() for item in pack["assets"])
+
+
+def test_cpu_profile_stages_every_selected_model_and_lexicon_from_the_sealed_vault() -> None:
+    """A public CPU profile may not advertise a sealed capability without packaging it."""
+
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "stage_profile_model_packs.py" in builder
+    assert "stage_object_detection_pack.py" not in builder
+    assert "selected_capabilities.json" in builder
+    assert "selected_capabilities.json.sig" in builder
+    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' in installer
+    assert 'File "staged\\configs\\selected_capabilities.json"' in installer
+    assert "verify_profile_model_payload.py" in verifier
+
+
+def test_cpu_profile_stages_the_catalogued_document_tool() -> None:
+    """Poppler is an eligible document capability, not an optional workstation assumption."""
+
+    builder = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "poppler.zip" in builder
+    assert 'File /r "staged\\poppler\\*.*"' in installer
+    assert "poppler\\pdftotext.exe" in verifier
+    assert "document_runtime" in verifier
 
 
 def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None:
@@ -376,15 +417,12 @@ def test_installer_profile_controls_the_sealed_object_detection_payload() -> Non
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
     lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
 
-    assert "stage_object_detection_pack.py" in builder
+    assert "stage_profile_model_packs.py" in builder
     assert "GOODQ_ASSET_VAULT_ROOT" in builder
     assert "GOODQ_INSTALLER_PROFILE" in builder
-    assert "GOODQ_OBJECT_DETECTION_PACK_ARGS" in builder
     assert "/DGOODQ_INSTALLER_PROFILE=" in builder
-    assert 'File /r "staged\\model_packs\\object_detection_cpu\\*.*"' in installer
-    assert 'File /r "staged\\model_packs\\object_detection_gpu\\*.*"' in installer
-    assert "!define GOODQ_INCLUDE_OBJECT_DETECTION_CPU" in installer
-    assert "!define GOODQ_INCLUDE_OBJECT_DETECTION_GPU" in installer
+    assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' in installer
+    assert "Unknown GOODQ_INSTALLER_PROFILE" in installer
     assert 'File "staged\\configs\\installer_profile.txt"' in installer
     assert "opencv-python-headless==4.13.0.92" in lockfile
 
@@ -405,7 +443,7 @@ def test_offline_verifier_reads_object_detection_packs_from_programdata() -> Non
         encoding="utf-8"
     )
 
-    assert '$COMMONAPPDATA\\GoodQ4All\\models\\model_packs\\object_detection_cpu' in installer
+    assert '$COMMONAPPDATA\\GoodQ4All\\models' in installer
     assert 'Join-Path $env:ProgramData "GoodQ4All\\models"' in verifier
     assert 'Join-Path $InstallDir "models\\model_packs\\object_detection_cpu' not in verifier
 

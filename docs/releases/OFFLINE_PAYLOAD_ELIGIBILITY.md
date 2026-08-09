@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_RELEASE_REFERENCE -->
-<!-- DOC_LAST_VERIFIED: 2026-08-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-09 -->
 
 # Offline Payload Eligibility Ledger
 
@@ -12,10 +12,25 @@ redistribution decision. A repository configuration claim is not license
 evidence. A payload enters a release only after its exact artifact, revision,
 license evidence, and SHA-256 receipt are verified.
 
-The signed baseline model manifest ships two sealed OpenCV Zoo object-detection
-packs: NanoDet for CPU baseline and YOLOX for GPU-enhanced installations. Each
-contains one pinned ONNX artifact, its Apache-2.0 notice, a SHA-256 receipt,
-and a compatibility manifest. No model is downloaded at first use.
+Each installer profile now materializes every profile-selected, distributable
+model and lexicon from its sealed vault snapshot into the exact runtime cache
+layout. The build writes and signs `selected_capabilities.json`; the installed
+launcher and offline suite verify that receipt, every declared payload path,
+and every external-model hash before first use. The legacy signed detector
+manifest remains a narrow compatibility receipt for NanoDet/YOLOX, not the
+definition of the complete CPU payload.
+
+### Public CPU Baseline: Explicit Payload Set
+
+The signed selection receipt names 31 CPU-profile assets. Ten are runtime or
+tool assets (embedded Python, wheelhouse, certificate bundle, Qdrant, NSSM,
+Visual C++ runtime, Tesseract, Poppler, FFmpeg, and FFprobe). The remaining 21
+are sealed model or lexicon snapshots: BERT NER; BLIP; CLAP; CLIP; DINOv2 base
+and large; Cardiff emotion; Faster-Whisper tiny, small, and medium; HuBERT
+emotion; NanoDet; YuNet; SFace; MiniLM; SST-2 sentiment; Silero VAD; VADER;
+ViT-GPT2; Wav2Vec2 ASR; and Wav2Vec2 emotion. The runtime receipt, rather than
+this prose list, is authoritative for a particular build and must be verified
+at install time.
 
 ## Personal Source Vault
 
@@ -151,18 +166,16 @@ Scope column explicitly says the capability is already bundled.
 |---|---|---|---|
 | Object detection | OpenCV Zoo NanoDet (`47534e27c9851bb1128ccc0102f1145e27f23f98`) | upstream Apache-2.0 | sealed CPU baseline pack |
 | Object detection | OpenCV Zoo YOLOX (`47534e27c9851bb1128ccc0102f1145e27f23f98`) | upstream Apache-2.0 | sealed GPU-enhanced pack |
-| Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | baseline VAD candidate |
-| CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | baseline candidate |
-| Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | baseline candidate; 11-label multilabel semantics verified from sealed config |
-| Captioning | `Salesforce/blip-image-captioning-base` | model card BSD-3-Clause declaration | optional vision payload candidate |
-| Captioning | `nlpconnect/vit-gpt2-image-captioning` | model card Apache-2.0 declaration | optional payload candidate; require loader compatibility proof |
-| Visual embedding | `facebook/dinov2-base` and `facebook/dinov2-large` | model cards Apache-2.0 declarations | optional payload candidates |
-| Text embedding | `sentence-transformers/all-MiniLM-L6-v2` | model card Apache-2.0 declaration | optional payload candidate |
-| Audio embedding | `laion/clap-htsat-unfused` | model card Apache-2.0 declaration | optional payload candidate |
-| Transcription | `openai/whisper-large-v3` | model card Apache-2.0 declaration | optional payload candidate |
-| Transcription | `Systran/faster-whisper-{tiny,small,medium,large-v3}` | model cards MIT declarations | optional payload candidates |
-| Audio enrichment | `superb/hubert-large-superb-er`, `facebook/wav2vec2-base-960h`, and `ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition` | model cards Apache-2.0 declarations | optional payload candidates |
-| Text enrichment | `dslim/bert-base-NER` and `distilbert-base-uncased-finetuned-sst-2-english` | model cards MIT and Apache-2.0 declarations | optional payload candidates |
+| Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | sealed CPU baseline payload |
+| CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | sealed CPU baseline payload |
+| Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | sealed CPU baseline payload; 11-label multilabel semantics verified from sealed config |
+| Captioning | `Salesforce/blip-image-captioning-base` and `nlpconnect/vit-gpt2-image-captioning` | model cards BSD-3-Clause and Apache-2.0 | sealed CPU baseline payloads |
+| Visual embedding | `facebook/dinov2-base` and `facebook/dinov2-large` | model cards Apache-2.0 declarations | sealed CPU baseline payloads where selected by profile |
+| Text embedding | `sentence-transformers/all-MiniLM-L6-v2` | model card Apache-2.0 declaration | sealed CPU baseline payload |
+| Audio embedding | `laion/clap-htsat-unfused` | model card Apache-2.0 declaration | sealed CPU baseline payload |
+| Transcription | `Systran/faster-whisper-{tiny,small,medium}` | model cards MIT declarations | sealed CPU baseline payloads; no first-use model fetch |
+| Audio enrichment | `superb/hubert-large-superb-er`, `facebook/wav2vec2-base-960h`, and `ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition` | model cards Apache-2.0 declarations | sealed CPU baseline payloads |
+| Text enrichment | `dslim/bert-base-NER` and `distilbert-base-uncased-finetuned-sst-2-english` | model cards MIT and Apache-2.0 declarations | sealed CPU baseline payloads |
 | Local multimodal service | `Qwen/Qwen2.5-VL-7B-Instruct` | model card Apache-2.0 declaration | optional service payload candidate |
 | Local reasoning service | `deepseek-ai/DeepSeek-R1-Distill-Qwen-{7B,14B}` | model cards MIT declarations | optional service payload candidates |
 
@@ -180,18 +193,16 @@ wheel metadata license evidence must appear in the generated SBOM.
 | Retired unsealed face weights | removed from the supported pipeline; see the canonical face-engine policy | permanently excluded |
 | Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |
 | NRC Emotion Lexicon and acquired NRC collection | official terms prohibit redistribution | personal source archive only; do not bundle |
-| VADER lexicon | runtime dependency is small, but its exact artifact and notice have not been sealed into the release contract | acquire on demand until that proof exists |
+| VADER lexicon | source snapshot is sealed under its upstream MIT evidence | included as a sealed CPU reference lexicon; runtime activation remains explicit, never an implied fallback |
 | Historical release suites and old wheel caches | stale evidence and potential duplication | preserved outside active release inputs |
 
 ## 3. Disposition Closure
 
-There are no implicit model-payload approvals left. Every formerly pending
-component is now either an artifact-verification candidate or excluded from
-the current baseline. “Eligible” is not a shipping decision: the payload
-designer must still record the upstream owner, exact revision and files,
-license notice, access state, checksum, package size, and clean-install proof.
-No model may enter the baseline merely because runtime configuration marks it
-`allowed`.
+There are no implicit model-payload approvals left for a profile build. A
+selected capability enters only from an eligible sealed snapshot, with its
+exact source revision, member receipt, license class, installed runtime path,
+and signed selection receipt. A capability excluded by its license or access
+terms is refused before staging.
 
 ## Re-entry Gate for Full Offline Model Payload Design
 

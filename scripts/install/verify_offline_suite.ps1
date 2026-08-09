@@ -43,6 +43,9 @@ $criticalFiles = @(
     "configs\config.yaml",
     "configs\model_download_manifest.json",
     "configs\model_download_manifest.json.sig",
+    "configs\selected_capabilities.json",
+    "configs\selected_capabilities.json.sig",
+    "poppler\pdftotext.exe",
     (Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"),
     (Join-Path $modelPackRoot "model_packs\object_detection_cpu\PACK_MANIFEST.json")
 )
@@ -83,6 +86,23 @@ foreach ($tool in @("ffmpeg", "ffprobe")) {
 }
 if (-not $gate1b.pass) { $results.pass = $false }
 $results.gates += $gate1b
+
+# --- Gate 1bb: Bundled Document Runtime ---
+$gate1bb = @{ name = "document_runtime"; pass = $true; errors = @() }
+$pdftotextPath = Join-Path $InstallDir "poppler\pdftotext.exe"
+try {
+    & $pdftotextPath -v *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "exit code $LASTEXITCODE"
+    }
+    Write-Host "  [OK]   Bundled Poppler pdftotext runtime executes" -ForegroundColor Green
+} catch {
+    $gate1bb.pass = $false
+    $gate1bb.errors += "Bundled Poppler pdftotext runtime failed: $_"
+    Write-Host "  [FAIL] Bundled Poppler pdftotext runtime failed: $_" -ForegroundColor Red
+}
+if (-not $gate1bb.pass) { $results.pass = $false }
+$results.gates += $gate1bb
 
 # --- Gate 1c: OCR Runtime ---
 $gate1c = @{ name = "ocr_runtime"; pass = $true; errors = @() }
@@ -142,6 +162,20 @@ try {
 }
 if (-not $gate1d.pass) { $results.pass = $false }
 $results.gates += $gate1d
+
+# --- Gate 1e: Complete selected profile payload ---
+$gate1e = @{ name = "selected_profile_payload"; pass = $true; errors = @() }
+try {
+    & $pythonPath (Join-Path $InstallDir "scripts\install\verify_profile_model_payload.py") --install-dir $InstallDir --models-root $modelPackRoot *> $null
+    if ($LASTEXITCODE -ne 0) { throw "profile capability verification returned exit code $LASTEXITCODE" }
+    Write-Host "  [OK]   Every selected model and lexicon payload resolves from the installed offline cache" -ForegroundColor Green
+} catch {
+    $gate1e.pass = $false
+    $gate1e.errors += "Selected profile payload failed: $_"
+    Write-Host "  [FAIL] Selected profile payload failed: $_" -ForegroundColor Red
+}
+if (-not $gate1e.pass) { $results.pass = $false }
+$results.gates += $gate1e
 
 # --- Gate 2: Launcher Manifest Verification ---
 $gate2 = @{ name = "launcher_manifest"; pass = $true; errors = @() }

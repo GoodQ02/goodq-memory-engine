@@ -25,12 +25,9 @@ func main() {
 	flag.Parse()
 
 	if *verifyManifestOnly {
-		// Self-test mode: verify manifest signature and exit
+		// Self-test mode: verify every signed install capability receipt and exit.
 		programFilesDir := filepath.Dir(os.Args[0])
-		manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
-		signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
-
-		if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
+		if err := verifyInstalledManifests(programFilesDir); err != nil {
 			fmt.Printf("[LAUNCHER] [ERROR] Manifest verification failed: %s\n", err.Error())
 			os.Exit(1)
 		}
@@ -113,13 +110,10 @@ func main() {
 	_ = os.MkdirAll(filepath.Join(goodqDataDir, "failed"), 0755)
 
 	// 2. Verify Signed Manifest
-	manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
-	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
-
-	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
+	if err := verifyInstalledManifests(programFilesDir); err != nil {
 		fatalError("Manifest Verification Failed", err.Error())
 	}
-	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.")	// Resolve Python Runtime Early
+	fmt.Println("[LAUNCHER] [OK] Manifest signature verified successfully.") // Resolve Python Runtime Early
 	var pythonExe string
 	if runtime.GOOS == "windows" {
 		sandboxPython := filepath.Join(programFilesDir, "runtime", "python.exe")
@@ -168,10 +162,10 @@ func main() {
 			}
 
 			if pythonExe == "" {
-				fatalError("Python Runtime Missing", 
+				fatalError("Python Runtime Missing",
 					"The sandboxed Python runtime (.\\runtime\\python.exe) is missing or invalid.\n\n"+
-					"Please run Installer Repair or reinstall GoodQ4All to resolve this issue.\n"+
-					"If you are developing, please set the 'GOODQ_DEV_PYTHON' environment variable.")
+						"Please run Installer Repair or reinstall GoodQ4All to resolve this issue.\n"+
+						"If you are developing, please set the 'GOODQ_DEV_PYTHON' environment variable.")
 			}
 		}
 	} else {
@@ -231,9 +225,9 @@ func main() {
 
 	// Save selected port and settings to shared runtime config
 	runtimeConfig := map[string]interface{}{
-		"qdrant_port":   qdrantPort,
-		"qdrant_host":   "127.0.0.1",
-		"last_launch":   time.Now().Format(time.RFC3339),
+		"qdrant_port": qdrantPort,
+		"qdrant_host": "127.0.0.1",
+		"last_launch": time.Now().Format(time.RFC3339),
 	}
 	configBytes, _ := json.MarshalIndent(runtimeConfig, "", "  ")
 	_ = os.WriteFile(filepath.Join(programDataDir, "runtime_config.json"), configBytes, 0644)
@@ -314,8 +308,8 @@ func main() {
 	controlScript := filepath.Join(programFilesDir, "scripts", "run_control_agent.py")
 
 	fmt.Println("[LAUNCHER] Starting GoodQ4All Python Control Agent...")
-	agentCmd := exec.Command(pythonExe, controlScript, 
-		"--qdrant-port", strconv.Itoa(qdrantPort), 
+	agentCmd := exec.Command(pythonExe, controlScript,
+		"--qdrant-port", strconv.Itoa(qdrantPort),
 		"--session-token", sessionToken,
 	)
 	// Redirect Agent logs to file
@@ -429,6 +423,16 @@ func verifyManifestSignature(manifestPath, signaturePath string) error {
 		return fmt.Errorf("Ed25519 signature is invalid")
 	}
 
+	return nil
+}
+
+func verifyInstalledManifests(programFilesDir string) error {
+	for _, name := range []string{"model_download_manifest.json", "selected_capabilities.json"} {
+		manifestPath := filepath.Join(programFilesDir, "configs", name)
+		if err := verifyManifestSignature(manifestPath, manifestPath+".sig"); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+	}
 	return nil
 }
 

@@ -20,6 +20,7 @@ def test_audit_distinguishes_sealed_models_from_staged_installer_artifacts(tmp_p
     (source / "weights.bin").write_bytes(b"weights")
     vault = tmp_path / "vault"
     sealed = seal_snapshot(source, vault, "example_model", "a" * 40, [source / "README.md"])
+    personal_sealed = seal_snapshot(source, vault, "personal_model", "a" * 40, [source / "README.md"])
     catalog = tmp_path / "catalog.yaml"
     catalog.write_text(
         yaml.safe_dump(
@@ -43,6 +44,25 @@ def test_audit_distinguishes_sealed_models_from_staged_installer_artifacts(tmp_p
                         "vault_scope": "personal",
                         "pack_scope": "optional",
                     },
+                    "personal_model": {
+                        "kind": "model",
+                        "source": "owner/personal",
+                        "revision": "a" * 40,
+                        "status": "personal_only",
+                        "vault_scope": "personal",
+                        "pack_scope": "optional",
+                        "expected_terms": "https://example.invalid/personal-terms",
+                        "sealed_manifest_sha256": personal_sealed.manifest_sha256,
+                    },
+                    "personal_alias": {
+                        "kind": "lexicon",
+                        "source": "owner/personal-subset",
+                        "revision": "subset-v1",
+                        "status": "personal_only",
+                        "vault_scope": "personal",
+                        "pack_scope": "optional",
+                        "source_snapshot_parent": "personal_model",
+                    },
                 }
             }
         ),
@@ -61,6 +81,11 @@ def test_audit_distinguishes_sealed_models_from_staged_installer_artifacts(tmp_p
 
     report = build_report(catalog_path=catalog, manifest_path=manifest, vault_root=vault, repo_root=tmp_path)
 
-    assert report["summary"]["models_and_data"] == {"held_by_acceptance": 1, "sealed_manifest_confirmed": 1}
+    assert report["summary"]["models_and_data"] == {
+        "held_by_acceptance": 1,
+        "personal_snapshot_via_parent": 1,
+        "personal_snapshot_confirmed": 1,
+        "sealed_manifest_confirmed": 1,
+    }
     assert report["summary"]["installer_artifacts"] == {"staged_target_present": 1}
     assert report["wheelhouse_closure"]["state"] == "missing_sbom"

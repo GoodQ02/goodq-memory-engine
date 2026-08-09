@@ -76,11 +76,12 @@ stored in the catalog or vault.
 
 The reproducibility audit now reconciles the catalog, installer manifest,
 staged cache, and sealed vault in one machine-readable receipt. At this
-checkpoint it confirms 23 sealed model or data snapshots, a complete 94-package
-wheelhouse closure, and no missing required installer artifact. The only held
-model records are agreement-gated sources (Gemma, the three Pyannote models,
-and Qwen2.5-VL-3B); their absence is intentional until an acceptance receipt
-exists. `pytest` is not a baseline runtime dependency and is therefore optional
+checkpoint it confirms 29 sealed eligible model or data snapshots, four sealed
+personal-only snapshots, one personal lexicon alias verified through its sealed
+parent collection, a complete 97-package wheelhouse closure, and no missing
+required installer artifact. The GGML Whisper alternative is retained only as
+a sealed personal source snapshot; it remains outside baseline and public
+packs. `pytest` is not a baseline runtime dependency and is therefore optional
 in the installer artifact manifest.
 
 The vault admission preflight rejects any public pack that is not both eligible
@@ -132,11 +133,13 @@ missing license evidence. The compiled installer carries that receipt beside
 the lockfile and wheelhouse it installs.
 
 This gate is verified by focused contract tests. A fresh acquisition on
-2026-08-08 produced a 94-wheel, 496 MB closure with SHA-256
-`a35ddf4cf54977ff0de13ebae36f9fdecc87bcf0e62bde8443557c1594d1a372`.
-The stager's offline dry-run and compliance audit both passed. A managed
-offline build must still record the SBOM in a final asset manifest before this
-becomes a release artifact.
+2026-08-08 produced a 97-wheel closure with SHA-256
+`391d8c350b5d7a83d75f9c1207f11531d18008154b8b27d81c52807523afe9d5`.
+It includes the hash-pinned `pip`, `setuptools`, and `wheel` bootstrap set, so
+the embedded Python runtime can initialize without an index. The stager's
+offline dry-run and compliance audit both passed. A managed offline build must
+still record the SBOM in a final asset manifest before this becomes a release
+artifact.
 
 ## 1. Eligible After Artifact Verification
 

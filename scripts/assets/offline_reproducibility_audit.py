@@ -56,7 +56,8 @@ def _sealed_snapshot(vault_root: Path, asset_id: str, revision: str) -> tuple[Pa
 
 def _model_records(catalog: dict[str, Any], vault_root: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for asset_id, item in sorted(dict(catalog.get("assets", {})).items()):
+    assets = dict(catalog.get("assets", {}))
+    for asset_id, item in sorted(assets.items()):
         if not isinstance(item, dict) or item.get("kind") not in {"model", "lexicon", "source_collection"}:
             continue
         status = str(item.get("status", ""))
@@ -87,7 +88,34 @@ def _model_records(catalog: dict[str, Any], vault_root: Path) -> list[dict[str, 
         elif status == "agreement_gated":
             record["state"] = "held_by_acceptance"
         elif status == "personal_only":
-            record["state"] = "personal_only"
+            parent_id = item.get("source_snapshot_parent")
+            parent = assets.get(str(parent_id)) if parent_id else None
+            if isinstance(parent, dict):
+                parent_revision = str(parent.get("revision"))
+                seal_path, digest = _sealed_snapshot(vault_root, str(parent_id), parent_revision)
+                expected = parent.get("sealed_manifest_sha256")
+                if digest and expected == digest and parent.get("expected_terms"):
+                    state = "personal_snapshot_via_parent"
+                elif seal_path and digest:
+                    state = "personal_parent_snapshot_unrecorded"
+                else:
+                    state = "personal_parent_snapshot_missing"
+                record["source_snapshot_parent"] = str(parent_id)
+            else:
+                seal_path, digest = _sealed_snapshot(vault_root, asset_id, str(item.get("revision")))
+                expected = item.get("sealed_manifest_sha256")
+                if digest and expected == digest and item.get("expected_terms"):
+                    state = "personal_snapshot_confirmed"
+                elif seal_path and digest:
+                    state = "personal_snapshot_unrecorded"
+                else:
+                    state = "personal_snapshot_missing"
+            record.update(
+                state=state,
+                seal_path=str(seal_path) if seal_path else None,
+                sealed_manifest_sha256=digest,
+                expected_manifest_sha256=expected,
+            )
         else:
             record["state"] = "excluded"
         records.append(record)

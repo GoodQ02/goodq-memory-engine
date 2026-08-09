@@ -116,6 +116,8 @@ def test_wheel_acquisition_never_leaves_a_partial_file_at_the_final_name() -> No
     assert "--retry-all-errors" in stager
     assert "--retry-max-time" in stager
     assert "Preserving resumable partial" in stager
+    assert "A zero-byte partial is not resumable" in stager
+    assert "--continue-at" in stager
     assert "$LASTEXITCODE:" not in stager
 
 
@@ -127,6 +129,15 @@ def test_installer_generates_and_ships_a_strict_wheelhouse_sbom() -> None:
     assert "generate_wheelhouse_sbom.py" in builder
     assert "--requirements ..\\..\\requirements-baseline-lock.txt" in builder
     assert 'File "staged\\wheelhouse-sbom.json"' in installer
+
+
+def test_dependency_acquisition_refreshes_the_cache_sbom() -> None:
+    """An asset audit must never rely on a wheel inventory from an older closure."""
+    stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
+
+    assert "Refreshing wheelhouse SBOM from the acquired closure" in stager
+    assert 'Join-Path $CacheDir "wheelhouse-sbom.json"' in stager
+    assert "generate_wheelhouse_sbom.py" in stager
 
 
 def test_cpu_torch_wheels_are_hash_pinned() -> None:
@@ -154,6 +165,43 @@ def test_baseline_lock_covers_the_clap_runtime_imports() -> None:
 
     assert "librosa==0.10.2.post1" in lockfile
     assert "soundfile==0.12.1" in lockfile
+
+
+def test_baseline_lock_carries_the_offline_pip_bootstrap_wheels() -> None:
+    """get-pip.py must resolve its complete bootstrap set without an index."""
+    lockfile = (ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+    manifest_path = ROOT / "configs" / "offline_dependencies_manifest.json"
+    wheels = json.loads(manifest_path.read_text(encoding="utf-8"))["wheels"]["wheelhouse"]
+    bootstrap_wheels = [wheel for wheel in wheels if wheel["name"] in {"pip", "wheel"}]
+
+    assert "pip==26.2.1" in lockfile
+    assert "wheel==0.47.0" in lockfile
+    assert bootstrap_wheels == [
+        {
+            "artifact_id": "pip_py3_any",
+            "pack_id": "windows_wheelhouse",
+            "python_tag": "py3",
+            "platform_tag": "any",
+            "gpu_lane": "any",
+            "required": True,
+            "name": "pip",
+            "source_url": "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl",
+            "sha256": "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e",
+            "license": "MIT",
+        },
+        {
+            "artifact_id": "wheel_py3_any",
+            "pack_id": "windows_wheelhouse",
+            "python_tag": "py3",
+            "platform_tag": "any",
+            "gpu_lane": "any",
+            "required": True,
+            "name": "wheel",
+            "source_url": "https://files.pythonhosted.org/packages/87/1b/9e33c09813d65e248f7f773119148a612516a4bea93e9c6f545f78455b7c/wheel-0.47.0-py3-none-any.whl",
+            "sha256": "212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced",
+            "license": "MIT",
+        },
+    ]
 
 
 class TestManifestWheelCoverage:

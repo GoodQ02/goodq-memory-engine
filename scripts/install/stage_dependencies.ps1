@@ -64,7 +64,14 @@ function Invoke-VerifiedDownload {
     # The final artifact is still admitted only after its full SHA-256 matches.
     try {
         $curl = Get-Command curl.exe -ErrorAction Stop
-        & $curl.Source --fail --location --continue-at - --retry 5 --retry-all-errors --retry-max-time 1800 --connect-timeout 30 --output $temporaryPath -- $Url
+        $curlArguments = @("--fail", "--location", "--retry", "5", "--retry-all-errors", "--retry-max-time", "1800", "--connect-timeout", "30")
+        if ((Test-Path -LiteralPath $temporaryPath) -and (Get-Item -LiteralPath $temporaryPath).Length -gt 0) {
+            $curlArguments += @("--continue-at", "-")
+        } elseif (Test-Path -LiteralPath $temporaryPath) {
+            # A zero-byte partial is not resumable; start a fresh transfer.
+            Remove-Item -LiteralPath $temporaryPath -Force
+        }
+        & $curl.Source @curlArguments --output $temporaryPath -- $Url
         if ($LASTEXITCODE -ne 0) {
             throw "curl.exe failed with exit code $($LASTEXITCODE): $Url"
         }
@@ -234,6 +241,16 @@ if ($Mode -eq "Acquire") {
         Write-Error "Pip wheels download failed after 5 attempts."
     }
     Write-Host "Pip wheels staged successfully." -ForegroundColor Green
+
+    # The audit receipt must describe this exact acquisition, not a prior
+    # wheelhouse.  The builder independently creates its staged-payload SBOM.
+    $sbomGenerator = Join-Path $ScriptDir "generate_wheelhouse_sbom.py"
+    $sbomOutput = Join-Path $CacheDir "wheelhouse-sbom.json"
+    Write-Host "Refreshing wheelhouse SBOM from the acquired closure..." -ForegroundColor Cyan
+    & $targetPython $sbomGenerator --wheelhouse $wheelsDir --requirements $reqFile --output $sbomOutput
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Wheelhouse SBOM generation failed after acquisition."
+    }
 
 } elseif ($Mode -eq "Verify") {
     # Strictly offline hash verification

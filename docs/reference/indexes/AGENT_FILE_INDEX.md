@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1427**
+Indexed active tracked paths: **1430**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -434,6 +434,7 @@ Indexed active tracked paths: **1427**
 | `/docs/reference/DEPENDENCIES.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/FACE_EMBEDDING_POLICY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/GPU_CAPABILITY_MATRIX.md` | Documentation | Active documentation or governance surface. |
+| `/docs/reference/OBJECT_DETECTION_POLICY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/PLATFORM_SUPPORT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/WSL_AUDIO_RUNTIME.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/indexes/AGENT_COMMS_INDEX.md` | Documentation | Active documentation or governance surface. |
@@ -773,6 +774,7 @@ Indexed active tracked paths: **1427**
 | `/scripts/install/sign_manifest.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/smoke_test_restore.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/stage_dependencies.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/stage_object_detection_pack.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sync_nsi_version.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1247,6 +1249,7 @@ Indexed active tracked paths: **1427**
 | `/tests/unit/test_offline_mode_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_packaging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_reproducibility_audit.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_opencv_object_detect_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_operator_console_static.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_optional_vision_observability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_overview_semantic_quality.py` | Verification | Test, fixture, or verification asset. |

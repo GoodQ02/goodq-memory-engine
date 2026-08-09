@@ -1,6 +1,9 @@
 # Derived pip requirements lockfile for GoodQ4All CPU-safe baseline sandboxed runtime.
 # This lockfile is derived from the authoritative environment-baseline-lock.yml Conda specification.
 --extra-index-url https://download.pytorch.org/whl/cpu
+# Required before the application lock: get-pip.py resolves this wheel locally.
+pip==26.2.1
+wheel==0.47.0
 torch==2.6.0+cpu
 torchvision==0.21.0+cpu
 torchaudio==2.6.0+cpu

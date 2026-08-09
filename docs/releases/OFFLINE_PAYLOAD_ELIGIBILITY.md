@@ -92,6 +92,20 @@ acceptance receipt and the upstream Qwen Research License page. It remains
 copy exists solely as an immutable source input for a later personal installer
 whose compatibility contract matches the pinned revision.
 
+The Gemma 4 12B snapshot is likewise sealed at its exact immutable revision.
+Its pinned model card and Google's current license page identify Apache-2.0, so
+the catalog now classifies it as eligible for a later compatible pack. This
+does not mean it is already installed by the baseline: a model pack still
+requires its own compatibility manifest, artifact receipt, and clean offline
+install proof.
+
+The primary vault goal is personal continuity: retain every source asset whose
+upstream terms permit the user's acquisition, together with its exact revision,
+terms record, and verified source bytes. A later personal installer may use a
+sealed source only when its runtime and hardware contract match. Public packs
+remain the stricter downstream subset; an upstream restriction is never erased
+by retaining a personal copy.
+
 ### Reference-Audit Additions
 
 The catalog is also checked against the runtime fallback registry and literal
@@ -153,7 +167,6 @@ wheel metadata license evidence must appear in the generated SBOM.
 | Component | Reason | Disposition |
 |---|---|---|
 | Pyannote diarization, segmentation, and speaker models | token-gated and license acceptance required | user-provisioned optional feature only |
-| Gemma-family runtime | the active configuration's access policy conflicts with the current upstream card metadata; no exact artifact decision has been sealed | user-provisioned optional feature only until reconciled |
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
 | YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
 | `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License; personal acceptance receipt and immutable source snapshot are recorded | personal source only; never baseline/public |

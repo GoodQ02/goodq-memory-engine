@@ -2025,6 +2025,10 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   was sealed only after an explicit personal-use acceptance receipt was
   recorded against the upstream Qwen Research License page. Its catalog status
   is `personal_only`; public and sanitized pack admission remain denied.
+- License reconciliation (2026-08-08): Gemma 4 12B's retained pinned model
+  card and the upstream Google license page identify Apache-2.0. Its existing
+  immutable vault snapshot is now catalog-admitted as eligible; compatibility,
+  pack assembly, and clean-offline proof remain separate gates.
 - Completion gate: each source is classified from its exact upstream terms,
   eligible sources have a sealed source snapshot and compatibility manifest,
   and every personal/public pack admission is denied unless those records agree.

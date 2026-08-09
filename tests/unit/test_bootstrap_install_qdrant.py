@@ -118,7 +118,7 @@ def test_run_emits_heartbeat_status_hint(monkeypatch):
     assert any("current_model=openai/whisper-large-v3" in message for message in messages)
 
 
-def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(monkeypatch, tmp_path):
+def test_validate_step_env_reports_pip_check_failure_as_blocking(monkeypatch, tmp_path):
     from scripts import bootstrap_install
 
     messages: list[str] = []
@@ -130,9 +130,6 @@ def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(mon
         "envs/locks/face_embed.lock.txt",
         "face detection and embeddings",
         ("face_recognition",),
-        allowed_pip_check_warnings=(
-            "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0",
-        ),
     )
 
     def fake_run(cmd, **kwargs):
@@ -141,7 +138,7 @@ def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(mon
             return subprocess.CompletedProcess(
                 cmd,
                 1,
-                "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0, but you have torch 2.5.1+cu121.",
+                "broken dependency closure",
                 "",
             )
         if "python -c" in rendered:
@@ -156,8 +153,7 @@ def test_validate_step_env_reports_allowed_pip_check_warning_as_non_blocking(mon
         spec,
     )
 
-    assert issues == []
-    assert any("accepted non-blocking dependency notice" in message for message in messages)
+    assert issues == ["pip check failed for goodq_face_embed: broken dependency closure"]
 
 
 def test_write_env_local_sets_require_gpu_from_context(tmp_path: Path):

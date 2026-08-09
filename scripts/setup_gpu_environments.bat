@@ -15,7 +15,7 @@ echo This script will install PyTorch with CUDA 12.4 support in GPU-capable
 echo step environments. This will enable GPU acceleration for:
 echo   - Audio diarization (PyAnnote)
 echo   - Audio transcription (Faster Whisper)
-echo   - Face embedding (FaceNet)
+echo   - Face embedding (OpenCV YuNet/SFace)
 echo   - Emotion classification (RoBERTa)
 echo   - Image embeddings (CLIP, DINO)
 echo   - Object detection/tracking (YOLO)

@@ -29,7 +29,7 @@ $env:GOODQ_HOST_PROFILE = "GPU_ENHANCED"
 GPU acceleration provides **10-50x speedup** for:
 - **Audio Diarization** (PyAnnote): 30x faster speaker identification
 - **Audio Transcription** (Faster Whisper): 15x faster speech-to-text
-- **Face Embedding** (FaceNet): 20x faster face recognition
+- **Face Embedding** (OpenCV YuNet/SFace): CPU-safe sealed capability pack
 - **Emotion Classification** (RoBERTa): 25x faster sentiment analysis
 - **Image Embeddings** (CLIP/DINO): 40x faster visual understanding
 

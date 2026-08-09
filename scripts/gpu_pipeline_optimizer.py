@@ -36,7 +36,7 @@ class GPUOptimizer:
                 "priority": "high"
             },
             "face_embed": {
-                "fraction": 0.20,  # 20% - FaceNet embeddings
+                "fraction": 0.20,  # legacy budget; OpenCV YuNet/SFace is CPU-first
                 "device": "0",
                 "priority": "medium"
             },

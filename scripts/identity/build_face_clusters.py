@@ -160,6 +160,16 @@ def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
                     "image_path": str(fname).replace("_raw_faces.json", ".jpg"),
                 })
 
+    engine_dimensions = {
+        (str(item.get("engine") or "legacy_unsealed"), len(item["embedding"]))
+        for item in detections
+    }
+    if len(engine_dimensions) > 1:
+        raise RuntimeError(
+            "Face cluster rebuild refused mixed or legacy embedding contracts: "
+            f"{sorted(engine_dimensions)}. Re-ingest into a clean epoch before clustering."
+        )
+
     log.info(
         "Collected %d face detections (%d files missing UCF provenance)",
         len(detections), missing_provenance,

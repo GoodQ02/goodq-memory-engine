@@ -21,7 +21,7 @@ class GPUManager:
     # Memory allocation per step (as fraction of total GPU memory)
     MEMORY_FRACTIONS = {
         "emotion_classify": 0.30,  # RoBERTa emotion model
-        "face_embed": 0.20,         # FaceNet PyTorch
+        "face_embed": 0.20,         # OpenCV YuNet/SFace
         "image_embed_clip": 0.25,   # CLIP vision model
         "image_embed_dino": 0.25,   # DINOv2 model
         "audio_embed_clap": 0.20,   # CLAP audio model

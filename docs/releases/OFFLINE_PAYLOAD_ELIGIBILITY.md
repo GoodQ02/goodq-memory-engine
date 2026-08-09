@@ -171,7 +171,7 @@ wheel metadata license evidence must appear in the generated SBOM.
 | OpenAI CLIP host weights | the repository code license does not establish redistribution terms for the model weights | replaced; do not bundle |
 | YOLOv8 weights | AGPL or commercial-license boundary | do not bundle without an explicit licensing decision |
 | `Qwen/Qwen2.5-VL-3B-Instruct` | Qwen Research License; personal acceptance receipt and immutable source snapshot are recorded | personal source only; never baseline/public |
-| FaceNet pretrained weights | package source is permissive, but the inherited pretrained-weight provenance is not yet sealed as redistributable | user-provisioned optional feature only |
+| Retired unsealed face weights | removed from the supported pipeline; see the canonical face-engine policy | permanently excluded |
 | Whisper GGML executable and converted weights | code and source-weight terms do not by themselves prove a redistributable converted artifact | user-provisioned optional feature only |
 | NRC Emotion Lexicon and acquired NRC collection | official terms prohibit redistribution | personal source archive only; do not bundle |
 | VADER lexicon | runtime dependency is small, but its exact artifact and notice have not been sealed into the release contract | acquire on demand until that proof exists |

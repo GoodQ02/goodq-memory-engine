@@ -265,18 +265,6 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
     },
-    "facenet_vggface2": {
-        "key": "facenet_vggface2",
-        "is_external": True,
-        "local_path": "checkpoints/20180402-114759-vggface2.pt",
-        "source_url": "https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt",
-        "tier_scope": ["cpu_only", "gpu_enhanced"],
-        "classification": "DEV_TEST_ONLY",
-        "gated": False,
-        "requires_token": False,
-        "token_env": None,
-        "failure_behavior": "WARN_DEGRADED"
-    }
 }
 
 def redact_sensitive_info(text: str, repo_id: Optional[str] = None) -> str:
@@ -470,6 +458,9 @@ def _validate_and_normalize_metadata(info: Dict[str, Any], repo_id_or_key: str) 
         "is_external": info.get("is_external", False),
         "source_url": info.get("source_url"),
         "local_path": info.get("local_path"),
+        "sha256": info.get("sha256"),
+        "file_size_bytes": info.get("file_size_bytes"),
+        "acquisition_policy": info.get("acquisition_policy", "online_or_bundled"),
         "required": info.get("required", classification in ("REQUIRED_INSTALL_BLOCKER", "REQUIRED_FIRST_LAUNCH")),
     }
 
@@ -595,6 +586,41 @@ def ensure_model_cached(
             local_rel_path = f"external/{repo_id}"
         target_path = models_root / local_rel_path
         
+        bundled_only = metadata.get("acquisition_policy") == "bundled_only"
+
+        def external_integrity_error() -> Optional[str]:
+            if not target_path.is_file():
+                return None
+            expected_size = metadata.get("file_size_bytes")
+            if expected_size is not None and target_path.stat().st_size != int(expected_size):
+                return (
+                    f"external model '{repo_id}' size mismatch: expected {expected_size} bytes, "
+                    f"found {target_path.stat().st_size}"
+                )
+            expected_sha256 = metadata.get("sha256")
+            if expected_sha256:
+                import hashlib
+                digest = hashlib.sha256(target_path.read_bytes()).hexdigest()
+                if digest.casefold() != str(expected_sha256).casefold():
+                    return f"external model '{repo_id}' digest mismatch"
+            return None
+
+        integrity_error = external_integrity_error()
+        if integrity_error and bundled_only:
+            elapsed = time.time() - start_time
+            logger.error(integrity_error)
+            return ModelProvisionResult(
+                status="invalid_cached_asset",
+                repo_id=repo_id,
+                revision=resolved_revision,
+                local_path=None,
+                gated=is_gated,
+                required=is_required,
+                elapsed_seconds=elapsed,
+                error=integrity_error,
+                attempts_made=attempts_made,
+            )
+
         # Check if cached
         if target_path.is_file() and target_path.stat().st_size > 1024:
             elapsed = time.time() - start_time
@@ -613,6 +639,25 @@ def ensure_model_cached(
             logger.info(msg)
             log_download_event(msg, repo_id)
             return res
+
+        if bundled_only:
+            elapsed = time.time() - start_time
+            err_msg = (
+                f"Bundled-only external model '{repo_id}' is absent from the verified local capability pack. "
+                "Install or repair the matching signed pack; no network download will be attempted."
+            )
+            logger.warning(err_msg)
+            return ModelProvisionResult(
+                status="bundled_missing",
+                repo_id=repo_id,
+                revision=resolved_revision,
+                local_path=None,
+                gated=is_gated,
+                required=is_required,
+                elapsed_seconds=elapsed,
+                error=err_msg,
+                attempts_made=attempts_made,
+            )
             
         # If offline and missing, fail/degrade cleanly
         if is_offline:

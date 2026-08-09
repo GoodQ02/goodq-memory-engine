@@ -95,7 +95,7 @@ def test_ucf_visual_logging_mock(tmp_path, monkeypatch):
             }
         ],
         "faces_meta": {
-            "engine": "facenet-pytorch"
+            "engine": "opencv-yunet-sface"
         },
         "dino_meta": {
             "status": "ok",
@@ -208,7 +208,7 @@ def test_ucf_visual_logging_mock(tmp_path, monkeypatch):
     assert pytest.approx(spatial_region_face) == [0.5, 0.5, 0.6, 0.55]
     payload_face = json.loads(face_row["payload"])
     assert payload_face["face_index"] == 0
-    assert payload_face["engine"] == "facenet-pytorch"
+    assert payload_face["engine"] == "opencv-yunet-sface"
     
     # 5. DINOv2 visual embedding assertions
     dino_rows = conn.execute("SELECT * FROM context_frames WHERE worker_name='image_embed_dino'").fetchall()

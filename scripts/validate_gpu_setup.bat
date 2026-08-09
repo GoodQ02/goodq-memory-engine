@@ -57,7 +57,7 @@ if %FAILED% GTR 0 (
     echo GPU acceleration is ready for:
     echo   - Audio diarization (PyAnnote)
     echo   - Audio transcription (Faster Whisper)
-    echo   - Face embedding (FaceNet)
+    echo   - Face embedding (OpenCV YuNet/SFace)
     echo   - Emotion classification (RoBERTa)
     echo.
     exit /b 0

@@ -51,7 +51,7 @@ Each pipeline step is assigned a specific fraction of total VRAM to prevent out-
 | `video_scene_detect` | 15% (2.4 GB) | Low | OpenCV-based, minimal GPU use |
 | `audio_transcribe` | 25% (4.0 GB) | Medium | Whisper medium model |
 | `audio_diarize` | 35% (5.6 GB) | High | PyAnnote + speaker embeddings |
-| `face_embed` | 20% (3.2 GB) | Medium | FaceNet embeddings |
+| `face_embed` | CPU-first | Medium | OpenCV YuNet/SFace embeddings |
 | `emotion_classify` | 20% (3.2 GB) | Medium | Emotion CNN model |
 | `text_embed` | 15% (2.4 GB) | Low | Sentence transformers |
 | `image_embed_clip` | 25% (4.0 GB) | Medium | CLIP ViT model |

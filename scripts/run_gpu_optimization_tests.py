@@ -160,7 +160,7 @@ class PipelineOptimizationRunner:
             "scene_detect": r"scene.detect",
             "audio_transcribe": r"audio.transcribe|whisper",
             "audio_diarize": r"audio.diarize|pyannote",
-            "face_embed": r"face.embed|facenet",
+            "face_embed": r"face.embed|yunet|sface|face_recognition",
             "emotion_classify": r"emotion.classify",
             "text_embed": r"text.embed|sentence",
             "clip_embed": r"clip.embed",

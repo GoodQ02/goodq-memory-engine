@@ -75,7 +75,7 @@ Implemented comprehensive 3-layer GPU management system:
 | **image_embed_clip** | 25% | 4.0 GB | CLIP ViT visual embeddings | 6 |
 | **image_embed_dino** | 25% | 4.0 GB | DINOv2 visual embeddings | 7 |
 | **object_detect** | 25% | 4.0 GB | YOLO object detection | 8 |
-| **face_embed** | 20% | 3.2 GB | FaceNet face embeddings | 3 |
+| **face_embed** | CPU-first | n/a | OpenCV YuNet/SFace face embeddings | 3 |
 | **emotion_classify** | 18% | 2.9 GB | RoBERTa emotion model | 4 |
 | **text_embed** | 15% | 2.4 GB | Sentence transformers | 5 |
 

@@ -5984,7 +5984,7 @@ def _log_visual_to_ucf_ledger(
             
             atomic_write_json(raw_ref_path, faces)
             
-            face_engine = item.get('faces_meta', {}).get('engine', 'facenet-pytorch')
+            face_engine = item.get('faces_meta', {}).get('engine', 'unknown')
             
             for idx, face in enumerate(faces):
                 bbox = face.get('bbox')

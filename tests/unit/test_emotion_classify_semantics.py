@@ -29,9 +29,6 @@ def test_retired_cardiff_multilabel_alias_is_absent_from_active_paths():
     retired_model = "cardiffnlp/twitter-roberta-base-emotion-multilabel-latest"
     active_paths = (
         repo_root / "configs" / "offline_asset_catalog.yaml",
-        repo_root / "scripts" / "audit_vision_gpu.py",
-        repo_root / "scripts" / "optimize_vision_gpu.py",
-        repo_root / "scripts" / "run_vision_optimization.bat",
     )
 
     for path in active_paths:

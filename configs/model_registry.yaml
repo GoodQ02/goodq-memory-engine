@@ -627,16 +627,33 @@ external_models:
     token_env: null
     failure_behavior: FATAL_HALT
 
-  facenet_vggface2:
-    name: FaceNet InceptionResnetV1 VGGFace2
-    source_url: https://github.com/timesler/facenet-pytorch/releases/download/v2.2.9/20180402-114759-vggface2.pt
-    version: v2.2.9
-    sha256: 8234f0ae076a4ca361a940d55e863457070567ea872ea7914fcc48f6963156f6
-    local_path: checkpoints/20180402-114759-vggface2.pt
-    file_size_bytes: 53116694
+  opencv_yunet:
+    name: OpenCV Zoo YuNet Face Detection
+    source_url: https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+    version: opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98
+    sha256: 8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4
+    local_path: opencv_zoo/face_detection_yunet_2023mar.onnx
+    file_size_bytes: 232589
+    model_type: face-detection
+    acquisition_policy: bundled_only
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: WARN_DEGRADED
+
+  opencv_sface:
+    name: OpenCV Zoo SFace Recognition
+    source_url: https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+    version: opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98
+    sha256: 0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79
+    local_path: opencv_zoo/face_recognition_sface_2021dec.onnx
+    file_size_bytes: 38696353
     model_type: face-embedding
-    tier_scope: [cpu_only, gpu_enhanced]
-    classification: DEV_TEST_ONLY
+    acquisition_policy: bundled_only
+    tier_scope: [baseline, cpu_only, gpu_enhanced]
+    classification: OPTIONAL_FEATURE
     gated: false
     requires_token: false
     token_env: null

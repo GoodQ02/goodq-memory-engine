@@ -56,7 +56,7 @@ GPUManager.clear_cache()
 | `object_detect` | 30% | YOLO v8n |
 | `image_embed_clip` | 25% | CLIP ViT-B/16 |
 | `image_embed_dino` | 25% | DINOv2-base |
-| `face_embed` | 20% | FaceNet |
+| `face_embed` | CPU-first | OpenCV YuNet/SFace |
 | `audio_embed_clap` | 20% | CLAP HTSAT |
 | `text_embed` | 15% | MiniLM-L6 |
 | `default` | 20% | Fallback |

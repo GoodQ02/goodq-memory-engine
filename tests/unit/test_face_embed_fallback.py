@@ -1,144 +1,87 @@
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
-
-import numpy as np
 
 from steps.face_embed import step as face_step
 
 
-def test_face_recognition_stack_available_requires_models(monkeypatch):
-    def _fake_find_spec(name: str):
-        if name == "face_recognition":
-            return object()
-        if name == "face_recognition_models":
-            return None
-        return object()
-
-    monkeypatch.setattr(face_step.importlib.util, "find_spec", _fake_find_spec)
-
-    assert face_step._face_recognition_stack_available() is False
-
-
-def test_face_recognition_stack_available_false_when_models_import_breaks(monkeypatch):
-    monkeypatch.setattr(face_step.importlib.util, "find_spec", lambda _name: object())
-
-    def _fake_import_module(name: str):
-        if name == "face_recognition_models":
-            raise ModuleNotFoundError("No module named 'pkg_resources'")
-        return object()
-
-    monkeypatch.setattr(face_step.importlib, "import_module", _fake_import_module)
-
-    assert face_step._face_recognition_stack_available() is False
-
-
-def test_face_embed_falls_back_to_facenet_when_dlib_stack_missing(monkeypatch, tmp_path: Path):
+def test_face_embed_uses_yunet_sface_as_primary(monkeypatch, tmp_path: Path):
     image_path = tmp_path / "frame.jpg"
-    image_path.write_bytes(b"fake")
+    image_path.write_bytes(b"fixture")
 
-    monkeypatch.setattr(face_step, "_face_recognition_stack_available", lambda: False)
-    monkeypatch.setattr(face_step, "setup_step_gpu", lambda _step: {"device": "cpu", "memory_fraction": 0.0})
-
-    fake_torch = types.ModuleType("torch")
-
-    class _NoGrad:
-        def __enter__(self):
-            return None
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    fake_torch.no_grad = lambda: _NoGrad()
-
-    class _FakeImage:
-        def convert(self, _mode):
-            return self
-
-        def crop(self, _box):
-            return self
-
-        def resize(self, _size):
-            return self
-
-    fake_pil_image = types.SimpleNamespace(open=lambda _path: _FakeImage())
-    fake_pil = types.ModuleType("PIL")
-    fake_pil.Image = fake_pil_image
-
-    class _FakeTensor:
-        def unsqueeze(self, _dim):
-            return self
-
-        def to(self, _device):
-            return self
-
-    class _FakeToTensor:
-        def __call__(self, _img):
-            return _FakeTensor()
-
-    fake_transforms = types.SimpleNamespace(ToTensor=lambda: _FakeToTensor())
-    fake_torchvision = types.ModuleType("torchvision")
-    fake_torchvision.transforms = fake_transforms
-
-    class _FakeMTCNN:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def detect(self, _img):
-            return np.array([[1, 2, 3, 4]], dtype=float), None
-
-    class _FakeEmbedding:
-        def cpu(self):
-            return self
-
-        def numpy(self):
-            return np.array([[0.1, 0.2, 0.3]], dtype=float)
-
-    class _FakeResnet:
-        def eval(self):
-            return self
-
-        def to(self, _device):
-            return self
-
-        def load_state_dict(self, _state_dict):
-            pass
-
-        def __call__(self, _tensor):
-            return _FakeEmbedding()
-
-    fake_facenet = types.ModuleType("facenet_pytorch")
-    fake_facenet.MTCNN = _FakeMTCNN
-    fake_facenet.InceptionResnetV1 = lambda *args, **kwargs: _FakeResnet()
-
-    # Mock torch.load to return a fake state dict for governed weight loading
-    fake_torch.load = lambda *args, **kwargs: {}
-
-    monkeypatch.setitem(sys.modules, "torch", fake_torch)
-    monkeypatch.setitem(sys.modules, "PIL", fake_pil)
-    monkeypatch.setitem(sys.modules, "torchvision", fake_torchvision)
-    monkeypatch.setitem(sys.modules, "facenet_pytorch", fake_facenet)
-
-    # Mock the model provisioner to return a valid governed path
-    from steps.common.model_provisioner import ModelProvisionResult
     monkeypatch.setattr(
-        "steps.common.model_provisioner.ensure_model_cached",
-        lambda *args, **kwargs: ModelProvisionResult(
-            status="cached",
-            repo_id="facenet_vggface2",
-            revision=None,
-            local_path="/fake/checkpoints/facenet.pt",
-            gated=False,
-            required=True,
-            elapsed_seconds=0.01
-        )
+        face_step,
+        "_opencv_yunet_sface_embed",
+        lambda _path: [{"bbox": [1, 2, 3, 4], "encoding": [0.1, 0.2], "engine": face_step.PRIMARY_ENGINE, "embedding_dimension": 2}],
     )
 
     result = face_step.face_embed({"source_path": str(image_path)}, {})
 
-    assert result["faces_meta"]["status"] == "ok"
-    assert result["faces_meta"]["engine"] == "facenet-pytorch"
-    assert len(result["faces"]) == 1
+    assert result["faces_meta"] == {
+        "status": "ok",
+        "engine": "opencv-yunet-sface",
+        "fallback_used": False,
+        "embedding_dimension": 2,
+    }
+    assert result["faces"][0]["engine"] == "opencv-yunet-sface"
+    assert result["faces"][0]["embedding_dimension"] == 2
 
+
+def test_face_embed_uses_dlib_only_as_explicit_degraded_fallback(monkeypatch, tmp_path: Path):
+    image_path = tmp_path / "frame.jpg"
+    image_path.write_bytes(b"fixture")
+
+    monkeypatch.setattr(
+        face_step,
+        "_opencv_yunet_sface_embed",
+        lambda _path: (_ for _ in ()).throw(face_step.PrimaryFaceEngineUnavailable("missing sealed SFace model")),
+    )
+    monkeypatch.setattr(
+        face_step,
+        "_face_recognition_embed",
+        lambda _path: [{"bbox": [1, 2, 3, 4], "encoding": [0.1, 0.2, 0.3], "engine": face_step.FALLBACK_ENGINE, "embedding_dimension": 3}],
+    )
+
+    result = face_step.face_embed({"source_path": str(image_path)}, {})
+
+    assert result["faces_meta"] == {
+        "status": "degraded",
+        "engine": "face_recognition",
+        "primary_engine": "opencv-yunet-sface",
+        "fallback_used": True,
+        "fallback_reason": "missing sealed SFace model",
+        "embedding_dimension": 3,
+    }
+    assert result["faces"][0]["engine"] == "face_recognition"
+    assert result["faces"][0]["embedding_dimension"] == 3
+
+
+def test_face_embed_surfaces_error_when_primary_and_fallback_are_unavailable(monkeypatch, tmp_path: Path):
+    image_path = tmp_path / "frame.jpg"
+    image_path.write_bytes(b"fixture")
+
+    monkeypatch.setattr(
+        face_step,
+        "_opencv_yunet_sface_embed",
+        lambda _path: (_ for _ in ()).throw(face_step.PrimaryFaceEngineUnavailable("YuNet model digest mismatch")),
+    )
+    monkeypatch.setattr(
+        face_step,
+        "_face_recognition_embed",
+        lambda _path: (_ for _ in ()).throw(RuntimeError("dlib unavailable")),
+    )
+
+    result = face_step.face_embed({"source_path": str(image_path)}, {})
+
+    assert result["faces"] == []
+    assert result["faces_meta"]["status"] == "error"
+    assert result["faces_meta"]["primary_engine"] == "opencv-yunet-sface"
+    assert result["faces_meta"]["fallback_engine"] == "face_recognition"
+    assert "YuNet model digest mismatch" in result["faces_meta"]["primary_error"]
+    assert "dlib unavailable" in result["faces_meta"]["fallback_error"]
+
+
+def test_face_embed_rejects_missing_source_file():
+    result = face_step.face_embed({"source_path": "not-a-real-file.jpg"}, {})
+
+    assert result == {"faces": [], "faces_meta": {"status": "no_file"}}

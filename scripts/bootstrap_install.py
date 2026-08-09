@@ -124,13 +124,9 @@ SUPPORTED_STEP_ENVS: tuple[StepEnvSpec, ...] = (
         "envs/face_embed/requirements.txt",
         "envs/locks/face_embed.lock.txt",
         "face detection and embeddings",
-        ("PIL", "torch", "torchvision", "face_recognition", "face_recognition_models", "facenet_pytorch", "cv2", "dlib"),
+        ("PIL", "face_recognition", "face_recognition_models", "cv2", "dlib"),
         conda_packages=("dlib=20.0.0",),
         conda_channels=("conda-forge",),
-        allowed_pip_check_warnings=(
-            "facenet-pytorch 2.6.0 has requirement torch<2.3.0,>=2.2.0",
-            "facenet-pytorch 2.6.0 has requirement torchvision<0.18.0,>=0.17.0",
-        ),
     ),
     StepEnvSpec(
         "goodq_text_embed",

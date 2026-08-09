@@ -22,6 +22,7 @@ from steps.common.model_provisioner import (
     resolve_models_root,
     resolve_hf_token,
     verify_snapshot_files,
+    lookup_model,
     ModelProvisionResult,
     _emit_first_use_model_status,
 )
@@ -389,27 +390,50 @@ def test_new_models_provisioning(tmp_path, monkeypatch):
     assert "pytorch_model.bin" in res_sent.files_checked
 
 
-def test_external_models_caching(tmp_path, monkeypatch):
-    """Verify caching check for external models: yolo_v8n and facenet_vggface2."""
+def test_bundled_external_model_requires_exact_hash(tmp_path, monkeypatch):
+    """A bundled-only external model is never accepted merely because it is non-empty."""
+    import hashlib
+
+    contents = b"verified-model-bytes" * 128
+    expected_hash = hashlib.sha256(contents).hexdigest()
+    metadata = {
+        "is_external": True,
+        "local_path": "opencv/yunet.onnx",
+        "tier_scope": ["baseline"],
+        "classification": "OPTIONAL_FEATURE",
+        "gated": False,
+        "requires_token": False,
+        "token_env": None,
+        "failure_behavior": "WARN_DEGRADED",
+        "revision": "immutable-test",
+        "required": False,
+        "sha256": expected_hash,
+        "file_size_bytes": len(contents),
+        "acquisition_policy": "bundled_only",
+    }
     monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
+    monkeypatch.setattr("steps.common.model_provisioner.lookup_model", lambda _key: ("opencv_yunet", metadata))
 
-    # 1. yolo_v8n
-    yolo_file = tmp_path / "yolo" / "yolov8n.pt"
-    yolo_file.parent.mkdir(parents=True, exist_ok=True)
-    yolo_file.write_bytes(b"\x00" * 2000)
-    res_yolo = ensure_model_cached("yolo_v8n", offline=True)
-    assert res_yolo.status == "cached"
-    assert "yolov8n.pt" in res_yolo.files_checked
-    assert Path(res_yolo.local_path) == yolo_file.absolute()
+    model_file = tmp_path / "opencv" / "yunet.onnx"
+    model_file.parent.mkdir(parents=True, exist_ok=True)
+    model_file.write_bytes(contents)
+    assert ensure_model_cached("opencv_yunet", offline=True).status == "cached"
 
-    # 2. facenet_vggface2
-    facenet_file = tmp_path / "checkpoints" / "20180402-114759-vggface2.pt"
-    facenet_file.parent.mkdir(parents=True, exist_ok=True)
-    facenet_file.write_bytes(b"\x00" * 2000)
-    res_face = ensure_model_cached("facenet_vggface2", offline=True)
-    assert res_face.status == "cached"
-    assert "20180402-114759-vggface2.pt" in res_face.files_checked
-    assert Path(res_face.local_path) == facenet_file.absolute()
+    model_file.write_bytes(b"corrupt")
+    result = ensure_model_cached("opencv_yunet", offline=True)
+    assert result.status == "invalid_cached_asset"
+    assert "mismatch" in result.error
+
+
+def test_opencv_face_models_are_bundled_only_registry_entries():
+    """YuNet/SFace are immutable installer-pack assets, never first-use downloads."""
+    for key in ("opencv_yunet", "opencv_sface"):
+        repo_id, metadata = lookup_model(key)
+        assert repo_id == key
+        assert metadata["is_external"] is True
+        assert metadata["acquisition_policy"] == "bundled_only"
+        assert metadata["sha256"]
+        assert metadata["file_size_bytes"] > 1024
 
 
 def test_external_models_offline_missing(tmp_path, monkeypatch):

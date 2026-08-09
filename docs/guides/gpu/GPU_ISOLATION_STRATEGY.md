@@ -31,7 +31,7 @@
 
 ### Current GPU-Heavy Steps:
 1. **audio_diarize** (PyAnnote) - VRAM intensive, can hang
-2. **face_embed** (facenet-pytorch/MTCNN) - GPU accelerated
+2. **face_embed** (OpenCV YuNet/SFace) - CPU-safe primary capability
 3. **image_embed_clip** (CLIP) - GPU required
 4. **image_embed_dino** (DINO) - GPU required  
 5. **audio_embed_clap** (CLAP) - GPU optional but beneficial
@@ -114,7 +114,7 @@ Based on our 16GB VRAM RTX 4070 Ti SUPER:
 | Step | VRAM Need | Fraction | Concurrent Safe |
 |------|-----------|----------|-----------------|
 | audio_diarize (PyAnnote) | ~4GB | 0.25 | Yes (2 max) |
-| face_embed (MTCNN) | ~2GB | 0.15 | Yes (4 max) |
+| face_embed (YuNet/SFace) | CPU-first | n/a | Yes (4 max) |
 | image_embed_clip | ~3GB | 0.20 | Yes (3 max) |
 | image_embed_dino | ~3GB | 0.20 | Yes (3 max) |
 | audio_embed_clap | ~2GB | 0.15 | Yes (4 max) |

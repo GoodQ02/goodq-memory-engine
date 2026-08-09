@@ -62,7 +62,7 @@ def configure_gpu(step_name=None, force_fraction=None):
         "video_scene_detect": 0.20,      # GPU-accelerated frame difference + histogram
         "audio_transcribe": 0.25,        # Whisper medium
         "audio_diarize": 0.35,           # PyAnnote + embeddings
-        "face_embed": 0.20,              # FaceNet
+        "face_embed": 0.20,              # OpenCV YuNet/SFace
         "emotion_classify": 0.20,        # Emotion CNN
         "text_embed": 0.15,              # Sentence transformers
         "image_embed_clip": 0.25,        # CLIP ViT

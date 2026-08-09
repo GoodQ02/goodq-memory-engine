@@ -133,7 +133,7 @@ and related canonical docs.
 - **Mock Contract Alignment**: Fixed `test_face_embed_fallback` and `test_emotion_classify_safetensors` to match governed model provisioner interface (`load_state_dict`, `torch.load`, `os.path.exists` mocks).
 
 ### Added
-- **External Model Provisioner Support**: Extended `model_provisioner.py` to govern non-HF models (YOLO v8n, FaceNet VGGFace2) via `is_external` flag with `source_url` and `local_path` resolution.
+- **External Model Provisioner Support**: Extended `model_provisioner.py` to govern non-HF models via `is_external` flag with `source_url` and `local_path` resolution.
 - **Governed Step Migrations**: Migrated `face_embed`, `object_detect`, `tagger`, and `tagger_llm_enhanced` to `ensure_model_cached()`.
 - **Governance Validators**: Added `tests/integration/test_governance_validators.py` (7 tests: step coverage, model loader, UCF vector parity, materialization, search lifecycle, hygiene, security profiles).
 - **Migrated Loader Tests**: Added `tests/unit/test_migrated_loaders.py` (4 tests validating governed loader contracts).

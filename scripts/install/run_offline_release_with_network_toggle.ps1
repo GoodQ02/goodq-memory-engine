@@ -102,7 +102,7 @@ try {
     $env:GOODQ_AUTO_NETWORK_TOGGLE = "1"
     $env:CONDA_EXE = $CondaExe
     $env:GOODQ_RELEASE_OUTPUT_ROOT = $OutputRoot
-    & $BuildScript
+    & cmd.exe /d /c ('"{0}"' -f $BuildScript)
     $buildExitCode = $LASTEXITCODE
     $receipt.build_exit_code = $buildExitCode
     Write-Receipt $receipt

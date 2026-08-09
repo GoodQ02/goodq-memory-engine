@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 import re
 
@@ -17,6 +18,7 @@ INSTALLER_PATH = REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
 FALLBACK_REGISTRY_PATH = REPO_ROOT / "steps" / "common" / "model_provisioner.py"
 PROFILE_CONFIG_PATH = REPO_ROOT / "configs" / "models_config.yaml"
 INSTALLER_PROFILE_CONTRACT_PATH = REPO_ROOT / "configs" / "installer_profile_contract.yaml"
+OFFLINE_DEPENDENCIES_MANIFEST_PATH = REPO_ROOT / "configs" / "offline_dependencies_manifest.json"
 LEGACY_WSL_SETUP_PATH = REPO_ROOT / "scripts" / "setup_wsl2_audio.py"
 THIRD_PARTY_NOTICES_PATH = REPO_ROOT / "THIRD_PARTY_NOTICES.md"
 VALID_STATUSES = {"eligible", "agreement_gated", "personal_only", "excluded"}
@@ -31,9 +33,35 @@ REQUIRED_FIELDS = {
     "status",
 }
 
+# A manifest artifact can expand into more than one executable (FFmpeg also
+# carries FFprobe), but every artifact used to build the offline payload needs a
+# catalog disposition.  This prevents build-only, retired, or agreement-gated
+# artifacts from becoming invisible simply because they are not model-registry
+# entries.
+OFFLINE_MANIFEST_CATALOG_MAP = {
+    "go": {"go_toolchain"},
+    "nsis": {"nsis_toolchain"},
+    "python_runtime": {"python_runtime"},
+    "qdrant": {"qdrant"},
+    "ffmpeg": {"ffmpeg", "ffprobe"},
+    "nssm": {"nssm"},
+    "vc_redist": {"vc_redist"},
+    "tesseract": {"tesseract"},
+    "poppler": {"poppler"},
+    "cublas64_12": {"cublas64_12"},
+    "cublasLt64_12": {"cublasLt64_12"},
+    "cacert": {"cacert"},
+    "get_pip": {"get_pip"},
+}
+
 
 def _load_yaml(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def _offline_manifest_keys() -> set[str]:
+    payload = json.loads(OFFLINE_DEPENDENCIES_MANIFEST_PATH.read_text(encoding="utf-8"))
+    return set(payload["toolchains"]) | set(payload["dependencies"])
 
 
 def _registry_asset_ids() -> set[str]:
@@ -98,6 +126,17 @@ def test_catalog_covers_every_registry_and_installer_asset() -> None:
     for asset_id, record in assets.items():
         assert REQUIRED_FIELDS <= set(record), asset_id
         assert record["status"] in VALID_STATUSES, asset_id
+
+
+def test_catalog_disposes_every_offline_manifest_artifact() -> None:
+    """The offline builder has no uncatalogued payload or build dependency."""
+
+    catalog = _load_yaml(CATALOG_PATH)
+    assets = set(dict(catalog["assets"]))
+
+    assert _offline_manifest_keys() == set(OFFLINE_MANIFEST_CATALOG_MAP)
+    for manifest_key, catalog_ids in OFFLINE_MANIFEST_CATALOG_MAP.items():
+        assert catalog_ids <= assets, manifest_key
 
 
 def test_catalog_and_runtime_registry_share_exact_model_sources_and_revisions() -> None:

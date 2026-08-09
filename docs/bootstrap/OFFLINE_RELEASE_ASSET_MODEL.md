@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_CONTRACT -->
-<!-- DOC_LAST_VERIFIED: 2026-08-03 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-09 -->
 
 # Offline Release Asset Model
 
@@ -91,8 +91,16 @@ without matching checksum evidence is not installer input.
 Purpose: provide external executables without requiring them to be tracked in
 git.
 
-Expected contents may include Qdrant, service helpers, FFmpeg, Tesseract,
-Poppler, and Piper only after license evidence and hashes are recorded.
+Expected contents may include Qdrant, service helpers, FFmpeg, Tesseract, and
+Poppler only after license evidence and hashes are recorded. Piper is a
+deprecated external TTS integration and is not acquired or shipped by the
+baseline installer.
+
+The browser is not a host-tools payload. The launcher opens the loopback UI
+through the user's existing URL handler and prints the exact local URL if that
+operation fails. A dedicated browser can be considered only as a separately
+versioned UI-host pack with its own update and distribution contract; it must
+not silently change a default browser or become an untracked prerequisite.
 
 Current source still tracks Qdrant and NSSM for bootstrap compatibility. Future
 host-tools assets must preserve their source URL, license URL, version, SHA256,

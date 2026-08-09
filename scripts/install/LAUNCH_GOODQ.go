@@ -115,7 +115,7 @@ func main() {
 	// 2. Verify Signed Manifest
 	manifestPath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json")
 	signaturePath := filepath.Join(programFilesDir, "configs", "model_download_manifest.json.sig")
-	
+
 	if err := verifyManifestSignature(manifestPath, signaturePath); err != nil {
 		fatalError("Manifest Verification Failed", err.Error())
 	}
@@ -123,7 +123,7 @@ func main() {
 	var pythonExe string
 	if runtime.GOOS == "windows" {
 		sandboxPython := filepath.Join(programFilesDir, "runtime", "python.exe")
-		
+
 		// 1. In production installed mode, we strictly expect sandboxed Python
 		if _, err := os.Stat(sandboxPython); err == nil {
 			pythonExe = sandboxPython
@@ -132,7 +132,7 @@ func main() {
 			// 2. Fallbacks are allowed ONLY in development mode (checking environment variables or dev tree)
 			devPython := os.Getenv("GOODQ_DEV_PYTHON")
 			isDevMode := os.Getenv("GOODQ_DEV_MODE") == "1" || os.Getenv("GOODQ_DEV_PYTHON") != ""
-			
+
 			// Detect dev tree structure
 			if !isDevMode {
 				if _, err := os.Stat(filepath.Join(programFilesDir, "configs")); err == nil {
@@ -147,14 +147,14 @@ func main() {
 						fmt.Printf("[LAUNCHER] Development mode: Using GOODQ_DEV_PYTHON override at: %s\n", pythonExe)
 					}
 				}
-				
+
 				if pythonExe == "" {
 					if path, err := exec.LookPath("python"); err == nil {
 						pythonExe = path
 						fmt.Printf("[LAUNCHER] Development mode: Using system PATH Python at: %s\n", pythonExe)
 					}
 				}
-				
+
 				if pythonExe == "" {
 					userProfile := os.Getenv("USERPROFILE")
 					if userProfile != "" {
@@ -192,7 +192,7 @@ func main() {
 		"--progress-path", bootstrapProgressPath,
 	)
 	prepareCmd(bootstrapCmd)
-	
+
 	bootstrapOutput, err := bootstrapCmd.CombinedOutput()
 	if err != nil {
 		fatalError("Model Bootstrap Failed", fmt.Sprintf("Model prefetch/bootstrap exited with error: %v\nBootstrap output:\n%s", err, string(bootstrapOutput)))
@@ -210,7 +210,7 @@ func main() {
 				}
 			}
 		}
-		
+
 		if isDegraded {
 			fmt.Println("[LAUNCHER] [WARNING] Model bootstrap completed in degraded/partial mode (some optional/gated assets were skipped).")
 		} else {
@@ -277,14 +277,14 @@ func main() {
 	if qdrantPath != "" {
 		_ = os.MkdirAll(qdrantDir, 0755)
 		qdrantConfig := filepath.Join(programDataDir, "qdrant", "config", "qdrant_config.yaml")
-		
+
 		var qdrantCmd *exec.Cmd
 		if _, err := os.Stat(qdrantConfig); err == nil {
 			qdrantCmd = exec.Command(qdrantPath, "--config-path", qdrantConfig)
 		} else {
 			qdrantCmd = exec.Command(qdrantPath)
 		}
-		
+
 		qdrantCmd.Dir = qdrantDir
 		qdrantCmd.Env = append(os.Environ(),
 			"QDRANT__SERVICE__HTTP_PORT="+strconv.Itoa(qdrantPort),
@@ -334,7 +334,7 @@ func main() {
 	// 6a. Launch Python API Server (FastAPI / Uvicorn)
 	fmt.Println("[LAUNCHER] Starting GoodQ4All Python API Server...")
 	apiCmd := exec.Command(pythonExe, "-m", "api.server")
-	
+
 	// Redirect API logs to file
 	apiLogFile, err := os.OpenFile(filepath.Join(logsDir, "api.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err == nil {
@@ -386,7 +386,11 @@ func main() {
 
 	if dashboardReady {
 		fmt.Println("[LAUNCHER] Dashboard is online. Opening browser...")
-		openBrowser(fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken))
+		dashboardURL := fmt.Sprintf("http://127.0.0.1:30000/ui/retro_console_v1/?token=%s", sessionToken)
+		if err := openBrowser(dashboardURL); err != nil {
+			fmt.Printf("[LAUNCHER] [WARN] Could not open the dashboard automatically: %v\n", err)
+			fmt.Printf("[LAUNCHER] Open this local URL in a browser: %s\n", dashboardURL)
+		}
 	} else {
 		fatalError("Service Startup Timeout", fmt.Sprintf("The GoodQ4All API service failed to start on port 30000 within 30 seconds.\nCheck logs at %s for details.", filepath.Join(logsDir, "api.log")))
 	}
@@ -411,7 +415,7 @@ func verifyManifestSignature(manifestPath, signaturePath string) error {
 	if err != nil {
 		return fmt.Errorf("unable to read manifest signature: %w", err)
 	}
-	
+
 	sigBytes, err := hex.DecodeString(string(sigHexBytes))
 	if err != nil {
 		return fmt.Errorf("invalid hex in signature: %w", err)
@@ -452,7 +456,7 @@ func generateSessionToken() string {
 	return hex.EncodeToString(b)
 }
 
-func openBrowser(url string) {
+func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -462,5 +466,5 @@ func openBrowser(url string) {
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
-	_ = cmd.Run()
+	return cmd.Run()
 }

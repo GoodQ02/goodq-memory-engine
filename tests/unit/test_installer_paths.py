@@ -33,3 +33,14 @@ def test_launcher_paths():
     
     # Assert that install root (Program Files) and mutable root are separate
     assert 'programFilesDir := filepath.Dir(os.Args[0])' in content
+
+
+def test_launcher_makes_dashboard_browser_failures_actionable():
+    """A healthy localhost service must not look broken when URL handling is unavailable."""
+
+    repo_root = Path(__file__).resolve().parents[2]
+    launcher = (repo_root / "scripts/install/LAUNCH_GOODQ.go").read_text(encoding="utf-8")
+
+    assert "func openBrowser(url string) error" in launcher
+    assert "Could not open the dashboard automatically" in launcher
+    assert "Open this local URL in a browser" in launcher

@@ -30,6 +30,10 @@ Double-click the **GoodQ4All** shortcut on your Desktop or Start Menu.
   ```text
   http://127.0.0.1:30000/ui/retro_console_v1/?token=<secure_session_token>
   ```
+  If Windows cannot open a browser automatically, the launcher keeps the local
+  services running, prints this exact URL, and records an actionable warning.
+  Copy the printed URL into any browser on the same machine; do not restart the
+  installer or services solely because automatic opening failed.
 
 ### 2. Ingest a Media File
 Once the Retro Memory Explorer UI loads, locate **Stage Media** in the header.

@@ -174,25 +174,6 @@
       "rollback_action": "remove target directory",
       "notes": "Poppler utility tools for PDF text extraction"
     },
-    "piper": {
-      "artifact_id": "piper_tts_windows_zip",
-      "pack_id": "external_binaries",
-      "required": false,
-      "kind": "zip",
-      "source_url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
-      "source_version": "2023.11.14-2",
-      "source_commit": null,
-      "cache_path": "staged_cache/external/piper.zip",
-      "target_path": "scripts/install/staged/binaries/piper/",
-      "sha256": "f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea",
-      "size_bytes": 22477236,
-      "license": "MIT",
-      "redistribution_status": "allowed",
-      "install_action": "extract",
-      "verify_action": "staged\\binaries\\piper\\piper.exe -h",
-      "rollback_action": "remove target directory",
-      "notes": "Piper Text-to-Speech standalone engine"
-    },
     "cublas64_12": {
       "artifact_id": "cublas64_12_dll",
       "pack_id": "runtime_libs",

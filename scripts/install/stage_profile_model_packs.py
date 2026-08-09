@@ -13,8 +13,9 @@ import hashlib
 import json
 import shutil
 import sys
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -29,6 +30,14 @@ from scripts.assets.personal_asset_vault import evaluate_pack_admission, verify_
 
 class ProfilePackStageError(RuntimeError):
     """Raised when a profile asset cannot be safely materialized."""
+
+
+COPY_CHUNK_BYTES = 16 * 1024 * 1024
+COPY_HEARTBEAT_SECONDS = 30.0
+
+
+def _format_bytes(value: int) -> str:
+    return f"{value / 1024**3:.2f} GiB"
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -66,11 +75,56 @@ def _registry_records(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return records
 
 
-def _copy_source(source: Path, destination: Path) -> None:
+def _copy_source(
+    source: Path,
+    destination: Path,
+    *,
+    asset_id: str,
+    progress: Callable[[str], None],
+    chunk_bytes: int = COPY_CHUNK_BYTES,
+    heartbeat_seconds: float = COPY_HEARTBEAT_SECONDS,
+) -> None:
+    """Copy a sealed source tree with bounded, operator-visible progress."""
+
     if destination.exists():
         raise ProfilePackStageError(f"refusing to overlay staged payload: {destination}")
+    if chunk_bytes <= 0:
+        raise ValueError("copy chunk size must be positive")
+    if heartbeat_seconds < 0:
+        raise ValueError("copy heartbeat interval must not be negative")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination)
+    files = [path for path in sorted(source.rglob("*")) if path.is_file()]
+    total_bytes = sum(path.stat().st_size for path in files)
+    copied_bytes = 0
+    last_heartbeat = time.monotonic()
+    progress(
+        f"[PROFILE-PACK] copy plan: {asset_id}: "
+        f"{len(files)} file(s), {_format_bytes(total_bytes)}"
+    )
+    for source_file in files:
+        relative = source_file.relative_to(source)
+        destination_file = destination / relative
+        destination_file.parent.mkdir(parents=True, exist_ok=True)
+        file_size = source_file.stat().st_size
+        progress(
+            f"[PROFILE-PACK] copying {asset_id}: {relative.as_posix()} "
+            f"({_format_bytes(file_size)})"
+        )
+        with source_file.open("rb") as source_handle, destination_file.open("wb") as destination_handle:
+            for chunk in iter(lambda: source_handle.read(chunk_bytes), b""):
+                destination_handle.write(chunk)
+                copied_bytes += len(chunk)
+                if time.monotonic() - last_heartbeat >= heartbeat_seconds:
+                    progress(
+                        f"[PROFILE-PACK] copy heartbeat: {asset_id}: "
+                        f"{_format_bytes(copied_bytes)} / {_format_bytes(total_bytes)}"
+                    )
+                    last_heartbeat = time.monotonic()
+        shutil.copystat(source_file, destination_file)
+    progress(
+        f"[PROFILE-PACK] copy complete: {asset_id}: "
+        f"{_format_bytes(copied_bytes)}"
+    )
 
 
 def _verify_copied_source(snapshot: Path, destination: Path, asset_id: str) -> None:
@@ -119,7 +173,7 @@ def _stage_asset(
 
     if catalog_record.get("kind") == "lexicon":
         destination = models_root / "lexicons" / asset_id
-        _copy_source(source, destination)
+        _copy_source(source, destination, asset_id=asset_id, progress=print)
         _verify_copied_source(snapshot, destination, asset_id)
         return {
             "asset_id": asset_id,
@@ -152,7 +206,7 @@ def _stage_asset(
     else:
         cache_name = repo_id.replace("/", "--")
         destination = models_root / "hub" / f"models--{cache_name}" / "snapshots" / revision
-    _copy_source(source, destination)
+    _copy_source(source, destination, asset_id=asset_id, progress=print)
     _verify_copied_source(snapshot, destination, asset_id)
     return {
         "asset_id": asset_id,

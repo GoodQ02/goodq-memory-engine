@@ -59,6 +59,29 @@ def test_staged_copy_must_match_every_sealed_source_member(tmp_path: Path) -> No
         stage_profile_model_packs._verify_copied_source(snapshot, staged, "sample")
 
 
+def test_staged_copy_reports_progress_for_large_source_members(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    payload = b"sealed-model" * 1024
+    (source / "model.bin").write_bytes(payload)
+    updates: list[str] = []
+
+    stage_profile_model_packs._copy_source(
+        source,
+        destination,
+        asset_id="large_model",
+        progress=updates.append,
+        chunk_bytes=128,
+        heartbeat_seconds=0,
+    )
+
+    assert (destination / "model.bin").read_bytes() == payload
+    assert any("copy plan: large_model" in update for update in updates)
+    assert any("copy heartbeat: large_model" in update for update in updates)
+    assert any("copy complete: large_model" in update for update in updates)
+
+
 def test_cpu_profile_selects_only_runtime_registered_models() -> None:
     catalog = stage_profile_model_packs._read_yaml(REPO_ROOT / "configs" / "offline_asset_catalog.yaml")
     profiles = stage_profile_model_packs._read_yaml(REPO_ROOT / "configs" / "installer_profile_contract.yaml")

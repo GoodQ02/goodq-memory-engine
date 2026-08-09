@@ -22,15 +22,16 @@ definition of the complete CPU payload.
 
 ### Public CPU Baseline: Explicit Payload Set
 
-The signed selection receipt names 31 CPU-profile assets. Ten are runtime or
+The signed selection receipt names 30 CPU-profile assets. Ten are runtime or
 tool assets (embedded Python, wheelhouse, certificate bundle, Qdrant, NSSM,
 Visual C++ runtime, Tesseract, Poppler, FFmpeg, and FFprobe). The remaining 21
-are sealed model or lexicon snapshots: BERT NER; BLIP; CLAP; CLIP; DINOv2 base
-and large; Cardiff emotion; Faster-Whisper tiny, small, and medium; HuBERT
+are sealed model or lexicon snapshots: BERT NER; BLIP; CLAP; CLIP; DINOv2
+large; Cardiff emotion; Faster-Whisper tiny, small, and medium; HuBERT
 emotion; NanoDet; YuNet; SFace; MiniLM; SST-2 sentiment; Silero VAD; VADER;
 ViT-GPT2; Wav2Vec2 ASR; and Wav2Vec2 emotion. The runtime receipt, rather than
 this prose list, is authoritative for a particular build and must be verified
-at install time.
+at install time. Profile validation also rejects any selected model that lacks
+an installed-runtime registry record before the builder begins vault staging.
 
 ## Personal Source Vault
 
@@ -170,7 +171,8 @@ Scope column explicitly says the capability is already bundled.
 | CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | sealed CPU baseline payload |
 | Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | sealed CPU baseline payload; 11-label multilabel semantics verified from sealed config |
 | Captioning | `Salesforce/blip-image-captioning-base` and `nlpconnect/vit-gpt2-image-captioning` | model cards BSD-3-Clause and Apache-2.0 | sealed CPU baseline payloads |
-| Visual embedding | `facebook/dinov2-base` and `facebook/dinov2-large` | model cards Apache-2.0 declarations | sealed CPU baseline payloads where selected by profile |
+| Visual embedding | `facebook/dinov2-large` | model card Apache-2.0 declaration | sealed CPU baseline payload; active DINO runtime target |
+| Visual embedding reference | `facebook/dinov2-base` | model card Apache-2.0 declaration | sealed source candidate only; intentionally outside profiles until a registered runtime path owns it |
 | Text embedding | `sentence-transformers/all-MiniLM-L6-v2` | model card Apache-2.0 declaration | sealed CPU baseline payload |
 | Audio embedding | `laion/clap-htsat-unfused` | model card Apache-2.0 declaration | sealed CPU baseline payload |
 | Transcription | `Systran/faster-whisper-{tiny,small,medium}` | model cards MIT declarations | sealed CPU baseline payloads; no first-use model fetch |

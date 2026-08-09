@@ -70,6 +70,12 @@ and payload paths after install. The remaining release gate is a fresh managed
 offline CPU build followed by a clean-target install and one isolated scene
 with no model download.
 
+The profile preflight additionally rejects catalog-only model candidates before
+staging. This closes the first complete-CPU-payload build finding: a sealed
+`dinov2-base` reference had been selected even though the active ingestion
+runtime owns only `dinov2-large`; the reference remains in the vault but is
+outside all installer profiles until a runtime owner exists.
+
 ## Status Vocabulary
 
 - OPEN: evidence confirms work remains.

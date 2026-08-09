@@ -38,6 +38,32 @@ def _flatten_registry(payload: dict[str, Any]) -> dict[str, Any]:
     return records
 
 
+def _validate_profile_model_bindings(
+    *,
+    catalog: dict[str, Any],
+    profile_selections: dict[str, list[str]],
+    registry: dict[str, Any],
+) -> None:
+    """Reject a profile model that the installed runtime cannot resolve.
+
+    This must run before vault staging so a catalog-only candidate cannot turn
+    an offline release build into a late, expensive failure.
+    """
+
+    assets = catalog.get("assets") if isinstance(catalog.get("assets"), dict) else catalog
+    if not isinstance(assets, dict):
+        raise ValueError("catalog assets must be a mapping")
+    for profile, selected_ids in sorted(profile_selections.items()):
+        for asset_id in selected_ids:
+            record = assets.get(asset_id)
+            if not isinstance(record, dict):
+                raise ValueError(f"profile selects absent asset: {profile}:{asset_id}")
+            if record.get("kind") == "model" and asset_id not in registry:
+                raise ValueError(
+                    f"selected model lacks runtime registry: {profile}:{asset_id}"
+                )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="validate only; do not write an artifact")
@@ -65,6 +91,11 @@ def main() -> int:
         profile: resolve_profile_assets(catalog, profile_contract, profile)
         for profile in sorted(dict(profile_contract.get("profiles") or {}))
     }
+    _validate_profile_model_bindings(
+        catalog=catalog,
+        profile_selections=profile_selections,
+        registry=registry,
+    )
     if args.profile and args.profile not in profile_selections:
         raise ValueError(f"unknown installer profile: {args.profile}")
     matrix["profile_selections"] = profile_selections

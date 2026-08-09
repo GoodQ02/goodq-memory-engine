@@ -59,9 +59,10 @@ The same pass sealed Silero VAD at commit
 (`3da369f472e752fea0ba238e9f5777bc8674de751715f7f8fe31d77a03600c25`)
 and the VADER 3.3.2 source distribution
 (`49b76a8c4dab5c59e2a3406c50e8a0cc134f449b5fef2d1ca917afe32f877ad8`).
-The catalog's former `Systran/faster-whisper-large-v3-turbo` record is now
-explicitly excluded: that upstream repository does not exist, and no
-third-party substitute is accepted by this ledger.
+The former Faster-Whisper Turbo candidate was removed from the active catalog,
+registry, provisioner fallback, and unused GPU profile fields after its upstream
+repository was proven invalid. The supported pinned Faster-Whisper model records
+remain the only selectable paths; no unverified substitute was introduced.
 
 Authenticated source intake resolved all three pinned Pyannote references.
 The diarization and segmentation sources are MIT but retain the upstream

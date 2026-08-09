@@ -14,6 +14,7 @@ CATALOG_PATH = REPO_ROOT / "configs" / "offline_asset_catalog.yaml"
 REGISTRY_PATH = REPO_ROOT / "configs" / "model_registry.yaml"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi"
 FALLBACK_REGISTRY_PATH = REPO_ROOT / "steps" / "common" / "model_provisioner.py"
+PROFILE_CONFIG_PATH = REPO_ROOT / "configs" / "models_config.yaml"
 VALID_STATUSES = {"eligible", "agreement_gated", "personal_only", "excluded"}
 REQUIRED_FIELDS = {
     "kind",
@@ -103,3 +104,16 @@ def test_catalog_and_runtime_registry_share_exact_model_sources_and_revisions() 
     for asset_id, record in dict(registry.get("huggingface_models", {})).items():
         assert assets[asset_id]["source"] == record["repo_id"], asset_id
         assert assets[asset_id]["revision"] == record["revision"], asset_id
+
+
+def test_invalid_faster_whisper_turbo_scaffold_is_absent_from_active_configuration() -> None:
+    """The retired Turbo candidate must not remain selectable or provisionable."""
+
+    retired_repo = "Systran/faster-whisper-large-v3-turbo"
+    retired_key = "whisper_large_v3_turbo"
+    active_paths = (CATALOG_PATH, REGISTRY_PATH, FALLBACK_REGISTRY_PATH, PROFILE_CONFIG_PATH)
+
+    for path in active_paths:
+        text = path.read_text(encoding="utf-8")
+        assert retired_repo not in text, path
+        assert retired_key not in text, path

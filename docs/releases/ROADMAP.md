@@ -2018,8 +2018,9 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   catalog, sealed vault, installer manifest, staged source cache, and the
   generated 94-package wheelhouse SBOM. It reports 23 catalog-confirmed sealed
   model/data sources and no missing required baseline artifact. Silero VAD and
-  VADER were sealed from their exact upstream sources; the nonexistent
-  Faster-Whisper Turbo reference is explicitly excluded rather than replaced.
+  VADER were sealed from their exact upstream sources. The nonexistent
+  Faster-Whisper Turbo candidate was removed from every active selection and
+  provisioning surface rather than retained as excluded scaffolding.
   Agreement-gated sources remain held pending acceptance receipts.
 - Personal-source evidence (2026-08-08): the pinned Qwen2.5-VL-3B snapshot
   was sealed only after an explicit personal-use acceptance receipt was

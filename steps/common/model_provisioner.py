@@ -145,15 +145,6 @@ _FALLBACK_REGISTRY = {
         "token_env": None,
         "failure_behavior": "FATAL_HALT"
     },
-    "Systran/faster-whisper-large-v3-turbo": {
-        "key": "whisper_large_v3_turbo",
-        "tier_scope": ["gpu_enhanced"],
-        "classification": "OPTIONAL_FEATURE",
-        "gated": False,
-        "requires_token": False,
-        "token_env": None,
-        "failure_behavior": "WARN_DEGRADED"
-    },
     "superb/hubert-large-superb-er": {
         "key": "hubert_emotion",
         "tier_scope": ["cpu_only", "gpu_enhanced"],

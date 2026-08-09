@@ -54,8 +54,8 @@ class TestSmokeBenchmark(unittest.TestCase):
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(self.metrics, f, indent=2)
 
-    def test_audio_asr_whisper_turbo(self):
-        """Benchmark 5 noisy audio clips on Whisper Large-v3-Turbo."""
+    def test_audio_asr_faster_whisper_large_v3(self):
+        """Benchmark 5 noisy audio clips on the supported Faster-Whisper Large V3 path."""
         start_load = time.monotonic()
         # Mock load (simulates faster-whisper loader)
         time.sleep(0.3)  # Simulated load

@@ -485,29 +485,6 @@ huggingface_models:
     token_env: null
     failure_behavior: FATAL_HALT
 
-  whisper_large_v3_turbo:
-    repo_id: Systran/faster-whisper-large-v3-turbo
-    revision: 153b6ab49080cf2dcffad5df2775f0a2c505f5b5
-    model_type: speech-to-text
-    trust_level: candidate
-    modalities: [audio]
-    engines:
-      CTranslate2: yes
-    quantization: [FP16, INT8]
-    vram_estimate_gb: 1.8
-    load_policy: concurrent_safe
-    access_control:
-      requires_hf_token: false
-      requires_license_acceptance: false
-      commercial_use: allowed
-      redistribution: allowed
-    tier_scope: [gpu_enhanced]
-    classification: OPTIONAL_FEATURE
-    gated: false
-    requires_token: false
-    token_env: null
-    failure_behavior: WARN_DEGRADED
-
   qwen2_5_vl_7b:
     repo_id: Qwen/Qwen2.5-VL-7B-Instruct
     revision: cc594898137f460bfe9f0759e9844b3ce807cfb5

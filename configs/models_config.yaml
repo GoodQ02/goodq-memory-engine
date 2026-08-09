@@ -136,7 +136,6 @@ profiles:
   GPU_16GB_INGEST_QUALITY:
     reasoning: "deepseek_r1_14b"
     vision: "qwen2_5_vl_7b"
-    audio: "whisper_large_v3_turbo"
     load_policy: "sequential_only"
     concurrency_allowed: false
     estimated_vram_peak_gb: 9.5
@@ -144,7 +143,6 @@ profiles:
   GPU_16GB_INTERACTIVE_LIGHT:
     reasoning: "deepseek_r1_7b"
     vision: "qwen2_5_vl_3b"
-    audio: "whisper_large_v3_turbo"
     load_policy: "concurrent_safe"
     concurrency_allowed: true
     estimated_vram_peak_gb: 10.6

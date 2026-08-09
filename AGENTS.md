@@ -183,8 +183,8 @@ Preferred escalation order:
 - `AUTO_LEARN` Scope Restrictions: Any automated subagent or workflow running lesson-learning tasks has read-only access to repository code files (goodq4all and goodq_agent) and configuration folders. It is allowed write access only to the Agent Knowledge Workspace (_AGENT/) lessons, checklists, and templates. It must never commit or push source code changes.
 
 ## Do / Don't
-- Do: propose before acting; keep diffs small; trust audits over intuition; preserve working behavior.
-- Don't: assume context; over-optimize; rewrite working systems; hide failures.
+- Do: propose before acting; keep diffs small; trust audits over intuition; preserve working behavior; close a superseded path only after tracing its active consumers and adding a regression guard.
+- Don't: assume context; over-optimize; rewrite working systems; hide failures; retain disabled, excluded, or obsolete scaffolding in active configuration after its replacement or retirement is verified.
 
 Always use the OpenAI developer documentation MCP server if you need to work with the OpenAI API, ChatGPT Apps SDK, Codex, or related docs without me having to explicitly ask.
 

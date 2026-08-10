@@ -74,8 +74,10 @@ applies to named followers such as GR-16 and GS-32.
 Keep the build receipt, pre-removal manifest and active-process snapshot when
 applicable, transfer-hash result, installer exit, offline-suite result,
 restore-smoke result, remote receipt, sealed witness receipt, and a short
-operator finding together. Do not promote the witness or broaden ingestion as
-part of this workflow.
+operator finding together. When the durable runner uses a scheduled worker,
+also record that the task is absent after terminal completion; a replayable
+task makes the witness receipt non-final. Do not promote the witness or
+broaden ingestion as part of this workflow.
 
 After the current candidate is verified, record its source commit and outcome
 in the release roadmap before pruning superseded timestamped build outputs.

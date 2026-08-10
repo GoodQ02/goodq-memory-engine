@@ -2192,18 +2192,24 @@ These items preserve unfinished intent from the plans this roadmap replaces.
 - Current CPU artifact (2026-08-10): the managed offline build produced the
   public CPU baseline candidate from private `dev` commit `004d55ed`, with a
   clean source tree, successful containment removal, restored connectivity,
-  and the exact signed CPU payload recorded by its release manifest. This is
-  the sole retained CPU candidate for the next clean GR-16 follower run. Once
-  that run is recorded, superseded timestamped installer outputs are pruned by
-  explicit inventory only; release history remains in Git and this roadmap,
-  not in stale executable copies.
+  and the exact signed CPU payload recorded by its release manifest. Its fresh
+  GR-16 validation reset the prior program and data roots with preserved
+  manifests, matched the staged clip hash, installed successfully, passed all
+  nine offline-suite gates and the Qdrant restore smoke, and completed an
+  isolated scene-zero witness. The terminal remote receipt recorded
+  `runner_exit_code: 0`; its capability receipt completed with all 16 records
+  `ok`; hybrid Whisper emitted a terminal CPU transcript; and the worker
+  removed its scheduled task rather than replaying. This closes the CPU
+  artifact-level installer lane for `004d55ed` without promoting follower
+  evidence into the canonical corpus.
 - Release-output closure (2026-08-10): after verifying the retained CPU
   candidate's signed payload hash and source lineage, 25 explicitly inventoried
   superseded CPU/GPU timestamped build outputs were removed. The release-output
   area now retains only the current CPU candidate; asset vaults, dependency
   caches, repositories, and follower validation roots were outside the prune
-  boundary. The remaining CPU artifact-level gate is one fresh GR-16
-  clean-install and isolated witness from commit `004d55ed`.
+  boundary. This closure is now authoritative for the retained CPU candidate;
+  a future installer failure should be investigated at its owning seam rather
+  than by reviving a superseded release output.
 
 ### V-02 — Watchdog interruption witness
 

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1430**
+Indexed active tracked paths: **1442**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -180,6 +180,7 @@ Indexed active tracked paths: **1430**
 | `/configs/identity/.gitignore` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/identity/family_roster.template.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/identity/family_terms.template.yaml` | Configuration | Configuration, schema, or runtime profile. |
+| `/configs/installer_profile_contract.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_download_manifest.json` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_download_manifest.json.sig` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_registry.yaml` | Configuration | Configuration, schema, or runtime profile. |
@@ -463,12 +464,14 @@ Indexed active tracked paths: **1430**
 | `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-03-public-baseline-installer-v2.5.8.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/plans/2026-08-08-ingestion-capability-contract.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/plans/2026-08-08-personal-asset-vault.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-02-dev-mode-operator-dashboard-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-02-oh-my-posh-baseline-design.md` | Documentation | Active documentation or governance surface. |
+| `/docs/superpowers/specs/2026-08-08-ingestion-capability-contract-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/superpowers/specs/2026-08-08-personal-asset-vault-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
@@ -554,6 +557,7 @@ Indexed active tracked paths: **1430**
 | `/lib/goodq_logger.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/identity_ledger.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/identity_resolver.py` | Core library | Core memory, control, or persistence implementation. |
+| `/lib/ingestion_capability_contract.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/kg_realtime_integration.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/knowledge_graph.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/llm_client.py` | Core library | Core memory, control, or persistence implementation. |
@@ -761,21 +765,26 @@ Indexed active tracked paths: **1430**
 | `/scripts/inspect_db.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/INSTALL_AUDIO_STANDARD.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/LAUNCH_GOODQ.go` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/build_capability_matrix.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/build_installer.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/follower_clean_reset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_manifest.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_wheelhouse_sbom.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/goodq4all_installer.nsi` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_unix.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/release_payload_packs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_build.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_with_network_toggle.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sandbox_env_setup.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sign_manifest.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/smoke_test_restore.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/stage_dependencies.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/stage_profile_model_packs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sync_nsi_version.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/verify_profile_model_payload.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/versioninfo.json` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_audio_deps_retry.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -1138,6 +1147,7 @@ Indexed active tracked paths: **1430**
 | `/tests/unit/test_audio_bridge_native.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_segment_timeline_normalization.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_speaker_merge_step.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_transcribe_terminal_chunk_receipts.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_transcribe_windows_cpu_threads.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_banned_token_lint.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_baseline_audio_profile_invariant.py` | Verification | Test, fixture, or verification asset. |
@@ -1221,6 +1231,7 @@ Indexed active tracked paths: **1430**
 | `/tests/unit/test_ingest_status_route.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_submit_route.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingest_upload_hardening.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ingestion_capability_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ingestion_isolation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_installer_paths.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_installer_release_contract.py` | Verification | Test, fixture, or verification asset. |
@@ -1262,12 +1273,14 @@ Indexed active tracked paths: **1430**
 | `/tests/unit/test_platform_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_preflight_concurrency.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_print_config.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_profile_model_pack_staging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_promote_identity_layer.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_loopback_transport.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_recovery_promotion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_release_payload_packs.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_remote_witness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_context_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_faiss_store_ref_privacy_authority.py` | Verification | Test, fixture, or verification asset. |

@@ -232,7 +232,21 @@ def _launch_with_task_scheduler(command: list[str], root: Path) -> tuple[str, Pa
     worker_path = root.parent / f"{root.name}.remote-runner.cmd"
     worker_path.parent.mkdir(parents=True, exist_ok=True)
     worker_path.write_text(
-        "@echo off\r\n" + subprocess.list2cmdline(command) + "\r\nexit /b %ERRORLEVEL%\r\n",
+        "\r\n".join(
+            (
+                "@echo off",
+                subprocess.list2cmdline(command),
+                "set \"GOODQ_EXIT_CODE=%ERRORLEVEL%\"",
+                # The scheduled task is started explicitly below. Retire its
+                # clock trigger only after the worker has reached a terminal
+                # state, so there is no launch race and no later replay can
+                # overwrite the receipt for this fresh root.
+                f"schtasks.exe /Change /TN \"{task_name}\" /Disable >nul 2>&1",
+                f"schtasks.exe /Delete /TN \"{task_name}\" /F >nul 2>&1",
+                "exit /b %GOODQ_EXIT_CODE%",
+                "",
+            )
+        ),
         encoding="utf-8",
     )
     task_command = f'cmd.exe /d /c "{worker_path}"'

@@ -1,3 +1,7 @@
+<!-- DOC_BADGE: EXPERIMENTAL -->
+<!-- DOC_STATUS: DRAFT_REVIEW -->
+<!-- DOC_LAST_VERIFIED: 2026-08-08 -->
+
 # Ingestion Capability Contract Implementation Plan
 
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.

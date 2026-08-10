@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **426**
+Indexed active Python paths: **430**
 
 ## Repository root
 
@@ -142,6 +142,7 @@ Indexed active Python paths: **426**
 - `lib/goodq_logger.py`
 - `lib/identity_ledger.py`
 - `lib/identity_resolver.py`
+- `lib/ingestion_capability_contract.py`
 - `lib/kg_realtime_integration.py`
 - `lib/knowledge_graph.py`
 - `lib/llm_client.py`
@@ -262,9 +263,13 @@ Indexed active Python paths: **426**
 - `scripts/implement_comprehensive_vad.py`
 - `scripts/init_qdrant_collections.py`
 - `scripts/inspect_db.py`
+- `scripts/install/build_capability_matrix.py`
 - `scripts/install/generate_wheelhouse_sbom.py`
+- `scripts/install/release_payload_packs.py`
 - `scripts/install/sandbox_env_setup.py`
+- `scripts/install/stage_profile_model_packs.py`
 - `scripts/install/sync_nsi_version.py`
+- `scripts/install/verify_profile_model_payload.py`
 - `scripts/install_pipeline_wsl.py`
 - `scripts/install_vision_gpu.py`
 - `scripts/internal/verify_entity_quality.py`

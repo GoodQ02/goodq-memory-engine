@@ -2169,6 +2169,26 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   restore smoke, then run one newly sealed scene-zero witness. Require a
   terminal transcript ledger and `runner_finished`; do not reuse the earlier
   timed-out witness root or promote any follower evidence.
+- GR-16 CPU functional acceptance (2026-08-10): the managed public CPU
+  baseline built from private `dev` commit `4aef917b` passed its offline asset
+  receipt. On GR-16, the prior GoodQ program and data roots were removed with
+  preserved removal manifests; the four-file set transferred with matching
+  hashes; the installer exited zero; the installed offline suite and isolated
+  Qdrant restore smoke passed. A fresh non-promoting scene-zero witness then
+  completed with `runner_exit_code: 0` and a completed capability receipt:
+  all 16 capabilities were `ok`, with zero required-core failures, optional
+  skips, optional errors, or recovered fallbacks. Its terminal transcript
+  ledger is available from `hybrid_whisper` on CPU. This closes the GR-16 CPU
+  functional-validation lane; it does not promote the witness or broaden the
+  canonical corpus.
+- Harness repair (2026-08-10): GR-16 also exposed a receipt-lifecycle defect:
+  the manually started scheduled task replayed at its `ONCE` clock time and
+  overwrote the completed top-level remote receipt with the expected
+  fresh-root guard failure. It did not rerun ingestion or invalidate the
+  sealed scene output. Private `dev` now has the worker disable and remove its
+  task only after the terminal state, with a regression test. Rebuild from that
+  repair before using a remote-witness receipt as the final artifact-level CPU
+  release seal; GPU packaging remains a separate next lane.
 
 ### V-02 — Watchdog interruption witness
 

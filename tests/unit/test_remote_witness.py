@@ -150,7 +150,7 @@ def test_qdrant_port_probe_reports_a_bind_error(monkeypatch):
         remote_witness._assert_qdrant_port_is_free()
 
 
-def test_launch_uses_task_scheduler_on_windows(monkeypatch, tmp_path: Path):
+def test_launch_uses_task_scheduler_on_windows_without_a_scheduled_replay(monkeypatch, tmp_path: Path):
     root = tmp_path / "witness"
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"clip")
@@ -169,6 +169,9 @@ def test_launch_uses_task_scheduler_on_windows(monkeypatch, tmp_path: Path):
     assert Path(receipt["scheduler_worker"]).exists()
     assert receipt["command"][1:4] == ["-m", "cli.remote_witness", "execute"]
     assert [call[0][1] for call in calls] == ["/Create", "/Run"]
+    worker = Path(receipt["scheduler_worker"]).read_text(encoding="utf-8")
+    assert 'schtasks.exe /Change /TN "GoodQ4All-RemoteWitness-witness" /Disable' in worker
+    assert 'schtasks.exe /Delete /TN "GoodQ4All-RemoteWitness-witness" /F' in worker
 
 
 def test_launch_records_scheduler_failure(monkeypatch, tmp_path: Path):

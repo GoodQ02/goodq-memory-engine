@@ -76,3 +76,8 @@ applicable, transfer-hash result, installer exit, offline-suite result,
 restore-smoke result, remote receipt, sealed witness receipt, and a short
 operator finding together. Do not promote the witness or broaden ingestion as
 part of this workflow.
+
+After the current candidate is verified, record its source commit and outcome
+in the release roadmap before pruning superseded timestamped build outputs.
+Retain the current candidate until it is replaced by a newer verified one; do
+not retain old installers as alternate release authorities.

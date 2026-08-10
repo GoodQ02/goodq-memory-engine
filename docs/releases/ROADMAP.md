@@ -2189,6 +2189,21 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   task only after the terminal state, with a regression test. Rebuild from that
   repair before using a remote-witness receipt as the final artifact-level CPU
   release seal; GPU packaging remains a separate next lane.
+- Current CPU artifact (2026-08-10): the managed offline build produced the
+  public CPU baseline candidate from private `dev` commit `004d55ed`, with a
+  clean source tree, successful containment removal, restored connectivity,
+  and the exact signed CPU payload recorded by its release manifest. This is
+  the sole retained CPU candidate for the next clean GR-16 follower run. Once
+  that run is recorded, superseded timestamped installer outputs are pruned by
+  explicit inventory only; release history remains in Git and this roadmap,
+  not in stale executable copies.
+- Release-output closure (2026-08-10): after verifying the retained CPU
+  candidate's signed payload hash and source lineage, 25 explicitly inventoried
+  superseded CPU/GPU timestamped build outputs were removed. The release-output
+  area now retains only the current CPU candidate; asset vaults, dependency
+  caches, repositories, and follower validation roots were outside the prune
+  boundary. The remaining CPU artifact-level gate is one fresh GR-16
+  clean-install and isolated witness from commit `004d55ed`.
 
 ### V-02 — Watchdog interruption witness
 

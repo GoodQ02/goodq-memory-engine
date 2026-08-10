@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-06 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-10 -->
 
 # Managed Offline Release Build
 
@@ -74,3 +74,19 @@ After a complete acceptance receipt, follow
 `PORTABLE_FOLLOWER_RELEASE_VALIDATION.md` on one named follower. Preserve the
 release output and transfer-hash evidence; do not promote or broaden ingestion
 as part of installer validation.
+
+## Candidate retention and pruning
+
+The newest complete, hash-verified profile candidate is the only installer
+output retained for the active follower-validation lane. Before removing an
+older timestamped installer output, verify the newer candidate's exact source
+commit, clean-tree declaration, asset set, release manifest, checksum, and
+network-containment receipt. Distill any reusable lesson into the applicable
+workflow or the release roadmap first, then remove only the explicitly
+inventoried older timestamped build roots.
+
+The release output directory is not an asset vault, dependency cache,
+repository, or runtime-validation root. Never use a pruning operation against
+those boundaries. Git history, the signed current manifest, and durable
+workflow/roadmap evidence are the retained authority for superseded builds;
+old executable copies are not a second release authority.

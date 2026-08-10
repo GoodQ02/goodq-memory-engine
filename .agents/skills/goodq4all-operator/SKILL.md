@@ -81,3 +81,9 @@ For an approved SSH follower, keep the release and witness boundaries separate:
    not a pass.
 5. Update `docs/releases/ROADMAP.md` and the applicable workflow with verified
    state; do not hand-edit generated current-state projections.
+6. For a remote elevated installer, follow the shared **Durable remote installer
+   validation** section in the local-network workflow. Read back the generated
+   task runner before launching it: the quoted setup path and `/S` must be one
+   line, or Session 0 can wait invisibly for an interactive installer.
+7. During NSIS payload verification or extraction, inspect the active child
+   process and its CPU/I/O. A quiet parent task is not a stall by itself.

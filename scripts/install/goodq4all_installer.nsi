@@ -128,7 +128,7 @@ runtime_ok:
   SetOutPath "$INSTDIR"
   File "${GOODQ_LAUNCHER_PATH}"
   File "..\..\goodq_version.py"
-  File "..\..\requirements-baseline-lock.txt"
+  File "staged\requirements-lock.txt"
   File "verify_offline_suite.ps1"
   
   SetOutPath "$INSTDIR\qdrant"
@@ -306,13 +306,23 @@ wheelhouse_missing:
   Abort
 wheelhouse_ready:
   StrCpy $InstallStage "wheelhouse_install"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links="file:///$INSTDIR/wheels" -r "$INSTDIR\requirements-baseline-lock.txt"'
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -m pip install --upgrade --force-reinstall --no-index --find-links="file:///$INSTDIR/wheels" -r "$INSTDIR\requirements-lock.txt"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2
     MessageBox MB_OK|MB_ICONSTOP "Error: Offline Python package installation failed. Code $0"
     Abort
   ${EndIf}
+!if "${GOODQ_INSTALLER_PROFILE}" != "PUBLIC_CPU_BASELINE"
+  StrCpy $InstallStage "cuda_runtime_verify"
+  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -c "import torch; assert torch.version.cuda; assert torch.cuda.is_available(); assert torch.cuda.device_count() >= 1; print(torch.__version__, torch.version.cuda, torch.cuda.device_count())"'
+  Pop $0
+  ${If} $0 != 0
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Error: GPU Enhanced runtime did not detect a usable CUDA device. Code $0"
+    Abort
+  ${EndIf}
+!endif
   StrCpy $InstallStage "ocr_binding_verify"
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -c "import pytesseract; print(pytesseract.__version__)"'
   Pop $0
@@ -492,7 +502,7 @@ preserve_wsl_distro:
   Delete "$INSTDIR\LAUNCH_GOODQ.exe"
   Delete "$INSTDIR\scripts\install\INSTALL_AUDIO_STANDARD.bat"
   Delete "$INSTDIR\goodq_version.py"
-  Delete "$INSTDIR\requirements-baseline-lock.txt"
+  Delete "$INSTDIR\requirements-lock.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\qdrant"

@@ -300,6 +300,42 @@
         "sha256": "a38f6c413a83bc1089d4eecd0acd88e8190df6e0c4423ee45ba59cc0a8001324"
       },
       {
+        "artifact_id": "torch_win_cp310_cu121",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "cuda",
+        "required": true,
+        "name": "torch",
+        "source_url": "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp310-cp310-win_amd64.whl",
+        "sha256": "9b22d6d98aa56f9317902dec0e066814a6edba1aada90110ceea2bb0678df22f",
+        "license": "BSD-3-Clause"
+      },
+      {
+        "artifact_id": "torchvision_win_cp310_cu121",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "cuda",
+        "required": true,
+        "name": "torchvision",
+        "source_url": "https://download.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp310-cp310-win_amd64.whl",
+        "sha256": "4cb1e44c1f7a4992f6d38a15633a1e694c093f1c52f3a036b1a719968031507a",
+        "license": "BSD-3-Clause"
+      },
+      {
+        "artifact_id": "torchaudio_win_cp310_cu121",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "cp310",
+        "platform_tag": "win_amd64",
+        "gpu_lane": "cuda",
+        "required": true,
+        "name": "torchaudio",
+        "source_url": "https://download.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp310-cp310-win_amd64.whl",
+        "sha256": "68c08cf69f7f39608f4c8d6b87fa054d7c801a19060e89d66003efbceef15641",
+        "license": "BSD-3-Clause"
+      },
+      {
         "artifact_id": "transformers_win_cp310",
         "pack_id": "windows_wheelhouse",
         "python_tag": "cp310",

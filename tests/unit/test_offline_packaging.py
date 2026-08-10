@@ -81,18 +81,23 @@ def test_local_only_model_pack_setup_refuses_remote_download(tmp_path: Path):
     assert "not published in this baseline" in result.stderr
 
 
-def test_cpu_baseline_stager_uses_cpu_pytorch_index() -> None:
+def test_profiled_stager_selects_the_matching_pytorch_index_and_lock() -> None:
     stager = ROOT / "scripts" / "install" / "stage_dependencies.ps1"
     content = stager.read_text(encoding="utf-8")
 
     assert "https://download.pytorch.org/whl/cpu" in content
-    assert "https://download.pytorch.org/whl/cu121" not in content
+    assert "https://download.pytorch.org/whl/cu121" in content
+    assert "requirements-gpu-enhanced-lock.txt" in content
+    assert 'Join-Path "wheels" $Profile' in content
+    assert "Direct CUDA wheel transfer failed" in content
+    assert "pip fallback produced a CUDA wheel with unexpected SHA256" in content
+    assert "known-broken range resume" in content
 
 
-def test_stager_resolves_the_baseline_lock_from_its_own_directory() -> None:
+def test_stager_resolves_the_selected_profile_lock_from_its_own_directory() -> None:
     stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
 
-    assert 'Join-Path $ScriptDir "..\\..\\requirements-baseline-lock.txt"' in stager
+    assert 'Join-Path $ScriptDir "..\\..\\$RequirementsName"' in stager
 
 
 def test_wheel_staging_replaces_stale_cache_and_payload_before_download() -> None:
@@ -100,7 +105,8 @@ def test_wheel_staging_replaces_stale_cache_and_payload_before_download() -> Non
     stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
     builder = (ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
 
-    assert 'Remove-Item -LiteralPath $wheelsDir -Recurse -Force' in stager
+    assert 'Get-ChildItem -LiteralPath $wheelsDir -Filter *.whl -File' in stager
+    assert "Preserve only resumable .partial downloads" in stager
     assert 'rmdir /s /q "staged\\wheels"' in builder
 
 
@@ -127,7 +133,7 @@ def test_installer_generates_and_ships_a_strict_wheelhouse_sbom() -> None:
     installer = (ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
 
     assert "generate_wheelhouse_sbom.py" in builder
-    assert "--requirements ..\\..\\requirements-baseline-lock.txt" in builder
+    assert '"%GOODQ_REQUIREMENTS_LOCK%"' in builder
     assert 'File "staged\\wheelhouse-sbom.json"' in installer
 
 
@@ -136,7 +142,7 @@ def test_dependency_acquisition_refreshes_the_cache_sbom() -> None:
     stager = (ROOT / "scripts" / "install" / "stage_dependencies.ps1").read_text(encoding="utf-8")
 
     assert "Refreshing wheelhouse SBOM from the acquired closure" in stager
-    assert 'Join-Path $CacheDir "wheelhouse-sbom.json"' in stager
+    assert 'Join-Path $wheelsDir "wheelhouse-sbom.json"' in stager
     assert "generate_wheelhouse_sbom.py" in stager
 
 
@@ -145,9 +151,24 @@ def test_cpu_torch_wheels_are_hash_pinned() -> None:
     wheels = json.loads(manifest_path.read_text(encoding="utf-8"))["wheels"]["wheelhouse"]
     torch_wheels = [wheel for wheel in wheels if wheel["name"] in {"torch", "torchvision", "torchaudio"}]
 
-    assert len(torch_wheels) == 3
-    assert all(wheel["gpu_lane"] == "cpu" for wheel in torch_wheels)
+    assert len(torch_wheels) == 6
+    assert {wheel["gpu_lane"] for wheel in torch_wheels} == {"cpu", "cuda"}
     assert all(wheel.get("source_url") and wheel.get("sha256") for wheel in torch_wheels)
+
+
+def test_gpu_lock_and_installer_require_a_real_cuda_runtime() -> None:
+    gpu_lock = (ROOT / "requirements-gpu-enhanced-lock.txt").read_text(encoding="utf-8")
+    builder = (ROOT / "scripts" / "install" / "build_installer.bat").read_text(encoding="utf-8")
+    installer = (ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(encoding="utf-8")
+    verifier = (ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(encoding="utf-8")
+
+    assert "torch==2.5.1+cu121" in gpu_lock
+    assert "torchvision==0.20.1+cu121" in gpu_lock
+    assert "torchaudio==2.5.1+cu121" in gpu_lock
+    assert "GOODQ_REQUIREMENTS_LOCK" in builder
+    assert "requirements-lock.txt" in installer
+    assert "cuda_runtime_verify" in installer
+    assert 'name = "cuda_runtime"' in verifier
 
 
 def test_installer_ships_explicit_audio_standard_launcher() -> None:

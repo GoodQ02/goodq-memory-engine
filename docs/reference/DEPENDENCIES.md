@@ -23,7 +23,7 @@ Analysis method: file inspection only (no project code executed).
 
 | Dependency | Type | Why this is OPTIONAL | Evidence (exact citations) |
 |---|---|---|---|
-| NVIDIA GPU + CUDA 12.1 profile | Hardware/runtime | Applies only when the `GPU_ENHANCED` profile is intentionally enabled; CPU-safe fallbacks exist for all referenced steps. | `AGENTS.md:19`; `AGENTS.md:45`; `configs/config.yaml:114`; `configs/config.yaml:115` |
+| NVIDIA GPU + CUDA 12.1 profile | Hardware/runtime | GPU Enhanced uses the sealed CUDA 12.1 Torch wheelhouse and rejects installation or post-install verification when no CUDA device is usable. CPU baseline remains available for systems without a GPU. | `AGENTS.md:19`; `AGENTS.md:45`; `configs/config.yaml:114`; `configs/config.yaml:115`; `scripts/install/verify_offline_suite.ps1` |
 | WSL2 Ubuntu audio compute extension | Runtime/OS | Audio pipeline offloads to WSL2, but architecture states optional enrichments may fail without halting ingestion. | `AGENTS.md:13`; `AGENTS.md:20`; `AGENTS.md:48`; `configs/config.yaml:194`; `scripts/wsl2_audio_bridge.py:115` |
 | WSL unified audio worker | Runtime/service | Current accelerated audio path uses a direct Windows-to-WSL bridge into the unified worker runtime; WSL remains optional unless strict mode is enabled. | `scripts/wsl2_audio_bridge.py:281`; `wsl2_audio/process_audio.py:527`; `docs/reference/WSL_AUDIO_RUNTIME.md:1` |
 | WSL audio venv + CUDA library shims | Runtime/tooling | Used only for the optional WSL audio acceleration path. | `wsl2_audio/setup_cuda_env.sh:6`; `wsl2_audio/setup_cuda_env.sh:12`; `wsl2_audio/setup_cuda_env.sh:15` |

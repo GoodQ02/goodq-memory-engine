@@ -1,0 +1,31 @@
+# GoodQ4All PUBLIC_GPU_ENHANCED / PERSONAL_AIR_GAP Windows runtime.
+# This is the sealed CUDA counterpart to requirements-baseline-lock.txt.
+# Do not replace it with a CPU lock: GPU profiles must prove CUDA at install time.
+--extra-index-url https://download.pytorch.org/whl/cu121
+pip==26.2.1
+wheel==0.47.0
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
+numpy==2.2.6
+opencv-python-headless==4.13.0.92
+scenedetect==0.6.2
+pandas==2.3.3
+pyyaml==6.0.3
+python-dotenv==1.2.2
+requests==2.33.0
+fastapi==0.135.2
+uvicorn==0.42.0
+typer==0.24.0
+imageio-ffmpeg==0.6.0
+pytesseract==0.3.10
+transformers==5.4.0
+sentence-transformers==5.3.0
+qdrant-client==1.17.1
+faster-whisper==1.2.1
+faiss-cpu==1.9.0
+librosa==0.10.2.post1
+soundfile==0.12.1
+psutil==7.2.2
+huggingface-hub==1.8.0
+goodq-mini-agent==0.1.1

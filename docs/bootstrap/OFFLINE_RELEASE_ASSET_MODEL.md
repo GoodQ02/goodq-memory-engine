@@ -43,7 +43,8 @@ variant:
 | Release manifest | `goodq4all-0.1.1-release-assets.manifest.json` | `.json` |
 | Manifest checksums | `goodq4all-0.1.1-release-assets.sha256` | `.sha256` |
 | Host tools payload | `goodq4all-0.1.1-host-tools-windows-x86_64.zip` | `.zip` |
-| Windows wheelhouse | `goodq4all-0.1.1-wheelhouse-windows-py310.zip` | `.zip` |
+| Windows CPU wheelhouse | `goodq4all-0.1.1-wheelhouse-windows-py310-cpu.zip` | `.zip` |
+| Windows CUDA wheelhouse | `goodq4all-0.1.1-wheelhouse-windows-py310-cu121.zip` | `.zip` |
 | Linux/WSL wheelhouse | `goodq4all-0.1.1-wheelhouse-wsl-linux-py310-cu121.tar.zst` | `.tar.zst` |
 | Conda package cache | `goodq4all-0.1.1-conda-cache-windows-py310.tar.zst` | `.tar.zst` |
 | Required model cache | `goodq4all-0.1.1-model-cache-required.tar.zst` | `.tar.zst` |
@@ -123,14 +124,18 @@ Supported builder and validator:
   authentication material remain outside the host-tools payload and base
   installer.
 
-## Windows Wheelhouse
+## Windows Wheelhouses
 
 Purpose: restore pip-installed packages without network access.
 
-The wheelhouse is derived from the canonical Conda and step-env dependency
-inputs, not from an ad hoc copy of `vendor/`. The release manifest must identify
-the Python ABI, platform tag, exact package set, and no-index install probe
-result.
+The wheelhouse is derived from the canonical dependency lock, not from an ad
+hoc copy of `vendor/`. The release manifest must identify the Python ABI,
+platform tag, exact package set, selected runtime lane, and no-index install
+probe result. CPU builds use the CPU lock. GPU Enhanced and Personal Air-Gap
+builds use the separately sealed CUDA 12.1 lock and must prove both a
+CUDA-compiled Torch build and a visible CUDA device during installation and
+post-install verification. A GPU-labelled installer that resolves CPU-only
+Torch is rejected; it must not silently become a CPU release.
 
 Externally released wheels that are not available from the standard package
 index, such as `goodq-mini-agent`, are acquired once while online from their

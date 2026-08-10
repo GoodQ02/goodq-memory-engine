@@ -279,6 +279,23 @@ def test_base_env_prefers_cfg_gpu_profile_over_stale_no_auto_gpu(monkeypatch, tm
     assert env.get("GOODQ_NO_AUTO_GPU") != "1"
 
 
+def test_base_env_normalizes_public_gpu_profile_to_the_internal_gpu_contract(monkeypatch, tmp_path: Path):
+    run_ingestion = _load_run_ingestion_module()
+    cfg_json = _write_cfg(
+        tmp_path,
+        host={"profile": "PUBLIC_GPU_ENHANCED", "require_gpu": True},
+    )
+
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "BASELINE")
+    monkeypatch.setenv("GOODQ_NO_AUTO_GPU", "1")
+
+    env = run_ingestion._base_env(cfg_json)
+
+    assert env["GOODQ_HOST_PROFILE"] == "GPU_ENHANCED"
+    assert env["GOODQ_REQUIRE_GPU"] == "1"
+    assert env.get("GOODQ_NO_AUTO_GPU") != "1"
+
+
 def test_base_env_forces_no_auto_gpu_for_baseline_profile(monkeypatch, tmp_path: Path):
     run_ingestion = _load_run_ingestion_module()
     cfg_json = _write_cfg(

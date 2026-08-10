@@ -51,15 +51,28 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 3. Run stage_dependencies.ps1 in Verify and Audit modes
+if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
+if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
+    echo [ERROR] Unknown installer profile: %GOODQ_INSTALLER_PROFILE%
+    exit /b 30
+)
+set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-baseline-lock.txt"
+if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-gpu-enhanced-lock.txt"
+if /I "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-gpu-enhanced-lock.txt"
+set "GOODQ_WHEEL_CACHE_DIR=staged_cache\wheels\%GOODQ_INSTALLER_PROFILE%"
+if not exist "%GOODQ_REQUIREMENTS_LOCK%" (
+    echo [ERROR] Selected profile requirements lock is missing: %GOODQ_REQUIREMENTS_LOCK%
+    exit /b 35
+)
 echo Running offline cache checksum verification...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging verification failed. Cache files are missing or corrupt.
     exit /b 2
 )
 
 echo Running offline licensing compliance audit...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
@@ -76,12 +89,6 @@ if "%GOODQ_DEV_PYTHON%"=="" (
     echo [ERROR] Missing CPython staging interpreter: GOODQ_DEV_PYTHON.
     exit /b 28
 )
-if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
-if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
-    echo [ERROR] Unknown installer profile: %GOODQ_INSTALLER_PROFILE%
-    exit /b 30
-)
-
 echo Validating installer profile: %GOODQ_INSTALLER_PROFILE%
 "%GOODQ_DEV_PYTHON%" ..\..\scripts\install\build_capability_matrix.py --check --profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
@@ -194,7 +201,7 @@ echo import site
 
 echo Bootstrapping pip in staged runtime folder...
 copy /y "staged_cache\build_tools\get-pip.py" "staged\get-pip.py" >nul
-staged\runtime\python.exe staged\get-pip.py --no-warn-script-location --no-index --find-links=staged_cache\wheels
+staged\runtime\python.exe staged\get-pip.py --no-warn-script-location --no-index --find-links=%GOODQ_WHEEL_CACHE_DIR%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to bootstrap pip in staged runtime.
     exit /b 98
@@ -289,14 +296,19 @@ if not exist "staged_cache\runtime\cacert.pem" (
 if not exist "staged\vendor\certifi" mkdir "staged\vendor\certifi"
 copy /y "staged_cache\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nul
 
-:: Copy wheels for the CPU-safe baseline. WSL audio remains an optional upgrade.
-xcopy /s /e /y "staged_cache\wheels" "staged\wheels" >nul
+:: Copy only the selected profile's sealed wheel closure.
+xcopy /s /e /y "%GOODQ_WHEEL_CACHE_DIR%" "staged\wheels" >nul
+copy /y "%GOODQ_REQUIREMENTS_LOCK%" "staged\requirements-lock.txt" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to stage the selected profile requirements lock.
+    exit /b 117
+)
 
 :: Seal the exact wheel closure before any installer payload is compiled.
 :: The SBOM rejects duplicate packages, unlocked direct requirements, and
 :: wheels without license evidence.
 echo Sealing strict wheelhouse SBOM...
-staged\runtime\python.exe ..\..\scripts\install\generate_wheelhouse_sbom.py --wheelhouse "staged\wheels" --requirements ..\..\requirements-baseline-lock.txt --output "staged\wheelhouse-sbom.json"
+staged\runtime\python.exe ..\..\scripts\install\generate_wheelhouse_sbom.py --wheelhouse "staged\wheels" --requirements "%GOODQ_REQUIREMENTS_LOCK%" --output "staged\wheelhouse-sbom.json"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Strict wheelhouse SBOM gate failed. Resolve staged dependency evidence before rebuilding.
     exit /b 98
@@ -322,7 +334,7 @@ copy /y "..\..\branding\favicon.ico" "..\..\ui\docs_offline\favicon.ico" >nul
 xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
 
 echo Verifying offline wheels integrity...
-staged\runtime\python.exe -m pip install --dry-run --no-index --find-links="staged\wheels" -r ..\..\requirements-baseline-lock.txt
+staged\runtime\python.exe -m pip install --dry-run --no-index --find-links="staged\wheels" -r "%GOODQ_REQUIREMENTS_LOCK%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Offline wheelhouse verification failed. Missing dependencies detected.
     exit /b 99

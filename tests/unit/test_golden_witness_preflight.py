@@ -50,6 +50,29 @@ def test_build_config_rejects_model_cache_inside_witness_root(
         golden_witness.build_witness_config(artifact_root, tmp_path / "input.mp4")
 
 
+def test_witness_uses_the_installed_profile_in_its_isolated_runtime_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A GPU installer must not produce a CPU-labelled capability receipt."""
+    install_root = tmp_path / "installed"
+    (install_root / "configs").mkdir(parents=True)
+    (install_root / "configs" / "installer_profile.txt").write_text("PUBLIC_GPU_ENHANCED\n", encoding="utf-8")
+    monkeypatch.setattr(golden_witness, "resolve_models_root", lambda: tmp_path / "models")
+    assert golden_witness._resolve_witness_profile(install_root) == "PUBLIC_GPU_ENHANCED"
+    monkeypatch.setattr(golden_witness, "_resolve_witness_profile", lambda: "PUBLIC_GPU_ENHANCED")
+
+    config = golden_witness.build_witness_config(tmp_path / "witness", tmp_path / "input.mp4")
+
+    assert config["host"]["profile"] == "PUBLIC_GPU_ENHANCED"
+    assert config["host"]["require_gpu"] is True
+    snapshot = golden_witness._isolated_runtime_snapshot(
+        {"preflight": {"config": config}, "epoch_id": "epoch_witness_test"},
+        tmp_path / "witness",
+    )
+    assert snapshot["host"]["profile"] == "PUBLIC_GPU_ENHANCED"
+    assert snapshot["host"]["require_gpu"] is True
+
+
 def test_prepare_witness_run_scopes_every_mutable_path_to_witness_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -3917,8 +3917,10 @@ def _write_cfg_snapshot(cfg: Dict[str, Any], workspace: Path) -> Path:
 
 def _normalize_host_profile_name(raw: Any) -> str:
     value = str(raw or "").strip().upper()
-    if value in {"BASELINE", "GPU_ENHANCED"}:
-        return value
+    if value in {"BASELINE", "PUBLIC_CPU_BASELINE"}:
+        return "BASELINE"
+    if value in {"GPU_ENHANCED", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP"}:
+        return "GPU_ENHANCED"
     return ""
 
 

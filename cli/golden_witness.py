@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -89,15 +90,37 @@ def _device_policy() -> dict[str, Any]:
         return {"cuda_available": False, "selected_device": "cpu", "probe_error": type(exc).__name__}
 
 
+def _resolve_witness_profile(install_root: Path | None = None) -> str:
+    """Resolve the installed profile so isolated evidence matches its runtime."""
+    root = (install_root or Path(__file__).resolve().parents[1]).resolve()
+    profile_path = root / "configs" / "installer_profile.txt"
+    if profile_path.is_file():
+        value = profile_path.read_text(encoding="utf-8").strip().upper()
+        if value in {"PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP"}:
+            return value
+        raise WitnessAuthorityError(f"installed profile is invalid: {value or 'empty'}")
+    value = os.getenv("GOODQ_HOST_PROFILE", "").strip().upper()
+    if value in {"GPU_ENHANCED", "PUBLIC_GPU_ENHANCED"}:
+        return "PUBLIC_GPU_ENHANCED"
+    if value == "PERSONAL_AIR_GAP":
+        return value
+    return "PUBLIC_CPU_BASELINE"
+
+
 def build_witness_config(artifact_root: Path, input_path: Path) -> dict[str, Any]:
     """Project a witness-only configuration without creating mutable paths."""
     root = Path(artifact_root).resolve()
     models_root = resolve_models_root().resolve()
+    profile = _resolve_witness_profile()
     if _is_within(models_root, root):
         raise WitnessAuthorityError("model cache resolved inside witness root")
     return {
         "ingestion_isolation": True,
         "promotion_enabled": False,
+        "host": {
+            "profile": profile,
+            "require_gpu": profile != "PUBLIC_CPU_BASELINE",
+        },
         "paths": {
             "artifact_root": str(root),
             "input_path": str(Path(input_path).resolve()),
@@ -172,6 +195,7 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
     faiss_root = epoch_root / "faiss"
     return {
         "ingestion_isolation": True,
+        "host": config.get("host") if isinstance(config, Mapping) else {},
         "witness": {
             "ingestion_isolation": True,
             "promotion_enabled": False,

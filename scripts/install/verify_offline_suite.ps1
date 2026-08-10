@@ -157,6 +157,26 @@ try {
 if (-not $gate1c1.pass) { $results.pass = $false }
 $results.gates += $gate1c1
 
+# --- Gate 1c2: CUDA runtime for GPU profiles ---
+if ($Profile -ne "PUBLIC_CPU_BASELINE") {
+    $gate1c2 = @{ name = "cuda_runtime"; pass = $true; errors = @() }
+    try {
+        $torchProbe = & $pythonPath -c "import json, torch; print(json.dumps({'torch': torch.__version__, 'cuda_compiled': torch.version.cuda, 'cuda_available': torch.cuda.is_available(), 'device_count': torch.cuda.device_count()}))"
+        if ($LASTEXITCODE -ne 0) { throw "PyTorch CUDA probe returned exit code $LASTEXITCODE" }
+        $torchState = ($torchProbe | Out-String | ConvertFrom-Json)
+        if (-not $torchState.cuda_compiled -or -not $torchState.cuda_available -or [int]$torchState.device_count -lt 1) {
+            throw "GPU profile requires CUDA Torch and a visible GPU; observed torch=$($torchState.torch) cuda_compiled=$($torchState.cuda_compiled) cuda_available=$($torchState.cuda_available) device_count=$($torchState.device_count)"
+        }
+        Write-Host "  [OK]   GPU runtime is CUDA-ready: torch=$($torchState.torch) CUDA=$($torchState.cuda_compiled) devices=$($torchState.device_count)" -ForegroundColor Green
+    } catch {
+        $gate1c2.pass = $false
+        $gate1c2.errors += "GPU CUDA runtime failed: $_"
+        Write-Host "  [FAIL] GPU CUDA runtime failed: $_" -ForegroundColor Red
+    }
+    if (-not $gate1c2.pass) { $results.pass = $false }
+    $results.gates += $gate1c2
+}
+
 # --- Gate 1d: Sealed object-detection baseline ---
 $gate1d = @{ name = "object_detection_payload"; pass = $true; errors = @() }
 $nanodetPath = Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"

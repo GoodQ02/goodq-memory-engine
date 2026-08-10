@@ -10,7 +10,9 @@ param(
 
     [string]$CacheDir = "staged_cache",
     [string]$ManifestPath = "..\..\configs\offline_dependencies_manifest.json",
-    [string]$PythonExe = ""
+    [string]$PythonExe = "",
+    [ValidateSet("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")]
+    [string]$Profile = "PUBLIC_CPU_BASELINE"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +43,13 @@ if (-not (Test-Path $ResolvedManifestPath)) {
 
 # Read manifest
 $Manifest = Get-Content -Raw -Path $ResolvedManifestPath | ConvertFrom-Json
+$GpuProfile = $Profile -in @("PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")
+$RequirementsName = if ($GpuProfile) { "requirements-gpu-enhanced-lock.txt" } else { "requirements-baseline-lock.txt" }
+$RequirementsPath = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\$RequirementsName"))
+if (-not (Test-Path -LiteralPath $RequirementsPath -PathType Leaf)) {
+    Write-Error "Selected profile requirements lock is missing: $RequirementsPath"
+}
+$TorchIndexUrl = if ($GpuProfile) { "https://download.pytorch.org/whl/cu121" } else { "https://download.pytorch.org/whl/cpu" }
 
 # Helper: ensure folder structure
 function Ensure-Directory {
@@ -91,6 +100,26 @@ function Invoke-VerifiedDownload {
     }
 }
 
+function Invoke-VerifiedCudaWheelPipFallback {
+    param(
+        [Parameter(Mandatory=$true)][string]$PythonPath,
+        [Parameter(Mandatory=$true)][string]$Url,
+        [Parameter(Mandatory=$true)][string]$DestinationPath,
+        [Parameter(Mandatory=$true)][string]$ExpectedSha256,
+        [Parameter(Mandatory=$true)][string]$WheelsDirectory
+    )
+
+    & $PythonPath -m pip download --disable-pip-version-check --no-deps --only-binary=:all: --dest $WheelsDirectory $Url
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip fallback failed after direct CUDA wheel transfer failure: $Url"
+    }
+    $fallbackHash = Get-FileSHA256 $DestinationPath
+    if ($fallbackHash -ne $ExpectedSha256.ToLower()) {
+        throw "pip fallback produced a CUDA wheel with unexpected SHA256 (got $fallbackHash, expected $ExpectedSha256): $Url"
+    }
+    Remove-Item -LiteralPath "$DestinationPath.partial" -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host " GoodQ4All Dependency Stager: Mode = $Mode" -ForegroundColor Cyan
 Write-Host "==============================================" -ForegroundColor Cyan
@@ -109,7 +138,8 @@ foreach ($prop in $Manifest.dependencies.psobject.properties) {
     $Artifacts += $Manifest.dependencies.$($prop.Name)
 }
 $DeclaredWheelArtifacts = @($Manifest.wheels.wheelhouse | Where-Object {
-    -not [string]::IsNullOrWhiteSpace($_.source_url) -and -not [string]::IsNullOrWhiteSpace($_.sha256)
+    $selectedLane = if ($GpuProfile) { $_.gpu_lane -ne "cpu" } else { $_.gpu_lane -ne "cuda" }
+    $selectedLane -and -not [string]::IsNullOrWhiteSpace($_.source_url) -and -not [string]::IsNullOrWhiteSpace($_.sha256)
 })
 
 if ($Mode -eq "Acquire") {
@@ -183,13 +213,26 @@ if ($Mode -eq "Acquire") {
     }
 
     # Phase 2: Stage python wheels offline
-    $wheelsDir = Join-Path $CacheDir "wheels"
+    $wheelsDir = Join-Path $CacheDir (Join-Path "wheels" $Profile)
     # A release wheelhouse is an exact closure, never an accumulation of prior
-    # staging attempts.  Leave every other verified cache artifact intact.
+    # staging attempts. Preserve only resumable .partial downloads for this
+    # same profile; every admitted wheel is rebuilt from the selected lock.
     if (Test-Path $wheelsDir) {
-        Remove-Item -LiteralPath $wheelsDir -Recurse -Force
+        Get-ChildItem -LiteralPath $wheelsDir -Filter *.whl -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
     }
     New-Item -ItemType Directory -Path $wheelsDir -Force | Out-Null
+
+    $targetPython = $PythonExe
+    if (-not $targetPython) {
+        $candidate = Join-Path $ScriptDir "staged\runtime\python.exe"
+        if (Test-Path $candidate) {
+            $targetPython = $candidate
+        }
+    }
+    if (-not $targetPython -or -not (Test-Path $targetPython)) {
+        Write-Error "Offline wheel staging requires the extracted CPython 3.10 installer runtime. Supply -PythonExe or stage runtime\python.exe first."
+    }
 
     foreach ($wheelArtifact in $DeclaredWheelArtifacts) {
         $wheelName = [Uri]::UnescapeDataString((Split-Path ([Uri]$wheelArtifact.source_url).AbsolutePath -Leaf))
@@ -204,29 +247,29 @@ if ($Mode -eq "Acquire") {
             Remove-Item $wheelPath -Force
         }
         Write-Host "  Downloading declared wheel from $($wheelArtifact.source_url)..." -ForegroundColor Yellow
-        Invoke-VerifiedDownload -Url $wheelArtifact.source_url -DestinationPath $wheelPath -ExpectedSha256 $wheelArtifact.sha256
+        if ($wheelArtifact.gpu_lane -eq "cuda" -and (Test-Path -LiteralPath "$wheelPath.partial")) {
+            Write-Warning "A prior CUDA transfer left a preserved partial; using the pinned pip fallback instead of retrying a known-broken range resume."
+            Invoke-VerifiedCudaWheelPipFallback -PythonPath $targetPython -Url $wheelArtifact.source_url -DestinationPath $wheelPath -ExpectedSha256 $wheelArtifact.sha256 -WheelsDirectory $wheelsDir
+        } else {
+            try {
+                Invoke-VerifiedDownload -Url $wheelArtifact.source_url -DestinationPath $wheelPath -ExpectedSha256 $wheelArtifact.sha256
+            } catch {
+                if ($wheelArtifact.gpu_lane -ne "cuda") { throw }
+                Write-Warning "Direct CUDA wheel transfer failed; retrying the same pinned URL through pip's wheel transport."
+                Invoke-VerifiedCudaWheelPipFallback -PythonPath $targetPython -Url $wheelArtifact.source_url -DestinationPath $wheelPath -ExpectedSha256 $wheelArtifact.sha256 -WheelsDirectory $wheelsDir
+            }
+        }
         Write-Host "  [OK] Declared wheel artifact staged and verified." -ForegroundColor Green
     }
 
     Write-Host "Staging python wheels offline via pip download..." -ForegroundColor Cyan
-    $reqFile = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\requirements-baseline-lock.txt"))
-    $targetPython = $PythonExe
-    if (-not $targetPython) {
-        $candidate = Join-Path $ScriptDir "staged\runtime\python.exe"
-        if (Test-Path $candidate) {
-            $targetPython = $candidate
-        }
-    }
-    if (-not $targetPython -or -not (Test-Path $targetPython)) {
-        Write-Error "Offline wheel staging requires the extracted CPython 3.10 installer runtime. Supply -PythonExe or stage runtime\\python.exe first."
-    }
-    
+    $reqFile = $RequirementsPath
     # Run pip download securely with retries
     $retryCount = 0
     $success = $false
     while (-not $success -and $retryCount -lt 5) {
         Write-Host "  Running pip download (Attempt $($retryCount + 1) of 5)..." -ForegroundColor Yellow
-        & $targetPython -m pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url https://download.pytorch.org/whl/cpu -r $reqFile
+        & $targetPython -m pip download --timeout 120 --dest $wheelsDir --find-links=$wheelsDir --only-binary=:all: --platform win_amd64 --implementation cp --abi cp310 --extra-index-url $TorchIndexUrl -r $reqFile
         if ($LASTEXITCODE -eq 0) {
             $success = $true
         } else {
@@ -245,7 +288,7 @@ if ($Mode -eq "Acquire") {
     # The audit receipt must describe this exact acquisition, not a prior
     # wheelhouse.  The builder independently creates its staged-payload SBOM.
     $sbomGenerator = Join-Path $ScriptDir "generate_wheelhouse_sbom.py"
-    $sbomOutput = Join-Path $CacheDir "wheelhouse-sbom.json"
+    $sbomOutput = Join-Path $wheelsDir "wheelhouse-sbom.json"
     Write-Host "Refreshing wheelhouse SBOM from the acquired closure..." -ForegroundColor Cyan
     & $targetPython $sbomGenerator --wheelhouse $wheelsDir --requirements $reqFile --output $sbomOutput
     if ($LASTEXITCODE -ne 0) {
@@ -274,7 +317,7 @@ if ($Mode -eq "Acquire") {
     }
     
     # Verify wheels exist
-    $wheelsDir = Join-Path $CacheDir "wheels"
+    $wheelsDir = Join-Path $CacheDir (Join-Path "wheels" $Profile)
     if (-not (Test-Path $wheelsDir) -or @(Get-ChildItem $wheelsDir -Filter *.whl).Count -eq 0) {
         Write-Host "  [ERROR] Windows Wheelhouse is empty or missing at $wheelsDir" -ForegroundColor Red
         $VerificationFailed = $true
@@ -302,7 +345,7 @@ if ($Mode -eq "Acquire") {
 
     # Cross-reference wheelhouse against lockfile
     $AbsoluteCacheDir = [System.IO.Path]::GetFullPath($CacheDir)
-    $lockfilePath = [System.IO.Path]::GetFullPath((Join-Path $ScriptDir "..\..\requirements-baseline-lock.txt"))
+    $lockfilePath = $RequirementsPath
     if (Test-Path $lockfilePath) {
         Write-Host "Cross-referencing wheelhouse against lockfile..." -ForegroundColor Cyan
         $lockPackages = Get-Content $lockfilePath | Where-Object { $_ -and -not $_.StartsWith("#") -and -not $_.StartsWith("--") } | ForEach-Object {

@@ -141,6 +141,22 @@ try {
 if (-not $gate1c.pass) { $results.pass = $false }
 $results.gates += $gate1c
 
+# --- Gate 1c1: Scene-detection Python runtime ---
+$gate1c1 = @{ name = "scene_detection_runtime"; pass = $true; errors = @() }
+try {
+    & $pythonPath -c "import scenedetect; assert scenedetect.__version__ == '0.6.2'; print(scenedetect.__version__)" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "scenedetect import/version check returned exit code $LASTEXITCODE"
+    }
+    Write-Host "  [OK]   Python scenedetect binding imports at locked version 0.6.2" -ForegroundColor Green
+} catch {
+    $gate1c1.pass = $false
+    $gate1c1.errors += "Python scenedetect binding failed: $_"
+    Write-Host "  [FAIL] Python scenedetect binding failed: $_" -ForegroundColor Red
+}
+if (-not $gate1c1.pass) { $results.pass = $false }
+$results.gates += $gate1c1
+
 # --- Gate 1d: Sealed object-detection baseline ---
 $gate1d = @{ name = "object_detection_payload"; pass = $true; errors = @() }
 $nanodetPath = Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx"

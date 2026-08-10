@@ -33,6 +33,15 @@ this prose list, is authoritative for a particular build and must be verified
 at install time. Profile validation also rejects any selected model that lacks
 an installed-runtime registry record before the builder begins vault staging.
 
+### Scene Detection Runtime Closure
+
+The CPU baseline also carries `scenedetect==0.6.2`, the BSD-3-Clause
+PySceneDetect wheel used by the configured scene-detection step. Its exact
+wheel SHA-256 and immutable source-snapshot receipt are recorded in
+`offline_dependencies_manifest.json`. The post-install verifier imports the
+locked version before declaring the baseline healthy, so a missing detector is
+an installation failure rather than a misleading single-scene fallback.
+
 ## Personal Source Vault
 
 The complete non-code runtime inventory is tracked in

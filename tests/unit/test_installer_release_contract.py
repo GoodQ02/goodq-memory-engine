@@ -571,6 +571,30 @@ def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> No
     assert "import pytesseract" in verifier
 
 
+def test_baseline_installer_provisions_and_verifies_required_scene_detection_runtime() -> None:
+    """A complete scene step must not degrade because its Python runtime is absent."""
+    lockfile = (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8")
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_offline_suite.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "scenedetect==0.6.2" in lockfile
+    assert 'name = "scene_detection_runtime"' in verifier
+    assert "import scenedetect" in verifier
+    assert "scenedetect.__version__ == '0.6.2'" in verifier
+
+    manifest = json.loads(
+        (REPO_ROOT / "configs" / "offline_dependencies_manifest.json").read_text(encoding="utf-8")
+    )
+    wheel = next(
+        item for item in manifest["wheels"]["wheelhouse"] if item["name"] == "scenedetect"
+    )
+    assert wheel["required"] is True
+    assert wheel["license"] == "BSD-3-Clause"
+    assert wheel["sha256"] == "ef052de459676de8f403f78987f4c4844bca79544100e69d4dbd34425d72a42e"
+    assert wheel["vault_snapshot"] == "scenedetect/0.6.2-c9c0886220c4"
+
+
 def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() -> None:
     installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"

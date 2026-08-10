@@ -348,6 +348,20 @@
         "license": "Apache-2.0"
       },
       {
+        "artifact_id": "scenedetect_py3_any",
+        "name": "scenedetect",
+        "pack_id": "windows_wheelhouse",
+        "python_tag": "py3",
+        "platform_tag": "any",
+        "gpu_lane": "any",
+        "required": true,
+        "source_url": "https://files.pythonhosted.org/packages/f1/5f/4e7ed7ca64d9f8f7330c7c1fc107340f2d712e199d71e62ce123f3d8668a/scenedetect-0.6.2-py3-none-any.whl",
+        "sha256": "ef052de459676de8f403f78987f4c4844bca79544100e69d4dbd34425d72a42e",
+        "license": "BSD-3-Clause",
+        "vault_snapshot": "scenedetect/0.6.2-c9c0886220c4",
+        "source_manifest_sha256": "c9c0886220c48f28a903c5de826e84c16f1dfdd149e5a606e2e622f92d93f569"
+      },
+      {
         "artifact_id": "pandas_win_cp310",
         "name": "pandas",
         "pack_id": "windows_wheelhouse",

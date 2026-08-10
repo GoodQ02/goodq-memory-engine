@@ -624,7 +624,17 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     """
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
-        return {"transcript": None, "transcript_meta": {"status": "no_file"}}
+        return {
+            "transcript": None,
+            "transcript_meta": {
+                "status": "no_file",
+                "reason": "source_file_missing",
+                "error": "source_file_missing",
+                "engine": "hybrid_whisper",
+                "model": None,
+                "device": "none",
+            },
+        }
 
     # Try WSL2 acceleration first (if available and enabled)
     cfg_audio = (cfg.get("audio", {}) or {})
@@ -670,9 +680,11 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                         "segments": segments,
                         "language": wsl_result.get("language"),
                         "transcript_meta": {
-                            "status": "success",
+                            "status": "ok" if full_text else "empty",
+                            "reason": "transcript_available" if full_text else "no_speech_detected",
+                            "error": None,
                             "method": "wsl_faster_whisper_venv",
-                            "engine": wsl_result.get("engine"),
+                            "engine": wsl_result.get("engine") or "faster-whisper",
                             "model": wsl_result.get("model"),
                             "device": wsl_result.get("device"),
                             "attempted_device": "wsl",
@@ -717,8 +729,12 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                         "segments": segments,
                         "language": wsl_result.get("language"),
                         "transcript_meta": {
-                            "status": "success",
+                            "status": "ok" if full_text.strip() else "empty",
+                            "reason": "transcript_available" if full_text.strip() else "no_speech_detected",
+                            "error": None,
                             "method": "wsl2_gpu",
+                            "engine": wsl_result.get("engine") or "wsl2_audio_bridge",
+                            "model": wsl_result.get("model"),
                             "device": wsl_result.get("device", "wsl"),
                             "attempted_device": "wsl",
                             "duration": duration,
@@ -761,7 +777,17 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     
     chunks = _build_chunks(item, cfg, duration, chunk_seconds)
     if not chunks:
-        return {"transcript": None, "transcript_meta": {"status": "no_chunks"}}
+        return {
+            "transcript": None,
+            "transcript_meta": {
+                "status": "no_chunks",
+                "reason": "no_audio_chunks",
+                "error": None,
+                "engine": "hybrid_whisper",
+                "model": None,
+                "device": "none",
+            },
+        }
 
     tools_cfg = ((cfg.get("config", {}) or {}).get("tools", {}) or {})
     whisper_cli = tools_cfg.get("whisper_cli")
@@ -882,6 +908,8 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
             "transcript": None,
             "transcript_meta": {
                 "status": "model_unavailable",
+                "reason": "transcription_backend_unavailable",
+                "error": "model_unavailable",
                 "engine": "hybrid_whisper",
                 "model": model_id,
                 "device": "none",
@@ -896,6 +924,7 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     full_text_parts: List[str] = []
     chunk_reports: List[Dict[str, Any]] = []
     flat_segments: List[Dict[str, Any]] = []
+    chunk_engine = "whisper.cpp" if whisper_cli else "faster-whisper"
     
     total_start = time.time()
     total_audio_duration = 0.0
@@ -919,7 +948,9 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                 "end": end,
                 "speaker": speaker,
                 "status": "error",
+                "reason": "audio_slice_failed",
                 "error": "slice_failed",
+                "engine": chunk_engine,
             })
             continue
         
@@ -940,7 +971,9 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                     "end": end,
                     "speaker": speaker,
                     "status": "error",
+                    "reason": "transcription_backend_no_result",
                     "error": "transcribe_failed",
+                    "engine": chunk_engine,
                 })
                 continue
             
@@ -1016,8 +1049,10 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
                 "start": start,
                 "end": end,
                 "speaker": speaker,
-                "status": "ok" if transcript else "failed",
-                "engine": result.get("engine"),
+                "status": "ok" if transcript else "empty",
+                "reason": "transcript_available" if transcript else "no_speech_detected",
+                "error": None,
+                "engine": result.get("engine") or chunk_engine,
                 "text": transcript,
                 "segments": seg_list,
             }
@@ -1153,17 +1188,34 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     flat_segments = normalized_segments
 
     full_text = " ".join(part.strip() for part in full_text_parts if part)
-    status = "ok" if full_text else "failed"
-    if all(c.get("status") == "error" for c in chunk_reports):
+    chunk_errors = [c for c in chunk_reports if c.get("status") == "error"]
+    if full_text and chunk_errors:
+        status = "partial"
+        reason = "transcript_available_with_chunk_errors"
+    elif full_text:
+        status = "ok"
+        reason = "transcript_available"
+    elif all(c.get("status") == "error" for c in chunk_reports):
         status = "error"
+        reason = "all_chunks_execution_failed"
+    elif all(c.get("status") == "empty" for c in chunk_reports):
+        status = "empty"
+        reason = "no_speech_detected"
     elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
         status = "failed"
+        reason = "no_transcript_output"
+    else:
+        status = "failed"
+        reason = "transcript_status_unresolved"
     
     gpu_stats = optimizer.get_memory_stats() if device == "cuda" else {}
 
     meta = {
         "status": status,
+        "reason": reason,
+        "error": "; ".join(str(c.get("error")) for c in chunk_errors if c.get("error")) or None,
         "engine": "hybrid_whisper",
+        "model": model_id,
         "chunks": chunk_reports,
         "chunk_seconds": chunk_seconds,
         "duration": duration,

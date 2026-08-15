@@ -188,6 +188,45 @@ def _run_asset_verifier(asset_root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_remote_release_verifier_writes_atomic_per_artifact_receipt(tmp_path: Path) -> None:
+    _write_asset_fixture(tmp_path)
+    receipt_path = tmp_path.parent / "remote-release-receipt.json"
+
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "scripts" / "install" / "verify_remote_release_hash.ps1"),
+            "-AssetRoot",
+            str(tmp_path),
+            "-ExpectedVersion",
+            "2.5.8",
+            "-ExpectedCommit",
+            "12f577e9",
+            "-ExpectedProfile",
+            "PUBLIC_CPU_BASELINE",
+            "-ReceiptPath",
+            str(receipt_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["status"] == "passed"
+    assert receipt["current_artifact"] is None
+    assert receipt["current_artifact_bytes_hashed"] == 0
+    assert receipt["current_artifact_size_bytes"] is None
+    assert receipt["heartbeat_at_utc"]
+    assert len(receipt["results"]) == 6
+    assert all(item["hash_match"] for item in receipt["results"])
+
+
 def test_release_asset_verifier_rejects_an_undeclared_nested_payload(tmp_path: Path) -> None:
     _write_asset_fixture(tmp_path)
     nested = tmp_path / "hidden_payload"

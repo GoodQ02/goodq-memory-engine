@@ -37,14 +37,24 @@ applies to named followers such as GR-16 and GS-32.
 ## Installation and baseline gates
 
 1. Transfer the complete release asset set once and verify its hashes on the
-   follower before execution.
-2. Install the verified setup executable. Preserve its exit code and install
+   follower before execution. For a multi-pack release, record every expected
+   pack size, transfer serially, and reject any final remote size mismatch
+   before hashing. Size confirms transport completeness only; it never replaces
+   SHA-256 verification.
+2. Run exactly one durable all-file verifier under the validation root. It must
+   atomically persist `running`, per-artifact terminal results, a current
+   artifact heartbeat, and an overall terminal receipt. Reconnecting SSH clients
+   read that state; they do not launch a second verifier for the same root.
+   If state has not advanced within the declared verification window, inspect
+   the named verifier's CPU and disk activity, retain the partial receipt, and
+   classify the gate `unproven` until the owning verifier seam is repaired.
+3. Install the verified setup executable. Preserve its exit code and install
    receipt.
-3. Run `verify_offline_suite.ps1` from the installed program root, then run the
+4. Run `verify_offline_suite.ps1` from the installed program root, then run the
    Qdrant restore smoke. The offline suite verifies bundled media tools plus
    the required OCR engine and Python binding; both gates must pass before a
    scene is staged. If that script is absent, the installer is incomplete.
-4. Confirm the installed runtime exposes both commands:
+5. Confirm the installed runtime exposes both commands:
 
    ```powershell
    & "<installed-runtime>" -m cli.remote_witness --help

@@ -26,7 +26,7 @@ pause
 echo.
 echo [1/4] Installing PyTorch with CUDA support...
 echo ================================================================================
-"%CONDA_EXE%" run -n goodq_audio_diarize pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+"%CONDA_EXE%" run -n goodq_audio_diarize pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 
 if errorlevel 1 (
     echo ERROR: PyTorch installation failed

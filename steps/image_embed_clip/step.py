@@ -121,8 +121,16 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         # Get image embeddings with correct method
         with torch.no_grad():
             if _CLIP["device"] == "cuda":
-                with torch.cuda.amp.autocast():
-                    out = _CLIP["model"].get_image_features(**ipt)
+                try:
+                    with torch.amp.autocast("cuda"):
+                        out = _CLIP["model"].get_image_features(**ipt)
+                except Exception as cuda_err:
+                    logger.warning(f"[WARN] CUDA inference failed ({cuda_err}); retrying on CPU")
+                    _CLIP["model"] = _CLIP["model"].to("cpu")
+                    _CLIP["device"] = "cpu"
+                    GPUManager.clear_cache()
+                    ipt_cpu = {k: v.to("cpu") for k, v in ipt.items()}
+                    out = _CLIP["model"].get_image_features(**ipt_cpu)
             else:
                 out = _CLIP["model"].get_image_features(**ipt)
         # Normalize output: handle tensor, tuple, and model-output object forms

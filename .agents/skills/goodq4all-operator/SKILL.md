@@ -72,6 +72,10 @@ looks absent, stale, or partially proven. The short pattern is:
 For an approved SSH follower, keep the release and witness boundaries separate:
 
 1. Verify the offline asset receipt and transfer hashes before installation.
+   For large multi-pack releases, transfer and size-check packs serially, then
+   run one durable hash verifier that persists per-pack progress and an atomic
+   receipt. A missing heartbeat or completed-artifact update is `unproven`, not
+   a reason to start a duplicate verifier.
 2. Preserve approved removal, installation, offline-suite, and restore-smoke
    evidence; a fresh installer exit alone is not a clean-baseline proof.
 3. Launch one isolated non-promoting scene through `cli.remote_witness` on the

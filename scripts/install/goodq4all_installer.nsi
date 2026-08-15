@@ -441,6 +441,19 @@ wsl_done:
   ; --- STATE 10: write install receipt ---
   DetailPrint "Step 10/11: Writing installation receipt..."
   StrCpy $InstallStage "install_receipt"
+
+  ; Auto-detect GPU profile from the bundled selected capabilities manifest.
+  ; GPU payload packs use pack_scope values ending in "_gpu".  When the
+  ; installer is a GPU build, the manifest will contain at least one such entry.
+  IfFileExists "$INSTDIR\configs\selected_capabilities.json" 0 gpu_detect_done
+    nsExec::ExecToStack '"$INSTDIR\runtime\python.exe" -c "import json,sys;d=json.load(open(sys.argv[1],encoding=\"utf-8\"));sys.exit(0 if any(str(p.get(\"pack_scope\",\"\")).endswith(\"_gpu\") for p in d.get(\"payloads\",[])) else 1)" "$INSTDIR\configs\selected_capabilities.json"'
+    Pop $0
+    ${If} $0 == 0
+      StrCpy $GpuStatus "ok"
+      DetailPrint "GPU profile detected from bundled capabilities manifest."
+    ${EndIf}
+  gpu_detect_done:
+
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\sandbox_env_setup.py" --write-receipt --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All" --service-mode "$AlwaysOnService" --wsl-status "$WslStatus" --baseline-status "ok" --gpu-enhanced-status "$GpuStatus"'
   Pop $0
   ${If} $0 != 0

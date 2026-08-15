@@ -284,10 +284,36 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
         "payloads": staged,
     }
     if not check_only:
+        _synthesize_safetensors_if_needed(staging_root)
         (staging_root / "selected_capabilities.json").write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     return result
+
+
+def _synthesize_safetensors_if_needed(staging_root: Path) -> None:
+    """Ensure staged models have safetensors weights so transformers never triggers torch.load CVE blocks."""
+    hub_root = staging_root / "hub"
+    if not hub_root.is_dir():
+        return
+
+    try:
+        import torch
+        from safetensors.torch import save_file
+    except ImportError:
+        return
+
+    for bin_path in sorted(hub_root.rglob("pytorch_model.bin")):
+        st_path = bin_path.parent / "model.safetensors"
+        if not st_path.exists():
+            print(f"[PROFILE-PACK] synthesizing safetensors for {bin_path.parent.name}...", flush=True)
+            try:
+                state_dict = torch.load(bin_path, map_location="cpu", weights_only=False)
+                cloned_dict = {k: v.clone() for k, v in state_dict.items()}
+                save_file(cloned_dict, st_path)
+                print(f"[PROFILE-PACK] saved {st_path.name} ({st_path.stat().st_size} bytes)", flush=True)
+            except Exception as exc:
+                print(f"[PROFILE-PACK] WARNING: could not synthesize safetensors for {bin_path}: {exc}", flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:

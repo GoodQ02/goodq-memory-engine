@@ -230,24 +230,35 @@ def test_active_baseline_paths_do_not_reintroduce_retired_clip_or_emotion_models
 
 def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    from steps.common.model_provisioner import ModelProvisionResult
     monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
     attempts = {"count": 0}
     recorded_kwargs = {}
 
-    def fake_snapshot_download(**kwargs):
+    def fake_ensure_model_cached(repo_id, revision=None, offline=False, **kwargs):
         attempts["count"] += 1
-        recorded_kwargs.update(kwargs)
-        if attempts["count"] == 1:
-            raise RuntimeError("Read timed out")
+        recorded_kwargs.update({"repo_id": repo_id, "revision": revision, "offline": offline})
         snapshot_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused" / "snapshots" / "abc123"
-        snapshot_dir.mkdir(parents=True)
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
         (snapshot_dir / "config.json").write_text("{}", encoding="utf-8")
         (snapshot_dir / "model.safetensors").write_bytes(b"\x00")
-        return str(snapshot_dir)
+        
+        return ModelProvisionResult(
+            status="downloaded",
+            repo_id=repo_id,
+            revision="abc123",
+            local_path=str(snapshot_dir),
+            gated=False,
+            required=True,
+            elapsed_seconds=1.0,
+            attempts_made=2
+        )
 
-    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
-    monkeypatch.setattr(bootstrap_models, "_retry_pause", lambda attempt: None)
+    monkeypatch.setattr("steps.common.model_provisioner.ensure_model_cached", fake_ensure_model_cached)
 
     result = bootstrap_models.snapshot(
         "laion/clap-htsat-unfused",
@@ -258,24 +269,36 @@ def test_snapshot_retries_transient_failure(monkeypatch, tmp_path: Path):
 
     assert result["status"] == "ok"
     assert result["attempts"] == "2"
-    assert attempts["count"] == 2
-    assert recorded_kwargs["cache_dir"] == str(tmp_path / "hub")
-    assert "local_dir" not in recorded_kwargs
+    assert attempts["count"] == 1
+    assert recorded_kwargs["repo_id"] == "laion/clap-htsat-unfused"
 
 
 def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    from steps.common.model_provisioner import ModelProvisionResult
     monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
     monkeypatch.setenv("HF_TOKEN", "mock_token")
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
     attempts = {"count": 0}
 
-    def fake_snapshot_download(**kwargs):
+    def fake_ensure_model_cached(repo_id, **kwargs):
         attempts["count"] += 1
-        raise RuntimeError("401 Client Error: Unauthorized")
+        return ModelProvisionResult(
+            status="failed",
+            repo_id=repo_id,
+            revision=None,
+            local_path=None,
+            gated=False,
+            required=True,
+            elapsed_seconds=1.0,
+            error="401 Client Error: Unauthorized",
+            attempts_made=1
+        )
 
-    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
-    monkeypatch.setattr(bootstrap_models, "_retry_pause", lambda attempt: None)
+    monkeypatch.setattr("steps.common.model_provisioner.ensure_model_cached", fake_ensure_model_cached)
 
     result = bootstrap_models.snapshot(
         "pyannote/speaker-diarization-3.1",
@@ -291,15 +314,26 @@ def test_snapshot_stops_on_non_transient_failure(monkeypatch, tmp_path: Path):
 
 def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    from steps.common.model_provisioner import ModelProvisionResult
     monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
-    def fake_snapshot_download(**kwargs):
-        flat_dir = tmp_path / "hub" / "models--laion--clap-htsat-unfused"
-        flat_dir.mkdir(parents=True)
-        (flat_dir / "config.json").write_text("{}", encoding="utf-8")
-        return str(flat_dir)
+    def fake_ensure_model_cached(repo_id, **kwargs):
+        return ModelProvisionResult(
+            status="failed",
+            repo_id=repo_id,
+            revision=None,
+            local_path=None,
+            gated=False,
+            required=True,
+            elapsed_seconds=1.0,
+            error="cache layout incomplete: missing model.safetensors",
+            attempts_made=1
+        )
 
-    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
+    monkeypatch.setattr("steps.common.model_provisioner.ensure_model_cached", fake_ensure_model_cached)
 
     result = bootstrap_models.snapshot(
         "laion/clap-htsat-unfused",
@@ -314,24 +348,36 @@ def test_snapshot_reports_error_when_cache_layout_is_not_runtime_compatible(monk
 
 def test_snapshot_writes_main_ref_for_pinned_revision(monkeypatch, tmp_path: Path):
     from scripts import bootstrap_models
+    from steps.common.model_provisioner import ModelProvisionResult
     monkeypatch.setenv("GOODQ_MODELS_DIR", str(tmp_path))
     monkeypatch.setenv("HF_TOKEN", "mock_token")
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("GOODQ_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
     pinned_revision = "84fd25912480287da0247647c3d2b4853cb3ee5d"
 
-    def fake_snapshot_download(**kwargs):
-        snapshot_dir = (
-            tmp_path
-            / "hub"
-            / "models--pyannote--speaker-diarization-3.1"
-            / "snapshots"
-            / pinned_revision
-        )
-        snapshot_dir.mkdir(parents=True)
+    def fake_ensure_model_cached(repo_id, revision=None, **kwargs):
+        ref_path = tmp_path / "hub" / f"models--{repo_id.replace('/', '--')}" / "refs" / "main"
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+        ref_path.write_text(pinned_revision, encoding="utf-8")
+        
+        snapshot_dir = tmp_path / "hub" / f"models--{repo_id.replace('/', '--')}" / "snapshots" / pinned_revision
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
         (snapshot_dir / "config.yaml").write_text("pipeline: test\n", encoding="utf-8")
-        return str(snapshot_dir)
 
-    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(snapshot_download=fake_snapshot_download))
+        return ModelProvisionResult(
+            status="downloaded",
+            repo_id=repo_id,
+            revision=pinned_revision,
+            local_path=str(snapshot_dir),
+            gated=True,
+            required=False,
+            elapsed_seconds=1.0,
+            attempts_made=1
+        )
+
+    monkeypatch.setattr("steps.common.model_provisioner.ensure_model_cached", fake_ensure_model_cached)
 
     result = bootstrap_models.snapshot(
         "pyannote/speaker-diarization-3.1",

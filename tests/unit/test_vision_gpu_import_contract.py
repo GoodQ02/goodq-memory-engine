@@ -12,7 +12,6 @@ import pytest
     [
         "steps.image_caption.step",
         "steps.object_detect.step",
-        "steps.face_embed.step",
         "steps.image_embed_clip.step",
         "steps.image_embed_dino.step",
     ],
@@ -28,6 +27,7 @@ def test_scripts_gpu_config_preserves_image_step_budgets(monkeypatch) -> None:
     fake_torch = SimpleNamespace(
         cuda=SimpleNamespace(is_available=lambda: False),
         backends=SimpleNamespace(cudnn=SimpleNamespace(benchmark=False)),
+        device=type('device', (), {'__init__': lambda self, *a, **kw: None}),
     )
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
 

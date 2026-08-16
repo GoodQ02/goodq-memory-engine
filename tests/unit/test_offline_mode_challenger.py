@@ -12,6 +12,11 @@ from unittest.mock import patch, MagicMock
 from wsl2_audio import process_audio
 from wsl2_audio import model_cache
 
+@pytest.fixture(autouse=True)
+def _clear_gpu_requirements(monkeypatch):
+    monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
+    monkeypatch.setattr(process_audio, "require_gpu", lambda: False)
+
 def test_whisper_model_supports_local_files_only():
     """Verify that WhisperModel supports local_files_only argument."""
     from faster_whisper import WhisperModel

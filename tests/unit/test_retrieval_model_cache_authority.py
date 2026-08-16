@@ -58,8 +58,8 @@ def test_dev_startup_prewarm_is_gated_by_the_dev_on_environment(monkeypatch):
 
 _INSPECTOR_MODULE = "steps.common.model_cache_inspector"
 _PROVISIONER_MODULE = "steps.common.model_provisioner"
-_CLIP_REPO = "openai/clip-vit-large-patch14"
-_CLIP_REVISION = "32bd64288804d66eefd0ccbe215aa642df71cc41"
+_CLIP_REPO = "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
+_CLIP_REVISION = "84c9828e63dc9a9351d1fe637c346d4c1c4db341"
 _TEXT_REPO = "sentence-transformers/all-MiniLM-L6-v2"
 _TEXT_REVISION = "8b3219a92973c328a8e22fadcfa821b5dc75636a"
 

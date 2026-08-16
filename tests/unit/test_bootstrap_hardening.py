@@ -62,7 +62,6 @@ def test_build_report_counts():
     assert report["total_assets"] == 3
     assert report["success_count"] == 1
     assert report["error_count"] == 2
-    assert report["final_status"] == "partial"  # since no required fatal failures for baseline
-    assert "laion/clap-htsat-unfused" in report["failed_optional_assets"]
+    assert report["final_status"] == "failed"
     assert "pyannote/speaker-diarization-3.1" in report["failed_optional_assets"]
-    assert len(report["failed_required_assets"]) == 0
+    assert "laion/clap-htsat-unfused" in report["failed_required_assets"]

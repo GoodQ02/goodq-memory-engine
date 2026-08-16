@@ -126,10 +126,6 @@ class AudioService:
         
         # Log environment variables
         sys.path.insert(0, str(self.base_dir))
-        try:
-            import model_cache
-        except ImportError:
-            from wsl2_audio import model_cache
         model_cache.log_env_summary(logger)
 
         self.running = True
@@ -243,10 +239,6 @@ class AudioService:
         
         if hasattr(self, 'base_dir') and self.base_dir:
             sys.path.insert(0, str(self.base_dir))
-        try:
-            import model_cache
-        except ImportError:
-            from wsl2_audio import model_cache
             
         is_offline = model_cache.is_offline_mode()
         

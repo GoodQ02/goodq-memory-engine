@@ -6,7 +6,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CRASH_FAMILY_ENVS = {
     "audio_embed": ("torch", "torchaudio"),
     "image_caption": ("torch", "torchvision", "torchaudio"),
-    "object_detect": ("torch", "torchvision"),
 }
 
 

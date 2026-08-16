@@ -18,11 +18,6 @@ import process_audio as audio_worker
 
 def build_signatures(audio_file: str | Path, diarization_segments: list[dict[str, Any]]) -> dict[str, Any]:
     """Return signature-only evidence using the pinned offline Wav2Vec model."""
-    try:
-        import model_cache
-    except ImportError:  # pragma: no cover - exercised in deployed WSL worker
-        from wsl2_audio import model_cache  # type: ignore
-
     if not audio_worker.TRANSFORMERS_AVAILABLE:
         raise RuntimeError("Wav2Vec signature runtime is unavailable: transformers not installed")
     if not isinstance(diarization_segments, list) or not diarization_segments:

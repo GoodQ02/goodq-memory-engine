@@ -37,6 +37,8 @@ def test_execute_persists_terminal_receipt(monkeypatch, tmp_path: Path):
 
 
 def test_execute_bounds_each_isolated_witness_step(monkeypatch, tmp_path: Path):
+    import multiprocessing
+    monkeypatch.setattr(multiprocessing, "cpu_count", lambda: 24)
     root = tmp_path / "witness"
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"clip")

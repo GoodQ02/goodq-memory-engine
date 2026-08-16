@@ -515,10 +515,7 @@ def process_audio(audio_file, output_dir):
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
     runtime_cfg = _load_runtime_config()
     
-    try:
-        import model_cache
-    except ImportError:
-        from wsl2_audio import model_cache
+
     is_offline = model_cache.is_offline_mode()
 
     result = {

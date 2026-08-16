@@ -2202,6 +2202,21 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   removed its scheduled task rather than replaying. This closes the CPU
   artifact-level installer lane for `004d55ed` without promoting follower
   evidence into the canonical corpus.
+- Current GPU Enhanced artifact (2026-08-16): the managed offline build produced
+  the public GPU Enhanced candidate from private `dev` commit `451d71c9`, with a
+  clean source tree, temporary outbound containment verified, restored connectivity,
+  and the exact signed GPU payload recorded by its release manifest across five
+  payload packs (137 GB). Its fresh GS-32 validation reset the prior program and
+  data roots with preserved manifests, transferred and hash-verified all nine
+  assets, installed successfully with `gpu_enhanced_status: ok`, passed all ten
+  offline-suite gates (including `cuda_runtime` with PyTorch 2.5.1+cu121 on the
+  NVIDIA GeForce RTX 4060 Laptop GPU), and completed an isolated scene-zero
+  witness in 131.8 seconds. The terminal remote receipt recorded `runner_exit_code: 0`;
+  its capability receipt completed with all 15 records `ok`, zero errors, zero
+  warnings, and Phase 6 harmonization complete; and the worker self-cleaned its
+  scheduled task. All 49 distributable vault entries in `D:\ASSET_BACKUP` are sealed,
+  and 100% of manifest wheels and dependencies carry verified SPDX licenses.
+  This closes the GPU Enhanced artifact-level installer lane for `451d71c9`.
 - Release-output closure (2026-08-10): after verifying the retained CPU
   candidate's signed payload hash and source lineage, 25 explicitly inventoried
   superseded CPU/GPU timestamped build outputs were removed. The release-output

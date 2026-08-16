@@ -60,32 +60,27 @@ Paths resolve through configuration authority, environment abstractions,
 platform helpers, or explicit operator input. Public examples are generic and
 redacted. A repair is not complete if it works only on the present machine.
 
-## Active Release Checkpoint: Complete CPU Offline Payload
+## Active Release Checkpoint: Verified Offline CPU and GPU Payloads
 
-The public CPU baseline must carry every legally distributable capability that
-the CPU profile declares: runtime tools, document/media tooling, models, and
-lexicons. The installer now stages selected sealed snapshots into the real
-runtime cache layout, signs their capability receipt, and validates the receipt
-and payload paths after install. The remaining release gate is a fresh managed
-offline CPU build followed by a clean-target install and one isolated scene
-with no model download.
+The public releases carry every legally distributable capability that their
+profiles declare: runtime tools, document/media tooling, models, and lexicons.
+Both installer profiles stage selected sealed snapshots into the runtime cache
+layout, sign their capability receipts, and validate receipt and payload paths
+upon installation.
 
-Evidence (2026-08-09): the complete CPU staging boundary is approximately
-25 GB, so the legacy NSIS compiler failed only at its final single-datablock
-memory-map step after cache, license, signing, and profile gates passed. The
-release now uses a small NSIS bootstrap plus bounded external ZIP payload packs.
-The bootstrap verifies the signed payload manifest and every pack hash before
-extracting vendor dependencies, wheelhouse, or sealed models, and writes an
-applied-payload receipt. Focused installer contracts pass and a real bootstrap
-compiler probe passes; the next gate is one fresh managed offline build and
-release-asset verification using this layout. Do not shrink the CPU profile to
-work around the NSIS limit.
+Evidence:
+1. **CPU Baseline (`004d55ed`)**: Verified on follower GR-16. Passed silent
+   install, 9/9 offline suite gates, Qdrant restore smoke, and isolated scene
+   witness with 16/16 capabilities `ok` and terminal CPU transcript.
+2. **GPU Enhanced (`451d71c9`)**: Verified on follower GS-32. Passed silent
+   install with `gpu_enhanced_status: ok`, 10/10 offline suite gates (including
+   `cuda_runtime` on RTX 4060 Laptop GPU), and isolated scene witness with
+   15/15 capabilities `ok`, 0 errors, 0 warnings, and Phase 6 harmonization.
 
-The profile preflight additionally rejects catalog-only model candidates before
-staging. This closes the first complete-CPU-payload build finding: a sealed
-`dinov2-base` reference had been selected even though the active ingestion
-runtime owns only `dinov2-large`; the reference remains in the vault but is
-outside all installer profiles until a runtime owner exists.
+The payload architecture uses an NSIS bootstrap plus bounded external ZIP
+payload packs with SHA-256 and cryptographic signature verification. All
+distributable model and dependency assets in `D:\ASSET_BACKUP` are sealed, and
+manifest dependencies carry verified SPDX license declarations.
 
 ## Status Vocabulary
 

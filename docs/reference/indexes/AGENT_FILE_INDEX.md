@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1442**
+Indexed active tracked paths: **1444**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -618,6 +618,7 @@ Indexed active tracked paths: **1442**
 | `/reports/ui_audit/RELEASE_ADDENDUM.md` | Repository root | Root-level project or runtime surface. |
 | `/reports/ui_surface_audits/2026-05-19-pipeline-surface-audit.md` | Repository root | Root-level project or runtime surface. |
 | `/requirements-baseline-lock.txt` | Repository root | Root-level project or runtime surface. |
+| `/requirements-gpu-enhanced-lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/__init__.py` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/multimodal_search.py` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/narrative_summarizer.py` | Repository root | Root-level project or runtime surface. |
@@ -786,6 +787,7 @@ Indexed active tracked paths: **1442**
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_profile_model_payload.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/verify_remote_release_hash.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/versioninfo.json` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_audio_deps_retry.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_gpu_support.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |

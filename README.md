@@ -76,7 +76,7 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
     >     - **CPU Baseline (`PUBLIC_CPU_BASELINE`)**: Lightweight CPU execution requiring ~35 GB free disk space.
     >     - **GPU Enhanced (`PUBLIC_GPU_ENHANCED`)**: High-performance multimodal pipeline accelerated by NVIDIA CUDA 12.1 (requires 8GB+ VRAM and ~160 GB free disk space during installation).
     > *   **Bundle Contents:** Each release includes `GoodQ4All_Setup_2.5.8.exe`, `LAUNCH_GOODQ.exe`, signed payload packs (`payloads/*.zip`), and the release manifest (`GoodQ4All_Setup_2.5.8.release_manifest.json`).
-    > *   **SmartScreen & Elevation:** Windows SmartScreen may present an "Unknown Publisher" prompt for self-signed releases. Click **More info** → **Run anyway**. Administrator rights are required to install to `C:\Program Files\GoodQ4All`.
+    > *   **SmartScreen & Elevation:** Windows SmartScreen may present an "Unknown Publisher" prompt for self-signed releases. Click **More info** → **Run anyway**. Administrator rights are required for the default install location (`Program Files\GoodQ4All`).
     > *   **Checksum Verification:** Verify asset integrity prior to installation using PowerShell:
     >     ```powershell
     >     Get-FileHash GoodQ4All_Setup_2.5.8.exe -Algorithm SHA256

@@ -404,8 +404,9 @@ def test_mini_agent_dependency_is_resolved_from_the_verified_offline_cache() -> 
         encoding="utf-8"
     )
 
-    assert "goodq-mini-agent==0.1.1" in lockfile
-    assert "goodq-mini-agent @ https://" not in lockfile
+    assert "goodq-mini-agent @ https://github.com/GoodQ02/goodq-mini-agent/releases/" in lockfile
+    assert "goodq_mini_agent-0.1.1-py3-none-any.whl" in lockfile
+    assert "#sha256=" in lockfile
     assert "Declared wheel artifact" in stager
     assert "--ignore-installed" in stager
 

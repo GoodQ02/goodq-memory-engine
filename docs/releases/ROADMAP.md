@@ -79,7 +79,7 @@ Evidence:
 
 The payload architecture uses an NSIS bootstrap plus bounded external ZIP
 payload packs with SHA-256 and cryptographic signature verification. All
-distributable model and dependency assets in `D:\ASSET_BACKUP` are sealed, and
+distributable model and dependency assets in the sealed asset vault are verified, and
 manifest dependencies carry verified SPDX license declarations.
 
 ## Status Vocabulary
@@ -2209,7 +2209,7 @@ These items preserve unfinished intent from the plans this roadmap replaces.
   witness in 131.8 seconds. The terminal remote receipt recorded `runner_exit_code: 0`;
   its capability receipt completed with all 15 records `ok`, zero errors, zero
   warnings, and Phase 6 harmonization complete; and the worker self-cleaned its
-  scheduled task. All 49 distributable vault entries in `D:\ASSET_BACKUP` are sealed,
+  scheduled task. All 49 distributable vault entries in the sealed asset backup are verified,
   and 100% of manifest wheels and dependencies carry verified SPDX licenses.
   This closes the GPU Enhanced artifact-level installer lane for `451d71c9`.
 - Release-output closure (2026-08-10): after verifying the retained CPU

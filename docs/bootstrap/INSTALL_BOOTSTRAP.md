@@ -35,16 +35,15 @@ The bootstrap intentionally reuses existing project surfaces:
 
 ## Offline Bundle Status
 
-The previous workspace-adjacent offline bundle generation has been retired from
-circulation after a stale-bundle audit. No current offline installer or archive
-is packaging truth until the rebuild plan is completed and validated.
+The managed offline release builder (`scripts/install/run_offline_release_with_network_toggle.ps1` /
+`scripts/install/run_offline_release_build.bat`) is the authoritative packaging system.
 
-Current rebuild plan:
+Both offline profiles are verified and active for v2.5.8:
+- **CPU Baseline (`PUBLIC_CPU_BASELINE`)**: Verified on GR-16.
+- **GPU Enhanced (`PUBLIC_GPU_ENHANCED`)**: Verified on GS-32 (CUDA 12.1 + RTX 4060).
 
-- [`OFFLINE_BUNDLE_REBUILD_PLAN.md`](../archive/bootstrap/OFFLINE_BUNDLE_REBUILD_PLAN.md)
-
-The rebuild must preserve the canonical WSL audio bootstrap target and must not
-package the observed cu128 WSL drift lane as an offline target.
+The release architecture uses an NSIS bootstrap (`GoodQ4All_Setup_2.5.8.exe`) paired with external
+signed and hash-verified ZIP payload packs (`payloads/*.zip`) and cryptographic release manifests.
 
 ## What It Prompts For
 

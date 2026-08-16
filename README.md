@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-16 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All Logo" width="130" />
@@ -9,7 +9,7 @@
 <h1 align="center">GoodQ4All: Local-First Multimodal AI Memory & Video Intelligence Stack</h1>
 
 <p align="center">
-  <strong>Offline Video Search, Scene Segmentation, Speech Transcription (Whisper), Speaker Diarization, and SQLite + Qdrant Semantic Search on Windows 11</strong>
+  <strong>Offline Video Search, Scene Segmentation, Speech Transcription (Whisper), Object Detection, Visual Embeddings (DINOv2/CLIP), and SQLite + Qdrant Semantic Search on Windows 11</strong>
 </p>
 
 <p align="center">
@@ -62,22 +62,25 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
       </tr>
     </table>
 
-*   **Using This All-in-One Installer (Unified Windows Installer):**
+*   **Using This All-in-One Installer (Unified Windows Offline Installer):**
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq-memory-engine/releases" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
-        🚀 View the latest GoodQ release
+        🚀 Download GoodQ4All v2.5.8 Offline Release
       </a>
     </p>
     
     > [!IMPORTANT]
-    > **System Requirement: Windows 11 only.** GoodQ4All is built for Windows-first local execution. It requires at least **25 GB** of free space to store local database structures, models, and cache files.
+    > **System Requirement: Windows 11 (64-bit).** GoodQ4All is a standalone, local-first system that runs 100% offline without external cloud dependencies.
     >
-    > *   **SmartScreen Workaround:** Since the setup installer is currently self-signed, Windows SmartScreen may show an "Unknown Publisher" dialog. Click **More info** and select **Run anyway** to proceed.
-    > *   **Integrity Checksum:** Verify your download authenticity by running the following command in PowerShell:
+    > *   **Available Profiles:**
+    >     - **CPU Baseline (`PUBLIC_CPU_BASELINE`)**: Lightweight CPU execution requiring ~35 GB free disk space.
+    >     - **GPU Enhanced (`PUBLIC_GPU_ENHANCED`)**: High-performance multimodal pipeline accelerated by NVIDIA CUDA 12.1 (requires 8GB+ VRAM and ~160 GB free disk space during installation).
+    > *   **Bundle Contents:** Each release includes `GoodQ4All_Setup_2.5.8.exe`, `LAUNCH_GOODQ.exe`, signed payload packs (`payloads/*.zip`), and the release manifest (`GoodQ4All_Setup_2.5.8.release_manifest.json`).
+    > *   **SmartScreen & Elevation:** Windows SmartScreen may present an "Unknown Publisher" prompt for self-signed releases. Click **More info** → **Run anyway**. Administrator rights are required to install to `C:\Program Files\GoodQ4All`.
+    > *   **Checksum Verification:** Verify asset integrity prior to installation using PowerShell:
     >     ```powershell
-    >     Get-FileHash <downloaded-release-asset>
+    >     Get-FileHash GoodQ4All_Setup_2.5.8.exe -Algorithm SHA256
     >     ```
-    >     Expected SHA256 hash: Refer to the GitHub Releases page for the latest signed executable checksum.
  
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq-memory-engine/releases">
@@ -96,8 +99,8 @@ Machine memory should earn every claim it makes. GoodQ4All generates step-by-ste
 *   **No Silent Failures**: The Control Agent and Watchdog processes bubble errors directly to the operator consoles, providing absolute visibility into the execution stack.
 
 ### 2. Local Model Governance & VRAM Budgeting
-To run large-parameter local models safely on consumer hardware (e.g. RTX 4070 Ti SUPER 16GB) without Out-of-Memory (OOM) crashes, GoodQ4All implements strict VRAM and execution controls:
-*   **Model Lifecycle Manager**: A specialized context manager (`lib/model_lifecycle.py`) that audits free VRAM using PyTorch and `nvidia-smi` before loading models, dynamically evicting idle networks from GPU memory.
+To run large-parameter local models safely on consumer hardware (e.g. RTX 4060 / 4070 Ti SUPER) without Out-of-Memory (OOM) crashes, GoodQ4All implements strict VRAM and execution controls:
+*   **Model Lifecycle Manager**: A specialized context manager (`lib/model_lifecycle.py`) that audits free VRAM using PyTorch and `nvidia-smi` before loading models, dynamically evicting idle networks from GPU memory and providing automatic CPU fallback for memory-constrained visual embeddings.
 *   **Local Agent Stack (`MiniAgentClient`)**: Gated LLM reasoning and local tool execution through zero-dependency policy enforcement middleware, loading schemas, policies, and contracts dynamically from the version-controlled `agents/stack/` directory.
 *   **Endpoint Fallback Orchestration**: Automatically falls back from the primary local vLLM server (`prefer_speed`, running Qwen2.5) to a local Ollama service (`prefer_quality`, running Phi-4) or a CPU-safe model variant when VRAM thresholds are breached.
 
@@ -113,18 +116,18 @@ High-precision 32-bit floating point embeddings are persisted in Qdrant and FAIS
 ### 4. Adaptive Hardware Profiles
 The pipeline dynamically adjusts its computational needs to match your system specs:
 *   `BASELINE` (CPU-safe): Fully operational, offline-ready execution on standard CPU hardware. Bypasses GPU requirements gracefully.
-*   `GPU_ENHANCED`: Activates local NVIDIA GPU (CUDA 12.1) and WSL2 accelerated audio processing paths for fast, high-volume ingestion.
+*   `GPU_ENHANCED`: Activates local NVIDIA GPU (CUDA 12.1) acceleration for rapid video segmentation, object detection, DINOv2 / CLIP visual embeddings, and CLAP audio embedding.
 
 ---
 
 ## ⚙️ Setup Paths
 
 ### Route A: Standalone User Installation (Recommended)
-GoodQ4All compiles the isolated Python environment, the Qdrant database, and perception libraries into a single executable wrapper:
-1.  Download the appropriate release asset from the GitHub Releases page, if one is provided for your platform.
-2.  Launch **GoodQ4All** from the desktop shortcut.
-3.  Open the local **Retro Memory Explorer** dashboard at `http://127.0.0.1:30000/ui/retro_console_v1/`.
-4.  Drag-and-drop video/audio files onto the yellow-dotted **Upload Pad** to begin automatic ingestion.
+GoodQ4All provides an isolated embedded Python runtime, native Qdrant vector database, FFmpeg/Poppler/Tesseract binaries, and pre-staged model packs in a single managed installer:
+1.  **Download & Extract:** Download the release bundle for your desired profile (`PUBLIC_CPU_BASELINE` or `PUBLIC_GPU_ENHANCED`) from [GitHub Releases](https://github.com/GoodQ02/goodq-memory-engine/releases). Ensure the `payloads/` directory sits alongside `GoodQ4All_Setup_2.5.8.exe`.
+2.  **Install:** Run `GoodQ4All_Setup_2.5.8.exe` (or execute `GoodQ4All_Setup_2.5.8.exe /S` for a silent install). The installer extracts dependencies, verifies payload cryptographic signatures, and registers runtime paths.
+3.  **Launch:** Double-click the **GoodQ4All** desktop shortcut or run `LAUNCH_GOODQ.exe`.
+4.  **Explore & Ingest:** Open the **Retro Memory Explorer** in your browser at `http://127.0.0.1:30000/ui/retro_console_v1/`. Drag-and-drop video/audio files onto the **Upload Pad** to begin local offline ingestion.
 
 ### Route B: Developer Source Setup (Advanced)
 If you are developing, customizing the pipeline, or running from source:

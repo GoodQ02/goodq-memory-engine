@@ -65,7 +65,7 @@ Following a strict **"proof-backed" system doctrine**, GoodQ4All documents every
 *   **Using This All-in-One Installer (Unified Windows Offline Installer):**
     <p align="center">
       <a href="https://github.com/GoodQ02/goodq-memory-engine/releases" style="display: inline-block; padding: 16px 32px; background-color: #ffb300; color: #110d1a; font-size: 1.15em; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.4); transition: all 0.2s ease; margin: 10px 0;">
-        🚀 Download GoodQ4All v2.5.8 Offline Release
+        🚀 Download GoodQ4All v3.0.0 Offline Release
       </a>
     </p>
     

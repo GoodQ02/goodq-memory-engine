@@ -38,11 +38,11 @@ The bootstrap intentionally reuses existing project surfaces:
 The managed offline release builder (`scripts/install/run_offline_release_with_network_toggle.ps1` /
 `scripts/install/run_offline_release_build.bat`) is the authoritative packaging system.
 
-Both offline profiles are verified and active for v2.5.8:
+Both offline profiles are verified and active for v3.0.0:
 - **CPU Baseline (`PUBLIC_CPU_BASELINE`)**: Verified on GR-16.
 - **GPU Enhanced (`PUBLIC_GPU_ENHANCED`)**: Verified on GS-32 (CUDA 12.1 + RTX 4060).
 
-The release architecture uses an NSIS bootstrap (`GoodQ4All_Setup_2.5.8.exe`) paired with external
+The release architecture uses an NSIS bootstrap (`GoodQ4All_Setup_3.0.0.exe`) paired with external
 signed and hash-verified ZIP payload packs (`payloads/*.zip`) and cryptographic release manifests.
 
 ## What It Prompts For

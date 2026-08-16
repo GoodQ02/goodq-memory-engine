@@ -25,7 +25,7 @@ def _sync_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
     shutil.copy2(REPO_ROOT / "goodq_version.py", repo_root / "goodq_version.py")
     nsi_path = install_root / "goodq4all_installer.nsi"
     nsi_path.write_text(
-        nsi_path.read_text(encoding="utf-8").replace("2.5.8", "2.5.8-rc5"),
+        nsi_path.read_text(encoding="utf-8").replace("3.0.0", "3.0.0-rc1"),
         encoding="utf-8",
     )
     return install_root / "sync_nsi_version.py", nsi_path, install_root / "versioninfo.json"
@@ -49,13 +49,14 @@ def test_sync_check_reports_stale_metadata_without_writing(tmp_path: Path) -> No
     assert versioninfo_path.read_bytes() == before_versioninfo
 
 
+
 def test_installer_template_names_the_canonical_stable_version() -> None:
     source = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
         encoding="utf-8"
     )
 
-    assert "GoodQ4All_Setup_2.5.8.exe" in source
-    assert "2.5.8-rc" not in source
+    assert "GoodQ4All_Setup_3.0.0.exe" in source
+    assert "3.0.0-rc" not in source
 
 
 def test_installer_refuses_to_collide_with_existing_canonical_data_or_service() -> None:

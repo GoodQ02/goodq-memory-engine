@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: RELEASE_LEDGER -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-16 -->
 
 # Changelog
 
@@ -12,6 +12,26 @@ audits, and archived release artifacts remain under [`docs/archive/`](docs/archi
 and related canonical docs.
 
 ## [Unreleased]
+
+## [3.0.0] - 2026-08-16 - Dual-Profile Offline Release
+
+### Added
+- **GPU Enhanced Offline Profile**: Full `PUBLIC_GPU_ENHANCED` offline installer with
+  CUDA 12.1 acceleration (PyTorch 2.5.1+cu121), verified on physical follower GS-32
+  with RTX 4060 Laptop GPU. 137 GB across 5 signed payload packs.
+- **Hugging Face Payload Distribution**: Large payload packs hosted on Hugging Face Hub
+  (`JoesDomingo/goodq4all-release-payloads`) with zero-egress CDN delivery.
+- **Phase 6 Multimodal Fusion**: GPU Enhanced profile includes full multimodal fusion
+  and Qdrant harmonization verified end-to-end on follower hardware.
+- **100% SPDX License Coverage**: All 31 wheel entries in the offline dependencies
+  manifest carry verified SPDX license identifiers.
+- **CPU Baseline Verification**: `PUBLIC_CPU_BASELINE` independently verified on
+  physical follower GR-16 (16/16 capabilities ok, 9/9 gates passed).
+
+### Changed
+- **Version Milestone**: Promoted from v2.5.8 to v3.0.0 to mark the completion of the
+  dual-profile offline release architecture — the culmination of the portable follower
+  witness validation program.
 
 ## [2.5.8-rc5] - 2026-07-02 - API Status & WSL Distro Alignment
 

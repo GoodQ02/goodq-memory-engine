@@ -102,7 +102,15 @@ def test_load_clip_model_uses_cpu_when_gpu_manager_import_fails(monkeypatch):
     transformers.CLIPProcessor = _FakeProcessor
     transformers.CLIPModel = _FakeModel
     monkeypatch.setitem(sys.modules, "transformers", transformers)
-    monkeypatch.setattr("steps.common.model_cache_inspector.resolve_pinned_model_snapshot", lambda *a, **kw: "fake_path")
+    from steps.common.model_provisioner import ModelProvisionResult
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.ensure_model_cached",
+        lambda *a, **kw: ModelProvisionResult(
+            status="cached", repo_id="laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
+            revision="test", local_path="fake_path", gated=False, required=True,
+            elapsed_seconds=0.0,
+        ),
+    )
 
     scene_embedder._load_clip_model()
 

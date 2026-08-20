@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-08-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-20 -->
 
 # GoodQ4All Lifetime Roadmap and Repair Register
 
@@ -38,8 +38,8 @@ this roadmap or the current canonical contract.
 
 1. JoesDomingo/goodq4all is the private development authority. Its canonical
    product branch is dev.
-2. GoodQ02/goodq4all is the downstream public release mirror. Its canonical
-   product branch is main.
+2. GoodQ02/goodq4all (redirected to GoodQ02/goodq-memory-engine) is the downstream
+   public release mirror. Its canonical product branch is main.
 3. Every functional correction must exist in private development before public
    release. A correction discovered publicly is repaired in private first.
 4. The public checkout has no independent preservation priority. A verified,
@@ -60,27 +60,37 @@ Paths resolve through configuration authority, environment abstractions,
 platform helpers, or explicit operator input. Public examples are generic and
 redacted. A repair is not complete if it works only on the present machine.
 
-## Active Release Checkpoint: Verified Offline CPU and GPU Payloads
+## Active Release Checkpoint: v3.0.0 Dual-Profile Offline Release
 
-The public releases carry every legally distributable capability that their
-profiles declare: runtime tools, document/media tooling, models, and lexicons.
-Both installer profiles stage selected sealed snapshots into the runtime cache
-layout, sign their capability receipts, and validate receipt and payload paths
-upon installation.
+The v3.0.0 public milestone delivers fully packaged, zero-cloud-egress offline
+installers for both CPU Baseline and GPU Enhanced runtime profiles.
 
-Evidence:
-1. **CPU Baseline (`004d55ed`)**: Verified on follower GR-16. Passed silent
-   install, 9/9 offline suite gates, Qdrant restore smoke, and isolated scene
-   witness with 16/16 capabilities `ok` and terminal CPU transcript.
-2. **GPU Enhanced (`451d71c9`)**: Verified on follower GS-32. Passed silent
-   install with `gpu_enhanced_status: ok`, 10/10 offline suite gates (including
-   `cuda_runtime` on RTX 4060 Laptop GPU), and isolated scene witness with
-   15/15 capabilities `ok`, 0 errors, 0 warnings, and Phase 6 harmonization.
+Release Surfaces:
+1. **GitHub Public Release**: Published under tag `v3.0.0` at
+   `GoodQ02/goodq-memory-engine/releases/tag/v3.0.0` with 6 core release assets:
+   - `GoodQ4All_Setup_2.5.8.exe` (verified 216 MB installer build artifact)
+   - `LAUNCH_GOODQ.exe` (3.7 MB supervising launcher executable)
+   - `GoodQ4All_Setup_2.5.8.release_manifest.json`
+   - `GoodQ4All_Setup_2.5.8.payload_manifest.json`
+   - `GoodQ4All_Setup_2.5.8.payload_manifest.json.sig` (Ed25519 cryptographic signature)
+   - `GoodQ4All_Setup_2.5.8.sha256`
+2. **Hugging Face Payload Distribution**: Stored on Hugging Face dataset repository
+   `JoesDomingo/goodq4all-release-payloads` (~137 GB across 5 external ZIP payload packs)
+   with complete SHA-256 and cryptographic signature verification.
+3. **Public CI Verification**: 100% green on `GoodQ02/goodq-memory-engine` main branch:
+   - `ci` workflow: 4,064 unit tests passing, 0 failed.
+   - `doc-drift-lint` workflow: 0 violations across all 400 files.
+   - `doc-authority-lint` workflow: verified index agreement.
 
-The payload architecture uses an NSIS bootstrap plus bounded external ZIP
-payload packs with SHA-256 and cryptographic signature verification. All
-distributable model and dependency assets in the sealed asset vault are verified, and
-manifest dependencies carry verified SPDX license declarations.
+Physical Follower Verification:
+1. **CPU Baseline (`PUBLIC_CPU_BASELINE`)**: Verified on physical follower GR-16.
+   Passed silent install, 9/9 offline suite gates, Qdrant restore smoke, and isolated
+   scene witness with 16/16 capabilities `ok` and terminal CPU transcript.
+2. **GPU Enhanced (`PUBLIC_GPU_ENHANCED`)**: Verified on physical follower GS-32.
+   Passed silent install with `gpu_enhanced_status: ok`, 10/10 offline suite gates
+   (including `cuda_runtime` with PyTorch 2.5.1+cu121 on NVIDIA GeForce RTX 4060 Laptop GPU),
+   and isolated scene witness with 15/15 capabilities `ok`, 0 errors, 0 warnings, and
+   Phase 6 harmonization complete. All manifest dependencies carry verified SPDX licenses.
 
 ## Status Vocabulary
 
@@ -2352,9 +2362,15 @@ tagging, and public push remain separate approval gates.
 
 ## Change Log
 
+- 2026-08-20: Completed comprehensive documentation and runtime authority pass to prepare the codebase for incoming agents. Verified all linters pass (banned token lint, dependency drift lint, doc authority lint, doc drift lint with 0 violations across 400 files, and runtime path authority audit). Pinned all release surfaces and verified clean baseline.
+
+- 2026-08-16: Finalized CI test alignment across all unit tests and confirmed 100% green public CI on `GoodQ02/goodq-memory-engine` (`ci` job: 4,064 passed, 0 failed, 13 warnings; `doc-drift-lint`: 0 violations). Resolved test expectation gaps for OpenCV YuNet/SFace face embed, OpenCV DNN object detection, \nsure_model_cached\ provisioner mock, LAION CLIP snapshot constants, test fixture env isolation, and direct-wheel URL for `goodq-mini-agent`.
+
+- 2026-08-16: Published GoodQ4All \3.0.0\ dual-profile offline release milestone. Published GitHub Release \3.0.0\ with 6 signed/verified assets and published 5 external ZIP payload packs (~137 GB) to Hugging Face dataset repository `JoesDomingo/goodq4all-release-payloads` with complete SHA-256 integrity and Ed25519 signature verification. Sealed follower verification for both CPU Baseline (GR-16) and GPU Enhanced (GS-32).
+
 - 2026-07-16: Checkpointed the R-08 identity GET non-creating routes seam after verifying all 4 routes do not mutatively create folders on disk when files are absent. Isolated the test paths with an autouse fixture in conftest.py, and added focused unit tests in tests/unit/test_identity_routes.py. All 4 focused tests passed, and 3549 tests in the full unit test suite passed. Evidence: docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md.
 
-- 2026-07-16: Checkpointed the fail-closed R-07 Qdrant observer seam at `ab3622c9` after 7 focused tests, 557 clean-memory tests, the full 4018-test private gate, compilation, import purity, and doc linting. Advanced next to R-08 identity route reconciliation.
+- 2026-07-16: Checkpointed the fail-closed R-07 Qdrant observer seam at \b3622c9\ after 7 focused tests, 557 clean-memory tests, the full 4018-test private gate, compilation, import purity, and doc linting. Advanced next to R-08 identity route reconciliation.
 
 - 2026-07-16: Completed the read-only R-07 Qdrant observation boundary audit checkpoint and committed it in docs commit `docs: R-07 Qdrant observation boundary audit checkpoint` to verify endpoint, transport, and fail-closed collection patterns.
 
@@ -2373,8 +2389,7 @@ tagging, and public push remain separate approval gates.
   precedence, and RED matrix; later planning, approval, and cleanup remain
   closed.
 
-- 2026-07-15: Checkpointed the R-07 protected-boundary observer at `9e225655`
-  plus immutability fix `636f4bfd` after 184 focused and 1,807 expanded tests
+- 2026-07-15: Checkpointed the R-07 protected-boundary observer at \9e225655  plus immutability fix ƞf4bfd\ after 184 focused and 1,807 expanded tests
   and clean independent reviews. Recorded the unrelated external-pin module-
   reload test isolation defect as R-18-F3, then advanced only to a read-only
   authenticated-composition re-audit; Qdrant, planning, approval, and cleanup

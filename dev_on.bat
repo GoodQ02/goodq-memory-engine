@@ -1,7 +1,10 @@
 @echo off
 REM GoodQ4All - Local Agent Mode (Dev On)
 REM Validates local config, then starts the GoodQ-owned runtime services.
-set "WSL_DISTRO=Ubuntu-22.04"
+call "%~dp0scripts\_lib\interpreter_bindings.bat"
+if "%WSL_DISTRO%"=="" set "WSL_DISTRO=%GOODQ_WSL_DISTRO%"
+if "%WSL_DISTRO%"=="" set "WSL_DISTRO=Ubuntu-22.04"
+set "GOODQ_WSL_DISTRO=%WSL_DISTRO%"
 
 call :dashboard -Event start
 
@@ -9,7 +12,9 @@ echo [DEV ON] Resolving the GoodQ Python environment...
 
 set "PYTHONPATH=%~dp0"
 set "PYTHON_EXE="
-if exist "%USERPROFILE%\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\envs\goodq_core\python.exe"
+if defined CONDA_PREFIX if exist "%CONDA_PREFIX%\python.exe" set "PYTHON_EXE=%CONDA_PREFIX%\python.exe"
+if not defined PYTHON_EXE if defined CONDA_EXE for %%I in ("%CONDA_EXE%") do if exist "%%~dpI..\envs\%GOODQ_CONDA_ENV%\python.exe" set "PYTHON_EXE=%%~dpI..\envs\%GOODQ_CONDA_ENV%\python.exe"
+if not defined PYTHON_EXE if exist "%USERPROFILE%\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\envs\goodq_core\python.exe"
 if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\anaconda3\envs\goodq_core\python.exe"
 if not defined PYTHON_EXE if exist "C:\ProgramData\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\miniconda3\envs\goodq_core\python.exe"
 if not defined PYTHON_EXE if exist "C:\ProgramData\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\anaconda3\envs\goodq_core\python.exe"
@@ -60,7 +65,7 @@ call :dashboard -Event node -Node QDRANT -State ready -Message "loopback store i
 echo [DEV ON] Starting API Server and Ingestion Watchdog...
 
 REM Ensure existing API / Watchdog instances are closed first to prevent conflicts
-powershell -NoProfile -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "$conn = Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; $deadline = (Get-Date).AddSeconds(3); do { if (-not (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue)) { exit 0 }; Start-Sleep -Milliseconds 200 } while ((Get-Date) -lt $deadline)"
 
 REM Start API Server in a separate minimized window
 set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"

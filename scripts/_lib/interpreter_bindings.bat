@@ -6,6 +6,19 @@ REM   - GOODQ_CONDA_ENV (default: goodq_core)
 REM   - CONDA_EXE (best-effort full path to conda.exe/conda.bat; fallback: conda)
 REM   - PYTHONNOUSERSITE=1 to keep user-site packages out of GoodQ runtimes
 
+if exist "%~dp0..\..\.env.local" (
+  for /f "usebackq tokens=1,* delims==" %%A in ("%~dp0..\..\.env.local") do (
+    if "%%A"=="GOODQ_WSL_DISTRO" if "%GOODQ_WSL_DISTRO%"=="" set "GOODQ_WSL_DISTRO=%%B"
+    if "%%A"=="GOODQ_CONDA_ENV" if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=%%B"
+  )
+)
+
+if "%GOODQ_WSL_DISTRO%"=="" (
+  for /f "tokens=1 delims= " %%I in ('powershell -NoProfile -Command "try { $first = (wsl.exe -l -q 2>$null | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1); if ($first) { ($first -replace \"`0\", \"\").Trim() } } catch {}"') do (
+    if not "%%I"=="" set "GOODQ_WSL_DISTRO=%%I"
+  )
+)
+
 if "%GOODQ_WSL_DISTRO%"=="" set "GOODQ_WSL_DISTRO=Ubuntu"
 if "%GOODQ_CONDA_ENV%"=="" set "GOODQ_CONDA_ENV=goodq_core"
 set "PYTHONNOUSERSITE=1"

@@ -1,10 +1,10 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: GENERATED_SNAPSHOT -->
-<!-- DOC_LAST_VERIFIED: 2026-06-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-20 -->
 
 # System Snapshot
 
-_Generated: 2026-06-07T08:14:20_
+_Generated: 2026-08-20T10:59:22_
 
 ## Host & OS
 - Hostname: GOOD-CUBE
@@ -18,24 +18,24 @@ _Generated: 2026-06-07T08:14:20_
 
 ## GPU
 - GPU(s): NVIDIA GeForce RTX 4070 Ti SUPER
-- CUDA: 610.47
+- CUDA: 610.88
 
 ## Storage (Top-Level)
-- System volume: total=3352GB free=1468GB
-- Workspace volume: total=3353GB free=1644GB
+- System volume: total=3352GB free=815GB
+- Workspace volume: total=3353GB free=1265GB
 
 ## Toolchain
 - Python: Python 3.10.20
 - Conda: conda 25.11.1
-- Git: git version 2.53.0.windows.1
-- Node: unavailable
+- Git: git version 2.55.0.windows.3
+- Node: v24.18.0
 - Codex CLI: unavailable
 
 ## WSL
 - WSL enabled: Default Distribution: Ubuntu-22.04 | Default Version: 2 | WSL1 is not supported with your current machine configuration. | Please enable the "Windows Subsystem for Linux" optional component to use WSL1.
-- Distros: NAME            STATE           VERSION | * Ubuntu-22.04    Stopped         2
+- Distros: NAME            STATE           VERSION | * Ubuntu-22.04    Running         2
 
 ## Local Services (Presence Check)
 - Qdrant (6333): reachable
-- Ollama (31434): not reachable
+- Ollama (11434): reachable
 - LM Studio (1234): not reachable

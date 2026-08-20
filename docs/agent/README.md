@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_OFFICE_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-08-20 -->
 
 # GoodQ4All Agent Office
 
@@ -22,13 +22,14 @@ interpret transient status or long basement-era handoff logs.
 
 ## Active Restart Handoff
 
-For the current July historical-audio repair seam, read the
-[`R08 Quality Queue Reconciliation`](../diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md)
-after the generated current-state snapshot. It records the closed repair lanes,
-the current independent review queues, and the exact no-repeat boundaries. Use
-the earlier [`R08 Historical Signature Backfill Closeout`](../diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md)
-only as supporting batch evidence; neither diagnostic supersedes live runtime
-probes.
+The GoodQ4All `v3.0.0` dual-profile offline release is complete and live across all
+surfaces:
+- **GitHub Release `v3.0.0`**: Published at `GoodQ02/goodq-memory-engine` with 6 core signed assets.
+- **Payload Distribution**: Hosted on Hugging Face dataset repository `JoesDomingo/goodq4all-release-payloads` (~137 GB across 5 verified packs).
+- **Follower Verifications**: Physical verification sealed on GR-16 (CPU Baseline) and GS-32 (GPU Enhanced).
+- **Public CI**: 100% green (`ci` job: 4,064 passed, 0 failed; `doc-drift-lint`: 0 violations).
+
+For historical background on the July audio repair seam, consult [`R08 Quality Queue Reconciliation`](../diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md) and [`R08 Historical Signature Backfill Closeout`](../diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md).
 
 ## Active Workflows
 

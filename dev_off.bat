@@ -1,7 +1,10 @@
 @echo off
 REM GoodQ4All - Game Mode (Dev Off)
 REM Stops GPU-backed and API services while retaining loopback Qdrant for a fast Dev On return.
-set "WSL_DISTRO=Ubuntu-22.04"
+call "%~dp0scripts\_lib\interpreter_bindings.bat"
+if "%WSL_DISTRO%"=="" set "WSL_DISTRO=%GOODQ_WSL_DISTRO%"
+if "%WSL_DISTRO%"=="" set "WSL_DISTRO=Ubuntu-22.04"
+set "GOODQ_WSL_DISTRO=%WSL_DISTRO%"
 
 call :dashboard -Event start
 
@@ -55,6 +58,12 @@ if errorlevel 1 (
     goto :blocked
 )
 call :dashboard -Event node -Node QDRANT -State retained -Message "loopback store remains available"
+
+REM Unload active Ollama models from GPU VRAM if Ollama is running
+where ollama >nul 2>&1
+if not errorlevel 1 (
+    powershell -NoProfile -Command "try { (ollama ps) | Select-Object -Skip 1 | ForEach-Object { $name = ($_ -split '\s+')[0]; if ($name) { ollama stop $name } } } catch {}"
+)
 
 REM Display actual GPU process and memory state without treating desktop ownership as failure.
 where nvidia-smi >nul 2>&1

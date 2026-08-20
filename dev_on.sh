@@ -47,6 +47,12 @@ if lsof -i :"$API_PORT" -t >/dev/null 2>&1; then
             exit 1
         fi
     done
+    for i in {1..10}; do
+        if ! lsof -i :"$API_PORT" -t >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.2
+    done
 fi
 
 # Cleanup old watchdog process if pid file or cmdline exists
@@ -115,8 +121,7 @@ if [ $QDRANT_RUNNING -eq 0 ]; then
     fi
 fi
 
-# 3. Start API Server and Ingestion Watchdog
-# Resolve conda runner
+# 3. Resolve Python / Conda runner
 CONDA_EXE=""
 if command -v conda >/dev/null 2>&1; then
     CONDA_EXE="conda"
@@ -129,30 +134,49 @@ else
     done
 fi
 
+PYTHON_CMD=()
 if [ -n "$CONDA_EXE" ]; then
-    echo "[DEV ON] Starting API Server via conda ($GOODQ_CONDA_ENV)..."
-    PYTHONPATH="$PROJECT_ROOT" nohup "$CONDA_EXE" run -n "$GOODQ_CONDA_ENV" python -m api.server > "$LOGS_DIR/api.log" 2>&1 &
-    echo $! > "$API_PID_FILE"
-
-    echo "[DEV ON] Starting Ingestion Watchdog via conda ($GOODQ_CONDA_ENV)..."
-    PYTHONPATH="$PROJECT_ROOT" nohup "$CONDA_EXE" run -n "$GOODQ_CONDA_ENV" python -m cli.watchdog > "$LOGS_DIR/watchdog.log" 2>&1 &
-    echo $! > "$WATCHDOG_PID_FILE"
-else
-    # Fallback to system python3 if conda is missing
+    PYTHON_CMD=("$CONDA_EXE" "run" "-n" "$GOODQ_CONDA_ENV" "python")
+elif command -v python3 >/dev/null 2>&1; then
     echo "[WARN] Conda not found. Falling back to system python3..."
-    if command -v python3 >/dev/null 2>&1; then
-        echo "[DEV ON] Starting API Server via system python3..."
-        PYTHONPATH="$PROJECT_ROOT" nohup python3 -m api.server > "$LOGS_DIR/api.log" 2>&1 &
-        echo $! > "$API_PID_FILE"
-
-        echo "[DEV ON] Starting Ingestion Watchdog via system python3..."
-        PYTHONPATH="$PROJECT_ROOT" nohup python3 -m cli.watchdog > "$LOGS_DIR/watchdog.log" 2>&1 &
-        echo $! > "$WATCHDOG_PID_FILE"
-    else
-        echo "[ERROR] Python3 not found on system PATH. Unable to start services."
-        exit 1
-    fi
+    PYTHON_CMD=("python3")
+else
+    echo "[ERROR] Neither conda nor python3 found on system PATH. Unable to start services."
+    exit 1
 fi
+
+echo "[DEV ON] Validating resolved configuration..."
+PYTHONPATH="$PROJECT_ROOT" "${PYTHON_CMD[@]}" -c "from steps.common.config_loader import load_configs, validate_config_mapping; validate_config_mapping(load_configs())"
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Config validation failed. Local Agent Mode was not started."
+    exit 1
+fi
+
+# 4. Start API Server with pre-warm enabled
+echo "[DEV ON] Starting API Server..."
+GOODQ_PREWARM_RETRIEVAL_MODELS=1 PYTHONPATH="$PROJECT_ROOT" nohup "${PYTHON_CMD[@]}" -m api.server > "$LOGS_DIR/api.log" 2>&1 &
+echo $! > "$API_PID_FILE"
+
+# Wait for API server readiness (up to 60s)
+API_READY=0
+for i in {1..60}; do
+    if curl -s -f "http://127.0.0.1:${API_PORT}/" >/dev/null 2>&1 || curl -s -f "http://127.0.0.1:${API_PORT}/api/status" >/dev/null 2>&1; then
+        API_READY=1
+        break
+    fi
+    sleep 1
+done
+
+if [ $API_READY -ne 1 ]; then
+    echo "[ERROR] API did not become ready within 60 seconds. Launch log:"
+    tail -n 12 "$LOGS_DIR/api.log" 2>/dev/null || true
+    exit 1
+fi
+
+# 5. Start Ingestion Watchdog after API readiness
+echo "[DEV ON] Starting Ingestion Watchdog..."
+PYTHONPATH="$PROJECT_ROOT" nohup "${PYTHON_CMD[@]}" -m cli.watchdog > "$LOGS_DIR/watchdog.log" 2>&1 &
+echo $! > "$WATCHDOG_PID_FILE"
 
 echo "[DEV ON] Local agent mode activated."
 echo "API Server PID: $(cat "$API_PID_FILE")"

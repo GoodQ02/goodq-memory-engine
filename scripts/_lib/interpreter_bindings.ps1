@@ -4,6 +4,25 @@
 function Get-GoodQWslDistro {
     $distro = $env:GOODQ_WSL_DISTRO
     if ([string]::IsNullOrWhiteSpace($distro)) {
+        $envLocal = Join-Path $PSScriptRoot "..\..\.env.local"
+        if (Test-Path $envLocal) {
+            Get-Content $envLocal | ForEach-Object {
+                if ($_ -match '^\s*GOODQ_WSL_DISTRO\s*=\s*(.+)$') {
+                    $distro = $Matches[1].Trim()
+                }
+            }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($distro)) {
+        try {
+            $raw = wsl.exe -l -q 2>$null
+            $first = ($raw | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
+            if ($first) {
+                $distro = ($first -replace "`0", "").Trim()
+            }
+        } catch {}
+    }
+    if ([string]::IsNullOrWhiteSpace($distro)) {
         return "Ubuntu"
     }
     return $distro
@@ -11,6 +30,16 @@ function Get-GoodQWslDistro {
 
 function Get-GoodQCondaEnv {
     $envName = $env:GOODQ_CONDA_ENV
+    if ([string]::IsNullOrWhiteSpace($envName)) {
+        $envLocal = Join-Path $PSScriptRoot "..\..\.env.local"
+        if (Test-Path $envLocal) {
+            Get-Content $envLocal | ForEach-Object {
+                if ($_ -match '^\s*GOODQ_CONDA_ENV\s*=\s*(.+)$') {
+                    $envName = $Matches[1].Trim()
+                }
+            }
+        }
+    }
     if ([string]::IsNullOrWhiteSpace($envName)) {
         return "goodq_core"
     }

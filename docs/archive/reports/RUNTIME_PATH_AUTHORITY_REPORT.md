@@ -1,12 +1,16 @@
+<!-- DOC_BADGE: ARCHIVE -->
+<!-- DOC_STATUS: ARCHIVED_REPORT -->
+
+> **ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS**
+> This is a generated runtime path authority audit report.
+
 # Runtime Path Authority Report
 
-> ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS
-
-- Generated: 2026-07-02T01:39:04.527953+00:00
+- Generated: 2026-08-20T16:00:33.781200+00:00
 - Canonical authority: `steps.common.config_loader.load_configs()` -> `configs/config.yaml`
 - Active runtime HIGH findings: 0
-- Legacy/diagnostic MEDIUM findings: 54
-- Test/docs LOW findings: 133
+- Legacy/diagnostic MEDIUM findings: 62
+- Test/docs LOW findings: 142
 
 ## Runtime Path Authority Map
 
@@ -67,7 +71,7 @@
 |---|---|---|---|
 | LOW | Active runtime authority | `cli/run_ingestion.py`, `cli/watchdog.py`, `LAUNCH_GOODQ.ps1` | Canonical config authority is consistent across audited runtime surfaces. |
 | MEDIUM | Legacy and diagnostic scripts still contain historical path references | `scripts/analyze_unified_kg.py`, `scripts/apply_scene_summaries.py`, `scripts/audit_vision_pipeline.py`, `scripts/bootstrap_install.py`, `scripts/bootstrap_models.py` | No primary runtime impact, but ad hoc operator runs could still observe old roots. |
-| LOW | Tests and docs still contain historical path references | `tests/agents/test_mini_agent_client.py`, `tests/e2e/test_staged_ingestion_harness.py`, `tests/integration/test_ucf_audio_logging.py`, `tests/integration/test_ucf_ingestion.py`, `tests/integration/test_ucf_multi_source.py` | Audit noise only; no production runtime impact. |
+| LOW | Tests and docs still contain historical path references | `tests/agents/test_mini_agent_client.py`, `tests/e2e/test_staged_ingestion_harness.py`, `tests/integration/test_ucf_audio_logging.py`, `tests/integration/test_ucf_multi_source.py`, `tests/integration/test_ucf_qdrant_challenger.py` | Audit noise only; no production runtime impact. |
 
 ## Recommended Canonical Runtime Authority
 
@@ -87,22 +91,22 @@ The current safest runtime authority is `steps.common.config_loader.load_configs
 - `scripts/diagnose_gpu_issue.py`: L:/_DATA
 - `scripts/diagnostics/episode_reference_eval.py`: L:/_DATA, GOODQ_DATA_ROOT
 - `scripts/diagnostics/FULL_SYSTEM_AUDIT.py`: L:/_DATA, L:/goodq4all/config.yaml
+- `scripts/docs/build_current_state.py`: GOODQ_DATA_ROOT
+- `scripts/docs/doc_authority_lint.py`: GOODQ_DATA_ROOT
 - `scripts/download_datasets.py`: GOODQ_DATA_ROOT
 - `scripts/extract_test_frame.py`: L:/_DATA
 - `scripts/final_validation_report.py`: L:/_DATA
 - `scripts/generate_goodq4all_agent_status.py`: GOODQ_DATA_ROOT
-- `scripts/inspect_db.py`: L:/_DATA
-- `scripts/install/LAUNCH_GOODQ.go`: GOODQ_DATA_ROOT
-- `scripts/install/staged/vendor/qdrant/config.yaml`: GOODQ_DATA_ROOT
-- `scripts/internal/analyze_unified_kg.py`: L:/_DATA
+- `scripts/identity/build_face_clusters.py`: L:/_DATA
+- `scripts/identity/build_speaker_clusters.py`: L:/_DATA
 
 ## Test / Docs Examples
 
 - `tests/agents/test_mini_agent_client.py`: GOODQ_DATA_ROOT
 - `tests/e2e/test_staged_ingestion_harness.py`: GOODQ_DATA_ROOT
 - `tests/integration/test_ucf_audio_logging.py`: GOODQ_DATA_ROOT
-- `tests/integration/test_ucf_ingestion.py`: GOODQ_DATA_ROOT
 - `tests/integration/test_ucf_multi_source.py`: GOODQ_DATA_ROOT
+- `tests/integration/test_ucf_qdrant_challenger.py`: GOODQ_DATA_ROOT
 - `tests/integration/test_ucf_regression.py`: GOODQ_DATA_ROOT
 - `tests/integration/test_ucf_retrieval_bridge.py`: GOODQ_DATA_ROOT
 - `tests/integration/test_ucf_retrieval_bridge_stress.py`: GOODQ_DATA_ROOT

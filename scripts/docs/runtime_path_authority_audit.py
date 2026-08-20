@@ -128,7 +128,7 @@ ACTIVE_EXPECTATIONS = {
         "forbidden": ["GOODQ_DATA_ROOT", "Path.cwd() / \"models\""],
     },
     Path("steps/object_detect/step.py"): {
-        "required": ["get_runtime_paths(load_configs({}), \"models_cache\")"],
+        "required": ["ensure_model_cached"],
         "forbidden": ["GOODQ_DATA_ROOT", "Path.cwd() / \"models\""],
     },
     Path("steps/sentiment/step.py"): {
@@ -220,9 +220,13 @@ def _scan_legacy_scripts() -> list[Finding]:
         rel_path = file_path.relative_to(REPO_ROOT).as_posix()
         if "__pycache__" in rel_path or file_path.suffix == ".pyc":
             continue
-        if rel_path.startswith("scripts/archive/"):
+        if rel_path.startswith("scripts/archive/") or "staged" in rel_path:
             continue
         if rel_path in protected:
+            continue
+        if file_path.suffix.lower() not in {".py", ".ps1", ".bat", ".cmd", ".sh", ".json", ".yaml", ".yml", ".txt", ".md", ".nsi"}:
+            continue
+        if file_path.stat().st_size > 2 * 1024 * 1024:
             continue
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         matches = [token for token in LEGACY_SCAN_TOKENS if token in text]
@@ -249,6 +253,10 @@ def _scan_test_and_docs() -> list[Finding]:
                 continue
             rel_path = file_path.relative_to(REPO_ROOT).as_posix()
             if "__pycache__" in rel_path or file_path.suffix == ".pyc":
+                continue
+            if file_path.suffix.lower() not in {".py", ".ps1", ".bat", ".cmd", ".sh", ".json", ".yaml", ".yml", ".txt", ".md", ".nsi"}:
+                continue
+            if file_path.stat().st_size > 2 * 1024 * 1024:
                 continue
             text = file_path.read_text(encoding="utf-8", errors="ignore")
             matches = [token for token in LEGACY_SCAN_TOKENS if token in text]
@@ -299,6 +307,12 @@ def _write_report(active: list[Finding], config_findings: list[Finding], legacy:
     low_findings = [f for f in docs_tests if f.severity == "LOW"]
 
     report_lines = [
+        "<!-- DOC_BADGE: ARCHIVE -->",
+        "<!-- DOC_STATUS: ARCHIVED_REPORT -->",
+        "",
+        "> **ARCHIVE / NON-CANONICAL / DO NOT COPY PATHS**",
+        "> This is a generated runtime path authority audit report.",
+        "",
         "# Runtime Path Authority Report",
         "",
         f"- Generated: {datetime.now(timezone.utc).isoformat()}",

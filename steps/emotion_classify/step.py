@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List
-import os
 import logging
+from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,9 @@ _EMO = {
     "problem_type": None,
     "model_id": None,
     "model_revision": None,
+    "requested_device": "cpu",
+    "fallback_chain": [],
+    "load_attempts": [],
 }
 
 
@@ -64,6 +67,10 @@ def _model_emotion_meta() -> Dict[str, Any]:
         "label_count": len(_EMO["labels"]),
         "model_id": _EMO["model_id"],
         "model_revision": _EMO["model_revision"],
+        "requested_implementation": f"cardiffnlp_{_EMO['requested_device']}",
+        "effective_implementation": f"cardiffnlp_{_EMO['device']}",
+        "fallback_chain": list(_EMO.get("fallback_chain") or []),
+        "load_attempts": list(_EMO.get("load_attempts") or []),
     }
 
 
@@ -110,59 +117,111 @@ def _rank_model_emotions(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str,
     return {"emotions": emotions, "emotion_meta": _model_emotion_meta()}
 
 
+def _resolve_emotion_snapshot() -> tuple[Path, str, str]:
+    """Resolve only the registry-pinned local safetensors snapshot."""
+
+    from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
+    from steps.common.model_provisioner import load_registry, resolve_models_root
+
+    registry = load_registry()
+    models = registry.get("huggingface_models") if isinstance(registry, dict) else None
+    record = models.get("emotion_classify_model") if isinstance(models, dict) else None
+    if not isinstance(record, dict):
+        raise OSError("emotion_classify_model is absent from the model registry")
+    repo_id = str(record.get("repo_id") or "").strip()
+    revision = str(record.get("revision") or "").strip()
+    if not repo_id or not revision:
+        raise OSError("emotion_classify_model registry identity is incomplete")
+    snapshot = resolve_pinned_model_snapshot(
+        resolve_models_root(),
+        "emotion_classify_model",
+        required_files=("model.safetensors",),
+    )
+    if snapshot is None:
+        raise OSError(
+            "emotion_classify_model exact pinned safetensors snapshot is unavailable "
+            f"for revision {revision}"
+        )
+    return snapshot.resolve(), repo_id, revision
+
+
 def _load_emotion():
     if _EMO["model"] is not None:
         return
     
     # Configure GPU using centralized manager (Phase 3)
     gpu_config = setup_step_gpu("emotion_classify")
-    device = gpu_config["device"]
+    requested_device = str(gpu_config["device"] or "cpu").strip().lower()
     
     try:
-        import torch  # type: ignore
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
-        from steps.common.model_provisioner import ensure_model_cached
+        snapshot, repo_id, revision = _resolve_emotion_snapshot()
+        attempts = [requested_device]
+        if requested_device != "cpu":
+            attempts.append("cpu")
+        load_errors: list[str] = []
+        for effective_device in attempts:
+            try:
+                tok = AutoTokenizer.from_pretrained(
+                    snapshot,
+                    local_files_only=True,
+                )
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    snapshot,
+                    use_safetensors=True,
+                    local_files_only=True,
+                )
+                model = model.to(effective_device).eval()
+                labels = _ordered_model_labels(model)
+                problem_type = str(
+                    getattr(model.config, "problem_type", "") or ""
+                ).strip()
+                if problem_type not in {
+                    "multi_label_classification",
+                    "single_label_classification",
+                }:
+                    raise ValueError(
+                        "Unsupported emotion model config.problem_type: "
+                        f"{problem_type!r}"
+                    )
+                _EMO.update(
+                    {
+                        "model": model,
+                        "tok": tok,
+                        "labels": labels,
+                        "device": effective_device,
+                        "error": None,
+                        "problem_type": problem_type,
+                        "model_id": repo_id,
+                        "model_revision": revision,
+                        "requested_device": requested_device,
+                        "fallback_chain": (
+                            ["cpu_fallback"]
+                            if effective_device == "cpu" and requested_device != "cpu"
+                            else []
+                        ),
+                        "load_attempts": list(attempts[: attempts.index(effective_device) + 1]),
+                    }
+                )
+                break
+            except Exception as exc:
+                load_errors.append(
+                    f"{effective_device}:{type(exc).__name__}:{exc}"
+                )
+                GPUManager.clear_cache()
+        else:
+            raise RuntimeError(
+                "emotion model load attempts failed: " + " | ".join(load_errors)
+            )
 
-        try:
-            from steps.common.config_loader import load_configs
-            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
-        except Exception:
-            offline_mode = False
-
-        provision_result = ensure_model_cached("emotion_classify_model", offline=offline_mode)
-        if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
-            raise OSError(f"Failed to provision emotion model: {provision_result.error or 'reason unknown'}")
-
-        model_id = provision_result.local_path
-        has_safetensors = os.path.exists(os.path.join(model_id, "model.safetensors"))
-        tok = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        model = AutoModelForSequenceClassification.from_pretrained(model_id, use_safetensors=has_safetensors, local_files_only=True)
-        
-        model = model.to(device).eval()
-        labels = _ordered_model_labels(model)
-        problem_type = str(getattr(model.config, "problem_type", "") or "").strip()
-        if problem_type not in {"multi_label_classification", "single_label_classification"}:
-            raise ValueError(f"Unsupported emotion model config.problem_type: {problem_type!r}")
-        _EMO.update(
-            {
-                "model": model,
-                "tok": tok,
-                "labels": labels,
-                "device": device,
-                "error": None,
-                "problem_type": problem_type,
-                "model_id": provision_result.repo_id,
-                "model_revision": provision_result.revision,
-            }
-        )
         memory_fraction = gpu_config.get("memory_fraction")
         if isinstance(memory_fraction, (int, float)):
-            logger.info(f"[OK] Emotion model loaded on {device} (GPU config: {memory_fraction:.1%} memory)")
+            logger.info(f"[OK] Emotion model loaded on {_EMO['device']} (GPU config: {memory_fraction:.1%} memory)")
         else:
-            logger.info(f"[OK] Emotion model loaded on {device}")
+            logger.info(f"[OK] Emotion model loaded on {_EMO['device']}")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load emotion model: {str(e)}")
-        logger.info("[WARN]  Falling back to CPU mode")
+        logger.warning("Emotion model unavailable after bounded load attempts")
         _EMO.update(
             {
                 "model": None,
@@ -173,6 +232,13 @@ def _load_emotion():
                 "problem_type": None,
                 "model_id": None,
                 "model_revision": None,
+                "requested_device": requested_device,
+                "fallback_chain": [],
+                "load_attempts": (
+                    [requested_device, "cpu"]
+                    if requested_device != "cpu"
+                    else ["cpu"]
+                ),
             }
         )
         # Clear any partial GPU allocations
@@ -214,15 +280,23 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         if scr:
             pairs = sorted(scr.items(), key=lambda x: x[1], reverse=True)
             emotions = [{"label": label, "score": float(f"{score:.4f}")} for label, score in pairs]
+            requested_device = str(_EMO.get("requested_device") or "cpu")
+            fallback_error = model_error if model_failed else _EMO.get("error")
+            fallback_meta = {
+                "engine": "nrc-lex",
+                "status": "fallback",
+                "source": "lexicon",
+                "label_count": len(emotions),
+                "reason": "model_inference_failed" if model_failed else "model_unavailable",
+                "requested_implementation": f"cardiffnlp_{requested_device}",
+                "effective_implementation": "nrc_lexicon",
+                "fallback_chain": ["nrc_lexicon"],
+            }
+            if fallback_error:
+                fallback_meta["model_error"] = str(fallback_error)[:500]
             return {
                 "emotions": emotions,
-                "emotion_meta": {
-                    "engine": "nrc-lex",
-                    "status": "fallback",
-                    "source": "lexicon",
-                    "label_count": len(emotions),
-                    "reason": "model_inference_failed" if model_failed else "model_unavailable",
-                },
+                "emotion_meta": fallback_meta,
             }
 
     # If nothing else worked

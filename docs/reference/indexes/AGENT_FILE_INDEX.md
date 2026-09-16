@@ -15,12 +15,11 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1444**
+Indexed active tracked paths: **1244**
 
 | File Path | Component | Purpose |
 |---|---|---|
 | `/.agents/DEFERRED_FINDINGS.md` | Repository root | Root-level project or runtime surface. |
-| `/.agents/index/corrections.json` | Repository root | Root-level project or runtime surface. |
 | `/.agents/skills/goodq4all-operator/SKILL.md` | Repository root | Root-level project or runtime surface. |
 | `/.env.local.template` | Repository root | Root-level project or runtime surface. |
 | `/.env.model_cache` | Repository root | Root-level project or runtime surface. |
@@ -180,6 +179,7 @@ Indexed active tracked paths: **1444**
 | `/configs/identity/.gitignore` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/identity/family_roster.template.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/identity/family_terms.template.yaml` | Configuration | Configuration, schema, or runtime profile. |
+| `/configs/ingestion_capability_profiles.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/installer_profile_contract.yaml` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_download_manifest.json` | Configuration | Configuration, schema, or runtime profile. |
 | `/configs/model_download_manifest.json.sig` | Configuration | Configuration, schema, or runtime profile. |
@@ -200,23 +200,15 @@ Indexed active tracked paths: **1444**
 | `/docs/GOODQ_RAG_CONTEXT_PACK.md` | Documentation | Active documentation or governance surface. |
 | `/docs/README.md` | Documentation | Active documentation or governance surface. |
 | `/docs/SYSTEM_SNAPSHOT.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/CLEAN_FIRST_GO_INGESTION_MONITORING_REPORT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/CONTROL_AGENT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/CURRENT_STATE.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/FORENSIC_THREE_SCENE_TRACE_AUDIT_76dedbe1b16c.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/GPU_ACCELERATED_INGESTION_WITNESS_REPORT.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/GPU_WSL_INGESTION_MONITORING_REPORT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/PROJECT_ORIENTATION.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/README.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/UCF_CLEAN_REINGEST_VERIFICATION_REPORT.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/UCF_COVERAGE_GAP_REPORT.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/birth_certificate.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/current_state.json` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/skills/fable-prompt-cache/SKILL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/skills/goodq4all-audit/SKILL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/skills/goodq4all-operator/SKILL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/skills/using-agent-skills/SKILL.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/training_dataset_generator_specification.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` | Documentation | Active documentation or governance surface. |
@@ -267,6 +259,7 @@ Indexed active tracked paths: **1444**
 | `/docs/bootstrap/INSTALL_BOOTSTRAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/OFFLINE_RELEASE_ASSET_MODEL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/PATH_ABSTRACTION_CONTRACT.md` | Documentation | Active documentation or governance surface. |
+| `/docs/bootstrap/PUBLIC_FIXTURE_MANIFEST.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_SELECTION_PROPOSAL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/bootstrap/REFERENCE_PACK_V0_SOURCE_EVIDENCE_APPENDIX.md` | Documentation | Active documentation or governance surface. |
@@ -281,114 +274,7 @@ Indexed active tracked paths: **1444**
 | `/docs/codebase_index/README.md` | Documentation | Active documentation or governance surface. |
 | `/docs/codebase_index/codebase_health_audit.md` | Documentation | Active documentation or governance surface. |
 | `/docs/codebase_index/codebase_index.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/AUDIT_SUMMARY_QUICK.txt` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/FOUNDATIONAL_ORIENTATION_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R02_PORTABLE_PROMOTION_CHECKPOINT_2026-07-10.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R03_LIFECYCLE_TRANSITION_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R04_CONFIG_PORTABILITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_API_AUTHORITY_AUDIT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_API_AUTHORITY_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_HIDDEN_READ_MUTATION_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_INGEST_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_MODEL_CACHE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_MODEL_CACHE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_QDRANT_QUERY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_REMAINING_CANDIDATE_RECONCILIATION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_REMAINING_HIDDEN_READ_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_CONTEXT_AUTHORITY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_FAISS_STORE_REF_PRIVACY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_QUERY_LOG_PRIVACY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_SQLITE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_RETRIEVAL_TELEMETRY_PERSISTENCE_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_SUMMARY_SQLITE_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_F1_SUMMARY_STATUS_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_GATE_REPAIR_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_INGEST_STAGING_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_MUTATION_EXECUTION_AUTHORITY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_PRIVATE_BACKUP_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_AUDIT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_ROUTE_EFFECT_BOUNDARY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_SUMMARY_COLLECTION_AUTHORITY_SELECTION_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_TEMPORAL_SUMMARY_AUTHORITY_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R05_VIDEO_SUMMARY_AUTHORITY_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R06_PROGRESSIVE_CHECKPOINT_EVIDENCE_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_AUDIT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_AUTHENTICATED_PROTECTED_MEMBERSHIP_COMPOSITION_RECHECK_DECISION_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_CLEAN_MEMORY_REPLACEMENT_SELECTION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_FILESYSTEM_OBSERVER_BOUNDARY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PASSIVE_PLAN_ORCHESTRATION_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SEMANTICS_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_AUTHORITY_SOURCE_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_BOUNDARY_AUTHORITY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CHECKPOINT_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_BOUNDARY_OBSERVER_CONTRACT_DECISION_2026-07-15.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CAPABILITY_GAP_AUDIT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_READER_CONTRACT_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_SECURITY_POLICY_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MANIFEST_VALIDATOR_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_PROTECTED_MEMBERSHIP_PROJECTION_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_QDRANT_OBSERVATION_BOUNDARY_AUDIT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_QDRANT_OBSERVER_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CAPACITY_EXTENSION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_BOUNDED_READ_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_BOUNDARY_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_IMPLEMENTATION_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_EXTERNAL_PIN_READER_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_HELD_HANDLE_EXTRACTION_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_LABEL_SECURITY_TRANSPORT_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_PROGRAM_DATA_LOCATOR_RECHECK_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_READER_CAPABILITY_GAP_AUDIT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_READER_IDENTITY_POLICY_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_SECURITY_CAPABILITY_DECISION_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_SECURITY_DESCRIPTOR_CHECKPOINT_2026-07-13.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_CHECKPOINT_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R07_WINDOWS_SECURITY_MECHANICS_EXTRACTION_DECISION_2026-07-14.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_HISTORICAL_AUDIO_REPAIR_RESTART_HANDOFF_2026-07-28.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_HISTORICAL_SIGNATURE_BACKFILL_CLOSEOUT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_HUMAN_PERCEIVED_QUALITY_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_IDENTITY_GET_NONCREATING_CHECKPOINT_2026-07-16.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_IDENTITY_WORKBENCH_BRANCH_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_PIPELINE_RECOVERY_AND_WITNESS_CLOSEOUT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_QDRANT_RETENTION_MANIFEST_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_QUALITY_QUEUE_RECONCILIATION_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_RECONCILIATION_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_RECOVERY_TEMPORAL_RECONCILIATION_AUDIT_2026-07-28.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_WORKSPACE_HYGIENE_AUDIT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R08_WSL_AUDIO_OFFLINE_WITNESS_2026-07-28.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R09_CURRENT_STATE_TRUTH_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R10_ARCHITECTURE_CONTRACT_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R11_CONTROL_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R11_F1_HANDLER_OUTCOME_TRUTH_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R13_DOCUMENTATION_AUTHORITY_CHECKPOINT_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R17_FROZEN_MAIN_INVENTORY_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R18_F1_API_TEST_HARNESS_CHECKPOINT_2026-07-12.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R18_VALIDATOR_EVIDENCE_ISOLATION_2026-07-11.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R22_HERMES_BRANCH_TRIAGE_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/R22_HERMES_ROUTING_PORT_2026-07-29.md` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/SESSION_COMPLETE_WSL2_AUDIT.txt` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-11.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-28.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T185504Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T191044Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T202515Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T204005Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_2026-07-29T205357Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/CURRENT_STATE_EVIDENCE_20260807T023333Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/R08_QDRANT_PRUNE_RECEIPT_2026-07-29T203811Z.json` | Documentation | Active documentation or governance surface. |
-| `/docs/diagnostics/evidence/R08_WORKSPACE_PRUNE_RECEIPT_2026-07-29T205240Z.json` | Documentation | Active documentation or governance surface. |
+| `/docs/diagnostics/evidence/PUBLIC_RELEASE_TEMPLATE_2026-09-16.json` | Documentation | Active documentation or governance surface. |
 | `/docs/goodq4all_agent_status.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/guides/CONSOLIDATION_EXPLAINED.md` | Documentation | Active documentation or governance surface. |
@@ -457,22 +343,8 @@ Indexed active tracked paths: **1444**
 | `/docs/reference/quick-refs/QUICK_REFERENCE_SETTINGS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/CONTROL_RECURRENCE_v0.5_STATUS.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/OFFLINE_PAYLOAD_ELIGIBILITY.md` | Documentation | Active documentation or governance surface. |
-| `/docs/releases/R24_GOLDEN_WITNESS_RELEASE_CANDIDATE_2026-08-02.md` | Documentation | Active documentation or governance surface. |
+| `/docs/releases/PUBLIC_SANITIZATION_MANIFEST.md` | Documentation | Active documentation or governance surface. |
 | `/docs/releases/ROADMAP.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-07-10-qori-archive-lynx-pet.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-01-r24-golden-witness-plan.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-01-r24-turboquant-candidate-retrieval.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-02-dev-mode-operator-dashboard.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-03-public-baseline-installer-v2.5.8.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-08-ingestion-capability-contract.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/plans/2026-08-08-personal-asset-vault.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-07-10-qori-archive-lynx-pet-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-01-r24-golden-witness-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-01-r24-turboquant-candidate-retrieval-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-02-dev-mode-operator-dashboard-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-02-oh-my-posh-baseline-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-08-ingestion-capability-contract-design.md` | Documentation | Active documentation or governance surface. |
-| `/docs/superpowers/specs/2026-08-08-personal-asset-vault-design.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/ERROR_HANDLING_RECOVERY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/systems/WATCHDOG_SYSTEM.md` | Documentation | Active documentation or governance surface. |
 | `/docs/technical/ANALYTICS_PAGES_COMPLETE.md` | Documentation | Active documentation or governance surface. |
@@ -573,50 +445,7 @@ Indexed active tracked paths: **1444**
 | `/lib/summary_aggregator.py` | Core library | Core memory, control, or persistence implementation. |
 | `/pipelines/__init__.py` | Repository root | Root-level project or runtime surface. |
 | `/pipelines/direct_ingestion.py` | Repository root | Root-level project or runtime surface. |
-| `/processing_onboarding/_resolved_config.json` | Repository root | Root-level project or runtime surface. |
 | `/pytest.ini` | Repository root | Root-level project or runtime surface. |
-| `/reports/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/control_recurrence/20260424_003250_season1_recompare_witness__vs__20260424_182406_season2_fresh_witness.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/control_recurrence/20260424_182406_season2_fresh_witness.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/llm_audit_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/reference_anchors/seinfeld/episodes/03x10_the_stranded.reference.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/reference_anchors/seinfeld/episodes/03x11_the_alternate_side.reference.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/POST_WITNESS_ANALYTICS_COMPARISON_2026-03-09.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/SEASON1_WITNESS_RUN_2026-03-09.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/embedding_health_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/entity_analysis_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/experiment_summary.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/kg_structure_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/post_witness_analytics_metrics_2026-03-09.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/scene_segmentation_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/diagnostics/semantic_pattern_report.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/README.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/artifact_manifest.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/ingestion_stderr.log` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/optional_step_failures.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/per_episode_coverage.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_metrics_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_optional_status_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/reliability_validation_stderr_2026-03-10.log` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/resolved_config_snapshot.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/resolved_config_snapshot_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/retrieval_anchor_checks.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10.svg` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_2026-03-10_metadata.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_labeled_2026-03-10.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/scene_embedding_map_2d_labeled_2026-03-10.svg` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/semantic_comparison_metrics_2026-03-10.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/semantic_comparison_report_2026-03-10.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/releases/season1_witness_run_2026-03-09/witness_metrics.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/generate_umap_clip_text.py` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text.png` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text_coords.csv` | Repository root | Root-level project or runtime surface. |
-| `/reports/seinfeld_experiment/umap/scene_umap_clip_text_meta.json` | Repository root | Root-level project or runtime surface. |
-| `/reports/ui_audit/RELEASE_ADDENDUM.md` | Repository root | Root-level project or runtime surface. |
-| `/reports/ui_surface_audits/2026-05-19-pipeline-surface-audit.md` | Repository root | Root-level project or runtime surface. |
 | `/requirements-baseline-lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/requirements-gpu-enhanced-lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/__init__.py` | Repository root | Root-level project or runtime surface. |
@@ -624,37 +453,11 @@ Indexed active tracked paths: **1444**
 | `/retrieval/narrative_summarizer.py` | Repository root | Root-level project or runtime surface. |
 | `/retrieval/temporal_reasoning.py` | Repository root | Root-level project or runtime surface. |
 | `/samples/README.md` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S02_opening_presenter_alpha.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S02_opening_presenter_audio_matched.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S05_preflight_presenter_alpha.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S05_preflight_presenter_audio_matched.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S14_final_landing_presenter_alpha.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/avatar/S14_final_landing_presenter_audio_matched.webm` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/01-clone-official-source.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/02-enter-project-cabin.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/03-bootstrap-installer.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/04-env-local-root.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/05-bootstrap-validator.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/06-launch-goodq.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/07-watchdog-observes.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/demo-steps/08-proof-recorded.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/goodq4all-demo-endcard.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/goodq4all-demo-poster.jpg` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/install_walkthrough.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/install_walkthrough.mp4` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/manifest.json` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/nasa_descent.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/nasa_launch.gif` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/one_click_installer_mockup.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-git-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-multicolor-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-white-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/retro_console_preview.png` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough.gif` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough.mp4` | Repository root | Root-level project or runtime surface. |
-| `/samples/assets/ui_onboarding_walkthrough_raw.mp4` | Repository root | Root-level project or runtime surface. |
-| `/samples/ingestion/anger_elimination.pdf` | Repository root | Root-level project or runtime surface. |
-| `/samples/onboarding_fixture.mp4` | Repository root | Root-level project or runtime surface. |
 | `/scripts/INSTALL_AUDIO_DIARIZE_ENV.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/INSTALL_WSL2_AUDIO.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/PIN_MODEL_VERSIONS.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -671,9 +474,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/analytics_query.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/analyze_database.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/analyze_kg_gaps.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/analyze_sample_output.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/analyze_unified_kg.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/apply_performance_fixes.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/apply_scene_summaries.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/assets/__init__.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/assets/hf_snapshot_intake.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -681,7 +481,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/assets/personal_asset_vault.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_monitor.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/audit_all_exceptions.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_codebase.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_llm.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_vision_pipeline.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -692,13 +491,10 @@ Indexed active tracked paths: **1444**
 | `/scripts/bootstrap_onboarding.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/bootstrap_validate.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/bootstrap_verify.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/build_identity_ledger.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/build_kg_standalone.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/build_knowledge_graph_from_db.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/build_unified_kg.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/cache_readiness_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/check_qdrant.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/clean_old_processing.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/comprehensive_gpu_setup.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/config_schema.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/dataset_specs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -711,8 +507,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/dev_mode_dashboard.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnose_gpu_issue.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnose_gpu_pipeline.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/diagnose_transcription.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/diagnostics/FULL_SYSTEM_AUDIT.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/FULL_SYSTEM_TEST.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/RUN_FULL_DIAGNOSTIC.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/RUN_HEALTH_CHECK.lnk` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -724,7 +518,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/diagnostics/check_latest_results.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/check_silent_suppression.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/episode_reference_eval.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/diagnostics/monitor_progress.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/native_model_stability_smoke.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/pipeline_witness_sheet.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/diagnostics/quick_laptop_test.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -738,11 +531,9 @@ Indexed active tracked paths: **1444**
 | `/scripts/download_datasets.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/extract_test_frame.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/extract_test_frame.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/final_validation_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/find_transcription_data.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/fix_imports.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/fix_pyannote_gpu.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/full_diagnostic_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/generate_goodq4all_agent_status.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/generate_post_manifest.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/generate_quantization_assets.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -763,17 +554,20 @@ Indexed active tracked paths: **1444**
 | `/scripts/identity/validate_roster.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/implement_comprehensive_vad.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/init_qdrant_collections.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/inspect_db.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/INSTALL_AUDIO_STANDARD.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/LAUNCH_GOODQ.go` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/LAUNCH_GOODQ_test.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/build_capability_matrix.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/build_installer.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/follower_clean_reset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_manifest.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/generate_release_fixture_pack.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/generate_wheelhouse_sbom.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/goodq4all_installer.nsi` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/installer_contract.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_unix.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/prebuild_readiness.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/release_payload_packs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_build.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -784,6 +578,7 @@ Indexed active tracked paths: **1444**
 | `/scripts/install/stage_dependencies.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/stage_profile_model_packs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/sync_nsi_version.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/verify_installer_semantic_contract.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_offline_suite.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_profile_model_payload.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -805,15 +600,8 @@ Indexed active tracked paths: **1444**
 | `/scripts/monitor_processing.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/monitoring/monitor_ingestion.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/monitoring/monitor_live.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/optimize_config.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase2_completion_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase2_embedding_analysis.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase2_fixes.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/phase2_llm_integration.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase2_progress_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase2_verify.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/phase3_diagnostic.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/phase5_full_validation.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/pin_model_versions.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/prepare_step_envs.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -823,9 +611,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/qdrant/INSTALL_QDRANT_SERVICE.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/qdrant/START_QDRANT.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/qdrant/UNINSTALL_QDRANT_SERVICE.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/qdrant/prepare_clean_slate.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/query_db_simple.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/quick_analysis.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/quick_gpu_test.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/reorganize_docs.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/repair_temporal_projection_gaps.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -854,18 +639,18 @@ Indexed active tracked paths: **1444**
 | `/scripts/setup_wsl2_audio_userspace.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/show_intelligence_report.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/show_kg_insights.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/show_phase2_enhancement.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/smoke_phase_a.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/start_api.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/start_ollama_fallback.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/start_vllm_servers.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/start_vllm_servers.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/status_vllm_servers.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/stop_vllm_servers.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/stop_vllm_servers.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/sync_env_local.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/sync_faiss_to_qdrant.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/sync_wsl_audio_worker.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/system_readiness_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/system_status_check.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_all_endpoints.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_gpu_config.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_gpu_scene_detection.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -876,8 +661,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/test_vllm_from_windows.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_wsl2_bridge.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/test_wsl2_bridge_integrity.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/ucf/generate_birth_certificate.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/ucf/maintenance/heal_ucf_ledger.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/ucf/ucf_ledger.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/ucf/validate_ucf_epoch.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/utilities/backup_gpu_steps.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -887,7 +670,6 @@ Indexed active tracked paths: **1444**
 | `/scripts/utils/check_watchdog_status.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/utils/verify_command_center.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/utils/verify_model_lockdown.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/utils/verify_phase1_fix.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/validate_gpu_setup.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/verify_audio_provisioning.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/verify_parity.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -968,6 +750,7 @@ Indexed active tracked paths: **1444**
 | `/steps/common/quantization.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/retrieval_events.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/retry.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/runtime_lifecycle.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/safe_access.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/scene_summarizer.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/sensitive_staging.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -1063,7 +846,6 @@ Indexed active tracked paths: **1444**
 | `/tests/integration/test_ucf_visual_logging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/integration/test_watchdog.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/legacy/LAUNCH_WEB_INTERFACE.bat.old` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/LAUNCH_WEB_INTERFACE_FIXED.bat.old` | Verification | Test, fixture, or verification asset. |
 | `/tests/legacy/README.md` | Verification | Test, fixture, or verification asset. |
 | `/tests/legacy/integration_harnesses/test_ingestion_verbose.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/legacy/integration_harnesses/test_scene_comprehensive.py` | Verification | Test, fixture, or verification asset. |
@@ -1138,6 +920,8 @@ Indexed active tracked paths: **1444**
 | `/tests/ui/test_ui_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/__init__.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/api_main_test_harness.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/fixtures/dev_startup_harness.ps1` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/fixtures/runtime_lifecycle_worker.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_action_jobs.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_health_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_main_legacy_prune_truth.py` | Verification | Test, fixture, or verification asset. |
@@ -1187,11 +971,14 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_control_recurrence_trend.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_crash_family_env_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_current_state_truth.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_dev_mode_callers.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_dashboard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_pytest_wrapper.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_dev_startup.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_direct_ingestion_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_doc_authority_lint.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_emotion_classify_semantics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_logging.py` | Verification | Test, fixture, or verification asset. |
@@ -1203,7 +990,10 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_face_embed_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_id_mapping.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_lock.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_faiss_replay_persistence.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_generate_release_fixture_pack.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_golden_witness_preflight.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_goodq_doctor_governance.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_gpu_config_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
@@ -1273,12 +1063,14 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_phase6_rerun_safety.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_phase6_truth_invariant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_platform_config.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_prebuild_readiness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_preflight_concurrency.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_print_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_model_pack_staging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_promote_identity_layer.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_public_state_template.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_loopback_transport.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_query_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_recovery_promotion.py` | Verification | Test, fixture, or verification asset. |
@@ -1286,6 +1078,7 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_remote_witness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_context_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_faiss_store_ref_privacy_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_retrieval_jsonl_concurrency.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_model_cache_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_query_log_privacy_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
@@ -1304,6 +1097,7 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_run_ingestion_step_observer_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_summary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_evidence_runner.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_runtime_lifecycle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_run_preview.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_status.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_test_profile.py` | Verification | Test, fixture, or verification asset. |
@@ -1360,6 +1154,8 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_ui_conduits_audio_doctrine.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vector_parity_artifact_persistence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_verify_entity_quality_metrics.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_verify_installer_semantic_contract.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_verify_profile_model_payload.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_ingest_semantic_summary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_scene_detect_duration_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_scene_detect_entity_refine_retired.py` | Verification | Test, fixture, or verification asset. |
@@ -1367,11 +1163,15 @@ Indexed active tracked paths: **1444**
 | `/tests/unit/test_vision_gpu_import_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vision_step_diagnostics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vllm_served_model_contract.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_vllm_start_control.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_vllm_stop_control.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vram_allocator.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_completion_evidence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_processed_prefix_idempotent.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_registry_deadlock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_safety.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_stage_coverage.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_worker_lifecycle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wheelhouse_sbom.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_held_handle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_security_mechanics.py` | Verification | Test, fixture, or verification asset. |

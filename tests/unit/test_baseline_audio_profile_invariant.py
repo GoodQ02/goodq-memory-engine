@@ -922,43 +922,48 @@ def test_emotion_classify_surfaces_model_unavailable_reason(monkeypatch):
 
 
 def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
-    from steps.common.model_provisioner import ModelProvisionResult
-    monkeypatch.setattr(
-        "steps.common.model_provisioner.ensure_model_cached",
-        lambda *args, **kwargs: ModelProvisionResult(
-            status="cached",
-            repo_id="cardiffnlp/twitter-roberta-base-emotion-latest",
-            revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
-            local_path="cardiffnlp/twitter-roberta-base-emotion-latest",
-            gated=False,
-            required=True,
-            elapsed_seconds=0.1
-        )
-    )
-
     import sys
     import types
 
     from steps.emotion_classify import step as emotion_step
+
+    snapshot = Path("sealed") / "cardiff" / "snapshots" / "pinned"
+    monkeypatch.setattr(
+        emotion_step,
+        "_resolve_emotion_snapshot",
+        lambda: (
+            snapshot,
+            "cardiffnlp/twitter-roberta-base-emotion-latest",
+            "415620c4fbc8bd82b82b9fd46642fcec6519d537",
+        ),
+    )
 
     monkeypatch.setitem(emotion_step._EMO, "model", None)
     monkeypatch.setitem(emotion_step._EMO, "tok", None)
     monkeypatch.setitem(emotion_step._EMO, "labels", [])
     monkeypatch.setitem(emotion_step._EMO, "device", "cpu")
     monkeypatch.setitem(emotion_step._EMO, "error", None)
+    monkeypatch.setitem(emotion_step._EMO, "problem_type", None)
+    monkeypatch.setitem(emotion_step._EMO, "model_id", None)
+    monkeypatch.setitem(emotion_step._EMO, "model_revision", None)
+    monkeypatch.setitem(emotion_step._EMO, "requested_device", "cpu")
+    monkeypatch.setitem(emotion_step._EMO, "fallback_chain", [])
+    monkeypatch.setitem(emotion_step._EMO, "load_attempts", [])
     monkeypatch.setattr(
         emotion_step,
         "setup_step_gpu",
         lambda step_name: {"device": "cpu", "step_name": step_name},
     )
 
-    fake_torch = types.ModuleType("torch")
     fake_transformers = types.ModuleType("transformers")
     model_kwargs = {}
+    tokenizer_kwargs = {}
+    model_path = []
 
     class FakeTokenizer:
         @classmethod
         def from_pretrained(cls, name, **kwargs):
+            tokenizer_kwargs.update(kwargs)
             return cls()
 
     class FakeModel:
@@ -969,6 +974,7 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
 
         @classmethod
         def from_pretrained(cls, name, **kwargs):
+            model_path.append(name)
             model_kwargs.update(kwargs)
             return cls()
 
@@ -980,22 +986,39 @@ def test_emotion_classify_loads_sequence_model_with_safetensors(monkeypatch):
 
     fake_transformers.AutoTokenizer = FakeTokenizer
     fake_transformers.AutoModelForSequenceClassification = FakeModel
-    monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
-
-    # Mock os.path.exists to report model.safetensors is present,
-    # validating the dynamic safetensors detection path.
-    import os
-    _real_exists = os.path.exists
-    monkeypatch.setattr(
-        os.path, "exists",
-        lambda p: True if p.endswith("model.safetensors") else _real_exists(p)
-    )
 
     emotion_step._load_emotion()
 
+    assert model_path == [snapshot]
+    assert tokenizer_kwargs["local_files_only"] is True
     assert model_kwargs["use_safetensors"] is True
+    assert model_kwargs["local_files_only"] is True
     assert emotion_step._EMO["model"] is not None
+
+
+def test_step_runner_propagates_emotion_fallback_provenance():
+    from cli.step_runner import _derive_step_log_outcome
+
+    status, error, extra = _derive_step_log_outcome(
+        "emotion_classify",
+        {
+            "emotion_meta": {
+                "status": "fallback",
+                "requested_implementation": "cardiffnlp_cuda",
+                "effective_implementation": "nrc_lexicon",
+                "fallback_chain": ["nrc_lexicon"],
+            }
+        },
+        verbose=False,
+    )
+
+    assert status == "ok"
+    assert error is None
+    assert extra is not None
+    assert extra["requested_implementation"] == "cardiffnlp_cuda"
+    assert extra["effective_implementation"] == "nrc_lexicon"
+    assert extra["fallback_chain"] == ["nrc_lexicon"]
 
 
 @pytest.mark.parametrize(

@@ -123,4 +123,4 @@ It is **not** intended to ship:
 - [`README.md`](README.md)
 - [`configs/model_registry.yaml`](configs/model_registry.yaml)
 - [`docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md`](docs/bootstrap/REFERENCE_PACK_V0_LICENSE_REVIEW_MATRIX.md)
-- [`docs/archive/releases/SHIP_PROFILE.md`](docs/archive/releases/SHIP_PROFILE.md)
+- `docs/archive/releases/SHIP_PROFILE.md` (historical material omitted from public source)

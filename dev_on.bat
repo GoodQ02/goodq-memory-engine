@@ -1,24 +1,29 @@
 @echo off
+setlocal
+set "DEV_ON_EXIT_CODE=0"
+pushd "%~dp0" || exit /b 1
+set "GOODQ_MODE_ROOT=%~dp0"
 REM GoodQ4All - Local Agent Mode (Dev On)
 REM Validates local config, then starts the GoodQ-owned runtime services.
+REM Resolve the explicit binding before the legacy helper's discovery fallback.
+set "GOODQ_MODE_WSL="
+for /f "delims=" %%D in ('powershell -NoProfile -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQWslDistro -RequireConfigured"') do set "GOODQ_MODE_WSL=%%D"
+if not defined GOODQ_MODE_WSL goto :blocked
+set "GOODQ_WSL_DISTRO=%GOODQ_MODE_WSL%"
 call "%~dp0scripts\_lib\interpreter_bindings.bat"
-if "%WSL_DISTRO%"=="" set "WSL_DISTRO=%GOODQ_WSL_DISTRO%"
-if "%WSL_DISTRO%"=="" set "WSL_DISTRO=Ubuntu-22.04"
-set "GOODQ_WSL_DISTRO=%WSL_DISTRO%"
 
 call :dashboard -Event start
 
-echo [DEV ON] Resolving the GoodQ Python environment...
+REM Refuse collisions before loading models or changing WSL worker files.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -CheckStart
+if errorlevel 1 goto :blocked
 
+echo [DEV ON] Resolving the same core interpreter as the canonical owner...
 set "PYTHONPATH=%~dp0"
 set "PYTHON_EXE="
-if defined CONDA_PREFIX if exist "%CONDA_PREFIX%\python.exe" set "PYTHON_EXE=%CONDA_PREFIX%\python.exe"
-if not defined PYTHON_EXE if defined CONDA_EXE for %%I in ("%CONDA_EXE%") do if exist "%%~dpI..\envs\%GOODQ_CONDA_ENV%\python.exe" set "PYTHON_EXE=%%~dpI..\envs\%GOODQ_CONDA_ENV%\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\envs\goodq_core\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=%USERPROFILE%\anaconda3\envs\goodq_core\python.exe"
-if not defined PYTHON_EXE if exist "C:\ProgramData\miniconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\miniconda3\envs\goodq_core\python.exe"
-if not defined PYTHON_EXE if exist "C:\ProgramData\anaconda3\envs\goodq_core\python.exe" set "PYTHON_EXE=C:\ProgramData\anaconda3\envs\goodq_core\python.exe"
-if not defined PYTHON_EXE set "PYTHON_EXE=python"
+for /f "delims=" %%P in ('powershell -NoProfile -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQPythonExe"') do set "PYTHON_EXE=%%P"
+if not defined PYTHON_EXE goto :blocked
+if not exist "%PYTHON_EXE%" goto :blocked
 
 echo [DEV ON] Validating the resolved configuration...
 "%PYTHON_EXE%" -c "from steps.common.config_loader import load_configs, validate_config_mapping; validate_config_mapping(load_configs())"
@@ -30,7 +35,7 @@ if errorlevel 1 (
 call :dashboard -Event node -Node CONFIG -State ready -Message "configuration validated"
 
 echo [DEV ON] Synchronizing verified WSL audio worker files...
-"%PYTHON_EXE%" scripts\sync_wsl_audio_worker.py --distro "%WSL_DISTRO%"
+"%PYTHON_EXE%" scripts\sync_wsl_audio_worker.py --distro "%GOODQ_WSL_DISTRO%"
 if errorlevel 1 (
     echo [ERROR] WSL audio worker deployment is not verified. Local Agent Mode was not started.
     call :dashboard -Event node -Node "WSL AUDIO" -State blocked -Message "worker deployment is not verified"
@@ -62,40 +67,17 @@ if errorlevel 1 (
 )
 call :dashboard -Event node -Node QDRANT -State ready -Message "loopback store is available"
 
-echo [DEV ON] Starting API Server and Ingestion Watchdog...
-
-REM Ensure existing API / Watchdog instances are closed first to prevent conflicts
-powershell -NoProfile -Command "$conn = Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; $deadline = (Get-Date).AddSeconds(3); do { if (-not (Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue)) { exit 0 }; Start-Sleep -Milliseconds 200 } while ((Get-Date) -lt $deadline)"
-
-REM Start API Server in a separate minimized window
+REM This foreground PowerShell process is the one canonical supervisor. Its
+REM startup/health/drain receipts own the result; no second API/Watchdog launcher.
+echo [DEV ON] Starting the canonical supervised GoodQ runtime...
+echo [DEV ON] Keep this supervisor window open. Use Dev Off to drain active work.
+echo [DEV ON] Hermes and whole-workstation model readiness require their separate gates.
 set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"
-set "API_LAUNCH_LOG=%TEMP%\goodq_api_launch.log"
-del /q "%API_LAUNCH_LOG%" >nul 2>&1
-start "GoodQ_API" /min cmd.exe /d /c ""%PYTHON_EXE%" -m api.server 1>> "%API_LAUNCH_LOG%" 2>&1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -Supervise
+set "DEV_ON_EXIT_CODE=%ERRORLEVEL%"
 set "GOODQ_PREWARM_RETRIEVAL_MODELS="
-
-echo [DEV ON] Local agent mode activated.
-echo vLLM endpoint:  http://127.0.0.1:38005/v1
-echo GoodQ API:      http://127.0.0.1:30000
-powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(60); do { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:30000/ | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); Write-Error ('API did not become ready. launch_log=' + $env:API_LAUNCH_LOG); if (Test-Path -LiteralPath $env:API_LAUNCH_LOG) { Get-Content -LiteralPath $env:API_LAUNCH_LOG -Tail 12 | ForEach-Object { Write-Error $_ } }; exit 1"
-if errorlevel 1 (
-    call :dashboard -Event node -Node API -State blocked -Message "loopback endpoint did not become ready; launch log is shown above"
-    goto :blocked
-)
-call :dashboard -Event node -Node API -State ready -Message "loopback endpoint is available"
-
-REM Start the watchdog only after API readiness to avoid concurrent conda-run temp-file contention.
-set "WATCHDOG_LAUNCH_LOG=%TEMP%\goodq_watchdog_launch.log"
-del /q "%WATCHDOG_LAUNCH_LOG%" >nul 2>&1
-start "GoodQ_Watchdog" /min cmd.exe /d /c ""%PYTHON_EXE%" -m cli.watchdog 1>> "%WATCHDOG_LAUNCH_LOG%" 2>&1"
-
-powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(15); do { if (Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'cli.watchdog' }) { exit 0 }; Start-Sleep -Seconds 1 } while ((Get-Date) -lt $deadline); Write-Error ('Watchdog did not stay running. launch_log=' + $env:WATCHDOG_LAUNCH_LOG); if (Test-Path -LiteralPath $env:WATCHDOG_LAUNCH_LOG) { Get-Content -LiteralPath $env:WATCHDOG_LAUNCH_LOG -Tail 12 | ForEach-Object { Write-Error $_ } }; exit 1"
-if errorlevel 1 (
-    call :dashboard -Event node -Node WATCHDOG -State blocked -Message "process did not stay running; launch log is shown above"
-    goto :blocked
-)
-call :dashboard -Event node -Node WATCHDOG -State ready -Message "ingestion monitor is running"
-call :dashboard -Event final -State ready -Message "All verified services are available."
+if not "%DEV_ON_EXIT_CODE%"=="0" goto :blocked
+echo [DEV ON] The supervised runtime has stopped. Its receipts retain the outcome.
 goto :finish
 
 :blocked
@@ -108,6 +90,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dev_mode_dashboard.p
 exit /b %errorlevel%
 
 :finish
+popd
 if /i not "%GOODQ_NO_PAUSE%"=="1" pause
 exit /b %DEV_ON_EXIT_CODE%
 

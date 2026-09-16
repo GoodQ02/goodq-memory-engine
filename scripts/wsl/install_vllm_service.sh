@@ -1,6 +1,6 @@
 #!/bin/bash
 # vLLM systemd service installer for the local GoodQ primary LLM.
-# Creates a WSL systemd service that autostarts with WSL and binds to localhost.
+# Installs the on-demand WSL owner used by Dev On/Dev Off, bound to localhost.
 
 set -euo pipefail
 WSL_USER="${GOODQ_WSL_USER:-${SUDO_USER:-$(whoami)}}"
@@ -91,19 +91,17 @@ echo "[3/6] Reloading systemd daemon..."
 echo "Daemon reloaded"
 echo ""
 
-echo "[4/6] Enabling vLLM service (auto-start on boot)..."
-"${SUDO[@]}" systemctl enable vllm-llama1b.service
-echo "Service enabled"
+echo "[4/6] Disabling independent WSL boot startup..."
+"${SUDO[@]}" systemctl disable vllm-llama1b.service
+echo "Service is on demand; Dev On/Dev Off own its lifecycle"
 echo ""
 
-echo "[5/6] Starting vLLM service..."
-"${SUDO[@]}" systemctl restart vllm-llama1b.service
-echo "Service started"
+echo "[5/6] Preserving the current running state..."
+echo "No model is started or restarted during installation."
 echo ""
 
 echo "[6/6] Checking service status..."
-sleep 5
-"${SUDO[@]}" systemctl status vllm-llama1b.service --no-pager -l || true
+"${SUDO[@]}" systemctl show vllm-llama1b.service --property=LoadState,ActiveState,UnitFileState
 echo ""
 
 echo "=================================================================="
@@ -117,21 +115,12 @@ echo "  Stop:    systemctl stop vllm-llama1b"
 echo "  Restart: systemctl restart vllm-llama1b"
 echo "  Logs:    journalctl -u vllm-llama1b -f"
 echo ""
-echo "Service will auto-start on WSL boot!"
-echo "Windows callers should use scripts/start_vllm_servers.bat to keep WSL alive."
+echo "Service will remain off after WSL boot until explicitly started."
+echo "Use Dev On/Dev Off, or scripts/start_vllm_servers.bat and scripts/stop_vllm_servers.bat."
 echo ""
 echo "Logs saved to:"
 echo "  ~/vllm_server/logs/vllm-service.log"
 echo "  ~/vllm_server/logs/vllm-service-error.log"
 echo ""
-echo "Testing in 30 seconds..."
-sleep 30
-
-echo "Testing endpoint..."
-if curl -s "http://${VLLM_HOST}:${VLLM_PORT}/v1/models" > /dev/null 2>&1; then
-    echo "vLLM service is responding."
-else
-    echo "Service may still be loading. Check with:"
-    echo "   journalctl -u vllm-llama1b -f"
-fi
+echo "The Windows start control performs the bounded model-endpoint readiness check."
 echo ""

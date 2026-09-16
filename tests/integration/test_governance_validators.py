@@ -359,7 +359,7 @@ def test_hygiene_and_sanitization():
     client = MiniAgentClient(profile="safe")
     
     # Verify sanitization of absolute paths
-    windows_path = "C:\\Users\\jdben\\My Drive\\_AGENT\\file.txt"
+    windows_path = "C:\\Users\\example-user\\My Drive\\_AGENT\\file.txt"
     sanitized_win = client.sanitize_envelope(windows_path)
     assert "C:\\" not in sanitized_win
     assert "relative/file.txt" in sanitized_win
@@ -374,7 +374,7 @@ def test_hygiene_and_sanitization():
     assert "/mnt/" not in sanitized_wsl
     assert "relative/test.py" in sanitized_wsl
     
-    linux_path = "/home/jdben/config.yaml"
+    linux_path = "/home/example-user/config.yaml"
     sanitized_lin = client.sanitize_envelope(linux_path)
     assert "/home/" not in sanitized_lin
     assert "relative/config.yaml" in sanitized_lin

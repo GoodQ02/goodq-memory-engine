@@ -110,21 +110,20 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
-- [SCRIPT_REGISTRY.md](../../archive/docs/bootstrap/SCRIPT_REGISTRY.md)
-- [HANDOFF_BASEMENT_PHASE.md](../archive/HANDOFF_BASEMENT_PHASE.md)
-- [ARTIFACT_LOCATION_CONTRACT.md](../archive/technical/ARTIFACT_LOCATION_CONTRACT.md)
-- [PIPELINE_RESTORATION_BACKLOG.md](../archive/technical/PIPELINE_RESTORATION_BACKLOG.md)
-- [PHASE5_FINAL_ACTIVATION_SUMMARY.md](../archive/technical/PHASE5_FINAL_ACTIVATION_SUMMARY.md)
-- [PIPELINES.md](../archive/architecture/PIPELINES.md)
-- [UCF_REMAINING_WORK.md](../archive/agent/UCF_REMAINING_WORK.md)
-- [UCF_SEARCH_LOOP_PLAN.md](../archive/agent/UCF_SEARCH_LOOP_PLAN.md)
-- [UCF_QDRANT_STATUS_BACKFILL_PLAN.md](../archive/agent/UCF_QDRANT_STATUS_BACKFILL_PLAN.md)
-- [NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md](../archive/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md)
-- [LLM_IMPLEMENTATION_PLAN_PHASE1.md](../archive/guides/llm/LLM_IMPLEMENTATION_PLAN_PHASE1.md)
-- [AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md](../archive/technical/AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md)
-- [DOCS_AUDIT_AND_REORGANIZATION_REPORT.md](../archive/reports/DOCS_AUDIT_AND_REORGANIZATION_REPORT.md)
-- [POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md](../archive/reports/POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md)
-- [UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md](../archive/agent/UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md)
+- HANDOFF_BASEMENT_PHASE.md (historical material omitted from public source)
+- ARTIFACT_LOCATION_CONTRACT.md (historical material omitted from public source)
+- PIPELINE_RESTORATION_BACKLOG.md (historical material omitted from public source)
+- PHASE5_FINAL_ACTIVATION_SUMMARY.md (historical material omitted from public source)
+- PIPELINES.md (historical material omitted from public source)
+- UCF_REMAINING_WORK.md (historical material omitted from public source)
+- UCF_SEARCH_LOOP_PLAN.md (historical material omitted from public source)
+- UCF_QDRANT_STATUS_BACKFILL_PLAN.md (historical material omitted from public source)
+- NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md (historical material omitted from public source)
+- LLM_IMPLEMENTATION_PLAN_PHASE1.md (historical material omitted from public source)
+- AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md (historical material omitted from public source)
+- DOCS_AUDIT_AND_REORGANIZATION_REPORT.md (historical material omitted from public source)
+- POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md (historical material omitted from public source)
+- UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md (historical material omitted from public source)
 
 ## Delete-Safe Registry
 

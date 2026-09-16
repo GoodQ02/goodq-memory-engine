@@ -13,7 +13,7 @@ This script produces evidence for the roster; it does not create identities.
 
 Usage:
     conda run -n goodq_core python scripts/identity/extract_name_mentions.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
 
 Output (all gitignored):

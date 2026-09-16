@@ -12,14 +12,14 @@ before posting.
 
 - First install, reset, or ingestion trouble: read
   [`docs/guides/FIRST_RUN.md`](docs/guides/FIRST_RUN.md) or the
-  [Clean Memory Start Guide](docs/guides/CLEAN_MEMORY_START.md) / [historical uninstall guide](docs/archive/guides/install/UNINSTALL.md), then use the
+  [Clean Memory Start Guide](docs/guides/CLEAN_MEMORY_START.md), then use the
   **First-Run Problem** issue template if the problem persists.
 - Reproducible runtime or documentation bug: use the **Bug Report** issue
   template.
 - Scoped product or documentation idea: use the **Feature Request** issue
   template.
 - General questions, operator notes, and community discussion: use
-  [GitHub Discussions](https://github.com/GoodQ02/goodq4all/discussions).
+  [GitHub Discussions](https://github.com/GoodQ02/goodq-memory-engine/discussions).
 - Suspected vulnerability: do not open a public issue. Follow
   [`SECURITY.md`](SECURITY.md).
 - Conduct or safety concern: follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).

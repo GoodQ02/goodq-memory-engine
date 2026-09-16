@@ -15,8 +15,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import os
-import re
 import shutil
 import socket
 import subprocess
@@ -102,29 +102,6 @@ def _bootstrap_repo_imports(repo_root: Path) -> None:
         sys.path.insert(0, repo_root_str)
 
 
-def _parse_mode(agent_status_text: str) -> Optional[str]:
-    # Supports either "- MODE: ..." or "MODE: ..." formats.
-    m = re.search(r"^\s*-\s*MODE:\s*(.+?)\s*$", agent_status_text, flags=re.MULTILINE)
-    if m:
-        return m.group(1).strip()
-    m = re.search(r"^\s*MODE:\s*(.+?)\s*$", agent_status_text, flags=re.MULTILINE)
-    if m:
-        return m.group(1).strip()
-    return None
-
-
-def _parse_phase6b_status(agent_status_text: str) -> Optional[str]:
-    for line in agent_status_text.splitlines():
-        if "Phase 6b Harmonization" not in line:
-            continue
-        # Expected markdown table row: | Phase 6b Harmonization | <status> | <notes> |
-        parts = [p.strip() for p in line.split("|")]
-        parts = [p for p in parts if p]
-        if len(parts) >= 2:
-            return parts[1]
-    return None
-
-
 def _is_audio_enabled(cfg: Dict[str, Any]) -> bool:
     seg = cfg.get("segmentation") if isinstance(cfg, dict) else None
     if not isinstance(seg, dict):
@@ -191,29 +168,42 @@ def _governance_checks(repo_root: Path) -> Tuple[List[Item], Dict[str, Any]]:
         else:
             items.append(Item(FAIL, f"Missing required governance doc: {path}"))
 
-    status_text, err = _read_text(agent_status)
-    if status_text is None:
-        items.append(Item(FAIL, f"Could not read {agent_status}: {err}"))
+    # The status page is a compatibility redirect. Validate the generated JSON
+    # against its owning sealed evidence, using the canonical projection builder.
+    from scripts.docs.build_current_state import project_current_state_json
+
+    snapshot_path = repo_root / "docs" / "agent" / "current_state.json"
+    try:
+        projected = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        if not isinstance(projected, dict) or projected.get("schema_version") != 2:
+            raise ValueError("unsupported current-state projection schema_version")
+        evidence_relative = projected["generated_from"]
+        if not isinstance(evidence_relative, str):
+            raise ValueError("generated_from must be a repository-relative evidence path")
+        evidence_candidate = Path(evidence_relative)
+        if evidence_candidate.is_absolute() or ".." in evidence_candidate.parts:
+            raise ValueError("generated_from must stay under docs/diagnostics/evidence")
+        evidence_path = (repo_root / evidence_candidate).resolve()
+        evidence_root = (repo_root / "docs" / "diagnostics" / "evidence").resolve()
+        if not evidence_path.is_relative_to(evidence_root):
+            raise ValueError("generated_from must stay under docs/diagnostics/evidence")
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        if not isinstance(evidence, dict):
+            raise ValueError("current-state evidence must be an object")
+        expected = project_current_state_json(evidence, evidence_source=evidence_relative)
+        if projected != expected:
+            raise ValueError("current-state projection differs from its owning evidence")
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        items.append(Item(FAIL, f"Cannot validate docs/agent/current_state.json: {exc}"))
         return items, info
 
-    info["agent_status_text"] = status_text
-
-    mode = _parse_mode(status_text)
-    if mode:
-        items.append(Item(PASS, f"Declared MODE: {mode}"))
-        if re.search(r"\baudit\b|\bstabil", mode, flags=re.IGNORECASE):
-            items.append(Item(WARN, "MODE indicates audit/stabilization; run ingestion intentionally and scope it."))
-    else:
-        items.append(Item(WARN, "Could not parse MODE from docs/goodq4all_agent_status.md"))
-
-    phase6b_status = _parse_phase6b_status(status_text)
-    if phase6b_status:
-        items.append(Item(PASS, f"Declared Phase 6b status: {phase6b_status}"))
-    else:
-        items.append(Item(WARN, "Could not parse Phase 6b Harmonization status from docs/goodq4all_agent_status.md"))
-
-    info["mode"] = mode
-    info["phase6b_status"] = phase6b_status
+    info["current_state"] = expected
+    items.append(Item(
+        PASS,
+        f"Validated current-state snapshot {expected['evidence_id']}, captured "
+        f"{expected['captured_at_utc']}; lifecycle at capture: {expected['lifecycle']['state']}. "
+        "This is historical evidence, not a live readiness probe.",
+    ))
     return items, info
 
 
@@ -379,17 +369,20 @@ def _phase6_checks(repo_root: Path, cfg: Optional[Dict[str, Any]], gov: Dict[str
         if isinstance(phase6_cfg, dict):
             phase6_enabled = bool(phase6_cfg.get("enabled", True))
 
-    declared_phase6b = gov.get("phase6b_status")
     if phase6_enabled:
-        if isinstance(declared_phase6b, str) and declared_phase6b.strip():
-            if "✅" in declared_phase6b:
-                items.append(Item(PASS, "No known Phase 6 blockers indicated by governance status"))
-            else:
-                items.append(Item(FAIL, f"Phase 6 is enabled but governance declares Phase 6b is not operational: {declared_phase6b}"))
-        else:
-            items.append(Item(WARN, "Phase 6 is enabled but Phase 6b status could not be confirmed from governance docs"))
+        snapshot = gov.get("current_state")
+        provenance = (
+            f"Snapshot captured {snapshot['captured_at_utc']} describes historical corpus state. "
+            if isinstance(snapshot, dict) and snapshot.get("captured_at_utc")
+            else ""
+        )
+        items.append(Item(
+            WARN,
+            provenance + "Phase 6 live readiness is unproven by this passive check; "
+            "verify current scoped scene receipts before relying on execution readiness.",
+        ))
     else:
-        items.append(Item(PASS, "Phase 6 disabled in config; skipping Phase 6b governance gating"))
+        items.append(Item(PASS, "Phase 6 disabled in config; skipping live readiness evidence"))
 
     return items
 

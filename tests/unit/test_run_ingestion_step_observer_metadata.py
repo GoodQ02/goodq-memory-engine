@@ -8,6 +8,7 @@ import types
 from pathlib import Path
 
 import pytest
+import typer
 
 
 def _load_run_ingestion_module():
@@ -248,6 +249,255 @@ def test_finalize_capability_receipt_writes_degraded_receipt_from_current_run_ev
     persisted = json.loads((output.parent / "capability_receipt.json").read_text(encoding="utf-8"))
     assert receipt["outcome"] == "degraded"
     assert persisted["capabilities_by_step"]["audio_embed_clap"]["reason"] == "optional_step_failed"
+
+
+def test_current_run_capability_reader_counts_malformed_fresh_log_rows(
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "step_runs.jsonl").write_text(
+        "{not-json}\n"
+        + json.dumps(
+            {"run_id": "other-run", "step": "image_ocr", "status": "ok"}
+        )
+        + "\n"
+        + json.dumps(
+            {"run_id": "receipt-run", "step": "unknown_step", "status": "ok"}
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "run_id": "receipt-run",
+                "step": "audio_unified_wsl2",
+                "status": "ok",
+            }
+        )
+        + "\n"
+        + "".join(
+            json.dumps({"run_id": "receipt-run", "step": step, "status": "ok"})
+            + "\n"
+            for step in (
+                "video_scene_detect",
+                "text_embed",
+                "text_embed",
+                "scene_visual_embeddings",
+                "cross_modal_harmonization",
+            )
+        )
+        + json.dumps(
+            {
+                "run_id": "receipt-run",
+                "step": "image_ocr",
+                "status": "ok",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rows, malformed_count = run_ingestion._read_current_run_capability_rows(
+        {"paths": {"log_dir": str(log_dir)}},
+        "receipt-run",
+    )
+
+    assert [row["step"] for row in rows] == ["image_ocr"]
+    assert malformed_count == 2
+
+
+def test_release_capability_receipt_fails_closed_on_incomplete_profile_evidence(
+    monkeypatch,
+    tmp_path: Path,
+):
+    run_ingestion = _load_run_ingestion_module()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "step_runs.jsonl").write_text(
+        json.dumps(
+            {
+                "run_id": "release-receipt-run",
+                "step": "audio_transcribe_local",
+                "status": "ok",
+                "scene_id": "scene-1",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        run_ingestion,
+        "_CURRENT_RUN_CONTEXT",
+        {"id": "release-receipt-run", "warnings": []},
+    )
+    output = tmp_path / "output" / "scene_ingest_results.json"
+
+    receipt = run_ingestion._finalize_capability_receipt(
+        terminal_status="completed",
+        cfg={
+            "paths": {"log_dir": str(log_dir)},
+            "host": {"profile": "PUBLIC_GPU_ENHANCED"},
+        },
+        results=[{"scenes": [{"scene_id": "scene-1"}]}],
+        output=output,
+        input_count=1,
+        release_validation=True,
+    )
+
+    assert receipt["schema_version"] == 2
+    assert receipt["full_coverage"] is True
+    assert receipt["outcome"] == "failed"
+    assert receipt["summary"]["missing_expected"] > 0
+    assert "capability_profile_contract" in receipt["evidence"]
+
+
+def test_release_validation_requires_an_explicit_isolated_config() -> None:
+    run_ingestion = _load_run_ingestion_module()
+
+    with pytest.raises(typer.BadParameter, match="explicit --config"):
+        run_ingestion._validate_release_validation_request(
+            release_validation=True,
+            config=None,
+        )
+
+
+def test_failed_release_receipt_raises_terminal_exit() -> None:
+    run_ingestion = _load_run_ingestion_module()
+
+    with pytest.raises(typer.Exit) as excinfo:
+        run_ingestion._enforce_release_capability_receipt(
+            {"outcome": "failed"},
+            release_validation=True,
+        )
+
+    assert excinfo.value.exit_code == 1
+
+
+def test_release_validation_zero_video_run_passes_zero_input_and_exits(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_ingestion = _load_run_ingestion_module()
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output" / "results.json"
+    workspace = tmp_path / "workspace"
+    config_path = tmp_path / "witness-config.json"
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        run_ingestion,
+        "load_isolated_runtime_cfg_snapshot",
+        lambda _path: {
+            "paths": {
+                "processing": str(tmp_path / "processing"),
+                "log_dir": str(tmp_path / "logs"),
+            },
+            "host": {"profile": "PUBLIC_GPU_ENHANCED"},
+        },
+    )
+    monkeypatch.setattr(
+        run_ingestion,
+        "_select_ingest_videos",
+        lambda selected, explicit: (selected, []),
+    )
+    monkeypatch.setattr(run_ingestion, "is_baseline", lambda: False)
+    monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
+    monkeypatch.setattr(
+        run_ingestion,
+        "_resolve_audio_runtime_contract",
+        lambda _cfg: {"selected": "none", "reason": "test"},
+    )
+    monkeypatch.setattr(
+        run_ingestion,
+        "_write_cfg_snapshot",
+        lambda _cfg, _workspace: tmp_path / "resolved.json",
+    )
+    monkeypatch.setattr(run_ingestion, "_resolve_processing_root", lambda _cfg: tmp_path)
+    monkeypatch.setattr(run_ingestion, "resolve_ffmpeg", lambda _cfg: "ffmpeg")
+    monkeypatch.setattr(
+        run_ingestion.PipelineObserver,
+        "from_runtime",
+        lambda **_kwargs: None,
+    )
+
+    def _finalize(**kwargs):
+        captured.update(kwargs)
+        return {"outcome": "failed"}
+
+    monkeypatch.setattr(run_ingestion, "_finalize_capability_receipt", _finalize)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        run_ingestion.run(
+            input_dir=input_dir,
+            input_file=None,
+            config=config_path,
+            output=output,
+            workspace=workspace,
+            max_videos=0,
+            max_scenes=0,
+            scene_threshold=None,
+            min_scene_seconds=None,
+            force_reprocess=False,
+            verbose=False,
+            step_timeout=None,
+            chunk_size=300.0,
+            chunk_overlap=10.0,
+            enable_control_agent=False,
+            enable_auto_healing=False,
+            scene_start_index=None,
+            scene_end_index=None,
+            scene_indices=None,
+            release_validation=True,
+        )
+
+    assert excinfo.value.exit_code == 1
+    assert captured["input_count"] == 0
+    assert captured["release_validation"] is True
+
+
+def test_wsl_component_outcomes_are_logged_as_independent_capability_rows(
+    monkeypatch,
+) -> None:
+    run_ingestion = _load_run_ingestion_module()
+    logged: list[dict[str, object]] = []
+
+    def _log_step_run(cfg, step, item, duration_ms, status, error=None, *, extra=None):
+        logged.append(
+            {
+                "step": step,
+                "status": status,
+                "error": error,
+                "extra": dict(extra or {}),
+            }
+        )
+
+    monkeypatch.setattr(run_ingestion, "log_step_run", _log_step_run)
+    run_ingestion._log_wsl_capability_outcomes(
+        cfg={"paths": {"log_dir": "unused"}},
+        item={"scene_id": "scene-1"},
+        duration_ms=125.0,
+        outcomes={
+            "transcription": {"status": "ok", "reason": "transcript_emitted"},
+            "diarization": {"status": "ok", "reason": "speaker_tracks_emitted"},
+            "acoustic_emotion": {"status": "ok", "reason": "emotion_emitted"},
+            "wav2vec2": {"status": "ok", "reason": "embedding_emitted"},
+            "clap_handoff": {
+                "status": "ok",
+                "reason": "canonical_clap_required",
+            },
+        },
+    )
+
+    assert [row["step"] for row in logged] == [
+        "audio_transcribe_local",
+        "audio_speaker_merge",
+        "audio_emotion",
+        "audio_wav2vec2_enrichment",
+        "audio_clap_handoff",
+    ]
+    assert all(row["status"] == "ok" for row in logged)
+    assert logged[-1]["extra"]["component"] == "clap_handoff"
 
 
 def test_base_env_enforces_python_no_user_site(monkeypatch, tmp_path: Path):

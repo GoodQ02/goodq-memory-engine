@@ -24,7 +24,7 @@ Name "GoodQ4All"
 !endif
 !endif
 !endif
-OutFile "${GOODQ_INSTALLER_OUTPUT_ROOT}\GoodQ4All_Setup_3.0.0.exe"
+OutFile "${GOODQ_INSTALLER_OUTPUT_ROOT}\GoodQ4All_Setup_3.0.1.exe"
 InstallDir "$PROGRAMFILES64\GoodQ4All"
 RequestExecutionLevel admin
 
@@ -32,7 +32,7 @@ RequestExecutionLevel admin
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\..\branding\favicon.ico"
 !define MUI_UNICON "..\..\branding\favicon.ico"
-!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v3.0.0 Offline Installer"
+!define MUI_WELCOMEPAGE_TITLE "Welcome to the GoodQ4All v3.0.1 Offline Installer"
 !define MUI_WELCOMEPAGE_TEXT "This installer will set up your local-first personal memory engine completely offline.\r\n\r\nIt configures a sandboxed Python runtime and imports selected local models."
 
 !insertmacro MUI_PAGE_WELCOME
@@ -149,6 +149,8 @@ runtime_ok:
   File "staged\configs\model_download_manifest.json.sig"
   File "staged\configs\selected_capabilities.json"
   File "staged\configs\selected_capabilities.json.sig"
+  File "staged\configs\model_member_manifest.json"
+  File "staged\configs\model_member_manifest.json.sig"
   File "staged\configs\installer_profile.txt"
 
   SetOutPath "$INSTDIR\api"
@@ -198,24 +200,15 @@ runtime_ok:
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\processed"
   CreateDirectory "$COMMONAPPDATA\GoodQ4All\GoodQ_Data\failed"
 
-  ; Verify the signed external payload manifest, then extract every bounded
-  ; local pack.  This is intentionally before wheel installation and model
-  ; verification so a partial or moved release bundle fails at its boundary.
+  ; Authenticate the external manifest once and stream those exact bytes to
+  ; the installed Python apply path. Pack handles stay open through extraction.
   DetailPrint "Step 5/12: Verifying and extracting signed offline payload packs..."
-  StrCpy $InstallStage "payload_pack_verify"
-  nsExec::ExecToLog '"$INSTDIR\LAUNCH_GOODQ.exe" --verify-release-payload "$EXEDIR"'
+  StrCpy $InstallStage "payload_pack_apply"
+  nsExec::ExecToLog '"$INSTDIR\LAUNCH_GOODQ.exe" --apply-release-payload "$EXEDIR" --payload-data-dir "$COMMONAPPDATA\GoodQ4All"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Signed offline payload verification failed. Keep every release asset together and retry. Code $0"
-    Abort
-  ${EndIf}
-  StrCpy $InstallStage "payload_pack_extract"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\scripts\install\release_payload_packs.py" apply --bundle-root "$EXEDIR" --install-dir "$INSTDIR" --data-dir "$COMMONAPPDATA\GoodQ4All"'
-  Pop $0
-  ${If} $0 != 0
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Signed offline payload extraction failed. Code $0"
+    MessageBox MB_OK|MB_ICONSTOP "Error: Signed offline payload verification or extraction failed. Keep every release asset together and retry. Code $0"
     Abort
   ${EndIf}
 
@@ -476,7 +469,7 @@ wsl_done:
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayName" "GoodQ4All"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "3.0.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayVersion" "3.0.1"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "Publisher" "GoodQ4All Team"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GoodQ4All" "DisplayIcon" '"$INSTDIR\branding\favicon.ico"'
 SectionEnd

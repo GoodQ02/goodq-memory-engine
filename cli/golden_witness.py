@@ -231,7 +231,7 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
         "memory": {
             "routing": {
                 "quantization_enabled": False,
-                "quantization_shadow_mode": True,
+                "quantization_shadow_mode": False,
             },
         },
         "qdrant": {

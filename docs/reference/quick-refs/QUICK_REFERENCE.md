@@ -15,7 +15,7 @@ Its previous contents contained older commands, legacy path layouts, and superse
 - Canonical CLI reference:
   [`docs/reference/CLI-REFERENCE.md`](../CLI-REFERENCE.md)
 - Launch/control runbook:
-  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
+  `docs/guides/general/LAUNCH_INSTRUCTIONS.md` (historical material omitted from public source)
 - Platform/profile contract:
   [`docs/reference/PLATFORM_SUPPORT.md`](../PLATFORM_SUPPORT.md)
 

@@ -78,4 +78,4 @@ a reproducible product vulnerability:
 - Support routing: [`SUPPORT.md`](SUPPORT.md)
 - Contributor expectations: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - Bootstrap guide: [`docs/bootstrap/INSTALL_BOOTSTRAP.md`](docs/bootstrap/INSTALL_BOOTSTRAP.md)
-- Historical shipping profile: [`docs/archive/releases/SHIP_PROFILE.md`](docs/archive/releases/SHIP_PROFILE.md)
+- Public-release boundary: [`docs/releases/PUBLIC_SANITIZATION_MANIFEST.md`](docs/releases/PUBLIC_SANITIZATION_MANIFEST.md)

@@ -15,13 +15,13 @@ Holiday/place/event context nodes are Phase 5B (separate script).
 
 Usage — dry-run first (required):
     conda run -n goodq_core python scripts/identity/promote_identity_layer.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         --dry-run \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
 
 Usage — actual promotion (only after dry-run review):
     conda run -n goodq_core python scripts/identity/promote_identity_layer.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         --confirm \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
 

@@ -80,7 +80,7 @@ the literal envelope renderer.
 ## Related Docs
 
 - Launch:
-  [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
+  `docs/guides/general/LAUNCH_INSTRUCTIONS.md` (historical material omitted from public source)
 - API:
   [`docs/reference/API.md`](../API.md)
 - Quick index:

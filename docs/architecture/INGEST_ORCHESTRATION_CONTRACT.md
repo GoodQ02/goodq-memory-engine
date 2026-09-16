@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-06 -->
 
 # Ingest Orchestration Contract
 
@@ -58,6 +58,14 @@ runner:
 - `pipelines/direct_ingestion.py` is a thin wrapper around `cli/run_ingestion.py`
 - `cli.watchdog` is an orchestration surface, not an alternate ingest engine
 - launchers and wrappers may start ingestion, but they do not redefine pipeline order
+
+The direct adapter passes resolved configuration to `run_with_config`, the
+same body used by the CLI. A caller-owned run ID stays attached to the runner's
+receipts. Standalone CLI invocations allocate a fresh ID. The adapter scopes
+input with `input_file`, retains a unique result file in the configured log
+directory, and requires that result's content identity to match the input.
+Missing or unbound results and runner exits fail visibly; old output files and
+an empty exception message cannot establish success.
 
 ### 2a. API mutation boundary
 
@@ -158,6 +166,40 @@ Final cleanup uses the same evidence gate. The checkpoint may be deleted only
 when Phase 6 is complete and a fresh re-probe verifies every current window as
 committed with exactly the five targets above and no failed target. Qdrant
 completion alone is not sufficient to discard recovery evidence.
+
+### Phase 6 completion ownership
+
+`steps/video/scene_visual_embeddings.py` owns the Phase 6 vector-commit receipt
+in `scene_manifest.json`. Generated CLIP/DINO identifiers are not proof of a
+successful write. A failed Phase 6 receipt requires retry even when those
+identifiers and the representative frame already exist.
+
+The runner derives final Phase 6 status from that receipt and the exact scene
+set, using the same oracle as progressive recovery. Ordinary scene or summary
+commits cannot substitute for Phase 6 visual-vector commits. The runner must
+preserve failure in results and the temporal index, retain recovery evidence,
+and terminate with a nonzero exit when enabled, required Phase 6 persistence
+is incomplete, including outside release-validation mode.
+
+Watchdog completion shortcuts require matching source identity, the same
+Phase 6 commit oracle, and complete detector coverage from the configured
+`db_dir/ucf/ucf_ledger.db`, opened read-only. A successful selected-scene witness
+does not establish completion of its entire source video. Missing or unreadable
+evidence cannot authorize an already-processed shortcut.
+
+### FAISS replay and publication
+
+Stable vector IDs are an upsert contract, including retries. The common FAISS
+writer replaces an ID's previous vector and collapses historical duplicates
+only for IDs included in that write. Unrelated rows remain unchanged.
+
+The accepted HNSW index type and cross-process `FaissLock` remain in use.
+Identical unique vectors do not rebuild the graph; changed or duplicated IDs
+require an in-memory rebuild because HNSW cannot remove individual vectors.
+All writers serialize to a temporary file beside the index and publish it
+atomically while holding the lock. A failed serialization must preserve the
+previous readable index and report failure. This is per-index durability,
+not a transaction across FAISS, Qdrant, and SQLite.
 
 ### 4b. Governed isolated materialization lifecycle
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-19 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-07 -->
 
 # Watchdog Automatic Ingestion System
 
@@ -15,6 +15,51 @@
 The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configured import inbox and processes supported files through the canonical ingestion runtime. Runtime paths are resolved from `configs/config.yaml`, local overrides, and environment variables via `config_loader`.
 
 `BASELINE` remains fully supported on Windows without WSL. If the active runtime contract enables WSL audio, video ingestion may delegate scene-audio work to the WSL bridge; otherwise the Windows-local audio path remains the default.
+
+Completion shortcuts follow the [ingest orchestration contract](../architecture/INGEST_ORCHESTRATION_CONTRACT.md#4b-phase-6-completion-ownership):
+the content hash, Phase 6 receipt, temporal scene set, and canonical detector
+ledger must agree before a file is treated as already processed. Missing,
+partial, or unreadable evidence leaves the file eligible for ingestion.
+
+Graceful shutdown stops and joins the monitor before placing FIFO stop markers
+after its final queued work. Workers acknowledge every dequeued item in a
+`finally` block, including failures, and exit on their stop marker. Queue drain
+therefore completes before worker shutdown; it may wait for active ingestion.
+This contract does not claim recovery from a forcibly killed process.
+
+### Isolated external lifecycle qualification (September 7)
+
+The repair branch extends the existing `start_goodq_dev.ps1 -Supervise` owner.
+It supplies a unique Windows stop event to the actual API and Watchdog. Watchdog
+feeds that request into the queue drain above; the API enters Uvicorn's graceful
+request/task shutdown. Readiness also verifies that each child joined its own
+Windows Job Object before the launcher accepts its lifecycle ownership.
+
+Request a stop through the same launcher's `-StopReceipt` argument, using that
+invocation's `supervisor.json` (or `startup.json` during startup). The command
+checks repository, protocol, PID, creation time and membership in the named job
+before signalling the event. A submitted request is not completed work. Only a
+live writer's terminal `stopped` receipt with `drain_verified=true` attests this
+bounded drain. Individual scene success still comes from its persistence receipt.
+
+Stop freezes restarts. A drain timeout records failure and preserves busy work.
+Supervised startup failure uses the same drain boundary, including a job that
+began inside the startup window. The startup receipt retains the original error
+and a separate drain result. Each role holds a non-inherited kill-on-close job
+handle until process exit; its Windows children cannot continue beside a
+replacement. Restart additionally waits for that old job to empty.
+
+A supervisor crash preserves the working roles. Their event handles remain
+usable by receipt-bound stop, but the dead supervisor's last observation stays
+historical and cannot certify the subsequent drain. The isolated witness covers
+real entrypoints, queue ownership, native descendants and SQLite transactions.
+A bounded WSL command/child probe also terminated when its owning Windows job
+exited. This is not model-inference, arbitrary Linux detachment or persistent WSL
+service qualification. The repair source's Dev On/Off callers now delegate to
+this owner. Dev Off uses `-StopCurrent` to discover its live invocation and wait
+for terminal drain evidence before releasing compute dependencies. The live
+shortcut and original environment remain unchanged; whole-workstation mode
+qualification and deployment stay in R-19 of the roadmap.
 
 ### What It Does
 
@@ -52,6 +97,11 @@ The Watchdog is GoodQ's **zero-touch ingestion system**. It monitors the configu
 .mp4, .avi, .mov, .mkv, .wmv, .flv, .webm, .m4v
 ```
 **Pipeline**: `pipelines/direct_ingestion.py` -> Full scene detection, audio/video analysis
+
+The direct adapter preserves Watchdog's resolved config and run ID through the
+canonical runner. Its per-call result is stored in the configured log directory
+and must match the input's content hash. No symlink permission or ambient log
+path is required. A failed runner exit is retained as an explicit error code.
 
 ### Audio (via Conda Step Runner)
 ```

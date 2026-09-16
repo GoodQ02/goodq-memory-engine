@@ -24,16 +24,44 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from lib.ingestion_capability_contract import resolve_profile_assets
+from lib.ingestion_capability_contract import (
+    build_profile_asset_closure,
+    resolve_capability_profile,
+    resolve_profile_assets,
+)
 from scripts.assets.personal_asset_vault import evaluate_pack_admission, verify_snapshot
+from scripts.install.installer_contract import (
+    MODEL_MEMBER_MANIFEST_REQUIRED_FIELDS,
+    MODEL_MEMBER_MANIFEST_SCHEMA_VERSION,
+    MODEL_MEMBER_REQUIRED_FIELDS,
+    SELECTED_CAPABILITIES_REQUIRED_FIELDS,
+    SELECTED_CAPABILITIES_SCHEMA_VERSION,
+)
 
 
 class ProfilePackStageError(RuntimeError):
     """Raised when a profile asset cannot be safely materialized."""
 
 
+def _require_fields(
+    value: dict[str, Any], required_fields: frozenset[str], label: str
+) -> None:
+    missing = sorted(required_fields - set(value))
+    if missing:
+        raise ProfilePackStageError(f"{label} is missing required field: {missing[0]}")
+
+
 COPY_CHUNK_BYTES = 16 * 1024 * 1024
 COPY_HEARTBEAT_SECONDS = 30.0
+MODEL_MEMBER_MANIFEST_NAME = "model_member_manifest.json"
+SELECTED_CAPABILITIES_NAME = "selected_capabilities.json"
+REQUIRED_SAFETENSORS_TRANSFORMS = {
+    "blip_caption": ("pytorch_model.bin", "model.safetensors"),
+    "clap_audio": ("pytorch_model.bin", "model.safetensors"),
+    "clip_vit": ("pytorch_model.bin", "model.safetensors"),
+    "hubert_emotion": ("pytorch_model.bin", "model.safetensors"),
+    "vit_gpt2_caption": ("pytorch_model.bin", "model.safetensors"),
+}
 
 
 def _format_bytes(value: int) -> str:
@@ -159,6 +187,272 @@ def _external_source_file(source: Path, record: dict[str, Any], asset_id: str) -
     return matches[0]
 
 
+def _source_member_receipts(snapshot: Path, asset_id: str) -> dict[str, dict[str, Any]]:
+    try:
+        payload = json.loads(
+            (snapshot / "source-manifest.json").read_text(encoding="utf-8")
+        )
+        members = payload["members"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ProfilePackStageError(
+            f"{asset_id} has an unreadable source-member receipt"
+        ) from exc
+    if not isinstance(members, list):
+        raise ProfilePackStageError(
+            f"{asset_id} source-member receipt must contain a member list"
+        )
+    receipts: dict[str, dict[str, Any]] = {}
+    for member in members:
+        if not isinstance(member, dict):
+            raise ProfilePackStageError(
+                f"{asset_id} source-member receipt contains an invalid row"
+            )
+        path = Path(str(member.get("path") or ""))
+        normalized = path.as_posix()
+        if path.is_absolute() or ".." in path.parts or not normalized:
+            raise ProfilePackStageError(
+                f"{asset_id} source-member receipt contains an unsafe path"
+            )
+        if normalized in receipts:
+            raise ProfilePackStageError(
+                f"{asset_id} source-member receipt contains a duplicate path"
+            )
+        receipts[normalized] = dict(member)
+    return receipts
+
+
+def _load_safetensors_tools():
+    import torch
+    from safetensors.torch import load_file, save_file
+
+    return torch, save_file, load_file
+
+
+def _transform_required_safetensors(
+    asset_id: str,
+    runtime_root: Path,
+    *,
+    tool_loader: Callable[[], tuple[Any, Callable[..., Any], Callable[..., Any]]]
+    | None = None,
+) -> list[dict[str, Any]]:
+    """Apply one declared, safe, fatal state-dict transformation."""
+
+    plan = REQUIRED_SAFETENSORS_TRANSFORMS.get(asset_id)
+    if plan is None:
+        return []
+    source_name, target_name = plan
+    source = runtime_root / source_name
+    target = runtime_root / target_name
+    temporary = runtime_root / f".{target_name}.tmp"
+    if not source.is_file():
+        raise ProfilePackStageError(
+            f"{asset_id} required transformation source is missing: {source_name}"
+        )
+    if target.exists() or temporary.exists():
+        raise ProfilePackStageError(
+            f"{asset_id} required transformation target is not fresh: {target_name}"
+        )
+    try:
+        torch, save_file, load_file = (tool_loader or _load_safetensors_tools)()
+    except ImportError as exc:
+        raise ProfilePackStageError(
+            f"{asset_id} required safetensors tooling is unavailable"
+        ) from exc
+
+    source_sha256 = _sha256(source)
+    try:
+        state_dict = torch.load(source, map_location="cpu", weights_only=True)
+        if not isinstance(state_dict, dict) or not state_dict:
+            raise TypeError("safe weight payload is not a non-empty state dictionary")
+        normalized: dict[str, Any] = {}
+        for key, tensor in state_dict.items():
+            if not isinstance(key, str) or not all(
+                hasattr(tensor, method)
+                for method in ("detach", "cpu", "contiguous", "clone")
+            ):
+                raise TypeError("safe weight payload contains a non-tensor member")
+            normalized[key] = tensor.detach().cpu().contiguous().clone()
+        save_file(normalized, temporary)
+        if not temporary.is_file() or temporary.stat().st_size <= 0:
+            raise OSError("safetensors writer did not produce a non-empty file")
+        verified = load_file(temporary, device="cpu")
+        if set(verified) != set(normalized):
+            raise ValueError("safetensors round-trip key mismatch")
+        for key, tensor in normalized.items():
+            restored = verified[key]
+            if tuple(getattr(restored, "shape", ())) != tuple(
+                getattr(tensor, "shape", ())
+            ) or str(getattr(restored, "dtype", "")) != str(
+                getattr(tensor, "dtype", "")
+            ):
+                raise ValueError(
+                    f"safetensors round-trip tensor metadata mismatch: {key}"
+                )
+        temporary.replace(target)
+    except Exception as exc:
+        if temporary.exists():
+            temporary.unlink()
+        if target.exists():
+            target.unlink()
+        raise ProfilePackStageError(
+            f"{asset_id} required safetensors transformation failed: {exc}"
+        ) from exc
+    return [
+        {
+            "type": "pytorch_state_dict_to_safetensors",
+            "source_path": source_name,
+            "source_sha256": source_sha256,
+            "target_path": target_name,
+            "target_sha256": _sha256(target),
+            "torch_version": str(getattr(torch, "__version__", "unknown")),
+            "safe_load": "weights_only_true",
+        }
+    ]
+
+
+def _build_model_member_manifest(
+    *,
+    staging_root: Path,
+    profile: str,
+    payloads: list[dict[str, Any]],
+    source_members_by_asset: dict[str, dict[str, dict[str, Any]]],
+    transformations_by_asset: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Bind every staged model member to source or transform provenance."""
+
+    members: list[dict[str, Any]] = []
+    declared_paths: set[str] = set()
+    for payload in sorted(payloads, key=lambda item: str(item.get("asset_id"))):
+        asset_id = str(payload.get("asset_id") or "")
+        runtime_relative = Path(str(payload.get("runtime_path") or ""))
+        if runtime_relative.is_absolute() or ".." in runtime_relative.parts:
+            raise ProfilePackStageError(f"{asset_id} declares an unsafe runtime path")
+        runtime_root = staging_root / runtime_relative
+        files = [runtime_root] if runtime_root.is_file() else [
+            path for path in sorted(runtime_root.rglob("*")) if path.is_file()
+        ]
+        if not files:
+            raise ProfilePackStageError(f"{asset_id} staged runtime has no members")
+        source_receipts = source_members_by_asset.get(asset_id) or {}
+        transform_records = {
+            str(record.get("target_path")): dict(record)
+            for record in transformations_by_asset.get(asset_id) or []
+        }
+        for path in files:
+            local_path = (
+                path.name if runtime_root.is_file() else path.relative_to(runtime_root).as_posix()
+            )
+            member_path = path.relative_to(staging_root).as_posix()
+            if member_path in declared_paths:
+                raise ProfilePackStageError(f"duplicate staged member: {member_path}")
+            declared_paths.add(member_path)
+            if local_path in transform_records:
+                provenance = transform_records[local_path]
+                if _sha256(path).casefold() != str(
+                    provenance.get("target_sha256") or ""
+                ).casefold():
+                    raise ProfilePackStageError(
+                        f"{asset_id} post-transform hash drift: {local_path}"
+                    )
+            else:
+                source_receipt = source_receipts.get(local_path)
+                if not isinstance(source_receipt, dict):
+                    raise ProfilePackStageError(
+                        f"{asset_id} orphan staged member: {local_path}"
+                    )
+                if path.stat().st_size != int(source_receipt.get("size_bytes") or -1):
+                    raise ProfilePackStageError(
+                        f"{asset_id} source member size drift: {local_path}"
+                    )
+                if _sha256(path).casefold() != str(
+                    source_receipt.get("sha256") or ""
+                ).casefold():
+                    raise ProfilePackStageError(
+                        f"{asset_id} source member hash drift: {local_path}"
+                    )
+                provenance = {
+                    "type": "sealed_source_copy",
+                    "source_path": local_path,
+                    "source_sha256": str(source_receipt["sha256"]),
+                }
+            members.append(
+                {
+                    "path": member_path,
+                    "size_bytes": path.stat().st_size,
+                    "sha256": _sha256(path),
+                    "asset_id": asset_id,
+                    "source_manifest_sha256": str(
+                        payload.get("source_manifest_sha256") or ""
+                    ),
+                    "provenance": provenance,
+                }
+            )
+    members.sort(key=lambda item: str(item["path"]))
+    actual_paths = {
+        path.relative_to(staging_root).as_posix()
+        for path in staging_root.rglob("*")
+        if path.is_file()
+        and path.name not in {MODEL_MEMBER_MANIFEST_NAME, SELECTED_CAPABILITIES_NAME}
+    }
+    orphans = sorted(actual_paths - declared_paths)
+    if orphans:
+        raise ProfilePackStageError(f"orphan staged member: {orphans[0]}")
+    missing = sorted(declared_paths - actual_paths)
+    if missing:
+        raise ProfilePackStageError(f"missing staged member: {missing[0]}")
+    inventory_bytes = json.dumps(
+        members, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return {
+        "schema_version": MODEL_MEMBER_MANIFEST_SCHEMA_VERSION,
+        "profile": profile,
+        "member_count": len(members),
+        "inventory_sha256": hashlib.sha256(inventory_bytes).hexdigest(),
+        "members": members,
+    }
+
+
+def _verify_model_member_manifest(
+    staging_root: Path, manifest: dict[str, Any]
+) -> None:
+    _require_fields(
+        manifest,
+        MODEL_MEMBER_MANIFEST_REQUIRED_FIELDS,
+        "model member manifest",
+    )
+    if manifest.get("schema_version") != MODEL_MEMBER_MANIFEST_SCHEMA_VERSION:
+        raise ProfilePackStageError("model member manifest schema is unsupported")
+    members = manifest.get("members")
+    if not isinstance(members, list) or not members:
+        raise ProfilePackStageError("model member manifest has no members")
+    if any(not isinstance(member, dict) for member in members):
+        raise ProfilePackStageError("model member manifest contains an invalid member")
+    for member in members:
+        _require_fields(member, MODEL_MEMBER_REQUIRED_FIELDS, "model member")
+    paths = [str(member.get("path") or "") for member in members]
+    if paths != sorted(paths) or len(paths) != len(set(paths)):
+        raise ProfilePackStageError("model member manifest paths are not unique and sorted")
+    actual_paths = {
+        path.relative_to(staging_root).as_posix()
+        for path in staging_root.rglob("*")
+        if path.is_file()
+        and path.name not in {MODEL_MEMBER_MANIFEST_NAME, SELECTED_CAPABILITIES_NAME}
+    }
+    if actual_paths != set(paths):
+        raise ProfilePackStageError("model member manifest membership mismatch")
+    for member in members:
+        path = staging_root / Path(str(member["path"]))
+        if path.stat().st_size != int(member.get("size_bytes") or -1):
+            raise ProfilePackStageError(f"member size mismatch: {member['path']}")
+        if _sha256(path).casefold() != str(member.get("sha256") or "").casefold():
+            raise ProfilePackStageError(f"member hash mismatch: {member['path']}")
+    inventory_bytes = json.dumps(
+        members, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if hashlib.sha256(inventory_bytes).hexdigest() != manifest.get("inventory_sha256"):
+        raise ProfilePackStageError("model member manifest inventory digest mismatch")
+
+
 def _stage_asset(
     *,
     asset_id: str,
@@ -222,6 +516,9 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
 
     catalog = _read_yaml(REPO_ROOT / "configs" / "offline_asset_catalog.yaml")
     profiles = _read_yaml(REPO_ROOT / "configs" / "installer_profile_contract.yaml")
+    capability_profiles = _read_yaml(
+        REPO_ROOT / "configs" / "ingestion_capability_profiles.yaml"
+    )
     registry = _registry_records(_read_yaml(REPO_ROOT / "configs" / "model_registry.yaml"))
     catalog_assets = dict(catalog.get("assets") or {})
     profile_record = dict((profiles.get("profiles") or {}).get(profile) or {})
@@ -229,6 +526,13 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
     if distribution not in {"public", "personal"}:
         raise ProfilePackStageError(f"unknown installer profile: {profile}")
     selected = resolve_profile_assets(catalog, profiles, profile)
+    asset_closure = build_profile_asset_closure(
+        catalog=catalog,
+        profile_contract=profiles,
+        registry=registry,
+        capability_profile=resolve_capability_profile(capability_profiles, profile),
+        profile=profile,
+    )
     payload_ids = [
         asset_id
         for asset_id in selected
@@ -240,6 +544,8 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
             shutil.rmtree(staging_root)
         staging_root.mkdir(parents=True, exist_ok=True)
     staged: list[dict[str, Any]] = []
+    source_members_by_asset: dict[str, dict[str, dict[str, Any]]] = {}
+    transformations_by_asset: dict[str, list[dict[str, Any]]] = {}
     for asset_id in payload_ids:
         print(
             f"[PROFILE-PACK] verifying {asset_id} ({len(staged) + 1}/{len(payload_ids)})",
@@ -254,6 +560,7 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
         verified = verify_snapshot(snapshot)
         if verified.manifest_sha256 != record.get("sealed_manifest_sha256"):
             raise ProfilePackStageError(f"{asset_id} sealed source manifest does not match catalog")
+        source_members = _source_member_receipts(snapshot, asset_id)
         if check_only:
             staged.append({"asset_id": asset_id, "status": "sealed"})
             continue
@@ -273,47 +580,62 @@ def stage_profile(*, vault_root: Path, staging_root: Path, profile: str, check_o
                 "license_class": record["license_class"],
             }
         )
+        runtime_root = staging_root / Path(str(staged_entry["runtime_path"]))
+        transformations = _transform_required_safetensors(asset_id, runtime_root)
+        staged_entry["transformations"] = transformations
+        source_members_by_asset[asset_id] = source_members
+        transformations_by_asset[asset_id] = transformations
         staged.append(staged_entry)
 
+    member_manifest: dict[str, Any] | None = None
+    member_manifest_sha256: str | None = None
+    if not check_only:
+        member_manifest = _build_model_member_manifest(
+            staging_root=staging_root,
+            profile=profile,
+            payloads=staged,
+            source_members_by_asset=source_members_by_asset,
+            transformations_by_asset=transformations_by_asset,
+        )
+        _verify_model_member_manifest(staging_root, member_manifest)
+        member_manifest_path = staging_root / MODEL_MEMBER_MANIFEST_NAME
+        member_manifest_path.write_text(
+            json.dumps(member_manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        member_manifest_sha256 = _sha256(member_manifest_path)
+
     result = {
-        "schema_version": 1,
+        "schema_version": SELECTED_CAPABILITIES_SCHEMA_VERSION,
         "profile": profile,
         "distribution": distribution,
         "selected_asset_ids": selected,
+        "selector_sha256": asset_closure["selector_sha256"],
+        "asset_inventory_sha256": asset_closure["asset_inventory_sha256"],
+        "asset_closure": asset_closure,
         "payload_asset_ids": payload_ids,
         "payloads": staged,
+        "model_member_manifest": (
+            {
+                "path": MODEL_MEMBER_MANIFEST_NAME,
+                "sha256": member_manifest_sha256,
+                "inventory_sha256": member_manifest["inventory_sha256"],
+                "member_count": member_manifest["member_count"],
+            }
+            if member_manifest is not None
+            else None
+        ),
     }
+    _require_fields(
+        result,
+        SELECTED_CAPABILITIES_REQUIRED_FIELDS,
+        "selected capability receipt",
+    )
     if not check_only:
-        _synthesize_safetensors_if_needed(staging_root)
-        (staging_root / "selected_capabilities.json").write_text(
+        (staging_root / SELECTED_CAPABILITIES_NAME).write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     return result
-
-
-def _synthesize_safetensors_if_needed(staging_root: Path) -> None:
-    """Ensure staged models have safetensors weights so transformers never triggers torch.load CVE blocks."""
-    hub_root = staging_root / "hub"
-    if not hub_root.is_dir():
-        return
-
-    try:
-        import torch
-        from safetensors.torch import save_file
-    except ImportError:
-        return
-
-    for bin_path in sorted(hub_root.rglob("pytorch_model.bin")):
-        st_path = bin_path.parent / "model.safetensors"
-        if not st_path.exists():
-            print(f"[PROFILE-PACK] synthesizing safetensors for {bin_path.parent.name}...", flush=True)
-            try:
-                state_dict = torch.load(bin_path, map_location="cpu", weights_only=False)
-                cloned_dict = {k: v.clone() for k, v in state_dict.items()}
-                save_file(cloned_dict, st_path)
-                print(f"[PROFILE-PACK] saved {st_path.name} ({st_path.stat().st_size} bytes)", flush=True)
-            except Exception as exc:
-                print(f"[PROFILE-PACK] WARNING: could not synthesize safetensors for {bin_path}: {exc}", flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:

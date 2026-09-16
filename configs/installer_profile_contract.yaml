@@ -13,19 +13,198 @@ profiles:
       - ocr_cpu
       - document_cpu
       - service_cpu
+    capability_dispositions:
+      local_vlm: {status: policy_excluded}
+      local_llm_serving: {status: policy_excluded}
+    component_dispositions:
+      gpu_enhanced: {status: excluded}
+      wsl_audio: {status: excluded}
   PUBLIC_GPU_ENHANCED:
     distribution: public
     extends: PUBLIC_CPU_BASELINE
-    exclude_assets:
+    expected_asset_count: 33
+    forbidden_assets:
+      - qwen2_5_vl_7b
       - qwen2_5_vl_3b
+      - deepseek_r1_distill_qwen_14b
+      - deepseek_r1_distill_qwen_7b
+      - gemma_4_12b_unified
     include_packs:
       - audio_gpu
       - object_detection_gpu
-      - local_vlm_gpu
-      - local_llm_gpu
+    component_dispositions:
+      gpu_enhanced: {status: included}
   PERSONAL_AIR_GAP:
     distribution: personal
     extends: PUBLIC_GPU_ENHANCED
     acceptance_required: true
+    expected_asset_count: 36
     include_packs:
       - audio_optional
+    component_dispositions:
+      wsl_audio:
+        status: host_prerequisite
+        distro: Ubuntu-22.04
+        wsl_version: 2
+        receipt_phases: [pre_install, post_install]
+        probe: scripts/wsl_audio_preflight.py
+        required_checks:
+          - workspace
+          - transcription
+          - process_import
+          - abi
+          - diarization
+          - wav2vec_enrichment
+          - clap_handoff
+          - gpu
+        allowed_warnings: [torchcodec_unavailable]
+        packaged: false
+
+# Every asset admitted by the v3.0.1 GPU selectors has one runtime owner and
+# one deterministic pre/post-install probe.  The resolved profile ledger is
+# embedded in the signed selected-capabilities receipt.
+asset_contracts:
+  bert_ner:
+    disposition: ingest_runtime
+    runtime_owner: steps.tagger.step.tagger
+    probe: transformers_token_classification
+  blip_caption:
+    disposition: ingest_runtime
+    runtime_owner: steps.image_caption.step.image_caption
+    probe: transformers_blip_caption
+  cacert:
+    disposition: infrastructure_runtime
+    runtime_owner: embedded_python_tls
+    probe: certificate_bundle_open
+  clap_audio:
+    disposition: ingest_runtime
+    runtime_owner: steps.audio_embed_clap.step.audio_embed_clap
+    probe: transformers_clap_audio
+  clip_vit:
+    disposition: ingest_runtime
+    runtime_owner: steps.image_embed_clip.step.image_embed_clip
+    probe: transformers_clip_image
+  dinov2:
+    disposition: ingest_runtime
+    runtime_owner: steps.image_embed_dino.step.image_embed_dino
+    probe: transformers_dino_image
+  emotion_classify_model:
+    disposition: ingest_runtime
+    runtime_owner: steps.emotion_classify.step.emotion_classify
+    probe: transformers_text_classification_safetensors
+  faster_whisper_large_v3:
+    disposition: alternate_model
+    runtime_owner: steps.audio_transcribe.step.audio_transcribe
+    probe: faster_whisper_transcribe
+  faster_whisper_medium:
+    disposition: ingest_runtime
+    runtime_owner: steps.audio_transcribe.step.audio_transcribe
+    probe: faster_whisper_transcribe
+  faster_whisper_small:
+    disposition: alternate_model
+    runtime_owner: steps.audio_transcribe.step.audio_transcribe
+    probe: faster_whisper_transcribe
+  faster_whisper_tiny:
+    disposition: alternate_model
+    runtime_owner: steps.audio_transcribe.step.audio_transcribe
+    probe: faster_whisper_transcribe
+  ffmpeg:
+    disposition: infrastructure_runtime
+    runtime_owner: media_subprocess_runtime
+    probe: executable_version
+  ffprobe:
+    disposition: infrastructure_runtime
+    runtime_owner: media_subprocess_runtime
+    probe: executable_version
+  hubert_emotion:
+    disposition: ingest_runtime
+    runtime_owner: steps.audio_emotion.step.audio_emotion
+    probe: transformers_audio_classification
+  nssm:
+    disposition: infrastructure_runtime
+    runtime_owner: windows_service_control
+    probe: executable_version
+  opencv_nanodet:
+    disposition: ingest_runtime
+    runtime_owner: steps.object_detect.step.object_detect
+    probe: opencv_dnn_graph
+  opencv_sface:
+    disposition: ingest_runtime
+    runtime_owner: steps.face_embed.step.face_embed
+    probe: opencv_sface_graph
+  opencv_yolox:
+    disposition: ingest_runtime
+    runtime_owner: steps.object_detect.step.object_detect
+    probe: opencv_dnn_graph
+  opencv_yunet:
+    disposition: ingest_runtime
+    runtime_owner: steps.face_embed.step.face_embed
+    probe: opencv_yunet_graph
+  poppler:
+    disposition: infrastructure_runtime
+    runtime_owner: document_subprocess_runtime
+    probe: executable_version
+  pyannote_diarization:
+    disposition: personal_overlay
+    runtime_owner: wsl2_audio.process_audio
+    probe: pyannote_pipeline_load
+  pyannote_segmentation:
+    disposition: personal_overlay
+    runtime_owner: wsl2_audio.process_audio
+    probe: pyannote_model_load
+  pyannote_wespeaker:
+    disposition: personal_overlay
+    runtime_owner: wsl2_audio.process_audio
+    probe: pyannote_model_load
+  python_runtime:
+    disposition: infrastructure_runtime
+    runtime_owner: embedded_python_runtime
+    probe: python_version
+  python_wheelhouse:
+    disposition: build_only
+    runtime_owner: installer_dependency_builder
+    probe: wheelhouse_sbom
+  qdrant:
+    disposition: infrastructure_runtime
+    runtime_owner: qdrant_service
+    probe: executable_version
+  sentence_transformer:
+    disposition: ingest_runtime
+    runtime_owner: steps.text_embed.step.text_embed
+    probe: sentence_transformer_encode
+  sentiment_model:
+    disposition: ingest_runtime
+    runtime_owner: steps.sentiment.step.sentiment
+    probe: transformers_text_classification
+  silero_vad:
+    disposition: ingest_runtime
+    runtime_owner: steps.common.vad_preprocessor
+    probe: silero_vad_load
+  tesseract:
+    disposition: infrastructure_runtime
+    runtime_owner: steps.image_ocr.step.image_ocr
+    probe: executable_version
+  vader_lexicon:
+    disposition: ingest_runtime
+    runtime_owner: steps.sentiment.step.sentiment
+    probe: lexicon_open
+  vc_redist:
+    disposition: infrastructure_runtime
+    runtime_owner: windows_native_runtime
+    probe: windows_runtime_dll
+  vit_gpt2_caption:
+    disposition: alternate_model
+    runtime_owner: steps.image_caption.step.image_caption
+    probe: transformers_vit_gpt2_caption
+  wav2vec2_base_960h:
+    disposition: ingest_runtime
+    runtime_owner: wsl2_audio.process_audio
+    probe: transformers_audio_ctc
+  wav2vec2_emotion:
+    disposition: ingest_runtime
+    runtime_owner: steps.audio_emotion.step.audio_emotion
+    probe: transformers_audio_classification
+  whisper_large_v3:
+    disposition: alternate_model
+    runtime_owner: wsl2_audio.process_audio
+    probe: transformers_whisper_generate

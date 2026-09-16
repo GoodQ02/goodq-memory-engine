@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from steps.common.memory import to_faiss_id
-from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, write_index_atomically, FaissLock
 from steps.common.memory_store import MemoryStore
 from steps.common.qdrant_client import QdrantClient, build_qdrant_client
 from steps.common.retrieval_events import (
@@ -339,7 +339,7 @@ class FaissMemory(MemoryStore):
         if os.path.isfile(self.index_path):
             return faiss.read_index(self.index_path), faiss
         index = create_hnsw_id_index(faiss, self.dim)
-        faiss.write_index(index, self.index_path)
+        write_index_atomically(faiss, index, self.index_path)
         return index, faiss
 
     def insert(self, vectors: List[Dict[str, Any]]) -> bool:
@@ -379,7 +379,7 @@ class FaissMemory(MemoryStore):
                 np_vecs = np.array(vecs, dtype="float32")
                 np_ids = np.array(ids, dtype="int64")
                 add_with_required_ids(index, np_vecs, np_ids)
-                faiss.write_index(index, self.index_path)
+                write_index_atomically(faiss, index, self.index_path)
                 return True
         except Exception as e:
             logger.warning(
@@ -434,7 +434,7 @@ class FaissMemory(MemoryStore):
             if self.db_path and os.path.isfile(self.db_path) and len(out) > 0:
                 try:
                     quant_routing = (self.cfg or {}).get("memory", {}).get("routing", {}) if self.cfg else {}
-                    shadow_mode = bool(quant_routing.get("quantization_shadow_mode", True))
+                    shadow_mode = bool(quant_routing.get("quantization_shadow_mode", False))
                     if shadow_mode:
                         valid_ids = [h["id"] for h in out if h["id"] is not None]
                         if valid_ids:

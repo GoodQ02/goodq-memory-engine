@@ -14,7 +14,7 @@ Hard acceptance criterion:
 
 Usage:
     conda run -n goodq_core python scripts/identity/build_speaker_clusters.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
 
 Output (all gitignored, written to data-path):

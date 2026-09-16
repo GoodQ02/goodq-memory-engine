@@ -30,8 +30,8 @@ the same claim.
 | [ARCHITECTURE_REFERENCE.md](ARCHITECTURE_REFERENCE.md) | Current architecture reference and subsystem orientation. |
 | [SYSTEM_MAP_v1.md](SYSTEM_MAP_v1.md) | Current control and memory system map. |
 | [INGEST_ORCHESTRATION_CONTRACT.md](INGEST_ORCHESTRATION_CONTRACT.md) | Canonical ingestion ownership and orchestration boundary. |
-| [GOODQ_EXECPLAN_PROTOCOL.md](../archive/architecture/GOODQ_EXECPLAN_PROTOCOL.md) | GoodQ-specific execution-plan contract for restartable, high-risk, or multi-session work. |
-| [OUTPUT_SCHEMA_INVENTORY.md](../archive/architecture/OUTPUT_SCHEMA_INVENTORY.md) | Authoritative inventory of persisted output surfaces and derived read-model contracts. |
+| GOODQ_EXECPLAN_PROTOCOL.md (historical material omitted from public source) | GoodQ-specific execution-plan contract for restartable, high-risk, or multi-session work. |
+| OUTPUT_SCHEMA_INVENTORY.md (historical material omitted from public source) | Authoritative inventory of persisted output surfaces and derived read-model contracts. |
 | [MEMORY_STORAGE.md](MEMORY_STORAGE.md) | Current persisted memory and storage architecture. |
 | [AUDIO_VECTOR_PROVENANCE_CONTRACT.md](AUDIO_VECTOR_PROVENANCE_CONTRACT.md) | Current-run CLAP/Qdrant audio-vector success definition. |
 | [CONFIG_LOADING_CONTRACT.md](CONFIG_LOADING_CONTRACT.md) | Current layered config-loading contract. |
@@ -75,13 +75,13 @@ the same claim.
 
 | Document | Status |
 | --- | --- |
-| [PIPELINES.md](../archive/architecture/PIPELINES.md) | Active compatibility reference for historical pipeline definitions. |
-| [NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md](../archive/architecture/NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md) | Archived implementation plan; future higher-order memory work is gated by the active roadmap. |
+| PIPELINES.md (historical material omitted from public source) | Active compatibility reference for historical pipeline definitions. |
+| NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md (historical material omitted from public source) | Archived implementation plan; future higher-order memory work is gated by the active roadmap. |
 | [narrative_layer.md](narrative_layer.md) | Descriptive narrative-layer reference. |
 | [LEGACY_WORKFLOWS.md](LEGACY_WORKFLOWS.md) | Historical workflow reference. |
-| [DATA_STRUCTURE.md](../archive/architecture/DATA_STRUCTURE.md) | Historical data-layout snapshot. |
+| DATA_STRUCTURE.md (historical material omitted from public source) | Historical data-layout snapshot. |
 | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | Historical project-layout snapshot. |
-| [PORT_ARCHITECTURE_ASSESSMENT.md](../archive/architecture/PORT_ARCHITECTURE_ASSESSMENT.md) | Historical port/WSL assessment. |
-| [DOCUMENTATION_REORGANIZATION_PLAN.md](../archive/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md) | Historical documentation reorganization plan. |
-| [DOCUMENTATION_REORGANIZATION_REPORT.md](../archive/architecture/DOCUMENTATION_REORGANIZATION_REPORT.md) | Historical documentation reorganization report. |
+| PORT_ARCHITECTURE_ASSESSMENT.md (historical material omitted from public source) | Historical port/WSL assessment. |
+| DOCUMENTATION_REORGANIZATION_PLAN.md (historical material omitted from public source) | Historical documentation reorganization plan. |
+| DOCUMENTATION_REORGANIZATION_REPORT.md (historical material omitted from public source) | Historical documentation reorganization report. |
 | [ORGANIZATION_COMPLETE_2025-11-15.md](ORGANIZATION_COMPLETE_2025-11-15.md) | Historical organization completion report. |

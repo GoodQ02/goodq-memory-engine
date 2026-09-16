@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -25,7 +26,42 @@ const EmbeddedPublicKeyHex = "815e163ff7ef0a527175efdaaaa078f9282a97f6ab4af96781
 func main() {
 	verifyManifestOnly := flag.Bool("verify-manifest-only", false, "Verify manifest signature and exit without starting services")
 	verifyReleasePayload := flag.String("verify-release-payload", "", "Verify signed external release payload packs in this bundle root and exit")
+	applyReleasePayload := flag.String("apply-release-payload", "", "Verify and apply signed external release payload packs from this bundle root")
+	payloadDataDir := flag.String("payload-data-dir", "", "ProgramData destination for authenticated release payload application")
 	flag.Parse()
+	if *verifyReleasePayload != "" && *applyReleasePayload != "" {
+		fmt.Println("[LAUNCHER] [ERROR] Release payload verify and apply modes are mutually exclusive.")
+		os.Exit(1)
+	}
+
+	if *applyReleasePayload != "" {
+		if *payloadDataDir == "" {
+			fmt.Println("[LAUNCHER] [ERROR] Release payload apply requires --payload-data-dir.")
+			os.Exit(1)
+		}
+		publicKey, err := embeddedPublicKey()
+		if err == nil {
+			programFilesDir := filepath.Dir(os.Args[0])
+			err = applyReleasePayloadBundle(
+				*applyReleasePayload,
+				*payloadDataDir,
+				programFilesDir,
+				publicKey,
+				func(command *exec.Cmd) error {
+					prepareCmd(command)
+					command.Stdout = os.Stdout
+					command.Stderr = os.Stderr
+					return command.Run()
+				},
+			)
+		}
+		if err != nil {
+			fmt.Printf("[LAUNCHER] [ERROR] Release payload application failed: %s\n", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("[LAUNCHER] [OK] Signed release payload applied and verified successfully.")
+		return
+	}
 
 	if *verifyReleasePayload != "" {
 		if err := verifyReleasePayloadBundle(*verifyReleasePayload); err != nil {
@@ -406,36 +442,51 @@ func main() {
 	_ = apiCmd.Wait()
 }
 
-func verifyManifestSignature(manifestPath, signaturePath string) error {
+func embeddedPublicKey() (ed25519.PublicKey, error) {
 	pubKeyBytes, err := hex.DecodeString(EmbeddedPublicKeyHex)
 	if err != nil {
-		return fmt.Errorf("invalid embedded verification key: %w", err)
+		return nil, fmt.Errorf("invalid embedded verification key: %w", err)
 	}
+	if len(pubKeyBytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("bad verification key size: %d", len(pubKeyBytes))
+	}
+	return ed25519.PublicKey(pubKeyBytes), nil
+}
 
+func readAndVerifyManifest(manifestPath, signaturePath string, publicKey ed25519.PublicKey) ([]byte, error) {
 	manifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return fmt.Errorf("unable to read manifest: %w", err)
+		return nil, fmt.Errorf("unable to read manifest: %w", err)
 	}
 
 	sigHexBytes, err := os.ReadFile(signaturePath)
 	if err != nil {
-		return fmt.Errorf("unable to read manifest signature: %w", err)
+		return nil, fmt.Errorf("unable to read manifest signature: %w", err)
 	}
 
-	sigBytes, err := hex.DecodeString(string(sigHexBytes))
+	sigBytes, err := hex.DecodeString(strings.TrimSpace(string(sigHexBytes)))
 	if err != nil {
-		return fmt.Errorf("invalid hex in signature: %w", err)
+		return nil, fmt.Errorf("invalid hex in signature: %w", err)
 	}
 
-	if len(pubKeyBytes) != ed25519.PublicKeySize {
-		return fmt.Errorf("bad verification key size: %d", len(pubKeyBytes))
+	if len(publicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("bad verification key size: %d", len(publicKey))
 	}
 
-	if !ed25519.Verify(pubKeyBytes, manifestBytes, sigBytes) {
-		return fmt.Errorf("Ed25519 signature is invalid")
+	if !ed25519.Verify(publicKey, manifestBytes, sigBytes) {
+		return nil, fmt.Errorf("Ed25519 signature is invalid")
 	}
 
-	return nil
+	return manifestBytes, nil
+}
+
+func verifyManifestSignature(manifestPath, signaturePath string) error {
+	publicKey, err := embeddedPublicKey()
+	if err != nil {
+		return err
+	}
+	_, err = readAndVerifyManifest(manifestPath, signaturePath, publicKey)
+	return err
 }
 
 func verifyInstalledManifests(programFilesDir string) error {
@@ -449,37 +500,108 @@ func verifyInstalledManifests(programFilesDir string) error {
 }
 
 type releasePayloadManifest struct {
-	SchemaVersion int `json:"schema_version"`
-	Packs         []struct {
+	SchemaVersion                int    `json:"schema_version"`
+	ProductVersion               string `json:"product_version"`
+	Profile                      string `json:"profile"`
+	PackFormat                   string `json:"pack_format"`
+	MaxPackBytes                 int64  `json:"max_pack_bytes"`
+	SelectedCapabilitiesSHA256   string `json:"selected_capabilities_sha256"`
+	SelectedAssetSelectorSHA256  string `json:"selected_asset_selector_sha256"`
+	SelectedAssetInventorySHA256 string `json:"selected_asset_inventory_sha256"`
+	ModelMemberManifestSHA256    string `json:"model_member_manifest_sha256"`
+	ModelMemberInventorySHA256   string `json:"model_member_inventory_sha256"`
+	MemberInventorySHA256        string `json:"member_inventory_sha256"`
+	MemberCount                  int    `json:"member_count"`
+	Members                      []struct {
 		Path      string `json:"path"`
+		PackPath  string `json:"pack_path"`
 		SHA256    string `json:"sha256"`
 		SizeBytes int64  `json:"size_bytes"`
+		Target    string `json:"target"`
+	} `json:"members"`
+	Packs []struct {
+		Path        string `json:"path"`
+		SHA256      string `json:"sha256"`
+		SizeBytes   int64  `json:"size_bytes"`
+		MemberCount int    `json:"member_count"`
 	} `json:"packs"`
 }
 
-func verifyReleasePayloadBundle(bundleRoot string) error {
+const releasePayloadSchemaVersion = 2
+const releasePayloadPackFormat = "zip_stored_zip64"
+
+func isSHA256Hex(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func parseReleasePayloadManifest(manifestBytes []byte) (releasePayloadManifest, error) {
+	var manifest releasePayloadManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return manifest, fmt.Errorf("parse payload manifest: %w", err)
+	}
+	if manifest.SchemaVersion != releasePayloadSchemaVersion {
+		return manifest, fmt.Errorf("payload manifest has unsupported schema")
+	}
+	if manifest.ProductVersion == "" || manifest.Profile == "" || manifest.PackFormat != releasePayloadPackFormat || manifest.MaxPackBytes < 1 {
+		return manifest, fmt.Errorf("payload manifest has incomplete product, profile, or pack metadata")
+	}
+	for name, digest := range map[string]string{
+		"selected capabilities":    manifest.SelectedCapabilitiesSHA256,
+		"selected asset selector":  manifest.SelectedAssetSelectorSHA256,
+		"selected asset inventory": manifest.SelectedAssetInventorySHA256,
+		"model member manifest":    manifest.ModelMemberManifestSHA256,
+		"model member inventory":   manifest.ModelMemberInventorySHA256,
+		"payload member inventory": manifest.MemberInventorySHA256,
+	} {
+		if !isSHA256Hex(digest) {
+			return manifest, fmt.Errorf("payload manifest has invalid %s digest", name)
+		}
+	}
+	if len(manifest.Members) == 0 || manifest.MemberCount != len(manifest.Members) || len(manifest.Packs) == 0 {
+		return manifest, fmt.Errorf("payload manifest has incomplete member or pack inventory")
+	}
+	for _, member := range manifest.Members {
+		if member.Path == "" || member.PackPath == "" || !isSHA256Hex(member.SHA256) || member.SizeBytes < 0 || (member.Target != "program_files" && member.Target != "program_data_models") {
+			return manifest, fmt.Errorf("payload manifest has an invalid member record")
+		}
+	}
+	for _, pack := range manifest.Packs {
+		if pack.Path == "" || !isSHA256Hex(pack.SHA256) || pack.SizeBytes < 0 || pack.MemberCount < 1 {
+			return manifest, fmt.Errorf("payload manifest has an invalid pack record")
+		}
+	}
+	return manifest, nil
+}
+
+func loadVerifiedReleasePayloadManifest(bundleRoot string, publicKey ed25519.PublicKey) (string, []byte, releasePayloadManifest, error) {
 	root, err := filepath.Abs(bundleRoot)
 	if err != nil {
-		return fmt.Errorf("resolve bundle root: %w", err)
+		return "", nil, releasePayloadManifest{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 	matches, err := filepath.Glob(filepath.Join(root, "GoodQ4All_Setup_*.payload_manifest.json"))
 	if err != nil || len(matches) != 1 {
-		return fmt.Errorf("expected exactly one release payload manifest in %s", root)
+		return "", nil, releasePayloadManifest{}, fmt.Errorf("expected exactly one release payload manifest in %s", root)
 	}
 	manifestPath := matches[0]
-	if err := verifyManifestSignature(manifestPath, manifestPath+".sig"); err != nil {
-		return fmt.Errorf("payload manifest signature: %w", err)
-	}
-	manifestBytes, err := os.ReadFile(manifestPath)
+	manifestBytes, err := readAndVerifyManifest(manifestPath, manifestPath+".sig", publicKey)
 	if err != nil {
-		return fmt.Errorf("read payload manifest: %w", err)
+		return "", nil, releasePayloadManifest{}, fmt.Errorf("payload manifest signature: %w", err)
 	}
-	var manifest releasePayloadManifest
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		return fmt.Errorf("parse payload manifest: %w", err)
+	manifest, err := parseReleasePayloadManifest(manifestBytes)
+	if err != nil {
+		return "", nil, releasePayloadManifest{}, err
 	}
-	if manifest.SchemaVersion != 1 || len(manifest.Packs) == 0 {
-		return fmt.Errorf("payload manifest has unsupported schema or no packs")
+	return root, manifestBytes, manifest, nil
+}
+
+func verifyReleasePayloadBundleWithKey(bundleRoot string, publicKey ed25519.PublicKey) error {
+	root, _, manifest, err := loadVerifiedReleasePayloadManifest(bundleRoot, publicKey)
+	if err != nil {
+		return err
 	}
 	for _, pack := range manifest.Packs {
 		relative := filepath.Clean(pack.Path)
@@ -510,6 +632,43 @@ func verifyReleasePayloadBundle(bundleRoot string) error {
 		if hex.EncodeToString(digest.Sum(nil)) != pack.SHA256 {
 			return fmt.Errorf("payload pack SHA256 mismatch: %s", pack.Path)
 		}
+	}
+	return nil
+}
+
+func verifyReleasePayloadBundle(bundleRoot string) error {
+	publicKey, err := embeddedPublicKey()
+	if err != nil {
+		return err
+	}
+	return verifyReleasePayloadBundleWithKey(bundleRoot, publicKey)
+}
+
+func applyReleasePayloadBundle(
+	bundleRoot string,
+	dataDir string,
+	programFilesDir string,
+	publicKey ed25519.PublicKey,
+	runCommand func(*exec.Cmd) error,
+) error {
+	root, manifestBytes, _, err := loadVerifiedReleasePayloadManifest(bundleRoot, publicKey)
+	if err != nil {
+		return err
+	}
+	pythonExe := filepath.Join(programFilesDir, "runtime", "python.exe")
+	payloadScript := filepath.Join(programFilesDir, "scripts", "install", "release_payload_packs.py")
+	command := exec.Command(
+		pythonExe,
+		payloadScript,
+		"apply",
+		"--bundle-root", root,
+		"--install-dir", programFilesDir,
+		"--data-dir", dataDir,
+		"--manifest-stdin",
+	)
+	command.Stdin = bytes.NewReader(manifestBytes)
+	if err := runCommand(command); err != nil {
+		return fmt.Errorf("authenticated payload apply failed: %w", err)
 	}
 	return nil
 }

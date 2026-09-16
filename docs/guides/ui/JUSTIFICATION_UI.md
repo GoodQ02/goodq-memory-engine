@@ -71,7 +71,7 @@ Last checked: 2026-05-19.
 - Install and launch:
   [`README.md`](../../../README.md),
   [`docs/guides/install/INSTALL.md`](../../bootstrap/INSTALL_BOOTSTRAP.md),
-  [`docs/guides/install/QUICKSTART.md`](../../archive/guides/install/QUICKSTART.md)
+  `docs/guides/install/QUICKSTART.md` (historical material omitted from public source)
 - Runtime authority:
-  [`docs/HANDOFF_BASEMENT_PHASE.md`](../../archive/HANDOFF_BASEMENT_PHASE.md),
+  `docs/HANDOFF_BASEMENT_PHASE.md` (historical material omitted from public source),
   [`docs/reference/CLI-REFERENCE.md`](../../reference/CLI-REFERENCE.md)

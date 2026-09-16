@@ -21,6 +21,170 @@ from wsl2_audio_bridge import WSL2AudioBridge
 logger = logging.getLogger(__name__)
 
 
+def _failed_component_outcome(
+    component: str,
+    raw_status: object,
+    error: object,
+    note: object,
+) -> dict:
+    normalized = str(raw_status or "missing").strip().lower()
+    if normalized in {"skipped", "unavailable"}:
+        return {
+            "status": "skipped",
+            "reason": str(note or f"{component}_{normalized}"),
+            "raw_status": normalized,
+        }
+    return {
+        "status": "error",
+        "reason": str(note or f"{component}_{normalized}"),
+        "raw_status": normalized,
+        "error": str(error or note or f"{component} status is {normalized}"),
+    }
+
+
+def _build_wsl_capability_outcomes(result: dict) -> dict:
+    transcript = str(result.get("transcription") or "").strip()
+    transcription_status = str(result.get("transcription_status") or "").lower()
+    if transcription_status == "success" and transcript:
+        transcription = {
+            "status": "ok",
+            "reason": "transcript_emitted",
+            "character_count": len(transcript),
+        }
+    elif transcription_status == "success":
+        transcription = {
+            "status": "not_applicable",
+            "reason": "no_text",
+            "raw_status": transcription_status,
+        }
+    else:
+        transcription = _failed_component_outcome(
+            "transcription",
+            transcription_status,
+            result.get("transcription_error"),
+            result.get("transcription_note"),
+        )
+
+    diarization_status = str(result.get("diarization_status") or "").lower()
+    diarization_segments = result.get("diarization")
+    if diarization_status == "success" and isinstance(diarization_segments, list) and diarization_segments:
+        diarization = {
+            "status": "ok",
+            "reason": "speaker_tracks_emitted",
+            "segment_count": len(diarization_segments),
+        }
+    elif diarization_status == "completed_no_speakers":
+        diarization = {
+            "status": "not_applicable",
+            "reason": "content_appropriate_empty",
+            "raw_status": diarization_status,
+        }
+    elif diarization_status == "success":
+        diarization = {
+            "status": "error",
+            "reason": "successful_status_without_speaker_tracks",
+            "raw_status": diarization_status,
+            "error": "diarization reported success without speaker tracks",
+        }
+    else:
+        diarization = _failed_component_outcome(
+            "diarization",
+            diarization_status,
+            result.get("diarization_error"),
+            result.get("diarization_note"),
+        )
+
+    emotion_status = str(result.get("emotion_status") or "").lower()
+    emotion_label = str(result.get("emotion") or "").strip()
+    if emotion_status == "success" and emotion_label and emotion_label.lower() != "unknown":
+        acoustic_emotion = {
+            "status": "ok",
+            "reason": "emotion_emitted",
+            "label": emotion_label,
+        }
+    elif emotion_status == "success":
+        acoustic_emotion = {
+            "status": "error",
+            "reason": "successful_status_without_emotion",
+            "raw_status": emotion_status,
+            "error": "acoustic emotion reported success without a label",
+        }
+    else:
+        acoustic_emotion = _failed_component_outcome(
+            "acoustic_emotion",
+            emotion_status,
+            result.get("emotion_error"),
+            result.get("emotion_note"),
+        )
+
+    embeddings_status = str(result.get("embeddings_status") or "").lower()
+    embeddings = result.get("embeddings")
+    embedding_dim = result.get("embedding_dim")
+    if (
+        embeddings_status == "success"
+        and isinstance(embeddings, list)
+        and bool(embeddings)
+        and isinstance(embedding_dim, int)
+        and not isinstance(embedding_dim, bool)
+        and embedding_dim == len(embeddings)
+    ):
+        wav2vec2 = {
+            "status": "ok",
+            "reason": "embedding_emitted",
+            "embedding_dim": embedding_dim,
+        }
+    elif embeddings_status == "success":
+        wav2vec2 = {
+            "status": "error",
+            "reason": "successful_status_without_embedding",
+            "raw_status": embeddings_status,
+            "error": "Wav2Vec2 reported success without a dimensionally valid embedding",
+        }
+    else:
+        wav2vec2 = _failed_component_outcome(
+            "wav2vec2",
+            embeddings_status,
+            result.get("embeddings_error"),
+            result.get("embeddings_note"),
+        )
+
+    clap_meta = result.get("clap_meta")
+    clap_persisted = (
+        isinstance(clap_meta, dict)
+        and clap_meta.get("status") == "ok"
+        and clap_meta.get("component") == "audio_embed_clap"
+        and isinstance(clap_meta.get("embedding_id"), str)
+        and bool(clap_meta.get("embedding_id", "").strip())
+        and clap_meta.get("qdrant_committed") is True
+        and isinstance(clap_meta.get("qdrant_collection"), str)
+        and bool(clap_meta.get("qdrant_collection", "").strip())
+    )
+    if str(result.get("status") or "").strip().lower() != "success":
+        clap_handoff = {
+            "status": "error",
+            "reason": "wsl_composite_failed_before_clap_handoff",
+            "required_step": "audio_embed_clap",
+            "error": str(result.get("error") or "WSL composite processing failed"),
+        }
+    else:
+        clap_handoff = {
+            "status": "ok",
+            "reason": (
+                "canonical_clap_already_persisted"
+                if clap_persisted
+                else "canonical_clap_required"
+            ),
+            "required_step": "audio_embed_clap",
+        }
+    return {
+        "transcription": transcription,
+        "diarization": diarization,
+        "acoustic_emotion": acoustic_emotion,
+        "wav2vec2": wav2vec2,
+        "clap_handoff": clap_handoff,
+    }
+
+
 def audio_diarize_wsl2(audio_path: str, **kwargs) -> dict:
     """
     GPU-accelerated speaker diarization via WSL2
@@ -207,6 +371,7 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'embeddings_note': result.get('embeddings_note'),
             'speaker_voice_signatures': result.get('speaker_voice_signatures', []),
             'speaker_voice_signature_meta': result.get('speaker_voice_signature_meta', {}),
+            'wsl_capability_outcomes': _build_wsl_capability_outcomes(result),
             
             # Status
             'wsl2_unified': True,
@@ -236,4 +401,5 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
                 'engine': 'wsl_unified',
                 'error': error_msg,
             },
+            'wsl_capability_outcomes': _build_wsl_capability_outcomes(result),
         }

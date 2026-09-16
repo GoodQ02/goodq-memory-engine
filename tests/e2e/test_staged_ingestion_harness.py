@@ -1120,7 +1120,7 @@ def test_f4_02_redacts_absolute_paths_in_artifacts():
     register_media("v1", 20.0)
     args = {
         "ucf_records": [{"video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
-        "absolute_path_artifacts": ["C:\\Users\\jdben\\mock_report.json"]
+        "absolute_path_artifacts": ["C:\\Users\\example-user\\mock_report.json"]
     }
     envelope, rc = execute_locally_confirmed(
         client, tool_name="run_ingestion", tool_args=args
@@ -1709,7 +1709,7 @@ def test_f4_tier4_01_complete_happy_path_loop():
     # Ingestion stages records
     args_ingest = {
         "ucf_records": [{"frame_id": "frame001", "video_hash": "v1", "ucf_schema_version": "ucf.v0.1", "epoch_id": "ep1", "run_id": "run1", "t_start": 0.0, "t_end": 10.0, "modality": "video", "worker_name": "worker1", "model_tag": "tag1", "payload": {}}],
-        "absolute_path_artifacts": ["C:\\Users\\jdben\\My Drive\\_AGENT\\scene_001.json"]
+        "absolute_path_artifacts": ["C:\\Users\\example-user\\My Drive\\_AGENT\\scene_001.json"]
     }
     envelope_ingest, rc_ingest = execute_locally_confirmed(
         client, tool_name="run_ingestion", tool_args=args_ingest
@@ -1935,10 +1935,10 @@ def test_adv_unix_path_redaction_leakage():
     """Verify that standard Linux/Unix absolute paths (e.g. in /home/ or /tmp/) are successfully redacted."""
     client = MiniAgentClient(profile="safe")
     
-    unix_path = "/home/jdben/MyProject/secrets.json"
+    unix_path = "/home/example-user/MyProject/secrets.json"
     sanitized = client.sanitize_envelope(unix_path)
     
-    assert "jdben" not in sanitized
+    assert "example-user" not in sanitized
     assert "/home/" not in sanitized
     assert "relative/secrets.json" in sanitized
 

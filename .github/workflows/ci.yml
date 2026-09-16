@@ -79,6 +79,10 @@ jobs:
         shell: pwsh
         run: conda run -n goodq_core python scripts/bootstrap_verify.py --json --profile ci
 
+      - name: Installer semantic compatibility
+        shell: pwsh
+        run: conda run -n goodq_core python scripts/install/verify_installer_semantic_contract.py --check --repo-root .
+
       - name: Unit test suite
         shell: pwsh
         run: conda run -n goodq_core python -m pytest -q

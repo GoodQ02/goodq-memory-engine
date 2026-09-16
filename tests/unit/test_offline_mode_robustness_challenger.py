@@ -82,18 +82,25 @@ def test_raw_socket_create_connection_blocked():
     with pytest.raises(NetworkBlockError):
         socket.create_connection(("8.8.8.8", 80), timeout=1)
 
-def test_loopback_connect_allowed():
-    """Verify that loopback connection attempts are not blocked with NetworkBlockError."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    with pytest.raises(Exception) as excinfo:
-        s.connect(("127.0.0.1", 9999))
-    assert not isinstance(excinfo.value, NetworkBlockError)
+@pytest.fixture
+def loopback_listener():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        yield listener.getsockname()
 
-def test_loopback_create_connection_allowed():
+
+def test_loopback_connect_allowed(loopback_listener):
+    """The offline guard permits a real connection to our own loopback listener."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.settimeout(1)
+        client.connect(loopback_listener)
+        assert client.getpeername() == loopback_listener
+
+def test_loopback_create_connection_allowed(loopback_listener):
     """Verify socket.create_connection to loopback does not raise NetworkBlockError."""
-    with pytest.raises(Exception) as excinfo:
-        socket.create_connection(("127.0.0.1", 9999), timeout=1)
-    assert not isinstance(excinfo.value, NetworkBlockError)
+    with socket.create_connection(loopback_listener, timeout=1) as client:
+        assert client.getpeername() == loopback_listener
 
 def test_wsl_bridge_sanitization_robustness(monkeypatch):
     """Test carriage-return sanitization robustness in WindowsWSL2AudioRunner."""

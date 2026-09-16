@@ -2,6 +2,7 @@
 # Keeps launcher behavior deterministic across PATH / shell-state drift.
 
 function Get-GoodQWslDistro {
+    param([switch]$RequireConfigured)
     $distro = $env:GOODQ_WSL_DISTRO
     if ([string]::IsNullOrWhiteSpace($distro)) {
         $envLocal = Join-Path $PSScriptRoot "..\..\.env.local"
@@ -14,6 +15,7 @@ function Get-GoodQWslDistro {
         }
     }
     if ([string]::IsNullOrWhiteSpace($distro)) {
+        if ($RequireConfigured) { throw 'GOODQ_WSL_DISTRO must be configured before a workstation mode can control WSL.' }
         try {
             $raw = wsl.exe -l -q 2>$null
             $first = ($raw | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)

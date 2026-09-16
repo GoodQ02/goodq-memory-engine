@@ -183,6 +183,15 @@ def _derive_step_log_outcome(
                 "result_meta": {meta_field: result_meta},
                 "embedding_emitted": bool(_EMBEDDING_EMISSION_BY_STEP.get(step_name, False) and meta_status == "ok"),
             }
+            for evidence_field in (
+                "requested_implementation",
+                "effective_implementation",
+                "fallback_chain",
+                "load_attempts",
+            ):
+                evidence_value = result_meta.get(evidence_field)
+                if evidence_value not in (None, "", []):
+                    extra[evidence_field] = copy.deepcopy(evidence_value)
             if meta_status in _META_ERROR_STATUSES:
                 error_text = str(result_meta.get("error") or "").strip() or f"{step_name} failed"
                 error_reason = str(result_meta.get("reason") or meta_status).strip().lower() or meta_status

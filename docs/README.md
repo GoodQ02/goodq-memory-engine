@@ -41,8 +41,7 @@ that map or the contracts above.
 - [Installation bootstrap](bootstrap/INSTALL_BOOTSTRAP.md)
 - [Qdrant setup](guides/QDRANT_SETUP.md)
 - [Agent office](agent/README.md)
-- [Diagnostics archive index](archive/diagnostics/README.md)
-- [Reports index](../reports/README.md)
+- [Public release scope](releases/PUBLIC_SANITIZATION_MANIFEST.md)
 - [RAG context pack](GOODQ_RAG_CONTEXT_PACK.md)
 
 ## Generated Discovery Surfaces
@@ -65,8 +64,9 @@ indexes are operational discovery aids and never become architecture authority.
 - `agent/`: agent orientation, workflows, and bounded evidence.
 - `testing/` and `diagnostics/`: focused verification evidence.
 - `releases/`: release notes and the sole long-running roadmap.
-- `archive/`: historical, non-canonical material.
+- Historical archives and runtime reports are retained in private development
+  and intentionally omitted from this public mirror.
 
 Do not create a second backlog, current-state narrative, or authority index.
-Historical paths may appear inside `archive/`; they must not be copied into
-active instructions.
+Do not add private runtime evidence, personal media, or generated reports to
+the public release tree.

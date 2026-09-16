@@ -23,7 +23,7 @@ This older documentation index path is kept to preserve incoming links.
 - Install:
   [`docs/guides/install/INSTALL.md`](../../bootstrap/INSTALL_BOOTSTRAP.md)
 - Quickstart:
-  [`docs/guides/install/QUICKSTART.md`](../../archive/guides/install/QUICKSTART.md)
+  `docs/guides/install/QUICKSTART.md` (historical material omitted from public source)
 
 ## Historical Note
 

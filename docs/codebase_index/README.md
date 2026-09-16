@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **430**
+Indexed active Python paths: **406**
 
 ## Repository root
 
@@ -162,10 +162,6 @@ Indexed active Python paths: **430**
 - `pipelines/__init__.py`
 - `pipelines/direct_ingestion.py`
 
-## reports
-
-- `reports/seinfeld_experiment/umap/generate_umap_clip_text.py`
-
 ## retrieval
 
 - `retrieval/__init__.py`
@@ -181,9 +177,6 @@ Indexed active Python paths: **430**
 - `scripts/analytics_query.py`
 - `scripts/analyze_database.py`
 - `scripts/analyze_kg_gaps.py`
-- `scripts/analyze_sample_output.py`
-- `scripts/analyze_unified_kg.py`
-- `scripts/apply_performance_fixes.py`
 - `scripts/apply_scene_summaries.py`
 - `scripts/assets/__init__.py`
 - `scripts/assets/hf_snapshot_intake.py`
@@ -191,7 +184,6 @@ Indexed active Python paths: **430**
 - `scripts/assets/personal_asset_vault.py`
 - `scripts/audio_gpu_monitor.py`
 - `scripts/audio_gpu_report.py`
-- `scripts/audit_all_exceptions.py`
 - `scripts/audit_codebase.py`
 - `scripts/audit_llm.py`
 - `scripts/audit_vision_pipeline.py`
@@ -200,13 +192,10 @@ Indexed active Python paths: **430**
 - `scripts/bootstrap_models.py`
 - `scripts/bootstrap_onboarding.py`
 - `scripts/bootstrap_verify.py`
-- `scripts/build_identity_ledger.py`
 - `scripts/build_kg_standalone.py`
 - `scripts/build_knowledge_graph_from_db.py`
-- `scripts/build_unified_kg.py`
 - `scripts/cache_readiness_check.py`
 - `scripts/check_qdrant.py`
-- `scripts/clean_old_processing.py`
 - `scripts/comprehensive_gpu_setup.py`
 - `scripts/config_schema.py`
 - `scripts/dataset_specs.py`
@@ -215,8 +204,6 @@ Indexed active Python paths: **430**
 - `scripts/deep_scene_analysis.py`
 - `scripts/diagnose_gpu_issue.py`
 - `scripts/diagnose_gpu_pipeline.py`
-- `scripts/diagnose_transcription.py`
-- `scripts/diagnostics/FULL_SYSTEM_AUDIT.py`
 - `scripts/diagnostics/audit_gpu_steps.py`
 - `scripts/diagnostics/audit_human_perceived_quality.py`
 - `scripts/diagnostics/check_atomic_writes.py`
@@ -225,7 +212,6 @@ Indexed active Python paths: **430**
 - `scripts/diagnostics/check_latest_results.py`
 - `scripts/diagnostics/check_silent_suppression.py`
 - `scripts/diagnostics/episode_reference_eval.py`
-- `scripts/diagnostics/monitor_progress.py`
 - `scripts/diagnostics/native_model_stability_smoke.py`
 - `scripts/diagnostics/pipeline_witness_sheet.py`
 - `scripts/diagnostics/scene_context_debug.py`
@@ -237,11 +223,9 @@ Indexed active Python paths: **430**
 - `scripts/docs/runtime_path_authority_audit.py`
 - `scripts/download_datasets.py`
 - `scripts/extract_test_frame.py`
-- `scripts/final_validation_report.py`
 - `scripts/find_transcription_data.py`
 - `scripts/fix_imports.py`
 - `scripts/fix_pyannote_gpu.py`
-- `scripts/full_diagnostic_check.py`
 - `scripts/generate_goodq4all_agent_status.py`
 - `scripts/generate_post_manifest.py`
 - `scripts/generate_quantization_assets.py`
@@ -262,13 +246,16 @@ Indexed active Python paths: **430**
 - `scripts/identity/validate_roster.py`
 - `scripts/implement_comprehensive_vad.py`
 - `scripts/init_qdrant_collections.py`
-- `scripts/inspect_db.py`
 - `scripts/install/build_capability_matrix.py`
+- `scripts/install/generate_release_fixture_pack.py`
 - `scripts/install/generate_wheelhouse_sbom.py`
+- `scripts/install/installer_contract.py`
+- `scripts/install/prebuild_readiness.py`
 - `scripts/install/release_payload_packs.py`
 - `scripts/install/sandbox_env_setup.py`
 - `scripts/install/stage_profile_model_packs.py`
 - `scripts/install/sync_nsi_version.py`
+- `scripts/install/verify_installer_semantic_contract.py`
 - `scripts/install/verify_profile_model_payload.py`
 - `scripts/install_pipeline_wsl.py`
 - `scripts/install_vision_gpu.py`
@@ -279,20 +266,10 @@ Indexed active Python paths: **430**
 - `scripts/monitor_ingestion_progress.py`
 - `scripts/monitor_ingestion_realtime.py`
 - `scripts/monitor_processing.py`
-- `scripts/optimize_config.py`
-- `scripts/phase2_completion_report.py`
-- `scripts/phase2_embedding_analysis.py`
-- `scripts/phase2_fixes.py`
 - `scripts/phase2_llm_integration.py`
-- `scripts/phase2_progress_report.py`
-- `scripts/phase2_verify.py`
 - `scripts/phase3_diagnostic.py`
-- `scripts/phase5_full_validation.py`
 - `scripts/pin_model_versions.py`
 - `scripts/promote_wsl_audio.py`
-- `scripts/qdrant/prepare_clean_slate.py`
-- `scripts/query_db_simple.py`
-- `scripts/quick_analysis.py`
 - `scripts/quick_gpu_test.py`
 - `scripts/repair_temporal_projection_gaps.py`
 - `scripts/rotate_logs.py`
@@ -310,12 +287,10 @@ Indexed active Python paths: **430**
 - `scripts/setup_wsl2_audio_fast.py`
 - `scripts/setup_wsl2_audio_userspace.py`
 - `scripts/show_kg_insights.py`
-- `scripts/show_phase2_enhancement.py`
 - `scripts/smoke_phase_a.py`
 - `scripts/sync_faiss_to_qdrant.py`
 - `scripts/sync_wsl_audio_worker.py`
 - `scripts/system_readiness_check.py`
-- `scripts/system_status_check.py`
 - `scripts/test_all_endpoints.py`
 - `scripts/test_gpu_config.py`
 - `scripts/test_gpu_scene_detection.py`
@@ -325,8 +300,6 @@ Indexed active Python paths: **430**
 - `scripts/test_vision_gpu.py`
 - `scripts/test_wsl2_bridge.py`
 - `scripts/test_wsl2_bridge_integrity.py`
-- `scripts/ucf/generate_birth_certificate.py`
-- `scripts/ucf/maintenance/heal_ucf_ledger.py`
 - `scripts/ucf/ucf_ledger.py`
 - `scripts/ucf/validate_ucf_epoch.py`
 - `scripts/utilities/backup_gpu_steps.py`
@@ -336,7 +309,6 @@ Indexed active Python paths: **430**
 - `scripts/utils/check_watchdog_status.py`
 - `scripts/utils/verify_command_center.py`
 - `scripts/utils/verify_model_lockdown.py`
-- `scripts/utils/verify_phase1_fix.py`
 - `scripts/verify_audio_provisioning.py`
 - `scripts/verify_parity.py`
 - `scripts/wsl2_audio_bridge.py`
@@ -409,6 +381,7 @@ Indexed active Python paths: **430**
 - `steps/common/quantization.py`
 - `steps/common/retrieval_events.py`
 - `steps/common/retry.py`
+- `steps/common/runtime_lifecycle.py`
 - `steps/common/safe_access.py`
 - `steps/common/scene_summarizer.py`
 - `steps/common/sensitive_staging.py`

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 import yaml
+from lib import ingestion_capability_contract as capability_contract
 from lib.ingestion_capability_contract import resolve_profile_assets
 
 
@@ -165,8 +166,64 @@ def test_installer_profiles_select_only_sealed_and_permitted_assets() -> None:
         and records[asset_id]["vault_scope"] == "personal_and_distributable"
         for asset_id in gpu_assets
     )
-    assert "qwen2_5_vl_3b" not in gpu_assets
-    assert "qwen2_5_vl_3b" in personal_assets
+    excluded_large_models = {
+        "qwen2_5_vl_7b",
+        "qwen2_5_vl_3b",
+        "deepseek_r1_distill_qwen_14b",
+        "deepseek_r1_distill_qwen_7b",
+        "gemma_4_12b_unified",
+    }
+    personal_overlay = {
+        "pyannote_diarization",
+        "pyannote_segmentation",
+        "pyannote_wespeaker",
+    }
+
+    assert len(gpu_assets) == 33
+    assert len(personal_assets) == 36
+    assert excluded_large_models.isdisjoint(gpu_assets)
+    assert excluded_large_models.isdisjoint(personal_assets)
+    assert set(personal_assets) - set(gpu_assets) == personal_overlay
+
+
+def test_gpu_profiles_resolve_explicit_local_model_and_wsl_dispositions() -> None:
+    profiles = _load_yaml(INSTALLER_PROFILE_CONTRACT_PATH)
+
+    public = capability_contract.resolve_installer_profile(
+        profiles, "PUBLIC_GPU_ENHANCED"
+    )
+    personal = capability_contract.resolve_installer_profile(
+        profiles, "PERSONAL_AIR_GAP"
+    )
+
+    for resolved in (public, personal):
+        assert resolved["capability_dispositions"] == {
+            "local_llm_serving": {"status": "policy_excluded"},
+            "local_vlm": {"status": "policy_excluded"},
+        }
+
+    assert public["component_dispositions"]["wsl_audio"] == {
+        "status": "excluded"
+    }
+    assert personal["component_dispositions"]["wsl_audio"] == {
+        "status": "host_prerequisite",
+        "distro": "Ubuntu-22.04",
+        "wsl_version": 2,
+        "receipt_phases": ["pre_install", "post_install"],
+        "probe": "scripts/wsl_audio_preflight.py",
+        "required_checks": [
+            "workspace",
+            "transcription",
+            "process_import",
+            "abi",
+            "diarization",
+            "wav2vec_enrichment",
+            "clap_handoff",
+            "gpu",
+        ],
+        "allowed_warnings": ["torchcodec_unavailable"],
+        "packaged": False,
+    }
 
 
 def test_invalid_faster_whisper_turbo_scaffold_is_absent_from_active_configuration() -> None:

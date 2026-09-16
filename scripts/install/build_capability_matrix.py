@@ -18,6 +18,8 @@ if str(REPO_ROOT) not in sys.path:
 from lib.ingestion_capability_contract import (
     RUNTIME_CAPABILITY_POLICIES,
     build_capability_matrix,
+    build_profile_asset_closure,
+    resolve_capability_profile,
     resolve_profile_assets,
 )
 
@@ -82,6 +84,9 @@ def main() -> int:
     registry = _flatten_registry(_load_yaml(REPO_ROOT / "configs" / "model_registry.yaml"))
     catalog = _load_yaml(REPO_ROOT / "configs" / "offline_asset_catalog.yaml")
     profile_contract = _load_yaml(REPO_ROOT / "configs" / "installer_profile_contract.yaml")
+    capability_contract = _load_yaml(
+        REPO_ROOT / "configs" / "ingestion_capability_profiles.yaml"
+    )
     matrix = build_capability_matrix(
         registry=registry,
         catalog=catalog,
@@ -91,6 +96,18 @@ def main() -> int:
         profile: resolve_profile_assets(catalog, profile_contract, profile)
         for profile in sorted(dict(profile_contract.get("profiles") or {}))
     }
+    profile_asset_closures = {
+        profile: build_profile_asset_closure(
+            catalog=catalog,
+            profile_contract=profile_contract,
+            registry=registry,
+            capability_profile=resolve_capability_profile(
+                capability_contract, profile
+            ),
+            profile=profile,
+        )
+        for profile in sorted(profile_selections)
+    }
     _validate_profile_model_bindings(
         catalog=catalog,
         profile_selections=profile_selections,
@@ -99,6 +116,7 @@ def main() -> int:
     if args.profile and args.profile not in profile_selections:
         raise ValueError(f"unknown installer profile: {args.profile}")
     matrix["profile_selections"] = profile_selections
+    matrix["profile_asset_closures"] = profile_asset_closures
     if args.check:
         print(
             "capability matrix check passed: "

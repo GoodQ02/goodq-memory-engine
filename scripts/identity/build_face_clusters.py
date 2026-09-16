@@ -11,7 +11,7 @@ a human labels it in family_roster.yaml.
 
 Usage:
     conda run -n goodq_core python scripts/identity/build_face_clusters.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         [--eps 0.4] \\
         [--min-samples 2] \\
         [--data-path L:/_DATA/GoodQ_Data/identity]

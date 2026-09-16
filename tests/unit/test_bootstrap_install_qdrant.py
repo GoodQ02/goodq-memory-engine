@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from argparse import Namespace
 from pathlib import Path
+
+import pytest
 
 
 def test_qdrant_installer_env_uses_canonical_runtime_paths(monkeypatch, tmp_path: Path):
@@ -217,3 +220,165 @@ def test_has_core_torch_stack_conflict_detects_gpu_cpuonly(monkeypatch):
 
     assert has_conflict is True
     assert "cpuonly" in detail
+
+
+@pytest.fixture
+def bootstrap_profile_host(monkeypatch, tmp_path: Path):
+    from scripts import bootstrap_install
+
+    for name in ("environment.yml", "environment.gpu.yml", "LAUNCH_GOODQ.bat"):
+        (tmp_path / name).write_text("fixture\n", encoding="utf-8")
+    monkeypatch.setattr(bootstrap_install, "_is_windows", lambda: True)
+    monkeypatch.setattr(bootstrap_install, "resolve_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(bootstrap_install, "detect_conda", lambda: tmp_path / "conda.exe")
+    monkeypatch.setattr(bootstrap_install, "detect_python", lambda: (True, "3.10"))
+    monkeypatch.setattr(bootstrap_install, "detect_gpu", lambda: (True, "GPU present"))
+    monkeypatch.setattr(bootstrap_install, "detect_wsl", lambda: (False, "none", "Ubuntu"))
+    args = Namespace(
+        yes=True, inspect_only=False, verify_only=False, no_launch=True,
+        data_root=str(tmp_path / "data"), enable_gpu=None,
+        enable_wsl_audio=False, prefetch_models=False, wsl_distro=None,
+    )
+    return bootstrap_install, args, tmp_path
+
+
+@pytest.mark.parametrize(
+    ("settings", "wanted_spec"),
+    [
+        ("", "environment.yml"),
+        ("GOODQ_HOST_PROFILE=BASELINE\nGOODQ_REQUIRE_GPU=0\n", "environment.yml"),
+        ("GOODQ_HOST_PROFILE=GPU_ENHANCED\nGOODQ_REQUIRE_GPU=1\n", "environment.gpu.yml"),
+        ("GOODQ_REQUIRE_GPU=1\n", "environment.gpu.yml"),
+    ],
+)
+def test_unattended_bootstrap_preserves_existing_gpu_selection(
+    bootstrap_profile_host, settings, wanted_spec,
+):
+    bootstrap, args, root = bootstrap_profile_host
+    if settings:
+        (root / ".env.local").write_text(settings, encoding="utf-8")
+
+    ctx = bootstrap.collect_context(args)
+
+    assert ctx.environment_yml == root / wanted_spec
+    assert ctx.enable_gpu is (wanted_spec == "environment.gpu.yml")
+    if settings:
+        assert (root / ".env.local").read_text(encoding="utf-8") == settings
+
+
+@pytest.mark.parametrize("existing_gpu", [False, True])
+def test_bootstrap_rejects_profile_change_that_preserved_config_would_undo(
+    bootstrap_profile_host, existing_gpu,
+):
+    bootstrap, args, root = bootstrap_profile_host
+    profile = "GPU_ENHANCED" if existing_gpu else "BASELINE"
+    (root / ".env.local").write_text(
+        f"GOODQ_HOST_PROFILE={profile}\nGOODQ_REQUIRE_GPU={int(existing_gpu)}\n",
+        encoding="utf-8",
+    )
+    args.enable_gpu = not existing_gpu
+
+    with pytest.raises(RuntimeError, match="preserved.*env.local"):
+        bootstrap.collect_context(args)
+
+
+@pytest.mark.parametrize("managed_header", ["", "# Bootstrap-managed defaults\n"])
+def test_bootstrap_cannot_downgrade_preserved_gpu_profile_when_gpu_is_unavailable(
+    bootstrap_profile_host, monkeypatch, managed_header,
+):
+    bootstrap, args, root = bootstrap_profile_host
+    (root / ".env.local").write_text(
+        managed_header + "GOODQ_REQUIRE_GPU=1\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(bootstrap, "detect_gpu", lambda: (False, "GPU unavailable"))
+
+    with pytest.raises(RuntimeError, match="preserved.*env.local"):
+        bootstrap.collect_context(args)
+
+
+def test_explicit_profile_change_updates_bootstrap_managed_settings(bootstrap_profile_host):
+    bootstrap, args, root = bootstrap_profile_host
+    env_path = root / ".env.local"
+    env_path.write_text(
+        "# Bootstrap-managed defaults\nGOODQ_HOST_PROFILE=GPU_ENHANCED\nGOODQ_REQUIRE_GPU=1\n",
+        encoding="utf-8",
+    )
+    args.enable_gpu = False
+
+    ctx = bootstrap.collect_context(args)
+    bootstrap.write_env_local(env_path, root / "absent-template", ctx)
+
+    assert ctx.environment_yml == root / "environment.yml"
+    assert bootstrap._load_env_file(env_path)["GOODQ_HOST_PROFILE"] == "BASELINE"
+    assert bootstrap._load_env_file(env_path)["GOODQ_REQUIRE_GPU"] == "0"
+
+
+def test_missing_gpu_recipe_cannot_select_baseline(bootstrap_profile_host, monkeypatch, capsys):
+    bootstrap, args, root = bootstrap_profile_host
+    args.enable_gpu = True
+    (root / "environment.gpu.yml").unlink()
+    monkeypatch.setattr(bootstrap, "parse_args", lambda: args)
+    monkeypatch.setattr(bootstrap, "print_inspection", lambda ctx: None)
+    provisions = []
+    monkeypatch.setattr(bootstrap, "ensure_conda_env", lambda *a, **kw: provisions.append(a))
+    monkeypatch.setattr(bootstrap, "ensure_supported_step_envs", lambda *a, **kw: None)
+    monkeypatch.setattr(bootstrap, "prepare_local_files", lambda *a, **kw: None)
+    monkeypatch.setattr(bootstrap, "ensure_model_cache", lambda *a, **kw: None)
+    monkeypatch.setattr(bootstrap, "ensure_wsl_audio_ready", lambda *a, **kw: True)
+    monkeypatch.setattr(bootstrap, "ensure_ffmpeg_ready", lambda *a, **kw: True)
+    monkeypatch.setattr(bootstrap, "ensure_qdrant_ready", lambda *a, **kw: True)
+    monkeypatch.setattr(bootstrap, "verify_runtime", lambda *a, **kw: 0)
+
+    assert bootstrap.main() == 1
+    assert provisions == []
+    assert "Missing environment spec" in capsys.readouterr().out
+
+
+def test_required_verifier_failure_blocks_bootstrap_completion(
+    bootstrap_profile_host, monkeypatch, capsys,
+):
+    bootstrap, args, root = bootstrap_profile_host
+    args.verify_only = True
+    monkeypatch.setattr(bootstrap, "parse_args", lambda: args)
+    monkeypatch.setattr(bootstrap, "print_inspection", lambda ctx: None)
+    monkeypatch.setattr(bootstrap, "verify_env_python", lambda *a: (True, "python ready"))
+    monkeypatch.setattr(bootstrap, "verify_config_loader", lambda *a: (True, "config loaded"))
+    monkeypatch.setattr(bootstrap, "run_bootstrap_verify", lambda *a: (False, "CUDA required but unavailable"))
+    monkeypatch.setattr(bootstrap, "resolve_ffmpeg", lambda: (True, "ffmpeg ready"))
+    monkeypatch.setattr(bootstrap, "resolve_qdrant_url", lambda *a: "http://127.0.0.1:6333")
+    monkeypatch.setattr(bootstrap, "check_qdrant", lambda *a: (True, "reachable"))
+
+    assert bootstrap.main() == 1
+    output = capsys.readouterr().out
+    assert "CUDA required but unavailable" in output
+    assert "Bootstrap complete" not in output
+
+
+@pytest.mark.parametrize(
+    ("stdout", "returncode", "accepted"),
+    [
+        ('{"overall":"pass"}', 0, True),
+        ('{"overall":"warn"}', 0, True),
+        ('{"overall":"fail"}', 0, False),
+        ('{"overall":"pass"}', 1, False),
+        ("", 0, False),
+        ("not JSON", 0, False),
+        ("[]", 0, False),
+        ("{}", 0, False),
+        ('{"overall":"unknown"}', 0, False),
+    ],
+)
+def test_bootstrap_accepts_only_usable_terminal_verification_report(
+    monkeypatch, tmp_path: Path, stdout, returncode, accepted,
+):
+    from scripts import bootstrap_install
+
+    monkeypatch.setattr(
+        bootstrap_install, "_run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, returncode, stdout, ""),
+    )
+
+    ok, detail = bootstrap_install.run_bootstrap_verify(tmp_path / "conda.exe", tmp_path)
+
+    assert ok is accepted
+    assert detail

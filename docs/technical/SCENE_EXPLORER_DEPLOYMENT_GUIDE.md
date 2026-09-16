@@ -17,8 +17,8 @@
 ## Use Instead
 
 - [`docs/reference/API.md`](../reference/API.md)
-- [`docs/guides/general/LAUNCH_INSTRUCTIONS.md`](../archive/guides/general/LAUNCH_INSTRUCTIONS.md)
-- [`docs/releases/SHIP_PROFILE.md`](../archive/releases/SHIP_PROFILE.md)
+- `docs/guides/general/LAUNCH_INSTRUCTIONS.md` (historical material omitted from public source)
+- `docs/releases/SHIP_PROFILE.md` (historical material omitted from public source)
 
 ## Why This Note Exists
 

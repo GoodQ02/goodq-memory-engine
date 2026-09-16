@@ -45,6 +45,8 @@ $criticalFiles = @(
     "configs\model_download_manifest.json.sig",
     "configs\selected_capabilities.json",
     "configs\selected_capabilities.json.sig",
+    "configs\model_member_manifest.json",
+    "configs\model_member_manifest.json.sig",
     "poppler\pdftotext.exe",
     (Join-Path $modelPackRoot "model_packs\object_detection_cpu\models\opencv_zoo\object_detection_nanodet_2022nov.onnx")
 )
@@ -210,9 +212,11 @@ $results.gates += $gate1d
 # --- Gate 1e: Complete selected profile payload ---
 $gate1e = @{ name = "selected_profile_payload"; pass = $true; errors = @() }
 try {
-    & $pythonPath (Join-Path $InstallDir "scripts\install\verify_profile_model_payload.py") --install-dir $InstallDir --models-root $modelPackRoot *> $null
+    $modelProbeReceipt = Join-Path $env:ProgramData "GoodQ4All\verification\profile_model_load_receipt.json"
+    & $pythonPath (Join-Path $InstallDir "scripts\install\verify_profile_model_payload.py") --install-dir $InstallDir --models-root $modelPackRoot --receipt-path $modelProbeReceipt *> $null
     if ($LASTEXITCODE -ne 0) { throw "profile capability verification returned exit code $LASTEXITCODE" }
-    Write-Host "  [OK]   Every selected model and lexicon payload resolves from the installed offline cache" -ForegroundColor Green
+    if (-not (Test-Path -LiteralPath $modelProbeReceipt -PathType Leaf)) { throw "profile model-load receipt was not written" }
+    Write-Host "  [OK]   Every selected model and lexicon payload loaded from its exact installed path" -ForegroundColor Green
 } catch {
     $gate1e.pass = $false
     $gate1e.errors += "Selected profile payload failed: $_"

@@ -1,0 +1,182 @@
+# Release-validation capability authority. Runtime observations may satisfy only
+# the expanded records produced for the selected profile.
+schema_version: 2
+
+capabilities:
+  audio_transcribe_local:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_transcribe.step.audio_transcribe
+    status_surface: transcript_meta
+    asset_ids: [faster_whisper_medium]
+    content_applicability: speech
+    fallback_policy: none
+  image_ocr:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.image_ocr.step.image_ocr
+    status_surface: ocr_meta
+    asset_ids: [tesseract]
+    content_applicability: ocr_text
+    fallback_policy: none
+  image_caption:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.image_caption.step.image_caption
+    status_surface: caption_meta
+    asset_ids: [blip_caption, vit_gpt2_caption]
+    content_applicability: video
+    fallback_policy: none
+  object_detect:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.object_detect.step.object_detect
+    status_surface: object_meta
+    asset_ids: [opencv_nanodet, opencv_yolox]
+    content_applicability: object
+    fallback_policy: none
+  face_embed:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.face_embed.step.face_embed
+    status_surface: face_meta
+    asset_ids: [opencv_yunet, opencv_sface]
+    content_applicability: face
+    fallback_policy: none
+  image_embed_dino:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.image_embed_dino.step.image_embed_dino
+    status_surface: dino_meta
+    asset_ids: [dinov2]
+    content_applicability: video
+    fallback_policy: none
+  image_embed_clip:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.image_embed_clip.step.image_embed_clip
+    status_surface: clip_meta
+    asset_ids: [clip_vit]
+    content_applicability: video
+    fallback_policy: none
+  tagger:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.tagger.step.tagger
+    status_surface: tagger_meta
+    asset_ids: [bert_ner]
+    content_applicability: text
+    fallback_policy: none
+  audio_metadata:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_metadata.step.audio_metadata
+    status_surface: audio_meta
+    asset_ids: []
+    content_applicability: audio
+    fallback_policy: none
+  audio_speaker_merge:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_speaker_merge.step.audio_speaker_merge
+    status_surface: speaker_meta
+    asset_ids: [pyannote_diarization, pyannote_segmentation, pyannote_wespeaker]
+    content_applicability: speech
+    fallback_policy: none
+  audio_music_events:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_music_events.step.audio_music_events
+    status_surface: music_meta
+    asset_ids: []
+    content_applicability: music
+    fallback_policy: none
+  audio_time_hints:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_time_hints.step.audio_time_hints
+    status_surface: time_hints
+    asset_ids: []
+    content_applicability: speech
+    fallback_policy: none
+  audio_emotion:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_emotion.step.audio_emotion
+    status_surface: audio_emotion_meta
+    asset_ids: [hubert_emotion, wav2vec2_emotion]
+    content_applicability: speech
+    fallback_policy: none
+  audio_wav2vec2_enrichment:
+    runtime_owner: steps.audio.audio_wsl2_bridge
+    implementation: steps.audio.audio_wsl2_bridge.audio_unified_wsl2
+    status_surface: wsl_capability_outcomes.wav2vec2
+    asset_ids: [wav2vec2_base_960h]
+    content_applicability: audio
+    fallback_policy: none
+  audio_clap_handoff:
+    runtime_owner: steps.audio.audio_wsl2_bridge
+    implementation: steps.audio.audio_wsl2_bridge.audio_unified_wsl2
+    status_surface: wsl_capability_outcomes.clap_handoff
+    asset_ids: []
+    content_applicability: audio
+    fallback_policy: none
+  sentiment:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.sentiment.step.sentiment
+    status_surface: sentiment_meta
+    asset_ids: [sentiment_model, vader_lexicon]
+    content_applicability: text
+    fallback_policy: none
+  emotion_classify:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.emotion_classify.step.emotion_classify
+    status_surface: emotion_meta
+    asset_ids: [emotion_classify_model]
+    content_applicability: text
+    fallback_policy: [cpu_fallback]
+  audio_embed_clap:
+    runtime_owner: cli.run_ingestion
+    implementation: steps.audio_embed_clap.step.audio_embed_clap
+    status_surface: clap_meta
+    asset_ids: [clap_audio]
+    content_applicability: audio
+    fallback_policy: none
+  local_vlm:
+    runtime_owner: none
+    implementation: none
+    status_surface: local_vlm_meta
+    asset_ids: [qwen2_5_vl_7b, qwen2_5_vl_3b]
+    content_applicability: profile_excluded
+    fallback_policy: none
+  local_llm_serving:
+    runtime_owner: none
+    implementation: none
+    status_surface: local_llm_serving_meta
+    asset_ids:
+      - deepseek_r1_distill_qwen_14b
+      - deepseek_r1_distill_qwen_7b
+      - gemma_4_12b_unified
+    content_applicability: profile_excluded
+    fallback_policy: none
+
+profiles:
+  PUBLIC_CPU_BASELINE:
+    default_disposition: runtime
+    capability_dispositions:
+      audio_speaker_merge:
+        disposition: policy_excluded
+        reason: personal_diarization_assets_excluded
+      audio_wav2vec2_enrichment:
+        disposition: policy_excluded
+        reason: public_wsl_audio_excluded
+      audio_clap_handoff:
+        disposition: policy_excluded
+        reason: public_wsl_audio_excluded
+      local_vlm:
+        disposition: policy_excluded
+        reason: deferred_for_v3_0_1
+      local_llm_serving:
+        disposition: policy_excluded
+        reason: no_owned_offline_serving_runtime
+  PUBLIC_GPU_ENHANCED:
+    extends: PUBLIC_CPU_BASELINE
+  PERSONAL_AIR_GAP:
+    extends: PUBLIC_GPU_ENHANCED
+    capability_dispositions:
+      audio_speaker_merge:
+        disposition: runtime
+        reason: personal_pyannote_overlay
+      audio_wav2vec2_enrichment:
+        disposition: runtime
+        reason: preserved_host_wsl_audio
+      audio_clap_handoff:
+        disposition: runtime
+        reason: preserved_host_wsl_audio

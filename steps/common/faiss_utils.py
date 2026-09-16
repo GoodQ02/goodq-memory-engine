@@ -6,6 +6,8 @@ import json
 import socket
 import uuid
 import threading
+import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -269,7 +271,12 @@ def create_hnsw_id_index(faiss_module: Any, dim: int, links: int = 32) -> Any:
 
 
 def add_with_required_ids(index: Any, vectors: Any, ids: Any) -> None:
-    """Add vectors to FAISS only when explicit stable IDs are supported."""
+    """Upsert stable IDs while preserving the accepted HNSW index type.
+
+    Callers hold FaissLock and publish the resulting index only after success.
+    HNSW cannot remove individual vectors, so changed/repeated IDs require a
+    rebuild of this in-memory index. Unchanged unique IDs are a no-op.
+    """
     try:
         if len(vectors) != len(ids):
             raise RuntimeError("faiss_id_count_mismatch")
@@ -279,6 +286,54 @@ def add_with_required_ids(index: Any, vectors: Any, ids: Any) -> None:
     if not callable(add_with_ids):
         raise RuntimeError("faiss_index_lacks_add_with_ids")
     try:
+        import numpy as np
+
+        vectors = np.asarray(vectors, dtype='float32')
+        ids = np.asarray(ids, dtype='int64')
+        # One batch follows the same last-write-wins rule as repeated calls.
+        last_positions = {int(identifier): position for position, identifier in enumerate(ids)}
+        positions = sorted(last_positions.values())
+        vectors, ids = vectors[positions], ids[positions]
+        if getattr(index, 'ntotal', 0):
+            import faiss
+
+            old_ids = faiss.vector_to_array(index.id_map)
+            base = faiss.downcast_index(index.index)
+            pending = []
+            for position, identifier in enumerate(ids):
+                matches = np.flatnonzero(old_ids == identifier)
+                if len(matches) == 1 and np.array_equal(base.reconstruct(int(matches[0])), vectors[position]):
+                    continue
+                pending.append(position)
+            if not pending:
+                return
+            vectors, ids = vectors[pending], ids[pending]
+            retained = ~np.isin(old_ids, ids)
+            if not retained.all():
+                old_vectors = base.reconstruct_n(0, len(old_ids))
+                vectors = np.concatenate((old_vectors[retained], vectors))
+                ids = np.concatenate((old_ids[retained], ids))
+                index.reset()
         add_with_ids(vectors, ids)
     except Exception as exc:
         raise RuntimeError("faiss_add_with_ids_failed") from exc
+
+
+def write_index_atomically(faiss_module: Any, index: Any, index_path: str | Path) -> None:
+    """Publish a complete index under the caller's FaissLock, preserving old bytes on failure."""
+    from steps.common.atomic_io import _replace_file_with_retry_for_open_readers
+
+    target = Path(index_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix=f'.{target.name}.', suffix='.tmp', dir=target.parent, delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        faiss_module.write_index(index, str(temporary))
+        with temporary.open('rb+') as handle:
+            os.fsync(handle.fileno())
+        _replace_file_with_retry_for_open_readers(temporary, target)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError as exc:
+            logging.getLogger(__name__).warning('FAISS temporary cleanup failed exc_type=%s', type(exc).__name__)

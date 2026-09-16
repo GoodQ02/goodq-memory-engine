@@ -34,9 +34,8 @@ function Resolve-CondaLauncher {
 
 function Write-Receipt {
     param([hashtable]$Receipt)
-    $path = Join-Path $OutputRoot "network-toggle-receipt.json"
     $Receipt.updated_at = [DateTime]::UtcNow.ToString("o")
-    $Receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $path -Encoding UTF8
+    $Receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
 }
 
 function Test-PublicConnectivity {
@@ -52,7 +51,11 @@ if (-not (Test-Path -LiteralPath $BuildScript)) {
 }
 $CondaExe = Resolve-CondaLauncher $CondaExe
 
-New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+$outputParent = Split-Path ([System.IO.Path]::GetFullPath($OutputRoot)) -Parent
+if (-not (Test-Path -LiteralPath $outputParent -PathType Container)) {
+    throw "The parent of the unused release output root must already exist: $outputParent"
+}
+$receiptPath = "$OutputRoot.network-toggle-receipt.json"
 $receipt = @{
     schema = "goodq.offline-network-containment.v1"
     started_at = [DateTime]::UtcNow.ToString("o")

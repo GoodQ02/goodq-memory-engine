@@ -1,16 +1,31 @@
 @echo off
+setlocal
+set "DEV_OFF_EXIT_CODE=0"
+pushd "%~dp0" || exit /b 1
+set "GOODQ_MODE_ROOT=%~dp0"
 REM GoodQ4All - Game Mode (Dev Off)
 REM Stops GPU-backed and API services while retaining loopback Qdrant for a fast Dev On return.
+REM Never terminate an automatically discovered, potentially unrelated distro.
+set "GOODQ_MODE_WSL="
+for /f "delims=" %%D in ('powershell -NoProfile -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQWslDistro -RequireConfigured"') do set "GOODQ_MODE_WSL=%%D"
+if not defined GOODQ_MODE_WSL goto :blocked
+set "GOODQ_WSL_DISTRO=%GOODQ_MODE_WSL%"
 call "%~dp0scripts\_lib\interpreter_bindings.bat"
-if "%WSL_DISTRO%"=="" set "WSL_DISTRO=%GOODQ_WSL_DISTRO%"
-if "%WSL_DISTRO%"=="" set "WSL_DISTRO=Ubuntu-22.04"
-set "GOODQ_WSL_DISTRO=%WSL_DISTRO%"
 
 call :dashboard -Event start
 
 echo [DEV OFF] Deactivating local agent services...
 
-REM Stop the GoodQ-owned vLLM service and keepalive anchor first.
+REM Request the existing owner to drain; never release dependencies first.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -StopCurrent
+if errorlevel 1 (
+    call :dashboard -Event node -Node RUNTIME -State blocked -Message "drain is unverified; compute dependencies preserved"
+    goto :blocked
+)
+call :dashboard -Event node -Node API -State released -Message "owning runtime drained or already absent"
+call :dashboard -Event node -Node WATCHDOG -State released -Message "owning runtime drained or already absent"
+
+REM Only a verified drain permits the GoodQ compute controls below.
 set "GOODQ_CALLER_NO_PAUSE=%GOODQ_NO_PAUSE%"
 set "GOODQ_NO_PAUSE=1"
 call "%~dp0scripts\stop_vllm_servers.bat"
@@ -21,35 +36,20 @@ if not "%VLLM_EXIT_CODE%"=="0" (
     call :dashboard -Event node -Node vLLM -State blocked -Message "stop control reported a failure"
     goto :blocked
 )
-powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:38005/v1/models | Out-Null; exit 1 } catch { exit 0 }"
-if errorlevel 1 (
-    call :dashboard -Event node -Node vLLM -State blocked -Message "speed endpoint is still reachable"
-    goto :blocked
-)
-call :dashboard -Event node -Node vLLM -State released -Message "speed endpoint is stopped"
+call :dashboard -Event node -Node vLLM -State released -Message "service, Linux/Windows endpoint and selected keepalive release verified"
 
-REM Force shut down WSL VM to free 100% of memory and GPU VRAM
-wsl --shutdown
+REM Release the configured GoodQ compute extension; other distro owners are separate.
+wsl --terminate "%GOODQ_WSL_DISTRO%"
 if errorlevel 1 (
     call :dashboard -Event node -Node "WSL AUDIO" -State blocked -Message "WSL shutdown command failed"
     goto :blocked
 )
-wsl --list --running | findstr /i /c:"%WSL_DISTRO%" >nul
-if not errorlevel 1 (
+powershell -NoProfile -Command "$running=@(wsl.exe --list --running --quiet); if ($LASTEXITCODE -ne 0) { exit 1 }; $names=@($running | ForEach-Object { ($_ -replace [char]0, '').Trim() }); if ($names -contains $env:GOODQ_WSL_DISTRO) { exit 1 }; exit 0"
+if errorlevel 1 (
     call :dashboard -Event node -Node "WSL AUDIO" -State blocked -Message "WSL distribution is still running"
     goto :blocked
 )
 call :dashboard -Event node -Node "WSL AUDIO" -State released -Message "compute extension is stopped"
-
-REM Stop Windows-side API and Ingestion Watchdog processes
-powershell -NoProfile -Command "$conn = Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.dog' -or $_.CommandLine -match 'cli.watchdog' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
-powershell -NoProfile -Command "$apiPort = Get-NetTCPConnection -LocalPort 30000 -ErrorAction SilentlyContinue; $services = Get-CimInstance Win32_Process -Filter 'name=''python.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'api.server' -or $_.CommandLine -match 'cli.watchdog' }; if (-not $apiPort -and -not $services) { exit 0 }; exit 1"
-if errorlevel 1 (
-    call :dashboard -Event node -Node API -State blocked -Message "API process is still active"
-    goto :blocked
-)
-call :dashboard -Event node -Node API -State released -Message "API process is stopped"
-call :dashboard -Event node -Node WATCHDOG -State released -Message "ingestion monitor is stopped"
 
 REM Qdrant remains available on loopback: it uses no GPU and avoids an index-service restart.
 powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:6333/collections | Out-Null; exit 0 } catch { exit 1 }"
@@ -74,8 +74,9 @@ if errorlevel 1 (
     nvidia-smi
 )
 
-echo [DEV OFF] Game mode activated. GPU services stopped, VRAM reclaimed, Qdrant remains available.
-call :dashboard -Event final -State ready -Message "Qdrant retained on loopback."
+echo [DEV OFF] GoodQ runtime drained and its compute extension stopped.
+echo [DEV OFF] Whole-workstation release, including Hermes and both Ollama lanes, remains unverified.
+call :dashboard -Event node -Node WORKSTATION -State warn -Message "Hermes and dual-lane model release are not yet qualified; Qdrant retained"
 goto :finish
 
 :blocked
@@ -88,6 +89,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dev_mode_dashboard.p
 exit /b %errorlevel%
 
 :finish
+popd
 if /i not "%GOODQ_NO_PAUSE%"=="1" pause
 exit /b %DEV_OFF_EXIT_CODE%
 

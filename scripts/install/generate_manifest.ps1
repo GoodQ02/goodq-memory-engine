@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$AssetRoot,
+    [Parameter(Mandatory = $true)]
+    [string]$PrebuildReceipt,
     [string]$ExpectedVersion,
     [ValidateSet("PUBLIC_CPU_BASELINE", "PUBLIC_GPU_ENHANCED", "PERSONAL_AIR_GAP")]
     [string]$Profile = "PUBLIC_CPU_BASELINE"
@@ -9,6 +11,19 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $assetRoot = [System.IO.Path]::GetFullPath($AssetRoot)
+$prebuildReceiptPath = [System.IO.Path]::GetFullPath($PrebuildReceipt)
+if (-not (Test-Path -LiteralPath $prebuildReceiptPath -PathType Leaf)) {
+    throw "Prebuild readiness receipt is missing"
+}
+try {
+    $prebuild = Get-Content -LiteralPath $prebuildReceiptPath -Raw | ConvertFrom-Json
+} catch {
+    throw "Prebuild readiness receipt is unreadable: $_"
+}
+if ($prebuild.schema -ne "goodq.prebuild-readiness.v1" -or $prebuild.status -ne "passed") {
+    throw "Prebuild readiness receipt is not terminal passing evidence"
+}
+$prebuildReceiptSha256 = (Get-FileHash -LiteralPath $prebuildReceiptPath -Algorithm SHA256).Hash.ToLower()
 $versionPath = Join-Path $repoRoot "goodq_version.py"
 $versionLine = Get-Content $versionPath | Where-Object { $_ -match 'GOODQ_VERSION\s*=' }
 if ($versionLine -notmatch '"([^"]+)"') {
@@ -36,8 +51,25 @@ try {
 } catch {
     throw "Payload manifest is unreadable: $_"
 }
-if ($payloadManifest.schema_version -ne 1 -or $payloadPacks.Count -lt 1) {
-    throw "Payload manifest must declare schema version 1 and at least one pack"
+if ($payloadManifest.schema_version -ne 2 -or $payloadManifest.pack_format -ne "zip_stored_zip64" -or $payloadPacks.Count -lt 1) {
+    throw "Payload manifest must declare schema version 2, ZIP_STORED ZIP64, and at least one pack"
+}
+$payloadMembers = @($payloadManifest.members)
+if ($payloadMembers.Count -lt 1 -or [int]$payloadManifest.member_count -ne $payloadMembers.Count) {
+    throw "Payload manifest schema v2 must bind every archive member"
+}
+foreach ($digestName in @(
+    "member_inventory_sha256",
+    "selected_capabilities_sha256",
+    "selected_asset_selector_sha256",
+    "selected_asset_inventory_sha256",
+    "model_member_manifest_sha256",
+    "model_member_inventory_sha256"
+)) {
+    $digest = [string]$payloadManifest.$digestName
+    if ($digest -notmatch '^[0-9a-f]{64}$') {
+        throw "Payload manifest has an invalid $digestName binding"
+    }
 }
 $payloadPackRecords = @()
 foreach ($pack in $payloadPacks) {
@@ -54,13 +86,47 @@ foreach ($pack in $payloadPacks) {
 }
 
 $sourceCommit = (git -C $repoRoot rev-parse HEAD).Trim()
+$sourceTree = (git -C $repoRoot rev-parse 'HEAD:').Trim()
 $dirtyFiles = git -C $repoRoot status --porcelain
 if (-not [string]::IsNullOrWhiteSpace($dirtyFiles)) {
     throw "Refusing to generate a release manifest from a dirty source tree."
 }
+if (
+    $prebuild.version -ne $productVersion -or
+    $prebuild.source.initial_commit -ne $sourceCommit -or
+    $prebuild.source.observed_commit -ne $sourceCommit -or
+    $prebuild.source.initial_tree -ne $sourceTree -or
+    $prebuild.source.observed_tree -ne $sourceTree
+) {
+    throw "Source commit/tree/version does not match the prebuild readiness receipt"
+}
+
+$excludedComponents = if ($Profile -eq "PUBLIC_CPU_BASELINE") {
+    @("wsl_audio", "local_vlm", "local_llm_serving", "gpu_enhanced")
+} elseif ($Profile -eq "PUBLIC_GPU_ENHANCED") {
+    @("wsl_audio", "local_vlm", "local_llm_serving")
+} else {
+    @("local_vlm", "local_llm_serving")
+}
+$componentDispositions = [ordered]@{
+    local_vlm = [ordered]@{ status = "policy_excluded" }
+    local_llm_serving = [ordered]@{ status = "policy_excluded" }
+    wsl_audio = if ($Profile -eq "PERSONAL_AIR_GAP") {
+        [ordered]@{
+            status = "host_prerequisite"
+            distro = "Ubuntu-22.04"
+            wsl_version = 2
+            packaged = $false
+            receipt_phases = @("pre_install", "post_install")
+            allowed_warnings = @("torchcodec_unavailable")
+        }
+    } else {
+        [ordered]@{ status = "excluded"; packaged = $false }
+    }
+}
 
 $manifest = [ordered]@{
-    manifest_version = "1.0.0"
+    manifest_version = "1.1.0"
     installer_filename = $installerName
     sha256 = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash.ToLower()
     launcher_filename = "LAUNCH_GOODQ.exe"
@@ -72,9 +138,13 @@ $manifest = [ordered]@{
     payload_packs = $payloadPackRecords
     product_version = $productVersion
     source_commit = $sourceCommit
+    source_tree = $sourceTree
     source_tree_clean = $true
+    prebuild_readiness_schema = [string]$prebuild.schema
+    prebuild_readiness_sha256 = $prebuildReceiptSha256
     profile = $Profile
-    excluded_optional_components = if ($Profile -eq "PUBLIC_CPU_BASELINE") { @("wsl_audio", "local_llm_serving", "gpu_enhanced") } else { @("wsl_audio", "local_llm_serving") }
+    excluded_optional_components = $excludedComponents
+    component_dispositions = $componentDispositions
     status = "verified_offline"
 }
 $manifestPath = Join-Path $assetRoot "GoodQ4All_Setup_$productVersion.release_manifest.json"

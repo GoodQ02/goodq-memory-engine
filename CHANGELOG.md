@@ -232,17 +232,17 @@ and related canonical docs.
   with `control-recurrence-v0.4.2` plus retry attribution/coalescing
   tightening.
 - Published the `control-recurrence-v0.4.2` operator release note:
-  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.2.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.2.md).
+  `docs/archive/releases/CONTROL_RECURRENCE_v0.4.2.md` (historical material omitted from public source).
 - Hardened direct canonical recurrence mapping for multi-video direct run roots,
   operator metadata output/workspace fallbacks, stderr-only recovered native
   retry visibility, and explicit markdown-only index warnings.
 - Published the `control-recurrence-v0.4.1` operator release note:
-  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.1.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.1.md).
+  `docs/archive/releases/CONTROL_RECURRENCE_v0.4.1.md` (historical material omitted from public source).
 - Extended read-only control recurrence reporting to direct canonical
   `cli.run_ingestion` run roots that do not have wrapper `experiment_log.json`
   ledgers, using existing output/workspace/operator-log artifacts only.
 - Published the `control-recurrence-v0.4.0` operator release note:
-  [`docs/archive/releases/CONTROL_RECURRENCE_v0.4.0.md`](docs/archive/releases/CONTROL_RECURRENCE_v0.4.0.md).
+  `docs/archive/releases/CONTROL_RECURRENCE_v0.4.0.md` (historical material omitted from public source).
 - Added the read-only deterministic control recurrence recommendation draft
   surface for existing durable recurrence JSON reports. This includes
   `--recommendations-for <report_id>` and
@@ -265,7 +265,7 @@ and related canonical docs.
 ## [0.1.1] - 2026-04-17
 
 Reference checkpoint:
-[`docs/archive/releases/RELEASE_0.1.1.md`](docs/archive/releases/RELEASE_0.1.1.md)
+`docs/archive/releases/RELEASE_0.1.1.md` (historical material omitted from public source)
 
 ### Changed
 - Published the scene-context interpretation hardening batch after the proving witness on `03x10` and `03x11` closed cleanly at `reports/fresh_ingest_runs/20260417_163530_season3_feature_ladder/`.
@@ -349,7 +349,7 @@ Reference checkpoint:
 ## [0.1.0] - 2026-03-20
 
 Reference checkpoint:
-[`docs/archive/releases/RELEASE_0.1.0.md`](docs/archive/releases/RELEASE_0.1.0.md)
+`docs/archive/releases/RELEASE_0.1.0.md` (historical material omitted from public source)
 
 ### Release Highlights
 

@@ -6,6 +6,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 MODEL_LABELS = {
     "0": "anger",
@@ -36,7 +38,19 @@ def test_retired_cardiff_multilabel_alias_is_absent_from_active_paths():
 
 
 def _reset_emotion_cache(monkeypatch, emotion_step, **values):
-    baseline = {"model": None, "tok": None, "labels": [], "device": "cpu", "error": None}
+    baseline = {
+        "model": None,
+        "tok": None,
+        "labels": [],
+        "device": "cpu",
+        "error": None,
+        "problem_type": None,
+        "model_id": None,
+        "model_revision": None,
+        "requested_device": "cpu",
+        "fallback_chain": [],
+        "load_attempts": [],
+    }
     baseline.update(values)
     for key, value in baseline.items():
         monkeypatch.setitem(emotion_step._EMO, key, value)
@@ -45,24 +59,18 @@ def _reset_emotion_cache(monkeypatch, emotion_step, **values):
 def test_load_emotion_uses_loaded_model_id2label(monkeypatch):
     """The sealed model configuration, not a handwritten list, owns label order."""
 
-    from steps.common.model_provisioner import ModelProvisionResult
     from steps.emotion_classify import step as emotion_step
 
     monkeypatch.setattr(
-        "steps.common.model_provisioner.ensure_model_cached",
-        lambda *args, **kwargs: ModelProvisionResult(
-            status="cached",
-            repo_id="cardiffnlp/twitter-roberta-base-emotion-latest",
-            revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
-            local_path="/sealed/cardiff",
-            gated=False,
-            required=True,
-            elapsed_seconds=0.1,
+        emotion_step,
+        "_resolve_emotion_snapshot",
+        lambda: (
+            Path("/sealed/cardiff/snapshots/415620c4fbc8bd82b82b9fd46642fcec6519d537"),
+            "cardiffnlp/twitter-roberta-base-emotion-latest",
+            "415620c4fbc8bd82b82b9fd46642fcec6519d537",
         ),
     )
     monkeypatch.setattr(emotion_step, "setup_step_gpu", lambda _: {"device": "cpu"})
-    monkeypatch.setattr("steps.common.config_loader.load_configs", lambda *_: {"verification": {"offline_mode": True}})
-    monkeypatch.setattr(emotion_step.os.path, "exists", lambda path: path.endswith("model.safetensors"))
 
     class FakeTokenizer:
         @classmethod
@@ -92,6 +100,138 @@ def test_load_emotion_uses_loaded_model_id2label(monkeypatch):
 
     assert emotion_step._EMO["labels"] == list(MODEL_LABELS.values())
     assert emotion_step._EMO["problem_type"] == "multi_label_classification"
+
+
+def test_resolve_emotion_snapshot_requires_exact_pinned_safetensors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from steps.emotion_classify import step as emotion_step
+
+    repo_id = "cardiffnlp/twitter-roberta-base-emotion-latest"
+    revision = "415620c4fbc8bd82b82b9fd46642fcec6519d537"
+    snapshot = (
+        tmp_path
+        / "hub"
+        / f"models--{repo_id.replace('/', '--')}"
+        / "snapshots"
+        / revision
+    )
+    snapshot.mkdir(parents=True)
+    (snapshot / "config.json").write_text("{}", encoding="utf-8")
+    (snapshot / "pytorch_model.bin").write_bytes(b"unsafe-legacy-weight")
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.resolve_models_root",
+        lambda: tmp_path,
+    )
+
+    with pytest.raises(OSError, match="exact pinned safetensors snapshot"):
+        emotion_step._resolve_emotion_snapshot()
+
+    (snapshot / "model.safetensors").write_bytes(b"sealed-safe-weight")
+    resolved, resolved_repo, resolved_revision = emotion_step._resolve_emotion_snapshot()
+
+    assert resolved == snapshot.resolve()
+    assert resolved_repo == repo_id
+    assert resolved_revision == revision
+
+
+def test_load_emotion_retries_once_on_cpu_after_gpu_load_failure(monkeypatch) -> None:
+    from steps.emotion_classify import step as emotion_step
+
+    snapshot = Path("/sealed/cardiff/snapshots/pinned")
+    monkeypatch.setattr(
+        emotion_step,
+        "_resolve_emotion_snapshot",
+        lambda: (
+            snapshot,
+            "cardiffnlp/twitter-roberta-base-emotion-latest",
+            "415620c4fbc8bd82b82b9fd46642fcec6519d537",
+        ),
+    )
+    monkeypatch.setattr(emotion_step, "setup_step_gpu", lambda _: {"device": "cuda"})
+    cleared: list[bool] = []
+    monkeypatch.setattr(
+        emotion_step.GPUManager,
+        "clear_cache",
+        lambda: cleared.append(True),
+    )
+    devices: list[str] = []
+    model_calls: list[dict[str, object]] = []
+
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            assert Path(path) == snapshot
+            assert kwargs == {"local_files_only": True}
+            return cls()
+
+    class FakeModel:
+        config = types.SimpleNamespace(
+            id2label=MODEL_LABELS,
+            problem_type="multi_label_classification",
+        )
+
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            assert Path(path) == snapshot
+            model_calls.append(dict(kwargs))
+            return cls()
+
+        def to(self, device):
+            devices.append(device)
+            if device == "cuda":
+                raise RuntimeError("simulated CUDA load failure")
+            return self
+
+        def eval(self):
+            return self
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.AutoTokenizer = FakeTokenizer
+    fake_transformers.AutoModelForSequenceClassification = FakeModel
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    _reset_emotion_cache(monkeypatch, emotion_step)
+
+    emotion_step._load_emotion()
+
+    assert devices == ["cuda", "cpu"]
+    assert len(model_calls) == 2
+    assert all(
+        kwargs == {"use_safetensors": True, "local_files_only": True}
+        for kwargs in model_calls
+    )
+    assert emotion_step._EMO["device"] == "cpu"
+    assert emotion_step._EMO["requested_device"] == "cuda"
+    assert emotion_step._EMO["fallback_chain"] == ["cpu_fallback"]
+    assert emotion_step._EMO["load_attempts"] == ["cuda", "cpu"]
+    assert cleared
+
+
+def test_model_meta_exposes_bounded_cpu_fallback_provenance(monkeypatch) -> None:
+    from steps.emotion_classify import step as emotion_step
+
+    _reset_emotion_cache(
+        monkeypatch,
+        emotion_step,
+        model=object(),
+        tok=object(),
+        labels=["joy"],
+        problem_type="multi_label_classification",
+        model_id="cardiffnlp/twitter-roberta-base-emotion-latest",
+        model_revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
+        requested_device="cuda",
+        device="cpu",
+        fallback_chain=["cpu_fallback"],
+        load_attempts=["cuda", "cpu"],
+    )
+
+    meta = emotion_step._model_emotion_meta()
+
+    assert meta["requested_implementation"] == "cardiffnlp_cuda"
+    assert meta["effective_implementation"] == "cardiffnlp_cpu"
+    assert meta["fallback_chain"] == ["cpu_fallback"]
+    assert meta["load_attempts"] == ["cuda", "cpu"]
 
 
 def test_emotion_classify_preserves_complete_model_ranking_and_semantics(monkeypatch):
@@ -160,6 +300,10 @@ def test_emotion_classify_preserves_complete_model_ranking_and_semantics(monkeyp
         "label_count": 11,
         "model_id": "cardiffnlp/twitter-roberta-base-emotion-latest",
         "model_revision": "415620c4fbc8bd82b82b9fd46642fcec6519d537",
+        "requested_implementation": "cardiffnlp_cpu",
+        "effective_implementation": "cardiffnlp_cpu",
+        "fallback_chain": [],
+        "load_attempts": [],
     }
 
 
@@ -195,7 +339,74 @@ def test_emotion_classify_marks_nrc_as_a_distinct_complete_fallback(monkeypatch)
         "source": "lexicon",
         "label_count": 6,
         "reason": "model_unavailable",
+        "requested_implementation": "cardiffnlp_cpu",
+        "effective_implementation": "nrc_lexicon",
+        "fallback_chain": ["nrc_lexicon"],
+        "model_error": "model cache unavailable",
     }
+
+
+def test_emotion_model_failure_is_visible_after_gpu_and_cpu_attempts(monkeypatch) -> None:
+    from steps.emotion_classify import step as emotion_step
+
+    snapshot = Path("/sealed/cardiff/snapshots/pinned")
+    monkeypatch.setattr(
+        emotion_step,
+        "_resolve_emotion_snapshot",
+        lambda: (
+            snapshot,
+            "cardiffnlp/twitter-roberta-base-emotion-latest",
+            "415620c4fbc8bd82b82b9fd46642fcec6519d537",
+        ),
+    )
+    monkeypatch.setattr(emotion_step, "setup_step_gpu", lambda _: {"device": "cuda"})
+    monkeypatch.setattr(emotion_step.GPUManager, "clear_cache", lambda: None)
+
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            return cls()
+
+    class FakeModel:
+        config = types.SimpleNamespace(
+            id2label=MODEL_LABELS,
+            problem_type="multi_label_classification",
+        )
+
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            return cls()
+
+        def to(self, device):
+            raise RuntimeError(f"simulated {device} load failure")
+
+        def eval(self):
+            return self
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.AutoTokenizer = FakeTokenizer
+    fake_transformers.AutoModelForSequenceClassification = FakeModel
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    _reset_emotion_cache(monkeypatch, emotion_step)
+
+    emotion_step._load_emotion()
+
+    assert emotion_step._EMO["model"] is None
+    assert emotion_step._EMO["requested_device"] == "cuda"
+    assert emotion_step._EMO["load_attempts"] == ["cuda", "cpu"]
+    assert "cuda:RuntimeError:simulated cuda load failure" in emotion_step._EMO["error"]
+    assert "cpu:RuntimeError:simulated cpu load failure" in emotion_step._EMO["error"]
+
+    monkeypatch.setattr(emotion_step, "_load_emotion", lambda: None)
+    monkeypatch.setattr(emotion_step, "score_nrc_emotions", lambda *_: None)
+    result = emotion_step.emotion_classify(
+        {"transcript": "A scene requiring emotion evidence"},
+        {"config": {}},
+    )
+
+    assert result["emotion_meta"]["status"] == "unavailable"
+    assert "simulated cuda load failure" in result["emotion_meta"]["error"]
+    assert "simulated cpu load failure" in result["emotion_meta"]["error"]
 
 
 def test_emotion_classify_uses_cached_model_while_offline(monkeypatch):

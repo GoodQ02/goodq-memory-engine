@@ -176,7 +176,7 @@ def test_competing_memory_policy_is_targeted_without_tightening_legacy_memory() 
     assert legacy_projection == {
         "routing": {
             "quantization_enabled": False,
-            "quantization_shadow_mode": True,
+            "quantization_shadow_mode": False,
         }
     }
 

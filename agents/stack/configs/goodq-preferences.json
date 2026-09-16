@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "user_id": "jdben",
+  "user_id": "local-user",
   "updated_at": "2026-03-01T00:00:00Z",
   "preferences": {
     "communication": {
@@ -28,27 +28,15 @@
     "path_meta": {
       "communication.verbosity": {
         "updated_at": "2026-03-01T00:00:00Z",
-        "source": "user_explicit",
+        "source": "example_default",
         "confidence": 1.0
       },
       "engineering.preferred_verification_profile": {
         "updated_at": "2026-03-01T00:00:00Z",
-        "source": "developer_seed",
+        "source": "example_default",
         "confidence": 0.9
       }
     }
   },
-  "history": [
-    {
-      "version": "1.0.0",
-      "event_id": "evt_seed_20260301_0001",
-      "timestamp": "2026-03-01T00:00:00Z",
-      "source": "developer_seed",
-      "operation": "upsert",
-      "path": "communication.verbosity",
-      "value": "concise",
-      "confidence": 1.0,
-      "reason": "Initial preference seed"
-    }
-  ]
+  "history": []
 }

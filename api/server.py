@@ -159,6 +159,9 @@ def main() -> None:
     here = pathlib.Path(__file__).resolve()
     repo_root = here.parents[1]  # .../goodq4all/api/server.py -> goodq4all root
     sys.path.insert(0, str(repo_root))
+    from steps.common.runtime_lifecycle import RuntimeLifecycle
+
+    lifecycle = RuntimeLifecycle.from_environment("api")
 
     # Apply token redaction filters to uvicorn loggers to protect session tokens in logs
     import logging
@@ -191,7 +194,20 @@ def main() -> None:
     from uvicorn import run  # type: ignore
     from api.main import app
     print(f"[api] Starting FastAPI on http://{host}:{port}")
-    run(app, host=host, port=port, log_level="info", proxy_headers=False)
+    if lifecycle is None:
+        run(app, host=host, port=port, log_level="info", proxy_headers=False)
+    else:
+        from uvicorn import Config, Server
+
+        class SupervisedServer(Server):
+            async def on_tick(self, counter):
+                # Enter Uvicorn's existing graceful shutdown, which stops new
+                # requests and waits for the current requests/background tasks.
+                if lifecycle.stop_requested():
+                    self.should_exit = True
+                return await super().on_tick(counter)
+
+        SupervisedServer(Config(app, host=host, port=port, log_level="info", proxy_headers=False)).run()
 
 
 if __name__ == "__main__":

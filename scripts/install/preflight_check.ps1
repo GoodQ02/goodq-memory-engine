@@ -21,7 +21,8 @@ Write-Host "Checking for poison payloads in staging and packaged source director
 $poisonFiles = @()
 $poisonPatterns = @('.env*', '*.key', '*.pem', 'token', 'huggingface/token', 'memory.db', 'knowledge_graph.db', '*.sqlite', '*.sqlite3')
 $packagedSourceRoots = @('..\..\scripts', '..\..\configs', '..\..\api', '..\..\cli', '..\..\steps', '..\..\ui', '..\..\agents', '..\..\lib', '..\..\common', '..\..\retrieval', '..\..\pipelines', '..\..\branding')
-$scanRoots = @('staged_cache', 'staged') + $packagedSourceRoots
+$privateCacheRoot = if ($env:GOODQ_PRIVATE_CACHE_ROOT) { $env:GOODQ_PRIVATE_CACHE_ROOT } else { 'staged_cache' }
+$scanRoots = @($privateCacheRoot, 'staged') + $packagedSourceRoots
 foreach ($pat in $poisonPatterns) {
     $found = Get-ChildItem -Path $scanRoots -Filter $pat -Recurse -ErrorAction SilentlyContinue |
         Where-Object {

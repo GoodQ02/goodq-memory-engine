@@ -288,7 +288,63 @@ def test_probe_wsl_audio_runtime_reports_wav2vec_enrichment_ready(monkeypatch):
 
     assert result["ready"] is True
     assert result["wav2vec_enrichment_ready"] is True
+    assert result["clap_handoff_ready"] is True
+    assert result["clap_handoff"]["required_step"] == "audio_embed_clap"
+    assert result["clap_handoff"]["reason"] == "canonical_clap_required"
     assert result["detected_versions"]["transformers"] == "4.43.3"
+
+
+def test_probe_wsl_audio_runtime_exposes_a_failed_clap_handoff_contract(monkeypatch):
+    from scripts import wsl_audio_preflight
+
+    monkeypatch.setattr(
+        wsl_audio_preflight,
+        "_probe_clap_handoff_contract",
+        lambda: {
+            "ready": False,
+            "required_step": "audio_embed_clap",
+            "reason": "canonical_clap_contract_unavailable",
+        },
+    )
+    monkeypatch.setattr(
+        wsl_audio_preflight,
+        "_run_wsl_probe",
+        lambda _distro, script, timeout: type(
+            "Probe",
+            (),
+            {
+                "returncode": 0,
+                "stdout": (
+                    "transcription_ready\ngpu_ready\n"
+                    if "import faster_whisper, torch" in script
+                    else "process_import_ready\n"
+                    if "spec_from_file_location('goodq_process_audio'" in script
+                    else "abi_ready\n"
+                    if "from torchvision.ops import nms" in script
+                    else "diarization_ready\n"
+                    if "snapshot_download" in script
+                    else "wav2vec_enrichment_ready\n"
+                    if "Wav2Vec2Model" in script
+                    else ""
+                ),
+                "stderr": "",
+            },
+        )(),
+    )
+    monkeypatch.setattr(wsl_audio_preflight, "_probe_package_version", lambda *args: None)
+    monkeypatch.setattr(
+        wsl_audio_preflight,
+        "_probe_wsl_audio_black_box",
+        lambda *args: {"package_versions": {}, "torchcodec": {"ready": True}},
+    )
+
+    result = wsl_audio_preflight.probe_wsl_audio_runtime(
+        "Ubuntu-22.04", "/home/goodq/goodq_audio"
+    )
+
+    assert result["clap_handoff_ready"] is False
+    assert result["clap_handoff"]["reason"] == "canonical_clap_contract_unavailable"
+    assert "clap_handoff_unavailable" in result["runtime_warnings"]
 
 
 def test_probe_wsl_audio_runtime_uses_env_probe_timeouts(monkeypatch):

@@ -107,28 +107,22 @@ if _VENDOR_DIR.exists() and str(_VENDOR_DIR) not in sys.path:
 
 
 def test_emotion_classify_safetensors_autodetect(tmp_path, monkeypatch):
-    """Verify that steps/emotion_classify/step.py checks for model.safetensors and uses the correct use_safetensors flag."""
-    from steps.common.model_provisioner import ModelProvisionResult
+    """The emotion loader uses only the resolved pinned safetensors snapshot."""
+    from steps.emotion_classify import step as emotion_step
 
     model_root = tmp_path / "cardiff"
     model_root.mkdir()
-    (model_root / "pytorch_model.bin").write_bytes(b"\x00")
+    (model_root / "model.safetensors").write_bytes(b"\x00")
     monkeypatch.setattr(
-        "steps.common.model_provisioner.ensure_model_cached",
-        lambda *args, **kwargs: ModelProvisionResult(
-            status="cached",
-            repo_id="cardiffnlp/twitter-roberta-base-emotion-latest",
-            revision="415620c4fbc8bd82b82b9fd46642fcec6519d537",
-            local_path=str(model_root),
-            gated=False,
-            required=True,
-            elapsed_seconds=0.1,
+        emotion_step,
+        "_resolve_emotion_snapshot",
+        lambda: (
+            model_root,
+            "cardiffnlp/twitter-roberta-base-emotion-latest",
+            "415620c4fbc8bd82b82b9fd46642fcec6519d537",
         ),
     )
-    
-    # Mock config loader to enable offline mode
-    import steps.common.config_loader
-    monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda *args: {"verification": {"offline_mode": True}})
+    monkeypatch.setattr(emotion_step, "setup_step_gpu", lambda _: {"device": "cpu"})
     
     # Mock Transformers AutoTokenizer and AutoModelForSequenceClassification
     tokenizer_calls = []
@@ -161,25 +155,29 @@ def test_emotion_classify_safetensors_autodetect(tmp_path, monkeypatch):
     transformers_mock.AutoModelForSequenceClassification = MockModel
     monkeypatch.setitem(sys.modules, "transformers", transformers_mock)
     
-    # Reset _EMO cache
-    from steps.emotion_classify.step import _EMO, _load_emotion
-    _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu", "error": None})
-    
-    _load_emotion()
-    
-    assert _EMO["model"] is not None
+    emotion_step._EMO.update(
+        {
+            "model": None,
+            "tok": None,
+            "labels": [],
+            "device": "cpu",
+            "error": None,
+            "problem_type": None,
+            "model_id": None,
+            "model_revision": None,
+            "requested_device": "cpu",
+            "fallback_chain": [],
+            "load_attempts": [],
+        }
+    )
+
+    emotion_step._load_emotion()
+
+    assert emotion_step._EMO["model"] is not None
     assert len(tokenizer_calls) == 1
     assert len(model_calls) == 1
-    assert model_calls[0][1] is False  # use_safetensors should be False because model.safetensors is missing
-    
-    # 2. Setup mock cached model WITH safetensors
-    _EMO.update({"model": None, "tok": None, "labels": [], "device": "cpu", "error": None})
-    (model_root / "model.safetensors").write_bytes(b"\x00")
-    tokenizer_calls.clear()
-    model_calls.clear()
-    
-    _load_emotion()
-    assert model_calls[0][1] is True  # use_safetensors should be True because model.safetensors exists
+    assert tokenizer_calls[0] == (model_root, True)
+    assert model_calls[0] == (model_root, True, True)
 
 
 def test_tagger_governed_loading(tmp_path, monkeypatch):

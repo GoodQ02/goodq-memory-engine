@@ -17,7 +17,7 @@ def walk_ignoring_system_files(top, topdown=True, onerror=None, followlinks=Fals
 os.walk = walk_ignoring_system_files
 
 
-WORKSPACE_ROOT = os.path.normpath("C:/Users/jdben/My Drive/_AGENT")
+WORKSPACE_ROOT = os.path.normpath("C:/Users/example-user/My Drive/_AGENT")
 REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 AGENTS_MD_PATH = os.path.join(REPO_ROOT, "AGENTS.md")
 
@@ -463,7 +463,7 @@ def mock_linter_workspace(tmp_path, monkeypatch):
     )
     
     # 4. Copy verify_agent_workspace.py from original WORKSPACE_ROOT
-    orig_linter = os.path.join("C:/Users/jdben/My Drive/_AGENT", "verify_agent_workspace.py")
+    orig_linter = os.path.join("C:/Users/example-user/My Drive/_AGENT", "verify_agent_workspace.py")
     mock_linter = mock_ws / "verify_agent_workspace.py"
     shutil.copy2(orig_linter, mock_linter)
     

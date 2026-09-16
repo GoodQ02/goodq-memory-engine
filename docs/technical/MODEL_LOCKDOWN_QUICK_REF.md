@@ -233,7 +233,8 @@ python scripts\verify_model_lockdown.py
 ## Related Documentation
 
 - [Full Guide](MODEL_LOCKDOWN.md) - Complete documentation
-- [Historical Status Report](../../archive/docs/status-reports/LOCKDOWN_STATUS.md) - Archived verification snapshot
+- Historical verification snapshots are retained in private development and are
+  omitted from this public mirror.
 - [System Architecture](../architecture/SYSTEM_ARCHITECTURE.md) - How it fits together
 
 ---

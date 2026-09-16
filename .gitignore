@@ -273,7 +273,7 @@ scripts/install/dev_private_key.hex
 scripts/install/go_bin/
 
 # ===== PUBLIC ONBOARDING DEMO FIXTURE =====
-!samples/onboarding_fixture.mp4
+
 
 # ===== AGENT CHECKPOINTS =====
 .goodq-mini-agent/
@@ -281,3 +281,6 @@ scripts/install/go_bin/
 .agents/
 ORIGINAL_REQUEST.md
 
+
+# Public staging must not acquire private evidence.
+processing_onboarding/

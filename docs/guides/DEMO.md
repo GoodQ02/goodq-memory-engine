@@ -5,11 +5,11 @@
 # Welcome Aboard GoodQ4All
 
 > [!TIP]
-> **Recommended User Setup**: For the easiest path, download and run the [GoodQ4All Standalone Setup Installer](https://github.com/GoodQ02/goodq4all/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe) which does not require Git, Conda, or Python. Refer to the [Installation Guide](../bootstrap/INSTALL_BOOTSTRAP.md).
+> **Recommended User Setup**: For the easiest path, download and run the [GoodQ4All Standalone Setup Installer](https://github.com/GoodQ02/goodq-memory-engine/releases/download/v2.5.7/GoodQ4All_Setup_2.5.7.exe) which does not require Git, Conda, or Python. Refer to the [Installation Guide](../bootstrap/INSTALL_BOOTSTRAP.md).
 
 For developers and advanced operators who want to run the project from source and use the CLI, we preserve the full walk-through demo video below as an alternative installation route.
 
-[![Watch Welcome Aboard GoodQ4All (Developer Alternative Route)](../../samples/assets/goodq4all-demo-poster.jpg)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
+![Watch Welcome Aboard GoodQ4All (Developer Alternative Route) (historical material omitted from public source)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 
 - [Watch the final demo (Developer CLI Route)](https://github.com/GoodQ02/.github/releases/download/welcome-aboard-goodq4all-2026-05-17/GOODQ4ALL_DEMO_FINAL.mp4)
 - Runtime: `2:06.8`
@@ -33,7 +33,7 @@ The demo is a guided proof path, not a new product surface. It shows the support
 ## Commands Shown
 
 ```powershell
-git clone https://github.com/GoodQ02/goodq4all.git
+git clone https://github.com/GoodQ02/goodq-memory-engine.git
 cd goodq4all
 python scripts/bootstrap_install.py
 .\scripts\bootstrap_validate.bat
@@ -66,7 +66,7 @@ These frames are pulled from the final onboarding film so the commands, narratio
 
 | Step | Type or do this | Demo frame |
 | --- | --- | --- |
-| 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq4all.git` | <a href="../../samples/assets/demo-steps/01-clone-official-source.jpg"><img src="../../samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
+| 1 | Clone the official source:<br>`git clone https://github.com/GoodQ02/goodq-memory-engine.git` | <a href="../../samples/assets/demo-steps/01-clone-official-source.jpg"><img src="../../samples/assets/demo-steps/01-clone-official-source.jpg" alt="Clone the GoodQ4All repository" width="300" /></a> |
 | 2 | Enter the project cabin:<br>`cd goodq4all` | <a href="../../samples/assets/demo-steps/02-enter-project-cabin.jpg"><img src="../../samples/assets/demo-steps/02-enter-project-cabin.jpg" alt="Enter the GoodQ4All project folder" width="300" /></a> |
 | 3 | Run the bootstrap installer:<br>`python scripts/bootstrap_install.py`<br><sub>CPU-safe first-run variant: `python scripts/bootstrap_install.py --disable-gpu --disable-wsl-audio --skip-model-prefetch`.</sub> | <a href="../../samples/assets/demo-steps/03-bootstrap-installer.jpg"><img src="../../samples/assets/demo-steps/03-bootstrap-installer.jpg" alt="Run the bootstrap installer" width="300" /></a> |
 | 4 | Optional local config:<br>keep `.env.local` in the repo root when using local model, cache, or provider settings. | <a href="../../samples/assets/demo-steps/04-env-local-root.jpg"><img src="../../samples/assets/demo-steps/04-env-local-root.jpg" alt="Place env local configuration in the repo root" width="300" /></a> |

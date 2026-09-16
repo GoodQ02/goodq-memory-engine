@@ -518,48 +518,65 @@ class WatchdogProcessor:
         return files
     
     def check_video_completion_on_disk(self, file_path: Path, file_hash: str) -> bool:
-        """Check if the video has a complete temporal_index indicating phase 6 completion."""
+        """Require matching source identity and complete persisted scene evidence."""
         try:
             # Check potential processing paths (both stem and hash based)
             candidates = [
-                self.processing_dir / file_path.stem / 'video' / 'temporal_index.json',
-                self.processing_dir / file_path.stem / 'temporal_index.json',
-                self.processing_dir / file_hash / 'video' / 'temporal_index.json',
-                self.processing_dir / file_hash / 'temporal_index.json'
+                (base / subdir / 'temporal_index.json', base / 'video' / 'scene_manifest.json')
+                for base in (self.processing_dir / file_path.stem, self.processing_dir / file_hash)
+                for subdir in ('video', '')
             ]
-            for candidate in candidates:
+            for candidate, manifest_path in candidates:
                 if candidate.exists():
                     try:
                         with open(candidate, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                         if isinstance(data, dict) and data.get('phase6_complete') is True:
-                            # Verify that it is not a progressive/partial run
+                            identities = {data[key] for key in ('video_hash', 'video_id') if data.get(key)}
+                            if identities != {file_hash}:
+                                logger.warning("Ignoring completion index for a different or unidentified source: %s", candidate)
+                                continue
+                            segments = data.get('segments')
+                            scene_ids = {
+                                str(segment['scene_id']) for segment in segments or []
+                                if isinstance(segment, dict) and segment.get('scene_id')
+                            }
+                            idx_scenes = data.get('total_scenes')
+                            if type(idx_scenes) is not int or idx_scenes <= 0 or len(scene_ids) != idx_scenes:
+                                logger.warning("Ignoring completion index with inconsistent scene coverage: %s", candidate)
+                                continue
+
+                            # Use the same Phase 6 commit oracle as the runner.
+                            from cli.run_ingestion import _scene_manifest_has_committed_vectors
+                            if not _scene_manifest_has_committed_vectors(manifest_path, list(scene_ids)):
+                                logger.warning("Ignoring completion index without committed Phase 6 evidence: %s", candidate)
+                                continue
+
+                            # The detector's canonical ledger covers the whole source,
+                            # including scenes excluded by a single-scene witness.
                             db_dir_val = self._cfg_base.get('paths', {}).get('db_dir')
-                            if db_dir_val:
-                                db_path = Path(db_dir_val) / "ucf_ledger.db"
-                                if db_path.exists():
-                                    import sqlite3
-                                    conn = sqlite3.connect(db_path)
-                                    cursor = conn.cursor()
-                                    cursor.execute(
-                                        "SELECT count(*) FROM context_frames WHERE video_hash = ? AND worker_name = 'video_scene_detect'",
-                                        (file_hash,)
-                                    )
-                                    db_scenes = cursor.fetchone()[0]
-                                    conn.close()
-                                    
-                                    idx_scenes = data.get('total_scenes', 0)
-                                    if db_scenes > 0 and idx_scenes < db_scenes:
-                                        logger.warning(
-                                            f"Temporal index has {idx_scenes} scenes, but ucf_ledger.db has {db_scenes} detected scenes. "
-                                            "Skipping progressive index to force full resumption."
-                                        )
-                                        continue
-                            
+                            if not db_dir_val:
+                                logger.warning("Cannot verify completion without the configured ledger directory")
+                                continue
+                            db_path = Path(db_dir_val) / 'ucf' / 'ucf_ledger.db'
+                            import sqlite3
+                            from contextlib import closing
+                            with closing(sqlite3.connect(db_path.resolve().as_uri() + '?mode=ro', uri=True)) as conn:
+                                db_scenes = conn.execute(
+                                    "SELECT count(*) FROM context_frames WHERE video_hash = ? AND worker_name = 'video_scene_detect'",
+                                    (file_hash,),
+                                ).fetchone()[0]
+                            if db_scenes != idx_scenes:
+                                logger.warning(
+                                    "Ignoring incomplete scene coverage: index=%s ledger=%s source=%s",
+                                    idx_scenes, db_scenes, file_hash,
+                                )
+                                continue
+
                             logger.debug(f"Found completed phase6 index at {candidate}")
                             return True
                     except Exception as e:
-                        logger.debug(f"Failed to read/parse candidate {candidate}: {e}")
+                        logger.warning(f"Cannot verify completion candidate {candidate}: {e}")
         except Exception as e:
             logger.warning(f"Error checking video completion on disk for {file_path.name}: {e}")
         return False
@@ -1274,25 +1291,25 @@ class WatchdogProcessor:
     def worker_loop(self):
         """Worker thread to process queued files"""
         logger.info("Starting worker thread...")
-        
-        while not self.shutdown.is_set():
+
+        # The monitor stops first; FIFO stop markers follow its final work.
+        while True:
             try:
                 # Get next file from queue (with timeout)
-                try:
-                    file_path, file_hash = self.queue.get(timeout=1.0)
-                except Empty:
-                    continue
-                
-                # Process the file
+                file_path, file_hash = self.queue.get(timeout=1.0)
+            except Empty:
+                continue
+
+            try:
+                if file_path is None:
+                    return
                 self.process_file(file_path, file_hash)
-                
-                # Mark task as done
-                self.queue.task_done()
-                
             except Exception as e:
                 logger.error(f"Error in worker loop: {e}", exc_info=True)
+            finally:
+                self.queue.task_done()
     
-    def run(self):
+    def run(self, stop_requested=None):
         """Start the watchdog"""
         logger.info("=" * 60)
         logger.info("GoodQ Watchdog Starting")
@@ -1316,23 +1333,28 @@ class WatchdogProcessor:
         
         # Main thread waits
         try:
-            while True:
+            while stop_requested is None or not stop_requested():
                 time.sleep(1)
         except KeyboardInterrupt:
-            logger.info("\nShutdown requested...")
-            self.shutdown.set()
-            
-            # Wait for queue to empty
-            logger.info("Waiting for queue to empty...")
-            self.queue.join()
-            
-            # Wait for threads
-            logger.info("Waiting for threads to finish...")
-            monitor.join(timeout=5)
-            for worker in workers:
-                worker.join(timeout=5)
-            
-            logger.info("Watchdog stopped")
+            pass
+        logger.info("\nShutdown requested...")
+        self.shutdown.set()
+
+        # Finish the producer before placing stop markers after its work.
+        monitor.join()
+        for _ in workers:
+            self.queue.put((None, None))
+
+        # Wait for queue to empty
+        logger.info("Waiting for queue to empty...")
+        self.queue.join()
+
+        # Wait for threads
+        logger.info("Waiting for threads to finish...")
+        for worker in workers:
+            worker.join(timeout=5)
+
+        logger.info("Watchdog stopped")
 
 
 def _pid_exists(pid: int) -> bool:
@@ -1416,6 +1438,9 @@ def _check_system_restart_events():
 
 def main():
     """Main entry point with file lock to prevent multiple instances"""
+    from steps.common.runtime_lifecycle import RuntimeLifecycle
+
+    lifecycle = RuntimeLifecycle.from_environment("watchdog")
     try:
         cfg = load_configs({})
         runtime_paths = _resolve_watchdog_paths(cfg)
@@ -1484,7 +1509,10 @@ def main():
         # Clean up any leftover temporary files from interrupted runs
         watchdog.cleanup_stale_processing_files()
         
-        watchdog.run()
+        if lifecycle is None:
+            watchdog.run()
+        else:
+            watchdog.run(stop_requested=lifecycle.stop_requested)
     finally:
         # Remove lock on exit
         try:

@@ -124,7 +124,7 @@ def test_seal_prepared_receipt_writes_a_validated_runtime_snapshot_and_receipt(
     assert runtime_cfg["ingestion_isolation"] is True
     assert runtime_cfg["memory"]["routing"] == {
         "quantization_enabled": False,
-        "quantization_shadow_mode": True,
+        "quantization_shadow_mode": False,
     }
     assert runtime_cfg["qdrant"]["host"] == "http://127.0.0.1:6333"
     assert set(runtime_cfg["qdrant"]["collections"]) == {"clip", "dino", "text", "audio"}

@@ -355,6 +355,55 @@ def _build_wav2vec_enrichment_probe_script(workspace: str) -> str:
     )
 
 
+def _probe_clap_handoff_contract() -> Dict[str, Any]:
+    """Prove the WSL composite has a canonical Windows CLAP continuation."""
+
+    import ast
+
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        bridge_source = (repo_root / "steps" / "audio" / "audio_wsl2_bridge.py").read_text(
+            encoding="utf-8"
+        )
+        clap_source = (repo_root / "steps" / "audio_embed_clap" / "step.py").read_text(
+            encoding="utf-8"
+        )
+        bridge_functions = {
+            node.name
+            for node in ast.parse(bridge_source).body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        clap_functions = {
+            node.name
+            for node in ast.parse(clap_source).body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        ready = (
+            "_build_wsl_capability_outcomes" in bridge_functions
+            and "audio_embed_clap" in clap_functions
+            and '"clap_handoff": clap_handoff' in bridge_source
+            and '"canonical_clap_required"' in bridge_source
+            and '"required_step": "audio_embed_clap"' in bridge_source
+        )
+        return {
+            "ready": bool(ready),
+            "required_step": "audio_embed_clap",
+            "reason": (
+                "canonical_clap_required"
+                if ready
+                else "canonical_clap_contract_unavailable"
+            ),
+        }
+    except Exception as exc:
+        return {
+            "ready": False,
+            "required_step": "audio_embed_clap",
+            "reason": "canonical_clap_contract_unavailable",
+            "error_type": type(exc).__name__,
+            "error": str(exc)[-500:],
+        }
+
+
 def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "distro": str(distro or "").strip() or "Ubuntu",
@@ -365,6 +414,12 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         "process_import_ready": False,
         "diarization_ready": False,
         "wav2vec_enrichment_ready": False,
+        "clap_handoff_ready": False,
+        "clap_handoff": {
+            "ready": False,
+            "required_step": "audio_embed_clap",
+            "reason": "unresolved",
+        },
         "runtime_ready": False,
         "abi_ready": False,
         "ready": False,
@@ -466,6 +521,8 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
 
     result["process_import_ready"] = True
     result["runtime_ready"] = True
+    result["clap_handoff"] = _probe_clap_handoff_contract()
+    result["clap_handoff_ready"] = bool(result["clap_handoff"].get("ready"))
 
     abi_script = (
         f"source '{workspace}/setup_cuda_env.sh' >/dev/null 2>&1 && "
@@ -606,6 +663,8 @@ def probe_wsl_audio_runtime(distro: str, workspace: str) -> Dict[str, Any]:
         runtime_warnings.append("pyannote_warned_torchcodec_decoder_unavailable")
     if not result["wav2vec_enrichment_ready"]:
         runtime_warnings.append("wav2vec_enrichment_unavailable")
+    if not result["clap_handoff_ready"]:
+        runtime_warnings.append("clap_handoff_unavailable")
     result["runtime_warnings"] = sorted(set(runtime_warnings))
 
     result["ready"] = True

@@ -388,7 +388,7 @@ class ObservabilityConfig(BaseModel):
 # ============================================================================
 class MemoryRoutingConfig(BaseModel):
     quantization_enabled: bool = False
-    quantization_shadow_mode: bool = True
+    quantization_shadow_mode: bool = False
 
 
 class MemoryConfigSection(BaseModel):

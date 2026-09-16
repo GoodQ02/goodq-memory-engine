@@ -7,7 +7,7 @@ import os
 import logging
 import json
 import sys
-from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, write_index_atomically, FaissLock
 from steps.common.memory import ensure_id_map_table_schema
 
 
@@ -203,7 +203,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             else:
                 index = create_hnsw_id_index(faiss, feats.shape[1])
             add_with_required_ids(index, feats.astype("float32"), uid)
-            faiss.write_index(index, index_path)
+            write_index_atomically(faiss, index, index_path)
         # Resolve identity fields
         video_hash = item.get("video_hash") or item.get("video_id") or "unknown_video"
         epoch_id = os.path.basename((cfg.get("paths", {}) or {}).get("db_dir") or "") or "unknown_epoch"

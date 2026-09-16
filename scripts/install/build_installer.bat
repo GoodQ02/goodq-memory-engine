@@ -14,16 +14,87 @@ if "%GOODQ_INSTALLER_OUTPUT_ROOT%"=="" (
     echo [ERROR] Missing release output: GOODQ_INSTALLER_OUTPUT_ROOT.
     exit /b 21
 )
+if "%GOODQ_PRIVATE_BUILD_ROOT%"=="" (
+    echo [ERROR] Missing private build input: GOODQ_PRIVATE_BUILD_ROOT.
+    exit /b 22
+)
+if "%GOODQ_INSTALLER_STAGING_ROOT%"=="" (
+    echo [ERROR] Missing external staging input: GOODQ_INSTALLER_STAGING_ROOT.
+    exit /b 23
+)
+if "%GOODQ_PREBUILD_RECEIPT%"=="" (
+    echo [ERROR] Missing terminal readiness evidence: GOODQ_PREBUILD_RECEIPT.
+    exit /b 24
+)
 for %%I in ("%GOODQ_INSTALLER_BUILD_ROOT%") do set "BUILD_ROOT=%%~fI"
 for %%I in ("%GOODQ_INSTALLER_OUTPUT_ROOT%") do set "OUTPUT_ROOT=%%~fI"
+for %%I in ("%GOODQ_PRIVATE_BUILD_ROOT%") do set "PRIVATE_BUILD_ROOT=%%~fI"
+for %%I in ("%GOODQ_INSTALLER_STAGING_ROOT%") do set "STAGING_ROOT=%%~fI"
+for %%I in ("%BUILD_ROOT%\..\..") do set "REPO_ROOT=%%~fI"
+for %%I in ("%OUTPUT_ROOT%\..") do set "RELEASE_ROOT=%%~fI"
+for %%I in ("%STAGING_ROOT%\..") do set "STAGING_PARENT=%%~fI"
+if /I not "%RELEASE_ROOT%"=="%STAGING_PARENT%" (
+    echo [ERROR] Mutable staging must be a sibling of the release asset root.
+    exit /b 25
+)
 for %%F in ("go_compiler\go\bin\go.exe" "nsis_compiler\nsis-3.09\makensis.exe" "staged_cache" "dev_private_key.hex") do (
-    if not exist "%BUILD_ROOT%\%%~F" (
-        echo [ERROR] Missing private build input: %BUILD_ROOT%\%%~F
+    if not exist "%PRIVATE_BUILD_ROOT%\%%~F" (
+        echo [ERROR] Missing private build input: %PRIVATE_BUILD_ROOT%\%%~F
         exit /b 22
     )
 )
-if not exist "%OUTPUT_ROOT%" mkdir "%OUTPUT_ROOT%"
+if not exist "%GOODQ_PREBUILD_RECEIPT%" (
+    echo [ERROR] Terminal readiness receipt is unavailable: %GOODQ_PREBUILD_RECEIPT%
+    exit /b 26
+)
+if not exist "%OUTPUT_ROOT%" (
+    echo [ERROR] Release asset root was not opened by the receipt-bound launcher.
+    exit /b 27
+)
+set "PRIVATE_CACHE_ROOT=%PRIVATE_BUILD_ROOT%\staged_cache"
+set "GOODQ_GO_EXE=%PRIVATE_BUILD_ROOT%\go_compiler\go\bin\go.exe"
+set "GOODQ_MAKENSIS_EXE=%PRIVATE_BUILD_ROOT%\nsis_compiler\nsis-3.09\makensis.exe"
+set "GOODQ_SIGNING_KEY_PATH=%PRIVATE_BUILD_ROOT%\dev_private_key.hex"
+if "%GOODQ_DEV_PYTHON%"=="" (
+    echo [ERROR] Missing CPython staging interpreter: GOODQ_DEV_PYTHON.
+    exit /b 28
+)
+if not exist "%GOODQ_DEV_PYTHON%" (
+    echo [ERROR] CPython staging interpreter is unavailable: %GOODQ_DEV_PYTHON%
+    exit /b 28
+)
 cd /d "%BUILD_ROOT%"
+
+echo Rechecking receipt-bound source identity before any staging...
+"%GOODQ_DEV_PYTHON%" "%REPO_ROOT%\scripts\install\prebuild_readiness.py" verify --receipt "%GOODQ_PREBUILD_RECEIPT%" --repo-root "%REPO_ROOT%" --phase source
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Receipt-bound source identity check failed before staging.
+    exit /b 28
+)
+echo Verifying installer semantic compatibility before staging...
+"%GOODQ_DEV_PYTHON%" "%REPO_ROOT%\scripts\install\verify_installer_semantic_contract.py" --check --repo-root "%REPO_ROOT%"
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Installer components are semantically incompatible. No staging was created.
+    exit /b 117
+)
+if exist "staged" (
+    echo [ERROR] Source-local staging alias already exists; use a fresh dedicated worktree.
+    exit /b 29
+)
+if exist "%STAGING_ROOT%" (
+    echo [ERROR] External staging root is not fresh: %STAGING_ROOT%
+    exit /b 30
+)
+mkdir "%STAGING_ROOT%"
+if errorlevel 1 (
+    echo [ERROR] Failed to create the external staging root.
+    exit /b 31
+)
+mklink /J "staged" "%STAGING_ROOT%" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to bind the source-local staging alias to the external root.
+    exit /b 32
+)
 
 :: Resolve PowerShell command (pwsh preferred, fallback to powershell)
 where pwsh >nul 2>nul
@@ -40,6 +111,7 @@ set TRANSFORMERS_OFFLINE=1
 set HF_DATASETS_OFFLINE=1
 set GOODQ_OFFLINE_BUILD=1
 set NETWORK_POLICY=blocked
+set "GOODQ_PRIVATE_CACHE_ROOT=%PRIVATE_CACHE_ROOT%"
 
 :: 2. Preflight Check: Run Poison Scan and Script Verification via PowerShell
 echo Running pre-build security audits and network blocks...
@@ -51,28 +123,27 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 3. Run stage_dependencies.ps1 in Verify and Audit modes
-if "%GOODQ_INSTALLER_PROFILE%"=="" set "GOODQ_INSTALLER_PROFILE=PUBLIC_CPU_BASELINE"
-if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_CPU_BASELINE" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
+if /I not "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" if /I not "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
     echo [ERROR] Unknown installer profile: %GOODQ_INSTALLER_PROFILE%
-    exit /b 30
+    exit /b 33
 )
 set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-baseline-lock.txt"
 if /I "%GOODQ_INSTALLER_PROFILE%"=="PUBLIC_GPU_ENHANCED" set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-gpu-enhanced-lock.txt"
 if /I "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" set "GOODQ_REQUIREMENTS_LOCK=..\..\requirements-gpu-enhanced-lock.txt"
-set "GOODQ_WHEEL_CACHE_DIR=staged_cache\wheels\%GOODQ_INSTALLER_PROFILE%"
+set "GOODQ_WHEEL_CACHE_DIR=%PRIVATE_CACHE_ROOT%\wheels\%GOODQ_INSTALLER_PROFILE%"
 if not exist "%GOODQ_REQUIREMENTS_LOCK%" (
     echo [ERROR] Selected profile requirements lock is missing: %GOODQ_REQUIREMENTS_LOCK%
     exit /b 35
 )
 echo Running offline cache checksum verification...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify -Profile "%GOODQ_INSTALLER_PROFILE%"
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Verify -CacheDir "%PRIVATE_CACHE_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging verification failed. Cache files are missing or corrupt.
     exit /b 2
 )
 
 echo Running offline licensing compliance audit...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit -Profile "%GOODQ_INSTALLER_PROFILE%"
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File stage_dependencies.ps1 -Mode Audit -CacheDir "%PRIVATE_CACHE_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Staging licensing audit failed. Non-permissive files found.
     exit /b 3
@@ -96,13 +167,8 @@ if %ERRORLEVEL% neq 0 (
     exit /b 31
 )
 
-:: Create a fresh private staging tree before signing. The tracked source
-:: manifest and signature remain untouched throughout the release build.
-if exist "staged" rmdir /s /q "staged"
-if errorlevel 1 (
-    echo [ERROR] Failed to clear the previous staging directory.
-    exit /b 24
-)
+:: Populate the fresh external staging tree through the ignored junction.
+:: The tracked source manifest and signature remain untouched throughout.
 mkdir "staged\configs"
 copy /y "..\..\configs\model_download_manifest.json" "staged\configs\model_download_manifest.json" >nul
 if errorlevel 1 (
@@ -124,10 +190,32 @@ if errorlevel 1 (
     echo [ERROR] Failed to stage the selected capability receipt.
     exit /b 32
 )
+copy /y "staged\models\model_member_manifest.json" "staged\configs\model_member_manifest.json" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to stage the model member manifest.
+    exit /b 36
+)
+:: The signed copies above are NSIS bootstrap inputs.  They are not model
+:: payload members and must not appear as undeclared files under ProgramData.
+del /q "staged\models\selected_capabilities.json" "staged\models\model_member_manifest.json" >nul 2>&1
+if exist "staged\models\selected_capabilities.json" (
+    echo [ERROR] Selected capability staging metadata leaked into the model payload.
+    exit /b 39
+)
+if exist "staged\models\model_member_manifest.json" (
+    echo [ERROR] Model member staging metadata leaked into the model payload.
+    exit /b 40
+)
 
 :: 3a. Sign manifest in release mode (verifies key matches launcher, signs, round-trip verifies)
+echo Rechecking receipt-bound source identity immediately before signing...
+"%GOODQ_DEV_PYTHON%" "%REPO_ROOT%\scripts\install\prebuild_readiness.py" verify --receipt "%GOODQ_PREBUILD_RECEIPT%" --repo-root "%REPO_ROOT%" --phase source
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Receipt-bound source identity changed before signing.
+    exit /b 41
+)
 echo Signing model download manifest with release key...
-go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
+"%GOODQ_GO_EXE%" run sign_manifest.go --mode release --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Manifest signing failed. Key mismatch or signing error.
     exit /b 10
@@ -135,27 +223,38 @@ if %ERRORLEVEL% neq 0 (
 
 :: 3b. Independent verify-only gate (reads back the written signature and verifies)
 echo Verifying manifest signature independently...
-go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
+"%GOODQ_GO_EXE%" run sign_manifest.go --verify-only --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\model_download_manifest.json --signature-path staged\configs\model_download_manifest.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Independent signature verification failed. Do not package.
     exit /b 11
 )
 
 echo Signing selected capability receipt with release key...
-go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
+"%GOODQ_GO_EXE%" run sign_manifest.go --mode release --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Capability receipt signing failed.
     exit /b 33
 )
-go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
+"%GOODQ_GO_EXE%" run sign_manifest.go --verify-only --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\selected_capabilities.json --signature-path staged\configs\selected_capabilities.json.sig
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Capability receipt signature verification failed.
     exit /b 34
 )
+echo Signing transformed model member manifest with release key...
+"%GOODQ_GO_EXE%" run sign_manifest.go --mode release --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\model_member_manifest.json --signature-path staged\configs\model_member_manifest.json.sig
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Model member manifest signing failed.
+    exit /b 37
+)
+"%GOODQ_GO_EXE%" run sign_manifest.go --verify-only --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path staged\configs\model_member_manifest.json --signature-path staged\configs\model_member_manifest.json.sig
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Model member manifest signature verification failed.
+    exit /b 38
+)
 
 :: 4a. Sync versioninfo.json and goodq4all_installer.nsi from canonical goodq_version.py
-echo Syncing installer version and metadata...
-python sync_nsi_version.py
+echo Verifying synchronized installer version and metadata...
+"%GOODQ_DEV_PYTHON%" sync_nsi_version.py --check
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Version synchronization failed. Aborting build.
     exit /b 12
@@ -163,7 +262,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 4b. Compile Supervising Launcher LAUNCH_GOODQ.go
 echo Compiling LAUNCH_GOODQ.exe supervisor offline...
-go_compiler\go\bin\go.exe build -o "%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" LAUNCH_GOODQ.go launcher_windows.go
+"%GOODQ_GO_EXE%" build -o "%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" LAUNCH_GOODQ.go launcher_windows.go
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile Go launcher.
     exit /b 4
@@ -187,7 +286,7 @@ if exist "staged\wheels" (
 mkdir "staged\wheels"
 
 :: Copy from staged_cache to staging folder
-copy /y "staged_cache\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\runtime\python-3.10-embed-amd64.zip" "staged\python-3.10-embed-amd64.zip" >nul
 %PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\python-3.10-embed-amd64.zip' -DestinationPath 'staged\runtime' -Force"
 
 (
@@ -200,7 +299,7 @@ echo import site
 ) > staged\runtime\python310._pth
 
 echo Bootstrapping pip in staged runtime folder...
-copy /y "staged_cache\build_tools\get-pip.py" "staged\get-pip.py" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\build_tools\get-pip.py" "staged\get-pip.py" >nul
 staged\runtime\python.exe staged\get-pip.py --no-warn-script-location --no-index --find-links=%GOODQ_WHEEL_CACHE_DIR%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to bootstrap pip in staged runtime.
@@ -208,10 +307,10 @@ if %ERRORLEVEL% neq 0 (
 )
 del staged\get-pip.py
 
-copy /y "staged_cache\db\qdrant.zip" "staged\qdrant.zip" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\db\qdrant.zip" "staged\qdrant.zip" >nul
 %PS_CMD% -NoProfile -Command "Expand-Archive -Path 'staged\qdrant.zip' -DestinationPath 'staged\qdrant' -Force"
 
-copy /y "staged_cache\external\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip" "staged\ffmpeg.zip" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\external\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip" "staged\ffmpeg.zip" >nul
 if errorlevel 1 (
     echo [ERROR] FFmpeg archive is missing from the verified cache.
     exit /b 103
@@ -247,7 +346,7 @@ if errorlevel 1 (
     exit /b 108
 )
 
-copy /y "staged_cache\external\poppler.zip" "staged\poppler.zip" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\external\poppler.zip" "staged\poppler.zip" >nul
 if errorlevel 1 (
     echo [ERROR] Poppler archive is missing from the verified cache.
     exit /b 109
@@ -268,7 +367,7 @@ if errorlevel 1 (
     exit /b 112
 )
 
-copy /y "staged_cache\host_tools\nssm.zip" "staged\nssm.zip" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\host_tools\nssm.zip" "staged\nssm.zip" >nul
 if errorlevel 1 (
     echo [ERROR] NSSM archive is missing from the verified cache.
     exit /b 100
@@ -284,17 +383,17 @@ if errorlevel 1 (
     exit /b 102
 )
 
-copy /y "staged_cache\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
-copy /y "staged_cache\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul
 
 :: Copy certifi CA bundle from verified staged_cache
 echo Staging certifi CA bundle from verified cache...
-if not exist "staged_cache\runtime\cacert.pem" (
+if not exist "%PRIVATE_CACHE_ROOT%\runtime\cacert.pem" (
     echo [ERROR] cacert.pem missing from staged_cache! Run stage_dependencies.ps1 -Mode Acquire first.
     exit /b 8
 )
 if not exist "staged\vendor\certifi" mkdir "staged\vendor\certifi"
-copy /y "staged_cache\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nul
+copy /y "%PRIVATE_CACHE_ROOT%\runtime\cacert.pem" "staged\vendor\certifi\cacert.pem" >nul
 
 :: Copy only the selected profile's sealed wheel closure.
 xcopy /s /e /y "%GOODQ_WHEEL_CACHE_DIR%" "staged\wheels" >nul
@@ -326,9 +425,16 @@ echo   host: 127.0.0.1
 echo   http_port: 6333
 ) > staged\qdrant\config\qdrant_config.yaml
 
-:: Stage Offline Swagger/ReDoc
-if not exist "..\..\ui\docs_offline" mkdir "..\..\ui\docs_offline"
-copy /y "..\..\branding\favicon.ico" "..\..\ui\docs_offline\favicon.ico" >nul
+:: Offline Swagger/ReDoc branding is a tracked, receipt-bound source input.
+if not exist "..\..\ui\docs_offline\favicon.ico" (
+    echo [ERROR] Tracked offline documentation favicon is missing.
+    exit /b 118
+)
+%PS_CMD% -NoProfile -Command "if ((Get-FileHash -LiteralPath '..\..\branding\favicon.ico' -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath '..\..\ui\docs_offline\favicon.ico' -Algorithm SHA256).Hash) { exit 1 }"
+if errorlevel 1 (
+    echo [ERROR] Tracked offline documentation favicon does not match branding.
+    exit /b 119
+)
 
 :: Copy staged vendor directory
 xcopy /s /e /i /y "..\..\vendor" "staged\vendor" >nul
@@ -356,12 +462,12 @@ if %ERRORLEVEL% neq 0 (
 )
 set "GOODQ_PAYLOAD_MANIFEST=%OUTPUT_ROOT%\GoodQ4All_Setup_%GOODQ_PRODUCT_VERSION%.payload_manifest.json"
 set "GOODQ_PAYLOAD_SIGNATURE=%GOODQ_PAYLOAD_MANIFEST%.sig"
-go_compiler\go\bin\go.exe run sign_manifest.go --mode release --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
+"%GOODQ_GO_EXE%" run sign_manifest.go --mode release --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Payload manifest signing failed.
     exit /b 115
 )
-go_compiler\go\bin\go.exe run sign_manifest.go --verify-only --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
+"%GOODQ_GO_EXE%" run sign_manifest.go --verify-only --private-key-path "%GOODQ_SIGNING_KEY_PATH%" --launcher-source-path "%REPO_ROOT%\scripts\install\LAUNCH_GOODQ.go" --manifest-path "%GOODQ_PAYLOAD_MANIFEST%" --signature-path "%GOODQ_PAYLOAD_SIGNATURE%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Payload manifest signature verification failed.
     exit /b 116
@@ -369,7 +475,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 7. Compile NSIS Setup Package Offline
 echo Compiling final NSIS Setup Installer package...
-nsis_compiler\nsis-3.09\makensis.exe /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" /DGOODQ_INSTALLER_PROFILE="%GOODQ_INSTALLER_PROFILE%" goodq4all_installer.nsi
+"%GOODQ_MAKENSIS_EXE%" /DGOODQ_INSTALLER_OUTPUT_ROOT="%OUTPUT_ROOT%" /DGOODQ_LAUNCHER_PATH="%OUTPUT_ROOT%\LAUNCH_GOODQ.exe" /DGOODQ_INSTALLER_PROFILE="%GOODQ_INSTALLER_PROFILE%" goodq4all_installer.nsi
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to compile NSIS installer.
     exit /b 5
@@ -377,7 +483,7 @@ if %ERRORLEVEL% neq 0 (
 
 :: 8. Write Release Manifest
 echo Generating release manifest and signatures...
-%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%"
+%PS_CMD% -NoProfile -ExecutionPolicy Bypass -File generate_manifest.ps1 -AssetRoot "%OUTPUT_ROOT%" -Profile "%GOODQ_INSTALLER_PROFILE%" -PrebuildReceipt "%GOODQ_PREBUILD_RECEIPT%"
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Release manifest generation failed.
     exit /b 23

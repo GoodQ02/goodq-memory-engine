@@ -8,7 +8,7 @@ from scripts import wsl_audio_preflight
 def test_preflight_concurrency_execution(monkeypatch):
     """Run the preflight check multiple times concurrently to test thread safety and system response."""
     distro = "Ubuntu-22.04"
-    workspace = "/home/jdben/goodq_audio"
+    workspace = "/home/example-user/goodq_audio"
     num_threads = 5
 
     def fake_run_wsl_probe(probe_distro, script, *, timeout):

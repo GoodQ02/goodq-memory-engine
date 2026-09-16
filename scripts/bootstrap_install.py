@@ -488,9 +488,7 @@ def detect_wsl() -> tuple[bool, str, str]:
 
 def resolve_environment_spec(repo_root: Path, enable_gpu: bool, gpu_available: bool) -> Path:
     if enable_gpu and gpu_available:
-        gpu_spec = repo_root / GPU_ENV_FILE
-        if gpu_spec.exists():
-            return gpu_spec
+        return repo_root / GPU_ENV_FILE
     return repo_root / BASELINE_ENV_FILE
 
 
@@ -1887,18 +1885,14 @@ def run_bootstrap_verify(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "bootstrap_verify failed"
         return False, detail
-    payload_text = (completed.stdout or "").strip()
-    if payload_text:
-        try:
-            report = json.loads(payload_text)
-            overall = str(report.get("overall") or "pass").lower()
-            if overall == "warn":
-                return True, "bootstrap_verify overall=warn"
-            if overall == "fail":
-                return False, "bootstrap_verify overall=fail"
-        except json.JSONDecodeError:
-            pass
-    return True, "bootstrap_verify overall=pass"
+    try:
+        report = json.loads(completed.stdout or "")
+    except json.JSONDecodeError:
+        return False, "bootstrap_verify returned invalid JSON"
+    overall = str(report.get("overall") or "").lower() if isinstance(report, dict) else ""
+    if overall not in {"pass", "warn", "fail"}:
+        return False, "bootstrap_verify returned no recognized terminal status"
+    return overall != "fail", f"bootstrap_verify overall={overall}"
 
 
 def verify_env_python(conda_exe: Path, repo_root: Path) -> tuple[bool, str]:
@@ -1946,9 +1940,35 @@ def collect_context(args: argparse.Namespace) -> BootstrapContext:
     assume_defaults = args.yes or args.inspect_only or args.verify_only
     default_data_root = str(args.data_root or DEFAULT_DATA_ROOT)
     chosen_data_root = _effective_data_root(Path(prompt_text("GoodQ data directory", default_data_root, assume_defaults)))
-    enable_gpu = args.enable_gpu if args.enable_gpu is not None else prompt_bool(
-        "Enable GPU acceleration", False, assume_defaults
+    env_path = repo_root / ".env.local"
+    existing_env = _load_env_file(env_path)
+    existing_profile = existing_env.get("GOODQ_HOST_PROFILE", "").upper()
+    existing_gpu = (
+        existing_profile == "GPU_ENHANCED"
+        or existing_env.get("GOODQ_REQUIRE_GPU", "").lower() in {"1", "true", "yes", "on"}
     )
+    enable_gpu = args.enable_gpu if args.enable_gpu is not None else prompt_bool(
+        "Enable GPU acceleration", existing_gpu, assume_defaults
+    )
+    if existing_gpu and enable_gpu and not gpu_available:
+        raise RuntimeError(
+            "GPU required by preserved .env.local settings is unavailable; "
+            "restore GPU detection before provisioning."
+        )
+    has_existing_gpu_policy = (
+        existing_profile in {"BASELINE", "GPU_ENHANCED"}
+        or "GOODQ_REQUIRE_GPU" in existing_env
+    )
+    if (
+        has_existing_gpu_policy
+        and env_path.exists()
+        and "# Bootstrap-managed defaults" not in env_path.read_text(encoding="utf-8")
+        and bool(enable_gpu and gpu_available) != existing_gpu
+    ):
+        raise RuntimeError(
+            "GPU selection conflicts with preserved .env.local settings; "
+            "reconcile the configured profile and available GPU before provisioning."
+        )
     enable_wsl_audio = args.enable_wsl_audio if args.enable_wsl_audio is not None else prompt_bool(
         "Enable WSL audio acceleration", wsl_available, assume_defaults
     )
@@ -2039,7 +2059,7 @@ def verify_runtime(ctx: BootstrapContext, *, qdrant_ready: Optional[bool] = None
     _print(f"[{'OK' if cfg_ok else 'FAIL'}] config loader: {cfg_detail}")
 
     verify_ok, verify_detail = run_bootstrap_verify(ctx.conda_exe, ctx.repo_root)
-    _print(f"[{'OK' if verify_ok else 'WARN'}] bootstrap_verify: {verify_detail}")
+    _print(f"[{'OK' if verify_ok else 'FAIL'}] bootstrap_verify: {verify_detail}")
 
     launcher_ok, launcher_detail = verify_launcher(ctx.launcher_bat)
     _print(f"[{'OK' if launcher_ok else 'FAIL'}] launcher: {launcher_detail}")
@@ -2075,7 +2095,7 @@ def verify_runtime(ctx: BootstrapContext, *, qdrant_ready: Optional[bool] = None
         if ctx.qdrant_start_bat.exists():
             _print(f"[INFO] Foreground testing fallback only: {ctx.qdrant_start_bat}")
 
-    if not (env_ok and cfg_ok and launcher_ok):
+    if not (env_ok and cfg_ok and launcher_ok and verify_ok):
         return 1
     return 0
 

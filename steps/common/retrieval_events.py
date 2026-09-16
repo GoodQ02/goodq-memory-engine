@@ -10,6 +10,8 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from filelock import FileLock
+
 
 logger = logging.getLogger(__name__)
 
@@ -321,9 +323,12 @@ def _emit_jsonl_fallback(
         return False
     jsonl_path = destination / "retrieval_events.jsonl"
     try:
-        with jsonl_path.open("a", encoding="utf-8") as f:
-            for ev in events:
-                f.write(json.dumps(ev.to_dict(), ensure_ascii=False) + "\n")
+        # Windows append handles can race at EOF across both threads and
+        # processes. Keep the lock until buffered writes have closed.
+        with FileLock(str(jsonl_path) + ".lock", timeout=1):
+            with jsonl_path.open("a", encoding="utf-8") as f:
+                for ev in events:
+                    f.write(json.dumps(ev.to_dict(), ensure_ascii=False) + "\n")
     except Exception:
         _warn_persistence_unavailable(
             reason="fallback_write_failed",

@@ -102,7 +102,7 @@ def _write_scene_faiss_points(
         import faiss  # type: ignore
         import numpy as np  # type: ignore
 
-        from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
+        from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, write_index_atomically, FaissLock
         from steps.common.memory import to_faiss_id, upsert_embedding
 
         with FaissLock(index_path):
@@ -169,7 +169,7 @@ def _write_scene_faiss_points(
                     "index_path": index_path,
                 }
 
-            faiss.write_index(index, index_path)
+            write_index_atomically(faiss, index, index_path)
 
         if isinstance(id_map_db, str) and id_map_db.strip() and not cfg.get("ingestion_isolation", False):
             from datetime import datetime
@@ -381,7 +381,12 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         return {"video_id": video_id, "phase6_status": "skipped", "reason": "no_scenes"}
     
     force_reprocess = cfg.get('force_reprocess', False)
-    if not force_reprocess:
+    phase6_commit = scene_data.get('phase6_vector_commit') or {}
+    retry_failed_phase6 = (
+        scene_data.get('phase6_status') == 'failed'
+        or phase6_commit.get('qdrant_ok') is False
+    )
+    if not force_reprocess and not retry_failed_phase6:
         scenes_to_process = [
             s for s in scenes
             if not s.get('clip_id') or not s.get('dino_id') or not s.get('representative_frame')
@@ -390,7 +395,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
         scenes_to_process = list(scenes)
 
     if not scenes_to_process:
-        logger.info("[PHASE6] All scenes already processed incrementally (qdrant_ok is True). Skipping extraction and upserts.")
+        logger.info("[PHASE6] Reusing existing visual embeddings with no recorded Phase 6 failure. Skipping extraction and upserts.")
         return {
             "video_id": video_id,
             "phase6_status": "complete",

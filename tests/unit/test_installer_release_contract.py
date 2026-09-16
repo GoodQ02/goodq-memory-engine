@@ -16,6 +16,25 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_v301_release_identity_is_synchronized_across_installer_sources() -> None:
+    version_source = (REPO_ROOT / "goodq_version.py").read_text(encoding="utf-8")
+    installer = (REPO_ROOT / "scripts" / "install" / "goodq4all_installer.nsi").read_text(
+        encoding="utf-8"
+    )
+    version_info = json.loads(
+        (REPO_ROOT / "scripts" / "install" / "versioninfo.json").read_text(encoding="utf-8")
+    )
+
+    assert 'GOODQ_VERSION = "3.0.1"' in version_source
+    assert "GoodQ4All_Setup_3.0.1.exe" in installer
+    assert "GoodQ4All v3.0.1 Offline Installer" in installer
+    assert '"DisplayVersion" "3.0.1"' in installer
+    assert version_info["StringFileInfo"]["FileVersion"] == "3.0.1.0"
+    assert version_info["StringFileInfo"]["ProductVersion"] == "3.0.1.0"
+    assert version_info["FixedFileInfo"]["FileVersion"]["Patch"] == 1
+    assert version_info["FixedFileInfo"]["ProductVersion"]["Patch"] == 1
+
+
 def _sync_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo_root = tmp_path / "repo"
     install_root = repo_root / "scripts" / "install"
@@ -25,7 +44,7 @@ def _sync_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
     shutil.copy2(REPO_ROOT / "goodq_version.py", repo_root / "goodq_version.py")
     nsi_path = install_root / "goodq4all_installer.nsi"
     nsi_path.write_text(
-        nsi_path.read_text(encoding="utf-8").replace("3.0.0", "3.0.0-rc1"),
+        nsi_path.read_text(encoding="utf-8").replace("3.0.1", "3.0.1-rc1"),
         encoding="utf-8",
     )
     return install_root / "sync_nsi_version.py", nsi_path, install_root / "versioninfo.json"
@@ -55,8 +74,8 @@ def test_installer_template_names_the_canonical_stable_version() -> None:
         encoding="utf-8"
     )
 
-    assert "GoodQ4All_Setup_3.0.0.exe" in source
-    assert "3.0.0-rc" not in source
+    assert "GoodQ4All_Setup_3.0.1.exe" in source
+    assert "3.0.1-rc" not in source
 
 
 def test_installer_refuses_to_collide_with_existing_canonical_data_or_service() -> None:
@@ -79,6 +98,61 @@ def test_private_builder_declares_its_input_and_output_boundaries() -> None:
     assert "GOODQ_INSTALLER_BUILD_ROOT" in source
     assert "Missing private build input" in source
     assert "GOODQ_INSTALLER_OUTPUT_ROOT" in source
+
+
+def test_release_entrypoint_consumes_readiness_before_creating_output() -> None:
+    source = (REPO_ROOT / "scripts" / "install" / "run_offline_release_build.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "GOODQ_PREBUILD_RECEIPT" in source
+    assert "GOODQ_PRIVATE_BUILD_ROOT" in source
+    assert "GOODQ_RUNTIME_CONFIG_ROOT" in source
+    assert "GOODQ_FIXTURE_PACK_ROOT" in source
+    assert "GOODQ_WSL_AUDIO_WORKSPACE" in source
+    assert "prebuild_readiness.py" in source
+    assert "--phase prebuild" in source
+    assert source.index("--phase prebuild") < source.index('mkdir "%GOODQ_RELEASE_OUTPUT_ROOT%"')
+    assert 'set "GOODQ_INSTALLER_STAGING_ROOT=%GOODQ_RELEASE_OUTPUT_ROOT%\\staging"' in source
+
+
+def test_builder_rechecks_bound_source_and_keeps_mutable_staging_external() -> None:
+    source = (REPO_ROOT / "scripts" / "install" / "build_installer.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert source.count("--phase source") >= 2
+    assert "GOODQ_PREBUILD_RECEIPT" in source
+    assert "GOODQ_PRIVATE_BUILD_ROOT" in source
+    assert "GOODQ_INSTALLER_STAGING_ROOT" in source
+    assert 'mklink /J "staged" "%STAGING_ROOT%"' in source
+    assert "sync_nsi_version.py --check" in source
+    assert 'mkdir "..\\..\\ui\\docs_offline"' not in source
+    assert 'copy /y "..\\..\\branding\\favicon.ico" "..\\..\\ui\\docs_offline\\favicon.ico"' not in source
+
+
+def test_release_manifest_binds_the_prebuild_receipt_and_source_tree() -> None:
+    generator = (REPO_ROOT / "scripts" / "install" / "generate_manifest.ps1").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_release_asset.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "$PrebuildReceipt" in generator
+    assert "prebuild_readiness_sha256" in generator
+    assert "source_tree" in generator
+    assert "$PrebuildReceipt" in verifier
+    assert "prebuild_readiness_sha256" in verifier
+
+
+def test_network_wrapper_does_not_consume_the_unused_output_before_readiness() -> None:
+    source = (
+        REPO_ROOT / "scripts" / "install" / "run_offline_release_with_network_toggle.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert 'New-Item -ItemType Directory -Path $OutputRoot' not in source
+    assert '$receiptPath = "$OutputRoot.network-toggle-receipt.json"' in source
 
 
 def test_release_asset_verifier_defines_the_baseline_asset_set() -> None:
@@ -124,15 +198,36 @@ def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) ->
     payload_pack = payload_dir / "payload_001.zip"
     payload_pack.write_bytes(b"payload")
     payload_manifest_path = asset_root / "GoodQ4All_Setup_2.5.8.payload_manifest.json"
+    payload_members = [
+        {
+            "path": "program_files/payload.bin",
+            "pack_path": "payloads/payload_001.zip",
+            "sha256": hashlib.sha256(payload_pack.read_bytes()).hexdigest(),
+            "size_bytes": payload_pack.stat().st_size,
+            "target": "program_files",
+        }
+    ]
     payload_manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "product_version": "2.5.8",
         "profile": "PUBLIC_CPU_BASELINE",
+        "pack_format": "zip_stored_zip64",
+        "selected_capabilities_sha256": "1" * 64,
+        "selected_asset_selector_sha256": "2" * 64,
+        "selected_asset_inventory_sha256": "3" * 64,
+        "model_member_manifest_sha256": "4" * 64,
+        "model_member_inventory_sha256": "5" * 64,
+        "member_inventory_sha256": hashlib.sha256(
+            json.dumps(payload_members, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "member_count": len(payload_members),
+        "members": payload_members,
         "packs": [
             {
                 "path": "payloads/payload_001.zip",
                 "sha256": hashlib.sha256(payload_pack.read_bytes()).hexdigest(),
                 "size_bytes": payload_pack.stat().st_size,
+                "member_count": len(payload_members),
             }
         ],
     }
@@ -144,7 +239,17 @@ def _write_asset_fixture(asset_root: Path, *, source_note: str | None = None) ->
         "source_commit": "12f577e9",
         "source_tree_clean": True,
         "profile": "PUBLIC_CPU_BASELINE",
-        "excluded_optional_components": ["wsl_audio", "local_llm_serving", "gpu_enhanced"],
+        "excluded_optional_components": [
+            "wsl_audio",
+            "local_vlm",
+            "local_llm_serving",
+            "gpu_enhanced",
+        ],
+        "component_dispositions": {
+            "wsl_audio": {"status": "excluded", "packaged": False},
+            "local_vlm": {"status": "policy_excluded"},
+            "local_llm_serving": {"status": "policy_excluded"},
+        },
         "sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
         "launcher_sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
         "payload_manifest_filename": payload_manifest_path.name,
@@ -248,7 +353,55 @@ def test_release_payload_packs_are_bounded_and_apply_only_to_declared_targets(tm
     (staging / "wheels" / "wheel.whl").write_bytes(b"w" * 400)
     (staging / "wheelhouse-sbom.json").write_text("s" * 400, encoding="utf-8")
     (staging / "models" / "hub").mkdir(parents=True)
-    (staging / "models" / "hub" / "model.bin").write_bytes(b"m" * 400)
+    model_path = staging / "models" / "hub" / "model.bin"
+    model_path.write_bytes(b"m" * 400)
+    (staging / "configs").mkdir()
+    model_members = [
+        {
+            "path": "hub/model.bin",
+            "size_bytes": model_path.stat().st_size,
+            "sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+            "asset_id": "fixture_model",
+            "source_manifest_sha256": "3" * 64,
+            "provenance": {
+                "type": "sealed_source_copy",
+                "source_path": "model.bin",
+                "source_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+            },
+        }
+    ]
+    model_inventory_sha256 = hashlib.sha256(
+        json.dumps(model_members, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    model_manifest = {
+        "schema_version": 2,
+        "profile": "PUBLIC_CPU_BASELINE",
+        "member_count": len(model_members),
+        "inventory_sha256": model_inventory_sha256,
+        "members": model_members,
+    }
+    model_manifest_path = staging / "configs" / "model_member_manifest.json"
+    model_manifest_path.write_text(json.dumps(model_manifest, sort_keys=True), encoding="utf-8")
+    selected = {
+        "schema_version": 2,
+        "profile": "PUBLIC_CPU_BASELINE",
+        "distribution": "public",
+        "selected_asset_ids": ["fixture_model"],
+        "selector_sha256": "1" * 64,
+        "asset_inventory_sha256": "2" * 64,
+        "asset_closure": {},
+        "payload_asset_ids": ["fixture_model"],
+        "payloads": [],
+        "model_member_manifest": {
+            "path": "model_member_manifest.json",
+            "sha256": hashlib.sha256(model_manifest_path.read_bytes()).hexdigest(),
+            "inventory_sha256": model_inventory_sha256,
+            "member_count": len(model_members),
+        },
+    }
+    (staging / "configs" / "selected_capabilities.json").write_text(
+        json.dumps(selected, sort_keys=True), encoding="utf-8"
+    )
     output = tmp_path / "assets"
     script = REPO_ROOT / "scripts" / "install" / "release_payload_packs.py"
     build = subprocess.run(
@@ -273,6 +426,8 @@ def test_release_payload_packs_are_bounded_and_apply_only_to_declared_targets(tm
     )
     assert build.returncode == 0, build.stderr
     payload_manifest = json.loads((output / "GoodQ4All_Setup_2.5.8.payload_manifest.json").read_text())
+    assert payload_manifest["schema_version"] == 2
+    assert len(payload_manifest["members"]) == 4
     assert len(payload_manifest["packs"]) >= 2
     assert all(pack["size_bytes"] <= 650 for pack in payload_manifest["packs"])
 
@@ -287,7 +442,11 @@ def test_release_payload_packs_are_bounded_and_apply_only_to_declared_targets(tm
             str(tmp_path / "install"),
             "--data-dir",
             str(tmp_path / "data"),
+            "--manifest-stdin",
         ],
+        input=(output / "GoodQ4All_Setup_2.5.8.payload_manifest.json").read_text(
+            encoding="utf-8"
+        ),
         capture_output=True,
         text=True,
         check=False,
@@ -295,10 +454,12 @@ def test_release_payload_packs_are_bounded_and_apply_only_to_declared_targets(tm
     assert apply.returncode == 0, apply.stderr
     assert (tmp_path / "install" / "vendor" / "runtime.bin").read_bytes() == b"v" * 400
     assert (tmp_path / "data" / "models" / "hub" / "model.bin").read_bytes() == b"m" * 400
-    assert (tmp_path / "data" / "payload_install_receipt.json").is_file()
+    receipt = json.loads((tmp_path / "data" / "payload_install_receipt.json").read_text())
+    assert receipt["status"] == "applied_and_verified"
+    assert len(receipt["installed_members"]) == 4
 
 
-@pytest.mark.parametrize("private_path", [r"C:\Users\jdben\private-build", r"c:/users/jdben/private-build"])
+@pytest.mark.parametrize("private_path", [r"C:\Users\example-user\private-build", r"c:/users/example-user/private-build"])
 def test_release_asset_verifier_rejects_a_normal_windows_user_path(
     tmp_path: Path, private_path: str
 ) -> None:
@@ -483,7 +644,9 @@ def test_cpu_profile_stages_every_selected_model_and_lexicon_from_the_sealed_vau
     assert "selected_capabilities.json" in builder
     assert "selected_capabilities.json.sig" in builder
     assert "release_payload_packs.py" in builder
-    assert "--verify-release-payload" in installer
+    assert "--apply-release-payload" in installer
+    assert "--payload-data-dir" in installer
+    assert "release_payload_packs.py\" apply" not in installer
     assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' not in installer
     assert 'File "staged\\configs\\selected_capabilities.json"' in installer
     assert "verify_profile_model_payload.py" in verifier
@@ -526,7 +689,7 @@ def test_builder_stages_nssm_from_the_manifest_verified_cache_location() -> None
         encoding="utf-8"
     )
 
-    assert 'copy /y "staged_cache\\host_tools\\nssm.zip" "staged\\nssm.zip" >nul' in builder
+    assert 'copy /y "%PRIVATE_CACHE_ROOT%\\host_tools\\nssm.zip" "staged\\nssm.zip" >nul' in builder
     assert "NSSM archive is missing from the verified cache" in builder
     assert "NSSM executable was not produced by the verified archive" in builder
 
@@ -542,7 +705,7 @@ def test_baseline_installer_stages_and_installs_the_pinned_ffmpeg_runtime() -> N
         encoding="utf-8"
     )
 
-    assert 'staged_cache\\external\\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip' in builder
+    assert '%PRIVATE_CACHE_ROOT%\\external\\ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip' in builder
     assert 'staged\\ffmpeg\\ffmpeg.exe -version >nul' in builder
     assert 'staged\\ffmpeg\\ffprobe.exe -version >nul' in builder
     assert 'staged\\ffmpeg\\SOURCE_URL.txt' in builder
@@ -561,7 +724,12 @@ def test_installer_profile_controls_the_sealed_object_detection_payload() -> Non
     assert "GOODQ_INSTALLER_PROFILE" in builder
     assert "/DGOODQ_INSTALLER_PROFILE=" in builder
     assert "release_payload_packs.py" in builder
-    assert "payload_pack_extract" in installer
+    assert 'staged\\configs\\model_member_manifest.json' in builder
+    assert 'staged\\configs\\model_member_manifest.json.sig' in builder
+    assert "Model member manifest signature verification failed" in builder
+    assert 'File "staged\\configs\\model_member_manifest.json"' in installer
+    assert 'File "staged\\configs\\model_member_manifest.json.sig"' in installer
+    assert "payload_pack_apply" in installer
     assert 'File /r /x "selected_capabilities.json" "staged\\models\\*.*"' not in installer
     assert "Unknown GOODQ_INSTALLER_PROFILE" in installer
     assert 'File "staged\\configs\\installer_profile.txt"' in installer
@@ -573,6 +741,23 @@ def test_installer_profile_controls_the_sealed_object_detection_payload() -> Non
     assert 'if ($Profile -ne "PUBLIC_CPU_BASELINE")' in verifier
     assert "installer_profile.txt" in verifier
     assert "Unknown installer profile in verification target" in verifier
+
+
+def test_release_manifest_keeps_personal_wsl_as_unpacked_host_prerequisite() -> None:
+    generator = (REPO_ROOT / "scripts" / "install" / "generate_manifest.ps1").read_text(
+        encoding="utf-8"
+    )
+    verifier = (REPO_ROOT / "scripts" / "install" / "verify_release_asset.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$Profile -eq "PERSONAL_AIR_GAP"' in generator
+    assert 'status = "host_prerequisite"' in generator
+    assert 'distro = "Ubuntu-22.04"' in generator
+    assert 'receipt_phases = @("pre_install", "post_install")' in generator
+    assert 'packaged = $false' in generator
+    assert "cannot both exclude WSL audio and declare it as a host prerequisite" in verifier
+    assert "Personal manifest must bind the preserved Ubuntu-22.04 WSL2 audio prerequisite" in verifier
 
 
 def test_offline_verifier_reads_object_detection_packs_from_programdata() -> None:
@@ -587,6 +772,8 @@ def test_offline_verifier_reads_object_detection_packs_from_programdata() -> Non
     assert '$COMMONAPPDATA\\GoodQ4All\\models' in installer
     assert 'Join-Path $env:ProgramData "GoodQ4All\\models"' in verifier
     assert 'Join-Path $InstallDir "models\\model_packs\\object_detection_cpu' not in verifier
+    assert "profile_model_load_receipt.json" in verifier
+    assert "loaded from its exact installed path" in verifier
 
 
 def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> None:

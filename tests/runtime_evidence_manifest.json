@@ -1,18 +1,16 @@
 {
   "schema_version": 1,
-  "purpose": "Pinned read-only runtime evidence authority for the golden GoodQ test profile.",
+  "purpose": "Unqualified public example; replace with operator-owned evidence before the golden profile.",
   "source_evidence": [
-    "docs/agent/birth_certificate.md",
-    "docs/agent/POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md",
-    "docs/releases/ROADMAP.md"
+    "docs/releases/PUBLIC_SANITIZATION_MANIFEST.md"
   ],
   "golden": {
-    "epoch_id": "epoch_2026_07_05_home_memory_clean_01",
+    "epoch_id": "epoch_public_example_unqualified",
     "qdrant_collections": {
-      "audio": "goodq_audio_epoch_2026_07_05_home_memory_clean_01",
-      "clip": "goodq_clip_epoch_2026_07_05_home_memory_clean_01",
-      "dino": "goodq_dino_epoch_2026_07_05_home_memory_clean_01",
-      "text": "goodq_text_epoch_2026_07_05_home_memory_clean_01"
+      "audio": "goodq_audio_epoch_public_example_unqualified",
+      "clip": "goodq_clip_epoch_public_example_unqualified",
+      "dino": "goodq_dino_epoch_public_example_unqualified",
+      "text": "goodq_text_epoch_public_example_unqualified"
     },
     "minimum_points_per_collection": 1,
     "required_test_nodes": [

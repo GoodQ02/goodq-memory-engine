@@ -8,6 +8,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from typing import Any, Dict, Iterable, List, Optional, Set
 import asyncio
+import copy
 import hashlib
 import json
 import logging
@@ -30,6 +31,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import re
 import typer
+import yaml
 from urllib.parse import urlparse
 
 from steps.common.config_loader import get_runtime_paths, load_configs
@@ -49,6 +51,7 @@ from lib.ingestion_capability_contract import (
     RUNTIME_CAPABILITY_POLICIES,
     build_capability_receipt,
     render_capability_receipt,
+    resolve_capability_profile,
 )
 from lib.observability.observer import PipelineObserver
 from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
@@ -57,6 +60,23 @@ _OPTIONAL_DIRECT_ENV_FALLBACK_STEPS = {"sentiment", "audio_embed_clap"}
 _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS = os.name == 'nt'
 _SYNTHETIC_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
 _SYNTHETIC_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
+_CAPABILITY_PROFILE_CONTRACT_PATH = REPO_ROOT / "configs" / "ingestion_capability_profiles.yaml"
+# Internal orchestration/persistence events share the log with capability rows.
+# Keep this explicit so unrecognized evidence still fails the release gate.
+_NON_CAPABILITY_STEP_RUNS = {
+    "audio_unified_wsl2",
+    "video_scene_detect",
+    "text_embed",
+    "scene_visual_embeddings",
+    "cross_modal_harmonization",
+}
+_WSL_CAPABILITY_STEP_BY_COMPONENT = {
+    "transcription": "audio_transcribe_local",
+    "diarization": "audio_speaker_merge",
+    "acoustic_emotion": "audio_emotion",
+    "wav2vec2": "audio_wav2vec2_enrichment",
+    "clap_handoff": "audio_clap_handoff",
+}
 
 
 def _has_wsl_unified_audio_embeddings(item: Dict[str, Any]) -> bool:
@@ -102,6 +122,50 @@ def _mark_wsl_unified_audio_embed_skip(item: Dict[str, Any]) -> Dict[str, Any]:
     )
     item['clap_meta'] = skip_meta
     return skip_meta
+
+
+def _log_wsl_capability_outcomes(
+    *,
+    cfg: Dict[str, Any],
+    item: Dict[str, Any],
+    duration_ms: float,
+    outcomes: object,
+) -> None:
+    records = outcomes if isinstance(outcomes, dict) else {}
+    for component, step in _WSL_CAPABILITY_STEP_BY_COMPONENT.items():
+        raw = records.get(component)
+        record = raw if isinstance(raw, dict) else {}
+        status = str(record.get("status") or "error").strip().lower()
+        if status not in {"ok", "error", "skipped", "not_applicable"}:
+            status = "error"
+        reason = str(
+            record.get("reason")
+            or ("missing_wsl_component_outcome" if not record else "invalid_wsl_component_status")
+        )
+        error = None
+        if status == "error":
+            error = str(record.get("error") or reason)
+        extra = {
+            "backend": "wsl",
+            "component": component,
+            "reason": reason,
+            "requested_implementation": "wsl_unified",
+            "effective_implementation": (
+                "canonical_clap_handoff"
+                if component == "clap_handoff"
+                else "wsl_unified"
+            ),
+            "component_outcome": dict(record),
+        }
+        log_step_run(
+            cfg,
+            step,
+            dict(item),
+            duration_ms,
+            status,
+            error,
+            extra=extra,
+        )
 
 
 def _is_synthetic_speaker_label(value: Any) -> bool:
@@ -3815,29 +3879,111 @@ def _capability_receipt_profile(cfg: Dict[str, Any]) -> str:
     return "PUBLIC_CPU_BASELINE"
 
 
-def _read_current_run_capability_rows(cfg: Dict[str, Any], run_id: str) -> list[dict[str, Any]]:
+def _read_current_run_capability_rows(
+    cfg: Dict[str, Any],
+    run_id: str,
+) -> tuple[list[dict[str, Any]], int]:
     paths_cfg = cfg.get("paths") if isinstance(cfg, dict) else None
     log_dir = paths_cfg.get("log_dir") if isinstance(paths_cfg, dict) else None
     if not isinstance(log_dir, str) or not log_dir.strip():
-        return []
+        return [], 0
     path = Path(log_dir) / "step_runs.jsonl"
     if not path.is_file():
-        return []
+        return [], 0
     rows: list[dict[str, Any]] = []
+    malformed_count = 0
     try:
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.strip():
                 continue
-            row = json.loads(line)
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                malformed_count += 1
+                continue
+            if not isinstance(row, dict):
+                malformed_count += 1
+                continue
+            if str(row.get("run_id") or "") != run_id:
+                continue
+            step = str(row.get("step") or "")
+            if step in _NON_CAPABILITY_STEP_RUNS:
+                continue
+            status = row.get("status")
             if (
-                isinstance(row, dict)
-                and str(row.get("run_id") or "") == run_id
-                and str(row.get("step") or "") in RUNTIME_CAPABILITY_POLICIES
+                step not in RUNTIME_CAPABILITY_POLICIES
+                or not isinstance(status, str)
+                or not status.strip()
             ):
-                rows.append(row)
-    except (OSError, json.JSONDecodeError) as exc:
+                malformed_count += 1
+                continue
+            rows.append(row)
+    except OSError as exc:
+        malformed_count += 1
         logger.warning("[CAPABILITY] Unable to read current step evidence path=%s error=%s", path, exc)
-    return rows
+    return rows, malformed_count
+
+
+def _load_release_capability_profile(cfg: Dict[str, Any]) -> dict[str, dict[str, Any]]:
+    try:
+        contract = yaml.safe_load(
+            _CAPABILITY_PROFILE_CONTRACT_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, yaml.YAMLError) as exc:
+        raise typer.BadParameter(
+            "Release capability profile contract is missing or malformed"
+        ) from exc
+    if not isinstance(contract, dict):
+        raise typer.BadParameter("Release capability profile contract must be a mapping")
+    try:
+        return resolve_capability_profile(contract, _capability_receipt_profile(cfg))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _release_content_truth(cfg: Dict[str, Any]) -> dict[str, dict[str, bool]]:
+    release_cfg = cfg.get("release_validation") if isinstance(cfg, dict) else None
+    if release_cfg is None:
+        return {}
+    if not isinstance(release_cfg, dict):
+        raise typer.BadParameter("release_validation config must be a mapping")
+    raw_truth = release_cfg.get("content_truth_by_scene")
+    if raw_truth is None:
+        return {}
+    if not isinstance(raw_truth, dict):
+        raise typer.BadParameter(
+            "release_validation.content_truth_by_scene must be a mapping"
+        )
+    resolved: dict[str, dict[str, bool]] = {}
+    for scene_id, truth in raw_truth.items():
+        if not isinstance(truth, dict) or any(
+            not isinstance(value, bool) for value in truth.values()
+        ):
+            raise typer.BadParameter(
+                "release-validation content truth values must be booleans"
+            )
+        resolved[str(scene_id)] = {str(key): value for key, value in truth.items()}
+    return resolved
+
+
+def _validate_release_validation_request(
+    *,
+    release_validation: bool,
+    config: Optional[Path],
+) -> None:
+    if release_validation and config is None:
+        raise typer.BadParameter(
+            "--release-validation requires an explicit --config witness snapshot"
+        )
+
+
+def _enforce_release_capability_receipt(
+    receipt: dict[str, Any],
+    *,
+    release_validation: bool,
+) -> None:
+    if release_validation and receipt.get("outcome") != "completed":
+        raise typer.Exit(code=1)
 
 
 def _flatten_scene_outputs(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3857,6 +4003,8 @@ def _finalize_capability_receipt(
     cfg: Dict[str, Any],
     results: list[dict[str, Any]],
     output: Path,
+    input_count: int | None = None,
+    release_validation: bool = False,
 ) -> dict[str, Any]:
     """Persist the sole terminal capability receipt from existing run evidence."""
 
@@ -3873,14 +4021,29 @@ def _finalize_capability_receipt(
     if step_path is not None:
         evidence_paths["step_runs"] = str(step_path)
 
+    step_rows, malformed_row_count = _read_current_run_capability_rows(cfg, run_id)
+    expected_capabilities = None
+    content_truth_by_scene = None
+    if release_validation:
+        expected_capabilities = _load_release_capability_profile(cfg)
+        content_truth_by_scene = _release_content_truth(cfg)
+        evidence_paths["capability_profile_contract"] = str(
+            _CAPABILITY_PROFILE_CONTRACT_PATH
+        )
+
     receipt = build_capability_receipt(
         run_id=run_id,
         profile=_capability_receipt_profile(cfg),
         terminal_status=terminal_status,
-        step_rows=_read_current_run_capability_rows(cfg, run_id),
+        step_rows=step_rows,
         warnings=list(run_context.get("warnings") or []),
         scenes=_flatten_scene_outputs(results),
         evidence_paths=evidence_paths,
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=malformed_row_count,
+        input_count=input_count,
+        full_coverage=release_validation,
+        content_truth_by_scene=content_truth_by_scene,
     )
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_json(receipt_path, receipt, indent=2)
@@ -6860,6 +7023,16 @@ def _process_audio(
             error_text,
             extra=extra,
         )
+        if (
+            isinstance(result_payload, dict)
+            and str(result_payload.get('status') or '').strip().lower() == 'success'
+        ):
+            _log_wsl_capability_outcomes(
+                cfg=_get_step_log_cfg(),
+                item=step_item,
+                duration_ms=duration_ms,
+                outcomes=result_payload.get('wsl_capability_outcomes'),
+            )
 
     merge('goodq_audio_metadata', 'audio_metadata')
     
@@ -7373,6 +7546,16 @@ async def _process_audio_async(
             error_text,
             extra=extra,
         )
+        if (
+            isinstance(result_payload, dict)
+            and str(result_payload.get('status') or '').strip().lower() == 'success'
+        ):
+            _log_wsl_capability_outcomes(
+                cfg=_get_step_log_cfg(),
+                item=step_item,
+                duration_ms=duration_ms,
+                outcomes=result_payload.get('wsl_capability_outcomes'),
+            )
 
     def record_optional_audio_step_failure(env_name: str, step_name: str, exc: Any) -> None:
         error_text = str(exc).strip() or type(exc).__name__
@@ -7995,7 +8178,49 @@ def run(
     scene_start_index: Optional[int] = typer.Option(None, "--scene-start-index", help="Start processing at this scene index (inclusive)"),
     scene_end_index: Optional[int] = typer.Option(None, "--scene-end-index", help="Stop processing at this scene index (inclusive)"),
     scene_indices: Optional[str] = typer.Option(None, "--scene-indices", help="Exact comma-separated scene indices to process"),
+    release_validation: bool = typer.Option(False, "--release-validation", help="Require profile-complete capability evidence and fail closed"),
 ) -> None:
+    return run_with_config(
+        input_dir=input_dir, input_file=input_file, config=config, output=output,
+        workspace=workspace, max_videos=max_videos, max_scenes=max_scenes,
+        scene_threshold=scene_threshold, min_scene_seconds=min_scene_seconds,
+        force_reprocess=force_reprocess, verbose=verbose, step_timeout=step_timeout,
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+        enable_control_agent=enable_control_agent, enable_auto_healing=enable_auto_healing,
+        scene_start_index=scene_start_index, scene_end_index=scene_end_index,
+        scene_indices=scene_indices, release_validation=release_validation,
+    )
+
+
+def run_with_config(
+    *,
+    cfg: Optional[Dict[str, Any]] = None,
+    input_dir: Optional[Path] = None,
+    input_file: Optional[Path] = None,
+    config: Optional[Path] = None,
+    output: Optional[Path] = None,
+    workspace: Optional[Path] = None,
+    max_videos: int = 0,
+    max_scenes: int = 0,
+    scene_threshold: Optional[float] = None,
+    min_scene_seconds: Optional[float] = None,
+    force_reprocess: bool = False,
+    verbose: bool = False,
+    step_timeout: Optional[int] = None,
+    chunk_size: float = 300.0,
+    chunk_overlap: float = 10.0,
+    enable_control_agent: bool = False,
+    enable_auto_healing: bool = False,
+    scene_start_index: Optional[int] = None,
+    scene_end_index: Optional[int] = None,
+    scene_indices: Optional[str] = None,
+    release_validation: bool = False,
+) -> None:
+    """Canonical runner for CLI and trusted callers with already-resolved config.
+
+    The CLI retains its validated witness-snapshot gate. A programmatic caller
+    passes its resolved runtime dictionary without another ambient reload.
+    """
     global VERBOSE, STEP_TIMEOUT, CONTROL_AGENT_AVAILABLE, _CURRENT_RUN_CONTEXT, _PIPELINE_OBSERVER, ENABLE_AUTO_HEALING
     VERBOSE = verbose
     STEP_TIMEOUT = _resolve_step_timeout_value(step_timeout)
@@ -8009,6 +8234,12 @@ def run(
         input_file = getattr(input_file, 'default', None)
     if config is not None and not isinstance(config, Path):
         config = getattr(config, 'default', None)
+    if not isinstance(release_validation, bool):
+        release_validation = bool(getattr(release_validation, 'default', False))
+    _validate_release_validation_request(
+        release_validation=release_validation,
+        config=config,
+    )
 
     # Resolve chunk_size and chunk_overlap if they are Typer OptionInfo wrappers (as in direct Python calls/tests)
     if not isinstance(chunk_size, (int, float)):
@@ -8027,8 +8258,14 @@ def run(
         raise typer.BadParameter("--scene-indices is mutually exclusive with --scene-start-index/--scene-end-index")
     parsed_scene_indices = _parse_scene_indices(scene_indices)
 
-    base_cfg = load_isolated_runtime_cfg_snapshot(config) if config is not None else load_configs({})
-    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    if cfg is not None and config is not None:
+        raise typer.BadParameter("runtime cfg and config snapshot are mutually exclusive")
+    caller_run = cfg.get('run') if isinstance(cfg, dict) else None
+    caller_run_id = caller_run.get('id') if isinstance(caller_run, dict) else None
+    base_cfg = cfg if cfg is not None else (
+        load_isolated_runtime_cfg_snapshot(config) if config is not None else load_configs({})
+    )
+    cfg = copy.deepcopy(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
     cfg['progressive_chunk_overlap'] = chunk_overlap
     required_runtime_keys: List[str] = []
@@ -8067,7 +8304,7 @@ def run(
         profile_override = "wsl_audio_forced_in_baseline"
         profile_override_reason = "GOODQ_REQUIRE_WSL_AUDIO=1 while GOODQ_HOST_PROFILE=BASELINE"
     run_context = {
-        'id': str(uuid.uuid4()),
+        'id': caller_run_id if isinstance(caller_run_id, str) and caller_run_id.strip() else str(uuid.uuid4()),
         'pipeline': 'scene_ingest_cli',
         'started_at': datetime.now(timezone.utc).isoformat(),
         'timer_unit': 'ms',
@@ -8160,17 +8397,23 @@ def run(
 
     if not videos:
         typer.echo('No videos found to process.')
-        _finalize_capability_receipt(
+        capability_receipt = _finalize_capability_receipt(
             terminal_status="completed",
             cfg=cfg,
             results=[],
             output=output,
+            input_count=0,
+            release_validation=release_validation,
         )
         if observer:
             observer.step_end("pipeline.ingestion", metadata={"status": "no_videos"})
         if _PIPELINE_OBSERVER is not None:
             _PIPELINE_OBSERVER.close()
         _PIPELINE_OBSERVER = None
+        _enforce_release_capability_receipt(
+            capability_receipt,
+            release_validation=release_validation,
+        )
         return
     if max_videos and len(videos) > max_videos:
         videos = videos[:max_videos]
@@ -9419,9 +9662,24 @@ def run(
             for scene in scene_outputs
             if isinstance(scene, dict)
         )
-        phase6_embeddings_result = None
-        phase6_qdrant_status = 'complete' if all(s.get('qdrant_ok') is True for s in scene_outputs) else 'failed'
-        phase6_faiss_status = 'complete' if all(s.get('faiss_ok') is True for s in scene_outputs) else 'failed'
+        # Phase 6 owns its commit receipt. Scene/summary commits cannot stand in
+        # for the separate scene-level visual vector writes.
+        scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
+        phase6_manifest = _safe_read_json_dict(scene_manifest_path) or {}
+        phase6_embeddings_result = phase6_manifest.get('phase6_vector_commit')
+        if not isinstance(phase6_embeddings_result, dict):
+            phase6_embeddings_result = {}
+        phase6_qdrant_status = _normalize_vector_store_status(phase6_embeddings_result.get('qdrant_ok'))
+        phase6_faiss_status = _normalize_vector_store_status(phase6_embeddings_result.get('faiss_ok'))
+        phase6_cfg = cfg.get('phase6', {}) or {}
+        phase6_complete = bool(scene_outputs) and phase6_cfg.get('enabled', True) and (
+            _scene_manifest_has_committed_vectors(
+                scene_manifest_path, [str(scene['scene_id']) for scene in scene_outputs]
+            )
+            if phase6_cfg.get('retrieval', {}).get('enable', True)
+            else phase6_manifest.get('phase6_complete') is True
+            and phase6_manifest.get('phase6_status') == 'complete'
+        )
 
         video_result = {
             'video_path': str(video_path),
@@ -9445,9 +9703,9 @@ def run(
             'knowledge_graph_status': knowledge_graph_status,
             'orchestration': orchestration_contract,
             'phase6_audio_artifact_dir': str(phase6_audio_artifact_dir),
-            'phase6_qdrant_ok': all(s.get('qdrant_ok') is True for s in scene_outputs) if scene_outputs else False,
-            'phase6_faiss_ok': all(s.get('faiss_ok') is True for s in scene_outputs) if scene_outputs else False,
-            'phase6_complete': all(s.get('qdrant_ok') is True for s in scene_outputs) if scene_outputs else False,
+            'phase6_qdrant_ok': phase6_qdrant_status,
+            'phase6_faiss_ok': phase6_faiss_status,
+            'phase6_complete': phase6_complete,
         }
         if profile_override:
             video_result['profile_override'] = profile_override
@@ -9464,25 +9722,13 @@ def run(
             try:
                 temporal_index_data = json.loads(temporal_index_path.read_text(encoding='utf-8'))
                 if isinstance(temporal_index_data, dict):
-                    if video_result.get('phase6_complete') is True:
-                        temporal_index_data['phase6_complete'] = True
+                    if temporal_index_data.get('phase6_complete') is not phase6_complete:
+                        temporal_index_data['phase6_complete'] = phase6_complete
                         atomic_write_json(temporal_index_path, temporal_index_data)
                     video_result['temporal_index'] = temporal_index_data
                     video_result['temporal_index_path'] = str(temporal_index_path)
             except Exception as e:
                 logger.warning(f"Failed to read/update final temporal index: {e}")
-
-        # Also update phase6_complete in scene_manifest.json on disk if complete
-        scene_manifest_path = processing_dir / 'video' / 'scene_manifest.json'
-        if scene_manifest_path.exists() and video_result.get('phase6_complete') is True:
-            try:
-                manifest_data = json.loads(scene_manifest_path.read_text(encoding='utf-8'))
-                if isinstance(manifest_data, dict):
-                    manifest_data['phase6_complete'] = True
-                    atomic_write_json(scene_manifest_path, manifest_data)
-            except Exception as e:
-                logger.warning(f"Failed to update phase6_complete in scene_manifest.json: {e}")
-
 
         segmentation_shadow_result = _attach_segmentation_shadow_metrics(
             cfg,
@@ -9537,7 +9783,9 @@ def run(
 
         results.append(video_result)
         if tracker is not None:
-            finish_processing("completed")
+            finish_processing(
+                "failed" if phase6_cfg.get('enabled', True) and not phase6_complete else "completed"
+            )
 
     if observer:
         observer.step_end("loop.videos", metadata={"processed_videos": len(results)})
@@ -9646,6 +9894,8 @@ def run(
                 cfg=cfg,
                 results=results,
                 output=output,
+                input_count=len(videos),
+                release_validation=release_validation,
             )
             if PROGRESS_TRACKING_AVAILABLE:
                 finish_processing("failed")
@@ -9681,21 +9931,35 @@ def run(
         except Exception as e:
             typer.echo(f"[WARNING] Final report generation skipped (non-fatal): {e}", err=True)
 
-    _finalize_capability_receipt(
-        terminal_status="completed",
+    phase6_incomplete = bool((cfg.get('phase6', {}) or {}).get('enabled', True)) and any(
+        result.get('scenes') and result.get('phase6_complete') is not True
+        for result in results
+    )
+    terminal_status = "failed" if phase6_incomplete else "completed"
+    capability_receipt = _finalize_capability_receipt(
+        terminal_status=terminal_status,
         cfg=cfg,
         results=results,
         output=output,
+        input_count=len(videos),
+        release_validation=release_validation,
     )
 
     if observer:
         observer.step_end(
             "pipeline.ingestion",
-            metadata={"status": "completed", "processed_videos": len(results)},
+            metadata={"status": terminal_status, "processed_videos": len(results)},
         )
     if _PIPELINE_OBSERVER is not None:
         _PIPELINE_OBSERVER.close()
     _PIPELINE_OBSERVER = None
+    if phase6_incomplete:
+        typer.echo("[ERROR] Required Phase 6 persistence is incomplete; retry evidence was retained.", err=True)
+        raise typer.Exit(code=1)
+    _enforce_release_capability_receipt(
+        capability_receipt,
+        release_validation=release_validation,
+    )
 
 
 if __name__ == '__main__':

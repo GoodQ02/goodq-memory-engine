@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-08-20 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-06 -->
 
 # GoodQ Bootstrap Installer
 
@@ -137,7 +137,14 @@ Environment selection:
 - model prefetch now follows `configs/model_registry.yaml` directly, so pinned repo ids and revisions stay aligned without separate hardcoded bootstrap lists
 - the step-env pack is installed from the pinned lock recipes in `envs/locks/` instead of a fresh dependency solve
 - `goodq_face_embed` additionally installs Conda `dlib` first so Windows hosts do not need to compile it from source during bootstrap
-- the bootstrap defaults to `BASELINE`; GPU throughput remains explicit opt-in
+- new installations default to `BASELINE`; GPU throughput remains explicit opt-in
+- reruns, including `--yes`, preserve GPU selection from the existing
+  `.env.local` profile or `GOODQ_REQUIRE_GPU`; a required GPU that is temporarily
+  undetected stops provisioning instead of replacing the environment with CPU packages
+- unmanaged `.env.local` settings are preserved; a conflicting explicit profile
+  selection must be reconciled in that file before provisioning
+- a selected GPU recipe must exist; a missing `environment.gpu.yml` does not
+  substitute the baseline recipe
 
 ## Lightweight Verification
 
@@ -153,6 +160,10 @@ The bootstrap performs only lightweight checks:
 - Qdrant reachability is checked
 - Qdrant Windows service status is surfaced when Qdrant is unavailable
 - launcher exists
+
+A failed required `bootstrap_verify.py` check stops bootstrap completion and
+launch. Missing, malformed or unrecognized verifier JSON also fails verification.
+An explicit `warn` report remains acceptable for optional capabilities.
 
 If Qdrant is unavailable, the bootstrap recommends repairing or installing the
 Windows `GoodQ_Qdrant` service first, attempts the existing service installer

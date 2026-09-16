@@ -1,6 +1,6 @@
 from __future__ import annotations
 # GPU Configuration - Auto-configured on import
-from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, FaissLock
+from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index, write_index_atomically, FaissLock
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
 from steps.common.memory import ensure_id_map_table_schema
@@ -570,7 +570,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             else:
                 index = create_hnsw_id_index(faiss, feats.shape[1])
             add_with_required_ids(index, feats.astype("float32"), uid)
-            faiss.write_index(index, index_path)
+            write_index_atomically(faiss, index, index_path)
         faiss_ok = True
         try:
             from steps.common.memory_commit_events import utc_now_iso

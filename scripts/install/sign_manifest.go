@@ -42,6 +42,8 @@ func extractEmbeddedPublicKey(launcherPath string) (string, error) {
 func main() {
 	mode := flag.String("mode", "release", "Operation mode: 'release' (sign with existing key), 'dev-init' (generate new keypair)")
 	verifyOnly := flag.Bool("verify-only", false, "Verify existing manifest signature without signing")
+	privateKeyPathFlag := flag.String("private-key-path", "", "Private key path (defaults to dev_private_key.hex in the working directory)")
+	launcherSourcePathFlag := flag.String("launcher-source-path", "", "Launcher source path containing EmbeddedPublicKeyHex")
 	manifestPathFlag := flag.String("manifest-path", "", "Manifest path to sign or verify (defaults to the tracked source manifest)")
 	signaturePathFlag := flag.String("signature-path", "", "Signature path to write or verify (defaults to the tracked source signature)")
 	flag.Parse()
@@ -53,6 +55,12 @@ func main() {
 	launcherSourcePath := "LAUNCH_GOODQ.go"
 	manifestPath := filepath.Join("..", "..", "configs", "model_download_manifest.json")
 	signaturePath := filepath.Join("..", "..", "configs", "model_download_manifest.json.sig")
+	if *privateKeyPathFlag != "" {
+		privateKeyPath = *privateKeyPathFlag
+	}
+	if *launcherSourcePathFlag != "" {
+		launcherSourcePath = *launcherSourcePathFlag
+	}
 	if *manifestPathFlag != "" {
 		manifestPath = *manifestPathFlag
 	}

@@ -4,7 +4,10 @@ import importlib
 import json
 import sys
 import types
+from contextlib import nullcontext
 from pathlib import Path
+
+import pytest
 
 from steps.video.scene_visual_embeddings import run_scene_visual_embeddings
 
@@ -34,7 +37,8 @@ def _load_run_ingestion_module():
     return importlib.import_module("cli.run_ingestion")
 
 
-def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize("phase6_committed", [False, True])
+def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path, phase6_committed):
     for name in (
         "GOODQ_REQUIRE_WSL_AUDIO",
         "GOODQ_REQUIRE_GPU",
@@ -55,7 +59,7 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
     processing_root = tmp_path / "processing"
 
     cfg_template = {
-        "paths": {"processing": str(processing_root)},
+        "paths": {"processing": str(processing_root), "db_path": str(tmp_path / "memory.db")},
         "phase6": {"enabled": True},
         "knowledge_graph": {"enabled": False},
     }
@@ -75,9 +79,30 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
     def _run_step(env_name, step_name, payload, cfg_json):
         if step_name == "scene_visual_embeddings":
             assert env_name == "goodq_image_caption"
-            return {"phase6_status": "failed", "error": "vector_commit_failed"}
+            manifest_path = Path(payload["scene_manifest_path"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update({
+                "phase6_complete": phase6_committed,
+                "phase6_status": "complete" if phase6_committed else "failed",
+                "phase6_vector_commit": {
+                    "enabled": True, "clip_committed": True,
+                    "dino_committed": phase6_committed, "vector_points_attempted": 2,
+                    "qdrant_ok": phase6_committed, "faiss_ok": True,
+                },
+            })
+            for scene in manifest["scenes"]:
+                scene.update(clip_id="clip-scene", dino_id="dino-scene", qdrant_ok=phase6_committed)
+            if not phase6_committed:
+                manifest["phase6_error"] = "vector_commit_failed"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            return {"phase6_status": manifest["phase6_status"], "qdrant_ok": phase6_committed, "faiss_ok": True}
         if step_name == "cross_modal_harmonization":
-            return {"harmonization_status": "complete", "temporal_index_path": None}
+            index_path = Path(payload["processing_dir"]) / "temporal_index.json"
+            index_path.write_text(json.dumps({
+                "video_hash": "videohash", "phase6_complete": phase6_committed,
+                "total_scenes": 1, "segments": [{"scene_id": scene["scene_id"]} for scene in payload["scenes"]],
+            }), encoding="utf-8")
+            return {"harmonization_status": "complete", "temporal_index_path": str(index_path)}
         raise AssertionError(f"Unexpected step invocation: {step_name}")
 
     monkeypatch.setattr(run_ingestion, "CONTROL_AGENT_AVAILABLE", False)
@@ -94,27 +119,46 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path):
         "get_scene_meta",
         lambda *a, **k: {"keyframe": {"path": "cached_frame.jpg", "hash": "h1"}, "audio": {"path": "cached_audio.wav", "hash": "h2"}},
     )
-    monkeypatch.setattr(run_ingestion, "register_scene_bundle", lambda *a, **k: {"status": "ok"})
+    # The ordinary scene/summary writer succeeds independently of Phase 6.
+    monkeypatch.setattr(run_ingestion, "register_scene_bundle", lambda *a, **k: {
+        "status": "ok", "vector_points_attempted": 1, "qdrant_ok": True, "faiss_ok": True,
+    })
     monkeypatch.setattr(run_ingestion, "log_step_run", lambda *a, **k: None)
     monkeypatch.setattr(run_ingestion, "_build_knowledge_graph_from_results", lambda *a, **k: None)
     monkeypatch.setattr(run_ingestion, "_run_step", _run_step)
 
-    run_ingestion.run(
-        input_dir=input_dir,
-        output=output,
-        workspace=workspace,
-        max_videos=1,
-        max_scenes=0,
-        scene_threshold=None,
-        min_scene_seconds=None,
-        force_reprocess=False,
-        verbose=False,
-        step_timeout=30,
-    )
+    outcome = nullcontext() if phase6_committed else pytest.raises(run_ingestion.typer.Exit)
+    with outcome as exit_info:
+        run_ingestion.run(
+            input_dir=input_dir,
+            output=output,
+            workspace=workspace,
+            max_videos=1,
+            max_scenes=0,
+            scene_threshold=None,
+            min_scene_seconds=None,
+            force_reprocess=False,
+            verbose=False,
+            step_timeout=30,
+            release_validation=False,
+        )
+    if not phase6_committed:
+        assert exit_info.value.exit_code == 1
 
     results = json.loads(output.read_text(encoding="utf-8"))
     assert results
-    assert results[0]["phase6_complete"] is False
+    assert results[0]["scenes"][0]["qdrant_ok"] is True
+    assert results[0]["phase6_complete"] is phase6_committed
+    assert results[0]["phase6_qdrant_ok"] is phase6_committed
+    assert results[0]["qdrant_ok"] is phase6_committed
+    assert results[0]["phase6_faiss_ok"] is True
+    manifest_path = processing_root / "demo" / "video" / "scene_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["phase6_complete"] is phase6_committed
+    assert manifest["phase6_status"] == ("complete" if phase6_committed else "failed")
+    assert results[0]["temporal_index"]["phase6_complete"] is phase6_committed
+    receipt = json.loads((tmp_path / "capability_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["terminal_status"] == ("completed" if phase6_committed else "failed")
 
 
 def test_phase6_early_failure_persists_false(monkeypatch, tmp_path: Path):

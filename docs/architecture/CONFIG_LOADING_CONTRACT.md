@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-10 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-06 -->
 
 # Canonical Runtime Configuration Loading Contract
 
@@ -30,6 +30,13 @@ defaults must remain generic; the concrete values belong in
 - Runtime **entry points** MUST call `load_configs()` exactly once at process start (optionally with explicit `overrides`) and then pass the resulting `cfg` dict downward.
 - Non-entry-point modules MUST NOT call `load_configs()`; they MUST accept `cfg` (or specific config slices) as parameters.
 - Runtime code MUST treat the returned config as read-only (no in-place mutation).
+
+The direct-ingestion adapter passes an already-resolved dictionary to
+`cli.run_ingestion.run_with_config`. The CLI and this trusted programmatic
+entrypoint use the same runner body. Caller configuration is copied before
+runtime defaults or per-run fields are added; it is not replaced by a second
+ambient load. The CLI's explicit `--config` remains restricted to validated
+isolated witness snapshots.
 
 ### 3) Resolution order
 

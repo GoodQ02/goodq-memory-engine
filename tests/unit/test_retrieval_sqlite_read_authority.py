@@ -508,6 +508,51 @@ def test_faiss_shadow_reader_does_not_retain_direct_write_capable_connect(
     assert not _marker_exists(database)
 
 
+def test_faiss_shadow_mode_is_retired_when_the_flag_is_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "memory.db"
+    index_path = tmp_path / "memory.index"
+    _seed_memory_database(database)
+    index_path.write_bytes(b"fixture")
+    _install_fake_faiss(monkeypatch)
+
+    fake_provenance = types.ModuleType("steps.common.memory_provenance")
+    fake_provenance.attach_provenance_to_hits = lambda _db, _hits: None
+    monkeypatch.setitem(sys.modules, "steps.common.memory_provenance", fake_provenance)
+    authority = _authority_module()
+    real_open = authority.open_sqlite_read_connection
+    shadow_opens: list[str] = []
+
+    def counting_open(path: str):
+        shadow_opens.append(path)
+        return real_open(path)
+
+    monkeypatch.setattr(
+        authority,
+        "open_sqlite_read_connection",
+        counting_open,
+    )
+
+    store = memory_stores.FaissMemory(
+        index_path=str(index_path),
+        dim=2,
+        db_path=str(database),
+        cfg={"memory": {"routing": {}}},
+        retrieval_event_policy=retrieval_events.RetrievalEventPolicy(enabled=False),
+    )
+
+    assert len(
+        store.query(
+            [0.1, 0.2],
+            top_k=1,
+            retrieval_context="system.healthcheck",
+        )
+    ) == 1
+    assert shadow_opens == []
+
+
 def test_fts_missing_database_does_not_open_or_create(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

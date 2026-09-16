@@ -5,6 +5,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from steps.video.scene_visual_embeddings import run_scene_visual_embeddings
 
 
@@ -16,7 +18,8 @@ class _FakeVec:
         return [0.0] * self._dim
 
 
-def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize("retry_succeeds", [False, True])
+def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path, retry_succeeds):
     video_id = "v_test"
     processing_root = tmp_path / "processing"
     manifest_dir = processing_root / video_id / "video"
@@ -72,6 +75,8 @@ def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path):
             self.dim = dim
             self.distance = distance
 
+    fail_dino = True
+
     class _QdrantClient:
         def __init__(self, cfg):
             self.cfg = cfg
@@ -79,7 +84,7 @@ def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path):
         def upsert(self, points):
             # Simulate partial vector commit failure:
             # clip succeeds, dino fails.
-            return "dino" not in self.cfg.collection
+            return not fail_dino or "dino" not in self.cfg.collection
 
     mod_extractor.extract_scene_frames = _extract_scene_frames
     mod_embedder.embed_scene_frames = _embed_scene_frames
@@ -117,6 +122,29 @@ def test_phase6_commit_failure_sets_manifest_false(monkeypatch, tmp_path: Path):
     assert scene_entry["vector_points_attempted"] == 2
     assert scene_entry["qdrant_ok"] is False
     assert scene_entry["faiss_ok"] == "not_attempted"
+
+    # IDs were persisted before the failed commit. They cannot authorize reuse.
+    fail_dino = not retry_succeeds
+    retried = run_scene_visual_embeddings(item, cfg)
+    retry_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert retried["phase6_status"] == ("complete" if retry_succeeds else "failed")
+    assert retried["scenes_processed"] == 1
+    assert retry_manifest["phase6_complete"] is retry_succeeds
+    assert retry_manifest["phase6_vector_commit"]["dino_committed"] is retry_succeeds
+    assert retry_manifest["scenes"][0]["qdrant_ok"] is retry_succeeds
+
+    if retry_succeeds:
+        assert "phase6_error" not in retry_manifest
+        # Successful recovery must retain the efficient incremental reuse path.
+        def _unexpected_extraction(**kwargs):
+            raise AssertionError("a committed scene must not be extracted again")
+
+        mod_extractor.extract_scene_frames = _unexpected_extraction
+        reused = run_scene_visual_embeddings(item, cfg)
+        assert reused["phase6_status"] == "complete"
+        assert reused["scenes_processed"] == 0
+        assert json.loads(manifest_path.read_text(encoding="utf-8")) == retry_manifest
 
 
 def test_phase6_missing_visual_modality_sets_manifest_false(monkeypatch, tmp_path: Path):

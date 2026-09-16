@@ -10,6 +10,10 @@ from pathlib import Path
 import sys
 import os
 import logging
+import copy
+import json
+import uuid
+import typer
 
 # Ensure goodq4all and local modules can be imported
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 if str(REPO_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT.parent))
 
-from steps.common.config_loader import load_configs
+from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
 _PROCESSING_FALLBACK_WARNED = False
@@ -77,8 +81,9 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     """
     if cfg is None:
         cfg = load_configs({})
+    cfg = copy.deepcopy(cfg)
     
-    video_path = Path(video_path)
+    video_path = Path(video_path).resolve()
     if not video_path.exists():
         raise FileNotFoundError(f"Video not found: {video_path}")
     
@@ -88,13 +93,12 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     # The actual ingestion uses the canonical scene-based runner
     # Import and use the working scene ingestion system
     try:
-        from cli.run_ingestion import run as scene_ingest_run
+        from cli.run_ingestion import run_with_config as scene_ingest_run, _compute_sha256
     except ModuleNotFoundError as e:
         if e.name in {'cli', 'cli.run_ingestion'}:
-            from goodq4all.cli.run_ingestion import run as scene_ingest_run
+            from goodq4all.cli.run_ingestion import run_with_config as scene_ingest_run, _compute_sha256
         else:
             raise
-    import typer
     
     # Get processing directory from config
     processing_root = _resolve_processing_root(cfg)
@@ -102,96 +106,65 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     
     # Call the existing scene ingestion runtime
     try:
-        # Create a temporary directory with just this video to ensure only it gets processed
-        import shutil
-        from configs.paths import LOGS_DIR
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        temp_inbox = LOGS_DIR / f"temp_inbox_{video_path.stem}"
-        temp_inbox.mkdir(parents=True, exist_ok=True)
-        
-        # Symlink the video file
-        temp_video = temp_inbox / video_path.name
-        if temp_video.exists():
-            temp_video.unlink()
-        temp_video.symlink_to(video_path.absolute())
-        
+        logs_dir = Path(get_runtime_paths(cfg, "log_dir", require_canonical=False)["log_dir"]).resolve()
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        output_json = logs_dir / f"direct_ingest_{uuid.uuid4().hex}.json"
+        expected_hash = _compute_sha256(video_path)
         chunk_size = cfg.get("progressive_chunk_size", 300.0)
         chunk_overlap = cfg.get("progressive_chunk_overlap", 10.0)
-        
+        scene_ingest_run(
+            cfg=cfg,
+            input_file=video_path,
+            output=output_json,
+            workspace=processing_root,
+            max_videos=1,
+            verbose=True,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+
+        # Only this invocation's result can establish successful handoff.
         try:
-            scene_ingest_run(
-                input_dir=temp_inbox,
-                output=LOGS_DIR / f"direct_ingest_{video_path.stem}.json",
-                workspace=processing_root,  # Use configured processing directory
-                max_videos=1,  # Process only this video
-                verbose=True,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-            )
-        finally:
-            # Cleanup temp directory
-            if temp_inbox.exists():
-                shutil.rmtree(temp_inbox)
-        
-        print(f"[INGEST] [PASS] Ingestion complete for {video_path.name}")
-        
-        # Read the actual result JSON to get the correct video_id and paths
-        output_json = LOGS_DIR / f"direct_ingest_{video_path.stem}.json"
-        actual_video_id = None
-        actual_processing_dir = None
-        video_hash = None
-        
-        if output_json.exists():
-            import json
-            with open(output_json, 'r', encoding='utf-8') as f:
-                ingestion_results = json.load(f)
-                # Handle both list and dict formats
-                if isinstance(ingestion_results, list) and len(ingestion_results) > 0:
-                    ingestion_results = ingestion_results[0]
-                
-                # Extract video_id and hash from the JSON structure
-                actual_video_id = ingestion_results.get('video_id')
-                
-                # Get the actual hash-based directory from scene data
-                if 'scenes' in ingestion_results and len(ingestion_results['scenes']) > 0:
-                    first_scene = ingestion_results['scenes'][0]
-                    if 'raw' in first_scene and 'video_hash' in first_scene['raw']:
-                        video_hash = first_scene['raw']['video_hash']
-                        # The REAL processing directory uses the hash
-                        actual_processing_dir = processing_root / video_hash
-        
-        # Fallback to stem-based ID if we couldn't read from JSON
-        video_id = actual_video_id if actual_video_id else video_path.stem
-        processing_dir = actual_processing_dir if actual_processing_dir else (processing_root / video_id)
-        
-        # Build temporal index path from actual processing location
-        temporal_index_path = processing_dir / "temporal_index.json"
-        if not temporal_index_path.exists():
-            # Also check in metadata subdirectory
-            temporal_index_path = processing_dir / "metadata" / "temporal_index.json"
-        
-        # Return complete result with video_id and temporal_index for downstream validation
+            ingestion_results = json.loads(output_json.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("direct_ingestion_result_missing_or_invalid") from exc
+        if isinstance(ingestion_results, list) and len(ingestion_results) == 1:
+            ingestion_results = ingestion_results[0]
+        if not isinstance(ingestion_results, dict) or not ingestion_results:
+            raise RuntimeError("direct_ingestion_result_requires_one_video")
+        if (
+            ingestion_results.get("video_hash") != expected_hash
+            or ingestion_results.get("video_id") != expected_hash
+        ):
+            raise RuntimeError("direct_ingestion_result_content_mismatch")
+
+        index_value = ingestion_results.get("temporal_index_path")
+        temporal_index_path = Path(index_value).resolve() if index_value else None
+        processing_dir = temporal_index_path.parent if temporal_index_path else processing_root / video_path.stem
         result = {
-            "status": "success", 
+            "status": "success",
             "video_path": str(video_path),
-            "video_id": video_id,
+            "video_id": expected_hash,
             "video_name": video_path.name,
-            "video_hash": video_hash,
+            "video_hash": expected_hash,
             "processing_dir": str(processing_dir.absolute()),
-            "temporal_index_path": str(temporal_index_path.absolute()) if temporal_index_path.exists() else None
+            "temporal_index_path": str(temporal_index_path) if temporal_index_path else None,
+            "result_path": str(output_json),
         }
-        
-        # Optionally embed temporal index content if it exists
-        if temporal_index_path.exists():
+
+        if temporal_index_path is not None:
             try:
-                import json
-                with open(temporal_index_path, 'r', encoding='utf-8') as f:
-                    result["temporal_index"] = json.load(f)
-            except Exception as e:
-                print(f"[INGEST] Warning: Could not load temporal_index.json: {e}")
-        
+                result["temporal_index"] = json.loads(temporal_index_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise RuntimeError("direct_ingestion_result_temporal_index_unreadable") from exc
+
+        print(f"[INGEST] [PASS] Ingestion complete for {video_path.name}")
         return result
         
+    except typer.Exit as e:
+        message = f"direct_ingestion_runner_failed exit_code={e.exit_code}"
+        print(f"[INGEST] [FAIL] Ingestion failed: {message}")
+        raise RuntimeError(message) from e
     except Exception as e:
         print(f"[INGEST] [FAIL] Ingestion failed: {e}")
         raise

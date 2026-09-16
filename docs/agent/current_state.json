@@ -40,7 +40,7 @@
       "model": null
     }
   },
-  "evidence_id": "0c572aebe6be4fa4",
+  "evidence_id": "fdb71559f3db95ea",
   "evidence_kind": "unconfigured_template",
   "generated_from": "docs/diagnostics/evidence/PUBLIC_RELEASE_TEMPLATE_2026-09-16.json",
   "historical_evidence": [],
@@ -130,7 +130,7 @@
     }
   },
   "repository": {
-    "commit": "370610475464819aaeb3a15cc504814c39e861e8",
+    "commit": "fcb8dbfc037a9bf857c6c2d6a654a7ac0e911535",
     "dirty": false
   },
   "schema_version": 2

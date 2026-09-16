@@ -250,6 +250,7 @@ def launch(tmp_path):
 def test_healthy_startup_launches_both_real_children(launch):
     result = launch()
     assert result["Completed"], result
+    assert result["ServiceRequests"] == 1
     assert result["ChildStarts"] == ["api", "watchdog"]
     assert {c["Role"] for c in result["Children"] if c["Alive"]} == {"api", "watchdog"}
     assert all(Path(c["Record"]["executable"]).samefile(sys.executable) for c in result["Children"])
@@ -261,6 +262,13 @@ def test_healthy_startup_launches_both_real_children(launch):
     assert terminal["api_pid"] == next(c["Pid"] for c in result["Children"] if c["Role"] == "api")
     assert terminal["watchdog_pid"] == next(c["Pid"] for c in result["Children"] if c["Role"] == "watchdog")
     assert terminal["ongoing_health_verified"] is False
+
+
+def test_running_store_does_not_require_service_start_rights(launch):
+    result = launch("service_already_running")
+    assert result["Completed"], result
+    assert result["ServiceRequests"] == 0
+    assert result["ChildStarts"] == ["api", "watchdog"]
 
 
 def test_startup_preflight_does_not_start_services_or_children(launch):

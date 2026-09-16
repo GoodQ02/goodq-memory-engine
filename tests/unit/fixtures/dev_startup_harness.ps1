@@ -23,10 +23,17 @@ $global:GoodQStartupTest = @{
 
 # Only the external service and unrestricted machine-wide process scan are
 # replaced. Listener ownership, HTTP, child creation, exit and cleanup are real.
+function Get-Service {
+    [CmdletBinding()]param($Name)
+    if ($Name -ne 'GoodQ_Qdrant') { throw 'Unexpected service query.' }
+    $status = if ($Scenario -eq 'service_already_running') { 'Running' } else { 'Stopped' }
+    [pscustomobject]@{ Status=$status }
+}
 function Start-Service {
     [CmdletBinding()]param($Name)
     if ($Name -ne 'GoodQ_Qdrant') { throw 'Unexpected service request.' }
     $global:GoodQStartupTest.ServiceRequests++
+    if ($Scenario -eq 'service_already_running') { throw 'Redundant start requires unnecessary service control rights.' }
     if ($Scenario -eq 'startup_owner_wait') {
         [IO.File]::WriteAllText((Join-Path $SandboxRoot 'awaiting-store.json'), ($Port | ConvertTo-Json))
         $deadline = [DateTime]::UtcNow.AddSeconds(15)

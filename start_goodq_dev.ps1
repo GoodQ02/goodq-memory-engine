@@ -564,7 +564,11 @@ try {
         $env:GOODQ_RUNTIME_STOP_EVENT = $stopEventName
         Write-GoodQStartupReceipt 'starting' 'Supervisor is armed; dependencies and runtime children are not yet started.'
     }
-    Start-Service -Name 'GoodQ_Qdrant' -ErrorAction Stop
+    # A running store needs query access only; requesting SERVICE_START can fail
+    # for an ordinary logon even though the required dependency is available.
+    if ((Get-Service -Name 'GoodQ_Qdrant' -ErrorAction Stop).Status -ne 'Running') {
+        Start-Service -Name 'GoodQ_Qdrant' -ErrorAction Stop
+    }
     # Bind the actual children to the same endpoint the launcher verifies.
     $env:GOODQ_API_HOST = '127.0.0.1'
     $env:GOODQ_API_PORT = [string]$ApiPort

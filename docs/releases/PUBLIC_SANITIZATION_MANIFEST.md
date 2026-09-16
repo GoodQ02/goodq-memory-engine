@@ -6,7 +6,7 @@
 
 ## Source and authority
 
-- Private development source: `370610475464819aaeb3a15cc504814c39e861e8` (`dev`).
+- Private development source: `fcb8dbfc037a9bf857c6c2d6a654a7ac0e911535` (`dev`).
 - Public parent: `eca11dddf8c27e2483361d9f19adea9261bbc833` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
@@ -48,3 +48,14 @@ history is retained; the snapshot prevents new private history from being pushed
 - Product code and signed model-manifest bytes match the pinned private source,
   apart from the declared comment examples and privacy exclusions.
 - Known source warnings: Pydantic class-based configuration is deprecated.
+
+## Existing-store startup follow-up
+
+The supervisor queries Qdrant before requesting service-start permission.
+The regression fixture rejects a redundant start while still proving that a
+stopped store is started and failed API startup blocks Watchdog. The five
+native Windows startup checks pass on the private source.
+
+Hosted CI did not execute for the initial publication: GitHub reported an
+account billing lock before any job steps ran. Local results above remain the
+verification evidence; this is not a green hosted-CI claim.

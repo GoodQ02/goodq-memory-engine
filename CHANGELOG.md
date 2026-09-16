@@ -8,8 +8,9 @@ This changelog tracks public-facing GoodQ4All milestones and release-readiness
 checkpoints.
 
 It is intentionally lightweight. Historical phase-by-phase notes, internal
-audits, and archived release artifacts remain under [`docs/archive/`](docs/archive/)
-and related canonical docs.
+audits, and archived release artifacts are omitted from this public source.
+See the [public sanitization manifest](docs/releases/PUBLIC_SANITIZATION_MANIFEST.md)
+for the published scope.
 
 ## [Unreleased]
 
@@ -432,8 +433,8 @@ Tag: `season1-witness-run-2026-03-09`
 
 ## Historical Notes
 
-- Older internal milestones and phase reports remain archived under
-  [`docs/archive/`](docs/archive/).
+- Older internal milestones and phase reports are omitted from this public
+  source; their historical references do not identify available public files.
 - Legacy runtime tags remain in Git history for internal traceability, but this
   changelog focuses on current public-facing release checkpoints.
 ## 2026-04-12

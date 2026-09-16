@@ -18,8 +18,9 @@
 Private reports, archives, witness receipts, model/corpus data, onboarding media,
 host-specific maintenance scripts, and local plans are omitted. Signed model
 manifests and product code retain their upstream source bytes. Public-only
-changes are documentation, fixture/config anonymization, four epoch examples in docstrings, and the declared
-exclusions; no runtime feature is developed exclusively in this mirror.
+changes are documentation, fixture/config anonymization, four epoch examples in
+docstrings, public-scope test expectations, and the declared exclusions; no
+runtime feature is developed exclusively in this mirror.
 
 The current-state files are generated from a public **unconfigured template**.
 Their zero counts and `not_probed` states do not assert an empty or healthy
@@ -56,9 +57,10 @@ The regression fixture rejects a redundant start while still proving that a
 stopped store is started and failed API startup blocks Watchdog. The five
 native Windows startup checks pass on the private source.
 
-Hosted CI did not execute for the initial publication: GitHub reported an
-account billing lock before any job steps ran. Local results above remain the
-verification evidence; this is not a green hosted-CI claim.
+The initial publication was blocked by GitHub billing before job steps ran.
+That block is cleared. Check the run matching the source commit in
+[GitHub Actions](https://github.com/GoodQ02/goodq-memory-engine/actions)
+for hosted results; local validation and hosted validation are separate evidence.
 
 ## Watchdog stale-owner follow-up
 
@@ -66,3 +68,16 @@ A stale lock could refer to a process ID recycled by Windows. The owner check
 now requires the process to predate the lock and preserves an owner whose
 identity cannot be read. Native lock, safety and real runtime lifecycle tests
 pass (11 tests); the unrelated process is never terminated.
+
+## Fresh-checkout hosted follow-up
+
+Fresh-checkout verification caught two links to excluded internal archives in
+the changelog. Those links now describe the public scope instead of implying
+that private archives are available here.
+
+The full hosted suite then passed 4,340 tests and found two public-scope fixture
+mismatches. The retrieval-context matrix covers every published caller; the
+private corpus-report case is replaced by an assertion that its excluded script
+stays absent. The runtime-evidence listing test expects the explicitly unqualified
+anonymous epoch from this snapshot. Both adaptations preserve the private
+repository's original tests and change no product code or runtime behavior.

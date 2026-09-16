@@ -157,15 +157,14 @@ FIXED_ORIGIN_CALLS: tuple[tuple[str, str, str, int, str], ...] = (
     ("agents/mini_agent_client.py", "q_client", "query", 1, "agent.reasoning"),
     ("cli/retrieve.py", "q_client", "query", 1, "human.cli.retrieve"),
     ("cli/test_ingestion.py", "engine", "search_multimodal", 1, "system.healthcheck"),
-    (
-        "scripts/ucf/generate_birth_certificate.py",
-        "engine",
-        "search_text",
-        3,
-        "system.healthcheck",
-    ),
     ("cli/observability_health.py", "client", "query", 1, "system.healthcheck"),
 )
+
+
+def test_private_corpus_report_is_not_part_of_public_source() -> None:
+    # The private repository checks this report's retrieval origin separately.
+    # This snapshot must not publish its host paths or corpus-specific queries.
+    assert not (REPO_ROOT / "scripts/ucf/generate_birth_certificate.py").exists()
 
 
 @pytest.mark.parametrize(

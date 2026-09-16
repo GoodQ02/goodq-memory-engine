@@ -43,7 +43,7 @@ def test_runtime_evidence_runner_lists_without_calling_services():
 
     assert result.returncode == 0, result.stderr
     assert "profile=golden" in result.stdout
-    assert "epoch=epoch_2026_07_05_home_memory_clean_01" in result.stdout
+    assert "epoch=epoch_public_example_unqualified" in result.stdout
     assert "test_runtime_profile_services.py" in result.stdout
 
 

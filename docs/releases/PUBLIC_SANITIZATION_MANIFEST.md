@@ -6,7 +6,7 @@
 
 ## Source and authority
 
-- Private development source: `fcb8dbfc037a9bf857c6c2d6a654a7ac0e911535` (`dev`).
+- Private development source: `26d49e423f268c7704c74457019fd9ba857e4a27` (`dev`).
 - Public parent: `eca11dddf8c27e2483361d9f19adea9261bbc833` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
@@ -59,3 +59,10 @@ native Windows startup checks pass on the private source.
 Hosted CI did not execute for the initial publication: GitHub reported an
 account billing lock before any job steps ran. Local results above remain the
 verification evidence; this is not a green hosted-CI claim.
+
+## Watchdog stale-owner follow-up
+
+A stale lock could refer to a process ID recycled by Windows. The owner check
+now requires the process to predate the lock and preserves an owner whose
+identity cannot be read. Native lock, safety and real runtime lifecycle tests
+pass (11 tests); the unrelated process is never terminated.

@@ -7,7 +7,7 @@
 No runtime or corpus was observed. Zero counts mean unconfigured placeholders;
 they do not prove an empty installation, service health, or retrieval readiness.
 
-- Template identity: `fdb71559f3db95ea`
+- Template identity: `94274c6efb049ee8`
 - Template date: `2026-09-16T08:00:00Z`
 - Placeholder epoch: `epoch_public_release_candidate`
 

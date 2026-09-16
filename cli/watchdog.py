@@ -1357,12 +1357,19 @@ class WatchdogProcessor:
         logger.info("Watchdog stopped")
 
 
-def _pid_exists(pid: int) -> bool:
-    """Check if a process ID exists on the system."""
+def _pid_exists(pid: int, *, created_before: float | None = None) -> bool:
+    """Check liveness, rejecting a recycled PID born after its lock was written."""
     try:
         import psutil
+        if created_before is not None:
+            try:
+                return psutil.Process(pid).create_time() <= created_before
+            except psutil.NoSuchProcess:
+                return False
         return psutil.pid_exists(pid)
     except ImportError:
+        if created_before is not None:
+            raise RuntimeError("Cannot verify lock owner birth without psutil; preserving lock")
         # Fallback for when psutil is not available
         if os.name == 'nt':
             import subprocess
@@ -1468,13 +1475,14 @@ def main():
             if not content:
                 raise ValueError("Lockfile is empty")
             old_pid = int(content)
-            # Check if process still exists
-            if _pid_exists(old_pid):
+            # PID liveness alone can mistake an unrelated recycled ID for the
+            # old owner. Unreadable process identity fails closed below.
+            if _pid_exists(old_pid, created_before=lockfile.stat().st_mtime):
                 logger.error(f"Watchdog already running (PID {old_pid}). Exiting.")
                 sys.exit(1)
             else:
                 # Dead process, remove stale lock
-                logger.warning(f"Removing stale lock from dead process {old_pid}")
+                logger.warning(f"Removing stale lock from dead or recycled process {old_pid}")
                 lockfile.unlink()
                 # Try again
                 lock_handle = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)

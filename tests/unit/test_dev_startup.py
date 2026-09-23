@@ -620,7 +620,7 @@ def _request_stop(sandbox, receipt=None):
     )
 
 
-def _stop_current(sandbox, port, timeout=3, action="StopCurrent"):
+def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powershell.exe"):
     """Run the real stop caller; only the unrelated machine process scan is scoped."""
     harness = sandbox / "stop-current-harness.ps1"
     harness.write_text(
@@ -637,7 +637,7 @@ def _stop_current(sandbox, port, timeout=3, action="StopCurrent"):
     log = (sandbox / "stop-current.log").open("wb")
     try:
         return subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            [shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
              "-File", str(harness), "-Script", str(sandbox / "start_goodq_dev.ps1"),
              "-Port", str(port), "-Timeout", str(timeout), "-Action", action],
             env=env, stdout=log, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
@@ -647,7 +647,8 @@ def _stop_current(sandbox, port, timeout=3, action="StopCurrent"):
 
 
 @pytest.mark.parametrize("newer_stale_receipt", [False, True])
-def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer_stale_receipt):
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer_stale_receipt, shell):
     def exercise(sandbox, process):
         initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
         if newer_stale_receipt:
@@ -656,7 +657,9 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
             directory.mkdir()
             (directory / "supervisor.json").write_text(json.dumps(stale), encoding="utf-8")
         port = int(initial["api_endpoint"].rsplit(":", 1)[1])
-        with _stop_current(sandbox, port) as stopper:
+        with _stop_current(sandbox, port, action="CheckRunning", shell=shell) as checker:
+            assert checker.wait(timeout=8) == 0, (sandbox / "stop-current.log").read_text(errors="replace")
+        with _stop_current(sandbox, port, shell=shell) as stopper:
             try:
                 _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=8)
                 assert stopper.poll() is None, "Stop caller returned before active work drained"

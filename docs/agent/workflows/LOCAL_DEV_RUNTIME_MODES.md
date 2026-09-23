@@ -1,20 +1,14 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-09-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-23 -->
 
 # Local Dev Runtime Modes
 
-Use this runbook to switch the desktop between GoodQ development work and a
-low-GPU-overhead desktop session. It owns the paired `dev_on.bat` and
-`dev_off.bat` behavior; it does not authorize ingestion, collection cleanup,
-model downloads, or configuration rewrites.
-
-The user's workstation target includes GoodQ, Hermes, both intentional Ollama
-lanes, and the supporting compute services. Dev Off should drain their work and
-release development/AI allocations for gaming or other GPU work. That complete
-target is not yet qualified. R-19 in the sole roadmap owns the remaining gates.
-The caller changes below are isolated repair source; live shortcuts and core
-environment selection remain unchanged.
+This runbook covers GoodQ's own `dev_on.bat` and `dev_off.bat` controls. They
+manage the supervised API/Watchdog, the configured GoodQ WSL vLLM/audio
+extension, and the retained Windows Qdrant service. They do not control other
+workstation applications or an ambient Ollama server. Neither script authorizes
+ingestion, collection cleanup, model downloads, or configuration rewrites.
 
 ## Dev On
 
@@ -24,20 +18,21 @@ It performs these actions in order:
 
 1. Requires `GOODQ_WSL_DISTRO` from the process environment or the checkout's
    environment file. It must not select an unrelated distro by discovery order.
-2. Uses `start_goodq_dev.ps1 -CheckStart` to reject existing owners before
-   compute startup, and validates config using the same core interpreter binding.
+2. Uses `start_goodq_dev.ps1 -CheckRunning` to recognize one healthy existing
+   supervisor. If none exists, `-CheckStart` rejects an unowned or competing
+   runtime before compute startup. It validates config with the core interpreter.
 3. Synchronizes only the three versioned WSL audio worker files when their
    deployed hashes differ, then fails closed unless every deployed hash matches.
 4. Starts the canonical vLLM controls, waits up to 90 seconds for its advertised
    loopback models endpoint to respond, and confirms loopback Qdrant is reachable.
-5. Runs the existing `start_goodq_dev.ps1 -Supervise` owner in the foreground.
-   That owner starts the API before Watchdog, binds exact process/job identities,
-   and owns readiness, restart/backoff, and drain receipts. There are no separate
-   shell-wrapped API/Watchdog launches or termination by port/name.
-6. Enables `GOODQ_PREWARM_RETRIEVAL_MODELS=1` for that supervised invocation. The
-   API and any replacement API use the same optional encoder pre-warm policy.
-7. Preserves a failed supervisor result as a nonzero caller result. Normal return
-   means the supervised runtime has stopped; it is not a new readiness claim.
+5. Rechecks and reuses the existing supervisor if it owns a healthy API and
+   Watchdog. Otherwise it runs `start_goodq_dev.ps1 -Supervise` in the foreground.
+   That owner binds exact process/job identities and owns readiness, restart,
+   backoff, and drain receipts. There is no separate API/Watchdog launcher.
+6. Enables `GOODQ_PREWARM_RETRIEVAL_MODELS=1` for a newly supervised invocation.
+   It does not restart a healthy runtime merely to change pre-warm.
+7. Preserves a failed supervisor result as a nonzero caller result. A normal
+   return from the reuse branch means the existing owner is still running.
 
 The pre-warm is fail-soft: an unavailable optional encoder is logged and does
 not prevent the API from starting. It uses pinned local model caches only.
@@ -49,9 +44,11 @@ importable but stale worker deployment.
 
 ### Operator Receipt
 
-Dev On displays its prerequisite checks, then the canonical supervisor's output.
-Keep that supervisor window open and use Dev Off for an orderly stop. Per-attempt
-logs and receipts are under the printed `%TEMP%/goodq-startup-<invocation>` path.
+Dev On displays its prerequisite checks and either confirms reuse or shows the
+new supervisor's output. Keep a foreground supervisor window open if Dev On
+created it; use Dev Off for an orderly stop. Another local launcher may also
+use `start_goodq_dev.ps1 -Supervise` as the same owner.
+Per-attempt logs and receipts are under `%TEMP%/goodq-startup-<invocation>`.
 Process liveness, HTTP response, model readiness, and successful scene work are
 separate observations. A blocked node or nonzero owner result remains a failure.
 
@@ -76,9 +73,10 @@ release and competing Dev On startup during that gap; no child is not proof of
 an absent stack. Retry after recovery or inspect the owner's terminal receipt.
 
 Only after that gate may the existing vLLM stop control run and the explicitly
-configured GoodQ distro be terminated. Other WSL distros are separate owners;
-the caller no longer invokes a global WSL shutdown. No model files, indexes,
-or canonical data are deleted.
+configured GoodQ distro be terminated. Shutdown verification waits for two
+consecutive absence observations to tolerate a transient WSL status error.
+Other WSL distros are separate owners; there is no global WSL shutdown. No
+model files, indexes, or canonical data are deleted.
 
 The vLLM batch entrypoint delegates to `scripts/stop_vllm_servers.ps1`. It checks
 the systemd stop result and service state, Linux processes/listeners, actual
@@ -92,14 +90,10 @@ Qdrant intentionally remains running on loopback. It uses no GPU and avoids a
 database-service restart when returning to development. It is not a remote
 access surface by virtue of remaining local.
 
-Dev Off reports the GoodQ boundaries and explicitly leaves whole-workstation
-release unverified. The retained ambient-host Ollama unload is not proof for
-both lanes, and Hermes producers are not yet part of this caller's drain. These
-limitations must close before a full gaming-mode claim or live consolidation.
-The user's full Dev Off scope includes NOMAD as well as Hermes and both Ollama
-lanes. Their producer/database drain and startup owners remain the next gate.
-The current exit code covers this bounded GoodQ workflow. Qdrant health and the
-informational `nvidia-smi` snapshot do not establish global release.
+Dev Off does not unload ambient Ollama models or stop unrelated workloads.
+Their owners must provide their own controls. Its exit code covers
+this bounded GoodQ workflow. Qdrant health and the informational `nvidia-smi`
+snapshot do not establish a whole-workstation resource release.
 
 Do not use a global GPU reset or kill unrelated desktop processes to reclaim
 display-managed VRAM. Those operations can disrupt the active desktop and are

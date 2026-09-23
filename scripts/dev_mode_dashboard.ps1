@@ -73,7 +73,7 @@ if ($Event -in 'node', 'final' -and [string]::IsNullOrWhiteSpace($State)) {
 
 switch ($Event) {
     'start' {
-        $title = if ($Mode -eq 'dev-on') { 'DEV ON / BUILD MODE' } else { 'DEV OFF / OPEN DESKTOP' }
+        $title = if ($Mode -eq 'dev-on') { 'GOODQ DEV ON' } else { 'GOODQ DEV OFF' }
         Write-Output '╔════════════════════════════════════════════════════╗'
         Write-Output "║ $title"
         Write-Output '╠════════════════════════════════════════════════════╣'
@@ -88,11 +88,11 @@ switch ($Event) {
     'final' {
         $label = Get-StateLabel $State
         $title = if ($State -eq 'blocked') {
-            if ($Mode -eq 'dev-on') { 'BUILD MODE BLOCKED' } else { 'OPEN DESKTOP BLOCKED' }
+            if ($Mode -eq 'dev-on') { 'GOODQ DEV ON BLOCKED' } else { 'GOODQ DEV OFF BLOCKED' }
         } elseif ($Mode -eq 'dev-on') {
-            'SYSTEM READY — BUILD MODE'
+            'GOODQ SERVICES READY'
         } else {
-            'OPEN DESKTOP — GPU SERVICES RELEASED'
+            'GOODQ COMPUTE RELEASED'
         }
         Write-Output '╠════════════════════════════════════════════════════╣'
         Write-DashboardLine $label $title

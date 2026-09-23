@@ -3,32 +3,40 @@ setlocal
 set "DEV_ON_EXIT_CODE=0"
 pushd "%~dp0" || exit /b 1
 set "GOODQ_MODE_ROOT=%~dp0"
-REM GoodQ4All - Local Agent Mode (Dev On)
-REM Validates local config, then starts the GoodQ-owned runtime services.
+REM GoodQ4All - Dev On. Only GoodQ-owned services are managed here.
+REM A GoodQ-specific URL override remains available; ignore ambient Ollama binds.
+set "OLLAMA_HOST="
 REM Resolve the explicit binding before the legacy helper's discovery fallback.
 set "GOODQ_MODE_WSL="
-for /f "delims=" %%D in ('powershell -NoProfile -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQWslDistro -RequireConfigured"') do set "GOODQ_MODE_WSL=%%D"
+for /f "delims=" %%D in ('powershell -NoProfile -ExecutionPolicy Bypass -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQWslDistro -RequireConfigured"') do set "GOODQ_MODE_WSL=%%D"
 if not defined GOODQ_MODE_WSL goto :blocked
 set "GOODQ_WSL_DISTRO=%GOODQ_MODE_WSL%"
 call "%~dp0scripts\_lib\interpreter_bindings.bat"
 
 call :dashboard -Event start
 
-REM Refuse collisions before loading models or changing WSL worker files.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -CheckStart
-if errorlevel 1 goto :blocked
+REM Reuse the sign-in supervisor when it already owns a healthy API/Watchdog.
+REM Otherwise refuse collisions before loading models or changing WSL files.
+set "GOODQ_REUSE_RUNTIME=0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -CheckRunning >nul 2>&1
+if not errorlevel 1 (
+    set "GOODQ_REUSE_RUNTIME=1"
+) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -CheckStart
+    if errorlevel 1 goto :blocked
+)
 
 echo [DEV ON] Resolving the same core interpreter as the canonical owner...
 set "PYTHONPATH=%~dp0"
 set "PYTHON_EXE="
-for /f "delims=" %%P in ('powershell -NoProfile -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQPythonExe"') do set "PYTHON_EXE=%%P"
+for /f "delims=" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command ". (Join-Path $env:GOODQ_MODE_ROOT 'scripts\_lib\interpreter_bindings.ps1'); Get-GoodQPythonExe"') do set "PYTHON_EXE=%%P"
 if not defined PYTHON_EXE goto :blocked
 if not exist "%PYTHON_EXE%" goto :blocked
 
 echo [DEV ON] Validating the resolved configuration...
 "%PYTHON_EXE%" -c "from steps.common.config_loader import load_configs, validate_config_mapping; validate_config_mapping(load_configs())"
 if errorlevel 1 (
-    echo [ERROR] Config validation failed. Local Agent Mode was not started.
+    echo [ERROR] Config validation failed. GoodQ Dev On was not started.
     call :dashboard -Event node -Node CONFIG -State blocked -Message "configuration validation failed"
     goto :blocked
 )
@@ -59,7 +67,7 @@ call :dashboard -Event node -Node vLLM -State ready -Message "speed endpoint is 
 
 echo [DEV ON] Starting local database services (Qdrant)...
 net start "GoodQ_Qdrant" >nul 2>&1
-powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:6333/collections | Out-Null; exit 0 } catch { Write-Error $_; exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:6333/collections | Out-Null; exit 0 } catch { Write-Error $_; exit 1 }"
 if errorlevel 1 (
     echo [ERROR] Qdrant is not reachable on 127.0.0.1:6333.
     call :dashboard -Event node -Node QDRANT -State blocked -Message "loopback health check failed"
@@ -69,9 +77,14 @@ call :dashboard -Event node -Node QDRANT -State ready -Message "loopback store i
 
 REM This foreground PowerShell process is the one canonical supervisor. Its
 REM startup/health/drain receipts own the result; no second API/Watchdog launcher.
+if "%GOODQ_REUSE_RUNTIME%"=="1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -CheckRunning
+    if errorlevel 1 goto :blocked
+    echo [DEV ON] Existing supervised GoodQ API and Watchdog retained.
+    goto :finish
+)
 echo [DEV ON] Starting the canonical supervised GoodQ runtime...
 echo [DEV ON] Keep this supervisor window open. Use Dev Off to drain active work.
-echo [DEV ON] Hermes and whole-workstation model readiness require their separate gates.
 set "GOODQ_PREWARM_RETRIEVAL_MODELS=1"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_goodq_dev.ps1" -Supervise
 set "DEV_ON_EXIT_CODE=%ERRORLEVEL%"

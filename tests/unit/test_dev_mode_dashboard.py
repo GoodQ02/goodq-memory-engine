@@ -28,10 +28,10 @@ def _dashboard(*args: str) -> str:
     return completed.stdout
 
 
-def test_start_renders_the_fixed_build_mode_signal_path():
+def test_start_renders_the_goodq_signal_path():
     output = _dashboard("-Mode", "dev-on", "-Event", "start")
 
-    assert "DEV ON / BUILD MODE" in output
+    assert "GOODQ DEV ON" in output
     assert "[CONFIG]" in output
     assert "[WSL AUDIO]" in output
     assert "[vLLM]" in output
@@ -69,5 +69,5 @@ def test_dev_off_final_calls_out_retained_qdrant():
         "Qdrant retained on loopback",
     )
 
-    assert "OPEN DESKTOP — GPU SERVICES RELEASED" in output
+    assert "GOODQ COMPUTE RELEASED" in output
     assert "Qdrant retained on loopback" in output

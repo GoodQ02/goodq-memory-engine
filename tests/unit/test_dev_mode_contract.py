@@ -23,6 +23,7 @@ def test_dev_off_keeps_loopback_qdrant_available_for_fast_dev_return():
 
     assert 'net stop "goodq_qdrant"' not in dev_off
     assert "qdrant remains available" in dev_off
+    assert "ollama ps" not in dev_off
 
 
 def test_dev_on_enables_retrieval_encoder_prewarm_for_its_api_process():

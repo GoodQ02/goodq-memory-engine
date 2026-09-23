@@ -1,12 +1,12 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_OPERATOR_REFERENCE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-23 -->
 
 # Ollama Port Boundaries
 
 > **Status**: Active operator reference  
-> **Applies to**: GOOD-CUBE (desktop), downstream installs  
-> **Last verified**: v2.5.8-rc2 at 9510473e
+> **Applies to**: GoodQ installs and optional operator inference lanes
+> **Last verified**: source behavior at the public update
 
 ## Port Assignments
 
@@ -23,22 +23,23 @@
 - Reserved for the Hermes agent runtime on GOOD-CUBE.
 - Runs operator-grade reasoning models (hermes-gemma4-64k:12b, gemma4:12b, phi4).
 - Configured via `%SystemDrive%\Tools\hermes-runtime\config.yaml`.
-- Bound by the User-level `OLLAMA_HOST=127.0.0.1:31434` environment variable.
+- If used, bind this lane only in its launcher process; do not set a persistent
+  User-level `OLLAMA_HOST` that changes unrelated GoodQ launches.
 - **Never** the public installer default.
 - **Never** silently written or required by the GoodQ installer.
-- Allowed in GoodQ only as an explicitly labeled legacy/operator fallback.
+- Allowed in GoodQ only through an explicitly configured operator model or override.
 
 ## GoodQ Ollama Endpoint Precedence
 
-GoodQ resolves its Ollama endpoint in this order:
+For `lib/llm_client.py` model endpoints, the precedence is:
 
-1. **`GOODQ_OLLAMA_URL`** — explicit GoodQ-specific override (env var or `.env.local`).
-2. **`configs/config.yaml` → `ollama_url`** — per-deployment config override.
-3. **`http://127.0.0.1:11434`** — ecosystem default.
-4. **`http://127.0.0.1:31434`** — legacy/operator fallback only, with clear log warning.
-5. **Unavailable** — neither port responds; pipeline logs a warning and disables LLM features.
+1. **`GOODQ_OLLAMA_URL`** — explicit GoodQ-specific full-URL override.
+2. **`OLLAMA_HOST`** — process-level host-and-port override, if present.
+3. **The model's configured base URL and port.** The default configuration
+   points to `http://127.0.0.1:11434/v1`.
 
-If both 11434 and 31434 respond, GoodQ prefers 11434 unless explicitly configured otherwise.
+Endpoint selection does not probe or silently switch between 11434 and 31434.
+Reachability is checked separately. An operator model may explicitly use 31434.
 
 ## Environment Variables
 
@@ -52,9 +53,8 @@ If both 11434 and 31434 respond, GoodQ prefers 11434 unless explicitly configure
 
 - Process/service-level Ollama bind address override.
 - Controls which address and port Ollama listens on.
-- On GOOD-CUBE, this is currently set to `127.0.0.1:31434` at the User registry level to support Hermes.
-- **Avoid relying on this globally for GoodQ.** GoodQ should use `GOODQ_OLLAMA_URL` or config-level overrides instead.
-- Future improvement: scope `OLLAMA_HOST` to Hermes launch scripts only, removing it from the persistent User registry so new tools default to 11434.
+- Avoid setting this persistently for all applications. A process-level value
+  overrides the model's configured GoodQ endpoint.
 
 ## Rules
 
@@ -63,13 +63,13 @@ If both 11434 and 31434 respond, GoodQ prefers 11434 unless explicitly configure
 - Do not bind Ollama to `0.0.0.0` by default.
 - GoodQ installer must not write or require `OLLAMA_HOST`.
 - The 31434 Ollama instance is Hermes's responsibility, not GoodQ's.
-- GoodQ may detect and use 31434 as a fallback, but must clearly label it as legacy/operator in logs and docs.
+- GoodQ may use 31434 only through an explicitly configured operator model or override.
 
 ## Downstream Installs
 
-On machines without Hermes (e.g., GOOD-SPEED-32, public users):
+On machines without an operator inference lane:
 
 - Only port 11434 is expected.
 - `OLLAMA_HOST` should be unset (Ollama uses its built-in default of 11434).
-- GoodQ fallback to 31434 will simply find nothing and move on.
+- GoodQ does not require the 31434 operator lane.
 - No action required from the user.

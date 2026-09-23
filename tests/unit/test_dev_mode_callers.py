@@ -42,7 +42,8 @@ public class Boundary {
             Console.WriteLine(distro);
         }
         if (joined.Contains("start_goodq_dev.ps1")) {
-            string key = joined.Contains("-StopCurrent") ? "STOP" : joined.Contains("-Supervise") ? "SUPERVISE" : "CHECK";
+            string key = joined.Contains("-StopCurrent") ? "STOP" : joined.Contains("-Supervise") ? "SUPERVISE" :
+                joined.Contains("-CheckRunning") ? "RUNNING" : "CHECK";
             string value = Environment.GetEnvironmentVariable("GOODQ_MODE_TEST_" + key);
             if (!string.IsNullOrEmpty(value)) return int.Parse(value);
         }
@@ -87,13 +88,14 @@ def run_mode(tmp_path, mode_boundary):
     for command in ("powershell", "pwsh", "python", "wsl", "net", "ollama", "nvidia-smi"):
         shutil.copyfile(mode_boundary, shims / f"{command}.exe")
 
-    def run(mode, *, check=0, supervise=0, stop=0, distro="Ubuntu-22.04", vllm_stop=0):
+    def run(mode, *, check=0, running=31, supervise=0, stop=0, distro="Ubuntu-22.04", vllm_stop=0):
         events = root / "events"
         events.mkdir()
         env = os.environ.copy()
         env.update(PATH=str(shims) + os.pathsep + os.environ["PATH"], CONDA_PREFIX=str(shims),
                    GOODQ_NO_PAUSE="1", GOODQ_MODE_TEST_EVENTS=str(events),
-                   GOODQ_MODE_TEST_CHECK=str(check), GOODQ_MODE_TEST_SUPERVISE=str(supervise),
+                   GOODQ_MODE_TEST_CHECK=str(check), GOODQ_MODE_TEST_RUNNING=str(running),
+                   GOODQ_MODE_TEST_SUPERVISE=str(supervise),
                    GOODQ_MODE_TEST_STOP=str(stop), GOODQ_MODE_TEST_DISTRO=distro,
                    GOODQ_MODE_TEST_VLLM=str(vllm_stop),
                    DEV_ON_EXIT_CODE="73", DEV_OFF_EXIT_CODE="74")
@@ -138,7 +140,7 @@ def test_dev_off_waits_for_owner_before_teardown_and_never_force_kills_windows_r
     teardown, = [i for i, (name, _) in enumerate(calls) if name == "stop_vllm"]
     assert stop < teardown
     assert not any("Stop-Process" in arg for _, args in calls for arg in args)
-    assert [(name, args) for name, args in calls if name == "wsl"] == [
+    assert [(name, args) for name, args in calls if name == "wsl" and args[:1] == ["--terminate"]] == [
         ("wsl", ["--terminate", "Ubuntu-22.04"])
     ], "Dev Off crossed the selected distro boundary"
 
@@ -156,6 +158,7 @@ def test_dev_off_uses_owner_release_instead_of_an_http_failure_as_absence(run_mo
     assert not any("38005/v1/models" in arg for _, args in calls for arg in args), (
         "Dev Off still substitutes a failed HTTP request for endpoint absence"
     )
+    assert not any(name == "ollama" for name, _ in calls), "Dev Off affected an unrelated Ollama lane"
 
 
 def test_dev_on_preserves_supervisor_failure_and_does_not_spawn_competing_roles(run_mode):
@@ -172,6 +175,15 @@ def test_dev_on_normal_supervisor_exit_is_not_an_ambient_failure_or_new_readines
     assert result.returncode == 0, result.stdout + result.stderr
     assert _owner(calls, "-Supervise")
     assert "Local agent mode activated" not in result.stdout
+
+
+def test_dev_on_reuses_a_verified_signin_supervisor(run_mode):
+    result, calls = run_mode("on", running=0)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(_owner(calls, "-CheckRunning")) == 2
+    assert not _owner(calls, "-CheckStart")
+    assert not _owner(calls, "-Supervise")
+    assert any(name == "start_vllm" for name, _ in calls)
 
 
 @pytest.mark.parametrize("mode", ["on", "off"])

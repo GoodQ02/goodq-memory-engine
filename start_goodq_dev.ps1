@@ -14,11 +14,29 @@ param(
     # Dev Off discovers this checkout's surviving invocation, then waits for
     # the owner's terminal drain evidence. Explicit StopReceipt remains request-only.
     [switch]$StopCurrent,
-    [switch]$CheckStart
+    [switch]$CheckStart,
+    [switch]$CheckRunning
 )
 
 $ErrorActionPreference = 'Stop'
 $rootDir = $PSScriptRoot
+function Get-GoodQUtcTicks($Value) {
+    # PowerShell 7 deserializes ISO timestamps as DateTime; Windows PowerShell
+    # leaves them as strings. Re-parsing a DateTime as text applies local time.
+    if ($Value -is [DateTime]) { return $Value.ToUniversalTime().Ticks }
+    return [DateTimeOffset]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture).UtcDateTime.Ticks
+}
+function Read-GoodQReceiptText([string]$Path) {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        try { return [IO.File]::ReadAllText($Path) }
+        catch [IO.IOException] {
+            $code = $_.Exception.GetBaseException().HResult -band 0xffff
+            if ($code -notin @(32, 33) -or $timer.Elapsed.TotalSeconds -ge 1) { throw }
+            Start-Sleep -Milliseconds 50
+        }
+    }
+}
 function Initialize-GoodQLifecycleTypes {
     if ('GoodQ.RuntimeJobQuery' -as [type]) { return }
     Add-Type -TypeDefinition @'
@@ -77,8 +95,9 @@ function Assert-GoodQRuntimeAbsent {
         throw 'GoodQ processes or an API listener remain without a verified drain; preserve dependencies and inspect the owning runtime.'
     }
 }
-if ($StopCurrent -or $CheckStart) {
-    if ($StopReceipt -or $Supervise -or ($StopCurrent -and $CheckStart)) { throw 'Select exactly one runtime control action.' }
+if ($StopCurrent -or $CheckStart -or $CheckRunning) {
+    if ($StopReceipt -or $Supervise -or ($StopCurrent -and ($CheckStart -or $CheckRunning)) -or
+        ($CheckStart -and $CheckRunning)) { throw 'Select exactly one runtime control action.' }
     Initialize-GoodQLifecycleTypes
     $candidates = @()
     $armedSupervisors = @()
@@ -88,7 +107,7 @@ if ($StopCurrent -or $CheckStart) {
         $path = Join-Path $directory.FullName 'supervisor.json'
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $path = Join-Path $directory.FullName 'startup.json' }
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
-        try { $record = [IO.File]::ReadAllText($path) | ConvertFrom-Json }
+        try { $record = Read-GoodQReceiptText $path | ConvertFrom-Json }
         catch { Write-Warning "Cannot read runtime receipt $path; it cannot establish ownership."; continue }
         if (-not $record.repository -or
             [IO.Path]::GetFullPath($record.repository) -ne [IO.Path]::GetFullPath($rootDir) -or
@@ -110,7 +129,7 @@ if ($StopCurrent -or $CheckStart) {
             if ($writer) {
                 try {
                     if (-not $writer.HasExited -and $writer.StartTime.ToUniversalTime().Ticks -eq
-                        [DateTimeOffset]::Parse($record.supervisor_started_at_utc).UtcDateTime.Ticks) {
+                        (Get-GoodQUtcTicks $record.supervisor_started_at_utc)) {
                         $armedSupervisors += $writer.Id
                     }
                 } finally { $writer.Dispose() }
@@ -137,11 +156,17 @@ if ($StopCurrent -or $CheckStart) {
         }
         $StopReceipt = $candidates[0]
     }
+    if ($CheckRunning) {
+        if ($candidates.Count -ne 1 -or @($armedSupervisors | Sort-Object -Unique).Count -ne 1) {
+            throw 'No single live GoodQ supervisor owns both roles.'
+        }
+        $StopReceipt = $candidates[0]
+    }
 }
 if ($StopReceipt) {
     # Stop is a request to this receipt's invocation, never a process search or
     # startup action. It is also usable after the supervisor has failed/exited.
-    $receipt = [IO.File]::ReadAllText([IO.Path]::GetFullPath($StopReceipt)) | ConvertFrom-Json
+    $receipt = Read-GoodQReceiptText ([IO.Path]::GetFullPath($StopReceipt)) | ConvertFrom-Json
     if ([IO.Path]::GetFullPath($receipt.repository) -ne [IO.Path]::GetFullPath($rootDir) -or
         $receipt.lifecycle_protocol -ne 'windows_event_job_v1' -or
         $receipt.stop_event -cnotmatch '^Local\\GoodQRuntime-[0-9a-f]{32}$') {
@@ -160,7 +185,7 @@ if ($StopReceipt) {
         try {
             $null = $child.Handle
             if ($child.HasExited) { continue }
-            if ($child.StartTime.ToUniversalTime().Ticks -ne [DateTimeOffset]::Parse($identity.started_at_utc).UtcDateTime.Ticks) {
+            if ($child.StartTime.ToUniversalTime().Ticks -ne (Get-GoodQUtcTicks $identity.started_at_utc)) {
                 throw 'Stop receipt process identity no longer matches; refusing request.'
             }
             if (-not [GoodQ.RuntimeJobQuery]::Contains("$($receipt.stop_event).$role.$($child.Id)", $child.Handle)) {
@@ -170,6 +195,21 @@ if ($StopReceipt) {
         } finally { $child.Dispose() }
     }
     if (-not $matched) { throw 'Stop receipt has no surviving owned runtime.' }
+    if ($CheckRunning) {
+        if ($matched -ne 2 -or $receipt.state -ne 'monitoring' -or
+            [int]$armedSupervisors[0] -ne [int]$receipt.supervisor_pid) {
+            throw 'GoodQ supervisor is not monitoring both owned roles.'
+        }
+        $listeners = @(Get-NetTCPConnection -LocalPort $ApiPort -State Listen -ErrorAction Stop)
+        if ($listeners.Count -ne 1 -or $listeners[0].LocalAddress -ne '127.0.0.1' -or
+            $listeners[0].OwningProcess -ne [int]$receipt.api.pid) {
+            throw 'GoodQ API listener does not match the supervised role.'
+        }
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ApiPort/" -TimeoutSec 8
+        if ($response.StatusCode -ne 200) { throw 'GoodQ API is not responsive.' }
+        Write-Host "GoodQ supervised runtime verified (API $($receipt.api.pid), Watchdog $($receipt.watchdog.pid))."
+        return
+    }
     $event = [Threading.EventWaitHandle]::OpenExisting($receipt.stop_event)
     try { $null = $event.Set() } finally { $event.Dispose() }
     Write-Host 'Graceful stop requested. Completion requires a stopped receipt with drain_verified=true.'
@@ -178,7 +218,7 @@ if ($StopReceipt) {
         $drainClock = [Diagnostics.Stopwatch]::StartNew()
         do {
             if (Test-Path -LiteralPath $terminalPath -PathType Leaf) {
-                $terminal = [IO.File]::ReadAllText($terminalPath) | ConvertFrom-Json
+                $terminal = Read-GoodQReceiptText $terminalPath | ConvertFrom-Json
                 if ($terminal.stop_event -ne $receipt.stop_event -or $terminal.repository -ne $receipt.repository) {
                     throw 'Runtime identity changed while waiting for drain; dependencies are preserved.'
                 }
@@ -257,7 +297,12 @@ function Write-GoodQStartupReceipt([string]$State, [string]$Reason) {
 }
 trap {
     $failure = $_
-    try { if (-not $startupVerified) { Write-GoodQStartupReceipt 'failed' $failure.Exception.Message } }
+    try {
+        if (-not ($StopCurrent -or $StopReceipt -or $CheckStart -or $CheckRunning) -and -not $startupVerified -and
+            $startupLogDir -and (Get-Command Write-GoodQStartupReceipt -ErrorAction SilentlyContinue)) {
+            Write-GoodQStartupReceipt 'failed' $failure.Exception.Message
+        }
+    }
     catch { Write-Warning "Could not persist startup failure: $($_.Exception.Message)" }
     throw $failure
 }

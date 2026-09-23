@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `26d49e423f268c7704c74457019fd9ba857e4a27` (`dev`).
-- Public parent: `eca11dddf8c27e2483361d9f19adea9261bbc833` (`main`).
+- Private development source: `5aaf6f4385827bc520ce72300e598e446cff1c73` (`dev`).
+- Public parent: `40617af6e51c65e49831cd3a2b50ae94f3e08037` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -50,12 +50,32 @@ history is retained; the snapshot prevents new private history from being pushed
   apart from the declared comment examples and privacy exclusions.
 - Known source warnings: Pydantic class-based configuration is deprecated.
 
+For the 2026-09-23 supervised dev-mode update, the eight changed source/test
+files match the pinned private commit byte for byte. The four focused test
+modules pass 56 tests with two existing Pydantic deprecation warnings.
+Documentation drift, authority, dependency, banned-token, and installer
+semantic checks pass. A CI-profile bootstrap check passes with the same
+Baseline/GPU settings as hosted CI when this checkout's ignored workstation
+`.env.local` is excluded from the check. Hosted results must still be matched
+to the public commit after publication.
+
 ## Existing-store startup follow-up
 
 The supervisor queries Qdrant before requesting service-start permission.
 The regression fixture rejects a redundant start while still proving that a
 stopped store is started and failed API startup blocks Watchdog. The five
 native Windows startup checks pass on the private source.
+
+## Supervised dev-mode follow-up
+
+The portable supervisor, Dev On/Off scripts, dashboard labels, and focused tests
+are copied from the pinned private source. Dev On reuses one verified existing
+supervisor; Dev Off requests its receipt-bound drain before stopping the
+configured GoodQ WSL compute extension. Ambient Ollama models and unrelated
+workstation services are outside these scripts' scope. Public documentation
+describes the portable behavior without GOOD-CUBE shortcut, panel, or distro
+paths. The live sign-in shortcut and native panel remain private workstation
+integration, not public installer content.
 
 The initial publication was blocked by GitHub billing before job steps ran.
 That block is cleared. Check the run matching the source commit in

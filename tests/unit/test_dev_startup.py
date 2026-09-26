@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import errno
 import os
 from pathlib import Path
-import re
 import shutil
 import socket
 import subprocess
@@ -153,8 +153,6 @@ def launch(tmp_path):
         stream.write("\nfunction Get-GoodQPythonExe { return $env:GOODQ_STARTUP_TEST_PYTHON }\n")
     source_path = Path(os.environ.get("GOODQ_STARTUP_TEST_SOURCE", REPO_ROOT / "start_goodq_dev.ps1"))
     source = source_path.read_text(encoding="utf-8-sig")
-    # Legacy deployment root only; no startup branches or error policy altered.
-    source = re.sub(r"(?m)^\$rootDir = '[^']*'$", lambda _: "$rootDir = '" + str(sandbox).replace("'", "''") + "'", source)
     script = sandbox / "start_goodq_dev.ps1"
     script.write_text(source, encoding="utf-8-sig")
 
@@ -620,6 +618,7 @@ def _request_stop(sandbox, receipt=None):
     )
 
 
+@contextmanager
 def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powershell.exe"):
     """Run the real stop caller; only the unrelated machine process scan is scoped."""
     harness = sandbox / "stop-current-harness.ps1"
@@ -636,7 +635,7 @@ def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powersh
     env["PSMODULEPATH"] = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/Modules")
     log = (sandbox / "stop-current.log").open("wb")
     try:
-        return subprocess.Popen(
+        process = subprocess.Popen(
             [shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
              "-File", str(harness), "-Script", str(sandbox / "start_goodq_dev.ps1"),
              "-Port", str(port), "-Timeout", str(timeout), "-Action", action],
@@ -644,6 +643,25 @@ def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powersh
         )
     finally:
         log.close()
+    try:
+        yield process
+    finally:
+        # Popen.__exit__ waits indefinitely; a failed assertion or timeout must
+        # not strand the test in that wait. This is our own control caller only.
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+
+
+def _check_running(sandbox, checker):
+    # Include cold PowerShell/Add-Type/NetTCPIP startup in addition to the
+    # production HTTP timeout (8 seconds). This is a test deadline, not an SLA.
+    try:
+        code = checker.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        pytest.fail("CheckRunning exceeded 30 seconds:\n" +
+                    (sandbox / "stop-current.log").read_text(errors="replace"))
+    assert code == 0, (sandbox / "stop-current.log").read_text(errors="replace")
 
 
 @pytest.mark.parametrize("newer_stale_receipt", [False, True])
@@ -658,7 +676,7 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
             (directory / "supervisor.json").write_text(json.dumps(stale), encoding="utf-8")
         port = int(initial["api_endpoint"].rsplit(":", 1)[1])
         with _stop_current(sandbox, port, action="CheckRunning", shell=shell) as checker:
-            assert checker.wait(timeout=8) == 0, (sandbox / "stop-current.log").read_text(errors="replace")
+            _check_running(sandbox, checker)
         with _stop_current(sandbox, port, shell=shell) as stopper:
             try:
                 _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=8)
@@ -945,3 +963,21 @@ def test_supervisor_crash_preserves_work_and_receipt_bound_stop_still_reaches_ow
 
     result = launch("supervisor_crash", supervise=exercise)
     assert result["shell_exit"] != 0
+
+
+def test_control_caller_failure_reaps_only_its_process(tmp_path, monkeypatch):
+    real_popen = subprocess.Popen
+    owned = []
+
+    def start_sleeping_control(*args, **kwargs):
+        child = real_popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                           stdout=kwargs["stdout"], stderr=kwargs["stderr"],
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        owned.append(child)
+        return child
+
+    monkeypatch.setattr(subprocess, "Popen", start_sleeping_control)
+    with pytest.raises(subprocess.TimeoutExpired):
+        with _stop_current(tmp_path, 12345) as child:
+            child.wait(timeout=0.1)
+    assert len(owned) == 1 and owned[0].poll() is not None

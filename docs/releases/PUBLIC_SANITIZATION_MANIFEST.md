@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `bddbd83206c78431036aac4aeb1160a7d511009f` (`dev`).
-- Public parent: `d08ba886ef02a44845f6442b2dc4ea4a5c4f9571` (`main`).
+- Private development source: `7765cbdda8cd75f4f21b494077bddf8327119a6b` (`dev`).
+- Public parent: `839c8aa59f83770a614bef767a5331c4e247050c` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -130,3 +130,14 @@ is unchanged; the JSON matches private dev. Only public URL metadata and this
 release manifest changed. Documentation drift/authority, dependency drift,
 banned-token, and all 15 installer semantic checks pass. Upstream claim status
 and index completion are separate service-side checks, not release guarantees.
+## CI and startup-test cleanup - 2026-09-26
+
+The three changed CI/test files match private dev byte for byte. Control callers
+have bounded failure cleanup; the CheckRunning test budget includes shell startup
+in addition to its HTTP timeout. Obsolete fixture root/port rewriting is removed.
+Pull-request CI covers all changes and uses read-only permissions, a 45-minute
+job limit, cancellation of superseded runs, and runtime/test-duration diagnostics.
+Production launcher behavior and the locked dependency baseline are unchanged.
+Private validation passed 37 startup tests, 21 CI/installer contract tests, all
+15 installer semantic checks, and documentation/dependency/banned-token gates.
+Hosted full-suite results must be matched to these new commits separately.

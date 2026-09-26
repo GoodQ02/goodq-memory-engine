@@ -52,11 +52,11 @@ function Get-CimInstance {
 }
 function Get-NetTCPConnection {
     [CmdletBinding()]param($LocalPort, $State)
-    if ($LocalPort -and $LocalPort -notin @(30000, $Port)) {
+    if ($LocalPort -and $LocalPort -ne $Port) {
         throw 'Unexpected port query.'
     }
-    # The legacy script hardcodes 30000. Redirect only that deployment setting;
-    # every returned connection and owner belongs to the real isolated port.
+    # The portable launcher receives the isolated port explicitly. Keep real
+    # listener ownership checks scoped to that port.
     NetTCPIP\Get-NetTCPConnection -State Listen -ErrorAction Stop |
         Where-Object LocalPort -eq $Port
 }

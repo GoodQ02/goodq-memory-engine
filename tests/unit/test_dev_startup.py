@@ -19,6 +19,7 @@ import psutil
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HARNESS = Path(__file__).parent / "fixtures" / "dev_startup_harness.ps1"
+CONTROL_TIMEOUT_SECONDS = 30
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows logon contract")
 
 DUMMY = '''
@@ -279,7 +280,7 @@ def test_startup_preflight_does_not_start_services_or_children(launch):
 def test_stop_current_already_absent_does_not_start_services(launch):
     result = launch(check_start=True)
     with _stop_current(result["sandbox"], result["port"]) as stopper:
-        assert stopper.wait(timeout=10) == 0
+        assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0
     assert not (result["sandbox"] / "api.json").exists()
     assert not (result["sandbox"] / "watchdog.json").exists()
 
@@ -304,7 +305,7 @@ def test_foreign_port_collision_refuses_without_stopping_owner(launch, tmp_path)
         assert terminal["watchdog_pid"] is None
         assert str(child.pid) in terminal["reason"]
         with _stop_current(result["sandbox"], port) as stopper:
-            assert stopper.wait(timeout=10) != 0, "Dev Off accepted an unowned API listener"
+            assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0, "Dev Off accepted an unowned API listener"
         assert child.poll() is None, "Dev Off terminated an unowned API listener"
     finally:
         if child.poll() is None:
@@ -370,6 +371,10 @@ def _supervisor_snapshot(sandbox, process, predicate, timeout=15):
         if paths:
             try:
                 latest = json.loads(paths[0].read_text(encoding="utf-8-sig"))
+            except FileNotFoundError:
+                # Directory enumeration and opening are separate operations. A
+                # transient missing receipt is not state; retry within deadline.
+                pass
             except PermissionError as exc:
                 # ReplaceFile briefly holds a non-sharing handle. Retry only
                 # Windows sharing/access errors, within the same test deadline.
@@ -614,7 +619,7 @@ def _request_stop(sandbox, receipt=None):
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
          "-File", str(sandbox / "start_goodq_dev.ps1"), "-StopReceipt", str(receipt),
          "-ApiPort", data["api_endpoint"].rsplit(":", 1)[1]],
-        env=env, capture_output=True, text=True, timeout=8, creationflags=subprocess.CREATE_NO_WINDOW,
+        env=env, capture_output=True, text=True, timeout=CONTROL_TIMEOUT_SECONDS, creationflags=subprocess.CREATE_NO_WINDOW,
     )
 
 
@@ -657,7 +662,7 @@ def _check_running(sandbox, checker):
     # Include cold PowerShell/Add-Type/NetTCPIP startup in addition to the
     # production HTTP timeout (8 seconds). This is a test deadline, not an SLA.
     try:
-        code = checker.wait(timeout=30)
+        code = checker.wait(timeout=CONTROL_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         pytest.fail("CheckRunning exceeded 30 seconds:\n" +
                     (sandbox / "stop-current.log").read_text(errors="replace"))
@@ -679,11 +684,11 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
             _check_running(sandbox, checker)
         with _stop_current(sandbox, port, shell=shell) as stopper:
             try:
-                _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=8)
+                _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=CONTROL_TIMEOUT_SECONDS)
                 assert stopper.poll() is None, "Stop caller returned before active work drained"
                 assert not (sandbox / "work-completed.json").exists()
                 (sandbox / "release-work").touch()
-                assert stopper.wait(timeout=10) == 0, (sandbox / "stop-current.log").read_text(errors="replace")
+                assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0, (sandbox / "stop-current.log").read_text(errors="replace")
                 snapshots = [json.loads(p.read_text(encoding="utf-8-sig")) for p in sandbox.glob("goodq-startup-*/supervisor.json")]
                 terminal = next(s for s in snapshots if s["stop_event"] == initial["stop_event"])
                 assert terminal["state"] == "stopped" and terminal["drain_verified"] is True
@@ -702,7 +707,7 @@ def test_stop_current_timeout_preserves_busy_owner_and_returns_failure(launch):
     def exercise(sandbox, process):
         initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
         with _stop_current(sandbox, int(initial["api_endpoint"].rsplit(":", 1)[1]), timeout=.5) as stopper:
-            assert stopper.wait(timeout=10) != 0
+            assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0
         assert (sandbox / "drain-requested.json").exists(), "Caller never requested the owning runtime to drain"
         child = psutil.Process(initial["watchdog"]["pid"])
         assert child.environ()["GOODQ_STARTUP_TEST_ROOT"] == str(sandbox)
@@ -716,20 +721,22 @@ def test_stop_current_timeout_preserves_busy_owner_and_returns_failure(launch):
 def test_stop_current_does_not_claim_absence_during_double_child_backoff(launch):
     def exercise(sandbox, process):
         initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+        (sandbox / "hold-backoff").touch()
         _kill_owned_fixture(sandbox, initial["api"])
         _kill_owned_fixture(sandbox, initial["watchdog"])
         waiting = _supervisor_snapshot(sandbox, process, lambda s:
             s["state"] == "backoff" and not s["api"]["alive"] and not s["watchdog"]["alive"])
         port = int(waiting["api_endpoint"].rsplit(":", 1)[1])
         with _stop_current(sandbox, port) as stopper:
-            assert stopper.wait(timeout=5) != 0, "Armed supervisor was mistaken for an absent runtime"
+            assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0, "Armed supervisor was mistaken for an absent runtime"
         with _stop_current(sandbox, port, action="CheckStart") as checker:
-            assert checker.wait(timeout=5) != 0, "Dev On accepted another supervisor during backoff"
+            assert checker.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0, "Dev On accepted another supervisor during backoff"
         assert process.poll() is None, "The active supervisor was terminated"
+        (sandbox / "hold-backoff").unlink()
         _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring" and s["api"]["restarts"] == 1)
         assert _request_stop(sandbox).returncode == 0
 
-    result = launch(supervise=exercise, max_restarts=1, backoff=8)
+    result = launch("held_backoff", supervise=exercise, max_restarts=1, backoff=8)
     assert result["Completed"], result
 
 
@@ -738,9 +745,9 @@ def test_stop_current_does_not_claim_absence_before_the_first_child_starts(launc
         _wait_for_file(sandbox / "awaiting-store.json", process)
         port = json.loads((sandbox / "awaiting-store.json").read_text(encoding="utf-8-sig"))
         with _stop_current(sandbox, port) as stopper:
-            assert stopper.wait(timeout=5) != 0, "Starting owner was mistaken for an absent runtime"
+            assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0, "Starting owner was mistaken for an absent runtime"
         with _stop_current(sandbox, port, action="CheckStart") as checker:
-            assert checker.wait(timeout=5) != 0, "Dev On accepted another starting owner"
+            assert checker.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0, "Dev On accepted another starting owner"
         assert not (sandbox / "api.json").exists()
         (sandbox / "release-store").touch()
         _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
@@ -981,3 +988,28 @@ def test_control_caller_failure_reaps_only_its_process(tmp_path, monkeypatch):
         with _stop_current(tmp_path, 12345) as child:
             child.wait(timeout=0.1)
     assert len(owned) == 1 and owned[0].poll() is not None
+
+
+def test_supervisor_snapshot_retries_disappearing_receipt(tmp_path, monkeypatch):
+    folder = tmp_path / "goodq-startup-fixture"
+    folder.mkdir()
+    receipt = folder / "supervisor.json"
+    receipt.write_text('{"state": "monitoring"}')
+    read_text = Path.read_text
+    attempts = []
+
+    def transient_read(path, *args, **kwargs):
+        if path == receipt:
+            attempts.append(path)
+            if len(attempts) == 1:
+                raise FileNotFoundError(path)
+        return read_text(path, *args, **kwargs)
+
+    class LiveProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(Path, "read_text", transient_read)
+    observed = _supervisor_snapshot(tmp_path, LiveProcess(),
+                                    lambda s: s["state"] == "monitoring", timeout=1)
+    assert observed["state"] == "monitoring" and len(attempts) == 2

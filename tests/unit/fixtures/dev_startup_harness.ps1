@@ -36,7 +36,7 @@ function Start-Service {
     if ($Scenario -eq 'service_already_running') { throw 'Redundant start requires unnecessary service control rights.' }
     if ($Scenario -eq 'startup_owner_wait') {
         [IO.File]::WriteAllText((Join-Path $SandboxRoot 'awaiting-store.json'), ($Port | ConvertTo-Json))
-        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        $deadline = [DateTime]::UtcNow.AddSeconds(90)
         while (-not (Test-Path -LiteralPath (Join-Path $SandboxRoot 'release-store'))) {
             if ([DateTime]::UtcNow -ge $deadline) { throw 'Fixture store wait timed out.' }
             Start-Sleep -Milliseconds 50
@@ -59,6 +59,19 @@ function Get-NetTCPConnection {
     # listener ownership checks scoped to that port.
     NetTCPIP\Get-NetTCPConnection -State Listen -ErrorAction Stop |
         Where-Object LocalPort -eq $Port
+}
+function Start-Sleep {
+    [CmdletBinding()]param([int]$Milliseconds, [int]$Seconds)
+    # Hold the observed backoff state until both control callers inspect it.
+    # Testing a transient state must not race two cold PowerShell startups.
+    if ($Scenario -eq 'held_backoff' -and $state -eq 'backoff') {
+        $deadline = [DateTime]::UtcNow.AddSeconds(90)
+        while (Test-Path -LiteralPath (Join-Path $SandboxRoot 'hold-backoff')) {
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Fixture backoff release timed out.' }
+            Microsoft.PowerShell.Utility\Start-Sleep -Milliseconds 50
+        }
+    }
+    Microsoft.PowerShell.Utility\Start-Sleep @PSBoundParameters
 }
 function Write-Host {
     param([Parameter(ValueFromRemainingArguments=$true)]$Object)

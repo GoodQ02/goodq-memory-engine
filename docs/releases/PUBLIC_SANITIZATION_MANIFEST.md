@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `7765cbdda8cd75f4f21b494077bddf8327119a6b` (`dev`).
-- Public parent: `839c8aa59f83770a614bef767a5331c4e247050c` (`main`).
+- Private development source: `fa31aca9e22c57c65d33dde556ea6122a45654af` (`dev`).
+- Public parent: `2e3f0d7ebff3aa31a6571c5e465d07d85b965101` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -141,3 +141,10 @@ Production launcher behavior and the locked dependency baseline are unchanged.
 Private validation passed 37 startup tests, 21 CI/installer contract tests, all
 15 installer semantic checks, and documentation/dependency/banned-token gates.
 Hosted full-suite results must be matched to these new commits separately.
+The hosted private first-pass suite passed 4,346 tests. Public CI exposed two
+additional test races: snapshot disappearance between enumeration and reading,
+and control checks racing a transient backoff window. The follow-up retries
+only transient missing snapshots within the existing deadline, holds the fixture
+backoff until both checks finish, and applies consistent cold-shell time budgets.
+All 38 startup tests and 21 CI/installer tests pass locally. The two changed test
+files match private fa31aca9 byte for byte; production runtime logic is unchanged.

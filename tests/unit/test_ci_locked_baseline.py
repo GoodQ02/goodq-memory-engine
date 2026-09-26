@@ -37,3 +37,15 @@ def test_ci_lock_pins_the_public_mini_agent_release() -> None:
 
     assert MINI_AGENT_RELEASE in environment
     assert MINI_AGENT_RELEASE in requirements
+
+
+def test_ci_runs_native_lifecycle_separately_without_dropping_coverage() -> None:
+    workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["bootstrap-baseline"]["steps"]
+    native = next(step for step in steps if step.get("name") == "Windows startup lifecycle tests")
+    unit = next(step for step in steps if step.get("name") == "Unit test suite")
+    gate = next(step for step in steps if step.get("name") == "Installer semantic compatibility")
+    assert steps.index(gate) < steps.index(native) < steps.index(unit)
+    assert "pytest tests/unit/test_dev_startup.py" in native["run"]
+    assert "--ignore=tests/unit/test_dev_startup.py" in unit["run"]
+    assert not native.get("continue-on-error") and not native.get("if")

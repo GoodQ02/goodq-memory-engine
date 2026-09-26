@@ -393,7 +393,13 @@ def _supervisor_snapshot(sandbox, process, predicate, timeout=45):
             pytest.fail(f"Launcher exited instead of supervising its children: {latest}\n" +
                         "\n".join(diagnostics))
         time.sleep(0.04)
-    pytest.fail(f"Supervisor did not reach the required observed state: {latest}")
+    diagnostics = []
+    for path in [sandbox / "receipt.json", sandbox / "harness-console.log",
+                 *sandbox.glob("goodq-startup-*/*.stderr.log")]:
+        if path.is_file():
+            diagnostics.append(f"{path.name}: {path.read_text(errors='replace')[-4000:]}")
+    pytest.fail(f"Supervisor did not reach the required observed state: {latest}\n" +
+                "\n".join(diagnostics))
 
 
 def _kill_owned_fixture(sandbox, record):
@@ -635,6 +641,9 @@ def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powersh
     harness = sandbox / "stop-current-harness.ps1"
     harness.write_text(
         "param($Script, [int]$Port, [double]$Timeout, $Action)\n"
+        "[Console]::WriteLine('control-start ' + $Action + ' PowerShell ' + $PSVersionTable.PSVersion)\n"
+        "function Add-Type { [CmdletBinding()]param($TypeDefinition); [Console]::WriteLine('Add-Type begin'); Microsoft.PowerShell.Utility\\Add-Type @PSBoundParameters; [Console]::WriteLine('Add-Type end') }\n"
+        "function Get-NetTCPConnection { [CmdletBinding()]param($LocalPort,$State); [Console]::WriteLine('listener-query begin'); NetTCPIP\\Get-NetTCPConnection @PSBoundParameters; [Console]::WriteLine('listener-query end') }\n"
         "function Get-CimInstance { param($ClassName,$Filter) }\n"
         "function Start-Service { param($Name); throw 'Unexpected service action in a stop/preflight control' }\n"
         "$arguments=@{ApiPort=$Port;DrainTimeoutSeconds=$Timeout}; $arguments[$Action]=$true\n"

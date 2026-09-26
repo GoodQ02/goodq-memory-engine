@@ -98,21 +98,18 @@ def test_heartbeat_updates_metadata(tmp_path):
     lock = FaissLock(index_path, timeout=1.0)
     lock.HEARTBEAT_INTERVAL_SECONDS = 0.1
     
-    lock.acquire()
-    assert lock.has_lock
-    
-    # Read initial heartbeat
-    initial_hb = lock.metadata["heartbeat"]
-    
-    # Wait for heartbeat thread to update
-    time.sleep(0.3)
-    
-    # Read metadata from file
-    with open(lock.lock_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
-        
-    assert meta["heartbeat"] > initial_hb
-    lock.release()
+    # Observe an actual update instead of assuming the scheduler runs the
+    # heartbeat thread within 300ms. Always release even if the assertion fails.
+    with lock:
+        initial_hb = lock.metadata["heartbeat"]
+        deadline = time.monotonic() + 5
+        while True:
+            with open(lock.lock_path, "r", encoding="utf-8") as stream:
+                meta = json.load(stream)
+            if meta["heartbeat"] > initial_hb:
+                break
+            assert time.monotonic() < deadline, "Heartbeat did not advance within five seconds"
+            time.sleep(0.02)
 
 
 def test_release_does_not_unlink_others(tmp_path):

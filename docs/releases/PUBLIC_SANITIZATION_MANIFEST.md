@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `df3f9831035205f76640beafa6f0cf765d506e71` (`dev`).
-- Public parent: `a4a4c880b7d73629e2f17c632218f3b6dcff1ce2` (`main`).
+- Private development source: `2c13cec6e8b11a74bbbdbf3cf63a88b8851dd76e` (`dev`).
+- Public parent: `b63e953253cb733509c7ffea2066444450b14237` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -155,3 +155,12 @@ allows legitimate PID reuse. Real-entrypoint fixtures get a separate 30-second
 startup budget; early exits include fixture diagnostics. All 39 startup tests
 and 21 CI/installer checks pass locally. Test sources match private df3f9831.
 Production lifecycle behavior is unchanged; hosted final results remain separate.
+A subsequent hosted run passed worker recovery but exposed a fixed-sleep heartbeat
+assertion and two native-process stalls. Native lifecycle tests now run in a
+separate mandatory CI step before the remaining unit suite; a coverage/order
+regression test prevents silently omitting them. Heartbeat validation observes
+actual progress within a deadline and releases the lock even on failure. Native
+control logs identify compilation and listener-query phases. All four changed
+source files match private 2c13cec6. Local focused checks passed (31 affected
+checks, then 27 final workflow/lock checks including the new coverage guard).
+No production runtime or dependency changes are included.

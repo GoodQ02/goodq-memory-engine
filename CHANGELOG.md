@@ -14,6 +14,11 @@ for the published scope.
 
 ## [Unreleased]
 
+### Changed
+- Route operator guidance by task and preserve explicit data-cleanup boundaries.
+- Prefer isolated probe stores; remove blanket collection-deletion instructions
+  and document the limits of the existing post-cleanup manifest helper.
+
 ## [3.0.0] - 2026-08-16 - Dual-Profile Offline Release
 
 ### Added

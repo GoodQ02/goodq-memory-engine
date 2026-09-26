@@ -7,53 +7,51 @@ description: Use for GoodQ4All repo runtime audits, clean memory starts, Qdrant 
 
 Use this skill when operating the GoodQ4All repo locally.
 
-## First Reads
+## Read For The Task
 
-1. `AGENTS.md`
-2. `docs/agent/PROJECT_ORIENTATION.md`
-3. `docs/agent/CURRENT_STATE.md`
-4. `docs/agent/current_state.json`
-5. The canonical contract for the subsystem you are touching
+Follow the applicable `AGENTS.md`. For unfamiliar or authority-sensitive work,
+read `docs/agent/PROJECT_ORIENTATION.md`; reuse it when already read this session.
+
+- For runtime-state questions, read the relevant current-state section and verify
+  it against the resolved configuration and live evidence. Generated state files
+  are snapshots, not permission or proof that cleanup remains necessary.
+- For clean-memory work, read `docs/agent/workflows/CLEAN_MEMORY_START.md`.
+- For a repair, read the relevant subsystem contract and the repair workflow below.
+- For documentation-only work, inspect the affected text and its authoritative
+  source. Do not start services, query personal stores, or preload runtime runbooks.
 
 ## Operating Rules
 
-- Start read-only: inspect config, runtime status, Qdrant, recent logs, and docs before changing anything.
-- Keep cleanup observable: write or inspect a manifest before destructive runtime cleanup.
-- Treat old Season, Seinfeld, witness, smoke, and prior home-movie test memory as disposable only when the current state file says so.
-- Use fresh epochs for new personal-memory tests; do not reuse old "clean" epoch labels without verifying emptiness.
-- Preserve source code behavior unless the task is specifically a code repair.
+- Inspect the affected surface before changing it; keep unrelated work intact.
+- Require explicit authorization covering destructive cleanup or ingestion.
+  A collection prefix, old epoch label, or historical state note never makes data
+  disposable. Resolve exact targets and preserve recovery evidence first.
+- Prefer a fresh isolated epoch and its own collections for an approved probe.
+  Verify emptiness and isolation; do not clear existing collections by default.
+- Preserve source behavior unless the task includes code repair.
+- Use current configured endpoints and the existing project environment. Probe
+  only the services relevant to the task; a successful health response alone
+  does not establish useful scene output.
 
-## Common Commands
+## Useful Checks
+
+From the repository root, when relevant:
 
 ```powershell
 git status --short --branch
 conda run --no-capture-output -n goodq_core python -m cli.print_config
-python scripts/docs/doc_drift_lint.py
 ```
 
-Qdrant health:
-
-```powershell
-Invoke-RestMethod -Uri 'http://127.0.0.1:6333/collections' -TimeoutSec 5
-```
-
-API health:
-
-```powershell
-Invoke-RestMethod -Uri 'http://127.0.0.1:30000/api/status' -TimeoutSec 5
-```
+Keep resolved configuration local and redact credentials before sharing it.
+For documentation changes, use `scripts/docs/doc_drift_lint.py`; distinguish
+pre-existing findings from findings introduced by the changed files.
 
 ## Clean Memory Starts
 
-Follow `docs/agent/workflows/CLEAN_MEMORY_START.md`. The safe pattern is:
-
-1. manifest old Qdrant collections
-2. point local config at a fresh epoch
-3. delete old `goodq_` Qdrant collections, watchdog state registry (`watchdog_state.json`), and processing cache directory
-4. initialize fresh empty collections
-5. generate post-cleanup manifest using `scripts/generate_post_manifest.py`
-6. run one scene first
-7. inspect evidence before broad ingestion
+Use the current procedure in `docs/agent/workflows/CLEAN_MEMORY_START.md` only
+when this task involves a fresh ingestion probe or explicitly approved cleanup.
+That runbook owns target selection, recovery, isolation, and scene-level evidence.
+Its historical reference is optional context, never an executable cleanup plan.
 
 ## Evidence-First Runtime Repair
 

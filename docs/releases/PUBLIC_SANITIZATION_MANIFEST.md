@@ -1,13 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_MANIFEST -->
-<!-- DOC_LAST_VERIFIED: 2026-09-16 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-26 -->
 
 # Public release sanitization manifest
 
 ## Source and authority
 
-- Private development source: `5aaf6f4385827bc520ce72300e598e446cff1c73` (`dev`).
-- Public parent: `40617af6e51c65e49831cd3a2b50ae94f3e08037` (`main`).
+- Private development source: `d568449575c059ef7e84b073d5f903ef7cb5993e` (`dev`).
+- Public parent: `8746cf9d6eac113110f4cbd0bc8ddb27e7370db6` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -101,3 +101,23 @@ private corpus-report case is replaced by an assertion that its excluded script
 stays absent. The runtime-evidence listing test expects the explicitly unqualified
 anonymous epoch from this snapshot. Both adaptations preserve the private
 repository's original tests and change no product code or runtime behavior.
+
+## Scoped operator documentation update (2026-09-26)
+
+The concise agent guidance and operator skill are copied from the pinned private
+source. The clean-memory workflow has the same current safety procedure, with a
+public-checkout wording adjustment and a public reference boundary replacing its
+private archive link. The private historical cleanup archive, workstation baseline,
+runtime repair receipts, temporary-file backups, and worktree evidence are excluded.
+Previously sanitized operator-lane and release-roadmap text is preserved.
+
+This update changes documentation and instructions only. Product code, dependencies,
+installer payloads, and runtime configuration are unchanged. It does not warrant
+rebuilding an installer or restarting a user's services. Older local and hosted
+verification results above belong to their named releases, not this commit.
+
+Local gates for this documentation update passed: documentation drift and authority,
+dependency drift, banned-token inspection, all 15 installer semantic checks, and
+36 focused documentation-authority tests. The guidance and skill match the pinned
+private source; only the declared workflow reference/checkout wording is adapted.
+Hosted checks are verified separately against the resulting public commit.

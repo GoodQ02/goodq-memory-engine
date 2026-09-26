@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `fa31aca9e22c57c65d33dde556ea6122a45654af` (`dev`).
-- Public parent: `2e3f0d7ebff3aa31a6571c5e465d07d85b965101` (`main`).
+- Private development source: `df3f9831035205f76640beafa6f0cf765d506e71` (`dev`).
+- Public parent: `a4a4c880b7d73629e2f17c632218f3b6dcff1ce2` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -148,3 +148,10 @@ only transient missing snapshots within the existing deadline, holds the fixture
 backoff until both checks finish, and applies consistent cold-shell time budgets.
 All 38 startup tests and 21 CI/installer tests pass locally. The two changed test
 files match private fa31aca9 byte for byte; production runtime logic is unchanged.
+The next hosted runs exposed an existing worker-receipt race: a restarted owner
+could be monitoring before its replacement transaction overwrote the old receipt.
+The recovery test now waits for a new live PID-plus-creation-time identity and
+allows legitimate PID reuse. Real-entrypoint fixtures get a separate 30-second
+startup budget; early exits include fixture diagnostics. All 39 startup tests
+and 21 CI/installer checks pass locally. Test sources match private df3f9831.
+Production lifecycle behavior is unchanged; hosted final results remain separate.

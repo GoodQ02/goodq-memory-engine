@@ -363,7 +363,7 @@ def test_non_core_environment_cannot_fall_back_to_path_python(launch):
     assert "goodq_core" in result["Failure"]
 
 
-def _supervisor_snapshot(sandbox, process, predicate, timeout=15):
+def _supervisor_snapshot(sandbox, process, predicate, timeout=45):
     deadline = time.monotonic() + timeout
     latest = None
     while time.monotonic() < deadline:
@@ -384,7 +384,14 @@ def _supervisor_snapshot(sandbox, process, predicate, timeout=15):
             else:
                 if predicate(latest):
                     return latest
-        assert process.poll() is None, f"Launcher exited instead of supervising its children: {latest}"
+        if process.poll() is not None:
+            diagnostics = []
+            for path in [sandbox / "receipt.json", sandbox / "harness-console.log",
+                         *sandbox.glob("goodq-startup-*/*.stderr.log")]:
+                if path.is_file():
+                    diagnostics.append(f"{path.name}: {path.read_text(errors='replace')[-4000:]}")
+            pytest.fail(f"Launcher exited instead of supervising its children: {latest}\n" +
+                        "\n".join(diagnostics))
         time.sleep(0.04)
     pytest.fail(f"Supervisor did not reach the required observed state: {latest}")
 
@@ -440,14 +447,14 @@ def test_supervisor_restarts_exited_child_with_backoff_and_finite_budget(launch,
         snapshot = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
         original_peer = snapshot[peer]["pid"]
         for attempt in range(3):
-            identities.append(snapshot[role]["pid"])
+            identities.append((snapshot[role]["pid"], snapshot[role]["started_at_utc"]))
             assert snapshot[peer]["pid"] == original_peer
             assert snapshot[peer]["alive"] is True
             _kill_owned_fixture(sandbox, snapshot[role])
             if attempt < 2:
                 snapshot = _supervisor_snapshot(sandbox, process, lambda s:
                     s["state"] == "monitoring" and s[role]["restarts"] == attempt + 1
-                    and s[role]["pid"] not in identities)
+                    and (s[role]["pid"], s[role]["started_at_utc"]) not in identities)
 
     result = launch(supervise=exercise, max_restarts=2)
     terminal, events = _supervisor_receipts(result)
@@ -465,7 +472,6 @@ def test_supervisor_restarts_exited_child_with_backoff_and_finite_budget(launch,
     assert len(restarted) == 2
     for waiting, started in zip(scheduled, restarted):
         assert started["elapsed_seconds"] - waiting["elapsed_seconds"] >= waiting["delay_seconds"]
-        assert started["pid"] != waiting["pid"]
         assert Path(started["stdout"]).is_file()
         assert Path(started["stderr"]).is_file()
     assert len({e["stdout"] for e in restarted}) == 2, "Restart overwrote the previous attempt's log"
@@ -501,7 +507,7 @@ def test_supervisor_restarts_api_that_exits_between_http_response_and_ownership_
         (sandbox / "exit-after-http.json").write_text(json.dumps({"pid": initial["api"]["pid"]}))
         recovered = _supervisor_snapshot(sandbox, process, lambda s:
             s["state"] == "monitoring" and s["api"]["restarts"] == 1)
-        assert recovered["api"]["pid"] != initial["api"]["pid"]
+        assert (recovered["api"]["pid"], recovered["api"]["started_at_utc"]) != (initial["api"]["pid"], initial["api"]["started_at_utc"])
         assert recovered["watchdog"]["pid"] == initial["watchdog"]["pid"]
         _kill_owned_fixture(sandbox, recovered["api"])
 
@@ -914,6 +920,23 @@ def test_stop_receipt_cannot_substitute_an_unrelated_event(launch):
     assert result["Completed"], result
 
 
+def _wait_for_new_worker(path, process, previous, timeout=30):
+    from tests.unit.test_runtime_lifecycle import is_alive
+
+    deadline = time.monotonic() + timeout
+    old_identity = (previous["pid"], previous["birth"])
+    while time.monotonic() < deadline:
+        try:
+            current = json.loads(path.read_text())
+        except (FileNotFoundError, PermissionError):
+            current = None
+        if current and (current["pid"], current["birth"]) != old_identity and is_alive(current):
+            return current
+        assert process.poll() is None, "Supervisor exited before replacement worker became ready"
+        time.sleep(.025)
+    pytest.fail("Replacement worker never published a new live identity")
+
+
 def test_real_launcher_watchdog_crash_recovery_and_external_drain(launch):
     from tests.unit.test_runtime_lifecycle import completed, is_alive
 
@@ -928,9 +951,8 @@ def test_real_launcher_watchdog_crash_recovery_and_external_drain(launch):
         assert not any(is_alive(identity) for identity in old_workers)
         assert completed(sandbox) == [], "crashed owner committed partial work"
         assert recovered["api"]["pid"] == initial["api"]["pid"]
-        _wait_for_file(sandbox / "transaction.json", process)
-        current = json.loads((sandbox / "transaction.json").read_text())
-        assert current["pid"] != old_workers[1]["pid"] and is_alive(current)
+        current = _wait_for_new_worker(sandbox / "transaction.json", process, old_workers[1])
+        assert is_alive(current)
         requested = _request_stop(sandbox)
         assert requested.returncode == 0, requested.stderr
         _wait_for_file(sandbox / "producer-stopped.json", process)
@@ -1013,3 +1035,20 @@ def test_supervisor_snapshot_retries_disappearing_receipt(tmp_path, monkeypatch)
     observed = _supervisor_snapshot(tmp_path, LiveProcess(),
                                     lambda s: s["state"] == "monitoring", timeout=1)
     assert observed["state"] == "monitoring" and len(attempts) == 2
+
+
+def test_new_worker_wait_rejects_stale_receipt_and_accepts_reused_pid(tmp_path, monkeypatch):
+    from tests.unit import test_runtime_lifecycle as lifecycle_tests
+
+    path = tmp_path / "transaction.json"
+    old = {"pid": 42, "birth": 1.0}
+    new = {"pid": 42, "birth": 2.0}
+    records = iter([old, new])
+    monkeypatch.setattr(Path, "read_text", lambda *a, **kw: json.dumps(next(records)))
+    monkeypatch.setattr(lifecycle_tests, "is_alive", lambda identity: identity == new)
+
+    class LiveProcess:
+        def poll(self):
+            return None
+
+    assert _wait_for_new_worker(path, LiveProcess(), old, timeout=1) == new

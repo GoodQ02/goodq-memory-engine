@@ -161,7 +161,9 @@ $failure = $null
 $children = @()
 try {
     try {
-        $parameters = @{ApiPort=$Port; StartupTimeoutSeconds=4; StabilizationSeconds=0.4}
+        # Real entrypoints import the application stack; dummy children do not.
+        $startupBudget = if ($Scenario -in @('real_work', 'supervisor_crash')) { 30 } else { 4 }
+        $parameters = @{ApiPort=$Port; StartupTimeoutSeconds=$startupBudget; StabilizationSeconds=0.4}
         if ($CheckStart) { $parameters.CheckStart = $true }
         if ($Supervise) {
             $parameters.Supervise = $true

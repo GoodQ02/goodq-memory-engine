@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `d568449575c059ef7e84b073d5f903ef7cb5993e` (`dev`).
-- Public parent: `8746cf9d6eac113110f4cbd0bc8ddb27e7370db6` (`main`).
+- Private development source: `bddbd83206c78431036aac4aeb1160a7d511009f` (`dev`).
+- Public parent: `d08ba886ef02a44845f6442b2dc4ea4a5c4f9571` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -121,3 +121,12 @@ dependency drift, banned-token inspection, all 15 installer semantic checks, and
 36 focused documentation-authority tests. The guidance and skill match the pinned
 private source; only the declared workflow reference/checkout wording is adapted.
 Hosted checks are verified separately against the resulting public commit.
+
+## Context7 library rename correction - 2026-09-26
+
+The root context7.json URL and README Context7 link now target
+`https://context7.com/goodq02/goodq-memory-engine`. The public verification key
+is unchanged; the JSON matches private dev. Only public URL metadata and this
+release manifest changed. Documentation drift/authority, dependency drift,
+banned-token, and all 15 installer semantic checks pass. Upstream claim status
+and index completion are separate service-side checks, not release guarantees.

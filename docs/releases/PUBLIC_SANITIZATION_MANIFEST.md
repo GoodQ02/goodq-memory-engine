@@ -7,7 +7,7 @@
 ## Source and authority
 
 - Private development source: `915c79f801422140a584f8067a99aaad66956897` (`dev`).
-- Public parent: `9d87e440f1f8900bba3ccf81a82d7193d9c77866` (`main`).
+- Public parent: `23608419762309368206d5545a542d88fae0f3ff` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -180,4 +180,14 @@ colliding with concurrent `supervisor.json` handles or overwriting a freshly
 republished heartbeat receipt during discovery fault injection, and a two-second
 `Invoke-WebRequest` readiness probe budget under cold `powershell.exe` `Add-Type`
 compilation jitter. `start_goodq_dev.ps1` and `tests/unit/test_dev_startup.py`
-now match private `915c79f8` byte for byte; all 68 local startup/caller checks pass.
+now match private `915c79f8` byte for byte; all 68 local startup/caller checks
+and hosted startup tests on both `dev` (`42761838665`) and `main` (`42762401537`)
+passed on the first attempt.
+
+Full-suite collection on `23608419` then surfaced `tests/unit/test_verify_entity_quality_metrics.py`
+importing the excluded `scripts/internal/verify_entity_quality.py` helper.
+Matching `test_retrieval_context_authority.py`, the public test now verifies
+that `scripts/internal/verify_entity_quality.py` remains excluded while private
+`dev` retains direct unit tests. The complete CI-profile unit suite in the
+isolated public checkout passed 7,102 tests plus seven subtests with zero
+failures before publication.

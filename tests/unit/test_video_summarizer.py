@@ -20,9 +20,19 @@ class StubResponse:
     def __init__(self, status_code: int, payload: dict) -> None:
         self.status_code = status_code
         self._payload = payload
+        self.text = json.dumps(payload)
 
     def json(self) -> dict:
         return self._payload
+
+
+@pytest.fixture(autouse=True)
+def configured_provider_health(monkeypatch):
+    from lib import llm_client
+
+    monkeypatch.delenv("GOODQ_HOST_PROFILE", raising=False)
+    monkeypatch.setattr(llm_client.requests.Session, "get", lambda *_a, **_kw: StubResponse(200, {}))
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _: None)
 
 
 @pytest.fixture
@@ -86,6 +96,11 @@ def _cfg(db_path: Path, *, isolation: bool = False) -> dict:
         "llm": {
             "api_url": "http://127.0.0.1:1234/v1/chat/completions",
             "model": "test-model",
+            "vllm_url": "http://127.0.0.1:38005/v1",
+            "vllm_model": "test-model",
+            "ollama_url": "http://127.0.0.1:11434/v1",
+            "ollama_model": "test-fallback-model",
+            "max_retries": 1,
             "timeout": 1,
             "features": {"video_summarization": True},
         },
@@ -174,7 +189,7 @@ def test_target_prompt_and_provenance_share_exact_scene_summary_selection(
     )
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("MODEL SUMMARY"),
     ) as post:
@@ -218,7 +233,7 @@ def test_provenance_contains_only_records_included_by_prompt_cap(
         )
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("MODEL SUMMARY"),
     ) as post:
@@ -262,7 +277,7 @@ def test_llm_helper_filters_supplied_records_by_canonical_target_scene_ids(
     ]
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("MODEL SUMMARY"),
     ) as post:
@@ -291,7 +306,7 @@ def test_no_target_summary_uses_template_without_borrowing_cross_video_text(
     _insert_summary(db_path, 22, {"summary": "MISSING SCENE ID TEXT"})
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("BORROWED MODEL SUMMARY"),
     ) as post:
@@ -315,7 +330,7 @@ def test_whitespace_only_target_summary_uses_template_without_http(
     )
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("MODEL SUMMARY"),
     ) as post:
@@ -350,7 +365,7 @@ def test_llm_failures_return_and_persist_template_method(
     else:
         post_kwargs = {"side_effect": RuntimeError("transport failed")}
 
-    with patch.object(video_summarizer.requests, "post", **post_kwargs):
+    with patch.object(video_summarizer.requests.Session, "post", **post_kwargs):
         result = video_summarizer.run_step(_cfg(db_path), TARGET_HASH)
 
     assert result["success"] is True
@@ -366,7 +381,7 @@ def test_isolation_fallback_reports_template_without_persisting(db_path: Path) -
     )
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         side_effect=video_summarizer.requests.Timeout("slow"),
     ):
@@ -412,7 +427,7 @@ def test_persistence_exception_still_returns_failure(db_path: Path) -> None:
         conn.close()
 
     with patch.object(
-        video_summarizer.requests,
+        video_summarizer.requests.Session,
         "post",
         return_value=_ok_response("MODEL SUMMARY"),
     ):

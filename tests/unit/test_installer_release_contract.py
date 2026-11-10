@@ -785,18 +785,14 @@ def test_baseline_installer_provisions_and_verifies_required_ocr_runtime() -> No
         encoding="utf-8"
     )
 
-    assert "pytesseract==0.3.10" in lockfile
-    assert 'tesseract_setup.exe" /S' in installer
-    assert 'IfFileExists "$PROGRAMFILES64\\Tesseract-OCR\\tesseract.exe" tesseract_verify tesseract_install' in installer
-    assert 'tesseract_install:' in installer
-    assert 'tesseract_verify:' in installer
-    assert 'IfFileExists "$PROGRAMFILES64\\Tesseract-OCR\\tesseract.exe" tesseract_command_verify tesseract_missing' in installer
-    assert 'tesseract_missing:' in installer
-    assert 'tesseract_command_verify:' in installer
-    assert "${AndIf} $0 != 2" in installer
+    assert "pytesseract" not in lockfile
+    assert "tesseract" not in installer.lower()
+    assert 'ocr-runtime\\python.exe' in installer
+    assert 'Required isolated Paddle OCR runtime payload is missing' in installer
     assert 'File "verify_offline_suite.ps1"' in installer
-    assert "Tesseract-OCR\\tesseract.exe" in verifier
-    assert "import pytesseract" in verifier
+    assert 'ocr-runtime\\python.exe' in verifier
+    assert 'import paddleocr, onnxruntime' in verifier
+
 
 
 def test_baseline_installer_provisions_and_verifies_required_scene_detection_runtime() -> None:
@@ -831,7 +827,7 @@ def test_baseline_installer_uses_its_packaged_wheelhouse_and_writes_a_receipt() 
     assert '/x "staged_cache"' in installer
     assert 'File /r "staged\\wheels\\*.*"' not in installer
     assert '--find-links="file:///$INSTDIR/wheels"' in installer
-    assert 'import pytesseract; print(pytesseract.__version__)' in installer
+    assert 'import paddleocr, onnxruntime' in installer
     assert 'Error: Failed to write installation receipt. Code $0' in installer
 
 
@@ -856,7 +852,7 @@ def test_baseline_installer_persists_its_terminal_failure_stage() -> None:
     assert "Var InstallStage" in installer
     assert 'StrCpy $InstallStage "runtime_verify"' in installer
     assert 'StrCpy $InstallStage "vc_runtime_verify"' in installer
-    assert 'StrCpy $InstallStage "tesseract_verify"' in installer
+    assert 'StrCpy $InstallStage "ocr_runtime_verify"' in installer
     assert 'StrCpy $InstallStage "wheelhouse_stage"' in installer
     assert "Function .onInstFailed" in installer
     assert 'WriteINIStr "$COMMONAPPDATA\\GoodQ4All\\install_failure.ini" "installation" "stage" "$InstallStage"' in installer

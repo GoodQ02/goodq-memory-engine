@@ -1,19 +1,99 @@
 from __future__ import annotations
 
+import pytest
 
-def test_build_diarization_probe_uses_pyannote_auth_kwarg_compatibility():
+
+@pytest.mark.parametrize('strict,missing,ready', [(True, [], True), (False, [], False), (True, ['classifier.weight'], False)])
+def test_emotion_probe_checks_the_workers_strict_trained_loader(monkeypatch, capsys, strict, missing, ready):
+    import sys
+    from types import SimpleNamespace
+    from scripts.wsl_audio_preflight import _build_wav2vec_enrichment_probe_script
+
+    calls = []
+    class Extractor:
+        @staticmethod
+        def from_pretrained(*args, **kwargs):
+            return object()
+
+    def load(repo, **kwargs):
+        calls.append((repo, kwargs))
+        return object(), {'strict': strict, 'missing_inference_keys': missing}
+
+    monkeypatch.setitem(sys.modules, 'process_audio', SimpleNamespace(
+        _load_trained_wav2vec=load, _resolve_hf_cache_dir=lambda: '/offline/cache',
+        Wav2Vec2FeatureExtractor=Extractor))
+    monkeypatch.setitem(sys.modules, 'transformers', SimpleNamespace(
+        Wav2Vec2ForSequenceClassification=Extractor, Wav2Vec2FeatureExtractor=Extractor,
+        Wav2Vec2Model=Extractor))
+    script = _build_wav2vec_enrichment_probe_script('/test/worker')
+    code = script.split("<<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    original_path = sys.path[:]
+    try:
+        exec(compile(code, '<emotion-preflight>', 'exec'), {})
+    finally:
+        sys.path[:] = original_path
+    lines = capsys.readouterr().out.splitlines()
+    assert ('wav2vec_enrichment_ready' in lines) is ready
+    assert calls == [('ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition',
+                      {'cache_dir': '/offline/cache', 'is_offline': True, 'emotion': True})]
+
+
+@pytest.mark.parametrize('decode_ready,pyannote,expected', [
+    (True, '3.3.2', 'not_required_for_active_lane'),
+    (False, '3.3.2', 'unknown'),
+    (True, '4.0.0', 'unknown'),
+])
+def test_missing_torchcodec_is_not_a_degradation_for_verified_active_decoder(monkeypatch, decode_ready, pyannote, expected):
+    from types import SimpleNamespace
+    from scripts import wsl_audio_preflight as preflight
+
+    def probe(distro, script, **kwargs):
+        # Return independent successful markers for the required probes.
+        return SimpleNamespace(returncode=0, stderr='', stdout='\n'.join([
+            'transcription_ready', 'gpu_ready', 'process_import_ready', 'abi_ready',
+            'diarization_ready', 'speaker_signature_ready', 'wav2vec_enrichment_ready']))
+    monkeypatch.setattr(preflight, '_run_wsl_probe', probe)
+    monkeypatch.setattr(preflight, '_probe_wsl_audio_black_box', lambda *args: {
+        'package_versions': {**preflight._EXPECTED_TORCH_LANE, 'pyannote.audio': pyannote},
+        'audio_decode': {'ready': decode_ready, 'backend': 'torchaudio.load'},
+        'torchcodec': {'ready': False, 'error_tail': "No module named 'torchcodec'"}})
+    result = preflight.probe_wsl_audio_runtime('Ubuntu', '/test/worker')
+    assert result['torchcodec_ready'] is False
+    assert result['torchcodec_applicability'] == expected
+    assert ('torchcodec_decoder_unavailable' in result['runtime_warnings']) is (expected == 'unknown')
+    assert ('active_audio_decoder_unavailable' in result['runtime_warnings']) is (not decode_ready)
+
+
+@pytest.mark.parametrize('model_name', ['pyannote/speaker-diarization-3.1', '/isolated/models/community-1'])
+@pytest.mark.parametrize('loader_fails', [False, True])
+def test_diarization_probe_loads_the_configured_model_through_worker(monkeypatch, capsys, model_name, loader_fails):
+    import sys
+    from types import SimpleNamespace
     from scripts.wsl_audio_preflight import _build_diarization_probe_script
 
-    script = _build_diarization_probe_script("/home/goodq/goodq_audio")
-
-    assert "use_auth_token=token" in script
-    assert "cache_dir = os.getenv('HUGGINGFACE_HUB_CACHE') or os.getenv('HF_HUB_CACHE') or None" in script
-    assert "os.environ.setdefault('HF_HUB_CACHE', cache_dir)" in script
-    assert "os.environ.setdefault('PYANNOTE_CACHE', cache_dir)" in script
-    assert "kwargs['cache_dir'] = cache_dir" in script
-    assert "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', use_auth_token=token, cache_dir=cache_dir)" in script
-    assert "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', token=token, cache_dir=cache_dir)" in script
-    assert "unexpected keyword" in script
+    calls, caches = [], []
+    def load(factory, model, token, **kwargs):
+        calls.append((model, kwargs))
+        if loader_fails:
+            raise OSError('missing model asset')
+        return object()
+    monkeypatch.setenv('HF_HUB_OFFLINE', '1')
+    monkeypatch.setitem(sys.modules, 'process_audio', SimpleNamespace(
+        _load_runtime_config=lambda: {'models': {'diarization': model_name}},
+        _load_pyannote_pipeline=load, _resolve_hf_cache_dir=lambda: '/offline/cache'))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', SimpleNamespace(snapshot_download=lambda **kw: caches.append(kw)))
+    monkeypatch.setitem(sys.modules, 'pyannote.audio', SimpleNamespace(Pipeline=object))
+    code = _build_diarization_probe_script('/test/worker').split("<<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    original_path = sys.path[:]
+    try:
+        exec(compile(code, '<diarization-preflight>', 'exec'), {})
+    finally:
+        sys.path[:] = original_path
+    assert calls == [(model_name, {'cache_dir': '/offline/cache', 'is_offline': True})]
+    assert all(call['local_files_only'] for call in caches)
+    if model_name.startswith('/isolated'):
+        assert not any(call['repo_id'].startswith('pyannote/') for call in caches)
+    assert ('diarization_ready' in capsys.readouterr().out.splitlines()) is not loader_fails
 
 
 def test_build_diarization_probe_uses_pinned_offline_revisions():
@@ -234,10 +314,15 @@ def test_probe_wsl_audio_runtime_records_torch_lane_and_torchcodec_warning(monke
     assert "torch_abi_symbol_mismatch" in result["torchcodec_detail"]
 
 
-def test_probe_wsl_audio_runtime_reports_wav2vec_enrichment_ready(monkeypatch):
+@pytest.mark.parametrize("ecapa_ready", [True, False])
+def test_probe_wsl_audio_runtime_reports_separate_enrichment_readiness(monkeypatch, ecapa_ready):
     from scripts import wsl_audio_preflight
 
     def _fake_run_wsl_probe(distro, script, *, timeout):
+        if "from speaker_signature import load_encoder" in script:
+            return type("Probe", (), {"returncode": 0 if ecapa_ready else 1,
+                "stdout": "speaker_signature_ready\n" if ecapa_ready else "",
+                "stderr": "" if ecapa_ready else "ECAPA assets unavailable"})()
         if "test -f" in script:
             return type("Probe", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         if "import faster_whisper, torch" in script:
@@ -248,7 +333,7 @@ def test_probe_wsl_audio_runtime_reports_wav2vec_enrichment_ready(monkeypatch):
             return type("Probe", (), {"returncode": 0, "stdout": "abi_ready\n", "stderr": ""})()
         if "snapshot_download" in script and "speaker-diarization-3.1" in script:
             return type("Probe", (), {"returncode": 0, "stdout": "diarization_ready\n", "stderr": ""})()
-        if "Wav2Vec2Model" in script:
+        if "_load_trained_wav2vec" in script:
             return type("Probe", (), {"returncode": 0, "stdout": "wav2vec_enrichment_ready\n", "stderr": ""})()
         raise AssertionError(f"unexpected probe script: {script}")
 
@@ -288,6 +373,8 @@ def test_probe_wsl_audio_runtime_reports_wav2vec_enrichment_ready(monkeypatch):
 
     assert result["ready"] is True
     assert result["wav2vec_enrichment_ready"] is True
+    assert result["speaker_signature_ready"] is ecapa_ready
+    assert ("speaker_signature_unavailable" in result["runtime_warnings"]) is not ecapa_ready
     assert result["clap_handoff_ready"] is True
     assert result["clap_handoff"]["required_step"] == "audio_embed_clap"
     assert result["clap_handoff"]["reason"] == "canonical_clap_required"
@@ -324,7 +411,7 @@ def test_probe_wsl_audio_runtime_exposes_a_failed_clap_handoff_contract(monkeypa
                     else "diarization_ready\n"
                     if "snapshot_download" in script
                     else "wav2vec_enrichment_ready\n"
-                    if "Wav2Vec2Model" in script
+                    if "_load_trained_wav2vec" in script
                     else ""
                 ),
                 "stderr": "",
@@ -374,7 +461,7 @@ def test_probe_wsl_audio_runtime_uses_env_probe_timeouts(monkeypatch):
         if "snapshot_download" in script and "speaker-diarization-3.1" in script:
             observed["diarization"] = timeout
             return type("Probe", (), {"returncode": 0, "stdout": "diarization_ready\n", "stderr": ""})()
-        if "Wav2Vec2Model" in script:
+        if "_load_trained_wav2vec" in script:
             observed["wav2vec"] = timeout
             return type("Probe", (), {"returncode": 0, "stdout": "wav2vec_enrichment_ready\n", "stderr": ""})()
         raise AssertionError(f"unexpected probe script: {script}")
@@ -410,7 +497,7 @@ def test_probe_wsl_audio_runtime_keeps_base_ready_when_wav2vec_enrichment_missin
             return type("Probe", (), {"returncode": 0, "stdout": "abi_ready\n", "stderr": ""})()
         if "snapshot_download" in script and "speaker-diarization-3.1" in script:
             return type("Probe", (), {"returncode": 0, "stdout": "diarization_ready\n", "stderr": ""})()
-        if "Wav2Vec2Model" in script:
+        if "_load_trained_wav2vec" in script:
             return type(
                 "Probe",
                 (),

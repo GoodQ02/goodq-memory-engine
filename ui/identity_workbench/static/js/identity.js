@@ -19,6 +19,7 @@
     nameSortDir: -1,                 // -1 = desc, +1 = asc
     faceFilter: "UNLABELED",
     epochAuthority: null,
+    actions: {},
   };
 
   // ── UI Cache ─────────────────────────────────────────────────────────────
@@ -67,6 +68,8 @@
     loadSpeakersBtn: document.getElementById("load-speakers-btn"),
     speakersList:    document.getElementById("speakers-list"),
     speakersNote:    document.getElementById("speakers-note"),
+    voiceReviewNote: document.getElementById("voice-review-note"),
+    voiceReviewLink: document.getElementById("voice-review-link"),
 
     // Phase 3 — Names
     nameSearch:      document.getElementById("name-search"),
@@ -113,11 +116,13 @@
 
   // ── API helper ───────────────────────────────────────────────────────────
   async function apiCall(endpoint, options = {}) {
-    const url = `${state.apiBase}${endpoint}`;
+    const path = `${state.apiBase}${endpoint}`;
+    const url = window.GoodQLibrary?.url(path) || path;
     const resp = await fetch(url, {
       ...options,
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
+    window.GoodQLibrary?.observeResponse?.(resp, endpoint);
     if (!resp.ok) {
       let msg = resp.statusText;
       let payload = null;
@@ -177,6 +182,11 @@
       btn.classList.toggle("active", isActive);
       btn.setAttribute("aria-selected", isActive ? "true" : "false");
     });
+    if (typeof document.querySelectorAll === "function") {
+      document.querySelectorAll(".ribbon-btn[data-ribbon-tab]").forEach(btn => {
+        btn.classList.toggle("active", btn.getAttribute("data-ribbon-tab") === tabName);
+      });
+    }
     ui.panels.forEach(panel => {
       const isActive = panel.id === `panel-${tabName}`;
       panel.classList.toggle("active", isActive);
@@ -187,40 +197,71 @@
       speakers: "PHASE 2 — SPEAKER HYPOTHESES",
       names:    "PHASE 3 — NAME MENTIONS",
       roster:   "PHASE 4 — FAMILY ROSTER",
+      appearances: "SCENE CONNECTIONS",
+      matches:  "MATCH REVIEW · NOTHING APPLIED",
     };
     ui.phaseIndicator.textContent = labels[tabName] || "";
+    if (tabName === "appearances" && !savedPeopleData && !savedPeopleLoading) loadSavedPeople();
   }
 
   ui.tabs.forEach(btn => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab));
   });
+  if (typeof document.querySelectorAll === "function") {
+    document.querySelectorAll(".ribbon-btn[data-ribbon-tab]").forEach(btn => {
+      btn.addEventListener("click", e => {
+        const tab = btn.getAttribute("data-ribbon-tab");
+        if (!tab) return;
+        e.preventDefault();
+        if (tab === "matches") document.getElementById("tab-matches")?.click();
+        else activateTab(tab);
+      });
+    });
+  }
 
   // ── System Status ────────────────────────────────────────────────────────
+  function actionReady(action) {
+    return state.actions[action]?.ready === true;
+  }
+
+  function applyReadiness() {
+    const controls = {
+      face_prepare: [ui.rerunFacesBtn, ui.epsInput],
+      face_review: [ui.loadFacesBtn], speaker_review: [ui.loadSpeakersBtn],
+      name_review: [ui.loadNamesBtn],
+      family_facts: [ui.validateRosterBtn, ui.exportRosterBtn, ui.newIdentityInput, ui.addIdentityBtn],
+    };
+    Object.entries(controls).forEach(([action, items]) => items.forEach(control => {
+      if (control) control.disabled = !actionReady(action);
+    }));
+    const note = (action) => state.actions[action]?.message || "Readiness unavailable.";
+    ui.facesNote.textContent = actionReady("face_review") ? "Face candidates available."
+      : actionReady("face_prepare") ? `${state.actions.face_prepare.count} saved face observations. Prepare candidates to review them.`
+      : note("face_review");
+    ui.speakersNote.textContent = actionReady("speaker_review") ? "Hypothesis candidates available." : note("speaker_review");
+    ui.namesNote.textContent = actionReady("name_review") ? "Name mentions available." : note("name_review");
+    ui.voiceReviewNote.textContent = actionReady("voice_review")
+      ? `${state.actions.voice_review.count} saved voice patterns available. Patterns are anonymous evidence, not confirmed people.`
+      : note("voice_review");
+    ui.voiceReviewLink.hidden = !actionReady("voice_review");
+  }
+
   async function checkStatus() {
     try {
-      const status = await apiCall("/api/status");
-      const authority = status.epoch_authority || {};
-      state.epochAuthority = authority;
-      if (!authority.ready) {
-        const configured = authority.configured_epoch_id || "UNSET";
-        const identity = authority.identity_epoch_id || "UNRESOLVED";
-        ui.status.textContent = "Status: BLOCKED · EPOCH MISMATCH";
-        ui.status.className = "header-status offline";
-        ui.epochAuthorityStatus.hidden = false;
-        ui.epochAuthorityStatus.textContent =
-          `IDENTITY WORKBENCH BLOCKED — configured epoch ${configured}; identity epoch ${identity}. ${authority.message || ""}`;
-        [
-          ui.rerunFacesBtn, ui.loadFacesBtn, ui.loadSpeakersBtn, ui.loadNamesBtn,
-          ui.loadRosterBtn, ui.validateRosterBtn, ui.exportRosterBtn,
-          ui.newIdentityInput, ui.addIdentityBtn,
-        ].forEach(control => { if (control) control.disabled = true; });
-        return false;
-      }
-      ui.status.textContent = `Status: ONLINE · EPOCH ${authority.configured_epoch_id}`;
+      const readiness = await apiCall("/api/identity/readiness");
+      state.epochAuthority = readiness;
+      state.actions = readiness.actions || {};
+      applyReadiness();
+      ui.status.textContent = `Status: ONLINE · EPOCH ${readiness.configured_epoch_id || "UNSET"}`;
       ui.status.className = "header-status online";
-      ui.epochAuthorityStatus.hidden = true;
+      ui.epochAuthorityStatus.hidden = false;
+      ui.epochAuthorityStatus.textContent = actionReady("family_facts")
+        ? "Family facts are editable. Face, voice and name evidence have separate availability. Assignments require matching evidence and confirmation."
+        : state.actions.family_facts?.message || "Family-fact editing is unavailable.";
       return true;
     } catch (_) {
+      state.actions = {};
+      applyReadiness();
       ui.status.textContent = "Status: OFFLINE";
       ui.status.className = "header-status offline";
       return false;
@@ -262,13 +303,14 @@
       ui.facesNote.textContent = `${state.faceClusters.length} clusters (eps=${eps}).`;
       renderFaceGrid();
       toast(`Re-clustered: ${state.faceClusters.length} clusters with eps=${eps}`);
+      await checkStatus();
     } catch (e) {
       const message = `Re-clustering failed: ${e.message}`;
       setOperationFailure(message);
       toast(message, "error");
     } finally {
-      ui.rerunFacesBtn.textContent = "RE-CLUSTER ↻";
-      ui.rerunFacesBtn.disabled = false;
+      ui.rerunFacesBtn.textContent = "PREPARE FACE CANDIDATES";
+      ui.rerunFacesBtn.disabled = !actionReady("face_prepare");
     }
   }
 
@@ -297,10 +339,13 @@
     });
 
     if (!clusters.length) {
+      const allLabeledMsg = (state.faceFilter === "UNLABELED" && total > 0 && labeledCount === total)
+        ? `All ${total} face clusters are labeled (${labeledCount} / ${total}). Select ALL or LABELED above to inspect or edit them.`
+        : "No clusters found matching filter.";
       ui.facesGrid.innerHTML = `
         <div class="empty-card">
           <span class="pulse-icon">⬡</span>
-          <p>No clusters found matching filter.</p>
+          <p>${allLabeledMsg}</p>
         </div>`;
       return;
     }
@@ -316,16 +361,15 @@
       // staggered animation
       card.style.animationDelay = `${(loopIdx % 20) * 50}ms`;
 
-      const faces = faceUrls(cluster);
-      const primaryEvidence = (cluster.representative_frames || [])[0] || {};
+      const members = cluster.members || [];
+      const primaryEvidence = members[0] || (cluster.representative_frames || [])[0] || {};
       const multiFaceWarning = (primaryEvidence.source_face_count || 0) > 1
         ? `<span class="multi-face-warning">MULTI-FACE SOURCE · TARGET DETECTION ${Number(primaryEvidence.target_face_index || 0) + 1} OF ${primaryEvidence.source_face_count}</span>`
         : "";
-      const heroThumb = faces.length > 0 ? `<img class="hero-thumb" src="${escHtml(faces[0])}" alt="hero" loading="lazy">` : `<span class="hero-thumb-placeholder">👤</span>`;
+      const heroThumb = targetFaceHtml(primaryEvidence);
 
-      const stripThumbs = faces.slice(1).map(src =>
-        `<img class="strip-thumb" src="${escHtml(src)}" alt="face" loading="lazy">`
-      ).join("");
+      const stripThumbs = members.slice(1, 5).map(member =>
+        `<div class="member-preview">${targetFaceHtml(member)}</div>`).join("");
 
       card.innerHTML = `
         <div class="cluster-card-header">
@@ -339,6 +383,7 @@
            ${multiFaceWarning}
         </div>
         <div class="cluster-thumbnails-strip">${stripThumbs}</div>
+        <button class="toolbar-btn review-members" type="button">VIEW ALL ${cluster.face_count || 0} SAVED MEMBERS</button>
         <div class="cluster-card-footer">
           <span class="cluster-stat">Faces: <strong>${cluster.face_count ?? "—"}</strong></span>
           <div class="typeahead-wrapper inline">
@@ -371,15 +416,57 @@
     return representative.length ? representative : samples;
   }
 
+  function targetFaceHtml(member, source = false) {
+    const box = member.crop_bbox;
+    const width = member.image_width, height = member.image_height;
+    if (member.evidence_status !== "available" || !member.frame_url ||
+        !Array.isArray(box) || box.length !== 4 ||
+        ![...box, width, height].every(Number.isFinite) ||
+        width <= 0 || height <= 0 || box[2] <= box[0] || box[3] <= box[1]) {
+      return '<span class="face-unavailable">Exact target unavailable</span>';
+    }
+    const [x, y, right, bottom] = box;
+    const cropWidth = right - x, cropHeight = bottom - y;
+    const viewBox = source ? `0 0 ${width} ${height}` : `${x} ${y} ${cropWidth} ${cropHeight}`;
+    const description = `${source ? "Source frame with target box" : "Exact target face"} ${member.target_face_id}`;
+    return `<svg class="${source ? "member-source" : "target-face"}" viewBox="${viewBox}" role="img" aria-label="${escHtml(description)}">
+      <image href="${escHtml(member.frame_url)}" width="${width}" height="${height}" />
+      ${source ? `<rect x="${x}" y="${y}" width="${cropWidth}" height="${cropHeight}" fill="none" stroke="#00e5ff" stroke-width="3" vector-effect="non-scaling-stroke" />` : ""}
+    </svg>`;
+  }
+
+  function memberTime(timestamp) {
+    if (!Number.isFinite(timestamp)) return "Time unavailable";
+    const seconds = Math.floor(timestamp);
+    return `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function faceMemberHtml(member, index) {
+    const detection = Number.isInteger(member.target_face_index)
+      ? ` · Detection ${member.target_face_index + 1} of ${member.source_face_count}` : "";
+    const unavailable = member.evidence_status !== "available"
+      ? `<p class="face-unavailable">${member.reason === "exact_source_unavailable" ? "Exact source was not recorded for this member." : "Saved evidence could not be verified."}</p>` : "";
+    return `<article class="face-member" data-face-id="${escHtml(member.target_face_id)}">
+      <h3>Member ${index + 1} · ${memberTime(member.timestamp)}</h3>
+      <p class="member-reference">${escHtml(member.target_face_id)}${escHtml(detection)}</p>
+      <div class="member-target">${targetFaceHtml(member)}</div>
+      <p class="member-view-label">EXACT TARGET · SAVED DETECTION</p>
+      ${member.evidence_status === "available" ? targetFaceHtml(member, true) + '<p class="member-view-label">SOURCE FRAME · TARGET OUTLINED</p>' : unavailable}
+    </article>`;
+  }
+
   function openFocusPanel(idx) {
     if (idx < 0 || idx >= state.faceClusters.length) return;
     currentFocusIdx = idx;
     const cluster = state.faceClusters[idx];
 
-    if (ui.focusMeta) ui.focusMeta.textContent = `Cluster: ${cluster.cluster_id} | Faces: ${cluster.face_count || 0}`;
+    const members = cluster.members || [];
+    if (ui.focusMeta) ui.focusMeta.textContent = `${cluster.cluster_id} · ${members.length} saved members · ${cluster.members_available || 0} available`;
 
-    const faces = faceUrls(cluster);
-    if (ui.focusGrid) ui.focusGrid.innerHTML = faces.map(src => `<img src="${escHtml(src)}" alt="face" loading="lazy">`).join("");
+    if (ui.focusGrid) ui.focusGrid.innerHTML = members.length
+      ? members.map(faceMemberHtml).join("")
+      : '<p>Exact member evidence is unavailable. Historical source frames below are context only.</p>' +
+        faceUrls(cluster).map(src => `<img src="${escHtml(src)}" alt="Historical source frame, target unverified" loading="lazy">`).join("");
 
     if (ui.focusNameInput) ui.focusNameInput.value = (cluster.label && cluster.label !== "null") ? cluster.label : "";
     if (ui.focusOperatorNote) ui.focusOperatorNote.value = cluster.operator_note || "";
@@ -782,10 +869,37 @@
     renderRosterDetail(idx);
   }
 
+  function rosterRelationshipsHtml(identity, roster) {
+    const rows = (identity.relationships || []).filter(r => r && typeof r === "object");
+    const body = rows.map(relation => {
+      const target = roster.find(person => person.id === relation.target_id);
+      const evidence = relation.evidence || {};
+      return `<details class="form-section"><summary>${escHtml(relation.type)} → ${escHtml(target?.display_name || relation.target_id)}</summary>
+        <p>Recorded review status: ${escHtml(relation.review_status || "not_recorded")}</p>
+        <p>Evidence source: ${escHtml(evidence.kind || "not_recorded")} · ${escHtml(evidence.source_id || "not_recorded")}</p>
+        <p>${escHtml(evidence.date || "")}</p><blockquote>${escHtml(evidence.statement || "Supporting statement not recorded.")}</blockquote>
+        <p>This roster statement does not identify a face or voice in footage.</p></details>`;
+    }).join("");
+    return `<div class="form-section"><div class="form-section-title">CURATED RELATIONSHIPS — OUTGOING</div>
+      ${body || "<p>No directed relationship recorded.</p>"}</div>`;
+  }
+
   function renderRosterDetail(idx) {
     const identity = state.roster[idx];
     if (!identity) {
       ui.rosterDetail.innerHTML = `<div class="roster-no-selection"><span class="pulse-icon">◼</span><p>SELECT AN IDENTITY</p></div>`;
+      return;
+    }
+
+    if (!actionReady("family_facts")) {
+      ui.rosterDetail.innerHTML = `<div class="form-section">
+        <div class="form-section-title">${escHtml(identity.display_name)} — READ ONLY</div>
+        <p>Role: ${escHtml(identity.role || "not recorded")}</p>
+        <p>Aliases: ${escHtml((identity.aliases || []).join(", ") || "none recorded")}</p>
+        <p>${escHtml(identity.notes || "")}</p>
+        <p>Face assignments: ${(identity.face_cluster_ids || []).length}. Voice assignments: ${(identity.speaker_cluster_ids || []).length}.</p>
+        <p>${escHtml(state.actions.family_facts?.message || "Readiness unavailable.")}</p>
+        </div>${rosterRelationshipsHtml(identity, state.roster)}`;
       return;
     }
 
@@ -853,6 +967,7 @@
 
         <div class="form-section">
           <div class="form-section-title">FACE CLUSTERS (candidate — visual evidence)</div>
+          ${actionReady("face_review") ? "" : `<p>${escHtml(state.actions.face_review?.message || "Face evidence unavailable.")}</p>`}
           <div class="cluster-chips" id="face-chips-${idx}">${faceChips || "<span style='color:var(--text-faint);font-size:11px'>None assigned</span>"}</div>
           <div class="form-field" style="margin-top:8px">
             <label class="form-label">ADD FACE CLUSTER</label>
@@ -867,6 +982,7 @@
 
         <div class="form-section">
           <div class="form-section-title">SPEAKER CLUSTERS ⚠ HYPOTHESIS — CONFIRM BEFORE PROMOTING</div>
+          ${actionReady("speaker_review") ? "" : `<p>${escHtml(state.actions.speaker_review?.message || "Speaker hypotheses unavailable.")} Saved voice patterns can be reviewed from the Speaker Hypotheses tab.</p>`}
           <div class="cluster-chips" id="spk-chips-${idx}">${speakerChips || "<span style='color:var(--text-faint);font-size:11px'>None assigned</span>"}</div>
           <div class="form-field" style="margin-top:8px">
             <label class="form-label">ADD SPEAKER CLUSTER</label>
@@ -895,6 +1011,21 @@
           <button class="toolbar-btn danger" id="delete-identity-${idx}" style="border-color:var(--error-color);color:var(--error-color)">REMOVE IDENTITY</button>
         </div>
       </div>`;
+
+    ui.rosterDetail.insertAdjacentHTML("beforeend", rosterRelationshipsHtml(identity, state.roster));
+
+    // Family facts remain editable while each evidence binding stays scoped.
+    const bindings = {
+      face_review: [`face-select-${idx}`, `add-face-cluster-${idx}`],
+      speaker_review: [`spk-select-${idx}`, `add-spk-cluster-${idx}`],
+      name_review: [`name-key-input-${idx}`, `add-name-key-${idx}`],
+    };
+    Object.entries(bindings).forEach(([action, ids]) => ids.forEach(id => {
+      document.getElementById(id).disabled = !actionReady(action);
+    }));
+    ui.rosterDetail.querySelectorAll(".remove-chip-btn").forEach(btn => {
+      btn.disabled = !actionReady({face: "face_review", speaker: "speaker_review", name: "name_review"}[btn.dataset.type]);
+    });
 
     // Wire form inputs
     document.querySelectorAll(`#identity-form-${idx} .form-input`).forEach(input => {
@@ -1157,16 +1288,315 @@
     return `${m}m ${s}s`;
   }
 
+  // ── Shared Theme Toggle ──────────────────────────────────────────────────
+  (function initThemeToggle() {
+    const btn = document.getElementById("toggle-theme");
+    const storage = typeof localStorage !== "undefined" ? localStorage : null;
+    if (!btn || !storage || !document.body || !document.body.classList) return;
+    const themes = ["night", "day", "auto"];
+    let current = "night";
+    try { current = storage.getItem("goodq-theme") || "night"; } catch (_) {}
+    function apply(mode) {
+      current = mode;
+      try { storage.setItem("goodq-theme", mode); } catch (_) {}
+      const prefersDark = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        : true;
+      const isDay = mode === "day" || (mode === "auto" && !prefersDark);
+      document.body.classList.toggle("theme-day", isDay);
+      btn.textContent = "Theme: " + mode.toUpperCase();
+    }
+    apply(current);
+    if (typeof btn.addEventListener === "function") {
+      btn.addEventListener("click", function () {
+        apply(themes[(themes.indexOf(current) + 1) % themes.length]);
+      });
+    }
+  })();
+
   // ── Bootstrap ─────────────────────────────────────────────────────────────
+  let savedPeopleData = null;
+  let savedPeopleLoading = false;
+  let savedPeopleGeneration = 0;
+  let savedPersonId = null;
+  const savedTimelineCache = new Map();
+
+  function savedPeopleLocation(personId, sceneId = "") {
+    const params = new URLSearchParams({person: personId});
+    if (savedPeopleData.epoch_id) params.set("epoch", savedPeopleData.epoch_id);
+    if (window.GoodQLibrary?.source) params.set("library_source", window.GoodQLibrary.source);
+    if (sceneId) params.set("scene", sceneId);
+    window.history?.replaceState(null, "", `/ui/identity_workbench/?${params}`);
+  }
+
+  function savedWatchUrl(personId, scene) {
+    return `/ui/retro_console_v1/?${new URLSearchParams({
+      watch_person: personId, watch_scene: scene.scene_id,
+      watch_video: scene.video_id, watch_epoch: scene.epoch_id || savedPeopleData.epoch_id,
+      ...(scene.library_source ? {library_source: scene.library_source} : {}),
+    })}`;
+  }
+
+  async function renderSavedPerson(personId, selectedScene = "") {
+    const person = savedPeopleData.people.find(p => p.id === personId);
+    if (!person) return;
+    const generation = ++savedPeopleGeneration;
+    savedPersonId = personId;
+    savedPeopleLocation(personId, selectedScene);
+    const target = document.getElementById("saved-person-scenes");
+    target.setAttribute("aria-busy", "true");
+    target.innerHTML = `<h2>${escHtml(person.display_name)}</h2><p>Loading saved scenes…</p>`;
+    document.querySelectorAll("[data-saved-person]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.savedPerson === personId));
+    });
+    const scenes = savedPeopleData.appearances.filter(a => a.person_id === personId);
+    await Promise.all([...new Set(scenes.map(a => a.video_id).filter(Boolean))].map(async videoId => {
+      if (!savedTimelineCache.has(videoId)) {
+        savedTimelineCache.set(videoId, apiCall(`/api/videos/${encodeURIComponent(videoId)}/scenes`)
+          .then(data => Array.isArray(data) ? data : data.scenes || []).catch(() => []));
+      }
+      const timeline = await savedTimelineCache.get(videoId);
+      scenes.filter(s => s.video_id === videoId).forEach(s => {
+        const matches = timeline.filter(row => String(row.scene_id ?? row.id) === s.scene_id);
+        s.timeline = matches.length === 1 ? matches[0] : null;
+      });
+    }));
+    if (generation !== savedPeopleGeneration) return;
+    scenes.sort((a, b) => (a.video_id || "").localeCompare(b.video_id || "") ||
+      (a.timeline?.start ?? Infinity) - (b.timeline?.start ?? Infinity));
+    target.innerHTML = `<h2>${escHtml(person.display_name)} <span>${scenes.length} saved scenes</span></h2>
+      <p class="appearance-help">Your saved face labels connect these moments. Watch opens the original scene in Explorer; you can return here afterward.</p>
+      ${scenes.map(scene => {
+        const t = scene.timeline;
+        const watchable = t?.original_video_available === true && Number.isFinite(t.start) && t.start >= 0 && Number.isFinite(t.end) && t.end >= t.start;
+        const first = scene.evidence.find(m => m.evidence_status === "available") || scene.evidence[0];
+        return `<article class="saved-scene" data-saved-scene="${escHtml(scene.scene_id)}">
+          <div class="saved-scene-heading"><div><h3>${t ? `${memberTime(t.start)} – ${memberTime(t.end)}` : "Scene timing unavailable"}</h3>
+            <p>${escHtml(scene.video_id || "Source unavailable")}</p></div>
+            ${watchable ? `<a class="toolbar-btn saved-watch" href="${escHtml(savedWatchUrl(personId, scene))}" data-watch-scene="${escHtml(scene.scene_id)}">Watch scene</a>`
+              : '<p class="saved-unavailable">Playback unavailable. Reload saved scenes to try again.</p>'}</div>
+          <div class="saved-scene-evidence">${first ? targetFaceHtml(first, true) : ""}
+            <div><p>Saved appearance · ${scene.evidence.length} ${scene.evidence.length === 1 ? "observation" : "observations"}</p>
+              <p class="appearance-help">Face-group evidence; this does not identify a voice or a spoken name.</p>
+              <details><summary>View exact faces and evidence</summary><div class="appearance-evidence">${scene.evidence.map(m => `<figure>
+                <div class="appearance-face-pair">${targetFaceHtml(m)}${targetFaceHtml(m, true)}</div>
+                <figcaption>${memberTime(m.timestamp)} · ${escHtml(m.target_face_id)}</figcaption></figure>`).join("")}</div></details></div>
+          </div></article>`;
+      }).join("")}`;
+    target.setAttribute("aria-busy", "false");
+    target.querySelectorAll("[data-watch-scene]").forEach(link => {
+      link.addEventListener("click", () => savedPeopleLocation(personId, link.dataset.watchScene));
+    });
+    if (selectedScene) {
+      const selected = [...target.querySelectorAll("[data-saved-scene]")].find(el => el.dataset.savedScene === selectedScene);
+      if (selected) { selected.classList.add("saved-scene-selected"); selected.scrollIntoView({block: "nearest"}); }
+    }
+  }
+
+  async function loadSavedPeople() {
+    const generation = ++savedPeopleGeneration;
+    savedPeopleLoading = true;
+    const status = document.getElementById("saved-people-status");
+    const browser = document.getElementById("saved-people-browser");
+    status.textContent = "Loading saved connections…";
+    browser.hidden = true;
+    savedPeopleData = null;
+    savedTimelineCache.clear();
+    try {
+      const data = await apiCall("/api/identity/appearances/saved");
+      if (generation !== savedPeopleGeneration) return;
+      savedPeopleData = data;
+      status.textContent = data.people.length
+        ? `${data.summary.people} people · ${data.summary.appearances} saved appearance links across ${data.summary.scenes} scenes. No changes to apply here.`
+        : "No saved appearance connections yet. Open Review or change connections below to preview your labeled groups.";
+      document.getElementById("saved-people-list").innerHTML = data.people.map(p => `<button data-saved-person="${escHtml(p.id)}" aria-pressed="false">
+        <strong>${escHtml(p.display_name)}</strong><span>${p.scene_count} scenes · ${p.observation_count} observations</span></button>`).join("");
+      document.querySelectorAll("[data-saved-person]").forEach(button => {
+        button.addEventListener("click", () => renderSavedPerson(button.dataset.savedPerson));
+      });
+      browser.hidden = !data.people.length;
+      const restore = new URLSearchParams(window.location?.search || "");
+      const requested = restore.get("person") || savedPersonId;
+      const sameEpoch = !restore.get("epoch") || restore.get("epoch") === data.epoch_id
+        || (data.library_epochs || []).includes(restore.get("epoch"));
+      if (requested && (!sameEpoch || !data.people.some(p => p.id === requested))) {
+        document.getElementById("saved-person-scenes").textContent = "That saved selection is unavailable in this movie. Choose a person to continue.";
+      } else if (data.people.length) {
+        await renderSavedPerson(requested || data.people[0].id, restore.get("scene") || "");
+      }
+    } catch (error) {
+      if (generation === savedPeopleGeneration) status.textContent = `Saved connections could not load: ${error.message} Use Reload saved scenes to try again.`;
+    } finally { savedPeopleLoading = false; }
+  }
+
+  document.getElementById("reload-saved-people").addEventListener("click", loadSavedPeople);
+
+  let appearancePlan = null;
+  let appearanceBusy = false;
+  const appearanceReview = document.getElementById("appearance-review");
+  const appearanceStatus = document.getElementById("appearance-status");
+  const appearanceHistory = document.getElementById("appearance-history");
+  const previewAppearancesBtn = document.getElementById("preview-appearances-btn");
+
+  function appearanceMessage(message, error = false) {
+    appearanceStatus.textContent = message;
+    appearanceStatus.dataset.status = error ? "error" : "info";
+  }
+
+  function appearanceControls(busy) {
+    appearanceBusy = busy;
+    previewAppearancesBtn.disabled = busy;
+    previewAppearancesBtn.textContent = busy ? "Checking connections…" : "Refresh preview";
+    document.querySelectorAll(".appearance-mutation").forEach(button => {
+      button.disabled = busy || (button.id === "apply-appearances-btn" && (!appearancePlan || !appearancePlan.summary.new_edges));
+    });
+  }
+
+  function renderAppearanceHistory(receipts) {
+    appearanceHistory.hidden = !receipts.length;
+    appearanceHistory.innerHTML = receipts.length ? `<h2>Connection history</h2>${receipts.map(r => `
+      <div class="appearance-history-row">
+        <div><strong>${r.status === "undone" ? "Undone" : "Applied"}</strong> · ${r.summary.appearances} appearance links
+          <span>${escHtml(r.created_at.replace("T", " ").slice(0, 19))} UTC · Receipt ${escHtml(r.id.slice(0, 8))}</span></div>
+        ${r.status === "applied" ? `<button class="toolbar-btn secondary appearance-mutation" data-undo-appearance="${escHtml(r.id)}">Undo these connections</button>` : ""}
+      </div>`).join("")}` : "";
+    appearanceHistory.querySelectorAll("[data-undo-appearance]").forEach(button => {
+      const receipt = receipts.find(r => r.id === button.dataset.undoAppearance);
+      button.addEventListener("click", () => undoAppearances(receipt));
+    });
+  }
+
+  function renderAppearanceEvidence(personId) {
+    const target = document.getElementById("appearance-scenes");
+    const person = appearancePlan.people.find(p => p.id === personId);
+    const scenes = appearancePlan.appearances.filter(a => a.person_id === personId)
+      .sort((a, b) => Math.min(...a.evidence.map(m => m.timestamp)) - Math.min(...b.evidence.map(m => m.timestamp)));
+    target.innerHTML = `<h2>${escHtml(person.display_name)} <span>${scenes.length} scenes</span></h2>
+      <p class="appearance-help">Expand a scene to review every saved target face. Group labels are your input; the links retain candidate evidence.</p>
+      ${scenes.map((scene, index) => `<details class="appearance-scene" ${index === 0 ? "open" : ""}>
+        <summary><span>${memberTime(Math.min(...scene.evidence.map(m => m.timestamp)))}</span>
+          <span>Scene ${escHtml(scene.scene_id.slice(0, 12))}</span><span>${scene.evidence.length} ${scene.evidence.length === 1 ? "observation" : "observations"}</span></summary>
+        <div class="appearance-evidence">${scene.evidence.map(member => `<figure>
+          <div class="appearance-face-pair">${targetFaceHtml(member)}${targetFaceHtml(member, true)}</div>
+          <figcaption>${memberTime(member.timestamp)} · Target ${escHtml(member.target_face_id)}<br>
+            ${escHtml(scene.cluster_ids.join(", "))}</figcaption></figure>`).join("")}</div>
+      </details>`).join("") || "<p>No saved scene evidence.</p>"}`;
+    appearanceReview.querySelectorAll("[data-appearance-person]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.appearancePerson === personId));
+    });
+  }
+
+  function renderAppearancePreview(plan) {
+    const s = plan.summary;
+    appearanceReview.hidden = false;
+    appearanceReview.innerHTML = `
+      <div class="appearance-summary">
+        <div><h2>${!s.appearances ? "No appearance connections to apply" : s.new_edges ? "Preview · not applied" : "Connections are up to date"}</h2>
+          <p>${s.people} people · ${s.groups} labeled groups · <strong>${s.appearances} appearance links across ${s.scenes} scenes</strong></p>
+          <p>${s.observations} saved observations. ${s.existing_edges ? `${s.existing_edges} connections already exist. ` : ""}Your labels and source movie are preserved.</p></div>
+        <button class="toolbar-btn appearance-mutation appearance-apply" id="apply-appearances-btn" ${s.new_edges ? "" : "disabled"}>Apply appearance links</button>
+      </div>
+      <p class="appearance-held">Mentions held for review${plan.held.shared_aliases.length ? `: ${plan.held.shared_aliases.map(a => `<strong>${escHtml(a.term)}</strong> is shared by ${a.people.map(escHtml).join(" / ")}`).join("; ")}` : "."}. This preview does not decide who a spoken name refers to.</p>
+      <div class="appearance-layout">
+        <nav class="appearance-people" aria-label="People in this preview">${plan.people.map(p => `
+          <button data-appearance-person="${escHtml(p.id)}" aria-pressed="false"><strong>${escHtml(p.display_name)}</strong>
+            <span>${p.scene_count} scenes · ${p.observation_count} observations</span></button>`).join("")}</nav>
+        <section id="appearance-scenes" aria-label="Proposed scene evidence"></section>
+      </div>
+      <p class="appearance-plan-note">Reviewed plan ${escHtml(plan.plan_sha256.slice(0, 12))}. Changed saved inputs require a fresh preview. Undo is available after Apply.</p>`;
+    appearanceReview.querySelectorAll("[data-appearance-person]").forEach(button => {
+      button.addEventListener("click", () => renderAppearanceEvidence(button.dataset.appearancePerson));
+    });
+    document.getElementById("apply-appearances-btn").addEventListener("click", applyAppearances);
+    if (plan.people.length) renderAppearanceEvidence(plan.people[0].id);
+  }
+
+  async function loadAppearancePreview() {
+    if (appearanceBusy) return;
+    appearanceControls(true);
+    appearancePlan = null;
+    appearanceReview.hidden = true;
+    appearanceMessage("Reading saved face evidence and scene connections…");
+    setOperationStatus("");
+    try {
+      const history = await apiCall("/api/identity/appearances/history");
+      renderAppearanceHistory(history.receipts);
+      appearancePlan = await apiCall("/api/identity/appearances/preview");
+      renderAppearancePreview(appearancePlan);
+      appearanceMessage(!appearancePlan.summary.appearances
+        ? "Link labeled face groups to roster entries, save, then preview again."
+        : appearancePlan.summary.new_edges ? "Preview ready. Review the people and scenes before choosing Apply."
+        : "All previewed appearance connections are already saved. Review the evidence or connection history below.");
+    } catch (error) {
+      appearanceMessage(`${error.message} Nothing was applied.`, true);
+    } finally {
+      appearanceControls(false);
+      const applyButton = document.getElementById("apply-appearances-btn");
+      if (applyButton) applyButton.disabled = !appearancePlan || !appearancePlan.summary.new_edges;
+    }
+  }
+
+  async function applyAppearances() {
+    if (appearanceBusy || !appearancePlan || !appearancePlan.summary.new_edges) return;
+    appearanceControls(true);
+    let applied = false;
+    try {
+      const result = await confirmedIdentityRequest("/api/identity/appearances/apply",
+        {plan_sha256: appearancePlan.plan_sha256},
+        `Apply the reviewed appearance connections for ${appearancePlan.summary.people} people across ${appearancePlan.summary.scenes} scenes? Transcript mentions and voice identities will remain on hold.`);
+      if (result) {
+        applied = true;
+        appearancePlan = null;
+        appearanceReview.hidden = true;
+        appearanceMessage("Applied. Appearance connections are now saved in memory. You can undo this receipt below.");
+        const history = await apiCall("/api/identity/appearances/history");
+        renderAppearanceHistory(history.receipts);
+        await loadSavedPeople();
+      } else appearanceMessage("Apply cancelled. Your preview is still available; no connections changed.");
+    } catch (error) {
+      appearancePlan = null;
+      appearanceReview.hidden = true;
+      appearanceMessage(applied ? `Connections were applied, but history could not load. Refresh to inspect the receipt. ${error.message}`
+        : `${error.message} Refresh preview and history before retrying.`, true);
+      setOperationFailure(appearanceStatus.textContent);
+    } finally { appearanceControls(false); }
+  }
+
+  async function undoAppearances(receipt) {
+    if (appearanceBusy) return;
+    appearanceControls(true);
+    try {
+      const result = await confirmedIdentityRequest("/api/identity/appearances/undo",
+        {receipt_id: receipt.id, receipt_sha256: receipt.receipt_sha256},
+        "Undo only the connections added by this receipt? Labels and source evidence are preserved. Later dependent changes will stop Undo.");
+      if (result) {
+        appearancePlan = null;
+        appearanceReview.hidden = true;
+        appearanceMessage("Undone. This receipt's connections were removed; your saved labels remain. Refresh to preview again.");
+        renderAppearanceHistory((await apiCall("/api/identity/appearances/history")).receipts);
+        await loadSavedPeople();
+      } else appearanceMessage("Undo cancelled. Saved connections remain applied.");
+    } catch (error) {
+      appearanceMessage(`${error.message} Reload history before retrying.`, true);
+      setOperationFailure(appearanceStatus.textContent);
+    } finally { appearanceControls(false); }
+  }
+
+  previewAppearancesBtn.addEventListener("click", loadAppearancePreview);
+
   async function init() {
     if (!await checkStatus()) return;
-    // Auto-load all data sources on startup (silently ignore failures)
-    await Promise.allSettled([
-      loadFaceClusters(),
-      loadSpeakerClusters(),
-      loadNameMentions(),
-      loadRoster(),
-    ]);
+    const reads = [loadRoster()];
+    if (actionReady("face_review")) reads.push(loadFaceClusters());
+    if (actionReady("speaker_review")) reads.push(loadSpeakerClusters());
+    if (actionReady("name_review")) reads.push(loadNameMentions());
+    await Promise.allSettled(reads);
+    const params = new URLSearchParams(window.location?.search || "");
+    const requestedTab = params.get("tab");
+    if (params.has("person") || requestedTab === "appearances") activateTab("appearances");
+    else if (requestedTab === "matches") document.getElementById("tab-matches")?.click();
+    else if (requestedTab && ["faces", "speakers", "names", "roster"].includes(requestedTab)) activateTab(requestedTab);
+    else activateTab("faces");
   }
 
   init();

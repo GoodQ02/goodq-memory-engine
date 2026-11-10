@@ -1,76 +1,68 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-05-24 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-06 -->
+<!-- INSTRUCTION_REVIEW: documentation only; no runtime qualification -->
 
 # Evidence-First Runtime Repair
 
-Use this workflow when a runtime capability looks absent, stale, or partially
-proven, especially around WSL audio, local LLM fallback, Qdrant/FAISS proof,
-sentiment, entities, operator-console visibility, or Retro Memory Explorer views.
+Use this for a demonstrated runtime, API, persistence or UI evidence failure.
+For ingestion-quality evaluation, also use [pipeline troubleshooting](PIPELINE_TROUBLESHOOTING_FLOW.md).
+Applicable `AGENTS.md`, the current authorization/checkpoint and the subsystem
+contract define scope. This workflow grants no ingestion, promotion or deployment
+authority and is not required for ordinary documentation edits.
 
-## Purpose
+## Diagnose and verify the affected boundary
 
-> [!NOTE]
-> **Issue Diagnostics & Reporting Directive (Mandatory Coverage)**
-> Report every issue you find, including ones you are uncertain about or consider low-severity. Do not filter for importance or confidence at this stage - a separate verification step will do that. Your goal here is coverage: it is better to surface a finding that later gets filtered out than to silently drop a real bug. For each finding, include your confidence level and an estimated severity so a downstream filter can rank them.
+1. Define one observable failure and the result that would close it. Inspect the
+   caller, relevant contract and existing evidence before changing anything.
+   Resolve conflicting observations instead of repeating an entire old workflow.
+2. Compare only relevant surfaces: resolved config, actual runtime owner/status,
+   durable output and its consumer. Discover the configured endpoint; do not
+   assume a default port or that `/api/runs/latest/evidence` belongs to this run.
+   Use bounded read-only checks first and keep secret-bearing config output local.
+3. Repair the cause at its owning boundary and retain original-failure evidence.
+   Validate the regression and affected production caller, including meaningful
+   negative/failure cases. Do not weaken contracts or hide diagnostic failures.
+4. Select integration evidence by the claim below. Expand only when the boundary
+   under test, current authorization and earlier evidence justify it.
 
-Close one concrete evidence seam without widening the blast radius.
+| Claim | Required evidence |
+| --- | --- |
+| Read model, API or UI consumes existing output correctly | Isolated production-caller check against suitable saved/copy fixtures; verify attributable output and failure behavior |
+| Current ingestion produces correct evidence | Fresh isolated source-to-consumer probe through the selected production path; follow [clean memory start](CLEAN_MEMORY_START.md) |
+| Ingestion coverage, cross-scene behavior, duration or recovery | Authorized selected full-source witness when the smaller probe cannot establish the claim |
+| Runtime deployment or release works | Its existing deployment/release gates in addition to source checks; a unit pass is not deployment evidence |
 
-This workflow is for cases where the system probably has the right pieces, but
-the operator surface, API route, runtime config, or persistence boundary is not
-showing truthful evidence yet.
+For ingestion proof, bind revision/configuration, input hash, run and epoch.
+Inspect each applicable selected store/step and its consumer: manifests, ledger,
+SQLite/KG and configured vector outputs as relevant. Qdrant point provenance and
+FAISS type/count checks apply when those stores participate; they are not gates
+for unrelated repairs. Explain warnings, fallbacks and supported negatives.
+An optional-stage failure can preserve core operation without passing that feature.
 
-## Loop
+## Record and stop
 
-1. **Name one seam**
-   - Example: API reports `faster_whisper=not_installed`, but WSL preflight says
-     the configured worker can import it.
-   - Do not combine unrelated seams in the same pass.
+Keep exact commands/results, evidence locations and unverified scope in the task
+receipt. Update `PROJECT.md` when its checkpoint changes and the roadmap when a
+gate changes; avoid duplicating the narrative. Generated current-state/RAG
+projections are never hand-edited. Use `scripts/docs/build_current_state.py` only
+for an in-scope capture/render/verify; rendering old evidence does not refresh it.
 
-2. **Prove the current contract**
-   - Start with `AGENTS.md`, `docs/agent/CURRENT_STATE.md`,
-     `docs/agent/current_state.json`, and the subsystem contract.
-   - Run read-only status probes first:
+Report confirmed defects and material unresolved risks with supporting evidence;
+label hypotheses and use the smallest useful check before promoting them to
+findings. Do not flood the backlog with every speculative issue. Preserve useful
+historical receipts without copying their old directions into current instructions.
 
-```powershell
-git status --short --branch
-conda run --no-capture-output -n goodq_core python -m cli.print_config
-Invoke-RestMethod -Uri 'http://127.0.0.1:30000/api/status' -TimeoutSec 10
-```
+Reuse passing checks on unchanged source. If independent review is used, the lead
+checks the relevant evidence, source/diff and test coverage; rerun a test only for
+a changed patch, missing/contradictory evidence or an applicable release gate.
+Do not edit code/config while a running witness may import it, overlap mutating
+seams, or bypass current review/test holds. A failing broad gate remains failed;
+diagnose it before spending on unrelated validation. Stop at the approved outcome
+or an actual blocker and report its source, rather than repeating the plan.
 
-3. **Compare authoritative surfaces**
-   - Config truth: `cli.print_config`
-   - Runtime truth: API status, service health, WSL preflight, Qdrant status
-   - Persistence truth: scene manifests, temporal index, Qdrant payloads, FAISS
-     indexes, SQLite/KG rows
-   - UI truth: operator console labels, Retro Memory Explorer views/logs, and evidence panels
+## Historical derived-evidence backfill
 
-4. **Patch the boundary, not the symptom**
-   - If an API probe checks the wrong environment, fix the probe.
-   - If a read model collapses distinct evidence channels, fix the projection.
-   - If a writer claims success without durable proof, fix the writer contract.
-   - Keep code changes narrow and covered by a focused regression test.
-
-5. **Validate in two gates**
-   - Gate A: targeted unit/contract test for the seam.
-   - Gate B: fresh scene-first probe in a fresh epoch with Qdrant empty and
-     FAISS absent/new.
-
-6. **Inspect the evidence envelope**
-   - Confirm `/api/runs/latest/evidence` reports the intended scope.
-   - Confirm Qdrant point counts and current-run payload provenance.
-   - Confirm FAISS index type and point counts.
-   - Confirm step ledger failures/warnings are zero or explained.
-   - Confirm retrieval/UI surfaces show evidence without overclaiming.
-
-7. **Update agent communication**
-   - Update `docs/agent/CURRENT_STATE.md`.
-   - Mirror material state into `docs/agent/current_state.json`.
-   - Update the relevant workflow/contract if the pattern should be reused.
-   - Mark superseded observations as historical instead of deleting useful
-     provenance.
-
-## Historical Derived-Evidence Backfill Branch
 
 Use this branch when a completed canonical corpus has a bounded historical
 failure in one *derived* evidence surface—such as speaker signatures—while the
@@ -122,61 +114,15 @@ Current GoodQ tooling:
   batch against its backups and projections, and stops on the first failed
   execution or audit gate.
 
-## Fresh Probe Rules
 
-- Use a fresh epoch for personal-memory validation.
-- Reset or manifest-delete only `goodq_` Qdrant collections when cleanup is
-  approved.
-- Verify fresh collections have `0` points before ingestion.
-- Verify target FAISS files are absent or explicit-ID indexes before broad
-  ingestion.
-- Run one scene or a tiny clip before a full source.
-- Treat generated probe artifacts as local evidence, not source docs.
+## Interpretation traps
 
-## Pass Criteria
+- A plain environment probe can be a false negative for a sourced worker runtime.
+- Collection totals and latest-run selectors do not establish selected-scene proof.
+- Scene-present, dialogue-mentioned, candidate-visible and speaker-aligned
+  evidence remain distinct; model confidence does not merge these channels.
+- Preserve useful audio-emotion rankings even when no label qualifies for promotion.
 
-The pass is ready to commit when:
-
-- the targeted unit/contract tests pass
-- the scene-first probe completes
-- strict proof surfaces are green for the claimed scope
-- optional gaps are labeled as optional or historical, not hidden
-- agent-facing docs no longer point a fresh agent toward the stale hypothesis
-
-## Loop-Exit Guard
-
-After the operator approves a named next action, the next update must contain
-one of three things: the executed action and its evidence, a newly discovered
-blocker with its source, or one materially narrower action needed to clear that
-blocker. Do not restate the approved plan as progress.
-
-If two consecutive updates repeat the same intended action without new
-evidence, stop the active loop. Reconcile the current branch, latest receipt,
-and owning contract; then publish one checkpoint with: completed work, the
-single unresolved seam, and the next verification gate. Resume only from that
-checkpoint.
-
-## Common Traps
-
-- Plain environment checks can be false negatives if the pipeline uses a
-  sourced worker runtime.
-- Latest-run selectors can mix stale report roots with fresh epoch artifacts if
-  scope is not explicit.
-- Collection-level proof can look like scene-level proof unless selected-scope
-  labels are precise.
-- Entity channels must stay separate: scene-present, dialogue-mentioned,
-  candidate-visible, and speaker-aligned evidence do not mean the same thing.
-- Audio emotion rankings can be useful without promoted labels; do not hide
-  ranked scores just because no label cleared the promotion threshold.
-
-## Release-Triage and Delegation Discipline
-
-- Keep exactly one mutating seam active. Stop a broad validation run at its
-  first deterministic failure; diagnose that failure before continuing.
-- Delegate only independent evidence questions. Treat every delegated result as
-  a claim until the lead rechecks the relevant source, diff, and focused test.
-- Record policy or release gaps in the authoritative ledger; do not normalize
-  the codebase merely to make a release checklist look complete.
-- Split large delivery work into bounded phases: diagnose, repair, private
-  promotion, public sanitization, then publication. Preserve the handoff and
-  rollback boundary between phases.
+Use the [agent decision protocol](../../architecture/AGENT_DECISION_PROTOCOL.md)
+for scene/contract and external-anchor boundaries. Private delivery, public
+sanitization and publication remain separate authorization and evidence gates.

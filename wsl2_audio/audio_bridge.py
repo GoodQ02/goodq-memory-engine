@@ -151,6 +151,10 @@ def transcribe_wsl2(audio_path: str, **kwargs: Any) -> Dict[str, Any]:
         DeprecationWarning,
         stacklevel=2,
     )
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        result = scene_result(kwargs['recording_audio'], kwargs['scene_id'])
+        return {**result, 'full_text': result['transcript'], 'transcription': result['segments']}
     return get_bridge().transcribe(audio_path, **kwargs)
 
 
@@ -165,4 +169,8 @@ def transcribe_and_diarize_wsl2(audio_path: str, **kwargs: Any) -> Dict[str, Any
         DeprecationWarning,
         stacklevel=2,
     )
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        result = scene_result(kwargs['recording_audio'], kwargs['scene_id'])
+        return {**result, 'full_text': result['transcript'], 'transcription': result['segments']}
     return get_bridge().transcribe_and_diarize(audio_path, **kwargs)

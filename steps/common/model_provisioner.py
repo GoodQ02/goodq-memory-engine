@@ -279,7 +279,8 @@ def log_download_event(message: str, repo_id: Optional[str] = None):
     try:
         models_root = resolve_models_root()
         data_root = models_root.parent
-        logs_dir = data_root / "logs"
+        logs_override = os.environ.get("GOODQ_LOGS_ROOT", "").strip()
+        logs_dir = Path(logs_override).expanduser().resolve() if logs_override else data_root / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         log_file_path = logs_dir / "model_downloads.log"
         

@@ -47,9 +47,10 @@ def test_validate_ucf_epoch_uses_configured_report_directory(tmp_path, monkeypat
 
     captured = {}
 
-    def fake_run_validation(*, mode, report_dir):
+    def fake_run_validation(*, mode, report_dir, config):
         captured["mode"] = mode
         captured["report_dir"] = report_dir
+        captured["config"] = config
         return 0
 
     monkeypatch.setattr(
@@ -69,6 +70,7 @@ def test_validate_ucf_epoch_uses_configured_report_directory(tmp_path, monkeypat
     assert captured == {
         "mode": "offline",
         "report_dir": expected_report_dir,
+        "config": client.config,
     }
 
 
@@ -77,9 +79,10 @@ def test_validate_ucf_epoch_reads_failure_from_same_report_directory(tmp_path, m
 
     expected_report_dir = tmp_path / "validator-reports"
 
-    def fake_run_validation(*, mode, report_dir):
+    def fake_run_validation(*, mode, report_dir, config):
         assert mode == "offline"
         assert report_dir == expected_report_dir
+        assert config is client.config
         report_dir.mkdir(parents=True)
         (report_dir / "ucf_validation_report.json").write_text(
             json.dumps({"vector_integrity": {"errors": ["isolated validator failure"]}}),
@@ -293,6 +296,8 @@ def test_confirmation_token_store_failure_preserves_last_valid_store(tmp_path, m
 
 
 EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
+    "identity.apply_appearances",
+    "identity.undo_appearances",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -317,6 +322,8 @@ EXPECTED_LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 }
 
 EXPECTED_LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
+    "identity.apply_appearances",
+    "identity.undo_appearances",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -362,7 +369,7 @@ def test_identity_face_label_requires_exact_scope_confirmation(
     monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "agent-home"))
     client = MiniAgentClient(profile="safe")
     client.agent_available = True
-    scope = {"cluster_id": "face_cluster_0", "label": "Grace"}
+    scope = {"cluster_id": "face_cluster_0", "label": "Grace", "content_sha256": "a" * 64}
 
     requested, requested_rc = client.authorize_action(
         prompt="Prepare one face label",
@@ -386,6 +393,85 @@ def test_identity_face_label_requires_exact_scope_confirmation(
 
     assert confirmed_rc == 0
     assert confirmed["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "operation, summary",
+    [
+        ("identity.label_face_cluster", {"cluster_id": "fc_001", "label": "Alice"}),
+        ("identity.confirm_speaker_cluster", {"cluster_id": "sc_001", "confirmed": True}),
+        ("identity.save_roster", {"identity_id": "p1"}),
+        ("identity.export_roster", {"identity_count": 1}),
+    ],
+)
+@pytest.mark.parametrize(
+    "digest_scope",
+    [
+        {},
+        {"content_sha256": None},
+        {"content_sha256": ""},
+        {"content_sha256": "a" * 63},
+        {"content_sha256": "a" * 65},
+        {"content_sha256": "A" * 64},
+        {"content_sha256": "g" * 64},
+        {"content_sha256": 123},
+    ],
+    ids=["missing", "null", "empty", "short", "long", "uppercase", "not-hex", "not-string"],
+)
+def test_identity_confirmation_rejects_missing_or_invalid_content_digest(
+    operation, summary, digest_scope, tmp_path, monkeypatch
+):
+    agent_home = tmp_path / "identity-invalid-scope"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    client = MiniAgentClient(profile="safe", config={"agent": {"execution_mode": "in_process"}})
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare a fixture identity edit",
+        mode="ops",
+        tool_name=operation,
+        tool_args={**summary, **digest_scope},
+    )
+
+    assert rc == 1
+    assert envelope["errors"][0]["code"] == "invalid_tool_arguments"
+    assert not (agent_home / "confirmation_tokens.json").exists()
+
+
+@pytest.mark.parametrize(
+    "operation, scope",
+    [
+        ("identity.label_face_cluster", {"cluster_id": "fc_001", "label": "Alice", "content_sha256": "a" * 64}),
+        ("identity.confirm_speaker_cluster", {"cluster_id": "sc_001", "confirmed": True, "content_sha256": "a" * 64}),
+        ("identity.save_roster", {"identity_id": "p1", "content_sha256": "a" * 64}),
+        ("identity.export_roster", {"identity_count": 1, "content_sha256": "a" * 64}),
+        ("identity.execute_stitch", {"source_node_name": "speaker_1", "target_person_name": "Alice"}),
+        ("identity.revoke_stitch", {"mapping_id": "fixture_mapping"}),
+        ("identity.rebuild_face_clusters", {"eps": 0.4}),
+        ("identity.validate_roster", {}),
+    ],
+)
+def test_offline_identity_authorization_denies_without_issuing_token(
+    operation, scope, tmp_path, monkeypatch
+):
+    agent_home = tmp_path / "offline-identity-authority"
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(agent_home))
+    monkeypatch.setenv("GOODQ_TOOL_AUDIT_LOG", str(tmp_path / "offline-identity-audit.jsonl"))
+    client = MiniAgentClient(profile="offline", config={"agent": {"execution_mode": "in_process"}})
+    client.agent_available = True
+
+    envelope, rc = client.authorize_action(
+        prompt="Prepare a fixture identity action",
+        mode="ops",
+        tool_name=operation,
+        tool_args=scope,
+    )
+
+    assert rc == 1, envelope
+    assert envelope["status"] == "error"
+    assert envelope["errors"][0]["code"] == "offline_blocked"
+    assert "confirmation_token" not in envelope["result"]
+    assert not (agent_home / "confirmation_tokens.json").exists()
 
 
 def _temporal_summary_scope(**overrides):
@@ -1084,6 +1170,94 @@ def test_file_delete_requires_break_glass_and_exact_confirmation(
     assert confirm_rc == 0
     assert result["status"] == "success"
     handler.assert_called_once_with(requested_args)
+
+
+def _file_delete_client(monkeypatch):
+    monkeypatch.setenv("GOODQ_BREAK_GLASS", "1")
+    return MiniAgentClient(
+        profile="safe",
+        config={"agent": {"execution_mode": "in_process"}},
+    )
+
+
+def _assert_file_delete_failure(client, target):
+    result, rc = _confirm_tool_directly(client, "file_delete", {"path": str(target)})
+
+    assert rc == 1
+    assert result["status"] == "fatal_error"
+    assert result["errors"][0]["code"] == "execution_failed"
+    assert "deleted" not in result.get("output", {})
+    audit_rows = [
+        json.loads(line)
+        for line in Path(os.environ["GOODQ_TOOL_AUDIT_LOG"]).read_text().splitlines()
+    ]
+    execution = [row for row in audit_rows if row["event_type"] == "execution"][-1]
+    assert execution["status"] == "fatal_error"
+    assert execution["return_code"] == 1
+    assert execution["error_codes"] == ["execution_failed"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows open handles deny deletion")
+def test_file_delete_open_file_reports_real_filesystem_failure(tmp_path, monkeypatch):
+    client = _file_delete_client(monkeypatch)
+    target = tmp_path / "held-open.txt"
+    target.write_text("retained evidence", encoding="utf-8")
+
+    with target.open("rb"):
+        _assert_file_delete_failure(client, target)
+
+    assert target.read_text(encoding="utf-8") == "retained evidence"
+
+
+@pytest.mark.parametrize("failure_point", ["stat", "unlink", "rmtree"])
+def test_file_delete_filesystem_errors_reach_caller_and_audit(
+    failure_point, tmp_path, monkeypatch
+):
+    import shutil
+
+    client = _file_delete_client(monkeypatch)
+    target = tmp_path / "target"
+    if failure_point == "rmtree":
+        target.mkdir()
+        retained = target / "retained.txt"
+    else:
+        retained = target
+    retained.write_text("retained evidence", encoding="utf-8")
+
+    def fail_target(original):
+        def guarded(path, *args, **kwargs):
+            if Path(path) == target:
+                raise PermissionError("fixture deletion denied")
+            return original(path, *args, **kwargs)
+        return guarded
+
+    with monkeypatch.context() as failure:
+        if failure_point == "rmtree":
+            failure.setattr(shutil, "rmtree", fail_target(shutil.rmtree))
+        else:
+            failure.setattr(Path, failure_point, fail_target(getattr(Path, failure_point)))
+        _assert_file_delete_failure(client, target)
+
+    assert retained.read_text(encoding="utf-8") == "retained evidence"
+
+
+@pytest.mark.parametrize("target_kind", ["file", "directory", "absent"])
+def test_file_delete_reports_actual_boolean_result(tmp_path, monkeypatch, target_kind):
+    client = _file_delete_client(monkeypatch)
+    target = tmp_path / "target"
+    if target_kind == "file":
+        target.write_text("disposable", encoding="utf-8")
+    elif target_kind == "directory":
+        target.mkdir()
+        (target / "child.txt").write_text("disposable", encoding="utf-8")
+
+    result, rc = _confirm_tool_directly(client, "file_delete", {"path": str(target)})
+
+    assert rc == 0
+    assert result["status"] == "success"
+    assert result["output"] == {"deleted": target_kind != "absent"}
+    assert result["side_effect_report"]["mutated"] is (target_kind != "absent")
+    assert not target.exists()
 
 
 @pytest.mark.parametrize(
@@ -2697,7 +2871,9 @@ def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key=
     """)
     conn.execute("INSERT OR REPLACE INTO media_sources VALUES ('vh_test_001', 'test.mp4', 10.0, 30.0, 1920, 1080, '2026-06-15')")
     
-    # Log a frame
+    # Delivery tests use a global scene identity; legacy aliases need a manifest.
+    from steps.common.memory import _make_id
+    fixture_scene_id = _make_id("scene", ["vh_test_001", "0.000", "1.000"])
     conn.execute("""
     INSERT INTO context_frames (
         video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
@@ -2709,7 +2885,7 @@ def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key=
         'vh_test_001', 'ucf.v0.1', 'epoch_test', 'run_test', 0.0, 1.0,
         'video', 'image_embed_clip', 'openai/clip-vit-large-patch14', 1.0,
         None, 'normalized_yxyx_top_left', vector_key, vector_backend, vector_collection,
-        384, 'openai/clip-vit-large-patch14', 'scene_001', None, '{}', 'hash', promotion_status
+        384, 'openai/clip-vit-large-patch14', fixture_scene_id, None, '{}', 'hash', promotion_status
     ))
     conn.commit()
     conn.close()

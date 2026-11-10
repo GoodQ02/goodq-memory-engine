@@ -71,6 +71,28 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/epoch_2025_12_22/processing/01x01 - Good Ne
 
 `phase6_status` and `phase6_complete` are the canonical Phase 6 truth surface for the video bundle.
 
+### Standalone source variant
+
+Standalone manifests use the same container with optional
+`source_kind: image | document | audio`, `source_path`, `original_filename`,
+and one canonical source scene. Their retained source is content-bound under
+`<configured processing>/<source_sha256>/`; `video_id` and `video_hash` retain
+the existing scope keys and contain that SHA256. The source scene ID uses the
+existing scene hash and `[0,0]` for image/document or measured audio duration.
+The scene repeats `source_kind` and `source_path`. Images carry `keyframe`
+worker outputs, audio carries `audio` outputs, and documents carry exact
+`document_text` plus `document_meta` parser provenance. The temporal index's
+`segments` array carries the corresponding source bundle; a static bundle is
+not a speech segment.
+
+`phase5_complete` records artifact completion for this variant. It does not
+claim video detection or Phase 6 execution, and the video-only Phase 6 fields
+above are not required. A separate `standalone_source` UCF anchor binds this
+representation; it cannot substitute for `video_scene_detect` on video input.
+Readers default absent `source_kind` to video. See the
+[standalone storage contract](MEMORY_STORAGE.md#standalone-source-bundles)
+for promotion, source retention and compatibility rules.
+
 ---
 
 ## Scene Object

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-09 -->
 
 <p align="center">
   <img src="samples/assets/q-git-square.png" alt="GoodQ4All Logo" width="130" />
@@ -132,11 +132,42 @@ If you are developing, customizing the pipeline, or running from source:
 
 ---
 
-## 📺 User Interfaces
+## 📺 User Interfaces & Identity Curation Suite
 
-GoodQ4All ships with two local operator console variants:
-*   **Classic Operator Console** (served at `/ui/operator_console_v1/`): Exposes the current scope strip, flight deck, proof/evidence status, recurrence reports, and video inventories.
-*   **Retro Memory Explorer (v1.4.7)** (served at `/ui/retro_console_v1/`): A premium cyber-CRT dashboard featuring a four-panel resizable/collapsible layout with floating restore tabs, an entity co-occurrence graph with dynamic zoom and flight transitions, an Inspector panel containing keyframe image/transcript views, and bidirectional timeline checklists.
+GoodQ4All ships a cohesive local web suite with shared **Deep Obsidian Night** and **Daylight Studio** themes (`Theme: NIGHT / DAY / AUTO`):
+
+*   **Memory Explorer (v2.1)** (`/ui/retro_console_v1/`): Four-panel workspace combining natural-language multimodal search, an interactive 2D/3D entity co-occurrence map, a progressive-disclosure Scene & Evidence Inspector (with clean grounded summaries, transcripts, OCR, and provenance labels), and multi-recording collection switching with explicit unavailable-source notices.
+*   **Identity Curation & Match Review Workbench** (`/ui/identity_workbench/`): Human-in-the-loop curation across saved recordings — browse **People & Connected Scenes** (`People -> Scenes -> Watch`) with direct playback return links, review cross-movie face and voice candidates (`Correct / Incorrect / Unsure`), reassign rejected face pairings to the right saved person (`"Who is this instead?"`), and apply or undo changes through single-use confirmation tokens and cryptographic review receipts.
+*   **Speaker Stitching Workbench** (`/ui/stitching_workbench/`) & **Classic Operator Console** (`/ui/operator_console_v1/`): Governed speaker-pattern ledger stitching, scope/flight-deck telemetry, and recurrence inspection.
+
+### Workspace Showcase (Synthetic Public-Domain Apollo 11 Archive)
+
+<p align="center">
+  <img src="samples/assets/ui_memory_explorer_night.png" alt="GoodQ Memory Explorer in Deep Obsidian Night Mode" width="900" style="max-width: 100%; border-radius: 8px;" />
+  <br />
+  <sub><em>Memory Explorer (Deep Obsidian Night Mode) — 2D/3D entity co-occurrence graph, grounded scene Inspector, and timeline cards.</em></sub>
+</p>
+
+<table width="100%" border="0" cellspacing="0" cellpadding="8">
+  <tr>
+    <td align="center" width="50%">
+      <img src="samples/assets/ui_people_appearances_night.png" alt="Saved People and Connected Scenes" style="max-width: 100%; border-radius: 8px;" /><br />
+      <sub><em>People &amp; Connected Scenes — browse verified appearances across saved recordings and jump directly to original scene playback.</em></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="samples/assets/ui_match_review_correction_night.png" alt="Cross-Movie Face Match Review and Reassignment" style="max-width: 100%; border-radius: 8px;" /><br />
+      <sub><em>Cross-Movie Match Review — mark Correct / Incorrect / Unsure, reassign rejected pairings ("Who is this instead?"), and preview before Apply.</em></sub>
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary><b>View Daylight Studio Theme</b></summary>
+<br />
+<p align="center">
+  <img src="samples/assets/ui_memory_explorer_day.png" alt="GoodQ Memory Explorer in Daylight Studio Mode" width="900" style="max-width: 100%; border-radius: 8px;" />
+</p>
+</details>
 
 ---
 
@@ -162,8 +193,7 @@ GoodQ4All ships with two local operator console variants:
 
 MIT. See [`LICENSE`](LICENSE).
 
-## September 2026 source update
+## November 2026 source & UI update
 
-The current source includes supervised startup/drain and installer contract fixes.
-See [public release scope](docs/releases/PUBLIC_SANITIZATION_MANIFEST.md). This
-source update does not replace existing published installer binaries.
+The current source includes the modernized Deep Obsidian Night / Daylight Studio UI suite, multi-recording library browsing (`People -> Scenes -> Watch`), governed cross-movie face/voice match review with rejected-pairing reassignment (`"Who is this instead?"`), grounding-markup stripping, corpus-neutral search/grounding repairs, lossless phrase grouping, and engineering/Pydantic `ConfigDict` cleanups.
+See [public release scope](docs/releases/PUBLIC_SANITIZATION_MANIFEST.md). This source update does not replace existing published installer binaries.

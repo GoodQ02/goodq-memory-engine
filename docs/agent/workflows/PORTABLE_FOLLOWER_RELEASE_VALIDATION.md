@@ -1,6 +1,7 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_AGENT_WORKFLOW -->
-<!-- DOC_LAST_VERIFIED: 2026-08-08 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-06 -->
+<!-- INSTRUCTION_REVIEW: documentation only; no follower qualification -->
 
 # Portable Follower Release Validation
 
@@ -62,6 +63,16 @@ applies to named followers such as GR-16 and GS-32.
    ```
 
    A missing command is a packaging failure; rebuild before staging a scene.
+
+## Remote elevated installer details
+
+For an authorized remote elevated install, use the installed local-network
+workflow's durable installer procedure when available. Read back the generated
+task runner before launch: the quoted setup path and `/S` must be on one line,
+otherwise Session 0 can wait invisibly for an interactive installer. During NSIS
+verification/extraction, inspect the active child's CPU/I/O before treating a
+quiet parent as stalled. Reconnect to durable task/receipt state rather than
+starting a duplicate installer. This does not authorize elevation or installation.
 
 ## First-use and witness gates
 

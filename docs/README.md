@@ -1,12 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-10-13 -->
 
 # GoodQ4All Documentation
 
 This is the active documentation landing page. It is a navigation surface, not
 runtime authority. Prefer the narrowest canonical contract for durable behavior
-and the generated current-state projections for time-sensitive facts.
+and scoped live evidence for time-sensitive facts. Pre-reset corpus reports and
+generated state projections are retired from ingestion planning and acceptance.
 
 ## Begin Here
 
@@ -14,8 +15,7 @@ and the generated current-state projections for time-sensitive facts.
 - [Timeless project orientation](agent/PROJECT_ORIENTATION.md)
 - [Current bounded mission](../PROJECT.md)
 - [Master action register](releases/ROADMAP.md)
-- [Human-readable current state](agent/CURRENT_STATE.md)
-- [Machine-readable current state](agent/current_state.json)
+- [Distilled ingestion failure modes](reference/INGESTION_FAILURE_MODES.md)
 - [Documentation authority map](bootstrap/doc_authority_map.md)
 - [ExecPlan protocol](../PLAN.md)
 
@@ -42,9 +42,13 @@ that map or the contracts above.
 - [Qdrant setup](guides/QDRANT_SETUP.md)
 - [Agent office](agent/README.md)
 - [Public release scope](releases/PUBLIC_SANITIZATION_MANIFEST.md)
-- [RAG context pack](GOODQ_RAG_CONTEXT_PACK.md)
+- [Historical RAG context capture — pre-reset corpus claims retired](GOODQ_RAG_CONTEXT_PACK.md)
 
 ## Generated Discovery Surfaces
+
+`agent/CURRENT_STATE.md` and `agent/current_state.json` retain their original
+capture dates. Do not use their pre-reset corpus claims as today's state or
+regenerate them from old evidence to imply freshness. PROJECT.md owns the handoff.
 
 - [Active repository file index](reference/indexes/AGENT_FILE_INDEX.md)
 - [Codebase Python-module index](codebase_index/README.md)

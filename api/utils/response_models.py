@@ -23,10 +23,20 @@ def default_confidence_payload() -> Dict[str, Any]:
 class SceneResponse(BaseModel):
     """Scene metadata response."""
     video_id: Optional[str] = None
+    source_kind: str = "video"
+    document_text: Optional[str] = None
+    document_meta: Optional[Dict[str, Any]] = None
+    original_source_endpoint: Optional[str] = None
+    original_source_available: bool = False
+    original_source_media_type: Optional[str] = None
     scene_id: SceneId
     start: float
     end: float
     duration: float
+    original_audio_endpoint: Optional[str] = None
+    original_audio_available: bool = False
+    original_video_endpoint: Optional[str] = None
+    original_video_available: bool = False
     representative_frame: Optional[str] = None
     representative_frame_available: bool = False
     representative_frame_endpoint: Optional[str] = None
@@ -36,12 +46,18 @@ class SceneResponse(BaseModel):
     frame_path_count: int = 0
     frame_paths_redacted: bool = False
     visual_caption: Optional[str] = None
+    caption_meta: Optional[Dict[str, Any]] = None
+    caption_observations: List[Dict[str, Any]] = Field(default_factory=list)
     ocr_text: Optional[str] = None
+    ocr_observations: List[Dict[str, Any]] = Field(default_factory=list)
     ocr_date_candidates: List[str] = Field(default_factory=list)
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
+    detect_meta: Optional[Dict[str, Any]] = None
+    detected_objects: List[Dict[str, Any]] = Field(default_factory=list)
+    object_observations: List[Dict[str, Any]] = Field(default_factory=list)
     transcript: Optional[str] = None
     speakers: List[str] = Field(default_factory=list)
     audio_chunks: List[int] = Field(default_factory=list)
@@ -49,10 +65,17 @@ class SceneResponse(BaseModel):
     dominant_speaker_id: Optional[str] = None
     continuity_key: Optional[str] = None
     diarization_status: Optional[str] = None
+    diarization_note: Optional[str] = None
     emotion_status: Optional[str] = None
+    emotion_note: Optional[str] = None
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    emotion_segments: List[Dict[str, Any]] = Field(default_factory=list)
+    emotion_input: Optional[Dict[str, Any]] = None
+    sound_events: List[Dict[str, Any]] = Field(default_factory=list)
+    sound_event_meta: Optional[Dict[str, Any]] = None
+    audio_evidence: Optional[Dict[str, Any]] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
     audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
@@ -60,11 +83,17 @@ class SceneResponse(BaseModel):
     text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
+    transcript_meta: Optional[Dict[str, Any]] = None
+    transcript_outcome: Optional[str] = None
+    transcript_outcome_reason: Optional[str] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
     sentiment_meta: Optional[Dict[str, Any]] = None
     time_hints: Optional[Dict[str, Any]] = None
+    music_events: Optional[List[Union[Dict[str, Any], str]]] = Field(
+        default=None, description="Retained transcript-pattern cue occurrences; null means unrecorded, not successful absence."
+    )
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
@@ -87,8 +116,16 @@ class SceneResponse(BaseModel):
 
 class SearchResult(BaseModel):
     """Search result with score and metadata."""
-    score: float
+    score: float = Field(description="Retrieval ranking score, not calibrated match or evidence confidence.")
+    source_kind: str = "video"
+    document_text: Optional[str] = None
+    document_meta: Optional[Dict[str, Any]] = None
+    matched_document_span: Optional[Dict[str, Any]] = None
+    document_context_span: Optional[Dict[str, Any]] = None
+    lexical_document_span: Optional[Dict[str, Any]] = None
     vector_score: Optional[float] = None
+    visual_ranking: Optional[Dict[str, Any]] = Field(default=None,
+        description="Saved-caption/CLIP ranking provenance, not evidence confidence.")
     identity_boost: float = 0.0
     identity_match: Optional[str] = None
     identity_evidence: List[Dict[str, Any]] = Field(default_factory=list)
@@ -108,11 +145,25 @@ class SearchResult(BaseModel):
     representative_frame_available: bool = False
     representative_frame_endpoint: Optional[str] = None
     representative_frame_path_redacted: bool = False
+    visual_caption: Optional[str] = None
+    caption_meta: Optional[Dict[str, Any]] = None
+    caption_observations: List[Dict[str, Any]] = Field(default_factory=list)
+    ocr_text: Optional[str] = None
+    ocr_observations: List[Dict[str, Any]] = Field(default_factory=list)
     transcript: Optional[str] = None
+    transcript_outcome_evidence: Dict[str, Any] = Field(default_factory=lambda: {"status":"unverified","reason":"not_exposed"})
     keywords: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
+    detect_meta: Optional[Dict[str, Any]] = None
+    detected_objects: List[Dict[str, Any]] = Field(default_factory=list)
+    object_observations: List[Dict[str, Any]] = Field(default_factory=list)
     audio_emotion: Optional[str] = None
+    emotion_segments: List[Dict[str, Any]] = Field(default_factory=list)
+    emotion_input: Optional[Dict[str, Any]] = None
+    sound_events: List[Dict[str, Any]] = Field(default_factory=list)
+    sound_event_meta: Optional[Dict[str, Any]] = None
+    audio_evidence: Optional[Dict[str, Any]] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
     audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
@@ -120,6 +171,13 @@ class SearchResult(BaseModel):
     text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
+    transcript_meta: Optional[Dict[str, Any]] = None
+    transcript_outcome: Optional[str] = None
+    transcript_outcome_reason: Optional[str] = None
+    diarization_status: Optional[str] = None
+    diarization_note: Optional[str] = None
+    emotion_status: Optional[str] = None
+    emotion_note: Optional[str] = None
     audio_vector_proof: Optional[Dict[str, Any]] = None
     current_run_qdrant_audio_proven: bool = False
     current_run_audio_vector_proven: bool = False
@@ -161,6 +219,9 @@ class SearchResponse(BaseModel):
 class TimelineSegment(BaseModel):
     """Timeline segment with all modalities."""
     segment_id: int
+    source_kind: str = "video"
+    document_text: Optional[str] = None
+    document_meta: Optional[Dict[str, Any]] = None
     start: float
     end: float
     scene_id: Optional[SceneId] = None
@@ -169,6 +230,9 @@ class TimelineSegment(BaseModel):
     transcript: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     objects: List[str] = Field(default_factory=list)
+    detect_meta: Optional[Dict[str, Any]] = None
+    detected_objects: List[Dict[str, Any]] = Field(default_factory=list)
+    object_observations: List[Dict[str, Any]] = Field(default_factory=list)
     clip_id: Optional[str] = None
     dino_id: Optional[str] = None
     representative_frame: Optional[str] = None
@@ -179,16 +243,26 @@ class TimelineSegment(BaseModel):
     frame_path_count: int = 0
     frame_paths_redacted: bool = False
     visual_caption: Optional[str] = None
+    caption_meta: Optional[Dict[str, Any]] = None
+    caption_observations: List[Dict[str, Any]] = Field(default_factory=list)
     ocr_text: Optional[str] = None
+    ocr_observations: List[Dict[str, Any]] = Field(default_factory=list)
     ocr_date_candidates: List[str] = Field(default_factory=list)
     speaker_count: Optional[int] = None
     dominant_speaker_id: Optional[str] = None
     continuity_key: Optional[str] = None
     diarization_status: Optional[str] = None
+    diarization_note: Optional[str] = None
     emotion_status: Optional[str] = None
+    emotion_note: Optional[str] = None
     speaker_voice_signature_count: Optional[int] = None
     speaker_voice_signature_meta: Optional[Dict[str, Any]] = None
     audio_emotion: Optional[str] = None
+    emotion_segments: List[Dict[str, Any]] = Field(default_factory=list)
+    emotion_input: Optional[Dict[str, Any]] = None
+    sound_events: List[Dict[str, Any]] = Field(default_factory=list)
+    sound_event_meta: Optional[Dict[str, Any]] = None
+    audio_evidence: Optional[Dict[str, Any]] = None
     audio_emotion_scores: Optional[Dict[str, Any]] = None
     audio_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     audio_emotion_top_candidate: Optional[Dict[str, Any]] = None
@@ -196,11 +270,17 @@ class TimelineSegment(BaseModel):
     text_emotion_ranking: List[Dict[str, Any]] = Field(default_factory=list)
     text_emotion_meta: Optional[Dict[str, Any]] = None
     clap_meta: Optional[Dict[str, Any]] = None
+    transcript_meta: Optional[Dict[str, Any]] = None
+    transcript_outcome: Optional[str] = None
+    transcript_outcome_reason: Optional[str] = None
     sentiment: Optional[Dict[str, Any]] = None
     sentiment_label: Optional[str] = None
     sentiment_score: Optional[float] = None
     sentiment_meta: Optional[Dict[str, Any]] = None
     time_hints: Optional[Dict[str, Any]] = None
+    music_events: Optional[List[Union[Dict[str, Any], str]]] = Field(
+        default=None, description="Retained transcript-pattern cue occurrences; null means unrecorded, not successful absence."
+    )
     tags: List[str] = Field(default_factory=list)
     tag_details: List[Dict[str, Any]] = Field(default_factory=list)
     scene_present_entities: List[Dict[str, Any]] = Field(default_factory=list)
@@ -224,6 +304,7 @@ class TimelineSegment(BaseModel):
 class TimelineResponse(BaseModel):
     """Complete timeline for a video."""
     video_id: str
+    source_kind: str = "video"
     duration: float
     total_scenes: int
     total_segments: int
@@ -234,6 +315,7 @@ class TimelineResponse(BaseModel):
 class VideoListItem(BaseModel):
     """Video list item with basic metadata."""
     video_id: str
+    source_kind: str = "video"
     title: Optional[str] = None
     duration: Optional[float] = None
     total_scenes: Optional[int] = None
@@ -243,6 +325,9 @@ class VideoListItem(BaseModel):
     thumbnail_endpoint: Optional[str] = None
     thumbnail_path_redacted: bool = False
     phase6_complete: Optional[bool] = None
+    library_source: Optional[str] = None
+    epoch_id: Optional[str] = None
+    review_report_id: Optional[str] = None
 
 
 class SystemStatus(BaseModel):
@@ -372,9 +457,12 @@ class UnstitchedPattern(BaseModel):
     node_id: int
     node_name: str
     occurrence_count: int
+    scene_count: int = 0
     voiced_seconds: float
-    segment_count: int
+    segment_count: Optional[int] = None
     sample_transcript: Optional[str] = None
+    possible_same_speaker_patterns: List[str] = Field(default_factory=list)
+    signature_evidence: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class StitchPreviewRequest(BaseModel):
@@ -465,7 +553,9 @@ class OccasionItem(BaseModel):
     occurrence_count: int
     occasion_type: str
     source: str
-    confidence: float
+    confidence: Optional[float] = None
+    scene_count: Optional[int] = None
+    evidence_basis: Optional[str] = None
 
 
 class EntitySummaryItem(BaseModel):
@@ -473,6 +563,7 @@ class EntitySummaryItem(BaseModel):
     entity_id: str
     name: str
     occurrence_count: int
+    scene_count: int = 0
     first_seen: Optional[float] = None
     last_seen: Optional[float] = None
 
@@ -484,6 +575,13 @@ class BuiltInHighlights(BaseModel):
     multi_person_gatherings: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class SentimentCoverage(BaseModel):
+    """Availability within the same selected scenes as the distribution."""
+    classified: int = Field(ge=0)
+    unavailable: int = Field(ge=0)
+    total: int = Field(ge=0)
+
+
 class SummaryDashboardResponse(BaseModel):
     """Response model for cumulative dashboard metrics."""
     scope_metadata: ScopeMetadata
@@ -491,6 +589,7 @@ class SummaryDashboardResponse(BaseModel):
     places: List[EntitySummaryItem] = Field(default_factory=list)
     occasions: List[OccasionItem] = Field(default_factory=list)
     sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    sentiment_coverage: Optional[SentimentCoverage] = None
     top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
     built_in_highlights: BuiltInHighlights
 
@@ -511,6 +610,8 @@ class SceneRef(BaseModel):
     end: float
     representative_frame: Optional[str] = None
     transcript: Optional[str] = None
+    source_sha256: Optional[str] = None
+    music_events: Optional[List[Union[Dict[str, Any], str]]] = None
 
 
 class EntityProfileResponse(BaseModel):
@@ -519,12 +620,16 @@ class EntityProfileResponse(BaseModel):
     entity_id: str
     node_type: str
     name: str
+    source: Optional[str] = None
+    evidence_basis: Optional[str] = None
     occurrence_count: int
+    scene_count: int = 0
     first_seen: Optional[float] = None
     last_seen: Optional[float] = None
     co_occurrences: List[CoOccurrenceItem] = Field(default_factory=list)
     scenes: List[SceneRef] = Field(default_factory=list)
     sentiment_distribution: Dict[str, int] = Field(default_factory=dict)
+    sentiment_coverage: Optional[SentimentCoverage] = None
     top_emotions: List[Dict[str, Any]] = Field(default_factory=list)
 
 

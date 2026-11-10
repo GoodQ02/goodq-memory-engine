@@ -39,9 +39,6 @@ def resolve_piper(cfg: Dict[str, Any]) -> (Optional[str], Optional[str], Optiona
     return exe, voice, out_dir
 
 
-def resolve_tesseract(cfg: Dict[str, Any]) -> Optional[str]:
-    return cfg_get(cfg, 'config.tools.tesseract_exe')
-
 
 def _normalize_executable_hint(raw: Optional[str], *, exe_names: tuple[str, ...]) -> Optional[str]:
     if not isinstance(raw, str):

@@ -10,6 +10,7 @@ All processing is offloaded to WSL2 with GPU acceleration.
 """
 
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -45,6 +46,8 @@ def _failed_component_outcome(
 def _build_wsl_capability_outcomes(result: dict) -> dict:
     transcript = str(result.get("transcription") or "").strip()
     transcription_status = str(result.get("transcription_status") or "").lower()
+    if result.get("transcription_error"):
+        transcription_status = "error"
     if transcription_status == "success" and transcript:
         transcription = {
             "status": "ok",
@@ -53,10 +56,45 @@ def _build_wsl_capability_outcomes(result: dict) -> dict:
         }
     elif transcription_status == "success":
         transcription = {
-            "status": "not_applicable",
-            "reason": "no_text",
+            # Process success without words is not evidence of absent speech.
+            # Match the scene classifier and leave acceptance visibly incomplete.
+            "status": "skipped",
+            "reason": "worker_success_empty_transcript",
+            "transcript_outcome": "unclassified",
             "raw_status": transcription_status,
         }
+        evidence = result.get("speech_detection")
+        if isinstance(evidence, dict):
+            duration = evidence.get("input_duration_seconds")
+            speech = evidence.get("speech_duration_seconds")
+            valid = (evidence.get("status") == "completed" and evidence.get("method") == "silero_vad"
+                     and all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                             for v in (duration, speech)) and duration > 0 and 0 <= speech <= duration)
+            if valid and not result.get("transcription_error"):
+                transcription.update({
+                    "status": "not_applicable" if speech == 0 else "skipped",
+                    "reason": "no_speech_detected" if speech == 0 else "speech_detected_without_words",
+                    "transcript_outcome": "no_speech" if speech == 0 else "no_intelligible_speech",
+                    "speech_detection": dict(evidence),
+                })
+        quality = result.get("transcription_quality")
+        if isinstance(quality, dict) and quality.get("status") == "completed":
+            threshold = quality.get("threshold")
+            rejected = quality.get("rejected_segments")
+            if (quality.get("rule") == "whisper_no_speech_threshold"
+                    and (quality.get("scope") != "per_source_region"
+                         or quality.get("whole_input_no_speech_supported") is True)
+                    and isinstance(threshold, (int, float)) and not isinstance(threshold, bool)
+                    and math.isfinite(threshold) and 0 <= threshold <= 1
+                    and quality.get("accepted_segment_count") == 0
+                    and isinstance(rejected, list) and rejected
+                    and quality.get("decoded_segment_count") == len(rejected)
+                    and all(isinstance(s, dict) and isinstance(s.get("no_speech_probability"), (int, float))
+                            and not isinstance(s.get("no_speech_probability"), bool)
+                            and threshold < s["no_speech_probability"] <= 1 for s in rejected)):
+                transcription.update({"status": "not_applicable", "reason": "no_speech_detected",
+                    "transcript_outcome": "no_speech", "basis": "whisper_no_speech_probability",
+                    "transcription_quality": dict(quality)})
     else:
         transcription = _failed_component_outcome(
             "transcription",
@@ -67,7 +105,13 @@ def _build_wsl_capability_outcomes(result: dict) -> dict:
 
     diarization_status = str(result.get("diarization_status") or "").lower()
     diarization_segments = result.get("diarization")
-    if diarization_status == "success" and isinstance(diarization_segments, list) and diarization_segments:
+    if (diarization_status == "not_applicable" and result.get("diarization_note") == "no_speech_detected"
+            and transcription.get("transcript_outcome") == "no_speech"
+            and not result.get("diarization_error") and not diarization_segments
+            and not result.get("speakers") and not result.get("speaker_count")
+            and not result.get("speaker_voice_signatures")):
+        diarization = {"status": "not_applicable", "reason": "no_speech_detected", "raw_status": diarization_status}
+    elif diarization_status == "success" and isinstance(diarization_segments, list) and diarization_segments:
         diarization = {
             "status": "ok",
             "reason": "speaker_tracks_emitted",
@@ -96,7 +140,28 @@ def _build_wsl_capability_outcomes(result: dict) -> dict:
 
     emotion_status = str(result.get("emotion_status") or "").lower()
     emotion_label = str(result.get("emotion") or "").strip()
-    if emotion_status == "success" and emotion_label and emotion_label.lower() != "unknown":
+    if (emotion_status == "not_applicable" and result.get("emotion_note") == "no_speech_detected"
+            and transcription.get("transcript_outcome") == "no_speech"
+            and not result.get("emotion_error") and not emotion_label and not result.get("emotion_scores")):
+        acoustic_emotion = {"status": "not_applicable", "reason": "no_speech_detected", "raw_status": emotion_status}
+    elif (emotion_status == "insufficient_evidence"
+          and ((result.get("emotion_input") or {}).get("phrase_selection") or {}).get("policy") == "complete_observed_phrases_v1"
+          and not ((result.get("emotion_input") or {}).get("phrase_selection") or {}).get("selected")
+          and not result.get("emotion_error") and not emotion_label and not result.get("emotion_scores")):
+        acoustic_emotion = {"status": "not_applicable", "reason": "no_complete_supported_phrase",
+                            "raw_status": emotion_status, "quality_status": "insufficient_evidence"}
+    elif (emotion_status == "insufficient_evidence"
+          and (result.get("emotion_input") or {}).get("policy") in {"clear_speech_only_v1", "clear_speech_only_v2"}
+          and not (result.get("emotion_input") or {}).get("selected")
+          and not emotion_label and not result.get("emotion_scores")):
+        acoustic_emotion = {"status": "not_applicable", "reason": "insufficient_clear_speech", "raw_status": emotion_status}
+    elif (emotion_status == "success" and result.get("emotion_segments")
+          and (result.get("emotion_input") or {}).get("policy") in {"clear_speech_only_v1", "clear_speech_only_v2"}
+          and not emotion_label and not result.get("emotion_scores")):
+        acoustic_emotion = {"status": "ok", "reason": "speech_segment_estimates", "count": len(result["emotion_segments"])}
+        if any(s.get("interpretation_status") == "uncertain" for s in result["emotion_segments"]):
+            acoustic_emotion.update(reason="uncertain_complete_phrase_estimates", quality_status="uncertain")
+    elif emotion_status == "success" and emotion_label and emotion_label.lower() != "unknown":
         acoustic_emotion = {
             "status": "ok",
             "reason": "emotion_emitted",
@@ -120,7 +185,13 @@ def _build_wsl_capability_outcomes(result: dict) -> dict:
     embeddings_status = str(result.get("embeddings_status") or "").lower()
     embeddings = result.get("embeddings")
     embedding_dim = result.get("embedding_dim")
-    if (
+    if embeddings_status == "retired":
+        wav2vec2 = {
+            "status": "error" if embeddings or embedding_dim else "skipped",
+            "reason": "retired_status_with_embedding" if embeddings or embedding_dim else "whole_scene_vector_retired",
+            "raw_status": "retired",
+        }
+    elif (
         embeddings_status == "success"
         and isinstance(embeddings, list)
         and bool(embeddings)
@@ -196,6 +267,9 @@ def audio_diarize_wsl2(audio_path: str, **kwargs) -> dict:
     Returns:
         dict with speaker segments and timestamps
     """
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        return scene_result(kwargs['recording_audio'], kwargs['scene_id'])
     logger.info(f"[WSL2] Running GPU-accelerated diarization: {audio_path}")
     
     bridge = WSL2AudioBridge()
@@ -219,6 +293,38 @@ def audio_diarize_wsl2(audio_path: str, **kwargs) -> dict:
         return {'error': error_msg, 'speakers': []}
 
 
+def _transcription_projection(result: dict, *, engine: str) -> dict:
+    """One evidence projection for unified, local and compatibility callers."""
+    text = str(result.get('transcription') or '')
+    outcome = _build_wsl_capability_outcomes(result)['transcription']
+    alignment = result.get('word_alignment') or {}
+    words = alignment.get('words') or []
+    segments = result.get('segments') or (result.get('word_timestamps') if not alignment else []) or []
+    error = result.get('transcription_error') or result.get('error')
+    failed = bool(error) or result.get('transcription_status') == 'error'
+    meta = {key: result.get(key) for key in ('transcription_context', 'transcription_decoding',
+        'transcription_quality', 'transcription_timing', 'speech_detection', 'language')}
+    # Speaker merging replaces display segments with attributed word turns.
+    # Preserve whole native phrases separately; their bounds must not be lent
+    # to those smaller turns or lost when attribution is materialized.
+    meta['phrase_observations'] = [{'text': str(segment.get('text') or ''),
+        **segment['phrase_timing'], 'source_segment_index': index}
+        for index, segment in enumerate(segments) if isinstance(segment, dict)
+        and isinstance(segment.get('phrase_timing'), dict)]
+    meta.update(status='partial' if failed and text else 'error' if failed else result.get('transcription_status', 'success'),
+        engine=engine, device=result.get('device'), model=result.get('whisper_model') or result.get('model'),
+        reason='transcript_available_with_region_errors' if failed and text else outcome['reason'], error=error,
+        word_alignment=result.get('word_alignment'), segments=segments, segment_count=len(segments),
+        outcome_basis=outcome.get('basis', 'silero_vad' if outcome.get('transcript_outcome') == 'no_speech' else None))
+    return {'status': 'partial' if failed and text else 'error' if failed else 'success',
+        'error': error, 'transcript': text, 'full_text': text, 'segments': segments,
+        'word_timestamps': words, 'words': words, 'language': result.get('language'),
+        'language_probability': result.get('language_probability'),
+        'transcript_outcome': 'partial' if failed and text else ('transcript_available' if outcome['status']=='ok'
+            else outcome.get('transcript_outcome', 'runtime_failure')),
+        'transcript_outcome_reason': meta['reason'], 'transcript_meta': meta}
+
+
 def audio_transcribe_wsl2(audio_path: str, **kwargs) -> dict:
     """
     GPU-accelerated transcription via WSL2 (Faster Whisper)
@@ -230,26 +336,20 @@ def audio_transcribe_wsl2(audio_path: str, **kwargs) -> dict:
     Returns:
         dict with transcript and word-level timestamps
     """
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        return scene_result(kwargs['recording_audio'], kwargs['scene_id'])
     logger.info(f"[WSL2] Running GPU-accelerated transcription: {audio_path}")
-    
-    bridge = WSL2AudioBridge()
-    result = bridge.process_audio(audio_path, timeout=kwargs.get('timeout', 3600))
-    
-    if result.get('status') == 'success':
-        # process_audio.py returns 'transcription', not 'full_text'
-        transcript = result.get('transcription', '') or result.get('full_text', '')
-        word_count = len(transcript.split()) if transcript else 0
-        logger.info(f"[WSL2] Transcription complete - {word_count} words")
-        return {
-            'transcript': transcript,
-            'full_text': transcript,
-            'segments': result.get('segments', []) or result.get('word_timestamps', []),
-            'words': result.get('words', []) or result.get('word_timestamps', [])
-        }
-    else:
-        error_msg = result.get('error', 'Unknown error')
-        logger.error(f"[WSL2] Transcription failed: {error_msg}")
-        return {'error': error_msg, 'transcript': '', 'full_text': ''}
+    kwargs.setdefault('transcription_temperature', 0.)
+    raw = _request_audio_worker(audio_path, **kwargs)
+    result = {**raw, **_transcription_projection(raw, engine='wsl_unified')}
+    # Policy/transport failure is still failure even if an old worker emitted words.
+    if raw.get('status') == 'error': result['status'] = 'error'
+    keys = ('status', 'error', 'transcript', 'full_text', 'segments', 'words', 'word_timestamps',
+            'transcript_meta', 'transcript_outcome', 'transcript_outcome_reason', 'language',
+            'language_probability', 'duration', 'bridge_runtime_probe', 'bridge_error_reason',
+            'bridge_error_details', 'wsl_returncode')
+    return {key: result[key] for key in keys if key in result}
 
 
 def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
@@ -266,6 +366,9 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
     Returns:
         dict with emotion labels and confidence scores
     """
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        return scene_result(kwargs['recording_audio'], kwargs['scene_id'])
     logger.debug("[WSL2] Emotion detection handled by unified audio processor")
     
     # Emotion detection now handled by process_audio.py
@@ -280,6 +383,83 @@ def audio_emotion_wsl2(audio_path: str, **kwargs) -> dict:
 audio_diarize = audio_diarize_wsl2
 audio_transcribe = audio_transcribe_wsl2
 audio_emotion = audio_emotion_wsl2
+
+
+def _bound_diarization_to_clip(segments: list, duration: float | None) -> list:
+    """Intersect model turns with the caller's clip, preserving adjusted times."""
+    if duration is None:
+        return segments
+    clip_end = float(duration)
+    if not math.isfinite(clip_end) or clip_end <= 0:
+        raise ValueError("Diarization clip duration must be finite and positive")
+    bounded = []
+    for segment in segments:
+        start, end = float(segment['start']), float(segment['end'])
+        if not (math.isfinite(start) and math.isfinite(end)) or end <= start:
+            raise ValueError("Diarization turn has invalid timestamps")
+        clipped_start, clipped_end = max(0.0, start), min(clip_end, end)
+        if clipped_end <= clipped_start:
+            raise ValueError("Diarization turn does not overlap the caller's clip")
+        turn = dict(segment)
+        if (clipped_start, clipped_end) != (start, end):
+            turn.update(start=clipped_start, end=clipped_end)
+            turn['timing_adjustment'] = {
+                'reason': 'caller_clip_bounds',
+                'original_start': start,
+                'original_end': end,
+                'clip_duration': clip_end,
+            }
+            logger.warning("Bounded diarization turn [%s, %s] to [%s, %s]",
+                           start, end, clipped_start, clipped_end)
+        bounded.append(turn)
+    return bounded
+
+
+def unified_transcription_options(cfg: dict) -> dict:
+    """One projection for direct video, standalone and step-dispatch callers."""
+    from scripts.config_schema import AudioTranscriptionConfig
+    raw = (cfg.get('audio') or {}).get('transcribe') or {}
+    # Legacy callers also carry local-backend keys here. Validate the settings
+    # owned by this projection without changing those callers' routing policy.
+    transcription = AudioTranscriptionConfig.model_validate(
+        {key: raw[key] for key in ('vocabulary', 'temperature') if key in raw})
+    options = {'transcription_temperature': transcription.temperature}
+    if transcription.vocabulary is not None:
+        options['transcription_vocabulary'] = transcription.vocabulary
+    return options
+
+
+def _request_audio_worker(audio_path, duration=None, **kwargs):
+    bridge = WSL2AudioBridge()
+
+    # Dynamic timeout based on duration
+    # ~2-3 seconds per second of audio (transcription + diarization + emotion)
+    if duration:
+        timeout = max(600, int(duration * 3) + 120)  # At least 10 min, or 3x duration + 2min buffer
+    else:
+        timeout = kwargs.get('timeout', 1800)  # Default 30 min
+
+    vocabulary = kwargs.get('transcription_vocabulary')
+    options = {'transcription_vocabulary': vocabulary} if vocabulary is not None else {}
+    temperature = kwargs.get('transcription_temperature')
+    if temperature is not None:
+        options['transcription_temperature'] = temperature
+    result = bridge.process_audio(audio_path, timeout=timeout, audio_duration=duration, **options)
+
+    # Old workers accept extra positional arguments without applying them. Do
+    # not report an explicitly requested policy as applied without its receipt.
+    decoding = result.get('transcription_decoding') or {}
+    if (result.get('status') == 'success' and temperature is not None
+            and (decoding.get('policy') != 'single_temperature_v1'
+                 or decoding.get('temperature') != temperature
+                 or (decoding.get('source_regions') or {}).get('policy') != 'source_audio_v2')):
+        result = {**result, 'status': 'error',
+                  'error': 'Worker did not confirm the requested transcription coverage and decoding policy; synchronize the worker before use.',
+                  'transcription_status': 'error',
+                  'transcription_error': 'transcription_policy_unconfirmed',
+                  'bridge_error_reason': 'transcription_policy_unconfirmed'}
+
+    return result
 
 
 def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = None, **kwargs) -> dict:
@@ -297,56 +477,46 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
     Args:
         audio_path: Path to audio file
         scene_id: Scene identifier for output organization
-        duration: Audio duration in seconds (for dynamic timeout)
+        duration: Caller clip duration in seconds (for timing bounds and timeout)
         **kwargs: Additional parameters
         
     Returns:
         dict with ALL audio data unified
     """
+    if kwargs.get('recording_audio') is not None:
+        from steps.audio.recording_ingestion import scene_result
+        return scene_result(kwargs['recording_audio'], scene_id)
     logger.info(f"[WSL2] Running UNIFIED GPU-accelerated audio processing: {audio_path}")
     
-    bridge = WSL2AudioBridge()
-    
-    # Dynamic timeout based on duration
-    # ~2-3 seconds per second of audio (transcription + diarization + emotion)
-    if duration:
-        timeout = max(600, int(duration * 3) + 120)  # At least 10 min, or 3x duration + 2min buffer
-    else:
-        timeout = kwargs.get('timeout', 1800)  # Default 30 min
-    
-    result = bridge.process_audio(audio_path, timeout=timeout, audio_duration=duration)
-    
+    result = _request_audio_worker(audio_path, duration=duration, **kwargs)
+
     if result.get('status') == 'success':
         transcript = result.get('transcription', '')
         word_count = len(transcript.split()) if transcript else 0
         speaker_count = result.get('speaker_count', 0)
         emotion = result.get('emotion', 'unknown')
-        word_timestamps = result.get('word_timestamps', []) or result.get('segments', [])
+        segments = result.get('segments', []) or result.get('word_timestamps', [])
+        # Legacy workers called whole segments words; never claim word alignment
+        # from that field unless the worker supplies the explicit alignment receipt.
+        alignment = result.get('word_alignment')
+        word_timestamps = (alignment or {}).get('words', [])
+        diarization = _bound_diarization_to_clip(result.get('diarization', []), duration)
+        capability_outcomes = _build_wsl_capability_outcomes(result)
+        transcription = capability_outcomes['transcription']
+        transcript_outcome = ('transcript_available' if transcription['status'] == 'ok'
+                              else transcription.get('transcript_outcome', 'runtime_failure'))
         
         logger.info(f"[WSL2] Unified processing complete - {word_count} words, {speaker_count} speakers, emotion: {emotion}")
         
         # Return unified structure that matches entity extractor expectations
         return {
-            'status': 'success',
-            # Transcription
-            'transcript': transcript,
-            'full_text': transcript,
-            'segments': word_timestamps,
-            'word_timestamps': word_timestamps,
-            'language': result.get('language'),
-            'language_probability': result.get('language_probability'),
-            'transcript_meta': {
-                'status': result.get('transcription_status', 'success'),
-                'engine': 'wsl_unified',
-                'device': result.get('device'),
-                'language': result.get('language'),
-            },
-            
+            **_transcription_projection(result, engine='wsl_unified'),
+
             # Diarization
             'speakers': result.get('speakers', []),
             'speaker_count': speaker_count,
-            'diarization': result.get('diarization', []),
-            'speaker_segments': result.get('diarization', []),
+            'diarization': diarization,
+            'speaker_segments': diarization,
             'diarization_status': result.get('diarization_status'),
             'diarization_error': result.get('diarization_error'),
             'diarization_note': result.get('diarization_note'),
@@ -358,6 +528,10 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'emotion_status': result.get('emotion_status'),
             'emotion_error': result.get('emotion_error'),
             'emotion_note': result.get('emotion_note'),
+            'emotion_segments': result.get('emotion_segments', []),
+            'emotion_input': result.get('emotion_input'),
+            'sound_events': result.get('sound_events', []),
+            'sound_event_meta': result.get('sound_event_meta'),
             
             # Features
             'energy': result.get('energy'),
@@ -365,13 +539,14 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             
             # Embeddings
             'embeddings': result.get('embeddings', []),
-            'embedding_dim': result.get('embedding_dim', 768),
+            'embedding_dim': result.get('embedding_dim', 0 if result.get('embeddings_status') == 'retired' else 768),
             'embeddings_status': result.get('embeddings_status'),
             'embeddings_error': result.get('embeddings_error'),
             'embeddings_note': result.get('embeddings_note'),
             'speaker_voice_signatures': result.get('speaker_voice_signatures', []),
             'speaker_voice_signature_meta': result.get('speaker_voice_signature_meta', {}),
-            'wsl_capability_outcomes': _build_wsl_capability_outcomes(result),
+            'speaker_change_review': result.get('speaker_change_review', {}),
+            'wsl_capability_outcomes': capability_outcomes,
             
             # Status
             'wsl2_unified': True,
@@ -385,9 +560,8 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
         error_msg = result.get('error', 'Unknown error')
         logger.error(f"[WSL2] Unified processing failed: {error_msg}")
         return {
+            **_transcription_projection(result, engine='wsl_unified'),
             'error': error_msg,
-            'transcript': '',
-            'full_text': '',
             'wsl2_unified': True,
             'status': 'error',
             'bridge_error_reason': result.get('bridge_error_reason'),
@@ -396,10 +570,5 @@ def audio_unified_wsl2(audio_path: str, scene_id: str = None, duration: float = 
             'bridge_runtime_probe': result.get('bridge_runtime_probe', {}),
             'stderr_warnings': result.get('stderr_warnings', []),
             'wsl_returncode': result.get('wsl_returncode'),
-            'transcript_meta': {
-                'status': 'error',
-                'engine': 'wsl_unified',
-                'error': error_msg,
-            },
             'wsl_capability_outcomes': _build_wsl_capability_outcomes(result),
         }

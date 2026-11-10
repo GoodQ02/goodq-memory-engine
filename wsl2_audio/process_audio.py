@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 GoodQ Audio Processing Script - Full Classification
-GPU-accelerated audio analysis with Whisper, Pyannote, and Wav2Vec2
+GPU-accelerated audio analysis with Whisper, Pyannote, Wav2Vec2 emotion, and ECAPA
 Memory-optimized: Models loaded sequentially with cleanup between steps
 """
 
@@ -12,6 +12,7 @@ import gc
 import importlib
 import logging
 import math
+import re
 import traceback
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -22,9 +23,11 @@ import torch
 import numpy as np
 
 try:
-    from wsl2_audio import model_cache
+    from wsl2_audio import model_cache, speaker_signature, acoustic_events
 except ImportError:  # Direct WSL worker execution from its workspace.
     import model_cache
+    import speaker_signature
+    import acoustic_events
 
 
 class _LazyTorchaudio:
@@ -45,6 +48,10 @@ class _LazyTorchaudio:
     @property
     def transforms(self):
         return self._module().transforms
+
+    @property
+    def functional(self):
+        return self._module().functional
 
 
 torchaudio = _LazyTorchaudio()
@@ -81,13 +88,108 @@ except Exception as exc:
 # Transformers for emotion/embeddings
 try:
     from transformers import (
-        Wav2Vec2ForSequenceClassification,
+        Wav2Vec2Config,
         Wav2Vec2FeatureExtractor,
         Wav2Vec2Model
     )
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+
+
+class _SpeechEmotionModel(torch.nn.Module):
+    """The cached ehcalabres head: temporal mean, dense, tanh, output.
+
+    Its classifier.dense/output tensors are not compatible with the generic
+    Transformers sequence classifier's projector/classifier forward.
+    Reference: the checkpoint's upstream discussion /discussions/12.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        if getattr(config, "pooling_mode", None) != "mean":
+            raise ValueError("Unsupported emotion checkpoint pooling_mode")
+        self.config = config
+        self.wav2vec2 = Wav2Vec2Model(config)
+        self.classifier = torch.nn.Module()
+        self.classifier.dense = torch.nn.Linear(config.hidden_size, config.hidden_size)
+        self.classifier.output = torch.nn.Linear(config.hidden_size, config.num_labels)
+
+    def forward(self, **inputs):
+        from types import SimpleNamespace
+
+        hidden = self.wav2vec2(**inputs).last_hidden_state.mean(dim=1)
+        logits = self.classifier.output(torch.tanh(self.classifier.dense(hidden)))
+        return SimpleNamespace(logits=logits)
+
+
+def _load_trained_wav2vec(repo, *, cache_dir, is_offline, emotion=False, revision=None):
+    """Load all inference tensors strictly, including legacy weight-norm keys.
+
+    Transformers 4.43's from_pretrained can initialize positional convolution
+    weights before PyTorch migrates the old weight_g/weight_v names. Loading the
+    complete state directly avoids that silent replacement. Never modify cache
+    files or accept missing learned inference parameters.
+    """
+    from transformers.utils.hub import cached_file
+    from safetensors.torch import load_file
+
+    def resolve(name, *, optional=False):
+        kwargs = dict(cache_dir=cache_dir, revision=revision,
+                      _raise_exceptions_for_missing_entries=not optional)
+        try:
+            return cached_file(repo, name, local_files_only=True, **kwargs)
+        except OSError:
+            if is_offline:
+                raise
+            return cached_file(repo, name, local_files_only=False, **kwargs)
+
+    config_path = resolve("config.json")
+    config = Wav2Vec2Config.from_pretrained(str(Path(config_path).parent), local_files_only=True)
+    # Mask embeddings are training-only; evaluation never applies SpecAugment.
+    config.mask_time_prob = 0.0
+    config.mask_feature_prob = 0.0
+    config.apply_spec_augment = False
+    model = _SpeechEmotionModel(config) if emotion else Wav2Vec2Model(config)
+    weights_path = resolve("model.safetensors", optional=True)
+    if weights_path:
+        state = load_file(weights_path, device="cpu")
+    else:
+        weights_path = resolve("pytorch_model.bin")
+        state = torch.load(weights_path, map_location="cpu", weights_only=True)
+
+    ignored = []
+    for key in ("wav2vec2.masked_spec_embed", "masked_spec_embed"):
+        if key in state:
+            ignored.append(key)
+            del state[key]
+    if not emotion:
+        # These are the source checkpoint's CTC output tensors, not features.
+        for key in ("lm_head.weight", "lm_head.bias"):
+            if key in state:
+                ignored.append(key)
+                del state[key]
+        state = {key.removeprefix("wav2vec2."): value for key, value in state.items()}
+
+    expected_keys = set(model.state_dict())
+    remapped = {}
+    for key in list(state):
+        target = key.replace(".weight_g", ".parametrizations.weight.original0").replace(
+            ".weight_v", ".parametrizations.weight.original1")
+        if target != key and target in expected_keys:
+            if target in state:
+                raise ValueError(f"Duplicate legacy/current checkpoint tensor: {target}")
+            state[target] = state.pop(key)
+            remapped[key] = target
+    model.load_state_dict(state, strict=True)
+    model.eval()
+    snapshot_revision = Path(weights_path).parent.name
+    return model, {
+        "repo": repo, "revision": revision or snapshot_revision,
+        "weights_path": str(weights_path), "strict": True,
+        "missing_inference_keys": [], "ignored_non_inference_keys": ignored,
+        "legacy_key_mapping": remapped,
+    }
 
 
 _DEFAULT_RUNTIME_CONFIG = {
@@ -106,6 +208,7 @@ _DEFAULT_RUNTIME_CONFIG = {
     "processing": {
         "language": "en",
         "beam_size": 5,
+        "temperature": 0.0,
     },
 }
 
@@ -262,18 +365,40 @@ def _select_speaker_signature_segments(
     min_segments: int = _SPEAKER_SIGNATURE_MIN_SEGMENTS,
     min_segment_seconds: float = _SPEAKER_SIGNATURE_MIN_SEGMENT_SECONDS,
     max_segments: int = _SPEAKER_SIGNATURE_MAX_SEGMENTS,
+    excluded_segments: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     if not isinstance(diarization_segments, list):
         return []
 
-    for segment in diarization_segments:
+    valid_turns = []
+    for turn in diarization_segments:
+        if not isinstance(turn, dict) or not isinstance(turn.get("speaker"), str) or not turn["speaker"].strip():
+            continue
+        try:
+            start, end = float(turn["start"]), float(turn["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(start) and math.isfinite(end) and 0 <= start < end:
+            valid_turns.append({**turn, "start": start, "end": end})
+    for segment in valid_turns:
         if not isinstance(segment, dict):
             continue
         speaker = segment.get("speaker")
         if not isinstance(speaker, str) or not speaker.strip():
             continue
         duration = _segment_duration(segment)
+        overlaps = [other for other in valid_turns
+                    if other["speaker"].strip() != speaker.strip()
+                    and float(other["start"]) < float(segment["end"])
+                    and float(segment["start"]) < float(other["end"])]
+        if overlaps:
+            if excluded_segments is not None:
+                excluded_segments.append({"speaker": speaker.strip(),
+                    "start": float(segment["start"]), "end": float(segment["end"]),
+                    "reason": "overlapping_speaker_turn",
+                    "overlapping_speakers": sorted({s["speaker"].strip() for s in overlaps})})
+            continue
         if duration < min_segment_seconds:
             continue
         grouped.setdefault(speaker.strip(), []).append(
@@ -340,114 +465,259 @@ def _normalize_embedding_vector(vector: np.ndarray) -> Optional[np.ndarray]:
 
 
 def _build_speaker_voice_signatures(
-    waveform_16k: torch.Tensor,
-    diarization_segments: Any,
-    *,
-    embed_model: Any,
-    embed_extractor: Any,
-    device: str,
+    waveform_16k: torch.Tensor, diarization_segments: Any, *,
+    embed_model: Any, device: str,
     sample_rate: int = _SPEAKER_SIGNATURE_TARGET_SR,
+    speech_intervals=None,
 ) -> Dict[str, Any]:
-    selected_groups = _select_speaker_signature_segments(diarization_segments)
-    signatures: List[Dict[str, Any]] = []
-    skipped: List[Dict[str, Any]] = []
-
-    if not selected_groups:
-        return {
-            "signatures": [],
-            "meta": {
-                "status": "skipped",
-                "reason": "insufficient_diverse_speech",
-                "emitted": 0,
-                "attempted_speakers": 0,
-                "min_voiced_seconds": _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS,
-                "min_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
-            },
-        }
-
-    for group in selected_groups:
-        speaker = str(group.get("speaker") or "").strip()
-        segment_vectors: List[np.ndarray] = []
-        emitted_segments: List[Dict[str, Any]] = []
-        for segment in group.get("selected_segments") or []:
-            clipped = _slice_waveform_segment(
-                waveform_16k,
-                start_seconds=float(segment.get("start") or 0.0),
-                end_seconds=float(segment.get("end") or 0.0),
-                sample_rate=int(sample_rate),
-            )
-            if clipped is None:
+    if sample_rate != 16000:
+        raise ValueError("ECAPA requires 16kHz audio")
+    signatures = []
+    excluded = []
+    for group in _select_speaker_signature_segments(diarization_segments, excluded_segments=excluded):
+        pieces, spans = [], []
+        segments = group["selected_segments"]
+        if speech_intervals is not None:
+            segments = [{**segment, "start": max(segment["start"], speech["start"]),
+                         "end": min(segment["end"], speech["end"])}
+                        for segment in segments for speech in speech_intervals
+                        if speech.get("speaker") == group["speaker"]
+                        and max(segment["start"], speech["start"]) < min(segment["end"], speech["end"])]
+        for segment in segments:
+            piece = _slice_waveform_segment(
+                waveform_16k, start_seconds=segment["start"],
+                end_seconds=segment["end"], sample_rate=sample_rate)
+            if piece is None or piece.shape[-1] / sample_rate < _SPEAKER_SIGNATURE_MIN_SEGMENT_SECONDS:
                 continue
-            inputs = embed_extractor(
-                clipped.numpy().flatten(),
-                sampling_rate=int(sample_rate),
-                return_tensors="pt",
-                padding=True,
-            )
-            inputs = {key: value.to(device) for key, value in inputs.items()}
-            with torch.no_grad():
-                hidden_state = embed_model(**inputs).last_hidden_state
-            pooled = torch.mean(hidden_state, dim=1).detach().cpu().numpy()[0]
-            normalized = _normalize_embedding_vector(pooled)
-            if normalized is None:
-                continue
-            segment_vectors.append(normalized)
-            emitted_segments.append(
-                {
-                    "start": float(segment.get("start") or 0.0),
-                    "end": float(segment.get("end") or 0.0),
-                    "duration": round(float(segment.get("duration") or 0.0), 3),
-                }
-            )
-
-        if len(segment_vectors) < _SPEAKER_SIGNATURE_MIN_SEGMENTS:
-            skipped.append(
-                {
-                    "speaker": speaker,
-                    "reason": "insufficient_embedded_segments",
-                    "selected_segment_count": len(emitted_segments),
-                    "required_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
-                }
-            )
+            pieces.append(piece.mean(dim=0, keepdim=True) if piece.ndim == 2 else piece.unsqueeze(0))
+            spans.append({**segment, "end": min(segment["end"], waveform_16k.shape[-1] / sample_rate),
+                          "duration": piece.shape[-1] / sample_rate})
+        seconds = sum(p.shape[-1] for p in pieces) / sample_rate
+        if len(pieces) < _SPEAKER_SIGNATURE_MIN_SEGMENTS or seconds < _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS:
             continue
-
-        centroid = np.mean(np.stack(segment_vectors, axis=0), axis=0)
-        normalized_centroid = _normalize_embedding_vector(centroid)
-        if normalized_centroid is None:
-            skipped.append(
-                {
-                    "speaker": speaker,
-                    "reason": "invalid_centroid",
-                    "selected_segment_count": len(emitted_segments),
-                }
-            )
-            continue
-
-        signatures.append(
-            {
-                "speaker": speaker,
-                "embedding": normalized_centroid.astype(np.float32).tolist(),
-                "embedding_dim": int(normalized_centroid.shape[0]),
-                "voiced_seconds": float(group.get("voiced_seconds") or 0.0),
-                "segment_count": len(emitted_segments),
-                "available_segment_count": int(group.get("available_segment_count") or len(emitted_segments)),
-                "selected_segments": emitted_segments,
-            }
-        )
-
-    status = "ok" if signatures else "skipped"
-    meta: Dict[str, Any] = {
-        "status": status,
-        "emitted": len(signatures),
-        "attempted_speakers": len(selected_groups),
+        with torch.inference_mode():
+            vector = embed_model.encode_batch(torch.cat(pieces, dim=-1).to(device)).flatten().detach().cpu().numpy()
+        normalized = _normalize_embedding_vector(vector)
+        if normalized is None or normalized.size != speaker_signature.DIMENSION:
+            raise ValueError("Invalid ECAPA speaker embedding")
+        signatures.append({
+            "speaker": group["speaker"], "embedding": normalized.astype(np.float32).tolist(),
+            "embedding_dim": speaker_signature.DIMENSION, **speaker_signature.metadata(),
+            "voiced_seconds": round(seconds, 3), "segment_count": len(spans),
+            "available_segment_count": group.get("available_segment_count", len(spans)),
+            "selected_segments": spans,
+            "excluded_segments": [s for s in excluded if s["speaker"] == group["speaker"]],
+          "admission_policy": "exclude_overlapping_turns_v1",
+        })
+    return {"signatures": signatures, "meta": {
+        "status": "ok" if signatures else "skipped", "emitted": len(signatures),
+        "reason": None if signatures else ("insufficient_unambiguous_speech" if excluded else "insufficient_diverse_speech"),
+        "excluded_segments": excluded,
+        "admission_policy": "exclude_overlapping_turns_v1",
+        **speaker_signature.metadata(),
         "min_voiced_seconds": _SPEAKER_SIGNATURE_MIN_TOTAL_SECONDS,
         "min_segment_count": _SPEAKER_SIGNATURE_MIN_SEGMENTS,
-    }
-    if skipped:
-        meta["skipped"] = skipped
-    if status != "ok":
-        meta.setdefault("reason", "no_signatures_emitted")
-    return {"signatures": signatures, "meta": meta}
+        "purity": "diarization_hypothesis_not_confirmed_identity",
+    }}
+
+
+def _collapsed_return_flags(segmentations, hard_clusters, frames, audio_seconds):
+    """Review-only A-B-A evidence; never modifies segmentation or clustering.
+
+    Local slots are window-specific, not identities. Silence is retained as gaps;
+    overlapping speech breaks a sequence. This rule is not speaker-purity proof.
+    """
+    data = segmentations.data
+    if not np.isin(data, [0, 1]).all():
+        raise ValueError("review rule requires decoded binary local activity")
+    flags = []
+    for chunk, activity in enumerate(data):
+        count = activity.sum(axis=1)
+        labels = np.where(count == 1, activity.argmax(axis=1), np.where(count == 0, -1, -2))
+        edges = np.r_[0, np.flatnonzero(np.diff(labels) != 0) + 1, len(labels)]
+        window = segmentations.sliding_window[chunk]
+        origin = window.start + frames.start + frames.duration / 2 - frames.step / 2
+        runs = [(int(labels[a]), max(0.0, origin + a * frames.step),
+                 min(audio_seconds, origin + b * frames.step))
+                for a, b in zip(edges[:-1], edges[1:])
+                if labels[a] != -1 and origin + a * frames.step < audio_seconds]
+        for left, middle, right in zip(runs, runs[1:], runs[2:]):
+            outer, inner, returned = left[0], middle[0], right[0]
+            if min(outer, inner, returned) < 0 or outer != returned or outer == inner:
+                continue
+            cluster = int(hard_clusters[chunk, outer])
+            if cluster < 0 or cluster != int(hard_clusters[chunk, inner]):
+                continue
+            flags.append({"start": float(middle[1]), "end": float(middle[2]),
+                          "window_start": float(window.start), "window_end": float(window.end),
+                          "local_slots": [outer, inner, returned], "final_cluster": cluster,
+                          "left_gap": float(middle[1] - left[2]),
+                          "right_gap": float(right[1] - middle[2]),
+                          "status": "unreviewed", "identity_claim": False})
+    return flags
+
+
+def _local_overlap_evidence(segmentations, frames, audio_seconds):
+    """Retain binary local overlap before count averaging or speaker clustering.
+
+    Local slots are window-specific model outputs, never person identities.
+    A positive window remains exclusion evidence when other windows disagree.
+    """
+    data = np.asarray(segmentations.data)
+    if data.ndim != 3 or not data.size or not np.isfinite(data).all() or not np.isin(data, [0., 1.]).all():
+        raise ValueError("Local overlap requires finite binary segmentation outputs")
+    if (not all(math.isfinite(x) for x in (frames.start, frames.duration, frames.step, audio_seconds))
+            or frames.duration <= 0 or frames.step <= 0 or audio_seconds <= 0):
+        raise ValueError("Invalid local overlap frame geometry")
+    observations = []
+    for chunk, values in enumerate(data):
+        window = segmentations.sliding_window[chunk]
+        if not math.isfinite(window.start) or not math.isfinite(window.end):
+            raise ValueError("Invalid local overlap window geometry")
+        active = values.sum(axis=-1) >= 2
+        edges = np.flatnonzero(np.diff(np.r_[False, active, False])).reshape(-1, 2)
+        origin = window.start + frames.start + frames.duration / 2 - frames.step / 2
+        for first, last in edges:
+            start, end = max(0., origin + first * frames.step), min(audio_seconds, origin + last * frames.step)
+            if start < end:
+                observations.append({"start": float(start), "end": float(end),
+                    "window_start": float(window.start), "window_end": float(window.end)})
+    intervals = []
+    for row in sorted(observations, key=lambda r: (r["start"], r["end"])):
+        if intervals and row["start"] <= intervals[-1]["end"] + 1e-9:
+            intervals[-1]["end"] = max(intervals[-1]["end"], row["end"])
+        else:
+            intervals.append({"start": row["start"], "end": row["end"]})
+    return {"status": "ok", "policy": "local_segmentation_overlap_v1",
+        "timebase": "input_audio_seconds", "intervals": intervals, "observations": observations,
+        "frame_step": float(frames.step), "review_status": "unreviewed", "identity_claim": False,
+        "qualification": "model_observations_not_verified_overlap_boundaries"}
+
+
+def _empty_speaker_observation(output, observed, frames, audio_seconds):
+    """Qualify the pinned diarizer's early return from actual zero-activity hooks.
+
+    An empty annotation alone is not an assessed recording. Require intact,
+    finite segmentation/count arrays covering the input before accepting it.
+    """
+    annotation = getattr(output, 'speaker_diarization', output)
+    if next(annotation.itertracks(yield_label=True), None) is not None:
+        raise ValueError('Early speaker return is not empty')
+    segments, count = observed['segmentation'], observed['speaker_counting']
+    local = _local_overlap_evidence(segments, frames, audio_seconds)
+    data = np.asarray(count.data)
+    if (np.any(segments.data) or data.ndim != 2 or data.shape[1] != 1 or not data.size
+            or not np.isfinite(data).all() or np.any(data)):
+        raise ValueError('Empty speaker return requires finite zero activity and counts')
+    window = count.sliding_window
+    if (not all(math.isfinite(x) for x in (window.start, window.duration, window.step))
+            or not 0 < window.step <= window.duration
+            or window[0].start > 1e-9 or window[len(data)-1].end < audio_seconds-1e-9):
+        raise ValueError('Empty speaker count does not cover the input')
+    cursor = 0.
+    frame_end = frames.start + (segments.data.shape[1]-1)*frames.step + frames.duration
+    for chunk in range(segments.data.shape[0]):
+        window = segments.sliding_window[chunk]
+        # Validate the full analysis windows, including the final sub-frame
+        # remainder. This does not extend any positive event/speaker interval.
+        if (window.start > cursor+1e-9 or window.end <= window.start
+                or not 0 <= frames.start <= frames.step
+                or not -1e-9 <= window.end-window.start-frame_end < frames.step+1e-9):
+            raise ValueError('Empty local activity has incomplete analysis windows')
+        cursor = max(cursor, window.end)
+    if cursor < audio_seconds-1e-9:
+        raise ValueError('Empty local activity does not cover the input')
+    local['reason'] = 'completed_no_speakers'
+    proof = {'basis': 'finite_zero_local_activity_and_speaker_counts',
+             'segmentation_shape': list(segments.data.shape), 'count_frames': len(data),
+             'assessed_seconds': [0., audio_seconds]}
+    return local, proof
+
+
+def _diarize_with_review(pipeline, audio, *, overlap_evidence=None, observe_empty=False):
+    """Observe the installed reconstruction seam once, restoring it on all exits."""
+    review = {"rule": "collapsed_local_return_v1", "status": "unavailable", "flags": []}
+    original = getattr(pipeline, "reconstruct", None)
+    if overlap_evidence is not None:
+        overlap_evidence.update(status="unavailable", policy="local_segmentation_overlap_v1",
+                                reason="no_reconstruction_evidence", intervals=[])
+    observed_overlap = False
+    try:
+        frames = pipeline._segmentation.model.receptive_field
+    except AttributeError:
+        frames = None
+    if not callable(original) or frames is None:
+        review["reason"] = "local_reconstruction_evidence_unavailable"
+        return pipeline(audio), review
+    had_override = "reconstruct" in vars(pipeline)
+    previous = vars(pipeline).get("reconstruct")
+    observed = {}
+
+    def hook(name, artifact=None, **kwargs):
+        if name in ('segmentation', 'speaker_counting') and artifact is not None:
+            observed[name] = artifact
+
+    def observe(segmentations, hard_clusters, count):
+        nonlocal observed_overlap
+        if overlap_evidence is not None and not observed_overlap:
+            observed_overlap = True
+            try:
+                overlap_evidence.clear()
+                overlap_evidence.update(_local_overlap_evidence(segmentations, frames,
+                    audio["waveform"].shape[-1] / audio["sample_rate"]))
+            except Exception as exc:
+                overlap_evidence.update(status="error", policy="local_segmentation_overlap_v1",
+                    reason=model_cache.redact_sensitive_info(str(exc)), intervals=[])
+                logging.getLogger(__name__).warning("Local overlap evidence unavailable: %s", exc)
+        output = original(segmentations, hard_clusters, count)
+        try:
+            review["flags"] = _collapsed_return_flags(
+                segmentations, hard_clusters, frames,
+                audio["waveform"].shape[-1] / audio["sample_rate"])
+            review["status"] = "ok"
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Speaker-change review evidence unavailable: %s", exc)
+            review.update(status="error", reason=str(exc), flags=[])
+        return output
+
+    pipeline.reconstruct = observe
+    try:
+        # Only the pinned recording adapter opts into the supported hook API;
+        # older callers retain their existing reconstruction-only contract.
+        output = pipeline(audio, hook=hook) if observe_empty else pipeline(audio)
+        if observe_empty and review['status'] == 'unavailable':
+            try:
+                local, proof = _empty_speaker_observation(output, observed, frames,
+                    audio['waveform'].shape[-1] / audio['sample_rate'])
+                if overlap_evidence is not None:
+                    overlap_evidence.clear()
+                    overlap_evidence.update(local)
+                review.update(status='ok', reason='completed_no_speakers', observation=proof)
+            except Exception as exc:
+                review.update(status='unavailable', reason='empty_speaker_evidence_unqualified',
+                              error=model_cache.redact_sensitive_info(str(exc)))
+        if review["status"] == "unavailable":
+            review.setdefault("reason", "no_reconstruction_evidence")
+        return output, review
+    finally:
+        if had_override:
+            pipeline.reconstruct = previous
+        else:
+            del pipeline.reconstruct
+
+
+# One policy is shared with local and compatibility transcription callers.
+try:
+    from .transcription_contract import (_recover_word_timing, _bound_transcript_segments_to_audio, _filter_no_speech_segments, _normalize_transcription_vocabulary, _source_speech_regions, _transcription_temperature, _resolved_transcription_options, _transcription_language_evidence, _transcribe_source_regions as _transcribe_source_regions_core)
+except ImportError:
+    from transcription_contract import (_recover_word_timing, _bound_transcript_segments_to_audio, _filter_no_speech_segments, _normalize_transcription_vocabulary, _source_speech_regions, _transcription_temperature, _resolved_transcription_options, _transcription_language_evidence, _transcribe_source_regions as _transcribe_source_regions_core)
+
+
+def _transcribe_source_regions(model, audio, *, language, beam_size, temperature,
+                               context_options, coverage, partial_segments=None):
+    return _transcribe_source_regions_core(model, audio, language=language,
+        beam_size=beam_size, temperature=temperature, context_options=context_options,
+        coverage=coverage, region_detector=_source_speech_regions, partial_segments=partial_segments)
 
 
 def _diarization_outcome(diarization_segments: list[dict[str, Any]]) -> tuple[str, Optional[str]]:
@@ -457,16 +727,20 @@ def _diarization_outcome(diarization_segments: list[dict[str, Any]]) -> tuple[st
     return "completed_no_speakers", "diarization completed without emitted speaker tracks"
 
 
-def _bound_transcript_segments_to_audio(
+
+
+
+
+def _bound_diarization_segments_to_audio(
     raw_segments: Any,
     *,
     duration_seconds: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Keep transcript timestamps within the waveform actually processed.
+    """Keep diarization turn timestamps within the waveform actually processed.
 
-    Faster-Whisper can occasionally emit a trailing timestamp beyond the input
-    chunk. The canonical scene contract cannot claim speech beyond the audio
-    file, so retain only overlapping text and make every correction observable.
+    Pyannote sliding windows can emit trailing turns slightly beyond the end of
+    the input waveform due to chunk padding. Clip overlapping turns to
+    [0.0, duration_seconds] and drop turns that start at or after duration_seconds.
     """
     duration = max(0.0, float(duration_seconds))
     normalized: list[dict[str, Any]] = []
@@ -474,10 +748,13 @@ def _bound_transcript_segments_to_audio(
     dropped_count = 0
 
     for raw in raw_segments if isinstance(raw_segments, list) else []:
+        if not isinstance(raw, dict):
+            dropped_count += 1
+            continue
         try:
-            start = float(getattr(raw, "start"))
-            end = float(getattr(raw, "end"))
-        except (AttributeError, TypeError, ValueError):
+            start = float(raw.get("start"))
+            end = float(raw.get("end"))
+        except (TypeError, ValueError):
             dropped_count += 1
             continue
         if not (math.isfinite(start) and math.isfinite(end)):
@@ -491,15 +768,11 @@ def _bound_transcript_segments_to_audio(
             continue
         if bounded_start != start or bounded_end != end:
             clipped_count += 1
+        speaker = str(raw.get("speaker") or "UNKNOWN").strip() or "UNKNOWN"
         normalized.append({
             "start": bounded_start,
             "end": bounded_end,
-            "text": str(getattr(raw, "text", "")).strip(),
-            "confidence": (
-                float(getattr(raw, "avg_logprob"))
-                if getattr(raw, "avg_logprob", None) is not None
-                else None
-            ),
+            "speaker": speaker,
         })
 
     return normalized, {
@@ -510,7 +783,88 @@ def _bound_transcript_segments_to_audio(
     }
 
 
-def process_audio(audio_file, output_dir):
+
+
+
+
+
+
+
+
+
+
+
+
+def _detect_additional_overlap(waveform, sample_rate, model_path, device):
+    """Optional, local-only Nemotron exclusion evidence; never speaker identity.
+
+    This bounded candidate supports isolated inputs up to 300 seconds. The native
+    model carries its speaker cache across internal chunks; no external slicing
+    or speaker-label reconciliation is introduced here.
+    The caller keeps the original speech gate and fails closed if it is enabled
+    but unavailable. No threshold tuning, audio separation or ASR substitution.
+    """
+    import hashlib
+    from transformers import AutoModelForAudioFrameClassification, AutoProcessor
+
+    if not isinstance(model_path, str) or not model_path.strip():
+        raise ValueError("Additional overlap model must be an existing local directory")
+    path = Path(model_path)
+    if not path.is_dir():
+        raise ValueError("Additional overlap model must be an existing local directory")
+    weights_hash = hashlib.sha256((path / "model.safetensors").read_bytes()).hexdigest()
+    if weights_hash != "c074d86335b3b794f8fa5edc25594558f128bdb3914d27806a3a5a2e44963cb6":
+        raise ValueError("Additional overlap model does not match the evaluated Nemotron weights")
+    duration = waveform.shape[-1] / sample_rate
+    if not 0 < duration <= 300:
+        raise ValueError("Additional overlap candidate supports only isolated inputs up to 300 seconds")
+    audio = waveform.detach().cpu().mean(dim=0)
+    if sample_rate != 16000:
+        audio = torchaudio.functional.resample(audio, sample_rate, 16000)
+    model = processor = inputs = logits = None
+    try:
+        model, loading = AutoModelForAudioFrameClassification.from_pretrained(
+            path, local_files_only=True, trust_remote_code=False, dtype=torch.float32, output_loading_info=True)
+        if any(loading.get(key) for key in ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")):
+            raise ValueError("Additional overlap checkpoint did not load strictly")
+        if model.config.model_type != "nemotron3_diarization":
+            raise ValueError("Unsupported additional overlap architecture")
+        model.to(device).eval()
+        processor = AutoProcessor.from_pretrained(path, local_files_only=True, trust_remote_code=False)
+        inputs = processor(audio.numpy(), sampling_rate=16000).to(device, dtype=torch.float32)
+        with torch.inference_mode():
+            logits = model(**inputs).logits
+        if logits.ndim != 3 or logits.shape[0] != 1 or logits.shape[-1] < 2 or not torch.isfinite(logits).all():
+            raise ValueError("Invalid additional overlap logits")
+        mask = inputs.attention_mask.bool()
+        if tuple(mask.shape) != tuple(logits.shape[:2]):
+            raise ValueError("Additional overlap frame mask does not match logits")
+        step = processor.feature_extractor.hop_length / processor.feature_extractor.sampling_rate
+        if not math.isfinite(step) or step != .01:
+            raise ValueError("Unexpected additional overlap frame timebase")
+        active = (((logits.sigmoid() > .5).sum(dim=-1) >= 2) & mask)[0].cpu().numpy()
+        intervals = []
+        for i, value in enumerate(active):
+            start, end = i * step, min((i + 1) * step, duration)
+            if not value or end <= start:
+                continue
+            if intervals and abs(intervals[-1]["end"] - start) < 1e-9:
+                intervals[-1]["end"] = end
+            else:
+                intervals.append({"start": start, "end": end})
+        return {"status": "ok", "policy": "nemotron3_overlap_exclusion_v1",
+            "model": "nvidia/Nemotron-3-Diarization", "weights_sha256": weights_hash,
+            "revision": "f667ed73aee57d40cc39428eb768b4fd87a0a29e",
+            "timebase": "input_audio_seconds", "threshold": .5, "frame_step": step,
+            "dtype": "float32", "intervals": intervals, "review_status": "unreviewed",
+            "processing_mode": "native_offline_chunked", "max_input_seconds": 300,
+            "identity_claim": False, "qualification": "additional_exclusion_only_not_speech_purity_certification"}
+    finally:
+        del model, processor, inputs, logits
+        clear_gpu_memory()
+
+
+def process_audio(audio_file, output_dir, *, transcription_vocabulary=None, transcription_temperature=None):
     """Process audio file with full classification pipeline - Memory optimized"""
     request_uuid = (os.getenv("GOODQ_BRIDGE_REQUEST_UUID") or "").strip()
     runtime_cfg = _load_runtime_config()
@@ -525,6 +879,7 @@ def process_audio(audio_file, output_dir):
         "config_sources": runtime_cfg.get("_sources", []),
         "speaker_voice_signatures": [],
         "speaker_voice_signature_meta": {"status": "pending"},
+        "overlap_detection": {"status": "unavailable", "reason": "diarization_not_run", "intervals": []},
     }
     if request_uuid:
         result["request_uuid"] = request_uuid
@@ -606,11 +961,26 @@ def process_audio(audio_file, output_dir):
         
         # === STEP 1: TRANSCRIPTION (Faster-Whisper) ===
         print("Processing: Transcription...", file=sys.stderr)
+        partial_segments = []
         try:
+            vocabulary = _normalize_transcription_vocabulary(transcription_vocabulary)
+            result["transcription_context"] = {"status": "applied" if vocabulary else "not_supplied",
+                "source": "request_config", "kind": "vocabulary_hints", "words": vocabulary,
+                "identity_claim": False}
+            context_options = {"hotwords": ", ".join(vocabulary)} if vocabulary else {}
             processing_cfg = dict(runtime_cfg.get("processing") or {})
+            temperature = _transcription_temperature(
+                processing_cfg.get("temperature", 0.0)
+                if transcription_temperature is None else transcription_temperature)
             transcription_language_raw = str(processing_cfg.get("language", "en") or "").strip()
             transcription_language = None if transcription_language_raw.lower() in {"", "auto", "detect", "none"} else transcription_language_raw
             beam_size = int(processing_cfg.get("beam_size", 5) or 5)
+            result['transcription_decoding'] = {
+                'policy': 'single_temperature_v1', 'temperature': temperature,
+                'source': 'worker_config' if transcription_temperature is None else 'request_config',
+                'sampling_enabled': temperature > 0, 'temperature_fallback': False,
+                'beam_size': beam_size, 'primary': None, 'timing_retry': None,
+            }
             whisper_device = "cpu" if device == "mps" else device
             whisper_compute = "int8" if whisper_device == "cpu" and compute_type not in {"float32", "float64"} else compute_type
             
@@ -623,16 +993,16 @@ def process_audio(audio_file, output_dir):
                 )
                 
             whisper_model = WhisperModel(result["whisper_model"], device=whisper_device, compute_type=whisper_compute, local_files_only=is_offline)
-            segments, info = whisper_model.transcribe(
-                audio_file,
-                language=transcription_language,
-                beam_size=beam_size,
-            )
-            
-            word_timestamps, transcript_timing = _bound_transcript_segments_to_audio(
-                list(segments),
-                duration_seconds=result["duration_seconds"],
-            )
+            asr_waveform = waveform if sr == 16000 else torchaudio.functional.resample(waveform, sr, 16000)
+            asr_audio = asr_waveform.squeeze(0).detach().cpu().numpy().astype(np.float32, copy=False)
+            source_coverage = result['transcription_decoding']['source_regions'] = {}
+            word_timestamps, info, transcript_timing, result['transcription_quality'] = _transcribe_source_regions(
+                whisper_model, asr_audio, language=transcription_language, beam_size=beam_size,
+                temperature=temperature, context_options=context_options, coverage=source_coverage,
+                partial_segments=partial_segments)
+            result['transcription_decoding']['primary'] = _resolved_transcription_options(info)
+            result['transcription_decoding']['language'] = _transcription_language_evidence(info, transcription_language)
+            result['transcription_decoding']['timing_retry'] = info.timing_retry_options
             transcription_text = " ".join(
                 str(segment.get("text") or "").strip()
                 for segment in word_timestamps
@@ -640,11 +1010,33 @@ def process_audio(audio_file, output_dir):
             )
             
             result["transcription"] = transcription_text
-            result["word_timestamps"] = word_timestamps
+            result["segments"] = word_timestamps
+            result["word_timestamps"] = [word for segment in word_timestamps
+                                         for word in segment.get("words", [])]
+            result["word_alignment"] = {
+                "method": "whisper_cross_attention_dtw",
+                "timebase": "input_audio_seconds",
+                "review_status": "unreviewed",
+                "words": result["word_timestamps"],
+                "status": "available" if result["word_timestamps"] else "no_word_alignment",
+            }
             result["transcription_timing"] = transcript_timing
             result["language"] = info.language
-            result["language_probability"] = float(info.language_probability)
+            result["language_probability"] = result['transcription_decoding']['language']['detection_probability']
             result["transcription_status"] = "success"
+            # An empty decoded string alone cannot establish absent speech.
+            # Keep the completed VAD measurement, including on non-speech input.
+            input_seconds = getattr(info, "duration", None)
+            speech_seconds = getattr(info, "duration_after_vad", None)
+            if (isinstance(input_seconds, (int, float)) and not isinstance(input_seconds, bool)
+                    and isinstance(speech_seconds, (int, float)) and not isinstance(speech_seconds, bool)
+                    and math.isfinite(input_seconds) and math.isfinite(speech_seconds)
+                    and 0 <= speech_seconds <= input_seconds and input_seconds > 0):
+                result["speech_detection"] = {
+                    "status": "completed", "method": "silero_vad",
+                    "input_duration_seconds": input_seconds,
+                    "speech_duration_seconds": speech_seconds,
+                }
             
             # Clean up Whisper model
             del whisper_model
@@ -655,6 +1047,16 @@ def process_audio(audio_file, output_dir):
         except Exception as e:
             result["transcription_status"] = "error"
             result["transcription_error"] = model_cache.redact_sensitive_info(str(e))
+            # A later decoder failure must not erase completed source regions.
+            # The failed coverage/status remains explicit, including in offline receipts.
+            result['segments'] = partial_segments
+            result['transcription'] = ' '.join(str(s.get('text') or '').strip()
+                for s in partial_segments if str(s.get('text') or '').strip())
+            result['word_timestamps'] = [w for s in partial_segments for w in s.get('words', [])]
+            result['word_alignment'] = {
+                'method': 'whisper_cross_attention_dtw', 'timebase': 'input_audio_seconds',
+                'review_status': 'unreviewed', 'words': result['word_timestamps'],
+                'status': 'available' if result['word_timestamps'] else 'no_word_alignment'}
             # Ensure cleanup even on error
             try:
                 del whisper_model
@@ -664,9 +1066,29 @@ def process_audio(audio_file, output_dir):
             if is_offline:
                 raise
         
+        # Only completed transcription evidence can make speech enrichments
+        # inapplicable. Empty/failed transcription alone leaves them independent.
+        detection = result.get("speech_detection") or {}
+        quality = result.get("transcription_quality") or {}
+        no_speech = (
+            result.get("transcription_status") == "success"
+            and not result.get("transcription_error") and not result.get("transcription", "").strip()
+            and ((detection.get("status") == "completed" and detection.get("speech_duration_seconds") == 0)
+                 or (quality.get("status") == "completed" and quality.get("decoded_segment_count", 0) > 0
+                     and (quality.get("scope") != "per_source_region"
+                          or quality.get("whole_input_no_speech_supported") is True)
+                     and quality.get("accepted_segment_count") == 0
+                     and len(quality.get("rejected_segments", [])) == quality["decoded_segment_count"]))
+        )
+
         # === STEP 2: SPEAKER DIARIZATION (Pyannote - optional) ===
         print("Processing: Diarization...", file=sys.stderr)
-        if bool(result["diarization_enabled"]) and DIARIZATION_AVAILABLE:
+        if bool(result["diarization_enabled"]) and no_speech:
+            result.update({"diarization_status": "not_applicable", "diarization_note": "no_speech_detected",
+                           "speakers": [], "speaker_count": 0, "diarization": [],
+                           "overlap_detection": {"status": "not_applicable", "reason": "no_speech_detected", "intervals": []},
+                           "speaker_change_review": {"status": "not_applicable", "reason": "no_speech_detected"}})
+        elif bool(result["diarization_enabled"]) and DIARIZATION_AVAILABLE:
             try:
                 # Runtime env overrides must win so tests, local overrides, and
                 # temporary credential swaps can take effect without mutating config.
@@ -704,7 +1126,8 @@ def process_audio(audio_file, output_dir):
                         "waveform": waveform.detach().cpu(),
                         "sample_rate": sr,
                     }
-                    diarization_result = diarization_pipeline(diarization_audio)
+                    diarization_result, result["speaker_change_review"] = _diarize_with_review(
+                        diarization_pipeline, diarization_audio, overlap_evidence=result["overlap_detection"])
                     
                     # Handle new pyannote API - DiarizeOutput object
                     # The actual annotation is in the speaker_diarization attribute
@@ -713,19 +1136,23 @@ def process_audio(audio_file, output_dir):
                     else:
                         diarization = diarization_result
                     
-                    speakers = []
-                    diarization_segments = []
+                    raw_diarization_segments = []
                     for segment, track, speaker in diarization.itertracks(yield_label=True):
-                        speakers.append(speaker)
-                        diarization_segments.append({
+                        raw_diarization_segments.append({
                             "start": float(segment.start),
                             "end": float(segment.end),
                             "speaker": speaker
                         })
+                    diarization_segments, diarization_timing = _bound_diarization_segments_to_audio(
+                        raw_diarization_segments,
+                        duration_seconds=result["duration_seconds"],
+                    )
+                    speakers = [seg["speaker"] for seg in diarization_segments if seg.get("speaker")]
                     
-                    result["speakers"] = list(set(speakers))
-                    result["speaker_count"] = len(set(speakers))
+                    result["speakers"] = sorted(set(speakers))
+                    result["speaker_count"] = len(result["speakers"])
                     result["diarization"] = diarization_segments
+                    result["diarization_timing"] = diarization_timing
                     diarization_status, diarization_note = _diarization_outcome(diarization_segments)
                     result["diarization_status"] = diarization_status
                     if diarization_note:
@@ -762,11 +1189,44 @@ def process_audio(audio_file, output_dir):
             else:
                 result["diarization_note"] = "pyannote.audio not installed"
         
+        # The optional detector adds vetoes only, before either individual
+        # inference caller. Absent configuration preserves the established path.
+        if "additional_overlap_model" in (runtime_cfg.get("diarization") or {}):
+            result["additional_overlap_detection"] = {"status": "unavailable", "intervals": [],
+                "policy": "nemotron3_overlap_exclusion_v1", "timebase": "input_audio_seconds",
+                "review_status": "unreviewed", "identity_claim": False}
+            if no_speech:
+                result["additional_overlap_detection"].update(status="not_applicable", reason="no_speech_detected")
+            else:
+                try:
+                    result["additional_overlap_detection"] = _detect_additional_overlap(
+                        waveform, sr, runtime_cfg["diarization"]["additional_overlap_model"], device)
+                except Exception as exc:
+                    result["additional_overlap_detection"].update(status="error",
+                        error=model_cache.redact_sensitive_info(str(exc)))
+
         # === STEP 3: EMOTION CLASSIFICATION (Wav2Vec2 - optional) ===
         # Use CPU for emotion model to save GPU memory
         print("Processing: Emotion classification...", file=sys.stderr)
         emotion_device = "cpu"  # Force CPU to save GPU memory
-        if TRANSFORMERS_AVAILABLE:
+        # Keep sound observations even when there is no usable speech. Failure
+        # to establish clean intervals must never restore whole-scene scoring.
+        result.update({"emotion": None, "emotion_scores": {}, "emotion_segments": []})
+        try:
+            result.update(acoustic_events.prepare_inputs(
+                waveform, sr, result, cache_dir=_resolve_hf_cache_dir(), device=device))
+        except Exception as exc:
+            result.update({"sound_events": [], "sound_event_meta": {
+                "status": "error", "error": model_cache.redact_sensitive_info(str(exc))},
+                "emotion_input": {"status": "unavailable", "policy": acoustic_events.POLICY, "selected": []}})
+        if no_speech:
+            result.update({"emotion_status": "not_applicable", "emotion_note": "no_speech_detected",
+                           "emotion": None, "emotion_scores": {}})
+        elif result["emotion_input"]["status"] == "unavailable":
+            result.update({"emotion_status": "error", "emotion_error": "speech_selection_unavailable"})
+        elif not (result["emotion_input"].get("phrase_selection") or {}).get("selected"):
+            result.update({"emotion_status": "insufficient_evidence", "emotion_note": "no_complete_supported_phrase"})
+        elif TRANSFORMERS_AVAILABLE:
             try:
                 wav2vec_cache_dir = _resolve_hf_cache_dir()
                 model_repo = "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
@@ -778,19 +1238,10 @@ def process_audio(audio_file, output_dir):
                         "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-emotion"
                     )
                 
-                try:
-                    emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
-                        model_repo,
-                        cache_dir=wav2vec_cache_dir,
-                        local_files_only=True,
-                    )
-                except Exception as exc:
-                    if is_offline:
-                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Emotion model '{model_repo}' from cache: {exc}") from exc
-                    emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
-                        model_repo,
-                        cache_dir=wav2vec_cache_dir,
-                    )
+                emotion_model, result["emotion_model_load"] = _load_trained_wav2vec(
+                    model_repo, cache_dir=wav2vec_cache_dir,
+                    is_offline=is_offline, emotion=True,
+                )
 
                 try:
                     emotion_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
@@ -814,26 +1265,30 @@ def process_audio(audio_file, output_dir):
                 else:
                     waveform_16k = waveform
                 
-                inputs = emotion_extractor(
-                    waveform_16k.numpy().flatten(),
-                    sampling_rate=16000,
-                    return_tensors="pt",
-                    padding=True
-                )
-                inputs = {k: v.to(emotion_device) for k, v in inputs.items()}
-                
-                with torch.no_grad():
-                    logits = emotion_model(**inputs).logits
-                
-                emotion_labels = ["angry", "calm", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
-                predicted_emotion = emotion_labels[torch.argmax(logits, dim=-1).item()]
-                emotion_scores = torch.nn.functional.softmax(logits, dim=-1).cpu().numpy()[0]
-                
-                result["emotion"] = predicted_emotion
-                result["emotion_scores"] = {
-                    label: float(score) for label, score in zip(emotion_labels, emotion_scores)
-                }
+                for segment in result["emotion_input"]["phrase_selection"]["selected"]:
+                    first = math.ceil(segment["start"] * 16000)
+                    last = math.floor(segment["end"] * 16000)
+                    sample = waveform_16k[:, first:last]
+                    if sample.shape[-1] == 0:
+                        raise ValueError("Selected emotion interval has no samples")
+                    inputs = emotion_extractor(sample.numpy().flatten(), sampling_rate=16000,
+                                               return_tensors="pt", padding=True)
+                    inputs = {k: v.to(emotion_device) for k, v in inputs.items()}
+                    with torch.no_grad():
+                        logits = emotion_model(**inputs).logits
+                    if not torch.isfinite(logits).all():
+                        raise ValueError("Non-finite speech emotion logits")
+                    labels = [emotion_model.config.id2label[index] for index in range(logits.shape[-1])]
+                    scores = logits.softmax(dim=-1).cpu().numpy()[0]
+                    result["emotion_segments"].append({**segment,
+                        **acoustic_events.emotion_uncertainty(segment),
+                        "label": labels[torch.argmax(logits, dim=-1).item()],
+                        "scores": {label: float(score) for label, score in zip(labels, scores)},
+                        "sample_start": first, "sample_end": last, "sample_rate": 16000,
+                        "source": "speech_acoustics", "review_status": "unreviewed"})
+                # Segment estimates are never promoted into a scene/person mood.
                 result["emotion_status"] = "success"
+                result["emotion_note"] = "uncertain_complete_phrase_estimates"
                 
                 # Clean up emotion model
                 del emotion_model
@@ -843,6 +1298,7 @@ def process_audio(audio_file, output_dir):
                     result["after_emotion_gpu_memory"] = get_gpu_memory_info()
                 
             except Exception as e:
+                result["emotion_segments"] = []
                 result["emotion_status"] = "error"
                 result["emotion_error"] = model_cache.redact_sensitive_info(str(e))
                 # Ensure cleanup even on error
@@ -852,8 +1308,6 @@ def process_audio(audio_file, output_dir):
                 except:
                     pass
                 clear_gpu_memory()
-                if is_offline:
-                    raise
         else:
             result["emotion_status"] = "unavailable"
             result["emotion_note"] = "transformers not installed"
@@ -876,139 +1330,41 @@ def process_audio(audio_file, output_dir):
             result["features_status"] = "error"
             result["features_error"] = str(e)
         
-        # === STEP 5: EMBEDDINGS (Wav2Vec2 - optional) ===
-        print("Processing: Embeddings...", file=sys.stderr)
-        if TRANSFORMERS_AVAILABLE:
+        # === STEP 5: DEDICATED SPEAKER SIGNATURES ===
+        result["embeddings_status"] = "retired"
+        result["embeddings_note"] = "whole_scene_vector_retired"
+        diarization_segments = result.get("diarization")
+        embed_model = None
+        if no_speech:
+            result["speaker_voice_signature_meta"] = {
+                "status": "not_applicable", "reason": "no_speech_detected"}
+        elif not isinstance(diarization_segments, list) or not diarization_segments:
+            result["speaker_voice_signature_meta"] = {
+                "status": "skipped", "reason": "diarization_unavailable"}
+        else:
             try:
-                wav2vec_cache_dir = _resolve_hf_cache_dir()
-                embed_repo = "facebook/wav2vec2-base-960h"
-                embed_revision = os.getenv(
-                    "GOODQ_WAV2VEC2_BASE_REVISION",
-                    "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
-                ).strip()
-                if is_offline and not model_cache.check_hf_model_cache(embed_repo):
-                    raise OSError(
-                        f"Offline mode: Wav2Vec2 Base model '{embed_repo}' is missing from local cache.\n"
-                        "Status: Non-gated.\n"
-                        "Requirements: No Hugging Face token or license terms required.\n"
-                        "Approved Provisioning Command: python3 scripts/install_pipeline_wsl.py --download-wav2vec2"
-                    )
-                
-                try:
-                    embed_model = Wav2Vec2Model.from_pretrained(
-                        embed_repo,
-                        revision=embed_revision or None,
-                        cache_dir=wav2vec_cache_dir,
-                        local_files_only=True,
-                    )
-                except Exception as exc:
-                    if is_offline:
-                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base model '{embed_repo}' from cache: {exc}") from exc
-                    embed_model = Wav2Vec2Model.from_pretrained(
-                        embed_repo,
-                        revision=embed_revision or None,
-                        cache_dir=wav2vec_cache_dir,
-                    )
-                embed_model.to(device)
-                
-                if sr != 16000:
-                    resampler = torchaudio.transforms.Resample(sr, 16000)
-                    waveform_16k = resampler(waveform)
-                else:
-                    waveform_16k = waveform
-                
-                try:
-                    embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                        embed_repo,
-                        revision=embed_revision or None,
-                        cache_dir=wav2vec_cache_dir,
-                        local_files_only=True,
-                    )
-                except Exception as exc:
-                    if is_offline:
-                        raise OSError(f"Offline mode: Failed to load Wav2Vec2 Base feature extractor '{embed_repo}' from cache: {exc}") from exc
-                    embed_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                        embed_repo,
-                        revision=embed_revision or None,
-                        cache_dir=wav2vec_cache_dir,
-                    )
-                inputs = embed_extractor(
-                    waveform_16k.numpy().flatten(),
-                    sampling_rate=16000,
-                    return_tensors="pt",
-                    padding=True
-                )
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-                
-                with torch.no_grad():
-                    embeddings = embed_model(**inputs).last_hidden_state
-                
-                # Mean pooling
-                embedding_vector = torch.mean(embeddings, dim=1).cpu().numpy()[0]
-                result["embeddings"] = embedding_vector.tolist()
-                result["embedding_dim"] = len(embedding_vector)
-                result["embeddings_status"] = "success"
-
-                diarization_segments = result.get("diarization")
-                if isinstance(diarization_segments, list) and diarization_segments:
-                    try:
-                        signature_result = _build_speaker_voice_signatures(
-                            waveform_16k.detach().cpu(),
-                            diarization_segments,
-                            embed_model=embed_model,
-                            embed_extractor=embed_extractor,
-                            device=device,
-                            sample_rate=_SPEAKER_SIGNATURE_TARGET_SR,
-                        )
-                        result["speaker_voice_signatures"] = signature_result.get("signatures", [])
-                        result["speaker_voice_signature_meta"] = signature_result.get("meta", {})
-                    except Exception as signature_exc:
-                        result["speaker_voice_signatures"] = []
-                        result["speaker_voice_signature_meta"] = {
-                            "status": "error",
-                            "error": str(signature_exc),
-                        }
-                else:
-                    result["speaker_voice_signatures"] = []
-                    result["speaker_voice_signature_meta"] = {
-                        "status": "skipped",
-                        "reason": "diarization_unavailable",
-                    }
-                
-                # Clean up embedding model
-                del embed_model
-                del embed_extractor
-                clear_gpu_memory()
-                if device == "cuda":
-                    result["after_embeddings_gpu_memory"] = get_gpu_memory_info()
-                
-            except Exception as e:
-                result["embeddings_status"] = "error"
-                result["embeddings_error"] = model_cache.redact_sensitive_info(str(e))
+                embed_model = speaker_signature.load_encoder(
+                    device, str(Path(output_dir) / "speaker_model"), _resolve_hf_cache_dir())
+                waveform_16k = (torchaudio.transforms.Resample(sr, 16000)(waveform)
+                               if sr != 16000 else waveform)
+                # Voice references require acoustic speech evidence as well as
+                # exclusive diarization. Keep the encoder's own duration/diversity gates.
+                qualified_segments = (result.get("emotion_input") or {}).get("selected", [])
+                signature_result = _build_speaker_voice_signatures(
+                    waveform_16k.detach().cpu(), diarization_segments,
+                    embed_model=embed_model, device=device, speech_intervals=qualified_segments)
+                signature_result["meta"]["speech_admission"] = "acoustically_assessed_phrases"
+                result["speaker_voice_signatures"] = signature_result["signatures"]
+                result["speaker_voice_signature_meta"] = signature_result["meta"]
+            except Exception as exc:
                 result["speaker_voice_signatures"] = []
                 result["speaker_voice_signature_meta"] = {
-                    "status": "error",
-                    "reason": "embedding_step_failed",
-                    "error": model_cache.redact_sensitive_info(str(e)),
-                }
-                # Ensure cleanup even on error
-                try:
-                    del embed_model
-                    del embed_extractor
-                except:
-                    pass
+                    "status": "error", "reason": "speaker_signature_step_failed",
+                    "error": model_cache.redact_sensitive_info(str(exc))}
+            finally:
+                del embed_model
                 clear_gpu_memory()
-                if is_offline:
-                    raise
-        else:
-            result["embeddings_status"] = "unavailable"
-            result["embeddings_note"] = "transformers not installed"
-            result["speaker_voice_signatures"] = []
-            result["speaker_voice_signature_meta"] = {
-                "status": "unavailable",
-                "reason": "transformers_not_installed",
-            }
-        
+
         # Final cleanup
         print("Processing complete. Final cleanup...", file=sys.stderr)
         clear_gpu_memory()
@@ -1062,7 +1418,10 @@ def main():
     # stdout during processing, which would otherwise corrupt the bridge
     # contract.
     with redirect_stdout(sys.stderr):
-        result = process_audio(audio_file, output_dir)
+        vocabulary = json.loads(sys.argv[3]) if len(sys.argv) > 3 else None
+        temperature = json.loads(sys.argv[4]) if len(sys.argv) > 4 else None
+        result = process_audio(audio_file, output_dir, transcription_vocabulary=vocabulary,
+                               transcription_temperature=temperature)
     print(json.dumps(result))
     
     if result["status"] != "success":

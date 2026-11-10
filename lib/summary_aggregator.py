@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,10 +13,35 @@ import uuid
 
 from filelock import FileLock
 
-from api.utils.loaders import DataLoader
+from api.utils.loaders import DataLoader, scene_is_retired
 from steps.common import sqlite_read_authority
 
 logger = logging.getLogger(__name__)
+
+
+def _count_scene_emotions(counts: dict, segment: dict) -> None:
+    """Keep stored acoustic labels distinct from top-ranked text evidence."""
+    ranking = segment.get("text_emotion_ranking")
+    top_text = ranking[0] if isinstance(ranking, list) and ranking else None
+    labels = {
+        "audio": segment.get("audio_emotion"),
+        "text": top_text.get("label") if isinstance(top_text, dict) else None,
+    }
+    for channel, label in labels.items():
+        if isinstance(label, str) and label.strip():
+            counts.setdefault((channel, label.strip().lower()), set()).add(str(segment["scene_id"]))
+
+
+def _format_scene_emotions(counts: dict) -> list[dict]:
+    rows = []
+    for channel, basis in (("audio", "stored_label"), ("text", "top_ranked")):
+        ranked = sorted(
+            ((label, len(ids)) for (source, label), ids in counts.items() if source == channel),
+            key=lambda item: (-item[1], item[0]),
+        )
+        rows.extend({"emotion": label, "count": count, "channel": channel,
+                     "basis": basis, "count_unit": "scenes"} for label, count in ranked[:10])
+    return rows
 
 _CORRELATION_IDENTIFIER_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
@@ -86,6 +112,174 @@ def open_summary_read_connection(db_path: Path | str) -> sqlite3.Connection:
     )
 
 
+def _retained_music_cue_profiles(conn, db_path: Path, data_loader: DataLoader) -> dict:
+    """Read retained cues from active materialized scenes; never create graph facts.
+
+    Promoted scene support establishes visibility, not promotion of each cue or
+    a claim that a mentioned event occurred. Keep this namespace separate from KG
+    entities and keep the original cue payloads in the exact-scene playlist.
+    """
+    from steps.common.ucf_retirement import _read_scene_retirements
+
+    candidates = []
+    for video_id in data_loader.list_processed_videos():
+        index = data_loader.load_temporal_index(video_id)
+        if index and any(s.get("music_events") for s in index.get("segments", [])):
+            candidates.append((video_id, index))
+    ledger_path = db_path.parent / "ucf" / "ucf_ledger.db"
+    if not candidates or not ledger_path.exists():
+        return {}
+
+    ledger = open_summary_read_connection(ledger_path)
+    profiles = {}
+    seen = set()
+    try:
+        for video_id, index in candidates:
+            source = index.get("video_hash")
+            if (not isinstance(source, str) or len(source) != 64
+                    or any(c not in "0123456789abcdef" for c in source)
+                    or index.get("video_id", source) != source):
+                continue
+            retired = _read_scene_retirements(ledger, video_hash=source, epoch_id=db_path.parent.name)
+            # Query only this source/epoch's promoted support. Missing or corrupt
+            # schemas fail visibly rather than granting cue visibility.
+            promoted = {row[0]: (row[1], row[2]) for row in ledger.execute(
+                "SELECT frame_id,t_start,t_end FROM context_frames "
+                "WHERE video_hash=? AND epoch_id=? AND promotion_status='promoted'",
+                (source, db_path.parent.name),
+            )}
+            for scene in index.get("segments", []):
+                events = scene.get("music_events")
+                if not isinstance(events, list) or not events or scene_is_retired(scene, retired):
+                    continue
+                start, end = scene.get("start"), scene.get("end")
+                if (type(start) not in (int, float) or type(end) not in (int, float)
+                        or not math.isfinite(start) or not math.isfinite(end) or not 0 <= start < end):
+                    continue
+                sid = scene.get("scene_id")
+                expected = hashlib.sha256(f"scene{source}|{start:.3f}|{end:.3f}|".encode()).hexdigest()
+                if sid != expected or (source, sid) in seen:
+                    continue
+                rows = conn.execute(
+                    "SELECT n.properties,m.timestamp_start,m.timestamp_end "
+                    "FROM nodes n JOIN node_media nm ON nm.node_id=n.id "
+                    "JOIN media_nodes m ON m.id=nm.media_id "
+                    "WHERE n.node_type='scene' AND n.name=? AND m.scene_id=?", (sid, sid),
+                ).fetchall()
+                authorized = False
+                for row in rows:
+                    if row[1] is None or row[2] is None or (round(row[1], 3), round(row[2], 3)) != (round(start, 3), round(end, 3)):
+                        continue
+                    props = json.loads(row[0] or "{}")
+                    for fid in props.get("ucf_provenance", []):
+                        bounds = promoted.get(fid) if type(fid) is int else None
+                        if bounds and start - .001 <= bounds[0] <= bounds[1] <= end + .001:
+                            authorized = True
+                            break
+                if not authorized:
+                    continue
+                seen.add((source, sid))
+                by_label = {}
+                for event in events:
+                    label = event.get("label") if isinstance(event, dict) else event
+                    if isinstance(label, str) and label.strip():
+                        by_label.setdefault(label.strip(), []).append(event)
+                for label, cues in by_label.items():
+                    profile = profiles.setdefault(label, {
+                        "entity_id": f"transcript_cue:{label}", "node_type": "transcript_cue",
+                        "name": label, "source": "retained_transcript_pattern",
+                        "evidence_basis": "Retained transcript cues; not confirmed events",
+                        "occurrence_count": 0, "scene_count": 0, "first_seen": None, "last_seen": None,
+                        "co_occurrences": [], "scenes": [], "sentiment_distribution": {},
+                        "top_emotions": [],
+                    })
+                    profile["occurrence_count"] += len(cues)
+                    profile["scene_count"] += 1
+                    profile["scenes"].append({
+                        "video_id": video_id, "scene_id": sid, "source_sha256": source,
+                        "start": start, "end": end,
+                        "representative_frame": scene.get("representative_frame"),
+                        "transcript": scene.get("full_transcript") or scene.get("transcript"),
+                        "music_events": cues,
+                    })
+        for profile in profiles.values():
+            profile["scenes"].sort(key=lambda row: (row["source_sha256"], row["start"], row["scene_id"]))
+        return profiles
+    finally:
+        ledger.close()
+
+
+def summary_scene_retirements(db_path: Path | str, video_hash: str) -> list[dict]:
+    from scripts.ucf.ucf_ledger import read_scene_retirements
+
+    return read_scene_retirements(Path(db_path).parent / "ucf" / "ucf_ledger.db", video_hash=video_hash)
+
+
+def active_summary_scene_ids(conn: sqlite3.Connection, db_path: Path | str, video_hash: str) -> set:
+    """SQL projection delivery may lag the authoritative scene retirement."""
+    retirements = summary_scene_retirements(db_path, video_hash)
+    retired = {alias for item in retirements for alias in item["aliases"]}
+    return {row[0] for row in conn.execute("SELECT id FROM scenes WHERE video_hash=?", (video_hash,))
+            if row[0] is not None and str(row[0]) not in retired}
+
+
+def _retirement_graph_projection(conn: sqlite3.Connection, db_path: Path) -> tuple[set, dict]:
+    """Project only graph statistics affected by undelivered scene retirement."""
+    if not (db_path.parent / "ucf" / "ucf_ledger.db").exists():
+        return set(), {}
+    media = {row["id"]: dict(row) for row in conn.execute(
+        "SELECT id,scene_id,timestamp_start,timestamp_end,properties FROM media_nodes"
+    )}
+    retirements = {}
+    retired = set()
+    for media_id, row in media.items():
+        props = json.loads(row["properties"] or "{}")
+        source_hash = props.get("video_hash") or props.get("video_id")
+        if not source_hash:
+            continue
+        if source_hash not in retirements:
+            retirements[source_hash] = summary_scene_retirements(db_path, source_hash)
+        if scene_is_retired({"scene_id": row["scene_id"], "start": row["timestamp_start"],
+                             "end": row["timestamp_end"]}, retirements[source_hash]):
+            retired.add(media_id)
+    if not retired:
+        return retired, {}
+    links = list(conn.execute("SELECT node_id,media_id FROM node_media"))
+    affected = {row["node_id"] for row in links if row["media_id"] in retired}
+    stats = {}
+    for node_id in affected:
+        remaining = {row["media_id"] for row in links if row["node_id"] == node_id and row["media_id"] not in retired}
+        starts = [media[mid]["timestamp_start"] for mid in remaining if media[mid]["timestamp_start"] is not None]
+        ends = [media[mid]["timestamp_end"] for mid in remaining if media[mid]["timestamp_end"] is not None]
+        stats[node_id] = {"occurrence_count": len(remaining), "first_seen": min(starts) if starts else None,
+                          "last_seen": max(ends) if ends else None}
+    return retired, stats
+
+
+def _project_node_statistics(row, stats: dict):
+    return {**dict(row), **stats.get(row["id"], {})}
+
+
+def entity_scene_ids(conn: sqlite3.Connection, node_ids, retired_media=()) -> set[str]:
+    """Count scene membership, never node writes; include stitched voice sources."""
+    ids = set(node_ids)
+    if not ids:
+        return set()
+    placeholders = ",".join("?" for _ in ids)
+    ids.update(row[0] for row in conn.execute(
+        f"SELECT source_id FROM edges WHERE target_id IN ({placeholders}) "
+        "AND edge_type = 'identity_evidence'", tuple(ids)))
+    placeholders = ",".join("?" for _ in ids)
+    ids.update(row[0] for row in conn.execute(
+        f"SELECT source_id FROM edges WHERE target_id IN ({placeholders}) "
+        "AND edge_type = 'voice_pattern_match'", tuple(ids)))
+    placeholders = ",".join("?" for _ in ids)
+    return {row[1] for row in conn.execute(
+        f"SELECT m.id, m.scene_id FROM node_media nm JOIN media_nodes m ON m.id=nm.media_id "
+        f"WHERE nm.node_id IN ({placeholders})", tuple(ids))
+        if row[1] and row[0] not in retired_media}
+
+
 def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]:
     """Compile execution scope metadata."""
     video_ids = data_loader.list_processed_videos()
@@ -136,6 +330,7 @@ def _get_summary_dashboard_with_connection(
 
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    _retired_media, retired_stats = _retirement_graph_projection(conn, db_path)
     
     # 1. Fetch People (major entities), aggregating manually stitched speaker patterns
     people_rows = cur.execute(
@@ -160,10 +355,11 @@ def _get_summary_dashboard_with_connection(
         target_to_sources.setdefault(mr["target_id"], []).append(mr["source_id"])
         
     node_rows = cur.execute("SELECT id, occurrence_count, first_seen, last_seen FROM nodes").fetchall()
-    nodes_dict = {nr["id"]: nr for nr in node_rows}
+    nodes_dict = {nr["id"]: _project_node_statistics(nr, retired_stats) for nr in node_rows}
     
     people = []
     for r in people_rows:
+        r = _project_node_statistics(r, retired_stats)
         person_id = r["id"]
         name = r["name"]
         
@@ -183,19 +379,23 @@ def _get_summary_dashboard_with_connection(
                 if src_l is not None:
                     l_seen = src_l if l_seen is None else max(l_seen, src_l)
                     
+        scene_count = len(entity_scene_ids(conn, [person_id], _retired_media))
+        if scene_count == 0:
+            continue
         people.append({
             "entity_id": _get_stable_entity_id("person", name),
             "name": name,
             "occurrence_count": count,
+            "scene_count": scene_count,
             "first_seen": f_seen,
             "last_seen": l_seen
         })
-    people.sort(key=lambda x: x["occurrence_count"], reverse=True)
+    people.sort(key=lambda x: x["scene_count"], reverse=True)
         
     # 2. Fetch Places (locations)
     places_rows = cur.execute(
         """
-        SELECT name, occurrence_count, first_seen, last_seen
+        SELECT id, name, occurrence_count, first_seen, last_seen
         FROM nodes
         WHERE node_type = 'location'
         ORDER BY occurrence_count DESC
@@ -204,22 +404,32 @@ def _get_summary_dashboard_with_connection(
     
     places = []
     for r in places_rows:
+        r = _project_node_statistics(r, retired_stats)
+        scene_count = len(entity_scene_ids(conn, [r["id"]], _retired_media))
+        if scene_count == 0:
+            continue
         places.append({
             "entity_id": _get_stable_entity_id("location", r["name"]),
             "name": r["name"],
             "occurrence_count": int(r["occurrence_count"]),
+            "scene_count": scene_count,
             "first_seen": r["first_seen"],
             "last_seen": r["last_seen"]
         })
         
+    places.sort(key=lambda x: x["scene_count"], reverse=True)
+
     # 3. Occasions logic
     # Select nodes from temporal_context or other types matching keywords
     all_nodes = cur.execute(
-        "SELECT node_type, name, occurrence_count, properties FROM nodes"
+        "SELECT id, node_type, name, occurrence_count, properties FROM nodes"
     ).fetchall()
     
     occasions = []
     for r in all_nodes:
+        r = _project_node_statistics(r, retired_stats)
+        if r["occurrence_count"] == 0:
+            continue
         name = r["name"]
         o_type = _classify_occasion_type(name)
         if o_type:
@@ -233,11 +443,19 @@ def _get_summary_dashboard_with_connection(
                 "confidence": float(props.get("confidence", 1.0))
             })
             
+    # Retained cues are read projections, not graph nodes or promoted event facts.
+    for cue in _retained_music_cue_profiles(conn, db_path, data_loader).values():
+        occasions.append({key: cue[key] for key in (
+            "entity_id", "name", "occurrence_count", "scene_count", "source", "evidence_basis",
+        )} | {"occasion_type": _classify_occasion_type(cue["name"]) or "music",
+             "confidence": None})
+
     # Sort occasions by occurrence
     occasions.sort(key=lambda x: x["occurrence_count"], reverse=True)
     
     # 4. Sentiment & Emotion summary from all temporal indexes
     sentiment_distribution = {"POSITIVE": 0, "NEGATIVE": 0, "NEUTRAL": 0}
+    sentiment_unavailable = 0
     emotion_counts = {}
     
     # Built-in Highlights collections lists
@@ -263,19 +481,9 @@ def _get_summary_dashboard_with_connection(
             if sent in sentiment_distribution:
                 sentiment_distribution[sent] += 1
             else:
-                sentiment_distribution["NEUTRAL"] += 1
+                sentiment_unavailable += 1
                 
-            # Emotion tracking
-            audio_emo = seg.get("audio_emotion")
-            if audio_emo:
-                emotion_counts[audio_emo] = emotion_counts.get(audio_emo, 0) + 1
-            
-            text_emo_ranking = seg.get("text_emotion_ranking", [])
-            if text_emo_ranking and isinstance(text_emo_ranking, list):
-                top_text_emo = text_emo_ranking[0]
-                if isinstance(top_text_emo, dict) and top_text_emo.get("label"):
-                    l = top_text_emo["label"]
-                    emotion_counts[l] = emotion_counts.get(l, 0) + 1
+            _count_scene_emotions(emotion_counts, seg)
                     
             # Build scene reference payload
             scene_ref = {
@@ -301,9 +509,7 @@ def _get_summary_dashboard_with_connection(
                 multi_person_gatherings.append(scene_ref)
 
     # Top emotions formatting
-    top_emotions = []
-    for emo, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-        top_emotions.append({"emotion": emo, "count": count})
+    top_emotions = _format_scene_emotions(emotion_counts)
         
     return {
         "scope_metadata": scope,
@@ -311,6 +517,11 @@ def _get_summary_dashboard_with_connection(
         "places": places,
         "occasions": occasions,
         "sentiment_distribution": sentiment_distribution,
+        "sentiment_coverage": {
+            "classified": sum(sentiment_distribution.values()),
+            "unavailable": sentiment_unavailable,
+            "total": sum(sentiment_distribution.values()) + sentiment_unavailable,
+        },
         "top_emotions": top_emotions,
         "built_in_highlights": {
             "positive_moments": positive_moments[:12],  # Cap display size
@@ -324,6 +535,11 @@ def get_entity_profile(db_path: Path, data_loader: DataLoader, entity_id: str) -
     node_type, name = _parse_stable_entity_id(entity_id)
     connection = open_summary_read_connection(db_path)
     try:
+        if node_type == "transcript_cue":
+            profile = _retained_music_cue_profiles(connection, db_path, data_loader).get(name)
+            if profile is None:
+                raise ValueError(f"No authorized retained cue scenes: {entity_id}")
+            return {"scope_metadata": get_scope_metadata(db_path, data_loader), **profile}
         return _get_entity_profile_with_connection(
             connection,
             db_path,
@@ -351,6 +567,7 @@ def _get_entity_profile_with_connection(
 
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    retired_media, retired_stats = _retirement_graph_projection(conn, db_path)
     
     # Fetch node statistics from graph
     node_row = cur.execute(
@@ -360,6 +577,9 @@ def _get_entity_profile_with_connection(
 
     if not node_row:
         raise ValueError(f"Entity profile node not found: {entity_id}")
+    node_row = _project_node_statistics(node_row, retired_stats)
+    if node_row["occurrence_count"] == 0:
+        raise ValueError(f"Entity profile node has no active scenes: {entity_id}")
         
     node_id = int(node_row["id"])
     occurrence_count = int(node_row["occurrence_count"] or 0)
@@ -378,10 +598,11 @@ def _get_entity_profile_with_connection(
         
         for src_id in source_ids:
             src_row = cur.execute(
-                "SELECT occurrence_count, first_seen, last_seen FROM nodes WHERE id = ?",
+                "SELECT id, occurrence_count, first_seen, last_seen FROM nodes WHERE id = ?",
                 (src_id,)
             ).fetchone()
             if src_row:
+                src_row = _project_node_statistics(src_row, retired_stats)
                 occurrence_count += int(src_row["occurrence_count"] or 0)
                 src_f = src_row["first_seen"]
                 src_l = src_row["last_seen"]
@@ -409,22 +630,24 @@ def _get_entity_profile_with_connection(
 
     all_node_ids = [node_id] + source_ids + raw_speaker_ids
     placeholders = ",".join("?" for _ in all_node_ids)
+    retired_filter = f"AND nm1.media_id NOT IN ({','.join('?' for _ in retired_media)})" if retired_media else ""
     
     # Fetch co-occurring nodes
     co_occur_rows = cur.execute(
         f"""
-        SELECT n.id, n.node_type, n.name, COUNT(*) AS co_occurrence_count
+        SELECT n.id, n.node_type, n.name, COUNT(DISTINCT nm1.media_id) AS co_occurrence_count
         FROM node_media nm1
         JOIN node_media nm2 ON nm1.media_id = nm2.media_id
         JOIN nodes n ON n.id = nm2.node_id
         WHERE nm1.node_id IN ({placeholders}) 
           AND nm2.node_id NOT IN ({placeholders})
           AND n.node_type IN ('person', 'location', 'concept', 'temporal_context')
+          {retired_filter}
         GROUP BY n.id, n.node_type, n.name
         ORDER BY co_occurrence_count DESC, n.name ASC
         LIMIT 25
         """,
-        all_node_ids + all_node_ids
+        all_node_ids + all_node_ids + sorted(retired_media)
     ).fetchall()
     
     co_occurrences = []
@@ -437,24 +660,16 @@ def _get_entity_profile_with_connection(
         })
         
     # Find all media nodes / scenes where this node is present
-    media_rows = cur.execute(
-        f"""
-        SELECT m.scene_id, m.media_path, m.properties
-        FROM node_media nm
-        JOIN media_nodes m ON nm.media_id = m.id
-        WHERE nm.node_id IN ({placeholders})
-        """,
-        all_node_ids
-    ).fetchall()
-    
-    scene_ids = {r["scene_id"] for r in media_rows if r["scene_id"]}
+    scene_ids = entity_scene_ids(conn, [node_id], retired_media)
     
     # Scan temporal indexes to load detailed scene details
     scenes = []
     sentiment_distribution = {"POSITIVE": 0, "NEGATIVE": 0, "NEUTRAL": 0}
+    sentiment_unavailable = 0
     emotion_counts = {}
     
     video_ids = data_loader.list_processed_videos()
+    seen_scenes = set()
     for vid in video_ids:
         temporal_index = data_loader.load_temporal_index(vid)
         if not temporal_index:
@@ -463,7 +678,8 @@ def _get_entity_profile_with_connection(
         video_title = Path(temporal_index.get("video_path") or vid).stem
         for seg in temporal_index.get("segments", []):
             seg_scene_id = seg.get("scene_id")
-            if seg_scene_id in scene_ids:
+            if seg_scene_id in scene_ids and seg_scene_id not in seen_scenes:
+                seen_scenes.add(seg_scene_id)
                 # Add to playlist scenes
                 scenes.append({
                     "video_id": vid,
@@ -480,27 +696,15 @@ def _get_entity_profile_with_connection(
                 if sent in sentiment_distribution:
                     sentiment_distribution[sent] += 1
                 else:
-                    sentiment_distribution["NEUTRAL"] += 1
+                    sentiment_unavailable += 1
                     
-                # Update profile emotion stats
-                audio_emo = seg.get("audio_emotion")
-                if audio_emo:
-                    emotion_counts[audio_emo] = emotion_counts.get(audio_emo, 0) + 1
-                    
-                text_emo_ranking = seg.get("text_emotion_ranking", [])
-                if text_emo_ranking and isinstance(text_emo_ranking, list):
-                    top_text_emo = text_emo_ranking[0]
-                    if isinstance(top_text_emo, dict) and top_text_emo.get("label"):
-                        l = top_text_emo["label"]
-                        emotion_counts[l] = emotion_counts.get(l, 0) + 1
+                _count_scene_emotions(emotion_counts, seg)
 
     # Sort scenes chronologically (by start time)
     scenes.sort(key=lambda x: x["start"])
     
     # Top emotions
-    top_emotions = []
-    for emo, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-        top_emotions.append({"emotion": emo, "count": count})
+    top_emotions = _format_scene_emotions(emotion_counts)
         
     return {
         "scope_metadata": scope,
@@ -508,11 +712,17 @@ def _get_entity_profile_with_connection(
         "node_type": node_type,
         "name": name,
         "occurrence_count": occurrence_count,
+        "scene_count": len(scenes),
         "first_seen": first_seen,
         "last_seen": last_seen,
         "co_occurrences": co_occurrences,
         "scenes": scenes,
         "sentiment_distribution": sentiment_distribution,
+        "sentiment_coverage": {
+            "classified": sum(sentiment_distribution.values()),
+            "unavailable": sentiment_unavailable,
+            "total": sum(sentiment_distribution.values()) + sentiment_unavailable,
+        },
         "top_emotions": top_emotions
     }
 

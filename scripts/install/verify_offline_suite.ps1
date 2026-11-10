@@ -87,6 +87,21 @@ foreach ($tool in @("ffmpeg", "ffprobe")) {
 if (-not $gate1b.pass) { $results.pass = $false }
 $results.gates += $gate1b
 
+# --- Personal-profile external playback runtime ---
+if ($Profile -eq "PERSONAL_AIR_GAP") {
+    $vlcGate = @{ name = "vlc_runtime"; pass = $true; errors = @() }
+    try {
+        & (Join-Path $InstallDir "runtime\python.exe") (Join-Path $InstallDir "scripts\install\vlc_runtime_payload.py") verify --root (Join-Path $InstallDir "vlc") --manifest (Join-Path $InstallDir "configs\offline_dependencies_manifest.json") --profile $Profile --probe
+        if ($LASTEXITCODE -ne 0) { throw "VLC payload verification exited $LASTEXITCODE" }
+        Write-Host "  [OK]   Bundled VLC hashes and isolated runtime probe passed" -ForegroundColor Green
+    } catch {
+        $vlcGate.pass = $false
+        $vlcGate.errors += "Bundled VLC runtime failed: $_"
+        $results.pass = $false
+    }
+    $results.gates += $vlcGate
+}
+
 # --- Gate 1bb: Bundled Document Runtime ---
 $gate1bb = @{ name = "document_runtime"; pass = $true; errors = @() }
 $pdftotextPath = Join-Path $InstallDir "poppler\pdftotext.exe"
@@ -117,28 +132,20 @@ $results.gates += $gate1bb
 # --- Gate 1c: OCR Runtime ---
 $gate1c = @{ name = "ocr_runtime"; pass = $true; errors = @() }
 $pythonPath = Join-Path $InstallDir "runtime\python.exe"
-$tesseractPath = Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"
+$ocrPythonPath = Join-Path $InstallDir "ocr-runtime\python.exe"
 try {
-    & $pythonPath -c "import pytesseract; print(pytesseract.__version__)" *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "pytesseract import returned exit code $LASTEXITCODE"
+    if (-not (Test-Path -LiteralPath $ocrPythonPath -PathType Leaf)) {
+        throw "Required isolated Paddle OCR runtime payload is missing"
     }
-    Write-Host "  [OK]   Python pytesseract binding imports" -ForegroundColor Green
+    & $ocrPythonPath -c "import paddleocr, onnxruntime; assert paddleocr.__version__ == '3.7.0'; assert onnxruntime.__version__ == '1.23.2'" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Paddle OCR runtime import/version check returned exit code $LASTEXITCODE"
+    }
+    Write-Host "  [OK]   Isolated Paddle OCR runtime imports at locked versions" -ForegroundColor Green
 } catch {
     $gate1c.pass = $false
-    $gate1c.errors += "Python pytesseract binding failed: $_"
-    Write-Host "  [FAIL] Python pytesseract binding failed: $_" -ForegroundColor Red
-}
-try {
-    & $tesseractPath --version *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "exit code $LASTEXITCODE"
-    }
-    Write-Host "  [OK]   Tesseract OCR runtime executes" -ForegroundColor Green
-} catch {
-    $gate1c.pass = $false
-    $gate1c.errors += "Tesseract OCR runtime failed: $_"
-    Write-Host "  [FAIL] Tesseract OCR runtime failed: $_" -ForegroundColor Red
+    $gate1c.errors += "Paddle OCR runtime failed: $_"
+    Write-Host "  [FAIL] Paddle OCR runtime failed: $_" -ForegroundColor Red
 }
 if (-not $gate1c.pass) { $results.pass = $false }
 $results.gates += $gate1c

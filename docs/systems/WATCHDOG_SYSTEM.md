@@ -363,9 +363,9 @@ step_plan = [
 
 ```python
 step_plan = [
-    ("goodq_image_caption", "image_ocr"),                # Tesseract OCR
-    ("goodq_image_caption", "image_caption"),            # BLIP captioning
-    ("goodq_object_detect", "object_detect"),            # YOLO detection
+    ("goodq_ocr", "image_ocr"),                          # PaddleOCR 3.7 ONNX Runtime
+    ("goodq_caption_vlm", "image_caption"),              # WeVisOne-VL-2B captioning
+    ("goodq_object_detect", "object_detect"),            # YOLOX ONNX Runtime / NanoDet fallback
     ("goodq_face_embed", "face_embed"),                  # Face embeddings
     ("goodq_image_caption", "image_exif"),               # EXIF metadata
     ("goodq_image_caption", "image_embed_dino"),         # DINOv2 embeddings

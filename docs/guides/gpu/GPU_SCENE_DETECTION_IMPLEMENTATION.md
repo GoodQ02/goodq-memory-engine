@@ -34,7 +34,7 @@ Created custom GPU-accelerated scene detection using PyTorch CUDA:
 
 ### Performance Results
 
-**Test Video**: `01. 1987 - 1988.mp4`
+**Test Video**: `sample_reel_01.mp4`
 - Duration: 8801 seconds (2.44 hours)
 - Frames: 263,780 frames @ 29.97 fps
 - Size: 7.46 GB

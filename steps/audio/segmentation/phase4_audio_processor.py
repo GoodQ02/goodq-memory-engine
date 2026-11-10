@@ -47,6 +47,9 @@ class Phase4AudioProcessor:
             cfg: Full GoodQ config dict
         """
         self.cfg = cfg
+        from steps.audio.recording_ingestion import selected
+        if selected(cfg):
+            raise ValueError('Recording engine does not support Phase 4 chunk recognition; use canonical scene projections')
         self.audio_cfg = cfg.get("audio", {})
         self.transcribe_cfg = self.audio_cfg.get("transcribe", {})
         self.diarize_cfg = self.audio_cfg.get("diarize", {})

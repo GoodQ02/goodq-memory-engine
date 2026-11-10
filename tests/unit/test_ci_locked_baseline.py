@@ -39,6 +39,40 @@ def test_ci_lock_pins_the_public_mini_agent_release() -> None:
     assert MINI_AGENT_RELEASE in requirements
 
 
+def test_ci_visual_runtime_matches_the_installer_cpu_torch_pins() -> None:
+    """The actual CI environment must support the pinned CLIP model's bin weights."""
+    workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    setup = next(
+        step
+        for step in workflow["jobs"]["bootstrap-baseline"]["steps"]
+        if step.get("name") == "Setup Miniconda"
+    )
+    environment = yaml.safe_load(
+        (REPO_ROOT / setup["with"]["environment-file"]).read_text(encoding="utf-8")
+    )
+    dependencies = environment["dependencies"]
+    pip_requirements = set(next(item["pip"] for item in dependencies if isinstance(item, dict)))
+    installer_requirements = set(
+        (REPO_ROOT / "requirements-baseline-lock.txt").read_text(encoding="utf-8").splitlines()
+    )
+    cpu_torch_requirements = {
+        "--extra-index-url https://download.pytorch.org/whl/cpu",
+        "torch==2.6.0+cpu",
+        "torchvision==0.21.0+cpu",
+        "torchaudio==2.6.0+cpu",
+    }
+
+    assert cpu_torch_requirements <= installer_requirements
+    assert cpu_torch_requirements <= pip_requirements, (
+        "CI must install the same native-loader-compatible CPU Torch family as the installer"
+    )
+    assert not any(
+        isinstance(item, str)
+        and item.split("=", 1)[0] in {"pytorch", "torchvision", "torchaudio", "cpuonly"}
+        for item in dependencies
+    ), "Do not combine the old Conda Torch family with the supported pip CPU wheels"
+
+
 def test_ci_runs_native_lifecycle_separately_without_dropping_coverage() -> None:
     workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["bootstrap-baseline"]["steps"]

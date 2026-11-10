@@ -88,7 +88,10 @@
 
   // API Call Wrapper
   async function apiCall(endpoint, options = {}) {
-    const url = `${state.apiBase}${endpoint}`;
+    const rawUrl = `${state.apiBase}${endpoint}`;
+    const url = (typeof GoodQLibrary !== "undefined" && GoodQLibrary && typeof GoodQLibrary.url === "function")
+      ? GoodQLibrary.url(rawUrl)
+      : rawUrl;
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -99,17 +102,47 @@
     
     if (!response.ok) {
       let message = response.statusText;
+      let payload = null;
       try {
-        const errorJson = await response.json();
-        message = errorJson.detail || errorJson.message || message;
+        payload = await response.json();
+        message = payload.detail || payload.message || message;
       } catch (e) {}
       
       const err = new Error(message);
       err.status = response.status;
+      err.payload = payload;
       throw err;
     }
     
     return await response.json();
+  }
+
+  // Called only after the operator confirms the preview. Keep the exact payload
+  // across the real authority's preparation and single-use confirmation calls.
+  async function commitConfirmedStitch(payload) {
+    return commitConfirmedIdentity("/api/system/identity/stitch", payload);
+  }
+
+  async function commitConfirmedIdentity(endpoint, payload) {
+    const body = JSON.stringify(payload);
+    let token = null;
+    try {
+      try {
+        await apiCall(endpoint, { method: "POST", body });
+        throw new Error("Confirmation gate did not require a scoped token.");
+      } catch (error) {
+        const envelope = error.payload;
+        token = envelope?.result?.confirmation_token;
+        if (error.status !== 403 || envelope?.status !== "needs_confirmation" ||
+            typeof token !== "string" || !token.trim()) throw error;
+      }
+      return await apiCall(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ ...JSON.parse(body), confirmation_token: token }),
+      });
+    } finally {
+      token = null;
+    }
   }
 
   // Fetch status of DB and setup environment headers
@@ -140,6 +173,41 @@
     } catch (e) {
       showToast(`Failed to load unstitched patterns: ${e.message}`, "error");
       ui.unstitchedList.innerHTML = `<div class="empty-state error-text">Load error: ${e.message}</div>`;
+    }
+  }
+
+  function renderSpeakerReviews(rows) {
+    const panel = document.getElementById("speaker-reviews");
+    panel.replaceChildren();
+    let notices = 0;
+    rows.forEach(({scene_id, video_id, review}) => {
+      if (review.status !== "ok") {
+        const note = document.createElement("p");
+        note.textContent = `Scene ${scene_id}: speaker-change review unavailable (${review.reason || review.status}).`;
+        panel.appendChild(note);
+        notices++;
+      }
+      (review.flags || []).forEach(flag => {
+        const note = document.createElement("p");
+        note.textContent = `Video ${video_id || "unknown"}, scene ${scene_id}, ${Number(flag.start).toFixed(3)}–${Number(flag.end).toFixed(3)}s (scene-relative): possible speaker change merged during diarization. Unreviewed; speaker identity and exact boundaries unconfirmed. Signatures and admission are unchanged.`;
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "Supporting evidence";
+        const evidence = document.createElement("p");
+        evidence.textContent = `Window ${flag.window_start}–${flag.window_end}s; local slots ${(flag.local_slots || []).join(" → ")}; final cluster ${flag.final_cluster}; gaps ${Number(flag.left_gap).toFixed(3)}s / ${Number(flag.right_gap).toFixed(3)}s; rule ${review.rule}. Local slots are not people.`;
+        details.append(summary, evidence);
+        panel.append(note, details);
+        notices++;
+      });
+    });
+    if (!notices) panel.textContent = "No review flags recorded. This does not establish speaker purity; historical scenes may lack review evidence.";
+  }
+
+  async function fetchSpeakerReviews() {
+    try {
+      renderSpeakerReviews(await apiCall("/api/system/identity/speaker-reviews"));
+    } catch (e) {
+      document.getElementById("speaker-reviews").textContent = `Review evidence unavailable: ${e.message}`;
     }
   }
 
@@ -191,16 +259,52 @@
         item.classList.add("selected");
       }
       
+      const match = /^voice_pattern_([0-9a-f]{8})[0-9a-f]*_speaker_(\d+)_([0-9a-f]{6})/i.exec(p.node_name || "");
+      const friendlyTitle = match
+        ? `Speaker ${match[2]} · Scene #${match[1]}`
+        : p.node_name;
+      const shortCode = match ? `${match[1]}…${match[3]}` : "";
+
       item.innerHTML = `
-        <div class="pattern-title">${p.node_name}</div>
+        <div class="pattern-title-row">
+          <div class="pattern-title" title="${p.node_name}">${friendlyTitle}</div>
+          ${shortCode ? `<span class="pattern-hash-pill" title="${p.node_name}">${shortCode}</span>` : ""}
+        </div>
         <div class="pattern-meta-grid">
-          <div class="meta-field">Scenes: <strong>${p.occurrence_count}</strong></div>
+          <div class="meta-field">Scenes: <strong>${p.scene_count ?? "Unknown"}</strong></div>
           <div class="meta-field">Voiced: <strong>${formatVoicedTime(p.voiced_seconds)}</strong></div>
-          <div class="meta-field">Segs: <strong>${p.segment_count}</strong></div>
+          <div class="meta-field">Selected turns: <strong>${p.segment_count ?? "Unknown"}</strong></div>
         </div>
         <div class="pattern-excerpt">${p.sample_transcript ? `"${p.sample_transcript}"` : "No transcript excerpt."}</div>
       `;
       
+      const splits = p.possible_same_speaker_patterns || [];
+      if (splits.length) {
+        const splitDetails = document.createElement("details");
+        splitDetails.className = "split-warning-details";
+        splitDetails.addEventListener("click", event => event.stopPropagation());
+        const splitSummary = document.createElement("summary");
+        splitSummary.textContent = `⚠️ ${splits.length} possible same-speaker split${splits.length === 1 ? "" : "s"} — review required`;
+        const warning = document.createElement("p");
+        warning.textContent = `Possible same-speaker split with ${splits.join(", ")}. Review required; tracks remain separate.`;
+        splitDetails.append(splitSummary, warning);
+        item.appendChild(splitDetails);
+      }
+      const evidence = (p.signature_evidence || []).filter(e => e.admission_policy);
+      if (evidence.length) {
+        const details = document.createElement("details");
+        details.addEventListener("click", event => event.stopPropagation());
+        const summary = document.createElement("summary");
+        summary.textContent = "Signature speech selection (speaker purity unconfirmed)";
+        details.appendChild(summary);
+        evidence.forEach(e => {
+          const note = document.createElement("p");
+          const spans = rows => rows == null ? "unknown" : rows.map(s => `${Number(s.start).toFixed(3)}–${Number(s.end).toFixed(3)}s`).join(", ") || "none";
+          note.textContent = `Scene ${e.scene_id}: selected ${spans(e.selected_segments)}; excluded overlapping turns ${spans(e.excluded_segments)}.`;
+          details.appendChild(note);
+        });
+        item.appendChild(details);
+      }
       item.addEventListener("click", () => selectPattern(p));
       ui.unstitchedList.appendChild(item);
     });
@@ -279,9 +383,9 @@
     
     // Populate form data
     ui.selectedPatternName.textContent = pattern.node_name;
-    ui.selectedPatternScenes.textContent = pattern.occurrence_count;
+    ui.selectedPatternScenes.textContent = pattern.scene_count ?? "Unknown";
     ui.selectedPatternVoiced.textContent = formatVoicedTime(pattern.voiced_seconds);
-    ui.selectedPatternSegments.textContent = pattern.segment_count;
+    ui.selectedPatternSegments.textContent = pattern.segment_count ?? "Unknown";
     ui.selectedPatternTranscript.textContent = pattern.sample_transcript ? `"${pattern.sample_transcript}"` : "No transcript excerpt.";
     
     // Reset form inputs
@@ -402,6 +506,8 @@
     
     // Stage 2: CONFIRM COMMIT
     ui.modalConfirmBtn.addEventListener("click", async () => {
+      if (ui.modalConfirmBtn.disabled) return;
+      ui.modalConfirmBtn.disabled = true;
       closeModal();
       
       const sourceName = state.selectedPattern.node_name;
@@ -414,14 +520,11 @@
         ui.status.textContent = "Status: REBUILDING GRAPH...";
         ui.status.className = "header-status ingesting";
         
-        const commitRes = await apiCall("/api/system/identity/stitch", {
-          method: "POST",
-          body: JSON.stringify({
-            source_node_name: sourceName,
-            target_person_name: targetName,
-            confirm: true,
-            operator_note: operatorNote,
-          }),
+        const commitRes = await commitConfirmedStitch({
+          source_node_name: sourceName,
+          target_person_name: targetName,
+          confirm: true,
+          operator_note: operatorNote,
         });
         
         showToast(commitRes.message || "Successfully stitched identity.");
@@ -437,13 +540,16 @@
       } catch (err) {
         showToast(`Stitching execution failed: ${err.message}`, "error");
       } finally {
+        ui.modalConfirmBtn.disabled = false;
         ui.rebuildOverlay.setAttribute("hidden", "");
       }
     });
   }
 
   // Revoke Mapping Operation
+  let revokePending = false;
   async function executeRevoke(mapping) {
+    if (revokePending) return;
     const confirmation = confirm(
       `WARNING: Are you sure you want to revoke the manual identity stitching for:\n` +
       `Pattern: ${mapping.source_node_name}\n` +
@@ -459,6 +565,7 @@
     );
     
     if (operatorNote === null) return; // cancelled prompt
+    revokePending = true;
     
     try {
       // Show rebuilding spinner overlay
@@ -466,12 +573,9 @@
       ui.status.textContent = "Status: REBUILDING GRAPH...";
       ui.status.className = "header-status ingesting";
       
-      const revokeRes = await apiCall("/api/system/identity/stitch/revoke", {
-        method: "POST",
-        body: JSON.stringify({
+      const revokeRes = await commitConfirmedIdentity("/api/system/identity/stitch/revoke", {
           mapping_id: mapping.mapping_id,
           operator_note: operatorNote || "Revoked by operator",
-        }),
       });
       
       showToast(revokeRes.message || "Successfully revoked mapping.");
@@ -482,6 +586,7 @@
     } catch (err) {
       showToast(`Revocation failed: ${err.message}`, "error");
     } finally {
+      revokePending = false;
       ui.rebuildOverlay.setAttribute("hidden", "");
     }
   }
@@ -490,6 +595,7 @@
   async function refreshData() {
     await fetchSystemStatus();
     await fetchUnstitched();
+    await fetchSpeakerReviews();
     await fetchMappings();
   }
 

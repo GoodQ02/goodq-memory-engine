@@ -9,14 +9,15 @@ def test_step_runner_surfaces_ocr_dependency_missing() -> None:
 
     status, error, extra = _derive_step_log_outcome(
         "image_ocr",
-        {"ocr_meta": {"status": "dependency_missing", "reason": "pytesseract"}},
+        {"ocr_meta": {"status": "dependency_missing", "reason": "ocr_dependency_missing",
+                      "error": "Paddle OCR runtime unavailable"}},
         verbose=False,
     )
 
-    assert status == "skipped"
-    assert error is None
+    assert status == "error"
+    assert error == "Paddle OCR runtime unavailable"
     assert extra is not None
-    assert extra["reason"] == "image_ocr_pytesseract"
+    assert extra["reason"] == "image_ocr_ocr_dependency_missing"
     assert extra["result_meta"]["ocr_meta"]["status"] == "dependency_missing"
 
 

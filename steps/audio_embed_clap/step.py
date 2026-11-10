@@ -4,6 +4,7 @@ from steps.common.faiss_utils import add_with_required_ids, create_hnsw_id_index
 from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 from steps.common.qdrant_client import build_qdrant_client
 from steps.common.memory import ensure_id_map_table_schema
+from steps.common.profile_config import require_gpu
 
 
 
@@ -29,7 +30,7 @@ _TORCHAUDIO_INSTALL_HINT = (
     "conda run -n goodq_audio_embed pip install "
     "torchaudio==2.3.1 --extra-index-url https://download.pytorch.org/whl/cu121"
 )
-_MIN_AUDIO_DURATION_SEC = 0.35
+_MIN_AUDIO_DURATION_SEC = 1.0  # Match the minimum window actually evaluated.
 _MIN_AUDIO_BYTES = 512
 _SILENCE_RMS_THRESHOLD = 8
 _SILENCE_PEAK_THRESHOLD = 24
@@ -72,15 +73,21 @@ def _build_qdrant_audio_payload(
     payload: Dict[str, Any] = {
         "source_path": source_path,
         "modality": "audio",
+        **({"source_kind": item["source_kind"]} if item.get("source_kind") else {}),
         "faiss_id": faiss_id,
         "embedding_id": embedding_id,
         "component": "audio_embed_clap",
         "step": "audio_embed_clap",
         "model": _CLAP_MODEL_ID,
+        "input_policy": "full_scene",
         "created_at": created_at,
         "commit_ts_utc": created_at,
         "ucf_promotion_status": "staged",
     }
+
+    db_dir = ((cfg or {}).get("paths") or {}).get("db_dir")
+    if db_dir:
+        payload["epoch_id"] = os.path.basename(db_dir)
 
     run_id = _resolve_run_id(item, cfg)
     if run_id:
@@ -204,7 +211,7 @@ def _inspect_audio_input(path: str) -> Optional[Dict[str, Any]]:
     try:
         file_size = os.path.getsize(path)
     except OSError as exc:
-        return {"status": "skipped", "reason": "audio_stat_failed", "error": str(exc)}
+        return {"status": "error", "reason": "audio_stat_failed", "error": str(exc)}
     if file_size < _MIN_AUDIO_BYTES:
         return {"status": "skipped", "reason": "audio_too_small", "bytes": file_size}
 
@@ -217,7 +224,7 @@ def _inspect_audio_input(path: str) -> Optional[Dict[str, Any]]:
             sample_rate = wav.getframerate()
             sample_width = wav.getsampwidth()
             if frame_count <= 0 or sample_rate <= 0 or sample_width <= 0:
-                return {"status": "skipped", "reason": "invalid_audio"}
+                return {"status": "error", "reason": "invalid_audio"}
 
             duration_sec = frame_count / float(sample_rate)
             if duration_sec < _MIN_AUDIO_DURATION_SEC:
@@ -229,7 +236,7 @@ def _inspect_audio_input(path: str) -> Optional[Dict[str, Any]]:
 
             raw = wav.readframes(frame_count)
             if not raw:
-                return {"status": "skipped", "reason": "audio_empty"}
+                return {"status": "error", "reason": "audio_empty"}
 
             rms = int(audioop.rms(raw, sample_width))
             peak = int(audioop.max(raw, sample_width))
@@ -239,14 +246,21 @@ def _inspect_audio_input(path: str) -> Optional[Dict[str, Any]]:
                     "reason": "audio_silent",
                     "duration_sec": round(duration_sec, 4),
                 }
-    except (wave.Error, EOFError, OSError) as exc:
-        return {"status": "skipped", "reason": "invalid_audio", "error": str(exc)}
+    except wave.Error:
+        # wave is an integer-PCM fast path, not the format authority. Valid
+        # float/extensible WAVs must reach the shared decoder below, which
+        # validates duration, finite samples and energy before embedding.
+        return None
+    except (EOFError, OSError) as exc:
+        return {"status": "error", "reason": "invalid_audio", "error": str(exc)}
 
     return None
 
 
 def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
     target_device = preferred_device or _preferred_device()
+    if require_gpu() and target_device != "cuda":
+        return False, "GPU-required CLAP policy forbids CPU model loading"
     if _CLAP["model"] is not None:
         if _CLAP["device"] == target_device:
             return True, None
@@ -292,6 +306,8 @@ def _load(preferred_device: Optional[str] = None) -> tuple[bool, Optional[str]]:
         os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
         
         device = target_device if target_device == "cpu" or (getattr(torch, "cuda", None) and torch.cuda.is_available()) else "cpu"
+        if require_gpu() and device != "cuda":
+            return False, "GPU-required CLAP policy: CUDA is unavailable"
         
         # Set memory fraction for this process (20% of GPU)
         if device == "cuda":
@@ -321,6 +337,13 @@ def _ensure_clap_map(db_path: str) -> None:
 
 
 def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    result = _embed_scene_audio(item, cfg)
+    # Retain provenance on absence and failure as well as successful vectors.
+    result["clap_meta"].update(input_policy="full_scene", model=_CLAP_MODEL_ID)
+    return result
+
+
+def _embed_scene_audio(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"clap_meta": {"status": "no_file"}}
@@ -336,7 +359,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             }
         }
     load_ok, load_error = _load(_preferred_device())
-    if not load_ok and _preferred_device() == "cuda":
+    if not load_ok and _preferred_device() == "cuda" and not require_gpu():
         clear_cache()
         load_ok, load_error = _load("cpu")
     if not load_ok or _CLAP["model"] is None:
@@ -365,45 +388,8 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         import faiss  # type: ignore
         from steps.text_embed.step import _content_fingerprint
         
-        # VAD Preprocessing - filter silence before embedding
-        vad_enabled = cfg.get("vad_enabled", True)
-        audio_path_to_use = path
-        
-        if vad_enabled:
-            try:
-                from steps.common.vad_preprocessor import preprocess_audio_with_vad
-                logger.info("audio_embed_clap vad preprocessing source_path=%s", path)
-                
-                vad_path, vad_segments = preprocess_audio_with_vad(
-                    path,
-                    threshold=0.5,
-                    min_speech_duration_ms=400,
-                    min_silence_duration_ms=200,
-                    extract_to_file=True
-                )
-                
-                if vad_path and vad_segments:
-                    audio_path_to_use = vad_path
-                    logger.info(
-                        "audio_embed_clap vad preprocessing complete source_path=%s segments=%s",
-                        path,
-                        len(vad_segments),
-                    )
-                else:
-                    logger.warning(
-                        "audio_embed_clap vad fallback operation=%s source_path=%s reason=%s",
-                        "preprocess_audio_with_vad",
-                        path,
-                        "no_speech_detected",
-                    )
-            except Exception as vad_exc:
-                logger.warning(
-                    "audio_embed_clap operation failed operation=%s source_path=%s exc_type=%s exc=%s",
-                    "preprocess_audio_with_vad",
-                    path,
-                    type(vad_exc).__name__,
-                    vad_exc,
-                )
+        # Acoustic retrieval includes non-speech sounds. Speech VAD must never
+        # replace this waveform; the energy gates below handle quiet input.
         
         # ── Chunked inference ──────────────────────────────────────────
         # CLAP HTSAT processes fixed 10-second windows (max_length_s=10
@@ -420,14 +406,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         _RMS_FLOOR = 1e-4   # Skip chunks below this RMS energy
 
         try:
-            sf_info = sf.info(audio_path_to_use)
+            sf_info = sf.info(path)
             total_duration_s = sf_info.frames / float(sf_info.samplerate)
         except Exception as info_exc:
             logger.warning(
                 "audio_embed_clap sf.info failed source_path=%s exc=%s",
-                audio_path_to_use, info_exc,
+                path, info_exc,
             )
-            return {"clap_meta": {"status": "skipped", "reason": "audio_info_failed", "error": str(info_exc)}}
+            return {"clap_meta": {"status": "error", "reason": "audio_info_failed", "error": str(info_exc)}}
 
         if total_duration_s < _MIN_AUDIO_DURATION_SEC:
             return {"clap_meta": {"status": "skipped", "reason": "audio_too_short", "duration_sec": round(total_duration_s, 4)}}
@@ -453,23 +439,37 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         cuda_failed = False
         offset_s = 0.0
 
+        def window_meta() -> Dict[str, Any]:
+            return {
+                "total_duration_s": round(total_duration_s, 4),
+                "chunk_duration_s": _CHUNK_SEC,
+                "chunk_stride_s": _STRIDE_SEC,
+                "chunks_processed": chunks_processed,
+                "chunks_skipped_silent": chunks_skipped_silent,
+            }
+
+        def failed_window(reason: str, error: Any) -> Dict[str, Any]:
+            # Do not commit an incomplete scene vector after losing a window.
+            return {"clap_meta": {**window_meta(), "status": "error", "reason": reason,
+                                  "error": str(error), "failed_offset_s": offset_s}}
+
         while offset_s < total_duration_s:
-            if (total_duration_s - offset_s) < 1.0:
+            if (total_duration_s - offset_s) < _MIN_AUDIO_DURATION_SEC:
                 break  # skip sub-second tail
 
             try:
                 wave_chunk, _sr = librosa.load(
-                    audio_path_to_use, sr=48000, mono=True,
+                    path, sr=48000, mono=True,
                     offset=offset_s, duration=_CHUNK_SEC,
                 )
             except Exception as chunk_exc:
-                logger.debug("audio_embed_clap chunk decode failed offset=%.1f exc=%s", offset_s, chunk_exc)
-                offset_s += _STRIDE_SEC
-                continue
+                return failed_window("chunk_decode_failed", chunk_exc)
 
             if wave_chunk is None or len(wave_chunk) == 0:
-                offset_s += _STRIDE_SEC
-                continue
+                return failed_window("chunk_decode_empty", "Decoder returned no samples")
+
+            if not np.isfinite(wave_chunk).all():
+                return failed_window("invalid_audio_samples", "Non-finite decoded samples")
 
             # RMS energy gate — skip silent/near-silent chunks
             rms = float(np.sqrt(np.mean(wave_chunk ** 2)))
@@ -478,14 +478,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 offset_s += _STRIDE_SEC
                 continue
 
-            # Inference with CUDA→CPU fallback on first failure
+            # CPU fallback is allowed only when GPU execution is not required.
             try:
-                if cuda_failed:
-                    raise RuntimeError("CUDA previously failed, using CPU")
                 emb = _infer_chunk(wave_chunk)
                 chunk_embeddings.append(emb)
                 chunks_processed += 1
             except Exception as infer_exc:
+                if require_gpu():
+                    return failed_window("gpu_inference_failed", infer_exc)
                 if _CLAP.get("device") == "cuda" and not cuda_failed and _should_retry_on_cpu(infer_exc):
                     logger.warning(
                         "audio_embed_clap CUDA chunk failed offset=%.1f exc=%s; retrying on CPU",
@@ -500,11 +500,11 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                             chunk_embeddings.append(emb)
                             chunks_processed += 1
                         except Exception as retry_exc:
-                            logger.warning("audio_embed_clap CPU retry failed offset=%.1f exc=%s", offset_s, retry_exc)
+                            return failed_window("chunk_inference_failed", retry_exc)
                     else:
-                        logger.warning("audio_embed_clap CPU reload failed: %s", retry_error)
+                        return failed_window("cpu_reload_failed", retry_error)
                 else:
-                    logger.warning("audio_embed_clap chunk inference failed offset=%.1f exc=%s", offset_s, infer_exc)
+                    return failed_window("chunk_inference_failed", infer_exc)
 
             offset_s += _STRIDE_SEC
 
@@ -515,14 +515,14 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
         )
 
         if not chunk_embeddings:
-            return {"clap_meta": {"status": "skipped", "reason": "no_active_audio_chunks",
-                                  "total_duration_s": round(total_duration_s, 2),
-                                  "chunks_skipped_silent": chunks_skipped_silent}}
+            return {"clap_meta": {**window_meta(), "status": "skipped", "reason": "audio_silent"}}
 
         # Mean-pool chunk embeddings into a single 512-dim vector
         stacked = torch.cat(chunk_embeddings, dim=0)  # (N, 512)
         pooled = stacked.mean(dim=0, keepdim=True)     # (1, 512)
         feats = pooled.numpy().astype("float32")
+        if not np.isfinite(feats).all() or not np.any(feats):
+            return failed_window("invalid_embedding", "CLAP returned a non-finite or zero vector")
         index_path = (cfg.get("paths", {}) or {}).get("faiss_audio_path")
         if not index_path:
             try:
@@ -558,7 +558,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     type(e).__name__,
                     e,
                 )
-            return {"clap_meta": {"status": "no_index_path"}}
+            return {"clap_meta": {**window_meta(), "status": "no_index_path"}}
         # Stable 64-bit ID derived from content fingerprint
         h = _content_fingerprint(item)
         uid = np.array([int(h[:16], 16) % (2**63 - 1)], dtype='int64')
@@ -723,6 +723,8 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         "source_path": path,
                         "run_id": _resolve_run_id(item, cfg),
                         "created_at": commit_ts_utc,
+                        "input_policy": "full_scene",
+                        **window_meta(),
                     },
                 ),
             )
@@ -735,6 +737,7 @@ def audio_embed_clap(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                 e,
             )
         clap_meta: Dict[str, Any] = {
+            **window_meta(),
             "status": "ok",
             "index_path": index_path,
             "faiss_id": faiss_id,

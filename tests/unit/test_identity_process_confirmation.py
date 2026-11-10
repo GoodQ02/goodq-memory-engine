@@ -158,6 +158,11 @@ def _install_gated_rebuild(
     monkeypatch: pytest.MonkeyPatch,
     process: _GatedRebuildProcess,
 ) -> MagicMock:
+    monkeypatch.setattr(identity_route, "_CFG", {
+        "paths": {"db_path": str(
+            process._identity_dir.parent / "epochs" / process._manifest["epoch_id"] / "memory.db"
+        )},
+    })
     popen = MagicMock(return_value=process)
     monkeypatch.setattr(identity_route.subprocess, "Popen", popen)
     monkeypatch.setattr(

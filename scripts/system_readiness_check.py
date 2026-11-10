@@ -304,7 +304,6 @@ def gather_path_checks(cfg: Dict[str, Any]) -> List[CheckResult]:
 
     tools_cfg = cfg.get("tools", {})
     check_path("ffmpeg", tools_cfg.get("ffmpeg_exe"))
-    check_path("tesseract", tools_cfg.get("tesseract_exe"), must_exist=False)
     check_path("poppler_bin", tools_cfg.get("poppler_bin"), must_exist=False)
 
     models_cfg = cfg.get("models", {})

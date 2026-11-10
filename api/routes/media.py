@@ -4,17 +4,115 @@ Serves frames, audio chunks, and other media files.
 """
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, HTTPException, Path as PathParam
+import math
+from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
+from fastapi import APIRouter, HTTPException, Path as PathParam, Request
 from fastapi.responses import FileResponse
 from pathlib import Path
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from api.utils.loaders import DataLoader
+from api.route_effects import is_loopback_client
+from api.utils.desktop_player import DesktopPlayer, DesktopPlayerError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/media", tags=["media"])
+_desktop_player = None
+
+
+@asynccontextmanager
+async def _media_lifespan(app):
+    yield
+    if _desktop_player is not None:
+        _desktop_player.close()
+
+
+router = APIRouter(prefix="/api/media", tags=["media"], lifespan=_media_lifespan)
 
 _data_loader = None
+
+
+def get_desktop_player():
+    global _desktop_player
+    if _desktop_player is None:
+        _desktop_player = DesktopPlayer()
+    return _desktop_player
+
+
+class PlayerWindow(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    x: int = Field(ge=-32768, le=32768)
+    y: int = Field(ge=-32768, le=32768)
+    width: int = Field(ge=240, le=1920)
+    height: int = Field(ge=180, le=1440)
+
+
+class DesktopPlayRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    video_id: str = Field(min_length=1, max_length=256, pattern=r"^[^/\\\x00-\x1f]+$")
+    scene_id: str = Field(min_length=1, max_length=256)
+    window: PlayerWindow | None = None
+
+
+class DesktopDoneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    playback_id: str = Field(min_length=1, max_length=128)
+
+
+def _require_local_desktop(request: Request) -> None:
+    if not is_loopback_client(request.scope.get("client")):
+        raise HTTPException(403, "Desktop playback is available only on this computer")
+    origin = request.headers.get("origin")
+    expected = urlsplit(str(request.base_url))
+    try:
+        supplied = urlsplit(origin or "")
+        same_origin = (supplied.scheme, supplied.hostname, supplied.port) == (
+            expected.scheme, expected.hostname, expected.port)
+    except ValueError:
+        same_origin = False
+    if not origin or not same_origin or supplied.username or supplied.password:
+        raise HTTPException(403, "Desktop playback requires a same-origin request")
+
+
+@router.get("/desktop-player/status")
+def desktop_player_status(request: Request):
+    if not is_loopback_client(request.scope.get("client")):
+        return {"available": False, "state": "unavailable", "playback_id": None,
+                "error": "Desktop playback is available only on this computer"}
+    return get_desktop_player().status()
+
+
+@router.post("/desktop-player/play")
+def desktop_player_play(body: DesktopPlayRequest, request: Request):
+    _require_local_desktop(request)
+    loader = get_data_loader()
+    path = loader.get_original_video_path(body.video_id)
+    if path is None:
+        raise HTTPException(404, "Original video not found")
+    temporal = loader.load_temporal_index(body.video_id) or {}
+    matches = [segment for segment in temporal.get("segments", []) if isinstance(segment, dict)
+               and str(segment.get("scene_id")) == body.scene_id]
+    if len(matches) != 1:
+        raise HTTPException(404, "Scene not found or ambiguous")
+    start = matches[0].get("start")
+    if isinstance(start, bool) or not isinstance(start, (int, float)) or not math.isfinite(start) or start < 0:
+        raise HTTPException(422, "Scene has no valid original-video timestamp")
+    try:
+        return get_desktop_player().play(path, float(start), body.video_id, body.scene_id,
+                                         body.window.model_dump() if body.window else None)
+    except DesktopPlayerError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+
+
+@router.post("/desktop-player/done")
+def desktop_player_done(body: DesktopDoneRequest, request: Request):
+    _require_local_desktop(request)
+    try:
+        return get_desktop_player().done(body.playback_id)
+    except DesktopPlayerError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
 
 
 def get_data_loader():
@@ -112,6 +210,30 @@ async def get_audio_chunk(
         raise HTTPException(status_code=500, detail=f"Failed to serve audio chunk: {str(e)}")
 
 
+@router.get("/video/{video_id}/scene/{scene_id}/audio")
+async def get_scene_audio(video_id: str, scene_id: str):
+    """Serve the recorded audio for one exact manifest scene, starting at local time zero."""
+    path = get_data_loader().get_scene_audio_paths(video_id).get(scene_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Original scene audio not found")
+    return FileResponse(path=str(path), media_type="audio/wav")
+
+
+@router.get("/video/{video_id}/source")
+async def get_original_video(video_id: str):
+    """Serve verified original bytes, retaining the legacy URL for every source kind."""
+    from api.utils.loaders import source_media_type
+    loader = get_data_loader()
+    temporal = loader.load_temporal_index(video_id) or {}
+    kind = temporal.get("source_kind") or "video"
+    resolver = loader.get_original_video_path if kind == "video" else loader.get_original_source_path
+    path = await run_in_threadpool(resolver, video_id)
+    if path is None:
+        detail = "Original video not found" if kind == "video" else "Original source not found"
+        raise HTTPException(status_code=404, detail=detail)
+    return FileResponse(path=str(path), media_type=source_media_type(path))
+
+
 @router.get("/video/{video_id}/frame/{frame_name}")
 async def get_frame_by_name(
     video_id: str = PathParam(..., description="Video identifier"),
@@ -131,6 +253,8 @@ async def get_frame_by_name(
         loader = get_data_loader()
         
         # Construct frame path
+        if not loader.is_scene_media_active(video_id, frame_name):
+            raise HTTPException(status_code=404, detail="Frame not found")
         frame_path = loader.processing_dir / video_id / "video" / "frames" / frame_name
         
         if not frame_path.exists():

@@ -13,7 +13,7 @@
 # First names, nicknames, and given names to search for in transcripts.
 # Case-insensitive matching is applied.
 names: []
-# Example: [Joe, Joey, Sophia, Ben, Jack]
+# Example: [Alex, Avery, Maya, Jordan, Sam]
 
 # Alias map: canonical name -> list of alternate forms.
 # These are used for roster linking and display normalization.
@@ -21,7 +21,7 @@ aliases: {}
 # Example:
 #   Dad: [Daddy, Father, Pop]
 #   Mom: [Mommy, Mother]
-#   Joe: [Joey, Little Joe]
+#   Alex: [Lex, Ally]
 
 # Generic family role terms to count as name signals when no given name
 # is spoken. These are lower-confidence than given names.

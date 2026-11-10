@@ -45,6 +45,32 @@ The workspace is organized into a **four-panel resizable grid shell**:
 
 ### B. Map (Canvas) Panel
 The central entity co-occurrence graph visualized on an HTML5 `<canvas>` element.
+* **Evidence meaning:** Counts are distinct scenes, not repeated extraction records.
+  Named labels group text for navigation; they do not establish a person's identity.
+  Anonymous speaker/person/face labels stay local to their scene. Presence claims,
+  dialogue mentions and visibility candidates retain their separate channels;
+  mixed evidence is shown as mixed rather than promoted to the strongest claim.
+* **Inspect a connection:** Select a label, open **Entities**, and expand a
+  shared-scene association. Each scene lists both endpoints' channels; expanding
+  the scene shows the selected label's recorded source/status/context and exact
+  scene ID. **Open scene evidence** clears prior search/filter state and opens that
+  scene in the inspector, with the existing original-media controls. Missing
+  provenance is explicit. Shared scenes alone prove neither co-presence nor a
+  confirmed relationship. This map projects scene records.
+* **Inspect stored relationships:** Select a scene, open **Entities**, then
+  **Load stored relationships**. The passive reader shows up to 100 durable KG
+  edges, their original types, exact endpoints, saved review state and scene
+  evidence. Voice matches retain selected turn times. **Open supporting scene**
+  opens the recorded scene and its original-media controls. Missing provenance,
+  unavailable graphs, conflicting sources and truncation are explicit. Active
+  review requires an exact manual mapping; automatic claims remain unreviewed.
+  Dataset/scene changes discard late responses. This is a scene-scoped evidence
+  reader, not an unrestricted graph traversal or a new identity decision.
+* **Curated family facts:** The Identity Workbench's **Family Roster** shows
+  directed relationships with their supporting statements and recorded review
+  status. These statements do not identify people in footage. When epoch-specific
+  face/voice artifacts are incomplete, the roster stays readable and identity
+  editing remains blocked.
 * **Dual Display Layouts**: Supports toggling between a 2D Circular Map and an immersive 3D Spinning Globe via buttons on the bottom margin.
 * **Immersive 3D Globe**: In 3D mode, nodes are mapped onto a spherical shell using a golden angle Fibonacci distribution.
 * **Dynamic Spacing Zoom:** Spreads node coordinates apart dynamically on zoom rather than scaling the canvas rendering context (`ctx.scale()`). This keeps font rendering and icon lines razor-sharp without element bloating or overlapping, both in 2D and 3D.
@@ -58,14 +84,21 @@ The central entity co-occurrence graph visualized on an HTML5 `<canvas>` element
 
 ### C. Timeline Panel
 * Displays scene-level cards in order of timestamp.
+* Changing datasets clears the previous query, ranked results/count and inspector,
+  then shows **All Scenes** for the selected source. Responses from superseded
+  searches or dataset loads cannot restore the previous view. Narrative summaries
+  also clear when the source changes.
 * Renders keyframe thumbnails, timestamps, text transcripts, and tag chips.
 * Interlocks with the **Entity Checklist Filter**: checking multiple entities narrows the timeline display incrementally (AND logic).
 
 ### D. Inspector Panel
 Displays detailed fields for the selected element:
 * **Keyframe Image & Overlay:** Displays the scene's keyframe at the top, embedded with a cyan timecode overlay.
+* **Original Source Video:** Select a scene card to load its verified original source, paused at that scene's source timestamp. **Play original video** uses the browser when supported and automatically opens a local VLC pop-out when the browser cannot decode video. Selection alone never launches it. Playback continues through the full original; no converted media copy is created. Missing source, invalid time, unavailable VLC and failed playback remain visible.
+* **Desktop Pop-out:** The Windows backend owns one separate VLC window, initially fitted near the inspector's player size and bounded to the monitor. Window chrome/minimum size and display scaling can affect the exact fit. Adjustments are remembered for the API session. **Done with pop-out**, native Stop or reaching the recording's end stops/minimizes it; five idle minutes close it. Restoring and resuming native playback cancels that timeout. The taskbar/native controls handle pause, seek and resume. Changing scene or starting original audio/transcript reading dismisses the prior pop-out. The personal offline installer bundles VLC; development can use the standard installed VLC. Desktop launching is restricted to this computer's same-origin loopback UI.
+* **Original Scene Audio:** Select a scene card, then use the native play, pause and seek controls to hear its original extracted recording. The clip starts at local `0:00`, even when the scene starts later in the source video. Missing or ambiguous media is shown as unavailable; playback failures remain visible.
 * **Standby Scanner:** When no scene is selected, it shows a CRT diagnostic animated scanning line.
-* **Transcript Zone:** Renders the transcript text directly below the keyframe image, keeping transcripts readable without excessive scrolling.
+* **Transcript Zone:** Renders the transcript text below the original-audio controls. **READ TRANSCRIPT** uses a synthetic browser voice; it is distinct from the original recording. Starting video, original audio or transcript reading stops the other modes. Selecting another scene, dataset or entity releases the prior recording.
 * **Entity Mode:** When inspecting an entity rather than a scene, the keyframe and transcript sections hide, allowing entity details to occupy the full panel height.
 * **Split Data Trail Section:** Uses an interactive subsection splitter. The logs terminal can be resized or collapsed independently.
 

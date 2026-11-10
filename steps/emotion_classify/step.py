@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 import logging
+import os
 from pathlib import Path
 
 # Set up logging
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Import GPU manager for centralized GPU configuration
 try:
-    from gpu_config import setup_step_gpu, GPUManager
+    from scripts.gpu_config import setup_step_gpu, GPUManager
 except ImportError:
     try:
         from gpu_config import setup_step_gpu, GPUManager
@@ -145,13 +146,198 @@ def _resolve_emotion_snapshot() -> tuple[Path, str, str]:
     return snapshot.resolve(), repo_id, revision
 
 
+_DEFAULT_RESOLVE_EMOTION_SNAPSHOT_CODE = _resolve_emotion_snapshot.__code__
+_WORKER_EMOTION_CUDA_CACHE: Dict[str, bool] = {}
+
+_GPU_ENV_OVERRIDE_KEYS = (
+    "GOODQ_DEVICE",
+    "GOODQ_FORCE_CPU",
+    "GOODQ_NO_AUTO_GPU",
+    "GOODQ_HOST_PROFILE",
+    "CUDA_VISIBLE_DEVICES",
+    "GOODQ_OBJECT_DETECT_FORCE_CPU",
+    "GOODQ_EMOTION_FORCE_CPU",
+)
+
+
+def _force_cpu(env: Dict[str, str] | None = None) -> bool:
+    active_env = env if env is not None else os.environ
+    return (
+        str(active_env.get("GOODQ_EMOTION_FORCE_CPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_FORCE_CPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_NO_AUTO_GPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_HOST_PROFILE", "")).strip().upper() == "BASELINE"
+        or str(active_env.get("CUDA_VISIBLE_DEVICES", "0")).strip() in {"", "-1"}
+        or str(active_env.get("GOODQ_DEVICE", "")).strip().lower() == "cpu"
+    )
+
+
+def _build_worker_probe_env(env: Dict[str, str] | None) -> Dict[str, str]:
+    probe_env = os.environ.copy()
+    if isinstance(env, dict):
+        for key in _GPU_ENV_OVERRIDE_KEYS:
+            probe_env.pop(key, None)
+        for key, value in env.items():
+            if value is not None:
+                probe_env[str(key)] = str(value)
+    probe_env.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    return probe_env
+
+
+def _resolve_emotion_snapshot_for_env(active_env: Dict[str, str]) -> tuple[Path, str, str]:
+    """Resolve the pinned safetensors snapshot honoring worker environment path overrides."""
+    if getattr(_resolve_emotion_snapshot, "__code__", None) is not _DEFAULT_RESOLVE_EMOTION_SNAPSHOT_CODE:
+        return _resolve_emotion_snapshot()
+    env_models_dir = str(active_env.get("GOODQ_MODELS_DIR") or "").strip()
+    env_data_root = str(active_env.get("GOODQ_DATA_ROOT") or "").strip()
+    if (
+        env_models_dir == str(os.environ.get("GOODQ_MODELS_DIR") or "").strip()
+        and env_data_root == str(os.environ.get("GOODQ_DATA_ROOT") or "").strip()
+    ):
+        return _resolve_emotion_snapshot()
+
+    from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
+    from steps.common.model_provisioner import load_registry, resolve_models_root
+
+    registry = load_registry()
+    models = registry.get("huggingface_models") if isinstance(registry, dict) else None
+    record = models.get("emotion_classify_model") if isinstance(models, dict) else None
+    if not isinstance(record, dict):
+        raise OSError("emotion_classify_model is absent from the model registry")
+    repo_id = str(record.get("repo_id") or "").strip()
+    revision = str(record.get("revision") or "").strip()
+    if not repo_id or not revision:
+        raise OSError("emotion_classify_model registry identity is incomplete")
+    if env_models_dir:
+        models_root = Path(env_models_dir).resolve()
+    elif env_data_root:
+        models_root = Path(env_data_root).resolve() / "models"
+    else:
+        models_root = resolve_models_root()
+    snapshot = resolve_pinned_model_snapshot(
+        models_root,
+        "emotion_classify_model",
+        required_files=("model.safetensors",),
+    )
+    if snapshot is None:
+        raise OSError(
+            "emotion_classify_model exact pinned safetensors snapshot is unavailable "
+            f"for revision {revision}"
+        )
+    return snapshot.resolve(), repo_id, revision
+
+
+def _emotion_worker_supports_cuda(
+    *,
+    conda_env: str | None = None,
+    env: Dict[str, str] | None = None,
+) -> bool | None:
+    """Return True/False when the target worker environment's CUDA capability is confirmed, or None if unknown."""
+    import subprocess
+    import sys
+
+    active_env = env if env is not None else os.environ
+    device_override = str(active_env.get("GOODQ_DEVICE", "")).strip().lower()
+    if device_override.startswith("cuda"):
+        return True
+    if device_override:
+        return False
+
+    torch_mod = sys.modules.get("torch")
+    if conda_env is None and torch_mod is not None and not hasattr(torch_mod, "__file__"):
+        try:
+            return bool(torch_mod.cuda.is_available())
+        except Exception:
+            return None
+
+    target_env = (conda_env or active_env.get("GOODQ_WORKER_CONDA_ENV") or "goodq_core").strip()
+    current_env = os.environ.get("CONDA_DEFAULT_ENV", "").strip()
+    python_exe = None
+    if target_env:
+        try:
+            from configs.python_paths import get_env_python
+
+            python_exe = get_env_python(target_env)
+            if (
+                python_exe is None
+                and target_env in {"goodq_emotion", "goodq_emotion_classify"}
+                and getattr(get_env_python, "__module__", "") == "configs.python_paths"
+            ):
+                python_exe = get_env_python("goodq_core")
+        except Exception:
+            python_exe = None
+
+    if python_exe is not None and Path(python_exe).exists():
+        resolved_exe = str(Path(python_exe).resolve())
+        cached = _WORKER_EMOTION_CUDA_CACHE.get(resolved_exe)
+        if cached is not None:
+            return cached
+        try:
+            proc = subprocess.run(
+                [
+                    resolved_exe,
+                    "-c",
+                    "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=_build_worker_probe_env(env),
+            )
+        except Exception:
+            return None
+        if proc.returncode == 0:
+            _WORKER_EMOTION_CUDA_CACHE[resolved_exe] = True
+            return True
+        if proc.returncode == 1 and "Traceback" not in (proc.stderr or ""):
+            _WORKER_EMOTION_CUDA_CACHE[resolved_exe] = False
+            return False
+        return None
+
+    if target_env and target_env != current_env:
+        return None
+
+    try:
+        import torch  # type: ignore
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return None
+
+
+def resolve_effective_device(
+    *,
+    env: Dict[str, str] | None = None,
+    conda_env: str | None = None,
+) -> str:
+    """Return 'cuda', 'cpu', or 'unknown' based on the resolved worker environment."""
+    active_env = env if env is not None else os.environ
+    if _force_cpu(active_env):
+        return "cpu"
+    if env is None and conda_env is None and _EMO.get("model") is not None:
+        return "cuda" if str(_EMO.get("device") or "cpu").strip().lower().startswith("cuda") else "cpu"
+    try:
+        _resolve_emotion_snapshot_for_env(active_env)
+    except OSError:
+        return "cpu"
+    except Exception:
+        return "unknown"
+    supported = _emotion_worker_supports_cuda(conda_env=conda_env, env=dict(active_env))
+    if supported is None:
+        return "unknown"
+    return "cuda" if supported else "cpu"
+
+
 def _load_emotion():
     if _EMO["model"] is not None:
         return
     
     # Configure GPU using centralized manager (Phase 3)
     gpu_config = setup_step_gpu("emotion_classify")
-    requested_device = str(gpu_config["device"] or "cpu").strip().lower()
+    if _force_cpu():
+        requested_device = "cpu"
+    else:
+        requested_device = str(gpu_config["device"] or "cpu").strip().lower()
     
     try:
         from transformers import AutoTokenizer, AutoModelForSequenceClassification  # type: ignore
@@ -246,7 +432,7 @@ def _load_emotion():
 
 
 def _gather_text(item: Dict[str, Any]) -> str:
-    for k in ("transcript", "ocr_text", "caption"):
+    for k in ("document_text", "transcript", "ocr_text", "caption"):
         v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v

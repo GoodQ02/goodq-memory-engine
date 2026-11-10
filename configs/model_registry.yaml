@@ -1,4 +1,140 @@
 huggingface_models:
+  paddle_ocr_det:
+    repo_id: PaddlePaddle/PP-OCRv6_medium_det_onnx
+    revision: 61323801669c338b7891481ec7bac61ce31b576a
+    local_path: paddle_ocr/paddle_ocr_det/61323801669c338b7891481ec7bac61ce31b576a
+    model_type: text-detection
+    trust_level: stable
+    modalities:
+    - vision
+    - text
+    engines:
+      ONNXRuntime: true
+    quantization:
+    - FP32
+    vram_estimate_gb: 1.0
+    load_policy: exclusive
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+    tier_scope:
+    - baseline
+    - cpu_only
+    - gpu_enhanced
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+    files:
+      inference.json:
+        sha256: 0f1a7ec35da36173529c7a60238b7f7919e3831929c3f700ad90ad4896adecd5
+        bytes: 312150
+      inference.onnx:
+        sha256: eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1
+        bytes: 62032837
+      inference.yml:
+        sha256: 7298d5ead546584af2504d03355f881ac7a7bc0eb1e282d3e159277c1d0af871
+        bytes: 886
+      README.md:
+        sha256: 3046e3aab0194a2291bb3941c93b980c2b3a938a24a5be88354968f6d6187ac8
+        bytes: 16089
+  paddle_ocr_rec:
+    repo_id: PaddlePaddle/PP-OCRv6_medium_rec_onnx
+    revision: 50c7eacafc52fa7bcf4194e8cd08e46f8558504b
+    local_path: paddle_ocr/paddle_ocr_rec/50c7eacafc52fa7bcf4194e8cd08e46f8558504b
+    model_type: text-recognition
+    trust_level: stable
+    modalities:
+    - vision
+    - text
+    engines:
+      ONNXRuntime: true
+    quantization:
+    - FP32
+    vram_estimate_gb: 1.0
+    load_policy: exclusive
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+    tier_scope:
+    - baseline
+    - cpu_only
+    - gpu_enhanced
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: FATAL_HALT
+    files:
+      inference.json:
+        sha256: 0b2e25e990bd072f1bf77d59d67d508bce6c4bd44af6624e0fb27d6da2cd00e8
+        bytes: 221814
+      inference.onnx:
+        sha256: 9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba
+        bytes: 76554979
+      inference.yml:
+        sha256: 991b700facf5b50a7de193468207d5f4255b538dde0d312ae3b7c7a9b6873129
+        bytes: 150580
+      README.md:
+        sha256: ebce8d28436623ecab4952e24935aed86b3f8ecaf8f8736b92d5544f60fae1e9
+        bytes: 16587
+  wevisone_vl_2b:
+    repo_id: tencent/WeVisOne-VL-2B
+    revision: 3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf
+    local_path: wevisone_vl/wevisone_vl_2b/3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf
+    model_type: vision-to-text
+    trust_level: stable
+    modalities: [vision, text]
+    engines:
+      Transformers: yes
+      vLLM: no
+      Ollama: no
+    quantization: [BF16]
+    vram_estimate_gb: 5.0
+    load_policy: exclusive
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+    tier_scope: [gpu_enhanced]
+    classification: REQUIRED_FIRST_LAUNCH
+    gated: false
+    requires_token: false
+    token_env: null
+    failure_behavior: DEGRADE_VISIBLE
+    license: Apache-2.0
+    notes: Selected 2026-10-25 under frozen caption criteria (tmp/visual-criteria-20261025-001); runs in envs/caption_vlm/.venv.
+    files:
+      LICENSE:
+        sha256: 097f84bbe01f4d987e3342ef0810f98bbbe23bc9c9e53c4003afb74507804269
+        bytes: 24539
+      chat_template.jinja:
+        sha256: 3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4
+        bytes: 5292
+      config.json:
+        sha256: c50561386446ad7a1b2d61b662d25adfa399acbda713dd78eca8a9696c7e1bea
+        bytes: 1656
+      generation_config.json:
+        sha256: ddecce697daef029e7e64a792e31a20541e050978a5a12216e07ca3e8e594b58
+        bytes: 227
+      processor_config.json:
+        sha256: bfbc24af59a3e73a9cd0653b8d4ae758dfaec4e3e6c15dfb1c6c8ee8d5683c85
+        bytes: 1220
+      tokenizer.json:
+        sha256: 3bb172429b952469b51c64783f52fa01c26d1b30f1f31a4693e385a43f9cfc5e
+        bytes: 11607393
+      tokenizer_config.json:
+        sha256: 064277e04934ac9c98e66f7325c4854cf225574b32a6d7bba21af2b06ed28ea5
+        bytes: 574
+      model.safetensors:
+        sha256: ecccb140b579441b46f4933961632ab608dae3d593542c9901b4ff2f068d857f
+        bytes: 9767053328
   blip_caption:
     repo_id: Salesforce/blip-image-captioning-base
     revision: 82a37760796d32b1411fe092ab5d4e227313294b
@@ -324,6 +460,28 @@ huggingface_models:
     token_env: null
     failure_behavior: FATAL_HALT
 
+  acoustic_events_ast:
+    repo_id: MIT/ast-finetuned-audioset-10-10-0.4593
+    revision: f826b80d28226b62986cc218e5cec390b1096902
+    model_type: audio-classification
+    trust_level: stable
+    modalities: [audio]
+    engines:
+      Transformers: yes
+    quantization: [FP32]
+    vram_estimate_gb: 1.0
+    load_policy: sequential
+    access_control:
+      requires_hf_token: false
+      requires_license_acceptance: false
+      commercial_use: allowed
+      redistribution: allowed
+    tier_scope: [wsl_audio]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    failure_behavior: WARN_DEGRADED
+
   hubert_emotion:
     repo_id: superb/hubert-large-superb-er
     revision: ef1a2ebfd7cfc424dc7f0fbcdc406e8b794d63bb
@@ -369,6 +527,18 @@ huggingface_models:
     requires_token: false
     token_env: null
     failure_behavior: FATAL_HALT
+
+  ecapa_speaker:
+    repo_id: speechbrain/spkrec-ecapa-voxceleb
+    revision: 0f99f2d0ebe89ac095bcc5903c4dd8f72b367286
+    model_type: speaker-verification
+    tier_scope: [cpu_only, gpu_enhanced]
+    trust_level: stable
+    modalities: [audio]
+    classification: OPTIONAL_FEATURE
+    gated: false
+    requires_token: false
+    failure_behavior: WARN_DEGRADED
 
   wav2vec2_base_960h:
     repo_id: facebook/wav2vec2-base-960h
@@ -717,12 +887,6 @@ system_tools:
     binary_path: '@config.tools.ffmpeg_exe'
     required: true
     verify_command: ffmpeg -version
-  tesseract:
-    name: Tesseract OCR
-    version: 5.3.0
-    binary_path: '@config.tools.tesseract_exe'
-    required: true
-    verify_command: tesseract --version
   poppler:
     name: Poppler PDF Tools
     version: 23.08.0

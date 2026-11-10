@@ -4,11 +4,21 @@ Provides unified temporal index access.
 """
 from __future__ import annotations
 import logging
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Path as PathParam
+from starlette.concurrency import run_in_threadpool
 
 from api.utils.response_models import TimelineResponse, TimelineSegment
 from api.utils.loaders import DataLoader
-from api.utils.media_projection import frame_paths_projection, representative_frame_projection
+from api.utils.audio_evidence import public_audio_evidence
+from api.utils.media_projection import (
+    document_meta_projection,
+    frame_paths_projection,
+    representative_frame_projection,
+    sanitize_detected_objects,
+    sanitize_visual_meta,
+    sanitize_visual_observations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,16 +79,26 @@ def _segment_object_labels(segment: dict) -> list[str]:
     return []
 
 
-def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool = False) -> TimelineSegment:
+def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool = False,
+                            source_kind: str = "video", original_image_available: bool = False) -> TimelineSegment:
     """Project one persisted segment into the stable timeline API contract."""
-    full_transcript = seg.get("full_transcript")
+    full_transcript = seg.get("full_transcript") or seg.get("transcript")
     transcript = full_transcript
     if truncate_transcript and isinstance(full_transcript, str) and len(full_transcript) > 200:
         transcript = f"{full_transcript[:200]}..."
     frame_projection = representative_frame_projection(video_id, seg.get('representative_frame'))
+    if original_image_available:
+        endpoint = f"/api/media/video/{quote(video_id, safe='')}/source"
+        frame_projection = {
+            "representative_frame": endpoint, "representative_frame_endpoint": endpoint,
+            "representative_frame_available": True, "representative_frame_path_redacted": False,
+        }
     frame_paths = frame_paths_projection(video_id, seg.get('frame_paths', []))
 
     return TimelineSegment(
+        source_kind=seg.get("source_kind") or source_kind,
+        document_text=seg.get("document_text"),
+        document_meta=document_meta_projection(seg.get("document_meta")),
         segment_id=seg.get('segment_id', 0),
         start=seg.get('start', 0.0),
         end=seg.get('end', 0.0),
@@ -95,11 +115,24 @@ def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool 
         visual_caption=seg.get('visual_caption'),
         ocr_text=seg.get('ocr_text'),
         ocr_date_candidates=seg.get('ocr_date_candidates', []),
+        caption_meta=sanitize_visual_meta(video_id, seg.get('caption_meta')),
+        caption_observations=sanitize_visual_observations(video_id, seg.get('caption_observations')),
+        ocr_observations=sanitize_visual_observations(video_id, seg.get('ocr_observations')),
+        detect_meta=sanitize_visual_meta(video_id, seg.get('detect_meta')),
+        detected_objects=sanitize_detected_objects(video_id, seg.get('detected_objects')),
+        object_observations=sanitize_visual_observations(video_id, seg.get('object_observations')),
         speaker_count=seg.get('speaker_count'),
         dominant_speaker_id=seg.get('dominant_speaker_id'),
         continuity_key=seg.get('continuity_key'),
         diarization_status=seg.get('diarization_status'),
+        diarization_note=seg.get('diarization_note'),
         emotion_status=seg.get('emotion_status'),
+        emotion_note=seg.get('emotion_note'),
+        emotion_segments=seg.get('emotion_segments') or [],
+        emotion_input=seg.get('emotion_input'),
+        sound_events=seg.get('sound_events') or [],
+        sound_event_meta=seg.get('sound_event_meta'),
+        audio_evidence=public_audio_evidence(video_id, seg.get('audio_evidence')),
         speaker_voice_signature_count=seg.get('speaker_voice_signature_count'),
         speaker_voice_signature_meta=seg.get('speaker_voice_signature_meta'),
         audio_emotion=seg.get('audio_emotion'),
@@ -110,11 +143,15 @@ def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool 
         text_emotion_ranking=seg.get('text_emotion_ranking') or [],
         text_emotion_meta=seg.get('text_emotion_meta'),
         clap_meta=seg.get('clap_meta'),
+        transcript_meta=seg.get('transcript_meta'),
+        transcript_outcome=seg.get('transcript_outcome'),
+        transcript_outcome_reason=seg.get('transcript_outcome_reason'),
         sentiment=seg.get("sentiment"),
         sentiment_label=seg.get("sentiment_label"),
         sentiment_score=seg.get("sentiment_score"),
         sentiment_meta=seg.get("sentiment_meta"),
         time_hints=seg.get('time_hints'),
+        music_events=seg.get('music_events'),
         tags=seg.get('tags', []),
         tag_details=seg.get('tag_details', []),
         scene_present_entities=seg.get('scene_present_entities', []),
@@ -181,13 +218,17 @@ async def get_timeline(
         if not temporal_index:
             raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
         
+        source_kind = temporal_index.get("source_kind") or "video"
+        original_image_available = source_kind == "image" and await run_in_threadpool(loader.get_original_source_path, video_id) is not None
         segments = []
         for seg in temporal_index.get('segments', []):
-            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=True))
+            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=True,
+                            source_kind=source_kind, original_image_available=original_image_available))
         
         return TimelineResponse(
             video_id=video_id,
-            duration=temporal_index.get('duration', 0.0),
+            source_kind=temporal_index.get("source_kind") or "video",
+            duration=temporal_index.get('total_duration', temporal_index.get('duration', 0.0)),
             total_scenes=len(set(seg.get('scene_id') for seg in temporal_index.get('segments', []) if seg.get('scene_id') is not None)),
             total_segments=len(segments),
             segments=segments,
@@ -221,13 +262,17 @@ async def get_full_timeline(
         if not temporal_index:
             raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
         
+        source_kind = temporal_index.get("source_kind") or "video"
+        original_image_available = source_kind == "image" and await run_in_threadpool(loader.get_original_source_path, video_id) is not None
         segments = []
         for seg in temporal_index.get('segments', []):
-            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=False))
+            segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=False,
+                            source_kind=source_kind, original_image_available=original_image_available))
         
         return TimelineResponse(
             video_id=video_id,
-            duration=temporal_index.get('duration', 0.0),
+            source_kind=temporal_index.get("source_kind") or "video",
+            duration=temporal_index.get('total_duration', temporal_index.get('duration', 0.0)),
             total_scenes=len(set(seg.get('scene_id') for seg in temporal_index.get('segments', []) if seg.get('scene_id') is not None)),
             total_segments=len(segments),
             segments=segments,

@@ -149,7 +149,6 @@ ENV_CONFIG: List[Dict[str, str]] = [
     # Other pipeline pieces (no torch needed)
     {"name": "goodq_llm_chat", "python": "3.12", "req": "envs/llm_chat/requirements.txt", "torch": ""},
     {"name": "goodq_tts", "python": "3.12", "req": "envs/tts/requirements.txt", "torch": ""},
-    {"name": "goodq_ocr", "python": "3.12", "req": "envs/ocr/requirements.txt", "torch": ""},
     {"name": "goodq_pdf_text", "python": "3.12", "req": "envs/pdf_text/requirements.txt", "torch": ""},
     {"name": "goodq_system_metrics", "python": "3.12", "req": "envs/system_metrics/requirements.txt", "torch": ""},
     {"name": "goodq_home_assistant_status", "python": "3.12", "req": "envs/home_assistant_status/requirements.txt", "torch": ""},
@@ -225,6 +224,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             agent_log(f"[FAIL] {name}: {exc}")
             continue
+    print("\nPaddle OCR has a separate Windows-qualified runtime; WSL OCR installation is unqualified. See envs/ocr/README.md.")
     print("\nDone.")
     return 0
 

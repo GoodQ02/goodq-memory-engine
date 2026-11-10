@@ -136,25 +136,6 @@
       "rollback_action": "none",
       "notes": "Microsoft Visual C++ Redistributable 2015-2022"
     },
-    "tesseract": {
-      "artifact_id": "tesseract_ocr_setup_exe",
-      "pack_id": "external_binaries",
-      "required": false,
-      "kind": "exe",
-      "source_url": "https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w64-setup-5.4.0.20240606.exe",
-      "source_version": "5.4.0",
-      "source_commit": null,
-      "cache_path": "staged_cache/external/tesseract_setup.exe",
-      "target_path": "scripts/install/staged/binaries/tesseract_setup.exe",
-      "sha256": "c885fff6998e0608ba4bb8ab51436e1c6775c2bafc2559a19b423e18678b60c9",
-      "size_bytes": 50175248,
-      "license": "Apache-2.0",
-      "redistribution_status": "allowed",
-      "install_action": "execute",
-      "verify_action": "staged\\binaries\\tesseract_setup.exe /?",
-      "rollback_action": "none",
-      "notes": "Tesseract OCR engine setup binary"
-    },
     "poppler": {
       "artifact_id": "poppler_windows_zip",
       "pack_id": "external_binaries",
@@ -249,6 +230,35 @@
       "verify_action": "staged\\get-pip.py",
       "rollback_action": "remove target file",
       "notes": "Script for bootstrapping pip in the staged embedded Python environment"
+    },
+    "vlc": {
+      "artifact_id": "vlc_windows_x64_zip",
+      "pack_id": "runtime_media_personal",
+      "profiles": [
+        "PERSONAL_AIR_GAP"
+      ],
+      "required": true,
+      "kind": "zip",
+      "source_url": "https://download.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.zip",
+      "source_version": "3.0.24",
+      "source_commit": null,
+      "cache_path": "staged_cache/external/vlc-3.0.24-win64.zip",
+      "target_path": "scripts/install/staged/vlc/",
+      "sha256": "fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323",
+      "size_bytes": 82765861,
+      "runtime_manifest_sha256": "b123f7b5d2a2c5eaba47dd1b11bbb62206b398adb492c0ad07b1d03987a03b42",
+      "license": "GPL-2.0-or-later with bundled third-party components",
+      "redistribution_status": "personal_only",
+      "install_action": "extract_unmodified_portable_zip",
+      "verify_action": "python scripts/install/vlc_runtime_payload.py verify --root staged/vlc --profile PERSONAL_AIR_GAP --probe",
+      "rollback_action": "remove only the installer-owned vlc directory",
+      "notes": "Personal-profile external player; public inclusion is held pending matching complete third-party source/build material and distribution review. Original media and personal VLC preferences are excluded.",
+      "corresponding_source": {
+        "url": "https://download.videolan.org/pub/videolan/vlc/3.0.24/vlc-3.0.24.tar.xz",
+        "sha256": "e7cab503d1d7d5849b89d2cf0e1ee60d0ef6d012407791b644b9cfc0cc225fdf",
+        "size_bytes": 27620304,
+        "closure": "VLC source preserved; bundled third-party corresponding-source closure not verified"
+      }
     }
   },
   "wheels": {
@@ -581,19 +591,6 @@
         "source_url": "https://files.pythonhosted.org/packages/50/ff/26a4ee48d0b66625a4e4028a055b9f25bc9d7c7b2d17d21a45137621a50d/soundfile-0.12.1-py2.py3-none-win_amd64.whl",
         "sha256": "0d86924c00b62552b650ddd28af426e3ff2d4dc2e9047dae5b3d8452e0a49a77",
         "license": "BSD-3-Clause"
-      },
-      {
-        "artifact_id": "pytesseract_py3_none_any",
-        "name": "pytesseract",
-        "pack_id": "windows_wheelhouse",
-        "python_tag": "py3",
-        "platform_tag": "any",
-        "gpu_lane": "any",
-        "required": true,
-        "source_url": "https://files.pythonhosted.org/packages/c5/54/ec007336f38d2d4ce61f3544af3e6855dacbf04a1ac8294f10cabe81146f/pytesseract-0.3.10-py3-none-any.whl",
-        "sha256": "8f22cc98f765bf13517ead0c70effedb46c153540d25783e04014f28b55a5fc6",
-        "license": "Apache-2.0",
-        "redistribution_status": "allowed"
       }
     ]
   }

@@ -1,0 +1,8 @@
+# Canonical reproducible install recipe: ../locks/caption_vlm.lock.txt
+# Project-local runtime: envs/caption_vlm/.venv (see envs/caption_vlm/README.md).
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+transformers==5.5.3
+numpy==1.26.4
+pillow==12.0.0
+PyYAML==6.0.2

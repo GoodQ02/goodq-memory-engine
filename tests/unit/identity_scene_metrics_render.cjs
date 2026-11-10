@@ -1,0 +1,16 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const source = fs.readFileSync('ui/summary_console/static/js/summary.js', 'utf8');
+const context = {};
+vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('function formatTimecode('), source.indexOf('function getFrameEndpoint(')), context);
+const span = context.profileSceneSpan;
+assert.equal(span([{video_id:'a',start:0,end:75.509}]), '00:00 - 01:15');
+assert.equal(span([{video_id:'f',start:0,end:32.532}]), '00:00 - 00:32');
+assert.equal(span([{video_id:'a',start:0,end:75.509},{video_id:'f',start:0,end:32.532}]), '2 sources; see individual scene spans');
+assert.equal(span([]), null);
+assert.equal(span([{video_id:'a',start:null,end:75}]), null);
+assert.equal(span([{video_id:'a',start:5,end:4}]), null);
+assert.equal(span([{start:0,end:75}]), null);
+console.log('PASS: real profile renderer uses source-local scene bounds, multiple clocks and missing spans');

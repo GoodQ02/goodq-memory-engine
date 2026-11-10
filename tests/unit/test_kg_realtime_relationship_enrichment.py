@@ -135,7 +135,7 @@ def test_update_kg_for_scene_resolves_entity_details_and_reports_count(tmp_path:
         },
         scene_id="scene_entity_details_0008",
         video_id="video_test",
-        video_path="samples/ingestion/family.mp4",
+        video_path="samples/ingestion/sample.mp4",
         cfg=cfg,
     )
 

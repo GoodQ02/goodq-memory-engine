@@ -2,13 +2,13 @@
 GoodQ4All — Identity Resolver
 ==============================
 Additive retrieval layer that augments normal search with identity-aware
-scene pre-selection from the curated family roster.
+scene pre-selection from the curated roster and active reviewed voice mappings.
 
 Contract:
-  - Gracefully returns is_enabled()=False when roster is absent or config-gated.
-  - Never replaces normal Qdrant/vector search. Always augments.
+  - Disabled by config or when both roster and active voice reviews are absent.
+  - Augments normal vector search; explicit People mode reads identity evidence only.
   - Thread-safe: roster is loaded once at startup, cached in memory.
-  - Invalidates cache when roster file modification time changes.
+  - Reloads changed rosters; reads current graph/review state on each query.
 
 Integration:
   - identity_search.enabled must be true in config to activate.
@@ -17,6 +17,7 @@ Integration:
 """
 
 import logging
+import json
 import os
 import re
 import threading
@@ -29,6 +30,29 @@ from steps.common.platform_config import PlatformHelper
 log = logging.getLogger(__name__)
 
 DEFAULT_ROSTER_NAME   = "family_roster.yaml"
+
+
+def retired_identity_scene_ids(ucf_path: Path) -> set[str]:
+    """Read durable exclusions even while KG projection delivery is pending."""
+    if not ucf_path.is_file():
+        return set()
+    import sqlite3
+    from scripts.ucf.ucf_ledger import read_scene_retirements
+
+    with sqlite3.connect(f"{ucf_path.resolve().as_uri()}?mode=ro", uri=True) as conn:
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ucf_status_transitions'"
+        ).fetchone():
+            return set()
+        sources = conn.execute(
+            "SELECT DISTINCT video_hash FROM ucf_status_transitions WHERE scope LIKE 'scene_retirement:%'"
+        ).fetchall()
+    return {
+        alias
+        for (source,) in sources
+        for evidence in read_scene_retirements(ucf_path, video_hash=source)
+        for alias in evidence["aliases"]
+    }
 
 
 @dataclass
@@ -77,10 +101,26 @@ class IdentityResolver:
         self._scene_evidence_cache: dict[str, dict[str, set[str]]] = {}
 
     def is_enabled(self) -> bool:
-        """Returns False when disabled by config or when roster is absent."""
+        """Require the feature gate and a curated roster or active voice review."""
         if not self._enabled:
             return False
-        return self._roster_path.exists()
+        return self._roster_path.exists() or bool(self._active_voice_mappings())
+
+    def _active_voice_mappings(self) -> list[dict]:
+        if not self._kg_db_path:
+            return []
+        path = Path(self._kg_db_path).parent / "manual_identity_mappings.json"
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return [m for m in data.get("mappings", []) if isinstance(m, dict)
+                    and m.get("status") == "active" and m.get("source_node_type") == "speaker_pattern"
+                    and all(isinstance(m.get(k), str) and m[k].strip() for k in
+                            ("mapping_id", "source_node_name", "target_person_name"))]
+        except (OSError, ValueError, AttributeError) as exc:
+            log.warning("IdentityResolver: reviewed voice mappings unavailable: %s", type(exc).__name__)
+            return []
 
     def _load_roster(self) -> None:
         """Loads (or reloads) the roster if the file has changed."""
@@ -136,7 +176,7 @@ class IdentityResolver:
             return {}
         import sqlite3
         try:
-            conn = sqlite3.connect(self._kg_db_path)
+            conn = sqlite3.connect(Path(self._kg_db_path).resolve().as_uri() + "?mode=ro", uri=True)
             cur = conn.cursor()
             cur.execute(
                 """
@@ -159,11 +199,36 @@ class IdentityResolver:
                     else "mention"
                 )
                 evidence.setdefault(str(scene_name), set()).add(evidence_type)
-            conn.close()
+            # A voice claim requires both an active saved review and its exact
+            # materialized manual edge, followed by a scene-local speaker link.
+            names = {i.get("display_name") for i in self._cache.identities if i.get("id") == person_id}
+            if person_id.startswith("reviewed-voice:"):
+                names.add(person_id.removeprefix("reviewed-voice:"))
+            for mapping in self._active_voice_mappings():
+                if mapping["target_person_name"] not in names:
+                    continue
+                rows = conn.execute("""
+                    SELECT DISTINCT scene.name, review.properties
+                    FROM nodes pattern
+                    JOIN edges review ON review.source_id=pattern.id AND review.edge_type='identity_evidence'
+                    JOIN nodes person ON person.id=review.target_id AND person.node_type='person'
+                    JOIN edges voice ON voice.target_id=pattern.id AND voice.edge_type='voice_pattern_match'
+                    JOIN nodes speaker ON speaker.id=voice.source_id AND speaker.node_type='speaker'
+                    JOIN edges spoken ON spoken.source_id=speaker.id AND spoken.edge_type='speaks_in'
+                    JOIN nodes scene ON scene.id=spoken.target_id AND scene.node_type='scene'
+                    WHERE pattern.node_type='speaker_pattern' AND pattern.name=? AND person.name=?
+                """, (mapping["source_node_name"], mapping["target_person_name"])).fetchall()
+                for scene_name, raw_properties in rows:
+                    props = json.loads(raw_properties or "{}")
+                    if props.get("source") == "operator_manual_override" and props.get("mapping_id") == mapping["mapping_id"]:
+                        evidence.setdefault(str(scene_name), set()).add("voice")
             return evidence
         except Exception as e:
             log.warning("IdentityResolver: KG query failed for %s: %s", person_id, e)
             return {}
+        finally:
+            if 'conn' in locals():
+                conn.close()
 
     def _load_scenes_for_person(self, person_id: str) -> set[str]:
         return set(self._load_scene_evidence_for_person(person_id))
@@ -183,9 +248,6 @@ class IdentityResolver:
             return []
 
         cache = self._cache
-        if not cache.alias_index:
-            return []
-
         matches = []
         seen_persons: set[str] = set()
         # Check each alias term against the query (word-boundary aware)
@@ -207,6 +269,17 @@ class IdentityResolver:
                 ))
                 seen_persons.add(person_id)
 
+        for name in sorted({m["target_person_name"] for m in self._active_voice_mappings()}):
+            # Only an exact unique roster display name bridges to a roster ID.
+            # Aliases are query terms, not authority to merge two people.
+            curated = [i for i in cache.identities if i.get("display_name") == name]
+            if len(curated) > 1:
+                continue
+            person_id = curated[0]["id"] if curated else "reviewed-voice:" + name
+            if person_id not in seen_persons and re.search(rf'\b{re.escape(name)}\b', query_text, re.IGNORECASE):
+                matches.append(PersonMatch(person_id, name, [], name, "reviewed_voice"))
+                seen_persons.add(person_id)
+
         if matches:
             log.debug(
                 "IdentityResolver: query '%s' matched %d identities: %s",
@@ -217,29 +290,29 @@ class IdentityResolver:
     def get_scenes_for_person(self, person_id: str) -> set[str]:
         """
         Returns the set of scene names (KG node names) where this person
-        has identity-linked evidence. Cached per person_id.
+        has current identity-linked evidence.
         """
         if not self.is_enabled():
             return set()
         with self._lock:
-            if person_id not in self._scene_cache:
-                scenes = self._load_scenes_for_person(person_id)
-                self._scene_cache[person_id] = scenes
-        return self._scene_cache.get(person_id, set())
+            self._scene_cache[person_id] = self._load_scenes_for_person(person_id)
+        retired = retired_identity_scene_ids(Path(self._kg_db_path).parent / "ucf/ucf_ledger.db") if self._kg_db_path else set()
+        return self._scene_cache.get(person_id, set()) - retired
 
     def get_scene_evidence_for_person(
         self,
         person_id: str,
     ) -> dict[str, set[str]]:
-        """Returns {scene_id: {appearance|mention}} for one curated person."""
+        """Returns typed current evidence; revocation must not survive a cache."""
         if not self.is_enabled():
             return {}
         with self._lock:
-            if person_id not in self._scene_evidence_cache:
-                evidence = self._load_scene_evidence_for_person(person_id)
-                self._scene_evidence_cache[person_id] = evidence
-                self._scene_cache[person_id] = set(evidence)
-        return self._scene_evidence_cache.get(person_id, {})
+            evidence = self._load_scene_evidence_for_person(person_id)
+            self._scene_evidence_cache[person_id] = evidence
+            self._scene_cache[person_id] = set(evidence)
+        retired = retired_identity_scene_ids(Path(self._kg_db_path).parent / "ucf/ucf_ledger.db") if self._kg_db_path else set()
+        return {scene: evidence for scene, evidence in self._scene_evidence_cache.get(person_id, {}).items()
+                if scene not in retired}
 
     def get_identity_scene_evidence(
         self,
@@ -253,7 +326,7 @@ class IdentityResolver:
             ).items():
                 ordered_types = [
                     evidence_type
-                    for evidence_type in ("appearance", "mention")
+                    for evidence_type in ("appearance", "voice", "mention")
                     if evidence_type in evidence_types
                 ]
                 result.setdefault(scene_id, []).append({
@@ -264,7 +337,7 @@ class IdentityResolver:
                     "strength": (
                         "appearance"
                         if "appearance" in evidence_types
-                        else "mention"
+                        else "voice" if "voice" in evidence_types else "mention"
                     ),
                 })
         return result

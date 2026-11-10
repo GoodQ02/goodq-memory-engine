@@ -37,6 +37,24 @@ def test_optional_skip_is_degraded_not_core_failure() -> None:
     assert receipt["capabilities_by_step"]["image_ocr"]["classification"] == "enhancement_optional"
 
 
+def test_completed_no_speech_is_content_appropriate_empty_through_wsl_step_logger(monkeypatch):
+    from cli import run_ingestion
+    from steps.audio.audio_wsl2_bridge import _build_wsl_capability_outcomes
+    rows = []
+    def capture(cfg, step, item, duration_ms, status, error, *, extra):
+        rows.append({'step': step, 'status': status, 'error': error, 'extra': extra})
+    monkeypatch.setattr(run_ingestion, 'log_step_run', capture)
+    outcomes = _build_wsl_capability_outcomes({'transcription_status': 'success',
+        'speech_detection': {'status': 'completed', 'method': 'silero_vad',
+                             'input_duration_seconds': 5, 'speech_duration_seconds': 0}})
+    run_ingestion._log_wsl_capability_outcomes(cfg={}, item={}, duration_ms=1, outcomes=outcomes)
+    receipt = build_capability_receipt(run_id='no-speech', profile='PERSONAL_AIR_GAP', terminal_status='completed',
+        step_rows=[r for r in rows if r['step']=='audio_transcribe_local'], warnings=[], scenes=[], evidence_paths={})
+    assert receipt['summary']['required_core_failures'] == 0
+    assert receipt['capabilities_by_step']['audio_transcribe_local']['status'] == 'not_applicable'
+    assert capability_contract._closure_status(receipt['capabilities_by_step']['audio_transcribe_local']) == 'ran_content_appropriate_empty'
+
+
 def test_profile_optional_error_is_degraded_outside_release_mode() -> None:
     receipt = build_capability_receipt(
         run_id="run-profile-optional",
@@ -778,10 +796,14 @@ def test_repository_gpu_capability_profiles_expand_to_complete_records() -> None
     assert personal["audio_speaker_merge"]["disposition"] == "runtime"
     for step in ("audio_wav2vec2_enrichment", "audio_clap_handoff"):
         assert public[step]["disposition"] == "policy_excluded"
-        assert personal[step]["disposition"] == "runtime"
-    assert public["audio_emotion"]["status_surface"] == "audio_emotion_meta"
+        assert personal[step]["disposition"] == (
+            "policy_excluded" if step == "audio_wav2vec2_enrichment" else "runtime"
+        )
+    assert public["audio_emotion"]["status_surface"] == "wsl_capability_outcomes.acoustic_emotion"
     assert public["emotion_classify"]["status_surface"] == "emotion_meta"
     assert public["emotion_classify"]["fallback_policy"] == ["cpu_fallback"]
+    assert public["object_detect"]["fallback_policy"] == "none"
+    assert personal["object_detect"]["fallback_policy"] == ["opencv_yolox:cpu"]
 
 
 def test_runtime_matrix_metadata_matches_capability_profile_contract() -> None:
@@ -847,12 +869,13 @@ def test_gpu_profiles_have_complete_asset_owner_and_probe_closure() -> None:
     personal = _repository_asset_closure("PERSONAL_AIR_GAP")
 
     assert public["schema_version"] == 2
-    assert public["asset_count"] == 33
-    assert personal["asset_count"] == 36
+    assert public["asset_count"] == 35
+    assert personal["asset_count"] == 39
     assert set(personal["assets_by_id"]) - set(public["assets_by_id"]) == {
         "pyannote_diarization",
         "pyannote_segmentation",
         "pyannote_wespeaker",
+        "vlc",
     }
     for closure in (public, personal):
         assert len(closure["assets"]) == closure["asset_count"]
@@ -957,3 +980,304 @@ def test_asset_closure_rejects_model_without_probe() -> None:
             capability_profile=capabilities,
             profile="PUBLIC_GPU_ENHANCED",
         )
+
+@pytest.mark.parametrize("status,reason,expected", [
+    ("skipped", "whole_scene_vector_retired", "policy_excluded"),
+    ("ok", "embedding_emitted", "policy_exclusion_violated"),
+    ("error", "weights_missing", "policy_exclusion_violated"),
+])
+def test_retired_wav2vec_receipt_requires_explicit_nonproduction(status, reason, expected):
+    receipt = build_capability_receipt(
+        step_rows=[{"step": "audio_wav2vec2_enrichment", "status": status, "extra": {"reason": reason}}],
+        run_id="retirement", profile="PERSONAL_AIR_GAP", warnings=[], scenes=[], evidence_paths={},
+        terminal_status="completed", expected_capabilities={
+            "audio_wav2vec2_enrichment": {"disposition": "policy_excluded", "reason": "whole_scene_vector_retired"}},
+        full_coverage=True, input_count=1,
+    )
+    assert receipt["capabilities_by_step"]["audio_wav2vec2_enrichment"]["closure_status"] == expected
+    assert receipt["outcome"] == ("completed" if expected == "policy_excluded" else "failed")
+
+@pytest.mark.parametrize("extra_status,expected", [(None, "policy_excluded"), ("ok", "skipped"), ("error", "error")])
+def test_ordinary_receipt_retirement_does_not_mask_mixed_observations(extra_status, expected):
+    rows = [{"step": "audio_wav2vec2_enrichment", "status": "skipped",
+             "extra": {"reason": "whole_scene_vector_retired"}}]
+    if extra_status:
+        rows.append({"step": "audio_wav2vec2_enrichment", "status": extra_status})
+    receipt = build_capability_receipt(run_id="retirement", profile="PERSONAL_AIR_GAP",
+        terminal_status="completed", step_rows=rows, warnings=[], scenes=[], evidence_paths={})
+    cap = receipt["capabilities_by_step"]["audio_wav2vec2_enrichment"]
+    assert cap["closure_status"] == expected
+    assert receipt["outcome"] == ("completed" if extra_status is None else "degraded")
+
+
+def test_ocr_per_scene_grouped_ground_truth_requires_non_midpoint_positive_and_all_empty_negative() -> None:
+    expected_capabilities = {
+        "image_ocr": {
+            "disposition": "runtime",
+            "runtime_owner": "cli.run_ingestion",
+            "implementation": "steps.image_ocr.step.image_ocr",
+            "status_surface": "ocr_meta",
+            "asset_ids": ["tesseract"],
+            "content_applicability": "ocr_text",
+            "fallback_policy": "none",
+        }
+    }
+    scenes = [
+        {"scene_id": "scene_pos", "start": 0.0, "duration": 6.0},
+        {"scene_id": "scene_neg", "start": 6.0, "duration": 6.0},
+    ]
+
+    def _ocr_row(
+        scene_id: str,
+        timestamp: float,
+        is_midpoint: bool,
+        status: str,
+        reason: str,
+        accepted_text: str | None = None,
+    ) -> dict[str, object]:
+        ocr_meta: dict[str, object] = {
+            "status": "ok" if status == "ok" else ("no_text" if status in {"not_applicable", "skipped"} else "error"),
+            "reason": reason,
+            "sample_timestamp": timestamp,
+            "is_midpoint_sample": is_midpoint,
+        }
+        if accepted_text is not None:
+            ocr_meta["accepted_text"] = accepted_text
+        return {
+            "step": "image_ocr",
+            "scene_id": scene_id,
+            "timestamp": timestamp,
+            "status": status,
+            "extra": {
+                "reason": reason,
+                "result_meta": {"ocr_meta": ocr_meta},
+            },
+        }
+
+    valid_rows = [
+        _ocr_row("scene_pos", 0.0, False, "not_applicable", "no_ocr_text"),
+        _ocr_row(
+            "scene_pos",
+            1.5,
+            False,
+            "ok",
+            "ok",
+            accepted_text="HARBOR MARINE LABORATORY PERMIT APPROVED",
+        ),
+        _ocr_row("scene_pos", 3.0, True, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_pos", 4.5, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_pos", 5.95, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_neg", 6.0, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_neg", 7.5, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_neg", 9.0, True, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_neg", 10.5, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_neg", 11.95, False, "not_applicable", "no_ocr_text"),
+    ]
+    truth = {
+        "scene_pos": {
+            "ocr_text": True,
+            "expected_non_midpoint_timestamp": 1.5,
+            "expected_text": "HARBOR MARINE LABORATORY",
+        },
+        "scene_neg": {"ocr_text": False},
+    }
+
+    passing = build_capability_receipt(
+        run_id="ocr-witness-pass",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=valid_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=truth,
+    )
+    assert passing["capabilities_by_step"]["image_ocr"]["closure_status"] == "ran_with_output"
+    assert passing["outcome"] == "completed"
+
+    # Midpoint-only positive fails non-midpoint timestamp ground truth
+    midpoint_only_rows = [
+        _ocr_row("scene_pos", 0.0, False, "not_applicable", "no_ocr_text"),
+        _ocr_row("scene_pos", 1.5, False, "not_applicable", "no_ocr_text"),
+        _ocr_row(
+            "scene_pos",
+            3.0,
+            True,
+            "ok",
+            "ok",
+            accepted_text="HARBOR MARINE LABORATORY PERMIT APPROVED",
+        ),
+        _ocr_row("scene_neg", 9.0, True, "not_applicable", "no_ocr_text"),
+    ]
+    midpoint_only = build_capability_receipt(
+        run_id="ocr-witness-midpoint-only",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=midpoint_only_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=truth,
+    )
+    assert midpoint_only["capabilities_by_step"]["image_ocr"]["closure_status"] == "content_truth_mismatch"
+    assert midpoint_only["outcome"] == "failed"
+
+    # Negative scene with unexpected positive output fails ground truth
+    false_pos_rows = list(valid_rows) + [
+        _ocr_row("scene_neg", 7.5, False, "ok", "ok", accepted_text="GHOST TEXT"),
+    ]
+    false_pos = build_capability_receipt(
+        run_id="ocr-witness-false-pos",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=false_pos_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=truth,
+    )
+    assert false_pos["capabilities_by_step"]["image_ocr"]["closure_status"] == "content_truth_mismatch"
+    assert false_pos["outcome"] == "failed"
+
+    # Missing scene observation fails ground truth
+    missing_scene = build_capability_receipt(
+        run_id="ocr-witness-missing-scene",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=[r for r in valid_rows if r["scene_id"] == "scene_pos"],
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=truth,
+    )
+    assert missing_scene["capabilities_by_step"]["image_ocr"]["closure_status"] == "content_truth_mismatch"
+    assert missing_scene["outcome"] == "failed"
+
+    # Ordinary positive ground truth ({"ocr_text": True}) passes when accepted output exists
+    ordinary_truth = {
+        "scene_pos": {"ocr_text": True},
+        "scene_neg": {"ocr_text": False},
+    }
+    ordinary_positive = build_capability_receipt(
+        run_id="ocr-witness-ordinary-pos",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=midpoint_only_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=ordinary_truth,
+    )
+    assert ordinary_positive["capabilities_by_step"]["image_ocr"]["closure_status"] == "ran_with_output"
+    assert ordinary_positive["outcome"] == "completed"
+
+    # Uncertain (skipped) or error rows preserve skipped/error closure_status
+    uncertain_rows = list(valid_rows) + [
+        _ocr_row("scene_neg", 10.5, False, "skipped", "image_ocr_unvalidated_vhs_candidates"),
+    ]
+    uncertain = build_capability_receipt(
+        run_id="ocr-witness-uncertain",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=uncertain_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=truth,
+    )
+    assert uncertain["capabilities_by_step"]["image_ocr"]["closure_status"] == "skipped"
+    assert uncertain["outcome"] == "failed"
+
+    error_rows = list(valid_rows) + [
+        _ocr_row("scene_pos", 4.5, False, "error", "ocr_fallback_exception"),
+    ]
+    errored = build_capability_receipt(
+        run_id="ocr-witness-error",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=error_rows,
+        warnings=[],
+        scenes=scenes,
+        evidence_paths={},
+        expected_capabilities=expected_capabilities,
+        malformed_row_count=0,
+        input_count=1,
+        full_coverage=True,
+        content_truth_by_scene=ordinary_truth,
+    )
+    assert errored["capabilities_by_step"]["image_ocr"]["closure_status"] == "error"
+    assert errored["outcome"] == "failed"
+
+
+def test_image_caption_blank_frame_not_applicable_receipt() -> None:
+    blank_stats = {
+        "gray_mean": 240.0,
+        "gray_std": 0.0,
+        "rgb_std_max": 0.0,
+        "min": 240.0,
+        "max": 240.0,
+        "dynamic_range": 0.0,
+        "p99_p1": 0.0,
+        "grad_mean": 0.0,
+    }
+    receipt = build_capability_receipt(
+        run_id="caption-blank-witness",
+        profile="PERSONAL_AIR_GAP",
+        terminal_status="completed",
+        step_rows=[
+            {
+                "step": "image_caption",
+                "status": "not_applicable",
+                "scene_id": "scene_blank",
+                "extra": {
+                    "reason": "blank_or_low_variance_frame",
+                    "requested_implementation": "blip",
+                    "effective_implementation": "blip",
+                    "result_meta": {
+                        "caption_meta": {
+                            "status": "not_applicable",
+                            "reason": "blank_or_low_variance_frame",
+                            "engine": "blip",
+                            "image_stats": blank_stats,
+                        }
+                    },
+                },
+            }
+        ],
+        warnings=[],
+        scenes=[{"scene_id": "scene_blank", "start": 0.0, "duration": 2.0}],
+        evidence_paths={"step_runs": "step_runs.jsonl"},
+    )
+    cap = receipt["capabilities_by_step"]["image_caption"]
+    assert cap["status"] == "not_applicable"
+    assert cap["closure_status"] == "ran_content_appropriate_empty"
+    assert cap["reason"] == "blank_or_low_variance_frame"
+    assert "image_stats" not in cap
+    assert len(cap["observations"]) == 1
+    assert cap["observations"][0]["closure_status"] == "ran_content_appropriate_empty"
+    assert cap["observations"][0]["image_stats"] == blank_stats
+    assert receipt["outcome"] == "completed"

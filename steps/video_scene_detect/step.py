@@ -260,23 +260,17 @@ def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: flo
             entry['confidence'] = 0.5
         entry.pop('score', None)
     try:
-        video.release()
+        # open_video's default OpenCV backend exposes its owned capture.
+        video.capture.release()
     except Exception as e:
-        print(f'[ERROR] Exception in step.py line 115: {str(e)}')
+        print(f'[WARN] Scene detection capture release failed: {str(e)}')
         pass
     return {'scenes': scenes, 'duration': duration}
 
 
 def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    # Import progress tracker
-    try:
-        from steps.common.progress_tracker import get_tracker
-        tracker = get_tracker()
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Failed to import progress tracker: {e}")
-        tracker = None
-    
+    # The ingestion runner owns pipeline progress. A subprocess has an idle
+    # tracker of its own and must not overwrite the runner's active receipt.
     path = item.get('source_path')
     if not isinstance(path, str) or not os.path.isfile(path):
         return {
@@ -289,12 +283,6 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
     
     filename = os.path.basename(path)
     params = _load_params(cfg, item)
-    
-    # Update progress
-    if tracker:
-        tracker.update_step("video_scene_detect", 2, {
-            "details": f"Detecting scenes (threshold={params['threshold']}, min_len={params['min_scene_len_sec']}s)"
-        })
     
     print(f"[SCENE] Detecting scenes in {filename}")
     print(f"[SCENE] Parameters: threshold={params['threshold']}, min_scene_len={params['min_scene_len_sec']}s")
@@ -317,21 +305,12 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
                                         max_scene_len_sec=params['max_scene_len_sec'])
         status = 'error'
         error_msg = str(exc)
-        if tracker:
-            tracker.add_error(f"Scene detection failed: {str(exc)}", "video_scene_detect")
 
     max_scenes = params['max_scenes']
     if max_scenes and len(scenes) > max_scenes:
         scenes = scenes[:max_scenes]
         print(f"[SCENE] Truncated to {max_scenes} scenes")
     
-    # Update progress with results
-    if tracker:
-        tracker.complete_step("video_scene_detect", {
-            "scene_count": len(scenes),
-            "status": status
-        })
-
     meta = {
         'status': status,
         'engine': 'scenedetect',
@@ -384,12 +363,15 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
                 print(f"[UCF] Media source registered: {path} ({resolved_dur:.3f}s, {fps:.2f} fps, {width}x{height})")
                 
                 # Log context frames for each scene
+                from steps.common.memory import _make_id
                 logged_count = 0
                 for scene in scenes:
                     start_val = scene.get('start', 0.0)
                     end_val = scene.get('end', 0.0)
                     idx_val = scene.get('index', 0)
                     confidence_val = scene.get('confidence', 1.0)
+                    scene_id = _make_id("scene", [video_hash, f"{start_val:.3f}", f"{end_val:.3f}"])
+                    scene['scene_id'] = scene_id
                     
                     payload = {
                         "scene_index": idx_val,
@@ -408,7 +390,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
                         worker_name="video_scene_detect",
                         model_tag="scenedetect",
                         confidence=confidence_val,
-                        source_artifact_id=f"scene_{idx_val:04d}",
+                        source_artifact_id=scene_id,
                         payload=payload
                     )
                     logged_count += 1

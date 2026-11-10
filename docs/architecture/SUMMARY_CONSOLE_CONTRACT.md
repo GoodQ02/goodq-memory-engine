@@ -38,6 +38,54 @@ control-ledger job. Neither prepare mutates the collection overlay. Both actions
 reuse the generic external-outcome audit authority; no browser-only, boolean, or
 second token authority is valid.
 
+### Emotion read projection
+
+Dashboard and entity-profile `top_emotions` rows retain `emotion` and `count`, and
+expose `channel`, `basis` and `count_unit`. The October 11, 2026 consumer repair
+defines these read projections without changing any persisted schema:
+
+| Channel | Basis | Evidence counted |
+| --- | --- | --- |
+| `audio` | `stored_label` | Nonempty stored `audio_emotion`; no candidate fallback. |
+| `text` | `top_ranked` | The first label in `text_emotion_ranking`. |
+
+`count_unit` is `scenes`. Each row counts distinct scene IDs in the existing
+dashboard or entity selection for that channel and normalized label. Up to ten
+rows per channel are returned, ordered by descending count then label. A scene
+may contribute to both channels; adding row counts does not yield unique corpus
+coverage. Missing evidence creates no emotion row. Stored acoustic labels and
+Retro's top-ranked acoustic candidates intentionally have different count bases.
+
+Both UI views name the channel, basis and scene unit and describe these as inferred
+signals, not observed emotion. Legacy rows without provenance or units display
+those fields as unspecified rather than assuming a source or scene count.
+
+### Retained transcript cue read projection (2026-10-12)
+
+The dashboard's occasions and exact-scene profiles may expose retained
+`music_events` as `transcript_cue:<label>`, with source
+`retained_transcript_pattern`. This is a transient read projection, not an
+`audio_event` graph entity or confirmation that a mentioned event occurred.
+Historical cue JSON alone cannot authorize graph backfill.
+
+Visibility requires the same source SHA-256 and epoch in promoted UCF support,
+a canonical scene ID derived from that source and its bounds, and an existing
+graph scene-to-media link with matching bounds. The graph scene's provenance
+must name a promoted frame within those bounds. Scene retirement excludes the
+cue even before graph cleanup arrives. Missing authority yields no cue profile;
+corrupt ledger/schema evidence fails visibly. Reads open existing databases
+without write capability and never promote frames or materialize cue nodes.
+
+`occurrence_count` counts retained cue entries; `scene_count` counts distinct
+source/scene pairs. Repeated reads and duplicate scene rows do not multiply them.
+Profiles retain the matching raw cue payloads, source SHA-256, exact scene ID,
+source-relative scene bounds and video alias. Cue offsets remain scene-relative;
+the UI labels the original confidence as a heuristic score. Legacy string cues
+have unavailable offsets. No recording dates or cross-source spans are inferred.
+The UI labels these as transcript cues, not confirmed events, and clears their
+details when another profile or an empty result is selected. Existing graph
+occasion profiles remain separate. Empty cue lists do not establish stage success.
+
 ---
 
 ## 2. Saved Collections JSON Schema
@@ -78,7 +126,7 @@ projections:
       },
       "scene_refs": [
         {
-          "video_id": "02. 1988 - 1989",
+          "video_id": "sample_reel_02",
           "scene_id": "scene_0003"
         }
       ],
@@ -169,6 +217,9 @@ The `entity_id` is defined as:
 * **Example:** `person:Joe`, `location:Living Room`, `concept:Speech`
 * Since `node_type` and `name` are a unique index constraint in the SQLite database, this guarantees uniqueness and structural stability across rebuilds.
 * All endpoints (dashboard, entity profiles, collections query parameters) must use or resolve to this format.
+
+The transient `transcript_cue` namespace follows that string format but resolves
+through the retained-cue authority checks above, not a persisted SQLite node.
 
 ---
 

@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
-  --bg: #111312;
-  --bg-soft: #171a18;
+  --bg: #06080d;
+  --bg-soft: #0b0f17;
   --panel: #eee9d8;
   --panel-strong: #f7f4e9;
   --panel-ink: #171a15;
@@ -17,8 +17,8 @@
   --red: #d88972;
   --cyan: #8ec7c0;
   --ink: #10120f;
-  --flight-bg: #0f1115;
-  --flight-panel: #161a20;
+  --flight-bg: #05070b;
+  --flight-panel: #0d131f;
   --flight-line: #2d352d;
   --flight-amber: #ffb300;
   --flight-amber-soft: rgba(255, 179, 0, 0.1);
@@ -79,7 +79,7 @@ a {
   min-height: 64px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--line);
-  background: rgba(17, 19, 18, 0.94);
+  background: rgba(6, 8, 13, 0.95);
   backdrop-filter: blur(12px);
 }
 

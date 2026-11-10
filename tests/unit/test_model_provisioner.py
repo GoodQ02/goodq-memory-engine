@@ -183,69 +183,67 @@ def test_clap_bin_and_safetensors_acceptance(tmp_path, monkeypatch):
 
 
 def test_blip_local_loading(tmp_path, monkeypatch):
-    """Test that the BLIP captioning loader works with our model provisioner."""
-    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
-    
-    from steps.common.model_provisioner import lookup_model
-    repo_id, metadata = lookup_model("blip_caption")
-    rev = metadata.get("revision") or "blip_rev"
-    
-    # Setup mock local snapshot directory
-    repo_cache_dir = tmp_path / "hub" / "models--Salesforce--blip-image-captioning-base"
-    snapshots_dir = repo_cache_dir / "snapshots" / rev
-    snapshots_dir.mkdir(parents=True, exist_ok=True)
-    (snapshots_dir / "config.json").write_text("{}", encoding="utf-8")
-    (snapshots_dir / "preprocessor_config.json").write_text("{}", encoding="utf-8")
-    (snapshots_dir / "model.safetensors").write_bytes(b"\x00")
-    
-    # Write refs/main
-    refs_dir = repo_cache_dir / "refs"
-    refs_dir.mkdir(parents=True, exist_ok=True)
-    (refs_dir / "main").write_text(rev, encoding="utf-8")
-
-    # Mock HF loader classes
-    class MockBlipProcessor:
-        @classmethod
-        def from_pretrained(cls, path, local_files_only):
-            assert local_files_only is True
-            assert rev in str(path)
-            return "mock_processor"
-            
-    class MockBlipGeneration:
-        @classmethod
-        def from_pretrained(cls, path, local_files_only):
-            assert local_files_only is True
-            assert rev in str(path)
-            # Create a mock model class
-            class MockModel:
-                def to(self, device):
-                    return self
-                def eval(self):
-                    return self
-            return MockModel()
-            
-    # Mock system configuration and imports
-    monkeypatch.setattr("steps.image_caption.step.setup_step_gpu", lambda name: {"device": "cpu", "memory_fraction": 0.0})
-    
+    """Test that the WeVisOne-VL-2B captioning loader verifies its sealed local directory."""
+    import hashlib
     import sys
     import types
+    from steps.common.model_provisioner import load_registry
+    from steps.image_caption.step import _load_model, _MODEL
+
+    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: tmp_path)
+    reg = load_registry()
+    entry = dict(reg["huggingface_models"]["wevisone_vl_2b"])
+    local_dir = tmp_path / entry["local_path"]
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    fake_files = {}
+    for name in entry["files"]:
+        payload = f"sealed-{name}".encode("utf-8")
+        (local_dir / name).write_bytes(payload)
+        fake_files[name] = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+    entry["files"] = fake_files
+    monkeypatch.setattr(
+        "steps.common.model_provisioner.load_registry",
+        lambda: {"huggingface_models": {"wevisone_vl_2b": entry}},
+    )
+
+    class MockAutoProcessor:
+        @classmethod
+        def from_pretrained(cls, path, local_files_only):
+            assert local_files_only is True
+            assert entry["revision"] in str(path)
+            return "mock_processor"
+
+    class MockAutoModelForImageTextToText:
+        @classmethod
+        def from_pretrained(cls, path, dtype, local_files_only):
+            assert local_files_only is True
+            assert entry["revision"] in str(path)
+
+            class MockModel:
+                def eval(self):
+                    return self
+
+                def to(self, device):
+                    return self
+
+            return MockModel()
+
+    torch_mock = types.ModuleType("torch")
+    torch_mock.bfloat16 = "bfloat16"
+    torch_mock.float32 = "float32"
+    torch_mock.cuda = types.SimpleNamespace(is_available=lambda: False)
     transformers_mock = types.ModuleType("transformers")
-    transformers_mock.BlipProcessor = MockBlipProcessor
-    transformers_mock.BlipForConditionalGeneration = MockBlipGeneration
+    transformers_mock.AutoProcessor = MockAutoProcessor
+    transformers_mock.AutoModelForImageTextToText = MockAutoModelForImageTextToText
+    monkeypatch.setitem(sys.modules, "torch", torch_mock)
     monkeypatch.setitem(sys.modules, "transformers", transformers_mock)
-    
-    # Mock config loader to enable offline mode
-    import steps.common.config_loader
-    monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda *args: {"verification": {"offline_mode": True}})
-    
-    from steps.image_caption.step import _load_blip, _BLIP
-    # Clear existing cached model
-    _BLIP.update({"model": None, "proc": None, "device": "cpu"})
-    
-    success = _load_blip()
+
+    _MODEL.update({"model": None, "processor": None, "device": None, "load_seconds": None})
+    success = _load_model({})
     assert success is True
-    assert _BLIP["proc"] == "mock_processor"
-    assert _BLIP["model"] is not None
+    assert _MODEL["processor"] == "mock_processor"
+    assert _MODEL["model"] is not None
 
 
 def test_concurrent_provisioning_lock_behavior(tmp_path, monkeypatch):
@@ -353,6 +351,24 @@ def test_download_logging_redaction(tmp_path, monkeypatch):
     content = log_file.read_text(encoding="utf-8")
     assert "hf_1234567890abcdef1234567890abcdef12" not in content
     assert "hf_***" in content
+
+
+def test_cached_model_honors_process_log_root(tmp_path, monkeypatch):
+    """An isolated caller can read shared models without writing shared logs."""
+    shared_models = tmp_path / "shared" / "models"
+    snapshot = shared_models / "hub" / "models--Salesforce--blip-image-captioning-base" / "snapshots" / "witness_rev"
+    snapshot.mkdir(parents=True)
+    (snapshot / "config.json").write_text("{}", encoding="utf-8")
+    (snapshot / "pytorch_model.bin").write_bytes(b"\x00")
+    logs = tmp_path / "witness" / "logs"
+    monkeypatch.setenv("GOODQ_LOGS_ROOT", str(logs))
+    monkeypatch.setattr("steps.common.model_provisioner.resolve_models_root", lambda: shared_models)
+
+    result = ensure_model_cached("blip_caption", revision="witness_rev", offline=True)
+
+    assert result.status == "cached"
+    assert (logs / "model_downloads.log").is_file()
+    assert not (shared_models.parent / "logs").exists()
 
 
 def test_new_models_provisioning(tmp_path, monkeypatch):

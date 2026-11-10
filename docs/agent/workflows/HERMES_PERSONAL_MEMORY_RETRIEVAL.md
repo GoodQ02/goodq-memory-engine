@@ -28,7 +28,7 @@ relationship records, and bounded source-scene evidence, then returns an
 | `evidence_ready` | Cite only returned source-scene evidence and explicit relationship records. |
 
 Never rewrite an unscoped role as a possessive or pairwise fact such as “your
-cousin,” “Joe's cousin,” or “your mother.” Co-presence, names in the same
+cousin,” “Alex's cousin,” or “your mother.” Co-presence, names in the same
 transcript, aliases, and semantic score do not establish a relationship.
 
 ## Evidence Escalation
@@ -46,9 +46,9 @@ Use fresh Hermes sessions for these gates:
 
 | Request | Expected result |
 |---|---|
-| “Who is Jamie?” | Identity-level label only. |
-| “What is Maria's relationship to Joe?” | Explicitly not established when no directed record exists. |
-| “What were notable interactions between Joe and Maria over time?” | One scope clarification question. |
+| “Who is Casey?” | Identity-level label only. |
+| “What is Maya's relationship to Alex?” | Explicitly not established when no directed record exists. |
+| “What were notable interactions between Alex and Maya over time?” | One scope clarification question. |
 
 The bridge test and MCP discovery test must pass before the model acceptance
 gates. No GoodQ epoch, vector, graph, or identity data is changed by this

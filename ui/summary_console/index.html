@@ -40,13 +40,13 @@
             <button class="tab-btn" data-tab="places-list-container">PLACES</button>
             <button class="tab-btn" data-tab="occasions-list-container">OCCASIONS</button>
             <button class="tab-btn" data-tab="moods-list-container">MOODS</button>
-            <button class="tab-btn" data-tab="videos-list-container">VIDEOS</button>
+            <button class="tab-btn" data-tab="videos-list-container">SOURCES</button>
           </div>
 
           <div class="panel-content overflow-y">
             <!-- Videos Tab -->
             <div class="tab-content" id="videos-list-container" hidden>
-              <div class="list-section-title">PROCESSED VIDEOS</div>
+              <div class="list-section-title">PROCESSED SOURCES</div>
               <div id="videos-list" class="entity-list-items"></div>
             </div>
 
@@ -71,6 +71,7 @@
             <!-- Moods Tab -->
             <div class="tab-content" id="moods-list-container" hidden>
               <div class="list-section-title">SENTIMENT BALANCE</div>
+              <p id="sentiment-coverage" role="status">Sentiment coverage unavailable.</p>
               <div class="sentiment-bar-container">
                 <div class="sentiment-bar">
                   <div class="bar-segment pos" id="sent-pos-bar" style="width: 0%"></div>
@@ -84,7 +85,8 @@
                 </div>
               </div>
 
-              <div class="list-section-title">TOP EMOTIONAL MARKERS</div>
+              <div class="list-section-title">EMOTION EVIDENCE BY SOURCE</div>
+              <p>Audio uses stored labels; text uses the top-ranked label. Counts are distinct scenes per label and channel, which may overlap. These are inferred signals, not observed emotion.</p>
               <div id="emotions-list" class="emotions-ranking-items"></div>
             </div>
           </div>
@@ -108,8 +110,8 @@
                 <h2 class="profile-name highlight-cyan" id="profile-name">...</h2>
                 <div class="profile-meta-row">
                   <span class="meta-badge" id="profile-type">TYPE</span>
-                  <span class="meta-label">Occurrences: <strong id="profile-occurrences">0</strong></span>
-                  <span class="meta-label" id="profile-span-label">Span: <strong id="profile-span">N/A</strong></span>
+                  <span class="meta-label">Scenes: <strong id="profile-occurrences">0</strong></span>
+                  <span class="meta-label" id="profile-span-label">Scene coverage: <strong id="profile-span">N/A</strong></span>
                 </div>
 
                 <!-- Narrative Summary Box for Video (Initially hidden) -->
@@ -127,6 +129,9 @@
                   <div class="tag-cloud" id="profile-tag-cloud">
                     <!-- Tags go here -->
                   </div>
+                  <div class="box-header">EMOTION EVIDENCE IN THIS PROFILE</div>
+                  <p>Stored audio labels and top-ranked text labels. Distinct scene counts per channel may overlap; these are inferred signals.</p>
+                  <div id="profile-emotions-list"></div>
                 </div>
               </div>
 
@@ -214,6 +219,6 @@
       <div class="toast-container" id="toast-container"></div>
     </div>
 
-    <script src="./static/js/summary.js"></script>
+    <script src="./static/js/summary.js?v=20261012-retained-cues"></script>
   </body>
 </html>

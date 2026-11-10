@@ -26,7 +26,7 @@ def _digest(character: str) -> str:
 
 def _valid_candidate() -> dict[str, object]:
     required_public = list(REQUIRED_TRANSFORM_ASSET_IDS)
-    required_public.extend(f"public_asset_{index:02d}" for index in range(33 - len(required_public)))
+    required_public.extend(f"public_asset_{index:02d}" for index in range(35 - len(required_public)))
     public = sorted(required_public)
     personal = sorted([*public, *PERSONAL_ONLY_DELTA])
     model_assets = sorted(required_public[:10])
@@ -60,13 +60,13 @@ def _valid_candidate() -> dict[str, object]:
         },
         "profiles": {
             "PUBLIC_GPU_ENHANCED": {
-                "asset_count": 33,
+                "asset_count": 35,
                 "asset_ids": public,
                 "selector_sha256": _digest("3"),
                 "asset_inventory_sha256": _digest("4"),
             },
             "PERSONAL_AIR_GAP": {
-                "asset_count": 36,
+                "asset_count": 39,
                 "asset_ids": personal,
                 "selector_sha256": _digest("5"),
                 "asset_inventory_sha256": _digest("6"),
@@ -261,7 +261,7 @@ def test_readiness_requires_all_five_preserved_large_model_seals() -> None:
 def test_readiness_rejects_wrong_profile_counts() -> None:
     candidate = _valid_candidate()
     candidate["profiles"]["PUBLIC_GPU_ENHANCED"]["asset_count"] = 32
-    _expect_failure(candidate, "Public GPU profile must contain exactly 33")
+    _expect_failure(candidate, "Public GPU profile must contain exactly 35")
 
 
 def test_readiness_rejects_a_forbidden_large_model_selection() -> None:
@@ -410,3 +410,11 @@ def test_terminal_receipt_may_not_be_written_inside_source_control(tmp_path: Pat
             receipt_path=repo_root / "prebuild-readiness.json",
             repo_root=repo_root,
         )
+
+
+def test_current_ocr_packaging_fails_prebuild_before_payload_creation():
+    from scripts.install.prebuild_readiness import _collect_profiles, _require_packaged_runtimes
+
+    _, context = _collect_profiles(Path(__file__).resolve().parents[2])
+    with pytest.raises(PrebuildReadinessError, match="isolated runtime payload and distribution snapshots are not qualified: paddle_ocr_det, paddle_ocr_rec, wevisone_vl_2b"):
+        _require_packaged_runtimes(context)

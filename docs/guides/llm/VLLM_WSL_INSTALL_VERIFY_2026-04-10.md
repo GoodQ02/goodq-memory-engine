@@ -1,10 +1,14 @@
-<!-- DOC_BADGE: OPERATIONAL -->
-<!-- DOC_STATUS: ACTIVE -->
+<!-- DOC_BADGE: HISTORICAL -->
+<!-- DOC_STATUS: REFERENCE_ONLY -->
 <!-- DOC_LAST_VERIFIED: 2026-04-10 -->
 
-# WSL vLLM Install And Verify Procedure (This Machine)
+# Historical April workstation install procedure
 
-This is the concrete operator runbook for bringing up the local LLM runtime on the current workstation.
+> Superseded workstation inventory and installation recipe. Do not replay it
+> against the current host. Use [LLM infrastructure](LLM_INFRASTRUCTURE.md) and
+> [current port boundaries](../../operator/OLLAMA_PORT_BOUNDARIES.md).
+
+This was the April operator runbook for bringing up the local LLM runtime on the workstation at that time.
 
 It is intentionally:
 - WSL-first

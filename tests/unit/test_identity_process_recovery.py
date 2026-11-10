@@ -41,8 +41,10 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def isolate_identity_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(identity_route, "_CFG", {})
+def isolate_identity_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(identity_route, "_CFG", {
+        "paths": {"db_path": str(tmp_path / "epochs" / "epoch-test" / "memory.db")},
+    })
 
 
 class _Authority:

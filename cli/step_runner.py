@@ -31,12 +31,19 @@ _EXPLICIT_META_STATUS_FIELD_BY_STEP = {
     "audio_transcribe_local": "transcript_meta",
     "audio_embed_clap": "clap_meta",
     "audio_emotion": "audio_emotion_meta",
+    "audio_music_events": "music_events_meta",
+    "audio_time_hints": "time_hints_meta",
+    "cross_modal_harmonization": "scene_context_meta",
     "emotion_classify": "emotion_meta",
+    "face_embed": "faces_meta",
     "image_caption": "caption_meta",
     "image_embed_clip": "clip_meta",
     "image_embed_dino": "dino_meta",
     "image_ocr": "ocr_meta",
+    "object_detect": "detect_meta",
+    "pdf_text": "document_meta",
     "sentiment": "sentiment_meta",
+    "tagger": "tagger_meta",
 }
 
 _META_ERROR_STATUSES = {
@@ -192,6 +199,88 @@ def _derive_step_log_outcome(
                 evidence_value = result_meta.get(evidence_field)
                 if evidence_value not in (None, "", []):
                     extra[evidence_field] = copy.deepcopy(evidence_value)
+            if step_name == "cross_modal_harmonization" and meta_status in {"degraded", "unknown"}:
+                extra["reason"] = result_meta.get("reason") or "scene_context_outcome_unknown"
+                return meta_status, None, extra
+            if step_name == "audio_embed_clap" and meta_status == "skipped" and result_meta.get("reason") == "audio_silent":
+                extra["reason"] = "silence"
+                return "not_applicable", None, extra
+            if step_name == "tagger" and meta_status == "degraded":
+                extra["reason"] = result_meta.get("reason") or "ner_inference_failed"
+                return "degraded", None, extra
+            if step_name == "face_embed" and meta_status in {"ok", "degraded"}:
+                extra["embedding_emitted"] = bool(
+                    result.get("faces") and result_meta.get("embedding_dimension")
+                )
+                extra["requested_implementation"] = (
+                    result_meta.get("primary_engine") or result_meta.get("engine") or step_name
+                )
+                extra["effective_implementation"] = result_meta.get("engine") or step_name
+                if result_meta.get("fallback_used"):
+                    extra["fallback_chain"] = [extra["effective_implementation"]]
+                if meta_status == "degraded" and not extra["embedding_emitted"]:
+                    extra["reason"] = "face_embed_degraded_no_output"
+                    return "skipped", None, extra
+                if meta_status == "ok" and not result.get("faces"):
+                    extra["reason"] = "no_face"
+                    return "not_applicable", None, extra
+            if step_name == "object_detect" and meta_status == "ok":
+                # Identity is model plus execution device: a CUDA failure may retry
+                # the same model on CPU, which is still a fallback.
+                model_id = result_meta.get("model") or step_name
+                device = result_meta.get("device")
+                effective = f"{model_id}:{device}" if device else model_id
+                extra["requested_implementation"] = result_meta.get("fallback_from") or effective
+                extra["effective_implementation"] = effective
+                if result_meta.get("fallback_from"):
+                    extra["fallback_chain"] = [extra["effective_implementation"]]
+                if not result.get("objects"):
+                    extra["reason"] = "no_detected_object"
+                    return "not_applicable", None, extra
+            if step_name in {"audio_music_events", "audio_time_hints"}:
+                if meta_status == "disabled":
+                    extra["reason"] = f"{step_name}_disabled"
+                    return "skipped", None, extra
+                if meta_status == "none":
+                    extra["reason"] = "content_appropriate_empty"
+                    return "not_applicable", None, extra
+            if step_name == "image_caption":
+                extra["requested_implementation"] = result_meta.get("engine") or step_name
+                extra["effective_implementation"] = result_meta.get("engine") or step_name
+                if meta_status in {"not_applicable", "blank_frame", "empty"}:
+                    extra["reason"] = (
+                        str(result_meta.get("reason") or "blank_or_low_variance_frame").strip()
+                        or "blank_or_low_variance_frame"
+                    )
+                    return "not_applicable", None, extra
+            if step_name == "image_ocr":
+                if meta_status in {"dependency_missing", "no_source_path", "unavailable"}:
+                    extra["reason"] = f"image_ocr_{result_meta.get('reason') or meta_status}"
+                    return "error", str(result_meta.get("error") or result_meta.get("reason") or meta_status), extra
+                if result_meta.get("fallback_error") and meta_status != "ok":
+                    error_text = (
+                        str(result_meta.get("fallback_error") or result_meta.get("error") or "").strip()
+                        or "image_ocr failed"
+                    )
+                    error_reason = (
+                        str(result_meta.get("reason") or "ocr_exception").strip().lower()
+                        or "ocr_exception"
+                    )
+                    extra["reason"] = (
+                        error_reason
+                        if error_reason.startswith("image_ocr_")
+                        else f"image_ocr_{error_reason}"
+                    )
+                    return "error", error_text, extra
+                if meta_status == "no_text":
+                    no_text_reason = str(result_meta.get("reason") or "no_text").strip().lower() or "no_text"
+                    ocr_text_val = result.get("ocr_text")
+                    has_ocr_text = isinstance(ocr_text_val, str) and bool(ocr_text_val.strip())
+                    if no_text_reason == "empty_ocr_text" and not has_ocr_text:
+                        extra["reason"] = "no_ocr_text"
+                        return "not_applicable", None, extra
+                    extra["reason"] = f"image_ocr_{no_text_reason}"
+                    return "skipped", None, extra
             if meta_status in _META_ERROR_STATUSES:
                 error_text = str(result_meta.get("error") or "").strip() or f"{step_name} failed"
                 error_reason = str(result_meta.get("reason") or meta_status).strip().lower() or meta_status
@@ -218,6 +307,9 @@ def _derive_step_log_outcome(
 
 def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -> Dict[str, Any]:
     global _PATH_FALLBACK_WARNED
+    from steps.audio.recording_ingestion import RECOGNITION_STEPS, selected, step_result, analyze_text
+    if step_name in RECOGNITION_STEPS and (selected(cfg) or (item or {}).get('recording_audio')):
+        return step_result(item or {}, cfg)
     # Map step names to callables and call signatures
     if step_name == "video_scene_detect":
         from steps.video_scene_detect.step import video_scene_detect
@@ -225,7 +317,7 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         return video_scene_detect(item, cfg)
 
     if step_name == "audio_transcribe":
-        from steps.audio.audio_wsl2_bridge import audio_transcribe_wsl2
+        from steps.audio.audio_wsl2_bridge import audio_transcribe_wsl2, unified_transcription_options
         assert item is not None
         audio_path = item.get("audio_path") or item.get("path")
         if not audio_path:
@@ -233,7 +325,8 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         audio_cfg = cfg.get("audio", {})
         transcribe_cfg = audio_cfg.get("transcribe", {})
         timeout = transcribe_cfg.get("timeout", 3600)
-        return audio_transcribe_wsl2(str(audio_path), timeout=timeout)
+        return audio_transcribe_wsl2(str(audio_path), timeout=timeout,
+            duration=item.get('duration'), **unified_transcription_options(cfg))
     if step_name == "audio_transcribe_local":
         from steps.audio_transcribe.step import audio_transcribe
         assert item is not None
@@ -289,11 +382,11 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
     if step_name == "emotion_classify":
         from steps.emotion_classify.step import emotion_classify
         assert item is not None
-        return emotion_classify(item, cfg)
+        return analyze_text(step_name, emotion_classify, item, cfg)
     if step_name == "sentiment":
         from steps.sentiment.step import sentiment
         assert item is not None
-        return sentiment(item, cfg)
+        return analyze_text(step_name, sentiment, item, cfg)
     if step_name == "home_assistant_status":
         from steps.home_assistant_status.step import home_assistant_status
         return home_assistant_status(cfg)
@@ -311,20 +404,29 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
         timeout = diarize_cfg.get("timeout", 3600)
         return audio_diarize_wsl2(str(audio_path), timeout=timeout)
     if step_name == "audio_unified_wsl2":
-        from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+        from steps.audio.audio_wsl2_bridge import audio_unified_wsl2, unified_transcription_options
         assert item is not None
         audio_path = item.get("audio_path") or item.get("path")
         if not audio_path:
             return {"status": "error", "error": "No audio path provided"}
-        return audio_unified_wsl2(str(audio_path), scene_id=item.get("scene_id"), duration=item.get("duration"))
+        options = unified_transcription_options(cfg)
+        return audio_unified_wsl2(str(audio_path), scene_id=item.get("scene_id"), duration=item.get("duration"), **options)
     if step_name == "audio_speaker_merge":
         from steps.audio_speaker_merge.step import audio_speaker_merge
         assert item is not None
         return audio_speaker_merge(item, cfg)
     if step_name == "audio_emotion":
-        from steps.audio_emotion.step import audio_emotion
-        assert item is not None
-        return audio_emotion(item, cfg)
+        # Acoustic emotion currently has a WSL composite producer only. Keep the
+        # native optional step visible without treating text emotion as inference.
+        return {
+            "emotion_status": "unavailable",
+            "audio_emotion_meta": {
+                "status": "unavailable",
+                "reason": "native_acoustic_emotion_not_implemented",
+                "requested_implementation": "native_acoustic_emotion",
+                "effective_implementation": None,
+            },
+        }
     if step_name == "audio_metadata":
         from steps.audio_metadata.step import audio_metadata
         assert item is not None
@@ -332,11 +434,11 @@ def run_step(step_name: str, item: Dict[str, Any] | None, cfg: Dict[str, Any]) -
     if step_name == "audio_music_events":
         from steps.audio_music_events.step import audio_music_events
         assert item is not None
-        return audio_music_events(item, cfg)
+        return analyze_text(step_name, audio_music_events, item, cfg)
     if step_name == "audio_time_hints":
         from steps.audio_time_hints.step import audio_time_hints
         assert item is not None
-        return audio_time_hints(item, cfg)
+        return analyze_text(step_name, audio_time_hints, item, cfg)
     if step_name == "tagger":
         from steps.tagger.step import tagger
         assert item is not None
@@ -416,7 +518,11 @@ def main() -> None:
     
     # Initialize GPU management for this step
     try:
-        from common.gpu_manager import initialize_gpu_for_step
+        # Paddle owns ONNX Runtime sessions and verifies their execution
+        # providers itself. Importing the PyTorch manager here would allocate a
+        # second CUDA runtime and does not constrain ONNX memory.
+        if args.step != "image_ocr":
+            from common.gpu_manager import initialize_gpu_for_step
         
         # Load GPU config from master config
         gpu_cfg = cfg.get('gpu', {})
@@ -429,14 +535,15 @@ def main() -> None:
         deterministic = gpu_cfg.get('deterministic', False)
         
         # Initialize GPU
-        gpu_manager = initialize_gpu_for_step(
+        # OCR's parent launcher owns admission; its worker owns provider setup.
+        gpu_manager = None if args.step == "image_ocr" else initialize_gpu_for_step(
             step_name=args.step,
             memory_fraction=memory_fraction,
             enable_determinism=deterministic
         )
         
         # Clear cache if configured
-        if gpu_cfg.get('clear_cache_before_step', True):
+        if gpu_manager is not None and gpu_cfg.get('clear_cache_before_step', True):
             gpu_manager.clear_cache()
             
     except Exception as e:

@@ -136,7 +136,17 @@ def test_resolve_emotion_snapshot_requires_exact_pinned_safetensors(
     assert resolved_revision == revision
 
 
-def test_load_emotion_retries_once_on_cpu_after_gpu_load_failure(monkeypatch) -> None:
+@pytest.fixture
+def simulated_gpu(monkeypatch):
+    """Exercise fake CUDA loaders even when the test runner uses BASELINE."""
+    for key in ("GOODQ_FORCE_CPU", "GOODQ_NO_AUTO_GPU", "GOODQ_EMOTION_FORCE_CPU"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "GPU_ENHANCED")
+    monkeypatch.setenv("GOODQ_DEVICE", "cuda")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+
+
+def test_load_emotion_retries_once_on_cpu_after_gpu_load_failure(monkeypatch, simulated_gpu) -> None:
     from steps.emotion_classify import step as emotion_step
 
     snapshot = Path("/sealed/cardiff/snapshots/pinned")
@@ -346,7 +356,7 @@ def test_emotion_classify_marks_nrc_as_a_distinct_complete_fallback(monkeypatch)
     }
 
 
-def test_emotion_model_failure_is_visible_after_gpu_and_cpu_attempts(monkeypatch) -> None:
+def test_emotion_model_failure_is_visible_after_gpu_and_cpu_attempts(monkeypatch, simulated_gpu) -> None:
     from steps.emotion_classify import step as emotion_step
 
     snapshot = Path("/sealed/cardiff/snapshots/pinned")

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: CURATED_AUTHORITY_INDEX -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-06 -->
 
 # Documentation Authority Map
 
@@ -31,7 +31,8 @@ Do not add archive/session/history material just for completeness.
 
 ## Canonical Authority Set
 
-These documents define current runtime, architecture, identity, and operator truth.
+These documents define intended runtime behavior, architecture, identity, and
+operator contracts. They do not certify current runtime health.
 
 ### Root Canonical
 
@@ -40,6 +41,7 @@ These documents define current runtime, architecture, identity, and operator tru
 
 ### Runtime And Architecture Contracts
 
+- [REPOSITORY_MAP.md](../architecture/REPOSITORY_MAP.md) - canonical source-navigation map; detailed behavior remains owned by the subsystem contracts below.
 - [INGEST_ORCHESTRATION_CONTRACT.md](../architecture/INGEST_ORCHESTRATION_CONTRACT.md)
 - [IDENTITY_STITCHING_CONTRACT.md](../architecture/IDENTITY_STITCHING_CONTRACT.md)
 - [HITL_STITCHING_CONTRACT.md](../architecture/HITL_STITCHING_CONTRACT.md)
@@ -83,12 +85,18 @@ These documents define current runtime, architecture, identity, and operator tru
 These docs are safe discovery/index surfaces for humans and agents, but they do not override canonical contracts.
 
 - [PROJECT_ORIENTATION.md](../agent/PROJECT_ORIENTATION.md) - timeless project
-  topology, evidence hierarchy, component boundaries, and no-repeat preflight.
-- [Agent office index](../agent/README.md)
-- [Agent current state](../agent/CURRENT_STATE.md) - transient restart snapshot;
-  verify time-sensitive claims against live evidence.
-- [Agent current state JSON](../agent/current_state.json) - machine-readable
-  transient state mirror.
+  topology, evidence boundaries and task-scoped resume guidance.
+- [Agent office index](../agent/README.md) - agent entrypoint and reading order.
+- [PROJECT.md](../../PROJECT.md) - current bounded checkpoint, evidence limits,
+  and exact resume seam.
+- [Ingestion failure modes](../reference/INGESTION_FAILURE_MODES.md) - distilled
+  advisory lessons; not a list of confirmed current defects or an execution plan.
+- [Captured agent state](../agent/CURRENT_STATE.md) - generated dated evidence
+  or an explicitly unconfigured public template; pre-reset corpus captures are
+  retired from current ingestion planning and are not startup reading.
+- [Captured agent state JSON](../agent/current_state.json) - machine-readable
+  projection of the same evidence or template. Verify time-sensitive claims
+  against live evidence.
 - [Clean memory start workflow](../agent/workflows/CLEAN_MEMORY_START.md)
 - [goodq4all_agent_status.md](../goodq4all_agent_status.md) - compatibility
   redirect; it carries no independent status claims.
@@ -110,27 +118,51 @@ These docs are safe discovery/index surfaces for humans and agents, but they do 
 
 These docs remain in the repo because they are useful historical records, but they must never be treated as current operator or runtime authority.
 
-- HANDOFF_BASEMENT_PHASE.md (historical material omitted from public source)
-- ARTIFACT_LOCATION_CONTRACT.md (historical material omitted from public source)
-- PIPELINE_RESTORATION_BACKLOG.md (historical material omitted from public source)
-- PHASE5_FINAL_ACTIVATION_SUMMARY.md (historical material omitted from public source)
-- PIPELINES.md (historical material omitted from public source)
-- UCF_REMAINING_WORK.md (historical material omitted from public source)
-- UCF_SEARCH_LOOP_PLAN.md (historical material omitted from public source)
-- UCF_QDRANT_STATUS_BACKFILL_PLAN.md (historical material omitted from public source)
-- NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md (historical material omitted from public source)
-- LLM_IMPLEMENTATION_PLAN_PHASE1.md (historical material omitted from public source)
-- AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md (historical material omitted from public source)
-- DOCS_AUDIT_AND_REORGANIZATION_REPORT.md (historical material omitted from public source)
-- POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md (historical material omitted from public source)
-- UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md (historical material omitted from public source)
+The October 13 reset retired pre-reset corpus reports across `reports/`,
+`docs/diagnostics/`, archived diagnostics and the marked local run directories.
+The subsequent approved archive pass moved 95 diagnostic Markdown reports,
+14 tracked report documents and four completed/superseded plans under
+`docs/archive/`, and extracted 619 lines of old run narratives from the roadmap.
+Archive badges and repaired links preserve code-history access. Generated
+snapshot inputs remain at the paths required by their existing consumers.
+The generated [RAG context capture](../GOODQ_RAG_CONTEXT_PACK.md), agent state
+projections and system snapshot retain historical evidence dates; their corpus
+claims are retired regardless of an older authority badge inside the capture.
+Their indexes and `RETIRED.md` markers define the boundary. The roadmap's retired
+narratives and prior handoffs are code history, not current work orders. Source
+contracts and regression tests retain their authority; report retirement does
+not retire product requirements.
+
+- `SCRIPT_REGISTRY.md` (omitted from public source)
+- `HANDOFF_BASEMENT_PHASE.md` (omitted from public source)
+- `ARTIFACT_LOCATION_CONTRACT.md` (omitted from public source)
+- `PIPELINE_RESTORATION_BACKLOG.md` (omitted from public source)
+- `PHASE5_FINAL_ACTIVATION_SUMMARY.md` (omitted from public source)
+- `PIPELINES.md` (omitted from public source)
+- `UCF_REMAINING_WORK.md` (omitted from public source)
+- `UCF_SEARCH_LOOP_PLAN.md` (omitted from public source)
+- `UCF_QDRANT_STATUS_BACKFILL_PLAN.md` (omitted from public source)
+- `NEXT_LAYER_IMPLEMENTATION_PLAN_2026-04-12.md` (omitted from public source)
+- `LLM_IMPLEMENTATION_PLAN_PHASE1.md` (omitted from public source)
+- `AUDIO_DIARIZATION_OPTIMIZATION_PLAN.md` (omitted from public source)
+- `DOCS_AUDIT_AND_REORGANIZATION_REPORT.md` (omitted from public source)
+- `POST_PROMOTION_GRAPH_SIGNAL_NOISE_AUDIT.md` (omitted from public source)
+- `UCF_CLEAN_REINGEST_VERIFICATION_REPORT_BASELINE.md` (omitted from public source)
 
 ## Delete-Safe Registry
 
 Only items listed here are approved for direct deletion without additional archive work.
 
-Current approved delete-safe items:
-- none
+Approved instruction-only removals, 2026-11-06 (user-authorized instruction cleanup):
+- `docs/agent/skills/using-agent-skills/SKILL.md`: obsolete generic skill chain;
+  repository `AGENTS.md` owns proportional task selection.
+- `docs/agent/skills/goodq4all-operator/SKILL.md`: duplicate skill-name stub;
+  canonical discovery is `.agents/skills/goodq4all-operator/SKILL.md`.
+- `docs/agent/skills/fable-prompt-cache/SKILL.md`: unreferenced session recipe
+  whose scratch script is absent. No runtime implementation is removed.
+
+These exact paths are retired, recoverable from Git history; this grants no
+authority to remove adjacent data, source or historical evidence.
 
 If a future cleanup approves deletion, record the file here before removal.
 
@@ -143,6 +175,12 @@ These tools support documentation verification, but they do not define authority
 - [runtime_path_authority_audit.py](../../scripts/docs/runtime_path_authority_audit.py)
 
 ## Non-Action Rules
+
+Public releases may carry an explicit `unconfigured_template` evidence kind.
+Its projections say that no runtime or corpus was observed; zero values are
+placeholders. The generator rejects observed counts, healthy services, model
+routes and historical receipts in this mode. Real runtime captures retain the
+reachable loopback Qdrant requirement. A public template is never live authority.
 
 - Do not expand this file into another full inventory snapshot.
 - Do not use this file to classify every archive or session note.

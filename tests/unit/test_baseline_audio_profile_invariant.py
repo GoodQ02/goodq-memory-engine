@@ -65,7 +65,9 @@ def test_baseline_profile_skips_unified_wsl(monkeypatch, tmp_path: Path):
 
     state = {"unified_called": False, "local_called": False}
 
+    from steps.audio.audio_wsl2_bridge import unified_transcription_options
     mod_unified = types.ModuleType("steps.audio.audio_wsl2_bridge")
+    mod_unified.unified_transcription_options = unified_transcription_options
 
     def _audio_unified_wsl2(*args, **kwargs):
         state["unified_called"] = True
@@ -137,7 +139,9 @@ def test_structured_wsl_audio_error_downgrades_to_local_transcription(monkeypatc
     monkeypatch.setattr(run_ingestion, "require_wsl_audio", lambda: False)
     monkeypatch.setattr(run_ingestion, "_extract_audio_chunk", lambda *a, **k: audio_path)
 
+    from steps.audio.audio_wsl2_bridge import unified_transcription_options
     mod_unified = types.ModuleType("steps.audio.audio_wsl2_bridge")
+    mod_unified.unified_transcription_options = unified_transcription_options
 
     def _audio_unified_wsl2(*args, **kwargs):
         return {
@@ -239,7 +243,9 @@ def test_structured_wsl_audio_error_fails_visible_when_wsl_required(monkeypatch,
     monkeypatch.setattr(run_ingestion, "_extract_audio_chunk", lambda *a, **k: audio_path)
     monkeypatch.setenv("GOODQ_REQUIRE_WSL_AUDIO", "1")
 
+    from steps.audio.audio_wsl2_bridge import unified_transcription_options
     mod_unified = types.ModuleType("steps.audio.audio_wsl2_bridge")
+    mod_unified.unified_transcription_options = unified_transcription_options
 
     def _audio_unified_wsl2(*args, **kwargs):
         return {
@@ -477,6 +483,7 @@ def test_audio_embed_clap_qdrant_payload_keeps_scene_video_metadata(monkeypatch)
         "component": "audio_embed_clap",
         "step": "audio_embed_clap",
         "model": "laion/clap-htsat-unfused",
+        "input_policy": "full_scene",
         "created_at": "2026-04-30T12:05:43+00:00",
         "commit_ts_utc": "2026-04-30T12:05:43+00:00",
         "ucf_promotion_status": "staged",
@@ -1027,8 +1034,8 @@ def test_step_runner_propagates_emotion_fallback_provenance():
         (
             "audio_embed_clap",
             {"clap_meta": {"status": "skipped", "reason": "audio_silent"}},
-            "skipped",
-            "audio_embed_clap_audio_silent",
+            "not_applicable",
+            "silence",
             False,
         ),
         (

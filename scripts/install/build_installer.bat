@@ -346,6 +346,14 @@ if errorlevel 1 (
     exit /b 108
 )
 
+if /I "%GOODQ_INSTALLER_PROFILE%"=="PERSONAL_AIR_GAP" (
+    "%GOODQ_DEV_PYTHON%" "%REPO_ROOT%\scripts\install\vlc_runtime_payload.py" stage --archive "%PRIVATE_CACHE_ROOT%\external\vlc-3.0.24-win64.zip" --root "staged\vlc" --profile "%GOODQ_INSTALLER_PROFILE%" --probe
+    if errorlevel 1 (
+        echo [ERROR] Personal VLC payload failed pinned staging or runtime verification.
+        exit /b 114
+    )
+)
+
 copy /y "%PRIVATE_CACHE_ROOT%\external\poppler.zip" "staged\poppler.zip" >nul
 if errorlevel 1 (
     echo [ERROR] Poppler archive is missing from the verified cache.
@@ -384,7 +392,6 @@ if errorlevel 1 (
 )
 
 copy /y "%PRIVATE_CACHE_ROOT%\prerequisites\vc_redist.x64.exe" "staged\binaries\vc_redist.x64.exe" >nul
-copy /y "%PRIVATE_CACHE_ROOT%\external\tesseract_setup.exe" "staged\binaries\tesseract_setup.exe" >nul
 
 :: Copy certifi CA bundle from verified staged_cache
 echo Staging certifi CA bundle from verified cache...

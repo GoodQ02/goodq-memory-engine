@@ -11,7 +11,10 @@
     selectedEntity: null,
     selectedEntities: [],
     searchActive: false,
+    datasetGeneration: 0,
+    searchGeneration: 0,
     selectedSceneId: null,
+    selectedOriginalMedia: null,
     activeInspectorTab: "overview",
     modes: new Set(["text", "visual", "audio"]),
     graph: { nodes: [], edges: [] },
@@ -47,6 +50,460 @@
     voice: null,    // active SpeechSynthesisVoice
     voices: [],     // all loaded voices
   };
+
+  const originalAudio = {
+    element: null,
+    generation: 0,
+  };
+
+  const originalVideo = {
+    element: null,
+    generation: 0,
+    desktop: null,
+  };
+
+  function pauseOriginalVideo() {
+    if (originalVideo.element) originalVideo.element.pause();
+    if (originalVideo.desktop) originalVideo.desktop.done();
+  }
+
+  function resetOriginalVideo() {
+    if (originalVideo.desktop) originalVideo.desktop.done();
+    originalVideo.desktop = null;
+    originalVideo.generation += 1;
+    const video = originalVideo.element;
+    originalVideo.element = null;
+    if (video) {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+    const panel = document.getElementById("inspector-original-video");
+    if (panel) {
+      panel.innerHTML = "";
+      panel.hidden = true;
+    }
+    const keyframe = document.getElementById("inspector-keyframe-zone");
+    if (keyframe) keyframe.hidden = false;
+  }
+
+  async function desktopPlayerCommand(action, body, librarySource) {
+    const path = `/api/media/desktop-player/${action}`;
+    const url = typeof window !== "undefined" && window.GoodQLibrary ? window.GoodQLibrary.url(path, librarySource) : path;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      const error = new Error(typeof result.detail === "string" ? result.detail : `Desktop playback failed (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    return result;
+  }
+
+  function desktopPlayerWindow(element) {
+    const rect = element.getBoundingClientRect();
+    const bounded = (value, minimum, maximum) => Number.isFinite(value)
+      ? Math.round(Math.max(minimum, Math.min(maximum, value))) : minimum;
+    const width = bounded(rect.width, 240, 1920);
+    const height = bounded(rect.height, 180, 1440);
+    const screen = window.screen || {};
+    const left = Number.isFinite(screen.availLeft) ? screen.availLeft : -32768;
+    const top = Number.isFinite(screen.availTop) ? screen.availTop : -32768;
+    const right = Number.isFinite(screen.availWidth) ? left + screen.availWidth - width : 32768;
+    const bottom = Number.isFinite(screen.availHeight) ? top + screen.availHeight - height : 32768;
+    return {
+      x: bounded(window.screenX + rect.x, Math.max(-32768, left), Math.min(32768, Math.max(left, right))),
+      y: bounded(window.screenY + Math.max(0, window.outerHeight - window.innerHeight) + rect.y,
+        Math.max(-32768, top), Math.min(32768, Math.max(top, bottom))),
+      width, height,
+    };
+  }
+
+  function renderOriginalVideo(scene) {
+    const librarySource = typeof window !== "undefined" ? window.GoodQLibrary?.source : undefined;
+    if (scene.source_kind && scene.source_kind !== "video") {
+      renderStandaloneSource(scene);
+      return;
+    }
+    const panel = document.getElementById("inspector-original-video");
+    if (!panel) return;
+    panel.hidden = false;
+    appendText(panel, "h3", "Original source video");
+    const status = document.createElement("p");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    const endpoint = scene.original_video_endpoint;
+    const start = scene.start;
+    if (scene.original_video_available !== true || typeof endpoint !== "string"
+      || !/^\/api\/media\/video\/[^/?#]+\/source$/.test(endpoint)) {
+      status.textContent = "Original source video unavailable.";
+      panel.appendChild(status);
+      return;
+    }
+    if (typeof start !== "number" || !Number.isFinite(start) || start < 0) {
+      status.textContent = "Original source video unavailable: invalid scene start time.";
+      panel.appendChild(status);
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.controls = true;
+    video.preload = "metadata";
+    video.playsInline = true;
+    video.hidden = true;
+    video.setAttribute("aria-label", "Original source video");
+    const keyframe = document.getElementById("inspector-keyframe-zone");
+    const generation = originalVideo.generation;
+    originalVideo.element = video;
+    const isCurrent = () => originalVideo.element === video && originalVideo.generation === generation;
+    const sourceMatch = endpoint.match(/^\/api\/media\/video\/([^/?#]+)\/source$/);
+    const sceneId = scene.scene_id ?? scene.id;
+    const playButton = document.createElement("button");
+    playButton.type = "button";
+    playButton.className = "original-video-play";
+    playButton.textContent = "Play original video";
+    const doneButton = document.createElement("button");
+    doneButton.type = "button";
+    doneButton.className = "original-video-done";
+    doneButton.textContent = "Done with pop-out";
+    doneButton.hidden = true;
+    let failed = false;
+    let initialSeek = false;
+    let unsupported = false;
+    let playIntent = false;
+    let fallbackRequested = false;
+    let playbackId = null;
+    let pendingLaunch = null;
+    let desktopGeneration = 0;
+    let desktopTimer = null;
+    let desktopAvailable = null;
+    const clearPoll = () => {
+      if (desktopTimer !== null) clearTimeout(desktopTimer);
+      desktopTimer = null;
+    };
+    const release = async (token, releaseGeneration = desktopGeneration) => {
+      try {
+        await desktopPlayerCommand("done", { playback_id: token }, librarySource);
+        if (isCurrent() && releaseGeneration === desktopGeneration && !fallbackRequested) {
+          status.textContent = "Desktop playback dismissed.";
+        }
+      }
+      catch (error) {
+        if (!isCurrent() || releaseGeneration !== desktopGeneration || fallbackRequested) return;
+        // A newer playback owns the shared window; its token must not be stopped.
+        if (error.status === 409) {
+          status.textContent = "The desktop window now belongs to another playback.";
+        } else {
+          playbackId = token;
+          fallbackRequested = true;
+          doneButton.hidden = false;
+          playButton.disabled = true;
+          status.textContent = `Could not dismiss desktop playback: ${error.message}`;
+        }
+      }
+    };
+    const done = () => {
+      desktopGeneration += 1;
+      if (pendingLaunch) pendingLaunch.cancelGeneration = desktopGeneration;
+      clearPoll();
+      const token = playbackId;
+      const wasRequested = fallbackRequested;
+      playbackId = null;
+      fallbackRequested = false;
+      playIntent = false;
+      doneButton.hidden = true;
+      playButton.disabled = desktopAvailable === false;
+      if (wasRequested && isCurrent()) status.textContent = "Dismissing desktop playback…";
+      return token ? release(token) : Promise.resolve();
+    };
+    originalVideo.desktop = { done, doneAndWait: async () => {
+      const launch = pendingLaunch;
+      await done();
+      if (launch) await launch.finished;
+      return !fallbackRequested;
+    } };
+    const displayDesktopStatus = snapshot => {
+      if (!isCurrent() || !fallbackRequested) return;
+      if (snapshot.playback_id !== playbackId) {
+        clearPoll();
+        playbackId = null;
+        fallbackRequested = false;
+        doneButton.hidden = true;
+        playButton.disabled = false;
+        status.textContent = "Desktop playback is no longer assigned to this scene.";
+        return;
+      }
+      const messages = {
+        starting: "Opening the original recording in the desktop player…",
+        playing: "Playing original recording in the desktop pop-out.",
+        paused: "Desktop playback paused. Restore the pop-out to continue.",
+        ended: "Original recording ended. The pop-out is minimized.",
+        stopped: "Desktop playback stopped.",
+        closed: "Desktop player closed.",
+        idle: "Desktop player is idle.",
+      };
+      status.textContent = snapshot.state === "error"
+        ? `Desktop playback unavailable: ${snapshot.error || "The player failed."}`
+        : messages[snapshot.state] || "Desktop playback status unavailable.";
+      playButton.disabled = ["starting", "playing", "paused"].includes(snapshot.state);
+      doneButton.hidden = !["starting", "playing", "paused"].includes(snapshot.state);
+      if (!["starting", "playing", "paused"].includes(snapshot.state)) {
+        clearPoll();
+        fallbackRequested = false;
+        return;
+      }
+      const requestGeneration = desktopGeneration;
+      desktopTimer = setTimeout(async () => {
+        desktopTimer = null;
+        try {
+          const current = await apiGet("/api/media/desktop-player/status", librarySource);
+          if (requestGeneration === desktopGeneration) displayDesktopStatus(current);
+        } catch (error) {
+          if (isCurrent() && requestGeneration === desktopGeneration) {
+            status.textContent = "Desktop playback status unavailable. Use the pop-out controls or Done.";
+            playButton.disabled = true;
+          }
+        }
+      }, 1000);
+    };
+    const launchDesktop = async () => {
+      if (!isCurrent() || !unsupported || !playIntent || fallbackRequested || desktopAvailable === false) return;
+      if (sceneId === null || sceneId === undefined || String(sceneId).trim() === "") {
+        status.textContent = "Desktop playback unavailable: this result has no scene identity.";
+        playButton.disabled = true;
+        return;
+      }
+      clearPoll();
+      fallbackRequested = true;
+      const requestGeneration = ++desktopGeneration;
+      const launch = { cancelGeneration: null };
+      let finishLaunch;
+      launch.finished = new Promise(resolve => { finishLaunch = resolve; });
+      pendingLaunch = launch;
+      video.pause();
+      pauseOriginalAudio();
+      ttsStop();
+      playButton.disabled = true;
+      doneButton.hidden = false;
+      status.textContent = "Opening the original recording in the desktop player…";
+      try {
+        const snapshot = await desktopPlayerCommand("play", {
+          video_id: decodeURIComponent(sourceMatch[1]), scene_id: String(sceneId),
+          window: desktopPlayerWindow(keyframe && !keyframe.hidden ? keyframe : video),
+        }, librarySource);
+        if (pendingLaunch === launch) pendingLaunch = null;
+        if (!isCurrent() || requestGeneration !== desktopGeneration) {
+          if (snapshot.playback_id) await release(snapshot.playback_id, launch.cancelGeneration);
+          return;
+        }
+        if (!snapshot.available || !snapshot.playback_id) throw new Error(snapshot.error || "The desktop player is unavailable.");
+        playbackId = snapshot.playback_id;
+        displayDesktopStatus(snapshot);
+      } catch (error) {
+        if (pendingLaunch === launch) pendingLaunch = null;
+        if (!isCurrent() || requestGeneration !== desktopGeneration) return;
+        fallbackRequested = false;
+        playIntent = false;
+        playButton.disabled = false;
+        doneButton.hidden = true;
+        status.textContent = `Desktop playback unavailable: ${error.message}`;
+      } finally {
+        finishLaunch();
+      }
+    };
+    const updateStatus = message => {
+      if (isCurrent() && !failed && !fallbackRequested) status.textContent = message;
+    };
+    const fail = (message, allowDesktop = false) => {
+      if (!isCurrent() || failed) return;
+      failed = true;
+      unsupported = allowDesktop;
+      video.pause();
+      video.hidden = true;
+      if (keyframe) keyframe.hidden = false;
+      status.textContent = message;
+      playButton.disabled = !allowDesktop;
+      if (allowDesktop) {
+        if (playIntent) launchDesktop();
+        else {
+          const checkGeneration = desktopGeneration;
+          apiGet("/api/media/desktop-player/status", librarySource).then(snapshot => {
+            if (!isCurrent() || fallbackRequested || checkGeneration !== desktopGeneration) return;
+            desktopAvailable = snapshot.available === true;
+            playButton.disabled = !desktopAvailable;
+            status.textContent = desktopAvailable
+              ? `${message} Use Play original video to open a desktop pop-out.`
+              : `${message} ${snapshot.error || "Desktop playback is unavailable on this device."}`;
+          }).catch(() => {
+            if (isCurrent() && !fallbackRequested && checkGeneration === desktopGeneration) {
+              status.textContent = `${message} Desktop playback availability could not be checked.`;
+            }
+          });
+        }
+      }
+    };
+    video.onloadedmetadata = () => {
+      if (!isCurrent() || failed || initialSeek) return;
+      if (!Number.isFinite(video.duration) || video.duration <= 0 || start >= video.duration) {
+        fail("Original source video unavailable: scene start is outside the recording duration.");
+        return;
+      }
+      try {
+        video.currentTime = start;
+        initialSeek = true;
+        updateStatus(`Seeking to scene at ${formatTime(start)} in the original recording.`);
+      } catch (error) {
+        fail("Original source video could not seek to this scene.");
+      }
+    };
+    const showVideo = () => {
+      if (!isCurrent() || failed || !initialSeek || video.seeking) return;
+      if (!(video.videoWidth > 0 && video.videoHeight > 0)) {
+        fail("Original source video unavailable: this browser decoded no video frames. The video format may be unsupported.", true);
+        return;
+      }
+      video.hidden = false;
+      if (keyframe) keyframe.hidden = true;
+      updateStatus(`Original recording ready. Scene starts at ${formatTime(start)}; use the video controls to play.`);
+    };
+    video.onloadeddata = showVideo;
+    video.onseeked = showVideo;
+    video.onplay = () => {
+      if (!isCurrent() || failed) return;
+      if (fallbackRequested || playbackId) done();
+      playIntent = true;
+      pauseOriginalAudio();
+      ttsStop();
+    };
+    video.onplaying = () => updateStatus("Playing original source video.");
+    video.onpause = () => updateStatus("Original source video paused.");
+    video.onended = () => updateStatus("Original source video ended.");
+    video.onerror = () => fail("Original source video could not be loaded or played. The file may be unavailable or its format unsupported by this browser.",
+      video.error?.code === 3 || video.error?.code === 4);
+    playButton.addEventListener("click", () => {
+      if (!isCurrent() || playButton.disabled) return;
+      playIntent = true;
+      if (unsupported) launchDesktop();
+      else video.play().catch(error => {
+        if (error.name === "NotSupportedError") fail("This browser cannot play the original video format.", true);
+        else updateStatus(`Original video playback could not start: ${error.message}`);
+      });
+    });
+    doneButton.addEventListener("click", done);
+    status.textContent = "Loading original source video.";
+    video.src = endpoint;
+    panel.appendChild(video);
+    const actions = document.createElement("div");
+    actions.className = "original-video-actions";
+    actions.append(playButton, doneButton);
+    panel.appendChild(actions);
+    panel.appendChild(status);
+  }
+
+  function pauseOriginalAudio() {
+    if (originalAudio.element) originalAudio.element.pause();
+  }
+
+  function resetOriginalAudio() {
+    originalAudio.generation += 1;
+    const audio = originalAudio.element;
+    originalAudio.element = null;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+    const panel = document.getElementById("inspector-original-audio");
+    if (panel) {
+      panel.innerHTML = "";
+      panel.hidden = true;
+    }
+  }
+
+  function renderStandaloneSource(scene) {
+    const panel = document.getElementById("inspector-original-video");
+    if (!panel) return;
+    const kind = scene.source_kind;
+    panel.hidden = false;
+    appendText(panel, "h3", `Original ${kind}`);
+    const endpoint = scene.original_source_endpoint;
+    if (scene.original_source_available !== true || typeof endpoint !== "string"
+      || !/^\/api\/media\/video\/[^/?#]+\/source$/.test(endpoint)
+      || !["image", "document", "audio"].includes(kind)) {
+      appendText(panel, "p", `Original ${kind} unavailable.`);
+      return;
+    }
+    const open = document.createElement("a");
+    open.href = endpoint;
+    open.target = "_blank";
+    open.rel = "noopener";
+    open.textContent = `Open original ${kind}`;
+    panel.appendChild(open);
+    if (kind === "audio") {
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.setAttribute("aria-label", "Original audio recording");
+      originalVideo.element = audio;
+      const status = document.createElement("p");
+      status.setAttribute("role", "status");
+      audio.onplay = () => { pauseOriginalAudio(); ttsStop(); };
+      audio.onerror = () => { status.textContent = "Original audio could not be loaded or played."; };
+      audio.src = endpoint;
+      panel.appendChild(audio);
+      panel.appendChild(status);
+    }
+  }
+
+  function renderOriginalAudio(scene) {
+    const panel = document.getElementById("inspector-original-audio");
+    if (!panel) return;
+    if (scene.source_kind && scene.source_kind !== "video") {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    appendText(panel, "h3", "Original scene audio");
+    const status = document.createElement("p");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    const endpoint = scene.original_audio_endpoint;
+    if (scene.original_audio_available !== true || typeof endpoint !== "string"
+      || !/^\/api\/media\/video\/[^/?#]+\/scene\/[^/?#]+\/audio$/.test(endpoint)) {
+      status.textContent = "Original scene audio unavailable.";
+      panel.appendChild(status);
+      return;
+    }
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.preload = "metadata";
+    audio.setAttribute("aria-label", "Original scene audio");
+    const generation = originalAudio.generation;
+    originalAudio.element = audio;
+    const isCurrent = () => originalAudio.element === audio && originalAudio.generation === generation;
+    let failed = false;
+    const updateStatus = message => {
+      if (isCurrent() && !failed) status.textContent = message;
+    };
+    audio.onplay = () => { if (isCurrent()) { pauseOriginalVideo(); ttsStop(); } };
+    audio.onplaying = () => updateStatus("Playing original scene audio.");
+    audio.onpause = () => updateStatus("Original scene audio paused.");
+    audio.onended = () => updateStatus("Original scene audio ended.");
+    audio.onerror = () => {
+      if (!isCurrent()) return;
+      failed = true;
+      status.textContent = "Original scene audio could not be loaded or played.";
+    };
+    status.textContent = "Use the audio controls to play this scene's recording.";
+    audio.src = endpoint;
+    panel.appendChild(audio);
+    panel.appendChild(status);
+  }
 
   // Priority list of preferred voice name substrings (en-GB first)
   const TTS_VOICE_PRIORITY = [
@@ -106,7 +563,7 @@
     if (tts.supported) window.speechSynthesis.cancel();
     tts.playing = false;
     if (tts.activePlayAllBtn) {
-      tts.activePlayAllBtn.textContent = '▶ PLAY ALL';
+      tts.activePlayAllBtn.textContent = '▶ READ TRANSCRIPT';
       tts.activePlayAllBtn.classList.remove('tts-active');
       tts.activePlayAllBtn = null;
     }
@@ -123,6 +580,8 @@
 
   function ttsSpeak(text, onEnd) {
     if (!tts.supported) return;
+    pauseOriginalAudio();
+    pauseOriginalVideo();
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = 0.92;
@@ -179,40 +638,17 @@
     next();
   }
 
-  // Helper Utility: Entity Name Normalizer and Alias Resolution
-  const entityAliases = {
-    "anthony": "tony",
-    "tony s.": "tony",
-    "speaker 2": "tony",
-    "male speaker 2": "tony",
-    "man in black jacket": "tony",
-    "tony": "tony",
-    
-    "charles": "charlie",
-    "charlie": "charlie",
-    
-    "joseph": "jose",
-    "jose": "jose"
-  };
-
-  const canonicalDisplayNames = {
-    "tony": "Tony",
-    "charlie": "Charlie",
-    "jose": "Jose"
-  };
+  // Helper Utility: Entity Name Normalizer (text grouping, never identity resolution)
 
   function normalizeEntityName(name) {
     const cleaned = String(name || "")
       .trim()
       .toLowerCase()
       .replace(/\s+/g, " ");
-    return entityAliases[cleaned] || cleaned;
+    return cleaned;
   }
 
   function getCanonicalLabel(id, rawName) {
-    if (canonicalDisplayNames[id]) {
-      return canonicalDisplayNames[id];
-    }
     const label = rawName || id;
     if (label === label.toLowerCase()) {
       return label.replace(/\b\w/g, c => c.toUpperCase());
@@ -246,8 +682,10 @@
   }
 
   // API Call Wrapper: GET
-  async function apiGet(path) {
-    const response = await fetch(path, { method: "GET" });
+  async function apiGet(path, librarySource) {
+    const url = typeof window !== "undefined" && window.GoodQLibrary ? window.GoodQLibrary.url(path, librarySource) : path;
+    const response = await fetch(url, { method: "GET" });
+    if (typeof window !== "undefined") window.GoodQLibrary?.observeResponse?.(response, path);
     if (!response.ok) {
       const error = new Error(`GET ${path} failed: ${response.status}`);
       error.status = response.status;
@@ -258,7 +696,8 @@
 
   // API Call Wrapper: POST
   async function apiPost(path, body) {
-    const response = await fetch(path, {
+    const url = typeof window !== "undefined" && window.GoodQLibrary ? window.GoodQLibrary.url(path) : path;
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -272,25 +711,24 @@
   // Normalize any entity list from API (handles string[], {name}[], {label}[] etc.)
   function normalizeEntityList(raw) {
     if (!Array.isArray(raw)) return [];
-    return raw.map((item) => {
+    return raw.filter(item => typeof item === "string" || (item && typeof item === "object")).map((item) => {
       if (typeof item === "string") return { name: item, type: "generic" };
       return {
-        name: item.label || item.name || item.text || "generic",
+        ...item,
+        name: item.label || item.name || item.text || "",
         type: item.entity_type || item.type || item.category || "generic",
       };
-    }).filter((e) => e.name && e.name !== "generic" || e.name);
+    }).filter(e => typeof e.name === "string" && e.name.trim());
   }
 
-  // Channel priority: scene_present > dialogue_mentioned > candidate > generic
-  const CHANNEL_PRIORITY = { scene_present: 3, dialogue_mentioned: 2, candidate: 1, generic: 0 };
-
-  // Parse entities and co-occurrences to build nodes & edges (channel-aware)
+  // Read projection only: every association retains its per-scene channel support.
+  // A shared label/scene is not an identity decision or a semantic relationship.
   function buildEntityGraph(scenes) {
     const nodes = new Map();
     const edges = new Map();
 
     scenes.forEach((scene) => {
-      // ── Collect all entity ids from all channels for this scene ──
+      if (!scene || scene.id == null) return;
       const channelSources = [
         { list: scene.scene_present_entities || [], channel: "scene_present" },
         { list: scene.dialogue_mentioned_entities || [], channel: "dialogue_mentioned" },
@@ -298,53 +736,61 @@
         { list: scene.entities || [], channel: "generic" },
       ];
 
-      const sceneEntityIds = new Set();
+      const sceneEntities = new Map();
 
       channelSources.forEach(({ list, channel }) => {
+        if (!Array.isArray(list)) return;
         list.forEach((entity) => {
-          const rawName = typeof entity === "string" ? entity : (entity.name || "");
-          if (!rawName) return;
-          const id = normalizeEntityName(rawName);
-          if (!id) return;
-          sceneEntityIds.add(id);
-
-          const existing = nodes.get(id);
-          const rawType = typeof entity === "object" ? (entity.entity_type || entity.type || channel) : channel;
-
-          if (!existing) {
-            nodes.set(id, {
-              id,
-              label: getCanonicalLabel(id, rawName),
-              type: rawType,
-              channel,
-              channelPriority: CHANNEL_PRIORITY[channel] ?? 0,
-              count: 1,
-              sceneIds: [scene.id],
-            });
-          } else {
-            // Upgrade channel if higher priority
-            const incomingPriority = CHANNEL_PRIORITY[channel] ?? 0;
-            if (incomingPriority > (existing.channelPriority ?? 0)) {
-              existing.channel = channel;
-              existing.channelPriority = incomingPriority;
-              existing.type = rawType;
-            }
-            existing.count += 1;
-            if (!existing.sceneIds.includes(scene.id)) existing.sceneIds.push(scene.id);
+          const rawName = typeof entity === "string" ? entity : (entity?.name || entity?.label || entity?.text || "");
+          if (typeof rawName !== "string" || !rawName.trim()) return;
+          const name = normalizeEntityName(rawName);
+          const sceneLocal = /^(anonymous[ _-]|(?:male |female )?speaker[ _-]?\d|face[ _-]?\d)/.test(name);
+          const id = sceneLocal ? JSON.stringify([name, String(scene.id)]) : name;
+          const rawType = typeof entity === "object" ? (entity.entity_type || entity.type || "generic") : "generic";
+          const node = nodes.get(id) || {
+            id, label: getCanonicalLabel(name, rawName), type: rawType,
+            types: [], channels: [], count: 0, sceneIds: [], observations: [],
+            scopeSceneId: sceneLocal ? scene.id : null,
+            scopeStart: sceneLocal ? scene.start : null,
+          };
+          if (!node.types.includes(rawType)) node.types.push(rawType);
+          if (!node.channels.includes(channel)) node.channels.push(channel);
+          if (!node.sceneIds.includes(scene.id)) node.sceneIds.push(scene.id);
+          if (!node.observations.some(o => o.sceneId === scene.id && o.channel === channel &&
+              JSON.stringify(o.entity) === JSON.stringify(entity))) {
+            node.observations.push({ sceneId: scene.id, channel, entity });
           }
+          node.count = node.sceneIds.length;
+          // A generic duplicate does not erase a specific channel. Different
+          // specific channels remain mixed rather than inheriting the strongest.
+          const specific = node.channels.filter(c => c !== "generic");
+          node.channel = specific.length > 1 ? "mixed" : (specific[0] || "generic");
+          const types = node.types.filter(t => t !== "generic");
+          node.type = types.length > 1 ? "mixed" : (types[0] || "generic");
+          nodes.set(id, node);
+          const channels = sceneEntities.get(id) || [];
+          if (!channels.includes(channel)) channels.push(channel);
+          sceneEntities.set(id, channels);
         });
       });
 
       // ── Build co-occurrence edges across all entities in this scene ──
-      const ids = Array.from(sceneEntityIds);
+      const ids = Array.from(sceneEntities.keys()).sort();
       for (let i = 0; i < ids.length; i += 1) {
         for (let j = i + 1; j < ids.length; j += 1) {
           const a = ids[i];
           const b = ids[j];
-          const key = [a, b].sort().join("::");
-          const existing = edges.get(key) || { source: a, target: b, weight: 0, sceneIds: [] };
-          existing.weight += 1;
-          if (!existing.sceneIds.includes(scene.id)) existing.sceneIds.push(scene.id);
+          const key = JSON.stringify([a, b]);
+          const existing = edges.get(key) || { source: a, target: b, relation: "shared_scene", weight: 0, sceneIds: [], evidence: [] };
+          const support = existing.evidence.find(e => e.sceneId === scene.id);
+          if (support) {
+            support.sourceChannels = [...new Set([...support.sourceChannels, ...sceneEntities.get(a)])];
+            support.targetChannels = [...new Set([...support.targetChannels, ...sceneEntities.get(b)])];
+          } else {
+            existing.sceneIds.push(scene.id);
+            existing.evidence.push({ sceneId: scene.id, sourceChannels: sceneEntities.get(a), targetChannels: sceneEntities.get(b) });
+          }
+          existing.weight = existing.sceneIds.length;
           edges.set(key, existing);
         }
       }
@@ -376,14 +822,64 @@
   // Calculate Node Layout Coordinates (2D and 3D)
   function calculateLayout(graph) {
     const nodes = graph.nodes;
-    const radius = 160;
 
-    // 2D Circular Layout
-    nodes.forEach((node, index) => {
-      const angle = (index / nodes.length) * 2 * Math.PI;
-      node.x = radius * Math.cos(angle);
-      node.y = radius * Math.sin(angle);
-    });
+    // 2D Multi-Ring Concentric Tactical Layout (sorted by importance/recurrence)
+    const channelWeight = (n) => {
+      const ch = n.channel || "generic";
+      if (ch === "mixed" || ch === "scene_present") return 4;
+      if (ch === "dialogue_mentioned") return 3;
+      if (n.type === "location" || n.type === "event") return 2;
+      if (ch === "candidate") return 1;
+      return 0;
+    };
+
+    const ranked = nodes
+      .map((node, idx) => ({ node, idx }))
+      .sort((a, b) => {
+        const cwDiff = channelWeight(b.node) - channelWeight(a.node);
+        if (cwDiff !== 0) return cwDiff;
+        return (b.node.count || 0) - (a.node.count || 0);
+      });
+
+    if (nodes.length <= 18) {
+      const radius = 128;
+      ranked.forEach((entry, rankIdx) => {
+        const angle = (rankIdx / (ranked.length || 1)) * 2 * Math.PI - Math.PI / 2;
+        entry.node.x = radius * Math.cos(angle);
+        entry.node.y = radius * Math.sin(angle);
+        entry.node._layoutTier = 0;
+      });
+    } else {
+      const innerCount = Math.min(7, Math.max(4, Math.ceil(nodes.length * 0.08)));
+      const middleCount = Math.min(15, Math.max(8, Math.ceil(nodes.length * 0.18)));
+      const innerRing = ranked.slice(0, innerCount);
+      const middleRing = ranked.slice(innerCount, innerCount + middleCount);
+      const outerRing = ranked.slice(innerCount + middleCount);
+
+      innerRing.forEach((entry, i) => {
+        const angle = (i / (innerRing.length || 1)) * 2 * Math.PI - Math.PI / 2;
+        const r = 54;
+        entry.node.x = r * Math.cos(angle);
+        entry.node.y = r * Math.sin(angle) - 8;
+        entry.node._layoutTier = 0;
+      });
+
+      middleRing.forEach((entry, i) => {
+        const angle = (i / (middleRing.length || 1)) * 2 * Math.PI - Math.PI / 2 + 0.22;
+        const r = 104 + (i % 2) * 6;
+        entry.node.x = r * Math.cos(angle);
+        entry.node.y = r * Math.sin(angle) - 8;
+        entry.node._layoutTier = 1;
+      });
+
+      outerRing.forEach((entry, i) => {
+        const angle = (i / (outerRing.length || 1)) * 2 * Math.PI - Math.PI / 2;
+        const r = 148 + (i % 2) * 14;
+        entry.node.x = r * Math.cos(angle);
+        entry.node.y = r * Math.sin(angle) - 8;
+        entry.node._layoutTier = 2;
+      });
+    }
 
     // 3D Fibonacci Sphere Layout
     const phi = Math.PI * (Math.sqrt(5.0) - 1.0); // golden angle in radians
@@ -446,6 +942,8 @@
     ctx.translate(canvas.width / 2 + state.canvasOffset.x, canvas.height / 2 + state.canvasOffset.y);
 
     const isEffects = document.getElementById("crt-screen").classList.contains("no-sfx") === false;
+    const hoveredId = state.hoveredNodeId || null;
+    const activeNeighborIds = new Set();
 
     // Draw Edges (Connections)
     state.graph.edges.forEach((edge) => {
@@ -454,7 +952,12 @@
       if (!sourceNode || !targetNode) return;
 
       const isSelected = (state.selectedEntities && state.selectedEntities.includes(edge.source)) || 
-                         (state.selectedEntities && state.selectedEntities.includes(edge.target));
+                         (state.selectedEntities && state.selectedEntities.includes(edge.target)) ||
+                         (hoveredId && (edge.source === hoveredId || edge.target === hoveredId));
+      if (isSelected) {
+        activeNeighborIds.add(edge.source);
+        activeNeighborIds.add(edge.target);
+      }
 
       let sx, sy, tx, ty;
       let opacityMultiplier = 1.0;
@@ -483,12 +986,14 @@
 
       // Selected blue color difference
       if (isSelected) {
-        ctx.strokeStyle = applyOpacity("rgba(0, 210, 255, 0.7)", opacityMultiplier);
+        ctx.strokeStyle = applyOpacity("rgba(0, 212, 255, 0.78)", opacityMultiplier);
         ctx.lineWidth = Math.min(8, 2 + edge.weight * 2);
       } else {
-        const edgeColor = document.body.classList.contains("theme-day") ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 255, 102, 0.15)";
+        const edgeColor = document.body.classList.contains("theme-day")
+          ? "rgba(71, 85, 105, 0.25)"
+          : "rgba(148, 163, 184, 0.22)";
         ctx.strokeStyle = applyOpacity(edgeColor, opacityMultiplier);
-        ctx.lineWidth = Math.min(3, 0.5 + edge.weight / 2);
+        ctx.lineWidth = Math.min(3, 0.6 + edge.weight / 2);
       }
       ctx.stroke();
     });
@@ -519,31 +1024,33 @@
       }
 
       const radius = (6 + Math.min(12, node.count * 1.5)) * depthScale;
-      const isSelected = state.selectedEntities && state.selectedEntities.includes(node.id);
+      const isSelected = (state.selectedEntities && state.selectedEntities.includes(node.id)) || (hoveredId === node.id);
       const ch = node.channel || "generic";
 
-      // ── Channel color scheme ──────────────────────────────────
+      // ── Channel color scheme (Obsidian / God's Eye View Tactical Studio) ──
       const isDayTheme = document.body.classList.contains("theme-day");
 
-      const channelStroke = isSelected ? "#00d2ff" :
-        ch === "scene_present"       ? "#00d2ff" :
-        ch === "dialogue_mentioned"  ? "#5ba3ff" :
-        ch === "candidate"           ? "#ffaa00" :
-        node.type === "location"     ? (isDayTheme ? "#80ffff" : "#00e5ff") :
-        node.type === "event"        ? "#ff6644" :
-                                       (isDayTheme ? "#ffffff" : "#00ff66");
+      const channelStroke = isSelected ? (isDayTheme ? "#0284c7" : "#00d4ff") :
+        ch === "mixed"               ? (isDayTheme ? "#7c3aed" : "#c084fc") :
+        ch === "scene_present"       ? (isDayTheme ? "#0284c7" : "#38bdf8") :
+        ch === "dialogue_mentioned"  ? (isDayTheme ? "#2563eb" : "#60a5fa") :
+        ch === "candidate"           ? (isDayTheme ? "#d97706" : "#fbbf24") :
+        node.type === "location"     ? (isDayTheme ? "#0891b2" : "#22d3ee") :
+        node.type === "event"        ? (isDayTheme ? "#ea580c" : "#fb7185") :
+                                       (isDayTheme ? "#0d9488" : "#34d399");
 
-      const channelFill = isSelected ? "rgba(0, 210, 255, 1.0)" :
-        ch === "scene_present"       ? "rgba(0, 210, 255, 0.25)" :
-        ch === "dialogue_mentioned"  ? "rgba(91, 163, 255, 0.08)" :
-        ch === "candidate"           ? "rgba(255, 170, 0, 0.18)" :
-                                       (isDayTheme ? "#000080" : "rgba(2, 5, 2, 1.0)");
+      const channelFill = isSelected ? (isDayTheme ? "rgba(2, 132, 199, 0.9)" : "rgba(0, 212, 255, 0.95)") :
+        ch === "scene_present"       ? (isDayTheme ? "rgba(2, 132, 199, 0.22)" : "rgba(56, 189, 248, 0.25)") :
+        ch === "dialogue_mentioned"  ? (isDayTheme ? "rgba(37, 99, 235, 0.10)" : "rgba(96, 165, 250, 0.12)") :
+        ch === "candidate"           ? (isDayTheme ? "rgba(217, 119, 6, 0.16)" : "rgba(251, 191, 36, 0.20)") :
+                                       (isDayTheme ? "rgba(255, 255, 255, 0.92)" : "rgba(9, 13, 20, 0.94)");
 
-      const channelLabel = isSelected ? "#00d2ff" :
-        ch === "scene_present"       ? "#00d2ff" :
-        ch === "dialogue_mentioned"  ? "#7ab8ff" :
-        ch === "candidate"           ? "#ffcc55" :
-                                       (isDayTheme ? "#ffffff" : "rgba(0, 255, 102, 0.85)");
+      const channelLabel = isSelected ? (isDayTheme ? "#0369a1" : "#38bdf8") :
+        ch === "mixed"               ? (isDayTheme ? "#6d28d9" : "#d8b4fe") :
+        ch === "scene_present"       ? (isDayTheme ? "#0369a1" : "#7dd3fc") :
+        ch === "dialogue_mentioned"  ? (isDayTheme ? "#1d4ed8" : "#93c5fd") :
+        ch === "candidate"           ? (isDayTheme ? "#b45309" : "#fcd34d") :
+                                       (isDayTheme ? "#1e293b" : "#cbd5e1");
 
       const strokeColor = applyOpacity(channelStroke, opacityMultiplier);
       const fillColor = applyOpacity(channelFill, opacityMultiplier);
@@ -584,13 +1091,33 @@
         ctx.shadowBlur = 0;
       }
 
-      // Text label (hide/fade on back hemisphere)
-      const showLabel = !(state.graphMode === "3D" && node.rotatedZ < -10);
-      if (showLabel) {
-        ctx.fillStyle = labelColor;
-        ctx.font = isSelected ? "bold 13px monospace" : (ch === "scene_present" ? "bold 11px monospace" : "11px monospace");
+      // Text label (hide/fade on back hemisphere, and declutter outer single-scene labels when zoomed out)
+      const inFront3D = !(state.graphMode === "3D" && node.rotatedZ < -10);
+      const isPrimaryLabel =
+        state.graphMode === "3D" ||
+        isSelected ||
+        activeNeighborIds.has(node.id) ||
+        state.graph.nodes.length <= 22 ||
+        state.canvasScale >= 1.32 ||
+        (node._layoutTier !== undefined ? node._layoutTier <= 1 : (node.count || 0) >= 3);
+
+      if (inFront3D && isPrimaryLabel) {
+        const rawText = objectEvidenceLabel(node);
+        const displayText = (!isSelected && state.canvasScale < 1.32 && rawText.length > 22)
+          ? `${rawText.slice(0, 20)}…`
+          : rawText;
+        ctx.font = isSelected
+          ? "600 11.5px 'Outfit', system-ui, sans-serif"
+          : (ch === "scene_present" ? "600 10.5px 'Outfit', system-ui, sans-serif" : "500 10px 'Outfit', system-ui, sans-serif");
         ctx.textAlign = "center";
-        ctx.fillText(node.label, nx, ny + radius + 14);
+        ctx.shadowBlur = 0;
+        const textWidth = ctx.measureText(displayText).width;
+        const pillPadX = 4;
+        const pillY = ny + radius + 3;
+        ctx.fillStyle = isDayTheme ? "rgba(248, 250, 252, 0.82)" : "rgba(9, 13, 20, 0.78)";
+        ctx.fillRect(nx - textWidth / 2 - pillPadX, pillY, textWidth + pillPadX * 2, 13);
+        ctx.fillStyle = labelColor;
+        ctx.fillText(displayText, nx, ny + radius + 13);
       }
     });
 
@@ -688,10 +1215,11 @@
       const option = document.createElement("option");
       option.value = video.video_id || video.id;
       let suffix = "";
-      if (video.phase6_complete === false) {
+      if ((video.source_kind || "video") === "video" && video.phase6_complete === false) {
         suffix = " [PARTIAL INDEX]";
       }
-      option.textContent = (video.title || video.video_id || video.id) + suffix;
+      const sourceLabel = video.source_kind && video.source_kind !== "video" ? ` [${video.source_kind}]` : "";
+      option.textContent = (video.title || video.video_id || video.id) + sourceLabel + suffix;
       if (video.video_id === state.activeVideoId || video.id === state.activeVideoId) {
         option.selected = true;
       }
@@ -729,7 +1257,7 @@
       
       const label = document.createElement("span");
       label.className = "entity-filter-label";
-      label.textContent = `${node.label} (${node.count})`;
+      label.textContent = `${objectEvidenceLabel(node)} (${node.count})`;
       
       item.appendChild(checkbox);
       item.appendChild(label);
@@ -765,6 +1293,26 @@
     });
   }
 
+  function appendIdentitySearchEvidence(container, sceneId) {
+    if (!state.searchActive) return;
+    const result = state.searchResults.find(res => String(res.scene_id) === String(sceneId));
+    if (!result || !Array.isArray(result.identity_evidence)) return;
+    result.identity_evidence.forEach(item => {
+      if (!item || typeof item.display_name !== "string" || !item.display_name.trim()) return;
+      if (!["appearance", "voice", "mention"].includes(item.strength)) return;
+      const evidence = document.createElement("p");
+      evidence.className = "scene-card-identity";
+      evidence.textContent = `${item.display_name}: ${(item.evidence_types || [item.strength]).map(type => ({appearance: "face-backed appearance", voice: "reviewed voice", mention: "transcript mention only"}[type])).filter(Boolean).join("; ")}`;
+      container.appendChild(evidence);
+    });
+    if (result.identity_only === true) {
+      const limit = document.createElement("p");
+      limit.className = "scene-card-identity-limit";
+      limit.textContent = "Person match only; event relevance unverified";
+      container.appendChild(limit);
+    }
+  }
+
   // Render Interstellar Timeline Index Grid
   function renderTimelineGrid() {
     const grid = document.getElementById("timeline-grid");
@@ -776,12 +1324,15 @@
     if (heading) {
       const parts = [];
       if (state.searchActive && state.lastQuery) {
+        if (state.activeSearchTab !== "narrative") {
+          parts.push(`${state.searchResults.length} ranked candidates`);
+        }
         parts.push(`"${state.lastQuery}"`);
       }
       if (state.selectedEntities && state.selectedEntities.length > 0) {
         const labels = state.selectedEntities.map(id => {
           const node = state.graph.nodes.find(n => n.id === id);
-          return node ? node.label : id;
+          return node ? objectEvidenceLabel(node) : id;
         });
         parts.push(labels.join(" + "));
       }
@@ -798,22 +1349,63 @@
       scenesToRender = state.searchResults.map((res) => {
         const found = state.scenes.find((s) => {
           if (!s) return false;
-          const sId = String(s.id || "").trim().toLowerCase();
-          const rId = String(res.scene_id || "").trim().toLowerCase();
+          const sId = String(s.id ?? "").trim().toLowerCase();
+          const rId = String(res.scene_id ?? "").trim().toLowerCase();
           return sId && rId && sId === rId;
         });
+        const resolvedSummary = res.summary || (found ? found.summary : "No description available.");
+        const resolvedSummaryMeta = (!res.summary && found && found.summary_meta)
+          ? found.summary_meta
+          : res.summary_meta
+          ? res.summary_meta
+          : (res.summary && found && found.summary === res.summary && found.summary_meta)
+          ? found.summary_meta
+          : res.summary
+          ? {
+              source: "unknown",
+              provenance_status: "unknown",
+              qualification: "Summary source: unknown provenance (historical or unattributed summary; unverified, check evidence channels).",
+            }
+          : {
+              source: "none",
+              provenance_status: "none",
+              qualification: null,
+            };
         return {
           id: res.scene_id,
-          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          start: res.start_time,
           end: typeof res.end_time === "number" ? res.end_time : 0.0,
-          summary: res.summary || (found ? found.summary : "No description available."),
+          summary: resolvedSummary,
+          summary_meta: resolvedSummaryMeta,
+          source_kind: res.source_kind || "video",
+          document_text: res.document_text || null,
+          document_meta: res.document_meta || null,
+          original_source_endpoint: res.original_source_endpoint,
+          original_source_available: res.original_source_available === true,
           keyframe_url: found ? found.keyframe_url : resolveKeyframeUrl(res.evidence ? res.evidence.artifact_paths : null, res.source_file),
           entities: Array.isArray(res.entities) ? res.entities.map(e => ({ name: e, type: "generic" })) : (found ? found.entities : []),
           dialogue: res.evidence && typeof res.evidence.transcript === "string" ? [{ text: res.evidence.transcript }] : (found ? found.dialogue : []),
           transcript: (res.evidence && res.evidence.transcript) || "",
+          clap_meta: res.clap_meta || (res.context && res.context.clap_meta) || null,
+          transcript_meta: res.transcript_meta || (res.context && res.context.transcript_meta) || null,
+          transcript_outcome: res.transcript_outcome || (res.context && res.context.transcript_outcome) || null,
+          transcript_outcome_reason: res.transcript_outcome_reason || (res.context && res.context.transcript_outcome_reason) || null,
+          diarization_status: res.diarization_status || null,
+          diarization_note: res.diarization_note || null,
+          emotion_status: res.emotion_status || null,
+          emotion_note: res.emotion_note || null,
           source_file: res.source_file || "",
+          original_audio_endpoint: res.original_audio_endpoint,
+          original_audio_available: res.original_audio_available === true,
+          original_video_endpoint: res.original_video_endpoint,
+          original_video_available: res.original_video_available === true,
           sentiment_label: found ? found.sentiment_label : "NEUTRAL",
-          audio_emotion: found ? found.audio_emotion : "calm",
+          audio_emotion: res.audio_emotion || (found ? found.audio_emotion : null),
+          emotion_segments: res.emotion_segments || [],
+          emotion_input: res.emotion_input || null,
+          sound_events: res.sound_events || [],
+          audio_evidence: res.audio_evidence,
+          sound_event_meta: res.sound_event_meta || null,
           content_state: found ? found.content_state : "signal",
           transcript_entity_disagreements: found ? found.transcript_entity_disagreements : [],
           phase6_complete: res.phase6_complete,
@@ -826,8 +1418,8 @@
         // 1. If search is active, check if this scene is in search results
         if (state.searchActive) {
           const isMatched = state.searchResults.some((res) => {
-            const rId = String(res.scene_id || "").trim().toLowerCase();
-            const sId = String(scene.id || "").trim().toLowerCase();
+            const rId = String(res.scene_id ?? "").trim().toLowerCase();
+            const sId = String(scene.id ?? "").trim().toLowerCase();
             if (rId && sId && rId === sId) {
               scene.phase6_complete = res.phase6_complete;
               return true;
@@ -839,22 +1431,18 @@
 
         // 2. Entity filter: check ALL channel arrays so Sprint 2 channels are included
         if (state.selectedEntities && state.selectedEntities.length > 0) {
-          // Collect every entity name across all four channels
-          const allChannelEntities = [
-            ...(scene.entities || []),
-            ...(scene.scene_present_entities || []),
-            ...(scene.dialogue_mentioned_entities || []),
-            ...(scene.candidate_visible_people || []),
-          ];
-          const sceneEntityNames = allChannelEntities.map(e =>
-            typeof e === 'string' ? normalizeEntityName(e) : normalizeEntityName(e.name || '')
-          );
-          const hasAllSelected = state.selectedEntities.every(entityId => sceneEntityNames.includes(entityId));
+          const hasAllSelected = state.selectedEntities.every(entityId =>
+            state.graph.nodes.find(n => n.id === entityId)?.sceneIds.includes(scene.id));
           if (!hasAllSelected) return false;
         }
 
         return true;
       });
+    }
+
+    if (state.searchActive && !isNarrativeSearchActive) {
+      const ranks = new Map(state.searchResults.map((res, index) => [String(res.scene_id).trim().toLowerCase(), index]));
+      scenesToRender.sort((a, b) => ranks.get(String(a.id).trim().toLowerCase()) - ranks.get(String(b.id).trim().toLowerCase()));
     }
 
     scenesToRender.forEach((scene, index) => {
@@ -897,17 +1485,20 @@
       }
 
       const card = document.createElement("article");
-      const isSelected = scene.id && state.selectedSceneId && 
+      const isSelected = scene.id != null && state.selectedSceneId != null &&
         (String(scene.id).trim().toLowerCase() === String(state.selectedSceneId).trim().toLowerCase());
       const isMatched = state.searchResults.some((res) => {
-        const rId = String(res.scene_id || "").trim().toLowerCase();
-        const sId = String(scene.id || "").trim().toLowerCase();
+        const rId = String(res.scene_id ?? "").trim().toLowerCase();
+        const sId = String(scene.id ?? "").trim().toLowerCase();
         return rId && sId && rId === sId;
       });
 
       const passesIntel = scenePassesIntelFilter(scene);
       card.className = `scene-card ${isSelected ? "selected" : ""} ${isMatched ? "matched" : ""} ${state.intelFilter && !passesIntel ? "intel-dim" : ""}`;
       card.setAttribute("data-scene-id", scene.id);
+      if (isMatched) {
+        card.setAttribute("data-search-label", `RESULT #${index + 1}`);
+      }
 
       // Keyframe thumbnail area
       const frame = document.createElement("div");
@@ -927,7 +1518,8 @@
 
       const timeTag = document.createElement("span");
       timeTag.className = "scene-time";
-      timeTag.textContent = `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+      timeTag.textContent = ["image", "document"].includes(scene.source_kind)
+        ? scene.source_kind.toUpperCase() : `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
       frame.appendChild(timeTag);
       card.appendChild(frame);
 
@@ -944,8 +1536,9 @@
       }
       
       const activeVideo = state.videos.find(v => (v.video_id || v.id) === state.activeVideoId);
+      const sourceKind = scene.source_kind || (activeVideo && activeVideo.source_kind) || "video";
       const isVideoPartial = activeVideo && activeVideo.phase6_complete === false;
-      const isPartial = (scene.phase6_complete === false) || (scene.phase6_complete === undefined && isVideoPartial);
+      const isPartial = sourceKind === "video" && ((scene.phase6_complete === false) || (scene.phase6_complete === undefined && isVideoPartial));
       if (isPartial) {
         const partialBadge = document.createElement("span");
         partialBadge.className = "ingestion-active-badge blink";
@@ -962,6 +1555,20 @@
       summary.className = "scene-card-summary";
       summary.textContent = scene.summary || "No description returned.";
       body.appendChild(summary);
+      const cardQualification = (scene.summary_meta && scene.summary_meta.qualification)
+        ? scene.summary_meta.qualification
+        : (scene.summary && scene.summary !== "No description available." && scene.summary !== "No description returned.")
+        ? (scene.visual_caption && scene.summary === scene.visual_caption
+            ? "Summary source: visual caption (unverified model observation; not confirmed scene fact)."
+            : "Summary source: unknown provenance (historical or unattributed summary; unverified, check evidence channels).")
+        : null;
+      if (cardQualification) {
+        const summaryQual = document.createElement("p");
+        summaryQual.className = "scene-card-summary-qualification";
+        summaryQual.textContent = cardQualification;
+        body.appendChild(summaryQual);
+      }
+      appendIdentitySearchEvidence(body, scene.id);
 
       // Footing info
       const footer = document.createElement("div");
@@ -976,8 +1583,9 @@
         const sl = scene.sentiment_label.toLowerCase();
         const chip = document.createElement("span");
         chip.className = `sentiment-chip ${sl === "positive" ? "positive" : sl === "negative" ? "negative" : "neutral"}`;
-        chip.textContent = scene.sentiment_label.toUpperCase();
-        chip.title = scene.sentiment_score != null ? `Sentiment score: ${scene.sentiment_score.toFixed(2)}` : "Sentiment";
+        const score = scene.sentiment_score ?? scene.sentiment?.score;
+        chip.textContent = `Text: ${sl}${Number.isFinite(score) ? ` · ${(score * 100).toFixed(1)}% score` : ""}`;
+        chip.title = "Text analysis estimate; a near-even binary score is uncertain.";
         footer.appendChild(chip);
       }
 
@@ -1012,7 +1620,7 @@
       card.appendChild(body);
 
       card.addEventListener("click", () => {
-        selectScene(scene.id);
+        selectScene(scene.id, scene);
       });
 
       grid.appendChild(card);
@@ -1020,8 +1628,11 @@
   }
 
   // Select Scene and Update Inspector (preserves entity filter)
-  function selectScene(sceneId) {
+  function selectScene(sceneId, mediaSource = null) {
     state.selectedSceneId = sceneId;
+    state.selectedOriginalMedia = mediaSource || (state.activeSearchTab === "narrative"
+      ? state.searchResults.find(result => String(result.scene_id) === String(sceneId)) || {}
+      : null);
     state.selectedEntity = null;  // Clear single entity highlight but keep multi-filter
     renderTimelineGrid();
     drawGraph();
@@ -1036,26 +1647,31 @@
     // Forensic logging of claims verification / scene selection data trail
     let scene = state.scenes.find((s) => {
       if (!s) return false;
-      const sId = String(s.id || "").trim().toLowerCase();
-      const selId = String(sceneId || "").trim().toLowerCase();
+      const sId = String(s.id ?? "").trim().toLowerCase();
+      const selId = String(sceneId ?? "").trim().toLowerCase();
       return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
     });
 
     if (!scene && state.searchResults && state.searchResults.length > 0) {
       const res = state.searchResults.find((r) => {
-        const rId = String(r.scene_id || "").trim().toLowerCase();
-        const selId = String(sceneId || "").trim().toLowerCase();
+        const rId = String(r.scene_id ?? "").trim().toLowerCase();
+        const selId = String(sceneId ?? "").trim().toLowerCase();
         return rId && selId && rId === selId;
       });
       if (res) {
         scene = {
           id: res.scene_id,
-          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          start: res.start_time,
           end: typeof res.end_time === "number" ? res.end_time : 0.0,
           summary: res.summary || "No description available.",
           source_file: res.source_file || "",
           sentiment_label: "NEUTRAL",
-          audio_emotion: "calm"
+          audio_emotion: res.audio_emotion || null,
+          emotion_segments: res.emotion_segments || [],
+          emotion_input: res.emotion_input || null,
+          sound_events: res.sound_events || [],
+          audio_evidence: res.audio_evidence,
+          sound_event_meta: res.sound_event_meta || null,
         };
       }
     }
@@ -1065,12 +1681,12 @@
       const source = scene.source_file || state.activeVideoId;
       const shortId = scene.id ? String(scene.id).substring(0, 8) : "N/A";
       logDataTrail(
-        `Verify Claim / Select Scene #${shortId}`,
-        "Narrative Verification / Claims Linkage",
+        `Select Scene #${shortId}`,
+        "Scene inspection / source linkage",
         state.activeVideoId,
         source,
-        `Verified narrative claim linked to scene: "${scene.summary || 'No description available.'}"`,
-        1.0,
+        `Selected scene evidence: "${scene.summary || 'No description available.'}"`,
+        null,
         timeRangeStr
       );
     }
@@ -1078,6 +1694,8 @@
 
   // Single Select an Entity (clears other selections)
   function singleSelectEntity(entityId, skipScrollChecklist = false) {
+    entityId = resolveGraphEntityId(entityId);
+    if (entityId == null) return;
     state.selectedEntities = [entityId];
     state.selectedEntity = entityId;
     // Keep selected scene active so keyframe remains visible
@@ -1163,6 +1781,8 @@
 
   // Deselect a specific Entity
   function deselectEntity(entityId) {
+    entityId = resolveGraphEntityId(entityId);
+    if (entityId == null) return;
     if (!state.selectedEntities) {
       state.selectedEntities = [];
     }
@@ -1213,8 +1833,601 @@
     singleSelectEntity(entityId, skipScrollChecklist);
   }
 
+  function resolveGraphEntityId(entityId) {
+    if (state.graph.nodes.some(n => n.id === entityId)) return entityId;
+    const matches = state.graph.nodes.filter(n => normalizeEntityName(n.label) === entityId &&
+      (n.scopeSceneId == null || n.scopeSceneId === state.selectedSceneId));
+    return matches.length === 1 ? matches[0].id : (matches.length ? null : entityId);
+  }
+
+  function graphChannelLabel(channel) {
+    return { scene_present: "Scene presence claim", dialogue_mentioned: "Dialogue mention",
+      candidate: "Visibility candidate", generic: "Other extracted record" }[channel] || "Unclassified record";
+  }
+
+  function openGraphEvidence(sceneId) {
+    const scene = state.scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+    // An explicit evidence jump must survive an older pending search and make
+    // the supporting scene visible even when it is outside the query/filter.
+    state.searchGeneration = (state.searchGeneration || 0) + 1;
+    state.temporalSummaryGeneration = (state.temporalSummaryGeneration || 0) + 1;
+    state.intelFilter = null;
+    state.lastQuery = "";
+    const status = document.getElementById("search-status");
+    if (status) { status.textContent = ""; status.hidden = true; }
+    const narrative = document.getElementById("narrative-summary-container");
+    if (narrative) { narrative.textContent = ""; narrative.hidden = true; }
+    resetAllFilters();
+    renderVideoIntelPanel();
+    selectScene(sceneId, scene);
+    switchInspectorTab("entities");
+  }
+
+  function renderGraphEvidence(container, node, edge = null) {
+    if (!container) return;
+    const ids = edge ? edge.sceneIds : node.sceneIds;
+    const channelIconMap = {
+      scene_present: "👁",
+      dialogue_mentioned: "💬",
+      candidate: "◇",
+      generic: "🏷",
+    };
+    const getSceneSpokenText = (scene) => {
+      if (typeof scene.transcript === "string" && scene.transcript.trim()) return scene.transcript.trim();
+      if (Array.isArray(scene.dialogue) && scene.dialogue.length > 0) {
+        return scene.dialogue.map(d => (d && typeof d.text === "string" ? d.text.trim() : "")).filter(Boolean).join(" ").trim();
+      }
+      return "";
+    };
+    const stripCaptionBoilerplate = (str) => {
+      const cleaned = String(str || "").trim().replace(/^the image (?:depicts|shows|features)\s+(?:a\s+(?:close-up\s+(?:scene|shot|view)\s+of\s+)?)?/i, "");
+      return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : String(str || "").trim();
+    };
+    const extractSceneHook = (scene, observations, labelText) => {
+      const cleanLabel = String(labelText || "").replace(/\s*\(unconfirmed object\)\s*$/i, "").trim().toLowerCase();
+      const rawTranscript = getSceneSpokenText(scene);
+      if (rawTranscript) {
+        const sentences = rawTranscript.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+        const matched = cleanLabel
+          ? sentences.find(s => s.toLowerCase().includes(cleanLabel))
+          : null;
+        const chosen = matched || sentences[0] || rawTranscript;
+        const clipped = chosen.length > 68 ? `${chosen.slice(0, 66).trim()}…` : chosen;
+        return `"${clipped}"`;
+      }
+      const summaryText = typeof scene.summary === "string" ? stripCaptionBoilerplate(scene.summary) : "";
+      if (summaryText && summaryText !== "No description available." && summaryText !== "No description returned.") {
+        return summaryText.length > 68 ? `${summaryText.slice(0, 66).trim()}…` : summaryText;
+      }
+      const captionText = typeof scene.visual_caption === "string" ? stripCaptionBoilerplate(scene.visual_caption) : "";
+      if (captionText) {
+        return captionText.length > 68 ? `${captionText.slice(0, 66).trim()}…` : captionText;
+      }
+      for (const obs of observations) {
+        const rec = typeof obs.entity === "object" && obs.entity ? obs.entity : {};
+        const props = rec.properties || {};
+        const ctx = rec.evidence || props.evidence || rec.context || props.context;
+        if (typeof ctx === "string" && ctx.trim()) {
+          const t = ctx.trim();
+          return t.length > 68 ? `${t.slice(0, 66).trim()}…` : t;
+        }
+      }
+      return "";
+    };
+
+    ids.forEach(sceneId => {
+      const scene = state.scenes.find(s => s.id === sceneId);
+      if (!scene) return;
+      const observations = (node.observations || []).filter(o => o.sceneId === sceneId);
+      const channels = [...new Set(observations.map(o => o.channel))];
+      const specificChannels = channels.filter(c => c !== "generic");
+      const displayChannels = specificChannels.length > 0 ? specificChannels : channels;
+      const icons = displayChannels.map(c => channelIconMap[c] || "•").join(" ");
+      const hook = extractSceneHook(scene, observations, node.label || node.id);
+      const emoSuffix = typeof scene.audio_emotion === "string" && scene.audio_emotion.trim()
+        ? ` · ◎ ${scene.audio_emotion.trim()}`
+        : "";
+
+      const row = document.createElement("details");
+      row.className = "graph-evidence-row";
+      const range = scene.source_kind === "image" ? "Image" : scene.source_kind === "document"
+        ? "Document passage" : `${formatTime(scene.start)}–${formatTime(scene.end)}`;
+      const summaryLabel = hook
+        ? `${range} · ${icons} ${hook}${emoSuffix}`
+        : `${range} · ${icons} ${displayChannels.map(graphChannelLabel).join("; ")}${emoSuffix}`;
+      appendText(row, "summary", summaryLabel);
+
+      // Rich mini-overview card inside the expanded row
+      const overviewBox = document.createElement("div");
+      overviewBox.className = "graph-scene-overview";
+      const desc = (scene.summary && scene.summary !== "No description available." && scene.summary !== "No description returned.")
+        ? scene.summary
+        : (scene.visual_caption || "");
+      if (desc) {
+        appendText(overviewBox, "p", `📷 Scene: ${desc}`, "graph-scene-desc");
+      }
+      const spokenText = getSceneSpokenText(scene);
+      if (spokenText) {
+        const cleanLabel = String(node.label || node.id || "").replace(/\s*\(unconfirmed object\)\s*$/i, "").trim().toLowerCase();
+        const sentences = spokenText.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+        const matchedIdx = cleanLabel ? sentences.findIndex(s => s.toLowerCase().includes(cleanLabel)) : -1;
+        const excerptSource = matchedIdx >= 0
+          ? sentences.slice(Math.max(0, matchedIdx - 1), matchedIdx + 2).join(" ")
+          : spokenText;
+        const snippet = excerptSource.length > 200 ? `${excerptSource.slice(0, 198).trim()}…` : excerptSource;
+        appendText(overviewBox, "p", `🗣 Dialogue: "${snippet}"`, "graph-scene-quote");
+      }
+      const coEntities = [];
+      const selfNorm = String(node.label || node.id || "").toLowerCase();
+      [
+        ...(scene.scene_present_entities || []),
+        ...(scene.dialogue_mentioned_entities || []),
+        ...(scene.candidate_visible_people || []),
+        ...(scene.entities || []),
+      ].forEach(ent => {
+        const raw = typeof ent === "string" ? ent : (ent?.name || ent?.label || ent?.text || "");
+        if (!raw || typeof raw !== "string") return;
+        const clean = raw.trim();
+        if (!clean || clean.toLowerCase() === selfNorm) return;
+        if (!coEntities.some(x => x.toLowerCase() === clean.toLowerCase())) coEntities.push(clean);
+      });
+      const metaBits = [];
+      if (coEntities.length > 0) metaBits.push(`👥 Also in scene: ${coEntities.slice(0, 6).join(", ")}${coEntities.length > 6 ? ` (+${coEntities.length - 6})` : ""}`);
+      if (scene.sentiment_label) metaBits.push(`Text sentiment estimate: ${scene.sentiment_label}`);
+      if (typeof scene.audio_emotion === "string" && scene.audio_emotion) metaBits.push(`Emotion: ${scene.audio_emotion}`);
+      if (metaBits.length > 0) {
+        appendText(overviewBox, "p", metaBits.join("  ·  "), "graph-scene-context-line");
+      }
+      if (overviewBox.children.length > 0) {
+        row.appendChild(overviewBox);
+      }
+
+      const open = document.createElement("button");
+      open.className = "retro-btn-mini graph-open-scene-btn";
+      open.textContent = `Open scene evidence ${range}`;
+      open.addEventListener("click", () => openGraphEvidence(sceneId));
+      row.appendChild(open);
+
+      // Compact provenance footer (preserves exact audit strings and unit test expectations)
+      const provBox = document.createElement("div");
+      provBox.className = "graph-evidence-provenance";
+      if (edge) {
+        const otherId = edge.source === node.id ? edge.target : edge.source;
+        const other = state.graph.nodes.find(n => n.id === otherId);
+        const support = edge.evidence.find(e => e.sceneId === sceneId);
+        const otherChannels = edge.source === node.id ? support.targetChannels : support.sourceChannels;
+        appendText(provBox, "p", `${other ? objectEvidenceLabel(other) : otherId}: ${otherChannels.map(graphChannelLabel).join("; ")}`);
+      }
+      const filteredObs = observations.length > 1 && observations.some(o => o.channel !== "generic")
+        ? observations.filter(o => {
+            if (o.channel !== "generic") return true;
+            const rec = typeof o.entity === "object" && o.entity ? o.entity : {};
+            const pr = rec.properties || {};
+            return Boolean(rec.source_step || pr.source_step || rec.verification_status || pr.verification_status || rec.evidence || pr.evidence || rec.context || pr.context);
+          })
+        : observations;
+      filteredObs.forEach(observation => {
+        const record = typeof observation.entity === "object" ? observation.entity : {};
+        const props = record.properties || {};
+        const source = record.source_step || props.source_step ||
+          (Array.isArray(record.source_steps) ? record.source_steps.join(", ") : "") || "not recorded";
+        appendText(provBox, "p", `${graphChannelLabel(observation.channel)} · source: ${source}`);
+        const qualification = record.verification_status || props.verification_status;
+        if (qualification) appendText(provBox, "p", `Recorded status: ${qualification}`);
+        const context = record.evidence || props.evidence || record.context || props.context;
+        if (typeof context === "string" && context.trim()) appendText(provBox, "p", context);
+      });
+      appendText(provBox, "p", `Scene: ${sceneId}`, "graph-evidence-id");
+      row.appendChild(provBox);
+      container.appendChild(row);
+    });
+  }
+
+  function renderStoredRelationships(container, scene) {
+    if (!container) return;
+    const section = document.createElement("section");
+    appendText(section, "h4", "Stored relationships");
+    appendText(section, "p", "Saved graph records and review status. A stored claim is not a confirmed identity.");
+    const load = document.createElement("button");
+    load.className = "retro-btn-mini";
+    load.textContent = "Load stored relationships";
+    const rows = document.createElement("div");
+    section.appendChild(load); section.appendChild(rows); container.appendChild(section);
+    const videoId = state.activeVideoId, generation = state.datasetGeneration;
+    load.addEventListener("click", async () => {
+      load.disabled = true;
+      rows.textContent = "Loading stored evidence…";
+      const current = () => section.isConnected && state.activeVideoId === videoId &&
+        state.datasetGeneration === generation && state.selectedSceneId === scene.id && !state.selectedEntity;
+      try {
+        const result = await apiGet(`/api/videos/${encodeURIComponent(videoId)}/scenes/${encodeURIComponent(scene.id)}/relationships`);
+        if (!current()) return;
+        rows.textContent = "";
+        if (result.status !== "ok") {
+          appendText(rows, "p", `Stored relationships unavailable: ${result.status || "unknown"}.`);
+          return;
+        }
+        appendText(rows, "p", `Epoch: ${result.epoch_id}. ${result.relationships.length} stored relationships${result.truncated ? " (limit reached)" : ""}.`);
+        if (result.review_ledger_available === false) appendText(rows, "p", "Review ledger unavailable; no reviewed identity can be established.");
+        result.relationships.forEach(relation => {
+          const detail = document.createElement("details");
+          detail.className = "graph-evidence-row";
+          appendText(detail, "summary", `${relation.type} · ${relation.review_status}`);
+          appendText(detail, "p", `${relation.source.type}: ${relation.source.name} → ${relation.target.type}: ${relation.target.name}`, "graph-evidence-id");
+          appendText(detail, "p", `Stored edge #${relation.id} · source: ${relation.evidence.provenance}`);
+          if (relation.evidence.mapping_id) appendText(detail, "p", `Review mapping: ${relation.evidence.mapping_id}`);
+          if (relation.evidence.reason) appendText(detail, "p", `Recorded reason: ${relation.evidence.reason}`);
+          if (relation.evidence.status) appendText(detail, "p", `Recorded status: ${relation.evidence.status}`);
+          (relation.evidence.selected_segments || []).forEach(turn => appendText(detail, "p", `Selected voice evidence: ${formatTime(turn.start)}–${formatTime(turn.end)}`));
+          appendText(detail, "p", `Scene: ${relation.evidence.scene_id}`, "graph-evidence-id");
+          const open = document.createElement("button");
+          open.className = "retro-btn-mini"; open.textContent = "Open supporting scene";
+          open.addEventListener("click", () => openGraphEvidence(relation.evidence.scene_id));
+          detail.appendChild(open); rows.appendChild(detail);
+        });
+      } catch (_) {
+        if (current()) rows.textContent = "Stored relationship read failed. Retry or inspect local API logs.";
+      } finally {
+        if (current()) load.disabled = false;
+      }
+    });
+  }
+
+  function renderRecordingAudio(container, evidence) {
+    const section = document.createElement("section");
+    section.className = "scene-audio-evidence";
+    appendText(section, "h4", "Speech and speaker review");
+    if (evidence.schema !== "goodq.scene_audio_view.v1") {
+      appendText(section, "p", "Audio evidence version unavailable for review.");
+      container.appendChild(section); return;
+    }
+    appendText(section, "p", "Times refer to the original recording. Players retain the whole phrase across scene cuts. Speaker tracks are unassigned; recognition and emotion accuracy remain unqualified.");
+    const vocabulary = (evidence.transcription_context || {}).vocabulary;
+    if (Array.isArray(vocabulary) && vocabulary.length)
+      appendText(section, "p", `Name/spelling hints supplied: ${vocabulary.join(", ")}. These may bias the wording; they do not identify a speaker.`);
+    (evidence.utterances || []).forEach((unit) => {
+      const row = document.createElement("details");
+      const bounds = unit.media_span || {};
+      const time = Number.isFinite(bounds.start) && Number.isFinite(bounds.end)
+        ? `${bounds.start.toFixed(2)}–${bounds.end.toFixed(2)}s · ` : "";
+      const admitted = ((unit.eligibility || {}).transcript || {}).status === "eligible";
+      appendText(row, "summary", `${time}${admitted ? "Model transcript" : "Possible words, unclear"}: ${unit.text || "No words resolved"}`);
+      appendText(row, "p", `Speaker: ${(unit.speaker || {}).id || "unresolved"}. Confidence: not calibrated; words require listening review.`);
+      const raw = (unit.confidence || {}).raw || {};
+      if (Object.keys(raw).length) appendText(row, "p", `Raw decoder scores: ${JSON.stringify(raw)}. These are not probabilities that the words are correct.`);
+      ["vocal_delivery", "voice_sample"].forEach((key) => {
+        const admission = (unit.eligibility || {})[key] || {};
+        const label = key === "voice_sample" ? "Voice signature" : "Individual vocal emotion";
+        appendText(row, "p", `${label}: ${admission.status === "eligible" ? "input eligible, model result still requires review" : "withheld"}${(admission.reasons || []).length ? " · " + admission.reasons.map(r => String(r).replaceAll("_", " ")).join(", ") : ""}.`);
+      });
+      const review = (evidence.reviews || []).find(r => r.utterance_id === unit.id);
+      if (review && /^\/api\/videos\/[^/?#]+\/scenes\/[^/?#]+\/audio-evidence\/[a-f0-9]{64}$/.test(review.url)) {
+        const player = document.createElement("audio");
+        player.controls = true; player.preload = "none"; player.src = review.url;
+        player.setAttribute("aria-label", "Complete original speech phrase");
+        player.onerror = () => appendText(row, "p", "Retained phrase audio unavailable or changed.");
+        row.appendChild(player);
+      }
+      section.appendChild(row);
+    });
+    (evidence.sound_events || []).forEach(event => {
+      const span = event.media_span || {};
+      if (Number.isFinite(span.start) && Number.isFinite(span.end))
+        appendText(section, "p", `${span.start.toFixed(2)}–${span.end.toFixed(2)}s: ${event.label} · acoustic estimate, approximate boundaries.`);
+    });
+    (evidence.overlap || []).forEach(event => {
+      const span = event.media_span || {};
+      let description = "overlap assessment unresolved";
+      if (event.reason === "aligned_envelope_collision")
+        description = "speech timing conflict; simultaneous voices unverified";
+      else if (["collapsed_local_speaker_change", "cross_window_speaker_disagreement"].includes(event.reason))
+        description = "speaker assignment unresolved";
+      else if (["simultaneous_source_channels", "simultaneous_channel_observations"].includes(event.reason))
+        description = "activity on multiple audio channels; speaker relationship unresolved";
+      else if (event.status === "observed")
+        description = "overlapping voices candidate; acoustic estimate, approximate boundaries; individual identity unresolved";
+      if (Number.isFinite(span.start) && Number.isFinite(span.end))
+        appendText(section, "p", `${span.start.toFixed(2)}–${span.end.toFixed(2)}s: ${description}.`);
+    });
+    (evidence.vocal_delivery || []).forEach(estimate => {
+      appendText(section, "p", `Individual vocal delivery: ${estimate.label || "uncertain"} · uncertain model estimate, not whole-scene sentiment.`);
+    });
+    appendText(section, "p", evidence.voice_signature_status === "ok"
+      ? "Qualified voice samples retained for review; no identity assigned."
+      : evidence.voice_signature_status === "error" ? "Voice signature extraction failed; listening evidence is retained."
+      : "No qualified voice signature from this scene.");
+    container.appendChild(section);
+  }
+
   // Render Metadata Detail Inspector Panel
+  function renderAcousticEvidence(container, scene) {
+    if (container && scene.audio_evidence) { renderRecordingAudio(container, scene.audio_evidence); return; }
+    if (!container || (!scene.emotion_input && !(scene.sound_events || []).length)) return;
+    const section = document.createElement("section");
+    section.className = "scene-audio-evidence";
+    appendText(section, "h4", "Sounds and speech estimates");
+    (scene.sound_events || []).forEach((event) => {
+      if (!Number.isFinite(event.start) || !Number.isFinite(event.end) || event.end <= event.start) return;
+      appendText(section, "p", `${event.start.toFixed(1)}–${event.end.toFixed(1)}s: ${event.label} · sound candidate (approximate interval within scene)`);
+    });
+    const phrases = (scene.emotion_input || {}).phrase_selection;
+    const localOverlap = ((scene.emotion_input || {}).speaker_purity || {}).local_overlap;
+    if (localOverlap && localOverlap.status === "ok") {
+      (Array.isArray(localOverlap.intervals) ? localOverlap.intervals : []).forEach((interval) => {
+        if (!interval || !Number.isFinite(interval.start) || !Number.isFinite(interval.end) || interval.end <= interval.start) return;
+        appendText(section, "p", `${interval.start.toFixed(2)}–${interval.end.toFixed(2)}s: overlapping voices · local model candidate, unreviewed; speakers unresolved`);
+      });
+    }
+    const additionalOverlap = ((scene.emotion_input || {}).speaker_purity || {}).additional_overlap;
+    if (additionalOverlap && additionalOverlap.status === "ok") {
+      (Array.isArray(additionalOverlap.intervals) ? additionalOverlap.intervals : []).forEach((interval) => {
+        if (!interval || !Number.isFinite(interval.start) || !Number.isFinite(interval.end) || interval.end <= interval.start) return;
+        appendText(section, "p", `${interval.start.toFixed(2)}–${interval.end.toFixed(2)}s: overlapping voices · additional model candidate, unreviewed; speakers unresolved`);
+      });
+    } else if (additionalOverlap && ["error", "unavailable"].includes(additionalOverlap.status)) {
+      appendText(section, "p", "Additional overlap assessment unavailable; individual scoring withheld.");
+    }
+    if (phrases && phrases.status === "insufficient_evidence") {
+      appendText(section, "p", "Emotion scoring withheld: no complete, supported speech phrase. Speech may still be audible.");
+    } else if (!phrases && (scene.emotion_input || {}).status === "insufficient_evidence") {
+      appendText(section, "p", "Emotion estimate withheld: insufficient clear speech.");
+    }
+    const phraseReasons = {
+      phrase_boundaries_unavailable: "phrase boundaries unavailable",
+      phrase_word_timing_unavailable: "word timing unresolved",
+      phrase_boundary_timing_unavailable: "phrase boundaries unresolved",
+      phrase_boundary_alignment_uncertain: "phrase boundary timing uncertain",
+      phrase_duration_outside_limits: "complete phrase outside supported duration; not split",
+      phrase_word_evidence_mismatch: "word timing evidence disagrees",
+      phrase_speakers_unresolved: "overlapping or unresolved speakers",
+      local_overlap_in_phrase: "overlapping speech detected locally; individual speaker unresolved",
+      additional_overlap_in_phrase: "additional overlap candidate; individual speaker unresolved",
+      overlap_detection_unavailable: "overlap assessment unavailable",
+      overlapping_phrase_timing_unresolved: "overlapping speakers; phrase timing unresolved",
+      phrase_acoustics_uncertain_or_non_speech: "speech acoustics uncertain or a non-speech sound is present",
+      phrase_speech_presence_unavailable: "speech evidence unavailable",
+      phrase_speaker_boundary_unresolved: "speaker support incomplete at phrase boundary",
+    };
+    ((phrases || {}).rejected || []).forEach((phrase) => {
+      const bounds = Number.isFinite(phrase.start) && Number.isFinite(phrase.end) && phrase.end > phrase.start
+        ? `${phrase.start.toFixed(1)}–${phrase.end.toFixed(1)}s: ` : "";
+      appendText(section, "p", `${bounds}${phrase.text || "Speech phrase"} · scoring withheld: ${phraseReasons[phrase.reason] || "evidence unresolved"}.`);
+    });
+    (scene.emotion_segments || []).forEach((segment) => {
+      if (!Number.isFinite(segment.start) || !Number.isFinite(segment.end) || segment.end <= segment.start) return;
+      const ranking = Object.entries(segment.scores || {})
+        .filter(([, value]) => Number.isFinite(value) && value >= 0 && value <= 1)
+        .sort((a, b) => b[1] - a[1]).slice(0, 3);
+      const estimate = ranking.length
+        ? ranking.map(([label, value]) => `${label} ${(100 * value).toFixed(0)}%`).join(", ")
+        : segment.label || "unavailable";
+      const qualification = segment.interpretation_status === "uncertain" ? "uncertain speech estimate" : "speech estimate";
+      appendText(section, "p", `${segment.start.toFixed(1)}–${segment.end.toFixed(1)}s · ${segment.speaker}: ${estimate} · ${qualification}, unreviewed`);
+      if (segment.interpretation_status === "uncertain") {
+        appendText(section, "p", "Emotion uncertain: model accuracy is not qualified; candidate scores are retained for review.");
+        if ((segment.uncertainty_reasons || []).includes("transcript_words_uncertain")) {
+          appendText(section, "p", "Some words are uncertain; the speech phrase was kept intact.");
+        }
+      }
+      if (ranking.length) appendText(section, "p", "These are uncalibrated model scores, not confidence in a person's feelings.");
+    });
+    container.appendChild(section);
+  }
+
+  function renderSpeechEvidence(container, scene) {
+    if (!container) return;
+    const section = document.createElement("div");
+    section.className = "speech-evidence";
+    appendText(section, "h4", "Speech analysis");
+    const meta = scene.transcript_meta || {};
+    (Array.isArray(meta.segments) ? meta.segments : []).forEach((turn) => {
+      if (!turn || turn.attribution_status !== "unresolved") return;
+      const reason = turn.attribution_reason === "overlapping_speakers"
+        ? "Overlapping voices — speakers unresolved"
+        : "Speaker attribution unresolved";
+      const bounds = Number.isFinite(turn.start) && Number.isFinite(turn.end) && turn.end > turn.start
+        ? `${turn.start.toFixed(1)}–${turn.end.toFixed(1)}s: ` : "";
+      appendText(section, "p", `${bounds}${turn.text || "Speech"} · ${reason}.`);
+    });
+    const outcome = meta.error ? "runtime_failure" : scene.transcript_outcome;
+    const labels = {
+      transcript_available: "Transcript available",
+      no_speech: "No speech detected",
+      no_intelligible_speech: "Speech detected; no intelligible words returned",
+      runtime_failure: "Transcription failed",
+      missing_audio_artifact: "Audio artifact missing",
+      low_confidence: "Low-confidence transcription",
+      unclassified: "Speech outcome unclassified",
+    };
+    appendText(section, "p", labels[outcome] || "No speech outcome recorded (historical or unverified)");
+    if (scene.transcript_outcome_reason) appendText(section, "p", `Reason: ${scene.transcript_outcome_reason}`);
+    if (meta.error) appendText(section, "p", `Error: ${meta.error}`);
+    const coverage = meta.transcription_decoding?.source_regions;
+    if (["source_regions_v1", "source_audio_v2"].includes(coverage?.policy)) {
+      const sourceAudio = coverage.policy === "source_audio_v2";
+      const regionCount = sourceAudio ? coverage.recognition_region_count : coverage.detected_region_count;
+      appendText(section, "p", `${coverage.completed_region_count ?? 0} of ${regionCount ?? 0} ${sourceAudio ? "original audio regions" : "detected speech regions"} processed · ${coverage.status || "unknown"}`);
+      if (sourceAudio) appendText(section, "p", "Speech detection and recognition boundaries are separate. Phrase bounds and individual word times are independent model estimates.");
+      appendText(section, "p", "Processing coverage does not prove that every word was recognized. Review missing or uncertain text against the source audio.");
+      const regionLabels = {no_text_returned: "no text returned", rejected_no_speech_candidate: "candidate rejected as non-speech",
+        text_with_unavailable_timing: "text retained without usable timing", not_attempted: "not processed", error: "processing failed"};
+      const warningLabels = {compression_ratio_threshold_exceeded: "Decoder repetition warning",
+        log_probability_below_threshold: "Low recognition confidence", invalid_word_timing: "Some word times unavailable",
+        invalid_segment_timing: "Some recognized text has unavailable timing", word_alignment_unavailable: "Word alignment unavailable"};
+      (Array.isArray(coverage.regions) ? coverage.regions : []).forEach(region => {
+        const bounds = Number.isFinite(region.start) && Number.isFinite(region.end)
+          ? `${region.start.toFixed(1)}–${region.end.toFixed(1)}s: ` : "";
+        if (regionLabels[region.outcome]) appendText(section, "p", `${bounds}${regionLabels[region.outcome]}`);
+        (Array.isArray(region.quality_flags) ? region.quality_flags : []).forEach(flag => {
+          if (warningLabels[flag]) appendText(section, "p", `${bounds}${warningLabels[flag]}`);
+        });
+        (Array.isArray(region.unplaced_segments) ? region.unplaced_segments : []).forEach(candidate =>
+          appendText(section, "p", `${candidate.text || "(empty)"} · timing unavailable`));
+        if (region.timing_retry === "error") appendText(section, "p", `${bounds}Word timing recovery failed`);
+      });
+    }
+    const detection = meta.speech_detection;
+    if (detection && detection.status === "completed") {
+      appendText(section, "p", `Speech detector: ${detection.method}`);
+      if (typeof detection.input_duration_seconds === "number" && typeof detection.speech_duration_seconds === "number") {
+        appendText(section, "p", `Audio analyzed: ${detection.input_duration_seconds.toFixed(3)} seconds; VAD speech candidates: ${detection.speech_duration_seconds.toFixed(3)} seconds`);
+      }
+    }
+    if (meta.engine) appendText(section, "p", `Transcriber: ${meta.engine}${meta.model ? ` / ${meta.model}` : ""}`);
+    const vocabulary = meta.transcription_context;
+    if (vocabulary?.status === "applied" && Array.isArray(vocabulary.words)) {
+      appendText(section, "p", `Vocabulary hints: ${vocabulary.words.join(", ")}`);
+      appendText(section, "p", "Hints can influence recognized names; a name does not confirm who is present or speaking.");
+    }
+    const sampled = meta.transcription_quality?.sampled_segment_count;
+    if (Number.isInteger(sampled) && sampled > 0) {
+      appendText(section, "p", `Decoder retry: ${sampled} segments used sampling. Words may vary between runs; review the original audio.`);
+    }
+    const alignment = meta.word_alignment;
+    const standaloneAudio = scene.source_kind === "audio";
+    const sourceTimes = alignment?.timebase === "video_seconds";
+    const hasOrigin = Number.isFinite(alignment?.source_offset_seconds) && alignment.source_offset_seconds >= 0;
+    const playableTimebase = alignment?.timebase === "input_audio_seconds" || (sourceTimes && (standaloneAudio || hasOrigin));
+    const phrases = Array.isArray(meta.phrase_observations)
+      ? meta.phrase_observations.filter(p => p && typeof p === "object").map(p => ({text: p.text, phrase_timing: p}))
+      : (Array.isArray(meta.segments) ? meta.segments : []).filter(s => s && typeof s.phrase_timing === "object" && s.phrase_timing);
+    if (phrases.length) {
+      const details = document.createElement("details");
+      appendText(details, "summary", "Phrase timing · separate from word alignment");
+      appendText(details, "p", "Whole decoder phrases may contain several sentences. Bounds are model estimates; they do not establish a single speaker or verified emotion.");
+      phrases.forEach(segment => {
+        const timing = segment.phrase_timing;
+        const offset = timing.timebase === "video_seconds" && !standaloneAudio ? timing.source_offset_seconds : 0;
+        const start = Number.isFinite(timing.start) ? timing.start - offset : null;
+        const end = Number.isFinite(timing.end) ? timing.end - offset : null;
+        const complete = timing.status === "model_estimated" && timing.boundary_status === "model_estimated_complete_phrase"
+          && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start;
+        appendText(details, "p", complete
+          ? `${start.toFixed(2)}–${end.toFixed(2)}s · ${segment.text} · estimated complete phrase`
+          : `${segment.text || "(empty)"} · complete phrase boundaries unresolved`);
+      });
+      section.appendChild(details);
+    }
+    if (alignment && playableTimebase && Array.isArray(alignment.words) && alignment.words.length) {
+      const details = document.createElement("details");
+      appendText(details, "summary", `Word timing · ${alignment.words.length} words (model alignment, unreviewed)`);
+      appendText(details, "p", `Times are relative to ${standaloneAudio ? "the original recording" : "this scene's original audio"}. Alignment does not verify the words or separate overlapping speakers.`);
+      const player = standaloneAudio ? originalVideo : originalAudio;
+      const audio = player.element;
+      const generation = player.generation;
+      alignment.words.forEach(word => {
+        const recovered = word.timing_status === "recovered_model_alignment";
+        const offset = sourceTimes && !standaloneAudio ? alignment.source_offset_seconds : 0;
+        const start = Number.isFinite(word.start) ? word.start - offset : null;
+        const end = Number.isFinite(word.end) ? word.end - offset : null;
+        const valid = (word.timing_status === "aligned" || recovered) && Number.isFinite(word.start)
+          && Number.isFinite(word.end) && start >= 0 && end > start;
+        if (!valid) {
+          appendText(details, "p", `${word.text || "(empty)"} · timing unavailable`);
+          return;
+        }
+        const row = document.createElement("p");
+        const seek = document.createElement("button");
+        seek.className = "retro-btn-mini word-timing-seek";
+        seek.textContent = `${start.toFixed(2)}–${end.toFixed(2)}s · ${word.text}`;
+        seek.title = "Seek original audio to this model-aligned word";
+        seek.disabled = !audio;
+        seek.addEventListener("click", () => {
+          if (audio && player.element === audio && player.generation === generation) {
+            audio.currentTime = start;
+          }
+        });
+        row.appendChild(seek);
+        if (recovered) appendText(row, "span", " · recovered timing, unreviewed");
+        details.appendChild(row);
+      });
+      section.appendChild(details);
+    } else if (scene.transcript_outcome === "transcript_available") {
+      appendText(section, "p", "Word timing not recorded for this transcript.");
+    }
+    for (const [name, status, note] of [
+      ["Speaker analysis", scene.diarization_status, scene.diarization_note],
+      ["Vocal emotion", scene.emotion_status, scene.emotion_note],
+    ]) {
+      if (!status) continue;
+      const description = status === "not_applicable" && note === "no_speech_detected"
+        ? "Not applicable (no speech detected)"
+        : status === "success"
+        ? (name === "Speaker analysis" ? "Speaker tracks recorded (unreviewed)" : "Model estimate (not verified emotion)")
+        : `${status}${note ? ` (${note})` : ""}`;
+      appendText(section, "p", `${name}: ${description}`);
+    }
+    const quality = meta.transcription_quality;
+    if (quality && Array.isArray(quality.uncertain_segments) && quality.uncertain_segments.length) {
+      appendText(section, "p", "Mixed speech evidence: disputed words remain in the transcript for review.");
+      quality.uncertain_segments.forEach(candidate => appendText(section, "p", `Review candidate: ${candidate.text || "(empty)"}`));
+    }
+    if (quality && quality.status === "completed" && Array.isArray(quality.rejected_segments) && quality.rejected_segments.length) {
+      appendText(section, "p", `Whisper no-speech threshold: ${quality.threshold}. Rejected candidates are retained for review, excluded from the transcript.`);
+      quality.rejected_segments.forEach(candidate => {
+        const probability = typeof candidate.no_speech_probability === "number" ? `${(candidate.no_speech_probability * 100).toFixed(1)}%` : "unknown";
+        appendText(section, "p", `Rejected candidate (${probability} no-speech probability): ${candidate.text || "(empty)"}`);
+      });
+    }
+    container.appendChild(section);
+  }
+
+  function renderAudioSearchEvidence(container, meta) {
+    if (!container) return;
+    const section = document.createElement("div");
+    section.className = "audio-search-evidence";
+    appendText(section, "h4", "Audio search evidence");
+    if (!meta || typeof meta !== "object") {
+      appendText(section, "p", "No CLAP outcome recorded for this scene.");
+    } else {
+      const silent = meta.status === "skipped" && meta.reason === "audio_silent";
+      const label = silent ? "Silence / below energy threshold — no audio vector"
+        : meta.status === "ok" ? "Audio embedding recorded" : `CLAP: ${meta.status || "unknown"}`;
+      appendText(section, "p", label);
+      if (meta.reason && !silent) appendText(section, "p", `Reason: ${meta.reason}`);
+      if (meta.error) appendText(section, "p", `Error: ${meta.error}`);
+      appendText(section, "p", meta.input_policy === "full_scene"
+        ? "Input: original scene audio (speech and non-speech)"
+        : "Input policy: not recorded (historical outcome)");
+      const duration = meta.total_duration_s ?? meta.duration_sec;
+      if (typeof duration === "number") appendText(section, "p", `Input duration: ${duration.toFixed(3)} seconds`);
+      if (typeof meta.chunks_processed === "number") {
+        appendText(section, "p", `Windows embedded: ${meta.chunks_processed}; quiet windows skipped: ${meta.chunks_skipped_silent || 0}`);
+      }
+      if (meta.status === "ok") {
+        appendText(section, "p", `Vector stores: FAISS ${meta.faiss_committed === true ? "committed" : "unconfirmed"}; Qdrant ${meta.qdrant_committed === true ? "committed" : "unconfirmed"}`);
+      }
+      if (meta.model) appendText(section, "p", `Model: ${meta.model}`);
+      if (meta.run_id) appendText(section, "p", `Ingestion run: ${meta.run_id}`);
+    }
+    container.appendChild(section);
+  }
+
+  function buildSceneDialogue(scene) {
+    const transcript = typeof scene.transcript === "string" ? scene.transcript.trim() : "";
+    if (!transcript) return [];
+    const segments = scene.transcript_meta && scene.transcript_meta.segments;
+    const rows = Array.isArray(segments) ? segments.filter(row =>
+      row && typeof row.text === "string" && row.text.trim()).map(row => ({
+        text: row.text.trim(),
+        speaker: typeof row.speaker === "string" && row.speaker.trim()
+          && !["?", "unknown", "unattributed"].includes(row.speaker.trim().toLowerCase())
+          ? row.speaker.trim() : "Unattributed",
+        start: row.start,
+        end: row.end,
+      })) : [];
+    // Do not lose words to partial/stale metadata or infer ownership from a
+    // scene-level count/dominant speaker. Retain the accepted transcript intact.
+    const normalize = text => text.replace(/\s+/g, " ").trim();
+    if (rows.length && normalize(rows.map(row => row.text).join(" ")) === normalize(transcript)) return rows;
+    return [{ speaker: "Unattributed", text: transcript, start: scene.start, end: scene.end }];
+  }
+
   function renderInspector() {
+    resetOriginalAudio();
+    resetOriginalVideo();
+    ttsStop();
     const defaultMsg = document.getElementById("inspector-default-message");
     const tabsBar = document.getElementById("inspector-tabs");
     const overviewDiv = document.getElementById("inspector-details-overview");
@@ -1242,7 +2455,7 @@
       transcriptZone.innerHTML = "";
     }
 
-    if (!state.selectedSceneId && !state.selectedEntity) {
+    if (state.selectedSceneId == null && !state.selectedEntity) {
       defaultMsg.hidden = false;
       if (tabsBar) tabsBar.hidden = true;
       const contents = document.querySelectorAll(".inspector-tab-content");
@@ -1274,11 +2487,11 @@
         state.activeInspectorTab = "overview";
       }
 
-      if (state.selectedSceneId) {
+      if (state.selectedSceneId != null) {
         const scene = state.scenes.find((s) => {
           if (!s) return false;
-          const sId = String(s.id || "").trim().toLowerCase();
-          const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+          const sId = String(s.id ?? "").trim().toLowerCase();
+          const selId = String(state.selectedSceneId ?? "").trim().toLowerCase();
           return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
         });
         if (scene) {
@@ -1322,17 +2535,6 @@
       const node = state.graph.nodes.find((n) => n.id === state.selectedEntity);
       if (!node) return;
 
-      const header = document.createElement("div");
-      header.className = "details-header";
-      appendText(header, "h3", `Entity: ${node.label}`, "details-title");
-      appendText(header, "p", `Category: ${node.type.toUpperCase()}`, "details-subtitle");
-      if (overviewDiv) overviewDiv.appendChild(header);
-
-      const countInfo = document.createElement("div");
-      countInfo.className = "details-summary";
-      countInfo.textContent = `Entity Co-occurrence Map counts: This entity appears in ${node.count} scene${node.count === 1 ? "" : "s"} across the timeline.`;
-      if (overviewDiv) overviewDiv.appendChild(countInfo);
-
       // List related entities (co-occurrences)
       const cooccurrences = state.graph.edges
         .filter((e) => e.source === node.id || e.target === node.id)
@@ -1341,21 +2543,122 @@
           const otherNode = state.graph.nodes.find((n) => n.id === otherId);
           return {
             id: otherId,
-            label: otherNode ? otherNode.label : otherId,
+            label: otherNode ? objectEvidenceLabel(otherNode) : otherId,
             weight: e.weight,
             type: otherNode ? otherNode.type : "generic",
+            edge: e,
           };
         })
         .sort((a, b) => b.weight - a.weight);
 
+      const header = document.createElement("div");
+      header.className = "details-header";
+      appendText(header, "h3", `Entity: ${objectEvidenceLabel(node)}`, "details-title");
+      appendText(header, "p", `Category: ${node.type.toUpperCase()}`, "details-subtitle");
+      if (overviewDiv) overviewDiv.appendChild(header);
+
+      const countInfo = document.createElement("div");
+      countInfo.className = "details-summary";
+      countInfo.textContent = `Recorded in ${node.count} distinct scene${node.count === 1 ? "" : "s"}. Labels are grouped for navigation; shared scenes do not establish identity or a confirmed relationship.`;
+      if (overviewDiv) overviewDiv.appendChild(countInfo);
+      if (node.scopeSceneId != null && overviewDiv) appendText(overviewDiv, "p", "Anonymous label scoped to this scene; no cross-scene identity inferred.");
+
+      if (overviewDiv) {
+        const dossier = document.createElement("div");
+        dossier.className = "entity-dossier-card";
+
+        // Channel breakdown pills
+        const channelCounts = { scene_present: 0, dialogue_mentioned: 0, candidate: 0, generic: 0 };
+        (node.sceneIds || []).forEach(sId => {
+          const obs = (node.observations || []).filter(o => o.sceneId === sId);
+          const chs = [...new Set(obs.map(o => o.channel))];
+          const spec = chs.filter(c => c !== "generic");
+          const active = spec.length > 0 ? spec : chs;
+          active.forEach(c => {
+            if (channelCounts[c] !== undefined) channelCounts[c] += 1;
+          });
+        });
+        const badgeRow = document.createElement("div");
+        badgeRow.className = "entity-channel-pills";
+        [
+          ["scene_present", "👁 Present", channelCounts.scene_present],
+          ["dialogue_mentioned", "💬 Dialogue mention", channelCounts.dialogue_mentioned],
+          ["candidate", "◇ Candidate", channelCounts.candidate],
+          ["generic", "🏷 Extracted only", channelCounts.generic],
+        ].forEach(([chKey, chLabel, cnt]) => {
+          if (!cnt) return;
+          appendText(badgeRow, "span", `${chLabel}: ${cnt}`, `entity-channel-pill ch-${chKey}`);
+        });
+        if (badgeRow.children.length > 0) dossier.appendChild(badgeRow);
+
+        // Timeline span & duration
+        const matchedScenes = (node.sceneIds || [])
+          .map(sId => state.scenes.find(s => s.id === sId))
+          .filter(s => s && typeof s.start === "number" && typeof s.end === "number");
+        if (matchedScenes.length > 0) {
+          const minStart = Math.min(...matchedScenes.map(s => s.start));
+          const maxEnd = Math.max(...matchedScenes.map(s => s.end));
+          const totalSecs = Math.round(matchedScenes.reduce((acc, s) => acc + Math.max(0, s.end - s.start), 0));
+          appendText(
+            dossier,
+            "p",
+            `⏱ Timeline span: ${formatTime(minStart)} – ${formatTime(maxEnd)}  ·  ${formatTime(totalSecs)} total scene time`,
+            "entity-span-row"
+          );
+        }
+
+        // Top co-occurring entities quick-jump pills (prioritize people/locations over unconfirmed objects)
+        if (cooccurrences.length > 0) {
+          const coWrap = document.createElement("div");
+          coWrap.className = "entity-top-connections";
+          appendText(coWrap, "span", "🔗 Shared scenes with:", "entity-conn-label");
+          const prioritizedCo = [...cooccurrences].sort((a, b) => {
+            const aObj = String(a.label).includes("(unconfirmed object)") ? 1 : 0;
+            const bObj = String(b.label).includes("(unconfirmed object)") ? 1 : 0;
+            if (aObj !== bObj) return aObj - bObj;
+            return b.weight - a.weight;
+          });
+          prioritizedCo.slice(0, 6).forEach(co => {
+            const btn = document.createElement("button");
+            btn.className = "retro-btn-mini entity-conn-pill";
+            btn.textContent = `${co.label} (${co.weight})`;
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              singleSelectEntity(co.id);
+            });
+            coWrap.appendChild(btn);
+          });
+          dossier.appendChild(coWrap);
+        }
+
+        if (dossier.children.length > 0) {
+          overviewDiv.appendChild(dossier);
+        }
+      }
+
+      if (overviewDiv) {
+        appendText(overviewDiv, "h4", "Evidence by scene");
+        appendText(
+          overviewDiv,
+          "p",
+          "💬 Dialogue mention  ·  👁 Scene presence  ·  ◇ Candidate  ·  🏷 Extracted — click any row to preview scene details.",
+          "graph-evidence-legend"
+        );
+      }
+      renderGraphEvidence(overviewDiv, node);
+
       if (cooccurrences.length) {
-        if (entitiesDiv) appendText(entitiesDiv, "h4", "Entity Co-occurrence Grid");
+        if (entitiesDiv) appendText(entitiesDiv, "h4", "Shared-scene associations");
         const list = document.createElement("div");
-        list.className = "details-entities-list";
+        list.className = "graph-associations";
         cooccurrences.forEach((co) => {
-          const pill = document.createElement("span");
-          pill.className = `entity-pill ${co.type}`;
-          pill.textContent = `${co.label} (Appears together in ${co.weight} scene${co.weight === 1 ? "" : "s"})`;
+          const relation = document.createElement("details");
+          relation.className = "graph-association";
+          appendText(relation, "summary", `${co.label} · ${co.weight} shared scene${co.weight === 1 ? "" : "s"}`);
+          appendText(relation, "p", "Both labels occur in these scene records. Their evidence channels are listed separately.");
+          const pill = document.createElement("button");
+          pill.className = "retro-btn-mini";
+          pill.textContent = `Explore ${co.label}`;
           pill.addEventListener("click", (e) => {
             e.stopPropagation();
             singleSelectEntity(co.id);
@@ -1364,30 +2667,15 @@
             e.stopPropagation();
             deselectEntity(co.id);
           });
-          list.appendChild(pill);
+          relation.appendChild(pill);
+          renderGraphEvidence(relation, node, co.edge);
+          list.appendChild(relation);
         });
         if (entitiesDiv) entitiesDiv.appendChild(list);
+      } else if (entitiesDiv) {
+        appendText(entitiesDiv, "p", "No shared-scene associations recorded for this label.");
       }
 
-      // Show filter trigger
-      const filterBtn = document.createElement("button");
-      filterBtn.className = "retro-btn primary-btn";
-      filterBtn.textContent = "Highlight Scenes in Grid";
-      filterBtn.addEventListener("click", () => {
-        state.searchResults = node.sceneIds.map((sid) => ({ scene_id: sid }));
-        renderTimelineGrid();
-        logDataTrail(
-          `Filter grid by entity: "${node.label}"`,
-          "Internal UI Event",
-          state.activeVideoId,
-          "scene metadata",
-          `Highlighted ${node.sceneIds.length} scenes containing "${node.label}"`,
-          1.0,
-          ""
-        );
-      });
-      if (overviewDiv) overviewDiv.appendChild(filterBtn);
-      
       switchInspectorTab(state.activeInspectorTab || "overview");
       return;
     }
@@ -1406,35 +2694,81 @@
 
     let scene = state.scenes.find((s) => {
       if (!s) return false;
-      const sId = String(s.id || "").trim().toLowerCase();
-      const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+      const sId = String(s.id ?? "").trim().toLowerCase();
+      const selId = String(state.selectedSceneId ?? "").trim().toLowerCase();
       return (sId && selId && sId === selId) || (s.scene_index != null && String(s.scene_index) === selId);
     });
     if (!scene && state.searchResults && state.searchResults.length > 0) {
       const res = state.searchResults.find((r) => {
-        const rId = String(r.scene_id || "").trim().toLowerCase();
-        const selId = String(state.selectedSceneId || "").trim().toLowerCase();
+        const rId = String(r.scene_id ?? "").trim().toLowerCase();
+        const selId = String(state.selectedSceneId ?? "").trim().toLowerCase();
         return rId && selId && rId === selId;
       });
       if (res) {
         scene = {
           id: res.scene_id,
-          start: typeof res.start_time === "number" ? res.start_time : 0.0,
+          start: res.start_time,
           end: typeof res.end_time === "number" ? res.end_time : 0.0,
           summary: res.summary || "No description available.",
+          summary_meta: res.summary_meta || (res.summary
+            ? {
+                source: "unknown",
+                provenance_status: "unknown",
+                qualification: "Summary source: unknown provenance (historical or unattributed summary; unverified, check evidence channels).",
+              }
+            : {
+                source: "none",
+                provenance_status: "none",
+                qualification: null,
+              }),
           keyframe_url: resolveKeyframeUrl(res.evidence ? res.evidence.artifact_paths : null, res.source_file),
+          source_kind: res.source_kind || "video",
+          document_text: res.document_text || null,
+          document_meta: res.document_meta || null,
+          original_source_endpoint: res.original_source_endpoint,
+          original_source_available: res.original_source_available === true,
           entities: Array.isArray(res.entities) ? res.entities.map(e => ({ name: e, type: "generic" })) : [],
-          dialogue: res.evidence && typeof res.evidence.transcript === "string" ? [{ text: res.evidence.transcript }] : [],
+          dialogue: buildSceneDialogue({
+            transcript: res.evidence && res.evidence.transcript,
+            transcript_meta: res.transcript_meta || (res.context && res.context.transcript_meta),
+          }),
           transcript: (res.evidence && res.evidence.transcript) || "",
+          clap_meta: res.clap_meta || (res.context && res.context.clap_meta) || null,
+          transcript_meta: res.transcript_meta || (res.context && res.context.transcript_meta) || null,
+          transcript_outcome: res.transcript_outcome || (res.context && res.context.transcript_outcome) || null,
+          transcript_outcome_reason: res.transcript_outcome_reason || (res.context && res.context.transcript_outcome_reason) || null,
+          diarization_status: res.diarization_status || null,
+          diarization_note: res.diarization_note || null,
+          emotion_status: res.emotion_status || null,
+          emotion_note: res.emotion_note || null,
           source_file: res.source_file || "",
+          original_audio_endpoint: res.original_audio_endpoint,
+          original_audio_available: res.original_audio_available === true,
+          original_video_endpoint: res.original_video_endpoint,
+          original_video_available: res.original_video_available === true,
           sentiment_label: "NEUTRAL",
-          audio_emotion: "calm",
+          audio_emotion: res.audio_emotion || null,
+          emotion_segments: res.emotion_segments || [],
+          emotion_input: res.emotion_input || null,
+          sound_events: res.sound_events || [],
+          audio_evidence: res.audio_evidence,
+          sound_event_meta: res.sound_event_meta || null,
           content_state: "signal",
           transcript_entity_disagreements: []
         };
       }
     }
     if (!scene) return;
+
+    if (tabTranscriptBtn && ["image", "document"].includes(scene.source_kind)) {
+      tabTranscriptBtn.style.display = "none";
+      if (state.activeInspectorTab === "transcript") state.activeInspectorTab = "overview";
+    }
+
+    const media = state.selectedOriginalMedia || scene;
+    const staticSource = ["image", "document"].includes(scene.source_kind);
+    renderOriginalAudio(media);
+    renderOriginalVideo({ ...media, start: media.start ?? media.start_time });
 
     // Render keyframe active state
     if (keyframeZone) keyframeZone.hidden = false;
@@ -1455,19 +2789,66 @@
       if (keyframeNoImage) {
         keyframeNoImage.hidden = false;
         if (noKeyframeTitle) noKeyframeTitle.textContent = `NO VISUAL CARRIER // SCENE #${scene.id}`;
-        if (noKeyframeText) noKeyframeText.textContent = `TIMECODE: ${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+        if (noKeyframeText) noKeyframeText.textContent = staticSource ? "Static source" : `TIMECODE: ${formatTime(scene.start)} - ${formatTime(scene.end)}`;
       }
     }
 
     if (keyframeTimecode) {
-      keyframeTimecode.textContent = `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
+      keyframeTimecode.textContent = staticSource ? "Static source" : `${formatTime(scene.start)} - ${formatTime(scene.end)}`;
     }
 
     const header = document.createElement("div");
-    header.className = "details-header";
+    header.className = "details-header scene-details-header";
     appendText(header, "h3", `SCENE INDEX #${scene.id}`, "details-title");
-    appendText(header, "p", `Timecode: ${formatTime(scene.start)} - ${formatTime(scene.end)}`, "details-subtitle");
+    appendText(header, "p", staticSource ? "Static source" : `Timecode: ${formatTime(scene.start)} - ${formatTime(scene.end)}`, "details-subtitle");
     if (overviewDiv) overviewDiv.appendChild(header);
+
+    const summary = document.createElement("div");
+    summary.className = "details-summary";
+    summary.textContent = scene.summary || "No description available.";
+    if (overviewDiv) overviewDiv.appendChild(summary);
+    const inspectorQualification = (scene.summary_meta && scene.summary_meta.qualification)
+      ? scene.summary_meta.qualification
+      : (scene.summary && scene.summary !== "No description available.")
+      ? (scene.visual_caption && scene.summary === scene.visual_caption
+          ? "Summary source: visual caption (unverified model observation; not confirmed scene fact)."
+          : "Summary source: unknown provenance (historical or unattributed summary; unverified, check evidence channels).")
+      : null;
+    if (inspectorQualification && overviewDiv) {
+      const summaryNote = document.createElement("p");
+      summaryNote.className = "summary-provenance-note";
+      summaryNote.textContent = inspectorQualification;
+      overviewDiv.appendChild(summaryNote);
+    }
+
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function" && overviewDiv && !staticSource) {
+      const quickCard = document.createElement("div");
+      quickCard.className = "scene-overview-quick-card";
+      const sceneSpoken = (typeof scene.transcript === "string" && scene.transcript.trim())
+        ? scene.transcript.trim()
+        : (Array.isArray(scene.dialogue) ? scene.dialogue.map(d => d?.text || "").filter(Boolean).join(" ").trim() : "");
+      if (sceneSpoken) {
+        const excerpt = sceneSpoken.length > 220
+          ? `${sceneSpoken.slice(0, 218).trim()}…`
+          : sceneSpoken;
+        appendText(quickCard, "p", `🗣 Dialogue: "${excerpt}"`, "scene-overview-dialogue-snippet");
+      }
+      const quickPeople = [];
+      [
+        ...(scene.scene_present_entities || []),
+        ...(scene.dialogue_mentioned_entities || []),
+        ...(scene.candidate_visible_people || []),
+      ].forEach(ent => {
+        const raw = typeof ent === "string" ? ent : (ent?.name || ent?.label || ent?.text || "");
+        if (raw && typeof raw === "string" && !quickPeople.includes(raw.trim())) quickPeople.push(raw.trim());
+      });
+      if (quickPeople.length > 0) {
+        appendText(quickCard, "p", `👥 People & Mentions: ${quickPeople.slice(0, 8).join(", ")}`, "scene-overview-people-line");
+      }
+      if (quickCard.children.length > 0) {
+        overviewDiv.appendChild(quickCard);
+      }
+    }
 
     // ── Scene Context LLM (tag groups: primary_tags / contextual_tags / structural_tags) ──
     const ctx_llm = scene.scene_context_llm;
@@ -1503,8 +2884,10 @@
           es === "unsupported_but_related"  ? "uncertain" :
                                              "uncertain"
         }`;
-        badge.textContent = epistemicState.replace(/_/g, " ").toUpperCase();
-        badge.title = "Epistemic confidence state for this scene";
+        badge.textContent = es === "supported"
+          ? "SUPPORTED (UNVERIFIED MODEL ALIGNMENT)"
+          : epistemicState.replace(/_/g, " ").toUpperCase();
+        badge.title = "Stored model assessment, not independently verified scene facts";
         ctxHeader.appendChild(badge);
       }
 
@@ -1512,13 +2895,27 @@
       if (arb && typeof arb === "object" && arb.resolved_by) {
         const arbBadge = document.createElement("span");
         arbBadge.className = "arbitration-badge";
-        arbBadge.textContent = `resolved: ${String(arb.resolved_by).replace(/_/g, " ")}`;
+        arbBadge.textContent = `Arbitration basis: ${String(arb.resolved_by).replace(/_/g, " ")}`;
         arbBadge.title = arb.unresolved_axes && arb.unresolved_axes.length
           ? `Unresolved axes: ${arb.unresolved_axes.join(", ")}`
-          : "No unresolved axes";
+          : "No unresolved axes recorded";
         ctxHeader.appendChild(arbBadge);
       }
       ctxWrap.appendChild(ctxHeader);
+      const assessmentNote = document.createElement("p");
+      assessmentNote.textContent = "Stored model assessment; not verified scene facts.";
+      ctxWrap.appendChild(assessmentNote);
+      if (typeof ctx_llm.narrative_summary === "string" && ctx_llm.narrative_summary.trim()) {
+        appendText(ctxWrap, "p", ctx_llm.narrative_summary);
+      }
+      if (typeof ctx_llm.emotional_arc === "string" && ctx_llm.emotional_arc.trim()) {
+        appendText(ctxWrap, "p", `Tone assessment: ${ctx_llm.emotional_arc}`);
+      }
+      if (Array.isArray(arb?.unresolved_axes) && arb.unresolved_axes.length) {
+        const unresolved = document.createElement("div");
+        unresolved.textContent = `Unresolved: ${arb.unresolved_axes.join(", ")}`;
+        ctxWrap.appendChild(unresolved);
+      }
 
       const tagGroups = [
         { key: "primary_tags",     label: "Primary" },
@@ -1553,19 +2950,19 @@
       if (overviewDiv) overviewDiv.appendChild(ctxWrap);
     }
 
-    const summary = document.createElement("div");
-    summary.className = "details-summary";
-    summary.textContent = scene.summary || "No description available.";
-    if (overviewDiv) overviewDiv.appendChild(summary);
+    if (!staticSource) {
+      renderSpeechEvidence(overviewDiv, scene);
+      renderAudioSearchEvidence(overviewDiv, scene.clap_meta);
+    }
 
     // Metadata grid details
     const dl = document.createElement("dl");
     dl.className = "details-metadata";
-    [
+    (staticSource ? [["Source kind", scene.source_kind], ["Timing", "Static source"]] : [
       ["Duration", `${Math.round(scene.end - scene.start)} seconds`],
       ["Start Offset", `${scene.start}s`],
       ["End Offset", `${scene.end}s`],
-    ].forEach(([k, v]) => {
+    ]).forEach(([k, v]) => {
       const dt = document.createElement("dt");
       dt.textContent = k;
       const dd = document.createElement("dd");
@@ -1575,7 +2972,65 @@
     });
     if (overviewDiv) overviewDiv.appendChild(dl);
 
+    // These are retained transcript-pattern occurrences, not acoustic detections.
+    if (!staticSource && overviewDiv) {
+      const cues = Array.isArray(scene.music_events) ? scene.music_events : null;
+      const section = document.createElement("section");
+      section.className = "music-event-cues";
+      appendText(section, "h4", "Transcript music/event cues");
+      appendText(section, "p", cues === null
+        ? "Music/event cue evidence is not recorded for this scene."
+        : cues.length ? `${cues.length} cue occurrence${cues.length === 1 ? "" : "s"} in this scene`
+        : "No music/event cues retained for this scene.");
+      if (cues?.length) {
+        appendText(section, "p", "Transcript-pattern matches; not confirmed events or detected music.");
+        const list = document.createElement("ol");
+        cues.forEach(cue => {
+          const record = cue && typeof cue === "object" ? cue : {};
+          const row = document.createElement("li");
+          row.className = "music-event-cue";
+          appendText(row, "strong", typeof cue === "string" ? cue
+            : record.label || record.event || record.name || record.type || record.category || "Unlabeled cue");
+          if (typeof record.context === "string" && record.context) {
+            appendText(row, "p", record.context);
+          }
+          const start = typeof record.start === "number" && Number.isFinite(record.start) ? record.start : null;
+          const end = typeof record.end === "number" && Number.isFinite(record.end) ? record.end : null;
+          const offset = start !== null && end !== null ? `${start}–${end} s`
+            : start !== null ? `${start} s (end not recorded)`
+            : end !== null ? `end ${end} s (start not recorded)` : "not recorded";
+          appendText(row, "p", `Scene-relative offset: ${offset}`);
+          const score = typeof record.confidence === "number" && Number.isFinite(record.confidence)
+            ? `${record.confidence} (not calibrated confidence)` : "not recorded";
+          appendText(row, "p", `Heuristic score: ${score}`);
+          list.appendChild(row);
+        });
+        section.appendChild(list);
+      }
+      appendText(section, "p", "Execution status is not available in this view.");
+      overviewDiv.appendChild(section);
+    }
+
     // Scene entities — split into channel groups
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function" && entitiesDiv) {
+      const banner = document.createElement("div");
+      banner.className = "entities-scene-banner";
+      const bannerText = (scene.summary && scene.summary !== "No description available." && scene.summary !== "No description returned.")
+        ? scene.summary
+        : (scene.visual_caption || (typeof scene.transcript === "string" && scene.transcript.trim() ? `"${scene.transcript.trim().slice(0, 120)}…"` : "Scene selected"));
+      appendText(
+        banner,
+        "p",
+        `🎬 ${staticSource ? "Static source" : `${formatTime(scene.start)}–${formatTime(scene.end)}`} · ${bannerText}`,
+        "entities-scene-banner-text"
+      );
+      const jumpBtn = document.createElement("button");
+      jumpBtn.className = "retro-btn-mini";
+      jumpBtn.textContent = "View Scene Overview →";
+      jumpBtn.addEventListener("click", () => switchInspectorTab("overview"));
+      banner.appendChild(jumpBtn);
+      entitiesDiv.appendChild(banner);
+    }
     const scenePresent  = scene.scene_present_entities  || [];
     const mentioned     = scene.dialogue_mentioned_entities || [];
     const candidates    = scene.candidate_visible_people || [];
@@ -1610,9 +3065,9 @@
 
     const hasChannels = scenePresent.length || mentioned.length || candidates.length;
     if (hasChannels) {
-      renderEntityGroup("In Scene (Proven)", scenePresent, "scene-present", true);
+      renderEntityGroup("Scene Presence Claims", scenePresent, "scene-present", true);
       renderEntityGroup("Mentioned in Dialogue", mentioned, "mentioned", true);
-      renderEntityGroup("Visible / Unconfirmed", candidates, "candidate-visible", false);
+      renderEntityGroup("Visibility Candidates (Unconfirmed)", candidates, "candidate-visible", true);
     } else if (fallbackAll.length) {
       if (entitiesDiv) appendText(entitiesDiv, "h4", "Detected Entities");
       const list = document.createElement("div");
@@ -1650,14 +3105,27 @@
 
     // Detected Objects
     if (scene.objects && scene.objects.length > 0) {
-      if (entitiesDiv) appendText(entitiesDiv, "h4", "Detected Objects");
+      if (entitiesDiv) appendText(entitiesDiv, "h4", "Detected Objects (Unconfirmed)");
       const objList = document.createElement("div");
       objList.className = "details-entities-list objects-list";
-      scene.objects.forEach((label) => {
+      const detailList = Array.isArray(scene.object_details) && scene.object_details.length === scene.objects.length
+        ? scene.object_details
+        : scene.objects.map((label) => ({ label, score: null, score_status: "unknown", source_step: "unknown", qualification: "candidate_unconfirmed" }));
+      detailList.forEach((detail) => {
+        const label = detail.label;
+        const scoreText = typeof detail.score === "number" && Number.isFinite(detail.score)
+          ? `score ${detail.score.toFixed(2)}`
+          : "score unknown";
+        const tsList = Array.isArray(detail.timestamps)
+          ? detail.timestamps.filter((t) => typeof t === "number" && Number.isFinite(t))
+          : [];
+        const tsSuffix = tsList.length > 0
+          ? ` @ ${tsList.map((t) => `${t.toFixed(2)}s`).join(", ")}`
+          : "";
         const pill = document.createElement("span");
         pill.className = "entity-pill object-pill";
-        pill.textContent = label;
-        pill.title = `Detected object: ${label}`;
+        pill.textContent = `${label} (unconfirmed, ${scoreText})${tsSuffix}`;
+        pill.title = `Unconfirmed object detection: ${label} (${scoreText}${tsSuffix}; source: ${detail.source_step || "unknown"})`;
         objList.appendChild(pill);
       });
       if (entitiesDiv) entitiesDiv.appendChild(objList);
@@ -1903,7 +3371,11 @@
         epistemicTitle.style.fontWeight = "bold";
         epistemicTitle.style.color = "#00ff66";
         epistemicTitle.style.marginBottom = "4px";
-        epistemicTitle.textContent = `[EPISTEMIC STATE: ${String(ctx_epistemic.state || "").toUpperCase()}]`;
+        const rawEpistemicStateStr = String(ctx_epistemic.state || "unknown");
+        const epistemicStateDisplay = rawEpistemicStateStr.toLowerCase() === "supported"
+          ? "SUPPORTED (UNVERIFIED MODEL ALIGNMENT)"
+          : rawEpistemicStateStr.toUpperCase();
+        epistemicTitle.textContent = `[STORED EVIDENCE STATE: ${epistemicStateDisplay}]`;
         cogBody.appendChild(epistemicTitle);
 
         const epistemicGrid = document.createElement("div");
@@ -1917,7 +3389,11 @@
         const epistemicDetails = [
           ["Evidence Family", ctx_epistemic.evidence_family],
           ["Dominant Source", ctx_epistemic.dominant_evidence],
-          ["Conflict Status", ctx_epistemic.conflict_detected ? "CONFLICT DETECTED" : "CLEAR (No conflicts)"],
+          ["Conflict Status", ctx_epistemic.conflict_detected === true
+            || (Array.isArray(arb?.evidence_conflicts) && arb.evidence_conflicts.length)
+            || (Array.isArray(arb?.unresolved_axes) && arb.unresolved_axes.length)
+            ? "CONFLICTS / UNRESOLVED AXES PRESENT"
+            : ctx_epistemic.conflict_detected === false ? "No conflict reported" : "Not recorded"],
         ];
 
         epistemicDetails.forEach(([k, v]) => {
@@ -1949,7 +3425,10 @@
           evidenceList.forEach((ev) => {
             const li = document.createElement("li");
             const kind = ev.kind ? `[${ev.kind}] ` : "";
-            const role = ev.role ? `(${ev.role}) ` : "";
+            const rawRole = ev.role || "";
+            const isHistoricalVisualSupport = ev.kind === "visual_signal" && rawRole === "support";
+            const roleLabel = isHistoricalVisualSupport ? "candidate; historical support label" : rawRole;
+            const role = roleLabel ? `(${roleLabel}) ` : "";
             const kindEl = document.createElement("span");
             kindEl.style.color = "rgba(0, 210, 255, 0.7)";
             kindEl.textContent = kind;
@@ -1958,6 +3437,28 @@
             const valueEl = document.createElement("strong");
             valueEl.textContent = ev.value || ev;
             li.appendChild(valueEl);
+            const metaParts = [];
+            if (ev.source_step) {
+              metaParts.push(`source: ${ev.source_step}`);
+            } else if (ev.kind === "visual_signal") {
+              metaParts.push("source: unknown");
+            }
+            if (Array.isArray(ev.depends_on) && ev.depends_on.length) {
+              metaParts.push(`depends_on: ${ev.depends_on.join("+")}`);
+            }
+            if (ev.source_step === "object_detect") {
+              metaParts.push(
+                typeof ev.score === "number" && Number.isFinite(ev.score)
+                  ? `score: ${ev.score.toFixed(2)}`
+                  : "score: unknown"
+              );
+            }
+            if (metaParts.length > 0) {
+              const metaEl = document.createElement("span");
+              metaEl.className = "evidence-provenance-meta";
+              metaEl.textContent = ` [${metaParts.join("; ")}]`;
+              li.appendChild(metaEl);
+            }
             evList.appendChild(li);
           });
           cogBody.appendChild(evList);
@@ -1990,8 +3491,13 @@
         arbTitle.style.fontWeight = "bold";
         arbTitle.style.color = "rgba(0, 220, 200, 0.85)";
         arbTitle.style.margin = "10px 0 4px 0";
-        arbTitle.textContent = `[RESOLVED BY: ${String(arb.resolved_by || "unknown").toUpperCase()}]`;
+        arbTitle.textContent = `[ARBITRATION BASIS: ${String(arb.resolved_by || "unknown").toUpperCase()}]`;
         cogBody.appendChild(arbTitle);
+        if (Array.isArray(arb.unresolved_axes) && arb.unresolved_axes.length) {
+          const unresolved = document.createElement("div");
+          unresolved.textContent = `Unresolved axes: ${arb.unresolved_axes.join(", ")}`;
+          cogBody.appendChild(unresolved);
+        }
 
         const hyps = Array.isArray(arb.hypotheses) ? arb.hypotheses : [];
         if (hyps.length > 0) {
@@ -2010,7 +3516,10 @@
             const li = document.createElement("li");
             const axis = h.axis ? `[${h.axis}] ` : "";
             const family = h.evidence_family ? `via ${h.evidence_family} ` : "";
-            const weight = h.weight ? `(${h.weight})` : "";
+            const rawWeight = h.weight || "";
+            const isHistoricalVisualSupporting = h.evidence_family === "visual" && rawWeight === "supporting";
+            const weightLabel = isHistoricalVisualSupporting ? "candidate; historical supporting label" : rawWeight;
+            const weight = weightLabel ? `(${weightLabel})` : "";
             const axisEl = document.createElement("span");
             axisEl.style.color = "rgba(0, 220, 200, 0.6)";
             axisEl.textContent = axis;
@@ -2075,6 +3584,8 @@
       if (overviewDiv) overviewDiv.appendChild(tagsRow);
     }
 
+    renderAcousticEvidence(overviewDiv, scene);
+
     // Emotion + Sentiment Summary Row
     const hasEmotionData = scene.audio_emotion || (scene.audio_emotion_ranking && scene.audio_emotion_ranking.length > 0)
                         || (scene.text_emotion_ranking && scene.text_emotion_ranking.length > 0);
@@ -2086,8 +3597,9 @@
         const sl = scene.sentiment_label.toLowerCase();
         const chip = document.createElement("span");
         chip.className = `sentiment-chip ${sl === "positive" ? "positive" : sl === "negative" ? "negative" : "neutral"}`;
-        chip.textContent = scene.sentiment_label.toUpperCase();
-        if (scene.sentiment_score != null) chip.title = `Score: ${scene.sentiment_score.toFixed(2)}`;
+        const score = scene.sentiment_score ?? scene.sentiment?.score;
+        chip.textContent = `Text: ${sl}${Number.isFinite(score) ? ` · ${(score * 100).toFixed(1)}% score` : ""}`;
+        chip.title = "Text analysis estimate; a near-even binary score is uncertain.";
         emoRow.appendChild(chip);
       }
 
@@ -2140,6 +3652,70 @@
       captionBlock.className = "visual-caption-block";
       captionBlock.textContent = scene.visual_caption;
       if (overviewDiv) overviewDiv.appendChild(captionBlock);
+      const captionNote = document.createElement("p");
+      captionNote.className = "visual-caption-provenance-note";
+      captionNote.textContent = "Unverified model observation (image_caption); not confirmed scene fact.";
+      if (overviewDiv) overviewDiv.appendChild(captionNote);
+    }
+
+    // Document text is a separate evidence channel from speech and OCR.
+    if (scene.source_kind === "document" && scene.document_text) {
+      const matchedResult = state.searchActive && state.searchResults.find(result =>
+        String(result.scene_id) === String(scene.id) &&
+        (!result.timeline_video_id || result.timeline_video_id === state.activeVideoId));
+      const passage = matchedResult && matchedResult.matched_document_span;
+      // Producer offsets count Unicode code points, not JavaScript UTF-16 units.
+      const documentCharacters = passage ? Array.from(scene.document_text) : [];
+      if (passage && Number.isInteger(passage.char_start) && Number.isInteger(passage.char_end) &&
+          passage.char_start >= 0 && passage.char_end > passage.char_start &&
+          passage.char_end <= documentCharacters.length &&
+          typeof passage.text === "string" &&
+          documentCharacters.slice(passage.char_start, passage.char_end).join("") === passage.text) {
+        if (overviewDiv) appendText(overviewDiv, "h4", "Matching document passage");
+        if (overviewDiv) appendText(overviewDiv, "p", `Extracted text characters ${passage.char_start}–${passage.char_end} (start inclusive, end exclusive).`);
+        const passageBlock = document.createElement("pre");
+        passageBlock.className = "ocr-text-block document-match-block";
+        passageBlock.textContent = passage.text;
+        if (overviewDiv) overviewDiv.appendChild(passageBlock);
+        const context = matchedResult.document_context_span;
+        if (context && Number.isInteger(context.char_start) && Number.isInteger(context.char_end) &&
+            context.matched_char_start === passage.char_start && context.matched_char_end === passage.char_end &&
+            context.char_start >= 0 && context.char_start <= passage.char_start &&
+            context.char_end >= passage.char_end && context.char_end <= documentCharacters.length &&
+            context.char_end - context.char_start <= 4096 &&
+            passage.char_start - context.char_start <= 1024 && context.char_end - passage.char_end <= 1024 &&
+            (context.char_start < passage.char_start || context.char_end > passage.char_end) &&
+            typeof context.text === "string" &&
+            documentCharacters.slice(context.char_start, context.char_end).join("") === context.text) {
+          if (overviewDiv) appendText(overviewDiv, "h4", "Surrounding document context");
+          if (overviewDiv) appendText(overviewDiv, "p", `Extracted text characters ${context.char_start}–${context.char_end} (start inclusive, end exclusive). Includes neighboring text around the ranked passage.`);
+          const contextBlock = document.createElement("pre");
+          contextBlock.className = "ocr-text-block document-context-block";
+          contextBlock.textContent = context.text;
+          if (overviewDiv) overviewDiv.appendChild(contextBlock);
+        }
+        const lexical = matchedResult.lexical_document_span;
+        if (lexical && Number.isInteger(lexical.char_start) && Number.isInteger(lexical.char_end) &&
+            lexical.char_start >= 0 && lexical.char_end > lexical.char_start &&
+            lexical.char_end <= documentCharacters.length && lexical.char_end - lexical.char_start <= 4096 &&
+            typeof lexical.text === "string" &&
+            documentCharacters.slice(lexical.char_start, lexical.char_end).join("") === lexical.text) {
+          if (overviewDiv) appendText(overviewDiv, "h4", "Additional lexical passage");
+          if (overviewDiv) appendText(overviewDiv, "p", `Extracted text characters ${lexical.char_start}–${lexical.char_end} (start inclusive, end exclusive). Additional query-term coverage; not a generated answer.`);
+          const lexicalBlock = document.createElement("pre");
+          lexicalBlock.className = "ocr-text-block document-lexical-block";
+          lexicalBlock.textContent = lexical.text;
+          if (overviewDiv) overviewDiv.appendChild(lexicalBlock);
+        }
+      }
+      if (overviewDiv) appendText(overviewDiv, "h4", "Document Text");
+      if (scene.document_meta && scene.document_meta.text_scope === "main_document_body") {
+        if (overviewDiv) appendText(overviewDiv, "p", "Main document body only. Headers, footers, notes, comments, embedded content and text in images are not extracted.");
+      }
+      const documentBlock = document.createElement("pre");
+      documentBlock.className = "ocr-text-block document-text-block";
+      documentBlock.textContent = scene.document_text;
+      if (overviewDiv) overviewDiv.appendChild(documentBlock);
     }
 
     // OCR / Screen Text
@@ -2157,14 +3733,15 @@
       const transcriptHeader = document.createElement("div");
       transcriptHeader.className = "transcript-header";
       const transcriptLabel = document.createElement("h4");
-      transcriptLabel.textContent = "Scene Transcript";
+      transcriptLabel.textContent = "Scene Transcript · Synthetic voice";
       transcriptHeader.appendChild(transcriptLabel);
+      appendText(transcriptHeader, "p", "Speaker labels are unreviewed model assignments within this scene, not confirmed identities. Dialogue without complete turn evidence is unattributed.", "transcript-attribution-note");
 
       const playAllBtn = document.createElement("button");
       playAllBtn.className = "tts-play-all-btn";
-      playAllBtn.textContent = tts.supported ? "▶ PLAY ALL" : "TTS N/A";
+      playAllBtn.textContent = tts.supported ? "▶ READ TRANSCRIPT" : "TTS N/A";
       playAllBtn.disabled = !tts.supported;
-      playAllBtn.title = "Read full transcript aloud";
+      playAllBtn.title = "Read transcript with a synthetic voice";
       transcriptHeader.appendChild(playAllBtn);
 
       if (tts.supported && tts.voices.length > 0) {
@@ -2194,7 +3771,7 @@
       if (tts.supported) {
         const hint = document.createElement("span");
         hint.className = "tts-hint";
-        hint.textContent = "Select any text to speak it";
+        hint.textContent = "Synthetic voice reads the transcript; select text to read an excerpt.";
         container.appendChild(hint);
       }
 
@@ -2208,13 +3785,14 @@
           rowBtn = document.createElement("button");
           rowBtn.className = "tts-btn";
           rowBtn.textContent = "▶";
-          rowBtn.title = `Read line aloud`;
+          rowBtn.title = "Read line with a synthetic voice";
           row.appendChild(rowBtn);
         }
 
         const speaker = document.createElement("strong");
         speaker.className = "transcript-speaker";
-        speaker.textContent = `${line.speaker}: `;
+        const speakerLabel = line.speaker === "Unattributed" ? "Unattributed" : `${line.speaker} (unreviewed)`;
+        speaker.textContent = `${speakerLabel}: `;
         row.appendChild(speaker);
 
         const textSpan = document.createElement("span");
@@ -2224,7 +3802,7 @@
 
         container.appendChild(row);
 
-        const speakText = `${line.speaker} says: ${line.text}`;
+        const speakText = `${speakerLabel}: ${line.text}`;
         rowMeta.push({ rowEl: row, rowBtn, text: speakText });
 
         if (rowBtn) {
@@ -2274,18 +3852,30 @@
       }
     }
     
+    renderStoredRelationships(entitiesDiv, scene);
     switchInspectorTab(state.activeInspectorTab || "overview");
+  }
+
+  // Keep canonical names/filter IDs intact; detector labels are not confirmed facts.
+  function objectEvidenceLabel(entity) {
+    let text = entity.name || entity.label || "generic";
+    if (entity.scopeSceneId != null) {
+      text += ` · scene ${typeof entity.scopeStart === "number" ? formatTime(entity.scopeStart) : entity.scopeSceneId}`;
+    }
+    return (entity.entity_type || entity.type) === "object"
+      ? `${text} (unconfirmed object)` : text;
   }
 
   // Format entity labels neatly
   function formatEntityLabel(entity) {
     if (typeof entity === "string") return entity;
     const text = entity.name || entity.label || "generic";
+    if ((entity.entity_type || entity.type) === "object") return objectEvidenceLabel(entity);
     return entity.type ? `${text} (${entity.type})` : text;
   }
 
   // Log Data Trail events (Forensic logging)
-  function logDataTrail(query, endpoint, dataset, source, reason, confidence, timeRange) {
+  function logDataTrail(query, endpoint, dataset, source, reason, confidence, timeRange, rankingScore = null) {
     const container = document.getElementById("data-trail-logs");
     if (!container) return;
 
@@ -2303,6 +3893,7 @@
       ["Evidence source", source],
       ["Match reason", reason],
       ["Confidence", confidence !== undefined ? confidence : "n/a"],
+      ["Ranking score (not confidence)", rankingScore],
       ["Time range", timeRange || "n/a"],
     ].filter(([, v]) => v !== null && v !== undefined && v !== "");
 
@@ -2317,14 +3908,89 @@
   }
 
   // Ingest video list and bootstrap selected console
+  async function openSavedAppearance() {
+    const params = new URLSearchParams(window.location.search);
+    if (![...params.keys()].some(key => key.startsWith("watch_"))) return false;
+    document.body.classList.add("people-watch");
+    const banner = document.getElementById("people-watch-banner");
+    const status = document.getElementById("people-watch-status");
+    const back = document.getElementById("return-to-people");
+    banner.hidden = false;
+    const personId = params.get("watch_person"), sceneId = params.get("watch_scene");
+    const videoId = params.get("watch_video"), epochId = params.get("watch_epoch");
+    const matchId = params.get("watch_match"), evidenceId = params.get("watch_evidence");
+    back.href = `/ui/identity_workbench/?${matchId
+      ? new URLSearchParams({matches: matchId})
+      : new URLSearchParams({person: personId || "", scene: sceneId || "", epoch: epochId || ""})}`;
+    back.addEventListener("click", async event => {
+      event.preventDefault();
+      pauseOriginalAudio();
+      ttsStop();
+      if (originalVideo.element) originalVideo.element.pause();
+      if (originalVideo.desktop && !await originalVideo.desktop.doneAndWait()) {
+        status.textContent = "The desktop player could not close. Use Done, then return to your scenes.";
+        return;
+      }
+      window.location.assign(back.href);
+    });
+    status.textContent = "Opening your saved scene…";
+    try {
+      if ((!matchId && !personId) || !sceneId || !videoId || !epochId) throw new Error("This saved-scene link is incomplete.");
+      let displayName, evidenceNote;
+      if (matchId) {
+        const saved = await apiGet(`/api/identity/matches/${encodeURIComponent(matchId)}`);
+        const matches = saved.records.filter(r => r.id === evidenceId && r.scene_id === sceneId);
+        if (saved.epoch_id !== epochId || saved.video_id !== videoId || saved.applied !== false || matches.length !== 1) {
+          throw new Error("This proposed match is unavailable in the active movie.");
+        }
+        displayName = "Proposed match";
+        evidenceNote = "Identity is not applied. Review the original evidence before naming this observation.";
+        back.textContent = "Back to match review";
+        back.href = `/ui/identity_workbench/?${new URLSearchParams({matches: matchId, match_kind: matches[0].modality})}`;
+        if (window.GoodQLibrary) back.href = window.GoodQLibrary.url(back.href);
+      } else {
+        const saved = await apiGet(`/api/identity/appearances/saved?person_id=${encodeURIComponent(personId)}`);
+        const person = saved.people.find(p => p.id === personId);
+        const matches = saved.appearances.filter(a => a.person_id === personId && a.scene_id === sceneId && a.video_id === videoId);
+        if ((saved.epoch_id || matches[0]?.epoch_id) !== epochId || !person || matches.length !== 1) {
+          throw new Error("This appearance is no longer available in the active movie.");
+        }
+        displayName = person.display_name;
+        evidenceNote = "Saved appearance only; mentions and voice remain on hold.";
+        back.textContent = `Back to ${person.display_name}’s scenes`;
+      }
+      if (!state.videos.some(v => (v.video_id || v.id) === videoId)) throw new Error("This movie is unavailable.");
+      document.getElementById("dataset-select").value = videoId;
+      await loadDataset(videoId);
+      const scenes = state.scenes.filter(s => s.id === sceneId);
+      if (state.activeVideoId !== videoId || scenes.length !== 1) throw new Error("The saved scene could not be loaded.");
+      selectScene(sceneId, scenes[0]);
+      status.textContent = `${displayName} · ${videoId} · ${formatTime(scenes[0].start)} – ${formatTime(scenes[0].end)}. ${evidenceNote}`;
+    } catch (error) {
+      status.textContent = `${error.message} Return to People and reload saved scenes.`;
+    }
+    return true;
+  }
+
   async function bootRetroConsole() {
-    const payload = await apiGet("/api/system/videos");
+    const payload = await apiGet("/api/system/videos", "");
     state.videos = Array.isArray(payload) ? payload : (payload.videos || []);
+    if (window.GoodQLibrary) window.GoodQLibrary.catalog(state.videos);
 
     renderVideoSelector();
 
+    if (await openSavedAppearance()) return;
+
     const select = document.getElementById("dataset-select");
-    const activeId = select ? select.value : null;
+    const requestedSource = window.GoodQLibrary?.source;
+    const requestedVideo = requestedSource && state.videos.find(v => v.library_source === requestedSource);
+    if (requestedSource && !requestedVideo) {
+      // An unavailable explicit source must never silently open another movie.
+      if (select) select.value = "";
+      return;
+    }
+    const activeId = requestedVideo ? requestedVideo.video_id : (select ? select.value : null);
+    if (select && activeId) select.value = activeId;
 
     if (activeId) {
       await loadDataset(activeId);
@@ -2333,13 +3999,23 @@
 
   // Fetch and Load selected Video scenes
   async function loadDataset(videoId) {
+    const datasetGeneration = (state.datasetGeneration || 0) + 1;
+    state.datasetGeneration = datasetGeneration;
+    // Invalidate responses even when a quick A -> B -> A switch returns to A.
+    state.searchGeneration = (state.searchGeneration || 0) + 1;
+    state.temporalSummaryGeneration = (state.temporalSummaryGeneration || 0) + 1;
+    state.activeTemporalSummaryJobId = null;
+    resetOriginalAudio();
+    resetOriginalVideo();
+    ttsStop();
     state.activeVideoId = videoId;
     
     // Toggle active ingestion / partial index badge
     const activeVideo = state.videos.find(v => (v.video_id || v.id) === videoId);
+    if (activeVideo && window.GoodQLibrary) window.GoodQLibrary.select(activeVideo);
     const badge = document.getElementById("active-ingestion-badge");
     if (badge) {
-      if (activeVideo && activeVideo.phase6_complete === false) {
+      if (activeVideo && (activeVideo.source_kind || "video") === "video" && activeVideo.phase6_complete === false) {
         badge.hidden = false;
       } else {
         badge.hidden = true;
@@ -2347,11 +4023,31 @@
     }
 
     state.searchResults = [];
+    state.searchActive = false;
+    state.lastQuery = "";
+    const queryInput = document.getElementById("query-input");
+    if (queryInput) queryInput.value = "";
+    const searchStatus = document.getElementById("search-status");
+    if (searchStatus) {
+      searchStatus.textContent = "";
+      searchStatus.hidden = true;
+    }
+    const summaryContainer = document.getElementById("narrative-summary-container");
+    if (summaryContainer) summaryContainer.hidden = true;
+    state.scenes = [];
+    state.graph = { nodes: [], edges: [] };
     state.selectedSceneId = null;
     state.selectedEntity = null;
     state.selectedEntities = [];
     state.videoMeta = null;
+    state.selectedOriginalMedia = null;
     state.intelFilter = null;   // clear any intel filter from previous dataset
+    // Remove old-source content immediately, including while the new load waits.
+    renderTimelineGrid();
+    drawGraph();
+    renderInspector();
+    renderEntityFilterChecklist(false);
+    renderVideoIntelPanel();
 
     try {
       // Fire scenes + full timeline in parallel
@@ -2359,6 +4055,7 @@
         apiGet(`/api/videos/${encodeURIComponent(videoId)}/scenes`),
         apiGet(`/api/videos/${encodeURIComponent(videoId)}/timeline/full`).catch(() => null),
       ]);
+      if (state.datasetGeneration !== datasetGeneration) return;
 
       // Store video-level metadata rollup (Sprint 3)
       if (timelinePayload && typeof timelinePayload === "object" && timelinePayload.metadata) {
@@ -2373,34 +4070,187 @@
 
       // Adapt flat backend outputs to expected shapes (mapping transcripts/entities structure)
       state.scenes = scenesList.map((scene) => {
+        function extractDetectorScore(item) {
+          if (!item || typeof item !== "object") return null;
+          const props = item.properties && typeof item.properties === "object" ? item.properties : null;
+          if (!props) return null;
+          if (props.score_status === "unknown" || props.score_status === "not_applicable") {
+            return null;
+          }
+          if (typeof props.detector_score === "number" && Number.isFinite(props.detector_score)) {
+            return props.detector_score;
+          }
+          if (typeof props.raw_score === "number" && Number.isFinite(props.raw_score)) {
+            return props.raw_score;
+          }
+          if (props.detection && typeof props.detection === "object") {
+            const detScore = typeof props.detection.score === "number" && Number.isFinite(props.detection.score)
+              ? props.detection.score
+              : typeof props.detection.confidence === "number" && Number.isFinite(props.detection.confidence)
+              ? props.detection.confidence
+              : null;
+            if (detScore !== null) return detScore;
+          }
+          if (Array.isArray(props.detections) && props.detections.length > 0) {
+            const detScores = props.detections
+              .map((det) => {
+                if (!det || typeof det !== "object") return null;
+                if (typeof det.score === "number" && Number.isFinite(det.score)) return det.score;
+                if (typeof det.confidence === "number" && Number.isFinite(det.confidence)) return det.confidence;
+                return null;
+              })
+              .filter((val) => val !== null);
+            if (detScores.length > 0) return Math.max(...detScores);
+            return null;
+          }
+          const modalities = Array.isArray(item.source_modalities) ? item.source_modalities : [];
+          const steps = Array.isArray(item.source_steps) ? item.source_steps : [];
+          const isVisionOnlyDetector =
+            props.score_status === "observed" &&
+            (props.source_step === "object_detect" || item.source_step === "object_detect") &&
+            props.mention_confidence == null &&
+            modalities.every((m) => m === "vision") &&
+            steps.every((s) => s === "object_detect");
+          if (isVisionOnlyDetector && typeof item.confidence === "number" && Number.isFinite(item.confidence)) {
+            return item.confidence;
+          }
+          return null;
+        }
+
         const entities = Array.isArray(scene.entities) ? scene.entities : [];
         const normalizedEntities = entities.map((item) => {
           if (typeof item === "string") {
-            return { name: item, type: "generic" };
+            return {
+              name: item,
+              type: "generic",
+              confidence: null,
+              detector_score: null,
+              mention_confidence: null,
+              score_status: "unknown",
+              source_step: null,
+              verification_status: null,
+              bboxes: [],
+              detections: [],
+              timestamps: [],
+            };
           }
+          const props = item.properties && typeof item.properties === "object" ? item.properties : null;
+          const detectorScore = extractDetectorScore(item);
+          const entityConfidence = typeof item.confidence === "number" && Number.isFinite(item.confidence)
+            ? item.confidence
+            : typeof item.score === "number" && Number.isFinite(item.score)
+            ? item.score
+            : detectorScore;
+          const mentionConfidence = props && typeof props.mention_confidence === "number" && Number.isFinite(props.mention_confidence)
+            ? props.mention_confidence
+            : null;
+          const bboxes = props && Array.isArray(props.bboxes)
+            ? props.bboxes
+            : props && props.bbox
+            ? [props.bbox]
+            : [];
+          const detections = props && Array.isArray(props.detections)
+            ? props.detections
+            : props && props.detection
+            ? [props.detection]
+            : [];
           return {
             // _list_dicts() wraps raw strings as {text:"..."} — handle all key variants
+            ...item,
             name: item.label || item.name || item.text || "generic",
             type: item.entity_type || item.type || item.category || "generic",
+            confidence: entityConfidence,
+            detector_score: detectorScore,
+            mention_confidence: mentionConfidence,
+            score_status: detectorScore !== null ? "observed" : "unknown",
+            source_step: item.source_step || item.source || (props && props.source_step) || (Array.isArray(item.source_steps) && item.source_steps.includes("object_detect") ? "object_detect" : null),
+            verification_status: (props && props.verification_status) || item.verification_status || null,
+            bboxes,
+            detections,
+            timestamps: Array.isArray(item.timestamps) ? item.timestamps : [],
           };
         });
 
-        // Parse transcripts from temporal logs
-        const dialogList = [];
-        if (scene.transcript) {
-          dialogList.push({
-            speaker: scene.dominant_speaker_id || "Dialogue",
-            text: scene.transcript,
-            start: scene.start,
-            end: scene.end,
-          });
-        }
-
-        // Normalize detected objects — API returns either string[] or {label}[]
-        const rawObjects = Array.isArray(scene.objects) ? scene.objects : [];
+        // Normalize detected objects — prefer rich detected_objects when present
+        const rawObjects = Array.isArray(scene.detected_objects) && scene.detected_objects.length > 0
+          ? scene.detected_objects
+          : (Array.isArray(scene.objects) ? scene.objects : []);
         const normalizedObjects = rawObjects.map((obj) =>
-          typeof obj === "string" ? obj : (obj && (obj.label || obj.name)) || ""
+          typeof obj === "string" ? obj : (obj && (obj.label || obj.name || obj.class)) || ""
         ).filter(Boolean);
+        const objectDetails = rawObjects.map((obj) => {
+          if (typeof obj === "string") {
+            const label = obj.trim();
+            if (!label) return null;
+            const matchingEntity = normalizedEntities.find(
+              (ent) => ent.type === "object" && String(ent.name || "").toLowerCase() === label.toLowerCase()
+            );
+            const score = matchingEntity && typeof matchingEntity.detector_score === "number" && Number.isFinite(matchingEntity.detector_score)
+              ? matchingEntity.detector_score
+              : null;
+            return {
+              label,
+              score,
+              detector_score: score,
+              mention_confidence: matchingEntity ? matchingEntity.mention_confidence : null,
+              score_status: score !== null ? "observed" : "unknown",
+              source_step: (matchingEntity && matchingEntity.source_step) || "unknown",
+              qualification: "candidate_unconfirmed",
+              bboxes: (matchingEntity && matchingEntity.bboxes) || [],
+              detections: (matchingEntity && matchingEntity.detections) || [],
+              timestamps: (matchingEntity && matchingEntity.timestamps) || [],
+            };
+          }
+          if (!obj || typeof obj !== "object") return null;
+          const label = String(obj.label || obj.name || obj.class || "").trim();
+          if (!label) return null;
+          const explicitUnknown = obj.score_status === "unknown" || obj.score_status === "not_applicable";
+          const rawScore = explicitUnknown
+            ? null
+            : typeof obj.detector_score === "number" && Number.isFinite(obj.detector_score)
+            ? obj.detector_score
+            : typeof obj.raw_score === "number" && Number.isFinite(obj.raw_score)
+            ? obj.raw_score
+            : typeof obj.score === "number" && Number.isFinite(obj.score)
+            ? obj.score
+            : (obj.mention_confidence == null && obj.source_step !== "tagger" && typeof obj.confidence === "number" && Number.isFinite(obj.confidence))
+            ? obj.confidence
+            : null;
+          const matchingEntity = normalizedEntities.find(
+            (ent) => ent.type === "object" && String(ent.name || "").toLowerCase() === label.toLowerCase()
+          );
+          const score = explicitUnknown
+            ? null
+            : rawScore !== null
+            ? rawScore
+            : matchingEntity && typeof matchingEntity.detector_score === "number" && Number.isFinite(matchingEntity.detector_score)
+            ? matchingEntity.detector_score
+            : null;
+          return {
+            label,
+            score,
+            detector_score: score,
+            mention_confidence: typeof obj.mention_confidence === "number" && Number.isFinite(obj.mention_confidence)
+              ? obj.mention_confidence
+              : (matchingEntity ? matchingEntity.mention_confidence : null),
+            score_status: score !== null ? "observed" : "unknown",
+            source_step: obj.source_step || obj.source || (matchingEntity && matchingEntity.source_step) || "object_detect",
+            qualification: "candidate_unconfirmed",
+            bboxes: Array.isArray(obj.bboxes)
+              ? obj.bboxes
+              : obj.bbox
+              ? [obj.bbox]
+              : (matchingEntity && matchingEntity.bboxes) || [],
+            detections: Array.isArray(obj.detections)
+              ? obj.detections
+              : [obj],
+            timestamps: Array.isArray(obj.timestamps)
+              ? obj.timestamps
+              : typeof obj.timestamp === "number" && Number.isFinite(obj.timestamp)
+              ? [obj.timestamp]
+              : (matchingEntity && matchingEntity.timestamps) || [],
+          };
+        }).filter(Boolean);
 
         // Top audio emotion: always normalize to string | null
         const emotionRanking = Array.isArray(scene.audio_emotion_ranking) ? scene.audio_emotion_ranking : [];
@@ -2413,29 +4263,115 @@
           return String(entry.label || entry.name || entry.emotion || entry.category || "") || null;
         }
 
-        const topRankedLabel = emotionRanking.length > 0 ? extractEmotionLabel(emotionRanking[0]) : null;
-        const rawTopEmotion = scene.audio_emotion_top_candidate || topRankedLabel || scene.audio_emotion;
+        // A ranked candidate is not a threshold-qualified acoustic label.
+        const rawTopEmotion = scene.audio_emotion;
         // Guarantee topEmotion is always string | null — never an object
         const topEmotion = rawTopEmotion && typeof rawTopEmotion === "string" ? rawTopEmotion
           : rawTopEmotion && typeof rawTopEmotion === "object" ? extractEmotionLabel(rawTopEmotion)
           : null;
 
+        const audioExcerpt = scene.source_kind === "audio"
+          && typeof scene.transcript === "string" && scene.transcript.trim()
+          ? `Transcript excerpt: ${scene.transcript.slice(0, 240)}` : null;
+
+        const summarySource = scene.summary
+          ? "explicit_summary"
+          : scene.visual_caption
+          ? "visual_caption"
+          : audioExcerpt
+          ? "transcript_excerpt"
+          : scene.document_text
+          ? "document_excerpt"
+          : "none";
+        const hasExplicitClaimProvenance = Boolean(
+          scene.scene_context_llm &&
+          typeof scene.scene_context_llm === "object" &&
+          scene.scene_context_llm.claim_provenance &&
+          typeof scene.scene_context_llm.claim_provenance === "object" &&
+          scene.scene_context_llm.claim_provenance.narrative_summary
+        );
+        const summaryProvenanceStatus = summarySource === "explicit_summary"
+          ? (hasExplicitClaimProvenance ? "observed" : "unknown")
+          : summarySource === "visual_caption"
+          ? (scene.caption_meta && scene.caption_meta.engine ? "observed" : "unknown")
+          : summarySource === "none"
+          ? "none"
+          : "observed";
+        const summaryMeta = {
+          source: summarySource,
+          provenance_status: summaryProvenanceStatus,
+          qualification: summarySource === "visual_caption"
+            ? "Summary source: visual caption (unverified model observation; not confirmed scene fact)."
+            : summarySource === "explicit_summary"
+            ? (hasExplicitClaimProvenance
+                ? "Summary source: model-generated context summary (unverified; check evidence channels)."
+                : "Summary source: unknown provenance (historical or unattributed summary; unverified, check evidence channels).")
+            : summarySource === "transcript_excerpt"
+            ? "Summary source: transcript excerpt (spoken dialogue only; visual presence unverified)."
+            : summarySource === "document_excerpt"
+            ? "Summary source: document text excerpt."
+            : null,
+        };
+        const rawEpistemicState = scene.scene_context_epistemic && typeof scene.scene_context_epistemic === "object"
+          ? (scene.scene_context_epistemic.state || scene.scene_context_epistemic.epistemic_state || null)
+          : null;
+        const epistemicMeta = {
+          raw_state: rawEpistemicState,
+          historical_supported_qualified: String(rawEpistemicState || "").toLowerCase() === "supported",
+          display_state: String(rawEpistemicState || "").toLowerCase() === "supported"
+            ? "SUPPORTED (UNVERIFIED MODEL ALIGNMENT)"
+            : rawEpistemicState
+            ? String(rawEpistemicState).toUpperCase()
+            : "UNKNOWN",
+        };
+
         return {
           id: scene.scene_id ?? scene.id,
+          source_kind: scene.source_kind || "video",
+          document_text: scene.document_text || null,
+          document_meta: scene.document_meta || null,
+          original_source_endpoint: scene.original_source_endpoint,
+          original_source_available: scene.original_source_available === true,
+          original_source_media_type: scene.original_source_media_type,
           start: scene.start,
           end: scene.end,
-          summary: scene.summary ?? scene.visual_caption ?? "No description available.",
+          summary: scene.summary ?? scene.visual_caption ?? audioExcerpt ?? (scene.document_text ? scene.document_text.slice(0, 240) : "No description available."),
+          summary_meta: summaryMeta,
           keyframe_url: scene.representative_frame_endpoint ?? scene.representative_frame,
+          original_audio_endpoint: scene.original_audio_endpoint,
+          original_audio_available: scene.original_audio_available === true,
+          original_video_endpoint: scene.original_video_endpoint,
+          original_video_available: scene.original_video_available === true,
           entities: normalizedEntities,
-          dialogue: dialogList,
+          dialogue: buildSceneDialogue(scene),
           // Sprint 1 enrichment fields
           objects: normalizedObjects,
+          object_details: objectDetails,
+          detected_objects: Array.isArray(scene.detected_objects) ? scene.detected_objects : [],
+          object_observations: Array.isArray(scene.object_observations) ? scene.object_observations : [],
+          detect_meta: scene.detect_meta || null,
           visual_caption: scene.visual_caption || null,
+          caption_meta: scene.caption_meta || null,
+          caption_observations: Array.isArray(scene.caption_observations) ? scene.caption_observations : [],
           ocr_text: scene.ocr_text || null,
+          ocr_observations: Array.isArray(scene.ocr_observations) ? scene.ocr_observations : [],
           tags: Array.isArray(scene.tags) ? scene.tags : [],
           sentiment_label: scene.sentiment_label || null,
           sentiment_score: typeof scene.sentiment_score === "number" ? scene.sentiment_score : null,
           audio_emotion: topEmotion,
+          sound_events: scene.sound_events || [],
+          audio_evidence: scene.audio_evidence,
+          sound_event_meta: scene.sound_event_meta || null,
+          emotion_segments: scene.emotion_segments || [],
+          emotion_input: scene.emotion_input || null,
+          clap_meta: scene.clap_meta || null,
+          transcript_meta: scene.transcript_meta || null,
+          transcript_outcome: scene.transcript_outcome || null,
+          transcript_outcome_reason: scene.transcript_outcome_reason || null,
+          diarization_status: scene.diarization_status || null,
+          diarization_note: scene.diarization_note || null,
+          emotion_status: scene.emotion_status || null,
+          emotion_note: scene.emotion_note || null,
           audio_emotion_ranking: emotionRanking,
           content_state: scene.content_state || "signal",
           // Sprint 2: entity channels
@@ -2445,9 +4381,11 @@
           // Sprint 2: scene context
           scene_context_llm: scene.scene_context_llm || null,
           scene_context_epistemic: scene.scene_context_epistemic || null,
+          epistemic_meta: epistemicMeta,
           // P0 additions: text emotion + interaction fields
           text_emotion_ranking: Array.isArray(scene.text_emotion_ranking) ? scene.text_emotion_ranking : [],
           time_hints: scene.time_hints || null,
+          music_events: Array.isArray(scene.music_events) ? scene.music_events : null,
           interaction_dominance: scene.interaction_dominance || null,
           conversation_owner: scene.conversation_owner || null,
           speaker_aligned_mentions: Array.isArray(scene.speaker_aligned_mentions) ? scene.speaker_aligned_mentions : [],
@@ -2491,23 +4429,25 @@
         videoId,
         "scene database",
         "Bootstrapped dataset scenes successfully.",
-        1.0,
+        null,
         ""
       );
     } catch (err) {
+      if (state.datasetGeneration !== datasetGeneration) return;
       console.error("Failed to load dataset: ", err);
-      logDataTrail("Error", "API fetch", videoId, "network", err.message, 0.0, "");
+      logDataTrail("Error", "API fetch", videoId, "network", err.message, null, "");
     }
   }
 
   // ─── Sprint 3+: Video Intelligence Panel (Interactive) ────────
 
   // Apply an intel-driven filter to the timeline (emotion / sentiment / tag)
-  function setIntelFilter(type, value) {
-    if (state.intelFilter && state.intelFilter.type === type && state.intelFilter.value === value) {
+  function setIntelFilter(type, value, channel = null) {
+    if (state.intelFilter && state.intelFilter.type === type && state.intelFilter.value === value
+        && state.intelFilter.channel === channel) {
       state.intelFilter = null; // toggle off
     } else {
-      state.intelFilter = { type, value };
+      state.intelFilter = { type, value, channel };
     }
     renderVideoIntelPanel();
     renderTimelineGrid();
@@ -2523,10 +4463,11 @@
     const f = state.intelFilter;
     if (!f) return true;
     if (f.type === "emotion") {
-      const audioMatch = scene.audio_emotion && scene.audio_emotion.toLowerCase() === f.value.toLowerCase();
-      const textMatch = Array.isArray(scene.text_emotion_ranking) &&
-        scene.text_emotion_ranking.some(e => (e.label || e || "").toLowerCase() === f.value.toLowerCase());
-      return audioMatch || textMatch;
+      const ranking = f.channel === "audio" ? scene.audio_emotion_ranking
+        : f.channel === "text" ? scene.text_emotion_ranking : null;
+      const top = Array.isArray(ranking) ? ranking[0] : null;
+      const label = typeof top === "string" ? top : (top && typeof top.label === "string" ? top.label : "");
+      return label.toLowerCase() === f.value.toLowerCase();
     }
     if (f.type === "sentiment") {
       return scene.sentiment_label && scene.sentiment_label.toLowerCase() === f.value.toLowerCase();
@@ -2566,7 +4507,8 @@
       const pill = document.createElement("span");
       pill.className = "intel-active-filter-pill";
       pill.title = "Click to clear intel filter";
-      pill.textContent = `◆ ${activeFilter.type}: "${activeFilter.value}"  ×`;
+      const filterLabel = activeFilter.type === "emotion" ? `${activeFilter.channel} top-ranked emotion` : activeFilter.type;
+      pill.textContent = `◆ ${filterLabel}: "${activeFilter.value}"  ×`;
       pill.addEventListener("click", clearIntelFilter);
       filterBar.appendChild(pill);
     } else {
@@ -2585,25 +4527,29 @@
       if (!audioRows.length && !textRows.length) {
         audioEmEl.innerHTML = '<span class="intel-empty">No emotion data.</span>';
       } else {
-        const merged = {};
-        textRows.forEach(r => { if (r.emotion) merged[r.emotion] = { ...r, channel: "text" }; });
-        audioRows.forEach(r => { if (r.emotion) merged[r.emotion] = { ...r, channel: "audio" }; });
-        const rows = Object.values(merged).sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 8);
+        const rows = [
+          ...textRows.filter(r => r.emotion).map(r => ({ ...r, channel: "text" })),
+          ...audioRows.filter(r => r.emotion).map(r => ({ ...r, channel: "audio" })),
+        ].sort((a, b) => (b.count || 0) - (a.count || 0));
         const maxCount = rows[0] ? (rows[0].count || 1) : 1;
 
         rows.forEach(row => {
           const isActive = activeFilter && activeFilter.type === "emotion"
+            && activeFilter.channel === row.channel
             && activeFilter.value.toLowerCase() === row.emotion.toLowerCase();
-          const bar = document.createElement("div");
+          const bar = document.createElement("button");
+          bar.type = "button";
           bar.className = `intel-bar-row intel-clickable${isActive ? " intel-filter-active" : ""}`;
-          bar.title = `Filter timeline to "${row.emotion}" — click to toggle`;
+          bar.setAttribute("aria-pressed", String(Boolean(isActive)));
+          const countLabel = `${row.count} scene${row.count === 1 ? "" : "s"}`;
+          bar.title = `Highlight ${countLabel} with top-ranked ${row.channel} emotion "${row.emotion}" — click to toggle`;
           const pct = Math.round(((row.count || 0) / maxCount) * 100);
           const avgScore = typeof row.average_score === "number" ? (row.average_score * 100).toFixed(0) : null;
           const channelClass = row.channel === "audio" ? "audio" : "text";
 
           const labelEl = document.createElement("span");
           labelEl.className = `intel-bar-label ${channelClass}`;
-          labelEl.textContent = row.emotion;
+          labelEl.textContent = `${row.channel === "audio" ? "Audio" : "Text"}: ${row.emotion}`;
           const track = document.createElement("div");
           track.className = "intel-bar-track";
           const fill = document.createElement("div");
@@ -2612,12 +4558,13 @@
           track.appendChild(fill);
           const metaEl = document.createElement("span");
           metaEl.className = "intel-bar-meta";
-          metaEl.innerHTML = `${row.count}×${avgScore ? ` <em>${avgScore}%</em>` : ""}`;
+          metaEl.textContent = countLabel;
+          if (avgScore !== null) metaEl.title = `Average ${row.channel} model score: ${avgScore}% (not measured accuracy)`;
 
           bar.appendChild(labelEl);
           bar.appendChild(track);
           bar.appendChild(metaEl);
-          bar.addEventListener("click", () => setIntelFilter("emotion", row.emotion));
+          bar.addEventListener("click", () => setIntelFilter("emotion", row.emotion, row.channel));
           audioEmEl.appendChild(bar);
         });
       }
@@ -2854,7 +4801,14 @@
     const input = document.getElementById("query-input");
     const query = String(input ? input.value : "").trim();
     if (!query) return;
+    const searchGeneration = (state.searchGeneration || 0) + 1;
+    state.searchGeneration = searchGeneration;
 
+    const searchStatus = document.getElementById("search-status");
+    if (searchStatus) {
+      searchStatus.textContent = "Searching…";
+      searchStatus.hidden = false;
+    }
     state.lastQuery = query;
     state.searchActive = true;
 
@@ -2901,7 +4855,7 @@
       state.activeVideoId,
       "user search input",
       `Executing multimodal query: "${query}"`,
-      1.0,
+      null,
       ""
     );
 
@@ -2913,28 +4867,68 @@
         modalities: modesList,
         top_k: 50,
       });
+      if (state.searchGeneration !== searchGeneration) return;
+
+      const diagnosticLabels = { text: "Text", visual: "Visual", audio: "Audio" };
+      const failureLabels = { unavailable: "unavailable", error: "failed", disabled: "disabled" };
+      const failures = modesList.flatMap(mode => {
+        const diagnostic = (searchResponse.diagnostics || {})[mode];
+        const failure = diagnostic && failureLabels[diagnostic.status];
+        return diagnosticLabels[mode] && failure
+          ? [`${diagnosticLabels[mode]} search ${failure}.`] : [];
+      });
+      const passageNotices = {
+        fallback: "Document passage ranking unavailable; showing the original search passages.",
+        limited: "Document passage ranking covered a limited candidate set.",
+      };
+      const passageStatus = (searchResponse.diagnostics || {}).text_passages?.status;
+      const passageNotice = modesList.includes("text") ? passageNotices[passageStatus] : null;
+      if (passageNotice) failures.push(passageNotice);
+      const captionStatus = (searchResponse.diagnostics || {}).visual_captions?.status;
+      if (captionStatus === "fallback") {
+        failures.push("Saved caption ranking unavailable; showing CLIP candidates.");
+      }
+      const incompleteMessage = failures.length
+        ? `${modesList.length > 1 ? "Search incomplete: " : ""}${failures.join(" ")}` : "";
+      if (searchStatus) {
+        searchStatus.textContent = incompleteMessage;
+        searchStatus.hidden = !incompleteMessage;
+      }
+      if (incompleteMessage) {
+        logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "search status", incompleteMessage, null, "");
+      }
 
       // Filter grid highlighted matching scenes for active video (robust mapping check)
       const allResults = searchResponse.results || [];
       state.searchResults = allResults.filter(
         (res) => res.timeline_video_id === state.activeVideoId || res.video_id === state.activeVideoId
       );
+      if (searchStatus) {
+        const captionNotice = captionStatus === "ready" ? "Ranked using saved midpoint captions and CLIP." : "";
+        searchStatus.textContent = [incompleteMessage, captionNotice, `${state.searchResults.length} ranked candidates for this source. Similarity does not confirm a match.`].filter(Boolean).join(" ");
+        searchStatus.hidden = false;
+      }
       renderTimelineGrid();
+
+      // The selected document stays open as the query changes, but its matched
+      // passage belongs to this response. Leave active audiovisual playback alone.
+      if (state.scenes.some(scene => scene.source_kind === "document" &&
+          String(scene.id) === String(state.selectedSceneId))) renderInspector();
 
       // Log matching results data trail details
       if (state.searchResults.length) {
         state.searchResults.forEach((res, i) => {
           const matchedScene = state.scenes.find((s) => {
             if (!s) return false;
-            const sId = String(s.id || "").trim().toLowerCase();
-            const rId = String(res.scene_id || "").trim().toLowerCase();
+            const sId = String(s.id ?? "").trim().toLowerCase();
+            const rId = String(res.scene_id ?? "").trim().toLowerCase();
             return sId && rId && sId === rId;
           });
           const timeRangeStr = matchedScene ? `${formatTime(matchedScene.start)} - ${formatTime(matchedScene.end)}` : "";
           
           // Map evidence source to nice labels
-          const evidenceSource = (res.matched_modes || ["text"])
-            .map(m => m === "text" ? "transcript" : m === "visual" ? "keyframe" : m)
+          const evidenceSource = (res.modalities || res.matched_modes || ["text"])
+            .map(m => m === "text" ? "text retrieval" : m === "visual" ? "keyframe" : m)
             .join(", ");
 
           logDataTrail(
@@ -2942,17 +4936,23 @@
             "POST /api/search/multimodal",
             state.activeVideoId,
             evidenceSource,
-            `Match result #${i + 1}: ${res.reason || "Matched semantic query keywords."}`,
-            res.score,
-            timeRangeStr
+            `Ranked candidate #${i + 1}: ${res.reason || "Review the scene evidence for relevance."}`,
+            res.confidence && res.confidence.overall != null ? res.confidence.overall : null,
+            timeRangeStr,
+            res.score
           );
         });
-      } else {
-        logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "search response", "No results found for active dataset.", 0.0, "");
+      } else if (!incompleteMessage) {
+        logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "search response", "No results found for active dataset.", null, "");
       }
     } catch (err) {
+      if (state.searchGeneration !== searchGeneration) return;
       console.error("Search failed: ", err);
-      logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "network error", err.message, 0.0, "");
+      if (searchStatus) {
+        searchStatus.textContent = "Search failed. Try again.";
+        searchStatus.hidden = false;
+      }
+      logDataTrail(query, "POST /api/search/multimodal", state.activeVideoId, "network error", err.message, null, "");
     }
   }
 
@@ -3125,6 +5125,10 @@
   async function pollTemporalSummaryJob(jobId, expectedScope, summaryStyle, summaryBody, summaryModelBadge, generation) {
     if (state.temporalSummaryGeneration !== generation) return;
     state.activeTemporalSummaryJobId = jobId;
+    const fetch = (path, init) => globalThis.fetch(
+      typeof window !== "undefined" && window.GoodQLibrary ? window.GoodQLibrary.url(path) : path,
+      init
+    );
     try {
       for (let attempt = 0; attempt < TEMPORAL_SUMMARY_POLL_LIMIT; attempt += 1) {
         if (
@@ -3237,7 +5241,7 @@
       state.activeVideoId,
       "user narrative search input",
       `Executing narrative search for entities: [${entities.join(", ")}], time hint: "${timeHint}"`,
-      1.0,
+      null,
       ""
     );
 
@@ -3279,12 +5283,12 @@
             state.activeVideoId,
             res.source_file,
             `Narrative Scene #${i + 1}: ${res.summary || "Segment summary"} (gap: ${res.temporal_distance_from_previous}s, similarity: ${res.semantic_similarity_from_previous})`,
-            1.0,
+            null,
             timeRangeStr
           );
         });
       } else {
-        logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "search response", "No narrative scenes returned.", 0.0, "");
+        logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "search response", "No narrative scenes returned.", null, "");
       }
 
       // If summarization is requested, use the governed prepare/confirm lifecycle.
@@ -3316,7 +5320,7 @@
           summaryBody.textContent = "Preparing exact temporal summary authority...";
           summaryModelBadge.textContent = "PREPARING";
 
-          const endpoint = "/api/search/temporal/summarize";
+          const endpoint = window.GoodQLibrary?.url("/api/search/temporal/summarize") || "/api/search/temporal/summarize";
           const prepareResponse = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3444,7 +5448,7 @@
     } catch (err) {
       if (state.temporalSummaryGeneration !== narrativeGeneration) return;
       console.error("Narrative search failed: ", err);
-      logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "network error", err.message, 0.0, "");
+      logDataTrail(state.lastQuery, "POST /api/search/temporal", state.activeVideoId, "network error", err.message, null, "");
       if (summaryBody && summaryModelBadge && enableSummary) {
         summaryBody.className = "summary-body";
         summaryBody.innerHTML = `<span style="color: var(--error-color)">⚠ SEARCH ERROR</span>: ${err.message}`;
@@ -3498,11 +5502,11 @@
         if (theme === "night") {
           document.body.classList.remove("theme-day");
           toggleTheme.textContent = "Theme: NIGHT";
-          toggleTheme.title = "Current: Night Mode (Green CRT). Click to change.";
+          toggleTheme.title = "Current: Night Mode (Deep Obsidian). Click to change.";
         } else if (theme === "day") {
           document.body.classList.add("theme-day");
           toggleTheme.textContent = "Theme: DAY";
-          toggleTheme.title = "Current: Day Mode (Blue CRT). Click to change.";
+          toggleTheme.title = "Current: Day Mode (Daylight Studio). Click to change.";
         } else if (theme === "auto") {
           toggleTheme.textContent = "Theme: AUTO";
           toggleTheme.title = "Current: Auto Mode (System theme). Click to change.";
@@ -3547,18 +5551,32 @@
     }
 
     // Intel panel toggle
-    if (toggleIntel && intelPanel) {
-      toggleIntel.addEventListener("click", () => {
-        state.intelVisible = !state.intelVisible;
-        intelPanel.hidden = !state.intelVisible;
-        
-        const resizerIntel = document.getElementById("resizer-intel");
-        if (resizerIntel) resizerIntel.hidden = !state.intelVisible;
-
+    const ribbonIntel = document.getElementById("ribbon-toggle-intel");
+    const closeIntel = document.getElementById("close-intel-btn");
+    function setIntelVisibility(visible) {
+      state.intelVisible = Boolean(visible);
+      if (intelPanel) intelPanel.hidden = !state.intelVisible;
+      const resizerIntel = document.getElementById("resizer-intel");
+      if (resizerIntel) resizerIntel.hidden = !state.intelVisible;
+      if (toggleIntel) {
         toggleIntel.textContent = state.intelVisible ? "Intel: ON" : "Intel: OFF";
         toggleIntel.classList.toggle("intel-active", state.intelVisible);
-        if (state.intelVisible && state.videoMeta) renderVideoIntelPanel();
-      });
+      }
+      if (ribbonIntel) {
+        ribbonIntel.classList.toggle("pane-active", state.intelVisible);
+        ribbonIntel.setAttribute("aria-pressed", String(state.intelVisible));
+      }
+      if (state.intelVisible && state.videoMeta) renderVideoIntelPanel();
+      resizeCanvas();
+    }
+    if (toggleIntel && intelPanel) {
+      toggleIntel.addEventListener("click", () => setIntelVisibility(!state.intelVisible));
+    }
+    if (ribbonIntel && intelPanel) {
+      ribbonIntel.addEventListener("click", () => setIntelVisibility(!state.intelVisible));
+    }
+    if (closeIntel && intelPanel) {
+      closeIntel.addEventListener("click", () => setIntelVisibility(false));
     }
 
     // Drop Pad Panel toggle & drag handlers
@@ -3735,15 +5753,28 @@
       dropZoneInitialized = true;
     }
 
+    const ribbonStage = document.getElementById("ribbon-toggle-stage");
+    const closeDroppad = document.getElementById("close-droppad-btn");
+    function setDroppadVisibility(visible) {
+      state.droppadVisible = Boolean(visible);
+      if (droppadPanel) droppadPanel.hidden = !state.droppadVisible;
+      if (toggleDroppad) toggleDroppad.classList.toggle("droppad-active", state.droppadVisible);
+      if (ribbonStage) {
+        ribbonStage.classList.toggle("pane-active", state.droppadVisible);
+        ribbonStage.setAttribute("aria-pressed", String(state.droppadVisible));
+      }
+      if (state.droppadVisible) {
+        initDropZoneHandlers();
+      }
+    }
     if (toggleDroppad && droppadPanel) {
-      toggleDroppad.addEventListener("click", () => {
-        state.droppadVisible = !state.droppadVisible;
-        droppadPanel.hidden = !state.droppadVisible;
-        toggleDroppad.classList.toggle("droppad-active", state.droppadVisible);
-        if (state.droppadVisible) {
-          initDropZoneHandlers();
-        }
-      });
+      toggleDroppad.addEventListener("click", () => setDroppadVisibility(!state.droppadVisible));
+    }
+    if (ribbonStage && droppadPanel) {
+      ribbonStage.addEventListener("click", () => setDroppadVisibility(!state.droppadVisible));
+    }
+    if (closeDroppad && droppadPanel) {
+      closeDroppad.addEventListener("click", () => setDroppadVisibility(false));
     }
 
     toggleSfx.addEventListener("click", () => {
@@ -3793,6 +5824,10 @@
     const restoreBottom = document.getElementById("restore-bottom-btn");
     const restoreTop = document.getElementById("restore-top-btn");
 
+    const ribbonSearch = document.getElementById("ribbon-toggle-search");
+    const ribbonInspector = document.getElementById("ribbon-toggle-inspector");
+    const ribbonTimeline = document.getElementById("ribbon-toggle-timeline");
+
     function applyLayout() {
       if (!grid || !screen) return;
 
@@ -3810,6 +5845,10 @@
         if (resizerLeft) resizerLeft.style.display = "";
         if (restoreLeft) restoreLeft.hidden = true;
       }
+      if (ribbonSearch) {
+        ribbonSearch.classList.toggle("pane-active", !layoutState.leftCollapsed);
+        ribbonSearch.setAttribute("aria-pressed", String(!layoutState.leftCollapsed));
+      }
 
       // Right Panel
       if (layoutState.rightCollapsed) {
@@ -3824,6 +5863,10 @@
         if (inspectorPanel) inspectorPanel.style.display = "";
         if (resizerRight) resizerRight.style.display = "";
         if (restoreRight) restoreRight.hidden = true;
+      }
+      if (ribbonInspector) {
+        ribbonInspector.classList.toggle("pane-active", !layoutState.rightCollapsed);
+        ribbonInspector.setAttribute("aria-pressed", String(!layoutState.rightCollapsed));
       }
 
       // Bottom Panel
@@ -3840,6 +5883,10 @@
         if (resizerBottom) resizerBottom.style.display = "";
         if (restoreBottom) restoreBottom.hidden = true;
       }
+      if (ribbonTimeline) {
+        ribbonTimeline.classList.toggle("pane-active", !layoutState.bottomCollapsed);
+        ribbonTimeline.setAttribute("aria-pressed", String(!layoutState.bottomCollapsed));
+      }
 
       // Top Header
       if (layoutState.headerCollapsed) {
@@ -3851,6 +5898,45 @@
       }
 
       resizeCanvas();
+    }
+
+    if (ribbonSearch) {
+      ribbonSearch.addEventListener("click", () => {
+        if (layoutState.leftCollapsed) {
+          layoutState.leftWidth = layoutState.lastLeftWidth;
+          layoutState.leftCollapsed = false;
+        } else {
+          layoutState.lastLeftWidth = layoutState.leftWidth;
+          layoutState.leftCollapsed = true;
+        }
+        applyLayout();
+      });
+    }
+
+    if (ribbonInspector) {
+      ribbonInspector.addEventListener("click", () => {
+        if (layoutState.rightCollapsed) {
+          layoutState.rightWidth = layoutState.lastRightWidth;
+          layoutState.rightCollapsed = false;
+        } else {
+          layoutState.lastRightWidth = layoutState.rightWidth;
+          layoutState.rightCollapsed = true;
+        }
+        applyLayout();
+      });
+    }
+
+    if (ribbonTimeline) {
+      ribbonTimeline.addEventListener("click", () => {
+        if (layoutState.bottomCollapsed) {
+          layoutState.bottomHeight = layoutState.lastBottomHeight;
+          layoutState.bottomCollapsed = false;
+        } else {
+          layoutState.lastBottomHeight = layoutState.bottomHeight;
+          layoutState.bottomCollapsed = true;
+        }
+        applyLayout();
+      });
     }
 
     // Collapse event listeners
@@ -4160,6 +6246,187 @@
     }
   }
 
+  // Obsidian & God's Eye View Progressive Disclosure & Quick-Filter Enhancements
+  function initModernWorkspaceEnhancements() {
+    const overviewEl = document.getElementById("inspector-details-overview");
+    const transcriptEl = document.getElementById("inspector-transcript-zone");
+    const entitiesEl = document.getElementById("inspector-details-entities");
+    const logsEl = document.getElementById("inspector-details-logs");
+    const dataTrailList = document.getElementById("data-trail-list");
+    const toggleDiagBtn = document.getElementById("toggle-diagnostics-btn");
+
+    // 1. Progressive Disclosure for Diagnostic Cards in Overview
+    if (overviewEl) {
+      overviewEl.addEventListener("click", (e) => {
+        if (e.target.closest("button, a, summary, input, select")) return;
+        const card = e.target.closest(".speech-evidence, .audio-search-evidence, .music-event-cues");
+        if (card) {
+          card.classList.toggle("is-expanded");
+        }
+      });
+
+      overviewEl.addEventListener("beforematch", (e) => {
+        const card = e.target.closest(".speech-evidence, .audio-search-evidence, .music-event-cues");
+        if (card) {
+          card.classList.add("is-expanded");
+        }
+      });
+    }
+
+    if (toggleDiagBtn && overviewEl) {
+      toggleDiagBtn.addEventListener("click", () => {
+        const expanded = overviewEl.classList.toggle("diagnostics-expanded");
+        toggleDiagBtn.setAttribute("aria-pressed", String(expanded));
+        toggleDiagBtn.textContent = expanded ? "Diagnostics: Expanded" : "Diagnostics: Compact";
+      });
+    }
+
+    // 2. Inspector Tab Count Badges (via data-badge so button.textContent remains exact)
+    function updateInspectorTabBadges() {
+      const tabTranscript = document.getElementById("inspect-tab-transcript");
+      const tabEntities = document.getElementById("inspect-tab-entities");
+      const tabLogs = document.getElementById("inspect-tab-logs");
+
+      if (tabTranscript && transcriptEl) {
+        const rows = transcriptEl.querySelectorAll(".transcript-row").length;
+        if (rows > 0) tabTranscript.setAttribute("data-badge", String(rows));
+        else tabTranscript.removeAttribute("data-badge");
+      }
+
+      if (tabEntities && entitiesEl) {
+        const items = entitiesEl.querySelectorAll(".entity-item, .graph-evidence-row, li").length;
+        if (items > 0) tabEntities.setAttribute("data-badge", String(items));
+        else tabEntities.removeAttribute("data-badge");
+      }
+
+      if (tabLogs) {
+        const trailItems = dataTrailList ? dataTrailList.querySelectorAll(".log-item").length : 0;
+        if (trailItems > 0) tabLogs.setAttribute("data-badge", String(trailItems));
+        else tabLogs.removeAttribute("data-badge");
+      }
+    }
+
+    if (typeof MutationObserver !== "undefined") {
+      const inspectorObserver = new MutationObserver(() => updateInspectorTabBadges());
+      [transcriptEl, entitiesEl, logsEl, dataTrailList].forEach((el) => {
+        if (el) inspectorObserver.observe(el, { childList: true, subtree: true });
+      });
+      updateInspectorTabBadges();
+    }
+
+    // 3. Entity Filter Quick Search & Clear Button
+    const entityFilterInput = document.getElementById("entity-quick-filter");
+    const clearEntityBtn = document.getElementById("clear-entity-filter-btn");
+    const entityListEl = document.getElementById("entity-filter-list");
+
+    function applyEntityQuickFilter() {
+      if (!entityListEl) return;
+      const q = (entityFilterInput ? entityFilterInput.value : "").trim().toLowerCase();
+      const items = entityListEl.querySelectorAll(".entity-filter-item");
+      items.forEach((item) => {
+        const txt = (item.textContent || "").toLowerCase();
+        item.hidden = q.length > 0 && !txt.includes(q);
+      });
+      if (clearEntityBtn) {
+        const hasSelection = Array.isArray(state.selectedEntities) && state.selectedEntities.length > 0;
+        clearEntityBtn.hidden = !(hasSelection || q.length > 0);
+      }
+    }
+
+    if (entityFilterInput) {
+      entityFilterInput.addEventListener("input", applyEntityQuickFilter);
+    }
+    if (clearEntityBtn) {
+      clearEntityBtn.addEventListener("click", () => {
+        if (entityFilterInput) entityFilterInput.value = "";
+        resetEntityFilters();
+        applyEntityQuickFilter();
+      });
+    }
+    if (typeof MutationObserver !== "undefined" && entityListEl) {
+      const entityObserver = new MutationObserver(() => applyEntityQuickFilter());
+      entityObserver.observe(entityListEl, { childList: true });
+    }
+
+    // 4. Caption grounding markup is removed by the API for every consumer
+    //    (api.main.GroundingMarkupMiddleware); no client-side rewriting here.
+
+    // 5. Timeline Quick Filter, Scene Count Badge & Grid/Compact View Toggle
+    const timelineFilterInput = document.getElementById("timeline-quick-filter");
+    const timelineCountBadge = document.getElementById("timeline-count-badge");
+    const timelineGridEl = document.getElementById("timeline-grid");
+    const viewGridBtn = document.getElementById("timeline-view-grid");
+    const viewCompactBtn = document.getElementById("timeline-view-compact");
+
+    function updateTimelineQuickFilterAndBadge() {
+      if (!timelineGridEl) return;
+      const q = (timelineFilterInput ? timelineFilterInput.value : "").trim().toLowerCase();
+      const cards = timelineGridEl.querySelectorAll(".scene-card");
+      let visibleCount = 0;
+      cards.forEach((card) => {
+        const txt = (card.textContent || "").toLowerCase();
+        const match = q.length === 0 || txt.includes(q);
+        card.style.display = match ? "" : "none";
+        if (match) visibleCount += 1;
+      });
+      if (timelineCountBadge) {
+        const total = cards.length;
+        timelineCountBadge.textContent = q.length > 0
+          ? `${visibleCount} / ${total} scenes`
+          : `${total} scene${total === 1 ? "" : "s"}`;
+      }
+    }
+
+    if (timelineFilterInput) {
+      timelineFilterInput.addEventListener("input", updateTimelineQuickFilterAndBadge);
+    }
+    if (typeof MutationObserver !== "undefined" && timelineGridEl) {
+      const timelineObserver = new MutationObserver(() => updateTimelineQuickFilterAndBadge());
+      timelineObserver.observe(timelineGridEl, { childList: true });
+      updateTimelineQuickFilterAndBadge();
+    }
+
+    if (viewGridBtn && viewCompactBtn && timelineGridEl) {
+      viewGridBtn.addEventListener("click", () => {
+        timelineGridEl.classList.remove("compact-view");
+        viewGridBtn.classList.add("active");
+        viewGridBtn.setAttribute("aria-pressed", "true");
+        viewCompactBtn.classList.remove("active");
+        viewCompactBtn.setAttribute("aria-pressed", "false");
+      });
+      viewCompactBtn.addEventListener("click", () => {
+        timelineGridEl.classList.add("compact-view");
+        viewCompactBtn.classList.add("active");
+        viewCompactBtn.setAttribute("aria-pressed", "true");
+        viewGridBtn.classList.remove("active");
+        viewGridBtn.setAttribute("aria-pressed", "false");
+      });
+    }
+
+    // 6. Keyboard Shortcuts: '/' focuses Search Input, 'Escape' clears active quick filter
+    document.addEventListener("keydown", (e) => {
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : "";
+      const isEditing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target && e.target.isContentEditable);
+      if (e.key === "/" && !isEditing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const qInput = document.getElementById("query-input");
+        if (qInput) {
+          e.preventDefault();
+          qInput.focus();
+          qInput.select();
+        }
+      } else if (e.key === "Escape" && isEditing) {
+        if (e.target === timelineFilterInput && timelineFilterInput.value) {
+          timelineFilterInput.value = "";
+          updateTimelineQuickFilterAndBadge();
+        } else if (e.target === entityFilterInput && entityFilterInput.value) {
+          entityFilterInput.value = "";
+          applyEntityQuickFilter();
+        }
+        e.target.blur();
+      }
+    });
+  }
+
   // Interactive Graph Controls (Drag / Scroll offsets / Zoom Flight)
   function initCanvasControls() {
     const canvas = document.getElementById("graph-canvas");
@@ -4253,6 +6520,36 @@
           state.targetOffset.y = state.canvasOffset.y;
           drawGraph();
         }
+      } else {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const hoverHit = state.graph.nodes.find((node) => {
+          let nx, ny;
+          if (state.graphMode === "3D") {
+            if ((node.rotatedZ || 0) < 0) return false;
+            nx = (node.rotatedX || 0) * state.canvasScale;
+            ny = (node.rotatedY || 0) * state.canvasScale;
+          } else {
+            nx = node.x * state.canvasScale;
+            ny = node.y * state.canvasScale;
+          }
+          const nodeScreenX = canvas.width / 2 + state.canvasOffset.x + nx;
+          const nodeScreenY = canvas.height / 2 + state.canvasOffset.y + ny;
+          const dist = Math.hypot(nodeScreenX - mouseX, nodeScreenY - mouseY);
+          let depthScale = 1.0;
+          if (state.graphMode === "3D") {
+            depthScale = 0.5 + 0.65 * (((node.rotatedZ || 0) + 140) / 280);
+          }
+          const radius = (6 + Math.min(12, node.count * 1.5)) * depthScale;
+          return dist <= radius + 6;
+        });
+        const nextHoverId = hoverHit ? hoverHit.id : null;
+        if (state.hoveredNodeId !== nextHoverId) {
+          state.hoveredNodeId = nextHoverId;
+          canvas.style.cursor = nextHoverId ? "pointer" : "";
+          drawGraph();
+        }
       }
     });
 
@@ -4282,6 +6579,11 @@
     canvas.addEventListener("mouseleave", () => {
       state.isDragging = false;
       state.activeNode = null;
+      if (state.hoveredNodeId) {
+        state.hoveredNodeId = null;
+        canvas.style.cursor = "";
+        drawGraph();
+      }
     });
 
     canvas.addEventListener("dblclick", (e) => {
@@ -4420,10 +6722,30 @@
         const db = statusPayload.database || {};
         const epoch = db.epoch || "N/A";
         fingerprintEl.textContent = `Epoch: ${epoch} | Run: ${runId}`;
+        if (typeof window !== "undefined" && window.GoodQLibrary?.caption) {
+          fingerprintEl.textContent = window.GoodQLibrary.caption;
+          fingerprintEl.title = `Selected collection: ${epoch}; run: ${runId}`;
+        }
       }
 
       const progressWidget = document.getElementById("ingestion-progress-widget");
       const headerStatus = document.querySelector(".header-status");
+      const currentFile = cliProgress.current_video || processing.current_video || "unknown";
+      const stage = cliProgress.stage || "ingestion";
+      const sceneEl = document.getElementById("progress-scene-count");
+      if ((isActive || isFailed) && sceneEl) {
+        const extension = String(currentFile).split(".").pop().toLowerCase();
+        if (["jpg", "jpeg", "png", "bmp", "gif", "tiff", "webp"].includes(extension)) {
+          sceneEl.textContent = "Source: image";
+        } else if (["pdf", "txt", "md", "doc", "docx"].includes(extension)) {
+          sceneEl.textContent = "Source: document";
+        } else {
+          const sceneIndex = cliProgress.scene_index || 0;
+          const scenesTotal = cliProgress.scenes_total || "?";
+          sceneEl.textContent = stage === "Processing additional scenes..." || scenesTotal === "..." || sceneIndex === "..."
+            ? "Analyzing..." : `Scene: ${sceneIndex} of ${scenesTotal}`;
+        }
+      }
 
       // Handle WSL Frozen Header Status
       if (headerStatus) {
@@ -4464,11 +6786,7 @@
         }
 
         const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
-        const currentFile = cliProgress.current_video || processing.current_video || "unknown";
         const currentStep = cliProgress.current_step || "processing";
-        const stage = cliProgress.stage || "ingestion";
-        const sceneIndex = cliProgress.scene_index || 0;
-        const scenesTotal = cliProgress.scenes_total || "?";
 
         // Update widget UI
         const fileEl = document.getElementById("progress-file");
@@ -4486,15 +6804,6 @@
         const stageEl = document.getElementById("progress-stage");
         if (stageEl) stageEl.textContent = `Stage: ${stage}`;
 
-        const sceneEl = document.getElementById("progress-scene-count");
-        if (sceneEl) {
-          if (stage === "Processing additional scenes..." || scenesTotal === "..." || sceneIndex === "...") {
-            sceneEl.textContent = "Analyzing...";
-          } else {
-            sceneEl.textContent = `Scene: ${sceneIndex} of ${scenesTotal}`;
-          }
-        }
-
         const elapsedSec = Math.floor((Date.now() - ingestionStartTime) / 1000);
         const elapsedEl = document.getElementById("progress-elapsed");
         if (elapsedEl) elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
@@ -4510,8 +6819,6 @@
           if (titleEl) titleEl.textContent = "🛰 PIPELINE INGESTION FAILED";
 
           const pct = cliProgress.progress_percent !== undefined ? cliProgress.progress_percent : (processing.progress_percent || 0);
-          const currentFile = cliProgress.current_video || processing.current_video || "unknown";
-          const stage = cliProgress.stage || "ingestion";
 
           const fileEl = document.getElementById("progress-file");
           if (fileEl) fileEl.textContent = `File: ${currentFile}`;
@@ -4522,10 +6829,8 @@
           const textEl = document.getElementById("progress-text");
           if (textEl) textEl.textContent = `${pct}%`;
 
-          const errors = cliProgress.errors || [];
-          const errorMsg = errors.length > 0 ? errors[errors.length - 1].message : "Unknown error";
           const stepEl = document.getElementById("progress-step");
-          if (stepEl) stepEl.textContent = `Step: FAILED - ${errorMsg}`;
+          if (stepEl) stepEl.textContent = "Step: FAILED - check local processing logs for details";
 
           const stageEl = document.getElementById("progress-stage");
           if (stageEl) stageEl.textContent = `Stage: ${stage}`;
@@ -4609,6 +6914,7 @@
         initCanvasControls();
         initTTS();
         initInspectorTabs();
+        initModernWorkspaceEnhancements();
         startStatusPolling();
 
         // Canvas resize observer for responsive scaling without stretching
@@ -4715,28 +7021,33 @@
           btn.addEventListener("click", () => {
             const currentMode = btn.getAttribute("data-mode");
             
-            if (currentMode === "all") {
-              const allActive = btn.classList.contains("active");
-              modeButtons.forEach((b) => b.classList.toggle("active", !allActive));
-              state.modes = !allActive ? new Set(["text", "visual", "audio"]) : new Set();
+            if (currentMode === "identity") {
+              state.modes = new Set(["identity"]);
+            } else if (currentMode === "all") {
+              state.modes = new Set(["text", "visual", "audio"]);
             } else {
-              const active = btn.classList.toggle("active");
-              if (active) {
-                state.modes.add(currentMode);
+              state.modes.delete("identity");
+              if (state.modes.has(currentMode)) {
+                // A query needs at least one evidence source.
+                if (state.modes.size > 1) state.modes.delete(currentMode);
               } else {
-                state.modes.delete(currentMode);
-              }
-              // Adjust All button state depending on individual mode status
-              const allBtn = document.querySelector('.mode-btn[data-mode="all"]');
-              if (allBtn) {
-                allBtn.classList.toggle("active", state.modes.size === 3);
+                state.modes.add(currentMode);
               }
             }
+            modeButtons.forEach((button) => {
+              const mode = button.getAttribute("data-mode");
+              const active = mode === "all" ? state.modes.size === 3 : state.modes.has(mode);
+              button.classList.toggle("active", active);
+              button.setAttribute("aria-pressed", String(active));
+            });
           });
         });
       })
       .catch((err) => {
         console.error("Bootloader failed: ", err);
+        const select = document.getElementById("dataset-select");
+        if (select) { select.innerHTML = ""; const option = document.createElement("option");
+          option.textContent = "Library unavailable — reload when saved collections are online"; select.appendChild(option); }
       });
   });
 })();

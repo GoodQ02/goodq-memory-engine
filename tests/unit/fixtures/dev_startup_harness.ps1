@@ -161,8 +161,10 @@ $failure = $null
 $children = @()
 try {
     try {
-        # Real entrypoints import the application stack; dummy children do not.
-        $startupBudget = if ($Scenario -in @('real_work', 'supervisor_crash')) { 30 } else { 4 }
+        # Even dummy children use real, cold NetTCPIP/HTTP ownership checks.
+        # Allow those checks and two stability observations to complete. Keep
+        # short budgets for scenarios that intentionally test failed readiness.
+        $startupBudget = if ($Scenario -in @('api_unhealthy', 'missing_lifecycle')) { 4 } else { 30 }
         $parameters = @{ApiPort=$Port; StartupTimeoutSeconds=$startupBudget; StabilizationSeconds=0.4}
         if ($CheckStart) { $parameters.CheckStart = $true }
         if ($Supervise) {

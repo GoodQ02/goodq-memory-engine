@@ -62,6 +62,9 @@ fi
 # Activate the virtual environment
 source "$VENV_DIR/bin/activate"
 
+# Local media analysis must not enable pyannote 4's optional usage telemetry.
+export PYANNOTE_METRICS_ENABLED=0
+
 PYTHON_TAG="$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')"
 NVIDIA_LIB_ROOT="$VENV_DIR/lib/$PYTHON_TAG/site-packages/nvidia"
 

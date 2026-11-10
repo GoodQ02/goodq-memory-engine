@@ -179,11 +179,14 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     "payload": {
                         "epoch_id": epoch_id,
                         "video_hash": video_hash,
+                        "video_id": item.get("video_id") or item.get("video_hash"),
+                        "run_id": item.get("run_id") or (cfg.get("run") or {}).get("id"),
                         "scene_id": scene_id,
                         "scene_hash": h,
                         "worker_name": "image_embed_clip",
                         "vector_model_tag": _CLIP["model_tag"],
-                        "modality": "video",
+                        "modality": "multimodal" if item.get("source_kind") == "image" else "video",
+                        **({"source_kind": item["source_kind"]} if item.get("source_kind") else {}),
                         "ucf_frame_id": None,
                         "source_path": path,
                         "faiss_id": faiss_id,
@@ -226,7 +229,8 @@ def image_embed_clip(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         (
                             faiss_id, h, path, datetime.utcnow().isoformat(),
                             epoch_id, video_hash, scene_id, h,
-                            "image_embed_clip", _CLIP["model_tag"], "video"
+                            "image_embed_clip", _CLIP["model_tag"],
+                            "multimodal" if item.get("source_kind") == "image" else "video"
                         ),
                     )
                 map_ok = True

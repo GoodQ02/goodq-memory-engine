@@ -516,6 +516,7 @@ def build_wanted_models(registry: Dict | None, profile: str = "all") -> List[str
         "superb/hubert-large-superb-er",
         "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
         "facebook/wav2vec2-base-960h",
+        "speechbrain/spkrec-ecapa-voxceleb",
         "cardiffnlp/twitter-roberta-base-emotion-latest",
         "distilbert-base-uncased-finetuned-sst-2-english",
         "snakers4/silero-vad",
@@ -530,6 +531,7 @@ def build_wanted_models(registry: Dict | None, profile: str = "all") -> List[str
             "superb/hubert-large-superb-er",
             "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition",
             "facebook/wav2vec2-base-960h",
+            "speechbrain/spkrec-ecapa-voxceleb",
         ]
     return fallback
 
@@ -708,6 +710,9 @@ def main() -> None:
                 pinned_models[repo_id] = revision
     else:
         print("[bootstrap] WARNING: model_registry.yaml not found, using latest versions")
+
+    from wsl2_audio.speaker_signature import MODEL_ID, REVISION
+    pinned_models[MODEL_ID] = REVISION
 
     profile = getattr(args, "profile", "all")
     wanted = build_wanted_models(registry, profile=profile)

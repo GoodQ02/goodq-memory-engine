@@ -3,6 +3,27 @@
 # snapshot, exact files, and a compatibility manifest before packing.
 schema_version: 1
 assets:
+  # Installed separately for the local WSL runtime; not qualified for installer packs.
+  acoustic_events_ast:
+    kind: model
+    source: MIT/ast-finetuned-audioset-10-10-0.4593
+    revision: f826b80d28226b62986cc218e5cec390b1096902
+    license_class: redistribution_unreviewed
+    vault_scope: personal
+    pack_scope: none
+    hardware_profile: cpu_gpu
+    status: excluded
+    disposition: host_provisioned_wsl_runtime_not_packaged
+  ecapa_speaker:
+    kind: model
+    source: speechbrain/spkrec-ecapa-voxceleb
+    revision: 0f99f2d0ebe89ac095bcc5903c4dd8f72b367286
+    license_class: redistribution_unreviewed
+    vault_scope: personal
+    pack_scope: none
+    hardware_profile: cpu_gpu
+    status: excluded
+    disposition: host_provisioned_wsl_runtime_not_packaged
   blip_caption: {kind: model, source: Salesforce/blip-image-captioning-base, revision: 82a37760796d32b1411fe092ab5d4e227313294b, license_class: bsd_3_clause_candidate, vault_scope: personal_and_distributable, pack_scope: vision_cpu, hardware_profile: cpu_gpu, status: eligible, expected_terms: https://huggingface.co/Salesforce/blip-image-captioning-base/blob/82a37760796d32b1411fe092ab5d4e227313294b/README.md, sealed_manifest_sha256: 3c49a0c56884b9647a9ed1b4390dc86394287648da9f9ea5381f72bacea4b3b6}
   vit_gpt2_caption: {kind: model, source: nlpconnect/vit-gpt2-image-captioning, revision: dc68f91c06a1ba6f15268e5b9c13ae7a7c514084, license_class: apache_2_candidate, vault_scope: personal_and_distributable, pack_scope: vision_cpu, hardware_profile: cpu_gpu, status: eligible, expected_terms: https://huggingface.co/nlpconnect/vit-gpt2-image-captioning/blob/dc68f91c06a1ba6f15268e5b9c13ae7a7c514084/README.md, sealed_manifest_sha256: ad4395f3c0ee30126524ef71de2ee52dac54fd413f01626b36db987edc58af38}
   clip_vit: {kind: model, source: laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K, revision: 84c9828e63dc9a9351d1fe637c346d4c1c4db341, license_class: mit_candidate, vault_scope: personal_and_distributable, pack_scope: vision_cpu, hardware_profile: cpu_gpu, status: eligible, expected_terms: https://huggingface.co/laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K/blob/84c9828e63dc9a9351d1fe637c346d4c1c4db341/README.md, sealed_manifest_sha256: 4a99b3b5899e553c6830200dced71a5e19774ec076fbf0f0bead04dd2d7e46c5}
@@ -50,7 +71,10 @@ assets:
   ffmpeg: {kind: executable, source: BtbN/FFmpeg-Builds, revision: 9b6c8969e0, license_class: lgpl_candidate, vault_scope: personal_and_distributable, pack_scope: core_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:ffmpeg_windows_lgpl_shared_zip, source_artifact_sha256: 8d252cb9d6fc0d206c7d02128d822a1b62007943f44d85e4f8a8d19b305465e9}
   ffprobe: {kind: executable, source: BtbN/FFmpeg-Builds, revision: 9b6c8969e0, license_class: lgpl_candidate, vault_scope: personal_and_distributable, pack_scope: core_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:ffmpeg_windows_lgpl_shared_zip, source_artifact_sha256: 8d252cb9d6fc0d206c7d02128d822a1b62007943f44d85e4f8a8d19b305465e9}
   python_wheelhouse: {kind: wheelhouse, source: requirements-baseline-lock, revision: lock_and_sbom_bound, license_class: per_wheel_sbom, vault_scope: personal_and_distributable, pack_scope: core_cpu, hardware_profile: cpu, status: eligible, seal_mode: build_time_sbom}
-  tesseract: {kind: executable, source: tesseract-ocr/tesseract, revision: 5.4.0, license_class: apache_2_candidate, vault_scope: personal_and_distributable, pack_scope: ocr_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:tesseract_ocr_setup_exe, source_artifact_sha256: c885fff6998e0608ba4bb8ab51436e1c6775c2bafc2559a19b423e18678b60c9}
   vc_redist: {kind: runtime, source: microsoft/vc_redist.x64, revision: 17.0, license_class: microsoft_redistributable, vault_scope: personal_and_distributable, pack_scope: core_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:vc_redist_x64_exe, source_artifact_sha256: cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b}
   nssm: {kind: executable, source: nssm.cc, revision: 2.24-103-gdee49fc, license_class: public_domain_candidate, vault_scope: personal_and_distributable, pack_scope: service_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:nssm_windows_zip, source_artifact_sha256: dd65d65d805ce646148d7ba18a9fcd1a1e8402f9e3822981252a6544136aad22}
   poppler: {kind: executable, source: oschwartz10612/poppler-windows, revision: 24.08.0, license_class: gpl_2_or_later_candidate, vault_scope: personal_and_distributable, pack_scope: document_cpu, hardware_profile: cpu, status: eligible, source_manifest: offline_dependencies_manifest:poppler_windows_zip, source_artifact_sha256: 58a6f9ae269756231d2f9aa6cba39d75fec6deacaf3c4a50683383b5f3d5a527}
+  vlc: {kind: executable, source: videolan/vlc, revision: 3.0.24, license_class: gpl_2_or_later_with_third_party_components, vault_scope: personal, pack_scope: media_playback_personal, hardware_profile: cpu, status: personal_only, expected_terms: https://images.videolan.org/legal.html, source_manifest: offline_dependencies_manifest:vlc_windows_x64_zip, source_artifact_sha256: fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323, sealed_manifest_sha256: 6900211fde74a7846344e27325f2f2d7b286e39a95c75f5c6ee07ddb62be755a, disposition: public_hold_corresponding_third_party_source_closure}
+  paddle_ocr_det: {"kind": "model", "source": "PaddlePaddle/PP-OCRv6_medium_det_onnx", "revision": "61323801669c338b7891481ec7bac61ce31b576a", "license_class": "apache_2_candidate", "vault_scope": "personal_and_distributable", "pack_scope": "ocr_cpu", "hardware_profile": "cpu_gpu", "status": "eligible", "expected_terms": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/blob/61323801669c338b7891481ec7bac61ce31b576a/README.md", "source_manifest": "model_registry:paddle_ocr_det", "source_artifact_sha256": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1", "disposition": "local_runtime_assets_pinned_packaging_snapshot_pending", "packaging_status": "pending"}
+  paddle_ocr_rec: {"kind": "model", "source": "PaddlePaddle/PP-OCRv6_medium_rec_onnx", "revision": "50c7eacafc52fa7bcf4194e8cd08e46f8558504b", "license_class": "apache_2_candidate", "vault_scope": "personal_and_distributable", "pack_scope": "ocr_cpu", "hardware_profile": "cpu_gpu", "status": "eligible", "expected_terms": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/blob/50c7eacafc52fa7bcf4194e8cd08e46f8558504b/README.md", "source_manifest": "model_registry:paddle_ocr_rec", "source_artifact_sha256": "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba", "disposition": "local_runtime_assets_pinned_packaging_snapshot_pending", "packaging_status": "pending"}
+  wevisone_vl_2b: {"kind": "model", "source": "tencent/WeVisOne-VL-2B", "revision": "3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf", "license_class": "apache_2_candidate", "vault_scope": "personal_and_distributable", "pack_scope": "vision_cpu", "hardware_profile": "cpu_gpu", "status": "eligible", "expected_terms": "https://huggingface.co/tencent/WeVisOne-VL-2B/blob/3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf/README.md", "source_manifest": "model_registry:wevisone_vl_2b", "source_artifact_sha256": "ecccb140b579441b46f4933961632ab608dae3d593542c9901b4ff2f068d857f", "disposition": "local_runtime_assets_pinned_packaging_snapshot_pending", "packaging_status": "pending"}

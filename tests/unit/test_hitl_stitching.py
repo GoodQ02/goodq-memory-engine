@@ -203,7 +203,8 @@ def test_get_unstitched_patterns(tmp_path: Path, monkeypatch) -> None:
     assert pattern.node_name == "voice_pattern_test_speaker_1"
     assert pattern.occurrence_count == 1
     assert pattern.voiced_seconds == 15.0
-    assert pattern.segment_count == 3
+    assert pattern.scene_count == 2
+    assert pattern.segment_count is None  # Signature count is not a speech-turn count.
     assert pattern.sample_transcript == "This is a sample transcript excerpt."
 
 

@@ -89,7 +89,7 @@ def promote_audio_result(source_json: Path, video_id: str, scene_id: str):
 
 def extract_metadata_from_path(json_path: Path):
     """Extract video_id and scene_id from file path"""
-    # Example: logs/scene_ingest/02. 1988 - 1989/audio/scene_0019.wav
+    # Example: logs/scene_ingest/sample_reel_02/audio/scene_0019.wav
     parts = json_path.parts
     
     video_name = None

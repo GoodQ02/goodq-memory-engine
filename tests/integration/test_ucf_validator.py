@@ -19,6 +19,67 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.ucf.validate_ucf_epoch import run_validation, is_overlapping, make_scene_hash
 from scripts.ucf.ucf_ledger import UCFLedgerClient
 
+
+def test_mini_agent_validation_uses_injected_epoch_without_ambient_reads(tmp_path, monkeypatch):
+    """The production dispatch must validate its configured epoch, not the operator's."""
+    from agents.mini_agent_client import MiniAgentClient
+    import scripts.ucf.validate_ucf_epoch as validator
+
+    configs = {}
+    ledgers = {}
+    for name in ("isolated", "ambient"):
+        epoch_root = tmp_path / name / "epoch_witness_config"
+        ledger_path = epoch_root / "ucf" / "ucf_ledger.db"
+        ledger_path.parent.mkdir(parents=True)
+        ledger = UCFLedgerClient(str(ledger_path))
+        ledger.init_schema()
+        ledger.close()
+        configs[name] = {
+            "agent": {"execution_mode": "in_process"},
+            "paths": {
+                "db_dir": str(epoch_root),
+                "data_root": str(tmp_path / name),
+                "processing": str(epoch_root / "processing"),
+                "reports_dir": str(tmp_path / name / "reports"),
+            },
+        }
+        ledgers[name] = ledger_path
+
+    ambient_before = ledgers["ambient"].read_bytes()
+    ambient_legacy = tmp_path / "ambient" / "epochs" / "epoch_witness_config" / "ucf" / "ucf_ledger.db"
+    ambient_legacy.parent.mkdir(parents=True)
+    ambient_legacy.write_bytes(b"operator legacy path sentinel")
+    ambient_config_reads = []
+    opened_databases = []
+    original_connect = sqlite3.connect
+
+    def load_ambient(_overrides):
+        ambient_config_reads.append(True)
+        return configs["ambient"]
+
+    def record_connect(database, *args, **kwargs):
+        opened_databases.append(str(database))
+        return original_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(validator, "load_configs", load_ambient)
+    monkeypatch.setattr(sqlite3, "connect", record_connect)
+    monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path / "ambient"))
+    client = MiniAgentClient(profile="safe", config=configs["isolated"])
+
+    result, return_code = client.execute_tool("validate_ucf_epoch", {})
+
+    assert return_code == 0, result
+    assert result["output"] == {"success": True, "errors": []}
+    report_path = Path(configs["isolated"]["paths"]["reports_dir"]) / "ucf_validation_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["path_hygiene"]["db_path"] == str(ledgers["isolated"])
+    assert not ambient_config_reads
+    assert str(ledgers["isolated"]) in opened_databases
+    assert str(ledgers["ambient"]) not in opened_databases
+    assert ledgers["ambient"].read_bytes() == ambient_before
+    assert not Path(configs["ambient"]["paths"]["reports_dir"]).exists()
+
+
 def test_is_overlapping():
     # 1. Standard overlap cases (max(start1, start2) < min(end1, end2))
     assert is_overlapping(1.0, 2.0, 1.5, 2.5) is True

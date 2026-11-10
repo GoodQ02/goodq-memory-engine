@@ -22,9 +22,10 @@ All routes are read-mostly. The only writes are:
   - speaker cluster confirmations (stored in speaker_clusters.json, no KG writes)
   - roster saves (stored in family_roster.yaml, no KG writes)
   - roster export (writes family_roster.yaml to data path)
+  - confirmed appearance additions/undo (graph rows and durable scoped receipts)
 
-No KG mutations happen here. Mutations are Phase 5A (promote_identity_layer.py),
-which requires a separate confirmed CLI flow.
+Appearance-only graph additions have a separate read-only preview and governed
+Apply/Undo flow. Transcript mentions and voice links are excluded from that flow.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from __future__ import annotations
 import json
 import hashlib
 import logging
+import sqlite3
 import math
 import os
 import re
@@ -47,7 +49,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from filelock import FileLock
 from pydantic import BaseModel, Field
 
@@ -67,7 +69,12 @@ from api.utils.identity_read_projection import (
     identity_data_path,
     project_face_cluster_images,
 )
+from api.utils.identity_readiness import artifact_readiness, identity_readiness_projection
+from api.utils import identity_appearance
+from api.utils import identity_match_review
+from api.utils import identity_matching as matching_projection
 from steps.common.config_loader import load_configs
+from steps.common.atomic_io import atomic_write_json
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/identity", tags=["identity"])
@@ -255,6 +262,174 @@ def _identity_data_path() -> Path:
 
 def _identity_epoch_authority() -> dict[str, Any]:
     return epoch_authority_projection(_CFG, _identity_data_path())
+
+
+@router.get("/readiness")
+async def get_identity_readiness() -> dict:
+    return identity_readiness_projection(_CFG)
+
+
+def _read_matching(action, *args):
+    try:
+        return action(_CFG, *args)
+    except FileNotFoundError:
+        raise HTTPException(404, "Saved comparison evidence is unavailable")
+    except (OSError, ValueError, KeyError):
+        log.exception("Saved identity comparison cannot be read")
+        raise HTTPException(409, "Saved comparison evidence has changed or is invalid")
+
+
+@router.get("/matches")
+def list_identity_matches():
+    return _read_matching(matching_projection.list_reports)
+
+
+@router.get("/matches/{report_id}")
+def get_identity_matches(report_id: str):
+    return _read_matching(matching_projection.public_report, report_id)
+
+
+@router.get("/matches/{report_id}/media/{evidence_id}")
+def get_identity_match_media(report_id: str, evidence_id: str):
+    path, media_type = _read_matching(matching_projection.media_file, report_id, evidence_id)
+    return FileResponse(path, media_type=media_type)
+
+
+@router.get("/appearances/preview")
+def preview_appearances() -> dict:
+    try:
+        return identity_appearance.preview(_CFG)
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail="Saved appearance evidence could not be read. Review the roster and face groups.") from exc
+
+
+@router.get("/appearances/history")
+def appearance_history() -> dict:
+    try:
+        return {"receipts": identity_appearance.history(_CFG)}
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/appearances/saved")
+def saved_appearances(person_id: Optional[str] = Query(None, min_length=1, max_length=256)) -> dict:
+    """Read applied face-to-scene links; never prepare or apply an identity plan."""
+    try:
+        return identity_appearance.saved(_CFG, person_id)
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=409, detail="Saved scene connections could not be read. Reload to try again.") from exc
+
+
+class FaceMatchReviewRequest(BaseModel):
+    report_id: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    report_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    accepted_ids: list[str] = Field(default_factory=list, max_length=1000)
+    decisions: Optional[dict[str, str]] = None
+    # Right saved person for faces marked Incorrect; omitted when none are chosen.
+    corrections: Optional[dict[str, str]] = Field(None, max_length=1000)
+    completed_review: bool = False
+    reuse_confirmed_faces: bool = False
+
+
+@router.post("/matches/preview")
+def preview_face_matches(req: FaceMatchReviewRequest):
+    try:
+        return identity_match_review.preview(_CFG, req.model_dump(exclude_unset=True))
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+        log.exception("Reviewed face evidence cannot be previewed")
+        raise HTTPException(409, "Saved face evidence changed or is unavailable. Reload before reviewing again.") from exc
+
+
+class AppearanceApplyRequest(BaseModel):
+    plan_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    match_review: Optional[FaceMatchReviewRequest] = None
+    confirmation_token: Optional[str] = None
+
+
+class AppearanceUndoRequest(BaseModel):
+    receipt_id: str = Field(..., pattern=r"^[0-9a-f]{32}$")
+    receipt_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    confirmation_token: Optional[str] = None
+
+
+def _appearance_mutation(req, action):
+    start = time.monotonic()
+    try:
+        args = {**identity_appearance.scope(_CFG),
+                "content_sha256": _identity_edit_digest(req)}
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    authority = MiniAgentClient(profile="safe")
+    operation = f"identity.{action}_appearances"
+    result, code = authority.authorize_action(
+        prompt=f"Confirm {action} of the reviewed appearance connections",
+        mode="ops", tool_name=operation, tool_args=args,
+        confirm=bool(req.confirmation_token), confirmation_token=req.confirmation_token or "",
+    )
+    if code != 0:
+        return JSONResponse(status_code=403, content=result)
+    outcome = None
+    try:
+        builder = None
+        if action == "apply" and req.match_review is not None:
+            review = req.match_review.model_dump(exclude_unset=True)
+            builder = lambda cfg, conn: identity_match_review.build(cfg, conn, review)
+        outcome = (identity_appearance.apply(_CFG, req.plan_sha256, plan_builder=builder) if action == "apply"
+                   else identity_appearance.undo(_CFG, req.receipt_id, req.receipt_sha256))
+        return outcome
+    except identity_appearance.AppearanceConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OSError, ValueError, KeyError) as exc:
+        log.exception("Reviewed appearance transaction refused")
+        raise HTTPException(409, "Saved evidence changed or is unavailable. Preview again before applying.") from exc
+    finally:
+        authority.record_external_execution_outcome(
+            operation=operation, arguments=args, request_id=result.get("request_id", ""),
+            mode="ops", status="succeeded" if outcome else "failed",
+            return_code=0 if outcome else 1, duration_ms=int((time.monotonic() - start) * 1000),
+            side_effect_report={"mutated": bool(outcome and outcome["mutated"]),
+                                "targets": [str(identity_appearance._paths(_CFG)[1])]},
+        )
+
+
+@router.post("/appearances/apply")
+def apply_appearances(req: AppearanceApplyRequest):
+    return _appearance_mutation(req, "apply")
+
+
+@router.post("/appearances/undo")
+def undo_appearances(req: AppearanceUndoRequest):
+    return _appearance_mutation(req, "undo")
+
+
+def _require_identity_artifact(filename: str) -> None:
+    readiness = artifact_readiness(_CFG, filename)
+    if not readiness["ready"]:
+        raise HTTPException(status_code=409, detail={
+            "code": "identity_evidence_not_ready", "artifact": filename, **readiness,
+        })
+
+
+def _check_assignment_changes(previous: dict, proposed: dict) -> None:
+    """Family facts may change without relabeling or dropping saved bindings."""
+    for field, filename in (("face_cluster_ids", "face_clusters.json"),
+                            ("speaker_cluster_ids", "speaker_clusters.json")):
+        before, after = previous.get(field) or [], proposed.get(field) or []
+        if before == after:
+            continue
+        _require_identity_artifact(filename)
+        manifest = _load_json_file(_identity_data_path() / filename)
+        clusters = {c["cluster_id"]: c for c in manifest["clusters"]}
+        if any(cid not in clusters for cid in after):
+            raise HTTPException(status_code=409, detail="identity_cluster_not_found")
+        if field == "speaker_cluster_ids" and any(not clusters[cid].get("confirmed") for cid in after):
+            raise HTTPException(status_code=409, detail="speaker_cluster_not_confirmed")
 
 
 def _data_path() -> Path:
@@ -1020,8 +1195,17 @@ def _load_json_file(path: Path) -> dict | list | None:
 
 
 def _save_json_file(path: Path, data: Any) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    # Curated callers hold the target lock across read, edit and replacement.
+    try:
+        atomic_write_json(path, data)
+    finally:
+        path.with_name(f"{path.name}.tmp").unlink(missing_ok=True)
+
+
+def _identity_edit_digest(req: BaseModel) -> str:
+    payload = req.model_dump(exclude={"confirmation_token"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @router.get("/process-jobs/{job_id}")
@@ -1054,7 +1238,7 @@ async def get_face_clusters() -> dict:
             "message": "face_clusters.json not found. Run Phase 1.",
             "epoch_authority": authority,
         }
-    projected = project_face_cluster_images(data, _CFG, authority)
+    projected = project_face_cluster_images(data, _CFG, artifact_readiness(_CFG, "face_clusters.json"))
     projected["epoch_authority"] = authority
     return projected
 
@@ -1089,6 +1273,15 @@ async def rebuild_face_clusters(body: RebuildFaceClustersRequest) -> dict:
     epoch_id = _epoch_id()
     if not epoch_id:
         raise HTTPException(status_code=400, detail="epoch_id not set in config.")
+    db_path = str((_CFG.get("paths") or {}).get("db_path") or "").strip()
+    if not db_path:
+        raise HTTPException(status_code=400, detail="identity_epoch_path_invalid")
+    epoch_dir = Path(db_path).resolve().parent
+    if epoch_dir.name != epoch_id:
+        raise HTTPException(status_code=400, detail="identity_epoch_path_invalid")
+
+    if (_identity_data_path() / "face_clusters.json").exists():
+        _require_identity_artifact("face_clusters.json")
 
     script = Path(__file__).resolve().parents[2] / "scripts" / "identity" / "build_face_clusters.py"
     if not script.is_file():
@@ -1117,6 +1310,8 @@ async def rebuild_face_clusters(body: RebuildFaceClustersRequest) -> dict:
         str(script),
         "--epoch-id",
         epoch_id,
+        "--epoch-root",
+        str(epoch_dir.parent),
         "--eps",
         str(body.eps),
         "--data-path",
@@ -1287,7 +1482,7 @@ async def label_face_cluster(req: FaceClusterLabelRequest) -> dict:
     import time
     _start = time.time()
     _authority = MiniAgentClient(profile="safe")
-    _tool_args = {"cluster_id": req.cluster_id, "label": req.label}
+    _tool_args = {"cluster_id": req.cluster_id, "label": req.label, "content_sha256": _identity_edit_digest(req)}
     _result, _code = _authority.authorize_action(
         prompt="Confirm identity mutation: label face cluster",
         mode="ops",
@@ -1300,22 +1495,24 @@ async def label_face_cluster(req: FaceClusterLabelRequest) -> dict:
         return JSONResponse(status_code=403, content=_result)
 
     path = _data_path() / "face_clusters.json"
-    data = _load_json_file(path)
-    if not data or not isinstance(data.get("clusters"), list):
-        raise HTTPException(status_code=404, detail="face_clusters.json not found or empty.")
+    with FileLock(str(path) + ".lock", timeout=10):
+        _require_identity_artifact("face_clusters.json")
+        data = _load_json_file(path)
+        if not data or not isinstance(data.get("clusters"), list):
+            raise HTTPException(status_code=404, detail="face_clusters.json not found or empty.")
 
-    updated = False
-    for cluster in data["clusters"]:
-        if cluster["cluster_id"] == req.cluster_id:
-            cluster["label"] = req.label
-            cluster["operator_note"] = req.operator_note
-            updated = True
-            break
+        updated = False
+        for cluster in data["clusters"]:
+            if cluster["cluster_id"] == req.cluster_id:
+                cluster["label"] = req.label
+                cluster["operator_note"] = req.operator_note
+                updated = True
+                break
 
-    if not updated:
-        raise HTTPException(status_code=404, detail=f"Cluster '{req.cluster_id}' not found.")
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Cluster '{req.cluster_id}' not found.")
 
-    _save_json_file(path, data)
+        _save_json_file(path, data)
     log.info("Face cluster %s labeled → %s", req.cluster_id, req.label)
     _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
     _authority.record_external_execution_outcome(
@@ -1362,7 +1559,7 @@ async def confirm_speaker_cluster(req: SpeakerConfirmRequest) -> dict:
     import time
     _start = time.time()
     _authority = MiniAgentClient(profile="safe")
-    _tool_args = {"cluster_id": req.cluster_id, "confirmed": req.confirmed}
+    _tool_args = {"cluster_id": req.cluster_id, "confirmed": req.confirmed, "content_sha256": _identity_edit_digest(req)}
     _result, _code = _authority.authorize_action(
         prompt="Confirm identity mutation: confirm speaker cluster",
         mode="ops",
@@ -1375,23 +1572,25 @@ async def confirm_speaker_cluster(req: SpeakerConfirmRequest) -> dict:
         return JSONResponse(status_code=403, content=_result)
 
     path = _data_path() / "speaker_clusters.json"
-    data = _load_json_file(path)
-    if not data or not isinstance(data.get("clusters"), list):
-        raise HTTPException(status_code=404, detail="speaker_clusters.json not found.")
+    with FileLock(str(path) + ".lock", timeout=10):
+        _require_identity_artifact("speaker_clusters.json")
+        data = _load_json_file(path)
+        if not data or not isinstance(data.get("clusters"), list):
+            raise HTTPException(status_code=404, detail="speaker_clusters.json not found.")
 
-    updated = False
-    for cluster in data["clusters"]:
-        if cluster["cluster_id"] == req.cluster_id:
-            cluster["confirmed"] = req.confirmed
-            if req.identity_label is not None:
-                cluster["identity_label"] = req.identity_label
-            updated = True
-            break
+        updated = False
+        for cluster in data["clusters"]:
+            if cluster["cluster_id"] == req.cluster_id:
+                cluster["confirmed"] = req.confirmed
+                if req.identity_label is not None:
+                    cluster["identity_label"] = req.identity_label
+                updated = True
+                break
 
-    if not updated:
-        raise HTTPException(status_code=404, detail=f"Speaker cluster '{req.cluster_id}' not found.")
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Speaker cluster '{req.cluster_id}' not found.")
 
-    _save_json_file(path, data)
+        _save_json_file(path, data)
     _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
     _authority.record_external_execution_outcome(
         operation="identity.confirm_speaker_cluster",
@@ -1576,7 +1775,7 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
 
     _authority = MiniAgentClient(profile="safe")
     _identity_id = req.identity.get("id", "")
-    _tool_args = {"identity_id": str(_identity_id)}
+    _tool_args = {"identity_id": str(_identity_id), "content_sha256": _identity_edit_digest(req)}
     _result, _code = _authority.authorize_action(
         prompt="Confirm identity mutation: save roster identity",
         mode="ops",
@@ -1589,64 +1788,67 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
         return JSONResponse(status_code=403, content=_result)
 
     roster_path = _data_path() / "family_roster.yaml"
-    if roster_path.exists():
-        with open(roster_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    else:
-        data = {}
+    with FileLock(str(roster_path) + ".lock", timeout=10):
+        if roster_path.exists():
+            with open(roster_path, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        else:
+            data = {}
 
-    identities: list = data.get("identities") or []
-    identity_id = req.identity.get("id", "")
-    requested_clusters = {
-        str(cluster_id)
-        for cluster_id in (req.identity.get("face_cluster_ids") or [])
-        if cluster_id
-    }
-    conflicting_owners: dict[str, str] = {}
-    for existing in identities:
-        existing_id = str(existing.get("id") or "")
-        if existing_id == str(identity_id):
-            continue
-        for cluster_id in existing.get("face_cluster_ids") or []:
-            cluster_key = str(cluster_id)
-            if cluster_key in requested_clusters:
-                conflicting_owners[cluster_key] = existing_id
-    if conflicting_owners:
-        ordered_clusters = sorted(conflicting_owners)
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "face_cluster_already_owned",
-                "cluster_ids": ordered_clusters,
-                "owner_ids": sorted(
-                    {conflicting_owners[cluster] for cluster in ordered_clusters}
-                ),
-            },
-        )
-    found = False
-    for i, existing in enumerate(identities):
-        if existing.get("id") == identity_id:
-            identities[i] = req.identity
-            found = True
-            break
-    if not found:
-        identities.append(req.identity)
+        identities: list = data.get("identities") or []
+        identity_id = req.identity.get("id", "")
+        requested_clusters = {
+            str(cluster_id)
+            for cluster_id in (req.identity.get("face_cluster_ids") or [])
+            if cluster_id
+        }
+        conflicting_owners: dict[str, str] = {}
+        for existing in identities:
+            existing_id = str(existing.get("id") or "")
+            if existing_id == str(identity_id):
+                continue
+            for cluster_id in existing.get("face_cluster_ids") or []:
+                cluster_key = str(cluster_id)
+                if cluster_key in requested_clusters:
+                    conflicting_owners[cluster_key] = existing_id
+        if conflicting_owners:
+            ordered_clusters = sorted(conflicting_owners)
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "face_cluster_already_owned",
+                    "cluster_ids": ordered_clusters,
+                    "owner_ids": sorted(
+                        {conflicting_owners[cluster] for cluster in ordered_clusters}
+                    ),
+                },
+            )
+        previous = next((i for i in identities if i.get("id") == identity_id), {})
+        _check_assignment_changes(previous, req.identity)
+        found = False
+        for i, existing in enumerate(identities):
+            if existing.get("id") == identity_id:
+                identities[i] = req.identity
+                found = True
+                break
+        if not found:
+            identities.append(req.identity)
 
-    data["identities"] = identities
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
-            tmp_path = tmp.name
-            yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        os.replace(tmp_path, roster_path)
-    except Exception as e:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-        log.error("save_roster failed: %s", e)
-        raise HTTPException(status_code=500, detail="roster_save_failed")
+        data["identities"] = identities
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
+                tmp_path = tmp.name
+                yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            os.replace(tmp_path, roster_path)
+        except Exception as e:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            log.error("save_roster failed: %s", e)
+            raise HTTPException(status_code=500, detail="roster_save_failed")
 
     _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
     _authority.record_external_execution_outcome(
@@ -1806,7 +2008,7 @@ async def export_roster(req: RosterExportRequest) -> dict:
         raise HTTPException(status_code=500, detail="PyYAML not installed.")
 
     _authority = MiniAgentClient(profile="safe")
-    _tool_args = {"identity_count": len(req.identities)}
+    _tool_args = {"identity_count": len(req.identities), "content_sha256": _identity_edit_digest(req)}
     _result, _code = _authority.authorize_action(
         prompt="Confirm identity mutation: export roster",
         mode="ops",
@@ -1819,21 +2021,27 @@ async def export_roster(req: RosterExportRequest) -> dict:
         return JSONResponse(status_code=403, content=_result)
 
     roster_path = _data_path() / "family_roster.yaml"
-    data = {"identities": req.identities}
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
-            tmp_path = tmp.name
-            yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        os.replace(tmp_path, roster_path)
-    except Exception as e:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-        log.error("export_roster failed: %s", e)
-        raise HTTPException(status_code=500, detail="roster_export_failed")
+    with FileLock(str(roster_path) + ".lock", timeout=10):
+        existing = yaml.safe_load(roster_path.read_text(encoding="utf-8")) if roster_path.exists() else {}
+        previous = {i.get("id"): i for i in (existing or {}).get("identities", [])}
+        proposed = {i.get("id"): i for i in req.identities}
+        for identity_id in previous.keys() | proposed.keys():
+            _check_assignment_changes(previous.get(identity_id, {}), proposed.get(identity_id, {}))
+        data = {"identities": req.identities}
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
+                tmp_path = tmp.name
+                yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            os.replace(tmp_path, roster_path)
+        except Exception as e:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            log.error("export_roster failed: %s", e)
+            raise HTTPException(status_code=500, detail="roster_export_failed")
 
     log.info("Roster exported: %d identities", len(req.identities))
     _request_id = _result.get("request_id") if isinstance(_result, dict) else ""

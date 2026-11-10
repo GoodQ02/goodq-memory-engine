@@ -5067,13 +5067,24 @@
     if (!hints || typeof hints !== "object" || Array.isArray(hints)) return [];
     const values = [];
     Object.entries(hints).forEach(([key, rawValue]) => {
+      // First-seen timestamps describe hint occurrences, not additional hints.
+      if (key === "first_seen_ts") return;
       const items = Array.isArray(rawValue) ? rawValue : valueObserved(rawValue) ? [rawValue] : [];
       items.forEach((item) => {
-        const text = String(item || "").trim();
+        if (typeof item !== "string" && typeof item !== "number") return;
+        const text = String(item).trim();
         if (text) values.push(`${key}: ${text}`);
       });
     });
     return values;
+  }
+
+  function timeHintOffsetRows(hints) {
+    const timestamps = hints && hints.first_seen_ts;
+    if (!timestamps || typeof timestamps !== "object" || Array.isArray(timestamps)) return [];
+    return Object.entries(timestamps)
+      .filter(([phrase, seconds]) => phrase.trim() && typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0)
+      .map(([phrase, seconds]) => `${phrase}: ${Math.round(seconds * 100) / 100}s`);
   }
 
   function appendSceneChipGroup(container, label, items, emptyText) {
@@ -5194,6 +5205,7 @@
   }
 
   function sceneEvidenceSignalFamilies(segment) {
+    const timeHintCount = flattenTimeHints(segment.time_hints).length;
     const context = sceneContextObject(segment);
     const epistemic = segment && segment.scene_context_epistemic && typeof segment.scene_context_epistemic === "object"
       ? segment.scene_context_epistemic
@@ -5244,8 +5256,8 @@
       },
       {
         label: "Temporal hints",
-        observed: flattenTimeHints(segment.time_hints).length > 0,
-        note: `${flattenTimeHints(segment.time_hints).length} time hints`,
+        observed: timeHintCount > 0,
+        note: `${timeHintCount} time hint${timeHintCount === 1 ? "" : "s"}`,
       },
       {
         label: "Sentiment",
@@ -5543,8 +5555,8 @@
         ].filter(Boolean)
       : [];
     const disagreementCount = arrayCount(segment.transcript_entity_disagreements);
-    const timeHintCount = objectCount(segment.time_hints);
     const timeHintValues = flattenTimeHints(segment.time_hints);
+    const timeHintCount = timeHintValues.length;
     const inventory = fieldInventory(segment);
 
     detail.appendChild(panelHeader("Selected scene", `${sceneLabel} | ${startEnd}`, segment.content_state || "read-only"));
@@ -5588,6 +5600,10 @@
       "No tag provenance exposed"
     );
     appendSceneChipGroup(evidence, "Time hints", timeHintValues.slice(0, 6), "No time hints exposed");
+    const timeHintOffsets = timeHintOffsetRows(segment.time_hints);
+    if (timeHintOffsets.length) {
+      appendSceneEvidenceRows(evidence, "First-seen offsets (scene-relative)", timeHintOffsets.slice(0, 6), "");
+    }
     appendSceneEvidenceRows(evidence, "Visual caption", visualCaptionRows, "No visual caption exposed");
     appendSceneEvidenceRows(evidence, "OCR text", ocrTextRows, "No OCR text exposed");
     appendSceneChipGroup(evidence, "OCR date candidates", ocrDateCandidates, "No OCR date candidates exposed");
@@ -5748,7 +5764,7 @@
       sceneContextRows.length > 0 || valueObserved(segment.scene_context_epistemic) || valueObserved(segment.scene_context_arbitration),
       sceneContextRows.length > 0 ? sceneContextRows[0] : "No scene_context_llm evidence exposed"
     );
-    appendSceneSignal(modalityList, "Temporal hints", timeHintCount > 0, `${timeHintCount} hint fields`);
+    appendSceneSignal(modalityList, "Temporal hints", timeHintCount > 0, `${timeHintCount} time hint${timeHintCount === 1 ? "" : "s"}`);
     if (disagreementCount > 0) {
       appendSceneSignal(modalityList, "Entity disagreements", true, `${disagreementCount} disagreement rows`);
     }

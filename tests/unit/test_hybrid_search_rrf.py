@@ -179,6 +179,21 @@ def test_fts_fallback_search(temp_db_path: str) -> None:
     assert results[0]["payload"]["video_hash"] == "v_01"
 
 
+def test_rrf_combines_artifacts_with_fts_once_per_scene():
+    engine = MultimodalSearchEngine({"paths": {"db_path": ":memory:"}})
+    def hit(point, scene, video="v", **extra):
+        return {"id": point, "payload": {"scene_id": scene, "video_hash": video, **extra}}
+    semantic = [hit("point-1", "a"), hit("point-2", "a"), hit("point-3", "b")]
+    lexical = [hit("b", "b", text="exact transcript"), hit("b", "b"), hit("a", "a")]
+    result = engine.reciprocal_rank_fusion([semantic, lexical], top_k=10)
+    assert len(result) == 2
+    assert {r["payload"]["scene_id"] for r in result} == {"a", "b"}
+    assert all(r["score"] == pytest.approx((1/61 + 1/62)/(2/61)) for r in result)
+    assert next(r for r in result if r["payload"]["scene_id"] == "b")["payload"]["text"] == "exact transcript"
+    separate = engine.reciprocal_rank_fusion([[hit("p", "0", "v1"), hit("q", "0", "v2")]])
+    assert len(separate) == 2
+
+
 def test_search_text_hybrid_blend(monkeypatch: pytest.MonkeyPatch, temp_db_path: str) -> None:
     engine = MultimodalSearchEngine({"paths": {"db_path": temp_db_path}})
 
@@ -211,6 +226,87 @@ def test_search_text_hybrid_blend(monkeypatch: pytest.MonkeyPatch, temp_db_path:
     # RRF fuses both semantic (scene_01) and lexical (scene_02)
     assert len(fused_results) == 2
     assert {r["id"] for r in fused_results} == {"scene_01", "scene_02"}
+
+
+def test_document_chunks_preserve_best_passage_and_distinct_sources_through_search(monkeypatch):
+    engine = MultimodalSearchEngine({"paths": {"db_path": ":memory:"}})
+    passage = {"chunk_index": 25, "char_start": 900, "char_end": 911,
+               "text": "late answer", "token_count": 2}
+    hits = [{"id": f"point-{i}", "score": 0.95 - i / 1000,
+             "payload": {"scene_id": "long-scene", "video_id": "long-pdf",
+                         "source_kind": "document", "document_chunk": {**passage, "chunk_index": i}}}
+            for i in range(80)]
+    hits.append({"id": "other-point", "score": 0.8,
+                 "payload": {"scene_id": "other-scene", "video_id": "other-pdf",
+                             "source_kind": "document", "document_chunk": passage}})
+    pulls = []
+    class Client:
+        def query(self, vector, top_k, **kwargs):
+            pulls.append((top_k, kwargs))
+            return hits[:top_k]
+    monkeypatch.setattr(engine, "_get_qdrant_client", lambda collection: Client())
+    monkeypatch.setattr(engine, "encode_text_query", lambda query: np.ones(384))
+    monkeypatch.setattr(engine, "search_fts", lambda query, top_k: [
+        {"id": "long-scene", "payload": {"video_id": "long-pdf", "scene_id": "long-scene",
+                                              "text": "complete document lexical text"}}])
+    results = engine.search_multimodal("late answer", top_k=2, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert {item["payload"]["video_id"] for item in results} == {"long-pdf", "other-pdf"}
+    matched = next(item for item in results if item["payload"]["video_id"] == "long-pdf")
+    assert matched["payload"]["document_chunk"] == {**passage, "chunk_index": 0}
+    assert len(pulls) > 1
+    assert max(limit for limit, _ in pulls) <= 4096
+    assert all(options["retrieval_context"] == "human.ui.search" for _, options in pulls)
+    assert all(options["payload_filter"]["must"] == [
+        {"key": "ucf_promotion_status", "match": {"value": "promoted"}}] for _, options in pulls)
+
+
+def test_multimodal_fusion_retains_text_passage_when_other_modality_wins(monkeypatch):
+    engine = MultimodalSearchEngine({"paths": {"db_path": ":memory:"}})
+    passage = {"chunk_index": 3, "char_start": 50, "char_end": 56,
+               "text": "answer", "token_count": 1}
+    payload = {"video_id": "pdf", "scene_id": "scene", "source_kind": "document"}
+    monkeypatch.setattr(engine, "search_text", lambda *args, **kwargs: [
+        {"score": 0.1, "payload": {**payload, "document_chunk": passage}}])
+    monkeypatch.setattr(engine, "search_visual", lambda *args, **kwargs: [
+        {"score": 1.0, "payload": payload}])
+    result = engine.search_multimodal("answer", top_k=1, modalities=["text", "visual"],
+                                     retrieval_context="human.ui.search")[0]
+    assert result["payload"]["document_chunk"] == passage
+
+
+def test_literal_document_search_uses_matching_retained_passage_not_semantic_sibling(monkeypatch, temp_db_path):
+    text = "General relaxation. Controlled breathing and palliative\nimagination reduce tension."
+    conn = _connect(temp_db_path)
+    conn.execute("INSERT INTO scenes(id,video_hash,start,end,meta,created_at) VALUES (?,?,?,?,?,?)",
+                 ("document-scene", "pdf", 0, 0, '{"source_kind":"document"}', "2026-10-15"))
+    conn.execute("INSERT INTO scene_text_fts(scene_id,video_hash,content_type,text) VALUES (?,?,?,?)",
+                 ("document-scene", "pdf", "document_text", text))
+    conn.commit()
+    conn.close()
+    engine = MultimodalSearchEngine({"paths": {"db_path": temp_db_path}})
+    def hit(index, start, end, score):
+        return {"id": f"point-{index}", "score": score, "payload": {
+            "video_id": "pdf", "scene_id": "document-scene", "source_kind": "document",
+            "document_chunk": {"chunk_index": index, "char_start": start, "char_end": end,
+                               "text": text[start:end], "token_count": 10}}}
+    semantic = [hit(0, 0, 20, .8), hit(1, 20, len(text), .4)]
+    class Client:
+        def query(self, *args, **kwargs):
+            return semantic
+    monkeypatch.setattr(engine, "_get_qdrant_client", lambda collection: Client())
+    monkeypatch.setattr(engine, "encode_text_query", lambda query: np.ones(384))
+    result = engine.search_multimodal("PALLIATIVE imagination", top_k=1, modalities=["text"],
+                                     retrieval_context="human.ui.search")[0]
+    assert result["id"] == "point-1"
+    assert result["payload"]["document_chunk"] == semantic[1]["payload"]["document_chunk"]
+    assert "palliative\nimagination" in result["payload"]["document_chunk"]["text"]
+    assert len(engine.search_multimodal("PALLIATIVE imagination", top_k=1, modalities=["text"],
+                                       retrieval_context="human.ui.search")) == 1
+    # A paraphrase retains model order; exact-match projection must not become a
+    # source-specific relevance heuristic or invent a span from the full text.
+    assert engine.search_multimodal("How do people relax?", top_k=1, modalities=["text"],
+                                    retrieval_context="human.ui.search")[0]["id"] == "point-0"
 
 
 def test_register_scene_bundle_summary_embedding_and_routing(monkeypatch: pytest.MonkeyPatch, temp_db_path: str) -> None:
@@ -329,6 +425,7 @@ def test_register_scene_bundle_summary_embedding_and_routing(monkeypatch: pytest
     assert targets["faiss"]["committed"] is True
     conn.close()
 
+
     # 2. Mismatch case: dimension matches 512 (mismatch!)
     fake_router_mismatch = FakeRouter()
     monkeypatch.setattr("steps.common.memory_manager.build_memory_router", lambda c: fake_router_mismatch)
@@ -380,3 +477,177 @@ def test_register_scene_bundle_summary_embedding_and_routing(monkeypatch: pytest
     assert "qdrant_fallback" in targets_m
     assert targets_m["qdrant_fallback"]["committed"] is True
     conn.close()
+
+
+class _PassageTokenizer:
+    def __call__(self, text, **kwargs):
+        import re
+        offsets = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
+        return {"input_ids": list(range(len(offsets))), "offset_mapping": offsets}
+
+
+class _PassageEncoder:
+    tokenizer = _PassageTokenizer()
+
+    def __init__(self, failure=None):
+        self.calls = []
+        self.failure = failure
+
+    def encode(self, texts, **kwargs):
+        self.calls.append((texts, kwargs))
+        if self.failure == "raise":
+            raise RuntimeError("encoder failed")
+        scores = [.99 if "bibliography" in t else .95 if "unreported" in t else .5 for t in texts]
+        vectors = np.array([[v, np.sqrt(1-v*v)] for v in scores])
+        if self.failure == "nan":
+            vectors[0, 0] = np.nan
+        elif self.failure == "shape":
+            vectors = vectors[:, :1]
+        elif self.failure == "zero":
+            vectors[:] = 0
+        elif self.failure == "overflow":
+            vectors[:] = 1e300
+        return vectors
+
+
+def _passage_hit(index, text, source="a", **metadata):
+    return {"id": f"{source}-{index}", "score": .9-index/1000, "payload": {
+        "scene_id": f"scene-{source}", "video_id": source, "source_kind": "document",
+        "document_chunk": {"chunk_index": index, "char_start": index*10000,
+                           "char_end": index*10000+len(text), "text": text,
+                           "token_count": len(text.split())}, **metadata}}
+
+
+def _passage_engine(monkeypatch, hits, failure=None):
+    engine = MultimodalSearchEngine({"paths": {"db_path": ":memory:"}})
+    model = _PassageEncoder(failure)
+    engine._text_model = model
+    class Client:
+        def query(self, vector, top_k, **kwargs):
+            return hits[:top_k]
+    monkeypatch.setattr(engine, "_get_qdrant_client", lambda collection: Client())
+    monkeypatch.setattr(engine, "encode_text_query", lambda query: np.array([1., 0.]))
+    monkeypatch.setattr(engine, "search_fts", lambda query, top_k: [])
+    return engine, model
+
+
+def test_combined_passage_ranking_preserves_source_order_metadata_and_exact_evidence(monkeypatch):
+    hits = [_passage_hit(0, "table of intervention results"),
+            _passage_hit(0, "unrelated source", source="b", text_preview="unreported persistence"),
+            _passage_hit(1, "bibliography of effects"),
+            _passage_hit(2, "effect size and persistence remain unreported", entities=["unreported", "persistence"])]
+    engine, model = _passage_engine(monkeypatch, hits)
+    result = engine.search_multimodal("unreported persistence", top_k=2, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    # Document preview metadata must not overturn the evidence-based source rank.
+    assert [r["payload"]["video_id"] for r in result] == ["a", "b"]
+    selected = result[0]
+    assert selected["payload"]["document_chunk"] == hits[3]["payload"]["document_chunk"]
+    assert selected["id"] == "a-0"
+    assert "entities" not in selected["payload"]
+    assert selected["score"] == pytest.approx(.5)
+    assert model.calls and all(len(t.split()) <= 96 for t in model.calls[0][0])
+
+
+def test_document_lexical_windows_match_terminal_s_variants(monkeypatch):
+    hits = [_passage_hit(0, "configuration guidance and model recovery"),
+            _passage_hit(1, "No downloads or configuration rewrites are authorized.")]
+    engine, _ = _passage_engine(monkeypatch, hits)
+    results = engine.search_multimodal("download and rewrite configuration", top_k=1,
+        modalities=["text"], retrieval_context="human.ui.search")
+    assert results[0]["payload"]["document_chunk"] == hits[0]["payload"]["document_chunk"]
+    assert results[0]["payload"]["document_lexical_chunk"] == hits[1]["payload"]["document_chunk"]
+
+
+def test_document_metadata_does_not_override_retrieval_but_video_keeps_bonus(monkeypatch):
+    engine, _ = _passage_engine(monkeypatch, [])
+    payload = {"entities": ["database"], "text_preview": "database database"}
+    assert engine._metadata_bonus("database", {**payload, "source_kind": "document"}) == 0
+    assert engine._metadata_bonus("database", {**payload, "content_type": "document_text"}) == 0
+    assert engine._metadata_bonus("database", {**payload, "source_kind": "video"}) > 0
+
+
+@pytest.mark.parametrize("failure", ["raise", "nan", "shape", "zero", "overflow"])
+def test_passage_encoder_failure_keeps_original_search_and_reports_fallback(monkeypatch, failure):
+    hits = [_passage_hit(0, "table results"), _passage_hit(1, "unreported persistence")]
+    engine, _ = _passage_engine(monkeypatch, hits, failure)
+    result = engine.search_multimodal("unreported persistence", top_k=1, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert result[0]["payload"]["document_chunk"] == hits[0]["payload"]["document_chunk"]
+    assert engine.last_search_diagnostics()["text_passages"]["status"] == "fallback"
+
+
+def test_passage_ranking_budget_is_global_across_documents(monkeypatch):
+    hits = [_passage_hit(i, " ".join([f"word{i}"]*254), source=str(i//2)) for i in range(40)]
+    engine, model = _passage_engine(monkeypatch, hits)
+    result = engine.search_multimodal("unreported persistence", top_k=20, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert len(result) == 20
+    windows = [t for texts, _ in model.calls for t in texts]
+    assert windows and len(windows) <= 192
+    assert all(len(t.split()) <= 96 for t in windows)
+    assert not any("word32" in t for t in windows)
+    assert engine.last_search_diagnostics()["text_passages"]["status"] == "limited"
+
+
+def test_literal_passage_override_wins_combined_ranking(monkeypatch):
+    hits = [_passage_hit(0, "table results"), _passage_hit(1, "bibliography unreported persistence"),
+            _passage_hit(2, "unreported persistence remains unknown")]
+    engine, _ = _passage_engine(monkeypatch, hits)
+    monkeypatch.setattr(engine, "search_fts", lambda query, top_k: [{"id": "scene-a", "payload": {
+        "scene_id": "scene-a", "video_id": "a", "content_type": "document_text", "text": "full document"}}])
+    result = engine.search_multimodal("remains unknown", top_k=1, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert result[0]["payload"]["document_chunk"] == hits[2]["payload"]["document_chunk"]
+    assert result[0]["id"] == "a-2"
+
+
+def test_scalar_text_search_does_not_encode_passage_windows(monkeypatch):
+    hits = [{"id": "scalar", "score": .9, "payload": {"scene_id": "scene", "text": "transcript"}}]
+    engine, model = _passage_engine(monkeypatch, hits)
+    result = engine.search_multimodal("unreported persistence", top_k=1, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert result[0]["id"] == "scalar"
+    assert not model.calls
+    assert "text_passages" not in engine.last_search_diagnostics()
+
+
+def test_direct_text_search_clears_previous_passage_diagnostic(monkeypatch):
+    hits = [_passage_hit(0, "table results"), _passage_hit(1, "unreported persistence")]
+    engine, _ = _passage_engine(monkeypatch, hits, "raise")
+    engine.search_text("unreported persistence", retrieval_context="human.ui.search")
+    assert engine.last_search_diagnostics()["text_passages"]["status"] == "fallback"
+    hits[:] = [{"id": "scalar", "payload": {"scene_id": "scalar", "text": "transcript"}}]
+    result = engine.search_text("unrelated query", retrieval_context="human.ui.search")
+    assert result[0]["id"] == "scalar"
+    assert "text_passages" not in engine.last_search_diagnostics()
+
+
+@pytest.mark.parametrize("fault,reason", [
+    ("query", "document_passage_input_limit"),
+    ("characters", "document_passage_input_limit"),
+    ("total_characters", "document_passage_input_limit"),
+    ("offset", "invalid_document_chunk"),
+    ("windows", "document_passage_window_limit"),
+])
+def test_passage_input_and_window_limits_fall_back_before_encoding(monkeypatch, fault, reason):
+    hits = [_passage_hit(0, "table results"), _passage_hit(1, "unreported persistence")]
+    query = "unreported persistence"
+    if fault == "query":
+        query = "x"*4097
+    elif fault == "characters":
+        hits[1] = _passage_hit(1, "x"*32769)
+    elif fault == "total_characters":
+        hits = [_passage_hit(i, "x"*32000) for i in range(9)]
+    elif fault == "offset":
+        hits[1]["payload"]["document_chunk"]["char_start"] = True
+    else:
+        hits = [_passage_hit(i, "word "*512) for i in range(32)]
+    engine, model = _passage_engine(monkeypatch, hits)
+    result = engine.search_multimodal(query, top_k=1, modalities=["text"],
+                                      retrieval_context="human.ui.search")
+    assert result[0]["payload"]["document_chunk"] == hits[0]["payload"]["document_chunk"]
+    assert not model.calls
+    diagnostic = engine.last_search_diagnostics()["text_passages"]
+    assert diagnostic["status"] == "fallback"
+    assert diagnostic["reason"] == reason

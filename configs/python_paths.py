@@ -11,6 +11,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Step environments served by an isolated, locked project-local runtime:
+# env name -> (envs/<dir>/.venv, packaged runtime directory).
+_PROJECT_LOCAL_RUNTIMES: Dict[str, tuple[str, str]] = {
+    "goodq_ocr": ("ocr", "ocr-runtime"),
+    "goodq_object_detect": ("object_detect", "object-detect-runtime"),
+    "goodq_caption_vlm": ("caption_vlm", "caption-vlm-runtime"),
+}
+
 
 class PythonPathConfig:
     def __init__(self):
@@ -166,12 +174,29 @@ class PythonPathConfig:
         return self._conda_exe
     
     def get_env_python(self, env_name: str) -> Optional[Path]:
+        # OCR, object detection and captioning have separately locked
+        # project-local runtimes. Never silently use a stale Conda environment when that
+        # runtime is missing.
+        if env_name in _PROJECT_LOCAL_RUNTIMES:
+            project_root = Path(__file__).resolve().parents[1]
+            runtime_dir, packaged_dir = _PROJECT_LOCAL_RUNTIMES[env_name]
+            root = project_root / "envs" / runtime_dir / ".venv"
+            python_exe = root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+            if python_exe.is_file():
+                return python_exe
+            # Packaged installs must carry the same isolated runtime;
+            # their shared embedded interpreter has a different NumPy lane.
+            packaged = project_root / packaged_dir / ("python.exe" if os.name == "nt" else "bin/python")
+            return packaged if self.is_sandboxed and packaged.is_file() else None
         if not self._initialized:
             self.initialize()
             
-        if self.is_sandboxed or not self._conda_base:
+        if self.is_sandboxed:
             import sys
             return Path(sys.executable)
+        if not self._conda_base:
+            logger.warning("Cannot resolve environment without a Conda installation: %s", env_name)
+            return None
             
         if env_name in self._env_pythons:
             return self._env_pythons[env_name]

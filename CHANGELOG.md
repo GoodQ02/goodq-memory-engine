@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: RELEASE_LEDGER -->
-<!-- DOC_LAST_VERIFIED: 2026-08-16 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-09 -->
 
 # Changelog
 
@@ -13,6 +13,15 @@ See the [public sanitization manifest](docs/releases/PUBLIC_SANITIZATION_MANIFES
 for the published scope.
 
 ## [Unreleased]
+
+### Added
+- **Modernized Deep Obsidian Night & Daylight Studio UI Suite**: Unified dark-room-friendly Obsidian palette (`#05070b` / `#090d14` / `#0e1420`), shared `Theme: NIGHT / DAY / AUTO` switching across Memory Explorer, Identity Curation Workbench, and Speaker Stitching Workbench, progressive-disclosure Inspector panels, and synthetic public-domain Apollo 11 UI showcase screenshots.
+- **Combined Multi-Recording Library & `People -> Scenes -> Watch`**: Browse saved recordings and verified person appearances from a single library view with explicit `x-goodq-unavailable-sources` degraded-collection disclosure and epoch-attested scene playback return links.
+- **Cross-Movie Match Review & Rejected-Pairing Reassignment**: Human-governed `Correct / Incorrect / Unsure` face and voice match review with `"Who is this instead?"` reassignment for faces marked `Incorrect`, alias-tolerant frozen-comparison reference checks, reusable reference examples, and single-use confirmation-token Apply / Undo receipts.
+
+### Fixed
+- **Grounding Markup Stripping & Privacy Hardening**: Strip literal VLM `<ref>`/`<box>` grounding tokens at both the caption step (`grounding_markup_removed`) and the API JSON response layer (`GroundingMarkupMiddleware`), and make `EntityExtractor` person-term matching strictly config-driven without hardcoded personal names.
+- **Corpus-Neutral Grounding, Phrase Grouping & Startup Hardening**: Remove corpus-specific ranking bonuses, preserve lossless evidence-backed audio phrase boundaries and LF worker digests (`.gitattributes`), resolve timeline `total_duration` fallback, migrate Pydantic schemas to `ConfigDict`, and retire the unused `steps/tts/` stub.
 
 ### Changed
 - Route operator guidance by task and preserve explicit data-cleanup boundaries.
@@ -103,7 +112,7 @@ for the published scope.
 ## [2.5.5] - 2026-06-22 — Family-Film Production Ingestion & E2E Validation
 
 ### Added
-- **Monitored Family-Film Production Ingestion**: Executed full ingestion, validation, and promotion of the home video file `01. 1987 - 1988.mp4` (sanitized: "FAMILY 01 home video file") under epoch `epoch_2026_06_21_family_clean_01` with strict privacy bounds.
+- **Monitored Family-Film Production Ingestion**: Executed full ingestion, validation, and promotion of the home video file `sample_reel_01.mp4` (sanitized: "FAMILY 01 home video file") under epoch `epoch_2026_06_21_family_clean_01` with strict privacy bounds.
 - **End-to-End Safety Gate Verifications**: Successfully verified pipeline stability, clean database states, clean git status, and complete local-first offline isolation.
 
 ### Fixed
@@ -111,7 +120,7 @@ for the published scope.
 
 ### Pilot Family Ingestion & Promotion
 - **Active Epoch**: `epoch_2026_06_21_family_clean_01` (successful clean memory start and full promotion).
-- **Ingestion Target**: `FAMILY/01. 1987 - 1988.mp4` (video hash: `35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307`).
+- **Ingestion Target**: `FAMILY/sample_reel_01.mp4` (video hash: `35bfbfdffd3e98a59667a56d46ecad3bf6f49b82fc49176b2464203e603b6307`).
 - **Observed UCF Ledger Census**:
   - Total context frames: 12,540, all promoted.
   - Active workers: audio_embed_clap, audio_transcribe, face_embed, image_caption, image_embed_clip, image_embed_dino, image_ocr, object_detect, scene_visual_embeddings_clip, scene_visual_embeddings_dino, speaker_merge, text_embed, video_scene_detect.

@@ -15,11 +15,11 @@ def test_tool_resolver_ffmpeg(tmp_path):
 
 def test_tool_resolver_not_found():
     with patch("shutil.which", return_value=None), patch("pathlib.Path.exists", return_value=False):
-        res = ToolResolver.resolve_tool("tesseract")
+        res = ToolResolver.resolve_tool("pdftotext")
         assert res["found"] is False
         assert res["path"] is None
         assert res["severity"] == "warning"
-        assert any(pkg in res["install_hint"].lower() for pkg in ["brew install", "apt install", "winget install", "apt-get"])
+        assert any(pkg in res["install_hint"].lower() for pkg in ["brew install", "apt install", "winget install", "apt-get", "install poppler"])
 
 
 def test_windows_pdftotext_fallback_does_not_satisfy_ffmpeg(monkeypatch, tmp_path):

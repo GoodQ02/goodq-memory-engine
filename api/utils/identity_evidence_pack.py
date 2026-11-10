@@ -131,9 +131,13 @@ def load_identity_scene_evidence(
     except sqlite3.Error:
         return {"scene_refs": [], "source": "promoted_knowledge_graph_unavailable"}
 
+    from lib.identity_resolver import retired_identity_scene_ids
+    retired = retired_identity_scene_ids(kg_path.parent / "ucf/ucf_ledger.db")
     scene_rows: dict[str, dict[str, Any]] = {}
     for person_id, scene_id, edge_type, video_hash in rows:
         scene_key = str(scene_id)
+        if scene_key in retired:
+            continue
         if scene_key not in scene_rows:
             if len(scene_rows) >= limit:
                 break
@@ -209,9 +213,13 @@ def load_identity_scene_context(
     except sqlite3.Error:
         return {"scenes": [], "source": "promoted_knowledge_graph_and_ucf_unavailable"}
 
+    from lib.identity_resolver import retired_identity_scene_ids
+    retired = retired_identity_scene_ids(ucf_path)
     selected: dict[str, dict[str, Any]] = {}
     for person_id, scene_id, properties_json, edge_type, video_hash in rows:
         scene_key = str(scene_id)
+        if scene_key in retired:
+            continue
         if scene_key not in selected:
             if len(selected) >= limit:
                 break

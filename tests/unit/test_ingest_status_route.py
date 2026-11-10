@@ -262,3 +262,50 @@ def test_get_ingest_status_redacts_raw_watchdog_error_details(
     assert response.error == "Watchdog processing failed"
     assert "private" not in response.model_dump_json()
     assert "secret-value" not in response.model_dump_json()
+
+
+@pytest.mark.parametrize("retry_succeeds", [True, False])
+def test_retry_keeps_prior_attempt_without_status_poll(tmp_path, monkeypatch, retry_succeeds):
+    from cli.watchdog import ProcessedRegistry
+
+    paths = _runtime_paths(tmp_path)
+    ledger = IngestRequestLedger(paths["ingest_requests"])
+    records = []
+    for index in range(3):
+        request_id = f"ingest_20261015T190000Z_{index:08x}"
+        records.append(ledger.create_record(
+            request_id=request_id, source_path=tmp_path / "sample.md",
+            staged_path=paths["import_inbox"] / f"{request_id}__sample.md",
+            file_hash="same-content", confirmation_token_present=True,
+            policy_profile="local_ingest_facade_v1", queue_depth_snapshot=1,
+            watchdog_detection_window_seconds=5,
+            budget_scope="single_local_file_handoff", budget_status="accepted",
+        ))
+    registry = ProcessedRegistry(paths["watchdog_state_file"])
+    registry.mark_failed("same-content", records[0]["staged_name"],
+                         r"failure at C:\private\sample.md token=secret-value", run_id="first-run")
+    (paths["failed"] / f"FAILED_{records[0]['staged_name']}").write_bytes(b"same-content")
+    first_completed_at = registry.processed["same-content"]["timestamp"]
+    # No GET before retry: history must be written by the producer, not polling.
+    registry = ProcessedRegistry(paths["watchdog_state_file"])
+    if retry_succeeds:
+        registry.mark_processed("same-content", records[1]["staged_name"], run_id="retry-run")
+    else:
+        registry.mark_failed("same-content", records[1]["staged_name"], "retry failure", run_id="retry-run")
+    registry = ProcessedRegistry(paths["watchdog_state_file"])
+    assert registry.is_processed("same-content") is retry_succeeds
+    monkeypatch.setattr(ingest_module, "get_ingest_runtime_paths", lambda: paths)
+    before = _tree_snapshot(tmp_path)
+    prior = asyncio.run(ingest_module.get_ingest_status(records[0]["request_id"]))
+    retry = asyncio.run(ingest_module.get_ingest_status(records[1]["request_id"]))
+    unrelated = asyncio.run(ingest_module.get_ingest_status(records[2]["request_id"]))
+    assert prior.status == "failed"
+    assert prior.run_id == "first-run"
+    assert prior.completed_at == first_completed_at
+    assert prior.error == "Watchdog processing failed"
+    assert "private" not in prior.model_dump_json()
+    assert "secret-value" not in prior.model_dump_json()
+    assert retry.run_id == "retry-run"
+    assert retry.status == ("completed" if retry_succeeds else "failed")
+    assert unrelated.run_id is None and unrelated.status == "orphaned"
+    assert _tree_snapshot(tmp_path) == before

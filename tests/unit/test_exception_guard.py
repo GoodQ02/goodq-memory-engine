@@ -13,7 +13,6 @@ GUARDED_FILES = {
     "steps/graph_builder/emotion_arc_analyzer.py",
     "steps/graph_builder/llm_enrichment.py",
     "steps/video_summarizer/step.py",
-    "steps/tts/step.py",
     "steps/llm_chat/step.py",
     "steps/home_assistant_status/step.py",
 }

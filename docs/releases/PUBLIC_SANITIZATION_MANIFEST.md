@@ -1,13 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_MANIFEST -->
-<!-- DOC_LAST_VERIFIED: 2026-09-26 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-09 -->
 
 # Public release sanitization manifest
 
 ## Source and authority
 
-- Private development source: `2c13cec6e8b11a74bbbdbf3cf63a88b8851dd76e` (`dev`).
-- Public parent: `b63e953253cb733509c7ffea2066444450b14237` (`main`).
+- Private development source: `e33c4109089fe6471942b588ae5164bd981a9ad7` (`dev`).
+- Public parent: `fbb89c10793245c2a1d433ba6a2db8e251b2bc90` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -164,3 +164,10 @@ control logs identify compilation and listener-query phases. All four changed
 source files match private 2c13cec6. Local focused checks passed (31 affected
 checks, then 27 final workflow/lock checks including the new coverage guard).
 No production runtime or dependency changes are included.
+
+## UI modernization, multi-recording curation, and quality-of-life release - 2026-11-09
+
+Mirrors pinned private commit `e33c4109` onto `GoodQ02/goodq-memory-engine` `main` (parent `fbb89c10`):
+- **UI & Quality-of-Life Upgrades**: Deepened Obsidian Night Mode and Daylight Studio theme synchronization across Memory Explorer, Identity Curation Workbench, Speaker Stitching Workbench, Summary Console, Justification UI, and Operator Console; combined multi-recording library federation with unavailable-source disclosure; `People -> Scenes -> Watch` navigation; cross-movie face/voice match review with `Correct / Incorrect / Unsure` decisions, `"Who is this instead?"` rejected-pairing reassignment, and alias-tolerant frozen-comparison guards; producer and API `<ref>`/`<box>` grounding-markup stripping; config-driven `EntityExtractor` person terms; corpus-neutral search/grounding repairs; lossless audio phrase grouping and LF-pinned worker digests; and Pydantic `ConfigDict` migration (resolving the previously noted class-based configuration warning) plus unused `steps/tts/` retirement.
+- **Public Showcase Media**: Four UI screenshots (`samples/assets/ui_*.png` and `retro_console_preview.png`) were generated from an isolated synthetic public-domain NASA Apollo 11 harness and re-encoded without metadata chunks. No personal media, family names, corpus databases, or workstation receipts are included.
+- **Parity & Privacy Gates**: Product code in `api/`, `cli/`, `common/`, `configs/`, `envs/`, `lib/`, `pipelines/`, `retrieval/`, `steps/`, `ui/`, and `wsl2_audio/` matches `e33c4109` byte for byte. Documentation drift, authority, dependency drift, banned-token, installer semantic contract, deep personal-term/path privacy scan, and focused unit/UI suites pass prior to publication.

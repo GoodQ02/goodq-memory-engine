@@ -15,18 +15,28 @@ import logging
 import os
 from pathlib import Path
 import re
+import sqlite3
+import threading
 import time
 from typing import Any, Dict, List, Literal, Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 import uuid
 
+import anyio
 from fastapi import APIRouter, BackgroundTasks, Query, HTTPException, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from api.utils.response_models import SearchResponse, SearchResult, default_confidence_payload
-from api.utils.loaders import DataLoader
-from api.utils.media_projection import representative_frame_projection
+from steps.common.transcript_binding import TimelineReadCache, project as project_transcript_outcome
+from api.utils.loaders import DataLoader, read_retired_scene_ids
+from api.utils.media_projection import (
+    document_meta_projection,
+    representative_frame_projection,
+    sanitize_detected_objects,
+    sanitize_visual_meta,
+    sanitize_visual_observations,
+)
 from api.utils.action_jobs import ActionJobLedger, ActionJobTransitionError
 from api.utils.temporal_summary_results import (
     TemporalSummaryResultConflict,
@@ -51,6 +61,23 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 _search_engine = None
 _data_loader = None
 _config = None
+# The engine lazily loads models and stores per-query diagnostics. Hold ownership
+# through response projection, including prewarm, without blocking the API loop.
+_search_lock = threading.RLock()
+# Queue requests before borrowing a worker. Searches must not exhaust the shared
+# API worker capacity while waiting for ownership of the singleton engine.
+_search_limiter = anyio.CapacityLimiter(1)
+
+
+def _run_serialized_search(operation, *args):
+    with _search_lock:
+        return operation(*args)
+
+
+async def _offload_search(operation, *args):
+    return await anyio.to_thread.run_sync(
+        _run_serialized_search, operation, *args, limiter=_search_limiter
+    )
 
 
 def configure_search_from_cfg(cfg: Dict[str, Any]) -> None:
@@ -187,7 +214,7 @@ def _kg_evidence(segment: dict) -> Dict[str, Any]:
     }
 
 
-def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
+def _timeline_enrichment_context(segment: dict, video_id: str = "") -> Dict[str, Any]:
     start = segment.get("start")
     end = segment.get("end")
     kg_evidence = _kg_evidence(segment)
@@ -196,8 +223,16 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
         "end": end,
         "duration": (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else segment.get("duration"),
         "transcript": _segment_transcript(segment),
+        "visual_caption": segment.get("visual_caption"),
+        "caption_meta": sanitize_visual_meta(video_id, segment.get("caption_meta")),
+        "caption_observations": sanitize_visual_observations(video_id, segment.get("caption_observations")),
+        "ocr_text": segment.get("ocr_text"),
+        "ocr_observations": sanitize_visual_observations(video_id, segment.get("ocr_observations")),
         "tags": _list_strings(segment.get("tags")),
         "objects": _segment_object_labels(segment),
+        "detect_meta": sanitize_visual_meta(video_id, segment.get("detect_meta")),
+        "detected_objects": sanitize_detected_objects(video_id, segment.get("detected_objects")),
+        "object_observations": sanitize_visual_observations(video_id, segment.get("object_observations")),
         "audio_emotion": segment.get("audio_emotion"),
         "audio_emotion_scores": segment.get("audio_emotion_scores"),
         "audio_emotion_ranking": _list_dicts(segment.get("audio_emotion_ranking")),
@@ -208,6 +243,13 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
         "text_emotion_ranking": _list_dicts(segment.get("text_emotion_ranking")),
         "text_emotion_meta": segment.get("text_emotion_meta") if isinstance(segment.get("text_emotion_meta"), dict) else None,
         "clap_meta": segment.get("clap_meta") if isinstance(segment.get("clap_meta"), dict) else None,
+        "transcript_meta": segment.get("transcript_meta"),
+        "transcript_outcome": segment.get("transcript_outcome"),
+        "transcript_outcome_reason": segment.get("transcript_outcome_reason"),
+        "diarization_status": segment.get("diarization_status"),
+        "diarization_note": segment.get("diarization_note"),
+        "emotion_status": segment.get("emotion_status"),
+        "emotion_note": segment.get("emotion_note"),
         "sentiment": segment.get("sentiment") if isinstance(segment.get("sentiment"), dict) else None,
         "sentiment_label": segment.get("sentiment_label"),
         "sentiment_score": segment.get("sentiment_score"),
@@ -237,13 +279,13 @@ def _timeline_enrichment_context(segment: dict) -> Dict[str, Any]:
     return {key: value for key, value in context.items() if value not in (None, [], {})}
 
 
-def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
+def _lookup_timeline_enrichment(payload: dict, loader=None) -> Dict[str, Any]:
     """Hydrate a search payload from persisted timeline data when a scene match is available."""
     scene_id = payload.get("scene_id")
     if scene_id is None or not str(scene_id).strip():
         return {}
 
-    loader = get_data_loader()
+    loader = loader if loader is not None else get_data_loader()
     search_video_id = str(payload.get("video_id")).strip() if payload.get("video_id") is not None else None
     video_ids: List[str] = []
 
@@ -291,23 +333,41 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
             end = segment.get("end")
             duration = (end - start) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else segment.get("duration")
             frame_projection = representative_frame_projection(video_id, _segment_representative_frame_reference(segment))
-            context = _timeline_enrichment_context(segment)
+            source_kind = segment.get("source_kind") or temporal_index.get("source_kind") or "video"
+            if source_kind == "image" and loader.get_original_source_path(video_id) is not None:
+                endpoint = f"/api/media/video/{quote(video_id, safe='')}/source"
+                frame_projection = {
+                    "representative_frame": endpoint, "representative_frame_endpoint": endpoint,
+                    "representative_frame_available": True, "representative_frame_path_redacted": False,
+                }
+            context = _timeline_enrichment_context(segment, video_id=video_id)
             context.update({key: value for key, value in frame_projection.items() if value not in (None, [], {})})
             kg_evidence = context.get("kg_evidence") if isinstance(context.get("kg_evidence"), dict) else _kg_evidence(segment)
             entities = _list_dicts(segment.get("scene_present_entities"))
             relationships = _list_dicts(segment.get("relationships")) or _list_dicts(segment.get("kg_relationships"))
             return {
                 "timeline_video_id": video_id,
+                "source_kind": source_kind,
+                "document_text": segment.get("document_text"),
+                "document_meta": document_meta_projection(segment.get("document_meta")),
                 "display_title": metadata.get("title") or video_id,
                 "start": start,
                 "end": end,
                 "duration": duration,
                 "timestamp": start,
                 **frame_projection,
+                "visual_caption": segment.get("visual_caption"),
+                "caption_meta": sanitize_visual_meta(video_id, segment.get("caption_meta")),
+                "caption_observations": sanitize_visual_observations(video_id, segment.get("caption_observations")),
+                "ocr_text": segment.get("ocr_text"),
+                "ocr_observations": sanitize_visual_observations(video_id, segment.get("ocr_observations")),
                 "transcript": _segment_transcript(segment),
                 "keywords": _list_strings(segment.get("tags")) or _list_strings(segment.get("keywords")),
                 "tags": _list_strings(segment.get("tags")),
                 "objects": _segment_object_labels(segment),
+                "detect_meta": sanitize_visual_meta(video_id, segment.get("detect_meta")),
+                "detected_objects": sanitize_detected_objects(video_id, segment.get("detected_objects")),
+                "object_observations": sanitize_visual_observations(video_id, segment.get("object_observations")),
                 "audio_emotion": segment.get("audio_emotion"),
                 "audio_emotion_scores": segment.get("audio_emotion_scores"),
                 "audio_emotion_ranking": _list_dicts(segment.get("audio_emotion_ranking")),
@@ -318,6 +378,13 @@ def _lookup_timeline_enrichment(payload: dict) -> Dict[str, Any]:
                 "text_emotion_ranking": _list_dicts(segment.get("text_emotion_ranking")),
                 "text_emotion_meta": segment.get("text_emotion_meta") if isinstance(segment.get("text_emotion_meta"), dict) else None,
                 "clap_meta": segment.get("clap_meta") if isinstance(segment.get("clap_meta"), dict) else None,
+                "transcript_meta": segment.get("transcript_meta"),
+                "transcript_outcome": segment.get("transcript_outcome"),
+                "transcript_outcome_reason": segment.get("transcript_outcome_reason"),
+                "diarization_status": segment.get("diarization_status"),
+                "diarization_note": segment.get("diarization_note"),
+                "emotion_status": segment.get("emotion_status"),
+                "emotion_note": segment.get("emotion_note"),
                 "sentiment": context.get("sentiment"),
                 "sentiment_label": context.get("sentiment_label"),
                 "sentiment_score": context.get("sentiment_score"),
@@ -544,12 +611,8 @@ def _safe_modalities(result: dict) -> List[str]:
 def _enriched_confidence(result: dict, enrichment: Dict[str, Any]) -> Dict[str, Any]:
     confidence = result.get("confidence") if isinstance(result.get("confidence"), dict) else default_confidence_payload()
     confidence = dict(confidence)
-    score = _safe_number(result.get("score"))
-    if score is not None:
-        if confidence.get("intrinsic") is None:
-            confidence["intrinsic"] = score
-        if confidence.get("overall") is None:
-            confidence["overall"] = score
+    # Retrieval scores rank candidates; they do not measure evidence confidence.
+    # Preserve explicitly supplied confidence, leaving unavailable values null.
 
     if enrichment:
         if confidence.get("source") is None:
@@ -565,10 +628,47 @@ def _enriched_confidence(result: dict, enrichment: Dict[str, Any]) -> Dict[str, 
     return confidence
 
 
-def _build_search_result(result: dict, modality: Optional[str] = None) -> SearchResult:
+def _matched_document_span(payload: dict, enrichment: Dict[str, Any], key: str = "document_chunk") -> Optional[Dict[str, Any]]:
+    """Expose only a passage that matches the authoritative extracted text."""
+    chunk = payload.get(key)
+    text = enrichment.get("document_text")
+    if enrichment.get("source_kind") != "document" or not isinstance(chunk, dict) or not isinstance(text, str):
+        return None
+    for key in ("chunk_index", "char_start", "char_end", "token_count"):
+        if type(chunk.get(key)) is not int:
+            return None
+    start, end = chunk["char_start"], chunk["char_end"]
+    if (chunk["chunk_index"] < 0 or chunk["token_count"] <= 0
+            or not 0 <= start < end <= len(text)
+            or not isinstance(chunk.get("text"), str) or chunk["text"] != text[start:end]):
+        return None
+    return {key: chunk[key] for key in ("chunk_index", "char_start", "char_end", "text", "token_count")}
+
+
+def _document_context_span(text: str, passage: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Attach bounded neighboring evidence without changing the validated match."""
+    if passage is None:
+        return None
+    start, end = passage["char_start"], passage["char_end"]
+    allowance = min(1024, (4096 - (end - start)) // 2)
+    if allowance <= 0:
+        return None
+    left, right = max(0, start - allowance), min(len(text), end + allowance)
+    # Move inward to word boundaries, retaining every character in the match.
+    while 0 < left < start and not text[left - 1].isspace():
+        left += 1
+    while end < right < len(text) and not text[right].isspace():
+        right -= 1
+    if left == start and right == end:
+        return None
+    return {"char_start": left, "char_end": right, "text": text[left:right],
+            "matched_char_start": start, "matched_char_end": end}
+
+
+def _build_search_result(result: dict, modality: Optional[str] = None, timeline_loader=None) -> SearchResult:
     payload = result.get("payload", {}) if isinstance(result.get("payload"), dict) else {}
     sentiment_fields = _extract_sentiment_fields(result)
-    enrichment = _lookup_timeline_enrichment(payload)
+    enrichment = _lookup_timeline_enrichment(payload, timeline_loader)
     if sentiment_fields["sentiment"] is None and isinstance(enrichment.get("sentiment"), dict):
         sentiment_fields["sentiment"] = enrichment.get("sentiment")
     if sentiment_fields["sentiment_label"] is None:
@@ -579,11 +679,12 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     context = _merge_dicts(enrichment.get("context"), result_context)
     provenance = _merge_dicts(enrichment.get("provenance"), result.get("provenance") if isinstance(result.get("provenance"), dict) else None)
     video_id = payload.get("video_id")
-    loader = get_data_loader()
+    loader = timeline_loader if timeline_loader is not None else get_data_loader()
     phase6_complete = False
-    if video_id:
+    metadata_video_id = enrichment.get("timeline_video_id") or video_id
+    if metadata_video_id:
         try:
-            metadata = loader.get_video_metadata(str(video_id))
+            metadata = loader.get_video_metadata(str(metadata_video_id))
             phase6_complete = bool(metadata.get('phase6_complete', False))
         except Exception:
             pass
@@ -601,9 +702,24 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
     if not frame_projection["representative_frame_endpoint"]:
         frame_projection = representative_frame_projection(str(video_id or ""), payload.get("representative_frame"))
 
-    return SearchResult(
+    passage = _matched_document_span(payload, enrichment)
+    document_context = _document_context_span(enrichment.get("document_text"), passage)
+    lexical_passage = _matched_document_span(payload, enrichment, "document_lexical_chunk") if passage else None
+    if lexical_passage:
+        displayed = document_context or passage
+        if (len(lexical_passage["text"]) > 4096 or
+                displayed["char_start"] <= lexical_passage["char_start"] < lexical_passage["char_end"] <= displayed["char_end"]):
+            lexical_passage = None
+    projected_result = SearchResult(
         score=result.get("score", 0.0),
+        source_kind=enrichment.get("source_kind") or payload.get("source_kind") or "video",
+        document_text=enrichment.get("document_text"),
+        document_meta=enrichment.get("document_meta"),
+        matched_document_span=passage,
+        document_context_span=document_context,
+        lexical_document_span=lexical_passage,
         vector_score=_safe_number(result.get("vector_score")),
+        visual_ranking=result.get("visual_ranking"),
         identity_boost=_safe_number(result.get("identity_boost")) or 0.0,
         identity_match=result.get("identity_match"),
         identity_evidence=_list_dicts(result.get("identity_evidence")),
@@ -620,10 +736,18 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         duration=enrichment.get("duration"),
         timestamp=payload.get("timestamp", enrichment.get("timestamp")),
         **frame_projection,
+        visual_caption=payload.get("visual_caption") or payload.get("caption") or enrichment.get("visual_caption"),
+        caption_meta=enrichment.get("caption_meta"),
+        caption_observations=enrichment.get("caption_observations") or [],
+        ocr_text=payload.get("ocr_text") or enrichment.get("ocr_text"),
+        ocr_observations=enrichment.get("ocr_observations") or [],
         transcript=payload.get("transcript", enrichment.get("transcript")),
         keywords=payload.get("keywords") or enrichment.get("keywords") or [],
         tags=enrichment.get("tags") or [],
         objects=payload.get("objects") or enrichment.get("objects") or [],
+        detect_meta=enrichment.get("detect_meta"),
+        detected_objects=enrichment.get("detected_objects") or [],
+        object_observations=enrichment.get("object_observations") or [],
         audio_emotion=enrichment.get("audio_emotion"),
         audio_emotion_scores=enrichment.get("audio_emotion_scores"),
         audio_emotion_ranking=enrichment.get("audio_emotion_ranking") or [],
@@ -632,6 +756,13 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         text_emotion_ranking=enrichment.get("text_emotion_ranking") or [],
         text_emotion_meta=enrichment.get("text_emotion_meta"),
         clap_meta=safe_clap_meta,
+        transcript_meta=_sanitize_read_model_mapping(enrichment.get("transcript_meta")) if isinstance(enrichment.get("transcript_meta"), dict) else None,
+        transcript_outcome=enrichment.get("transcript_outcome"),
+        transcript_outcome_reason=enrichment.get("transcript_outcome_reason"),
+        diarization_status=enrichment.get("diarization_status"),
+        diarization_note=enrichment.get("diarization_note"),
+        emotion_status=enrichment.get("emotion_status"),
+        emotion_note=enrichment.get("emotion_note"),
         audio_vector_proof=audio_vector_proof,
         current_run_qdrant_audio_proven=current_run_audio_proven,
         current_run_audio_vector_proven=current_run_audio_proven,
@@ -658,23 +789,32 @@ def _build_search_result(result: dict, modality: Optional[str] = None) -> Search
         confidence=_enriched_confidence(result, enrichment),
         phase6_complete=phase6_complete,
     )
+    projected_result.transcript_outcome_evidence = project_transcript_outcome(
+        payload, timeline_loader if timeline_loader is not None else loader, _config or {}, projected_result.transcript or '')
+    return projected_result
+
 
 
 def get_search_engine():
     """Lazy-load search engine."""
     global _search_engine, _config
     
-    if _search_engine is None:
-        if _config is None:
-            _config = load_configs({})
-        _search_engine = MultimodalSearchEngine(_config)
-        logger.info("[OK] Search engine initialized")
-    
-    return _search_engine
+    with _search_lock:
+        if _search_engine is None:
+            if _config is None:
+                _config = load_configs({})
+            _search_engine = MultimodalSearchEngine(_config)
+            logger.info("[OK] Search engine initialized")
+
+        return _search_engine
 
 
 def prewarm_search_engine() -> Dict[str, bool]:
     """Load local query encoders into the API process before interactive use."""
+    return _run_serialized_search(_prewarm_search_engine)
+
+
+def _prewarm_search_engine() -> Dict[str, bool]:
     engine = get_search_engine()
     query = "GoodQ retrieval warmup"
     encoders = {
@@ -765,10 +905,12 @@ def _rank_with_identity_evidence(
             identity_cfg.get("appearance_score_boost", 0.20)
         )
         mention_boost = float(identity_cfg.get("mention_score_boost", 0.05))
+        voice_boost = float(identity_cfg.get("voice_score_boost", 0.15))
     except (TypeError, ValueError):
-        appearance_boost, mention_boost = 0.20, 0.05
+        appearance_boost, mention_boost, voice_boost = 0.20, 0.05, 0.15
     appearance_boost = max(0.0, min(appearance_boost, 1.0))
     mention_boost = max(0.0, min(mention_boost, appearance_boost))
+    voice_boost = max(0.0, min(voice_boost, appearance_boost))
 
     ranked = []
     for raw_result in results:
@@ -791,12 +933,12 @@ def _rank_with_identity_evidence(
                     item.get("strength") == "appearance"
                     for item in scene_evidence
                 )
-                else "mention"
+                else "voice" if any(item.get("strength") == "voice" for item in scene_evidence) else "mention"
             )
             boost = (
                 appearance_boost
                 if match_strength == "appearance"
-                else mention_boost
+                else voice_boost if match_strength == "voice" else mention_boost
             )
             result.update({
                 "identity_boost": boost,
@@ -825,7 +967,7 @@ def _rank_with_identity_evidence(
     return selected[:requested_top_k]
 
 
-def _inject_missing_appearance_candidates(
+def _inject_missing_identity_candidates(
     results: list[dict],
     evidence: dict[str, list[dict]],
 ) -> list[dict]:
@@ -848,7 +990,7 @@ def _inject_missing_appearance_candidates(
     }
     existing_appearance_count = sum(
         any(
-            item.get("strength") == "appearance"
+            item.get("strength") in {"appearance", "voice"}
             for item in evidence.get(scene_id, [])
         )
         for scene_id in existing_scene_ids
@@ -862,7 +1004,7 @@ def _inject_missing_appearance_candidates(
         for scene_id, scene_evidence in evidence.items()
         if scene_id not in existing_scene_ids
         and any(
-            item.get("strength") == "appearance"
+            item.get("strength") in {"appearance", "voice"}
             for item in scene_evidence
         )
     ]
@@ -889,21 +1031,70 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
     Returns:
         Ranked search results with scores and context
     """
+    return await _offload_search(_search_multimodal, request)
+
+
+def _rank_saved_visual_captions(engine, query, results, timeline_loader):
+    """Resolve captions only within each candidate's exact source and scene."""
+    if not isinstance(engine, MultimodalSearchEngine):
+        return results
+    results = [r for r in results if not isinstance(timeline_loader.loader, DataLoader)
+               or timeline_loader.is_search_result_active(r.get("payload") or {})]
+    captions = []
+    for result in results:
+        payload = result.get("payload") or {}
+        caption = None
+        try:
+            timelines = timeline_loader.matching_timelines(payload.get("video_id"))
+            if len(timelines) == 1:
+                matches = [s for s in timelines[0].get("segments", []) if isinstance(s, dict)
+                           and str(s.get("scene_id")) == str(payload.get("scene_id"))]
+                if len(matches) == 1:
+                    segment = matches[0]
+                    meta = segment.get("caption_meta") or {}
+                    raw = segment.get("visual_caption")
+                    if (isinstance(raw, str) and meta.get("status") == "ok"
+                            and meta.get("is_midpoint_sample") is True
+                            and _safe_number(meta.get("sample_timestamp")) is not None):
+                        text = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", raw)).strip()
+                        if text:
+                            caption = {"text": text, "sample_timestamp": _safe_number(meta.get("sample_timestamp"))}
+        except (AttributeError, OSError, ValueError, TypeError):
+            pass  # Reported as an evidence fallback by the ranker.
+        captions.append(caption)
+    return engine.rank_visual_captions(query, results, captions)
+
+
+def _search_multimodal(request: MultimodalSearchRequest):
+    global _config
+    if _config is None:
+        _config = load_configs({})
+    people_only = request.modalities == ["identity"]
+    if people_only and not (_config.get("identity_search") or {}).get("enabled", False):
+        raise HTTPException(status_code=409, detail="Identity search is disabled in this configuration")
     try:
-        engine = get_search_engine()
+        engine = None if people_only else get_search_engine()
         identity_evidence, candidate_top_k = _identity_search_context(
             request.query,
             request.top_k,
         )
+        caption_ranking = request.modalities == ["visual"] and not identity_evidence and request.top_k <= 50
+        if caption_ranking:
+            candidate_top_k = 50
+        timeline_loader = TimelineReadCache(get_data_loader())
         
         # Execute search
-        results = engine.search_multimodal(
+        results = ([{"score": 0.0, "modality": "identity", "modalities": ["identity"],
+                     "payload": {"scene_id": sid}, "identity_only": True}
+                    for sid in sorted(identity_evidence)] if people_only else engine.search_multimodal(
             query=request.query,
             top_k=candidate_top_k,
             modalities=request.modalities,
             retrieval_context="human.ui.search",
-        )
-        results = _inject_missing_appearance_candidates(
+        ))
+        if caption_ranking:
+            results = _rank_saved_visual_captions(engine, request.query, results, timeline_loader)[:request.top_k]
+        results = _inject_missing_identity_candidates(
             results,
             identity_evidence,
         )
@@ -916,7 +1107,16 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
         # Convert to response format
         search_results = []
         for result in results:
-            search_results.append(_build_search_result(result))
+            if isinstance(get_data_loader(), DataLoader) and not get_data_loader().is_search_result_active(result.get("payload") or {}):
+                continue
+            projected = _build_search_result(result, timeline_loader=timeline_loader)
+            if result.get("identity_only") and isinstance(get_data_loader(), DataLoader):
+                source_id = projected.timeline_video_id or projected.video_id
+                if not source_id or not get_data_loader().is_search_result_active({
+                    "video_id": source_id, "scene_id": projected.scene_id, "source_kind": projected.source_kind,
+                }):
+                    continue
+            search_results.append(projected)
         
         modalities_searched = request.modalities if request.modalities else ['text', 'visual']
         
@@ -925,12 +1125,12 @@ async def search_multimodal(request: MultimodalSearchRequest = Body(...)):
             total_results=len(search_results),
             results=search_results,
             modalities_searched=modalities_searched,
-            fusion_weights=request.fusion_weights or {
+            fusion_weights={} if people_only else request.fusion_weights or {
                 'text': engine.weight_text,
                 'visual': engine.weight_visual,
                 'audio': engine.weight_audio
             },
-            diagnostics=engine.last_search_diagnostics() if hasattr(engine, "last_search_diagnostics") else None,
+            diagnostics={"identity": {"status": "ok", "inference_performed": False}} if people_only else engine.last_search_diagnostics() if hasattr(engine, "last_search_diagnostics") else None,
         )
         
     except Exception as e:
@@ -953,24 +1153,37 @@ async def search_text(
     Returns:
         Search results from text modality
     """
+    return await _offload_search(_search_text, q, top_k)
+
+
+def _search_text(q: str, top_k: int):
     try:
         engine = get_search_engine()
         
-        results = engine.search_text(
+        # Match the unified Text caller's candidate expansion and scene ranking.
+        # Keep this endpoint's projection and identity-independent scope intact.
+        results = engine.search_multimodal(
             q,
             top_k=top_k,
+            modalities=["text"],
             retrieval_context="human.ui.search",
         )
         
         search_results = []
+        timeline_loader = TimelineReadCache(get_data_loader())
         for result in results:
-            search_results.append(_build_search_result(result, modality="text"))
+            if isinstance(get_data_loader(), DataLoader) and not get_data_loader().is_search_result_active(result.get("payload") or {}):
+                continue
+            search_results.append(_build_search_result(result, modality="text", timeline_loader=timeline_loader))
         
         return SearchResponse(
             query=q,
             total_results=len(search_results),
             results=search_results,
-            modalities_searched=['text']
+            modalities_searched=['text'],
+            diagnostics={key: value for key, value in engine.last_search_diagnostics().items()
+                         if key in {"text", "text_passages"}}
+            if hasattr(engine, "last_search_diagnostics") else None,
         )
         
     except Exception as e:
@@ -993,24 +1206,38 @@ async def search_visual(
     Returns:
         Search results from visual modality
     """
+    return await _offload_search(_search_visual, q, top_k)
+
+
+def _search_visual(q: str, top_k: int):
     try:
         engine = get_search_engine()
+        engine._reset_search_diagnostics()
         
         results = engine.search_visual(
             q,
-            top_k=top_k,
+            top_k=50 if top_k <= 50 else top_k,
             retrieval_context="human.ui.search",
         )
         
         search_results = []
+        timeline_loader = TimelineReadCache(get_data_loader())
+        if top_k <= 50:
+            results = _rank_saved_visual_captions(engine, q, results, timeline_loader)[:top_k]
         for result in results:
-            search_results.append(_build_search_result(result, modality="visual"))
+            if isinstance(get_data_loader(), DataLoader) and not get_data_loader().is_search_result_active(result.get("payload") or {}):
+                continue
+            search_results.append(_build_search_result(result, modality="visual", timeline_loader=timeline_loader))
+
+        diagnostics = engine.last_search_diagnostics() if hasattr(engine, "last_search_diagnostics") else {}
         
         return SearchResponse(
             query=q,
             total_results=len(search_results),
             results=search_results,
-            modalities_searched=['visual']
+            modalities_searched=['visual'],
+            diagnostics={key: value for key, value in diagnostics.items()
+                         if key in {"visual", "visual_captions"}} or None,
         )
         
     except Exception as e:
@@ -1882,6 +2109,23 @@ async def get_temporal_summary_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(
                 status_code=409,
                 detail={"code": "result_invalid", "job": _public_temporal_summary_job(record)},
+            )
+        try:
+            db_path = Path(cfg["paths"]["db_path"])
+            retired = read_retired_scene_ids(
+                db_path.parent / "ucf" / "ucf_ledger.db", epoch_id=scope["epoch_id"],
+            )
+        except (KeyError, TypeError, OSError, ValueError, sqlite3.Error):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "result_invalid", "reason": "source_lifecycle_unavailable",
+                        "job": _public_temporal_summary_job(record)},
+            )
+        if retired.intersection(receipt["result"]["source_scene_ids"]):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "result_invalid", "reason": "source_scene_retired",
+                        "job": _public_temporal_summary_job(record)},
             )
     elif state == "failed":
         outcome = record.get("outcome")

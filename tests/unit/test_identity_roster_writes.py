@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 import sys
 import yaml
+import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
@@ -22,7 +25,7 @@ def client() -> TestClient:
 @pytest.fixture(autouse=True)
 def mock_global_cfg(monkeypatch):
     """Isolate _CFG state for all tests in this module to prevent leaks from other tests."""
-    monkeypatch.setattr("api.routes.identity._CFG", {})
+    monkeypatch.setattr("api.routes.identity._CFG", {"epoch_id": "epoch_test"})
 
 @pytest.fixture(autouse=True)
 def bypass_miniagent_confirmation(monkeypatch):
@@ -34,14 +37,18 @@ def bypass_miniagent_confirmation(monkeypatch):
         "errors": [],
     }
 
+    recorded = []
+
     class _BypassAuthority:
         def authorize_action(self, **kwargs):
             return _ok_envelope, 0
 
         def record_external_execution_outcome(self, **kwargs):
+            recorded.append(kwargs)
             return {"audit_status": "recorded", "error_codes": []}
 
     monkeypatch.setattr("api.routes.identity.MiniAgentClient", lambda **_kw: _BypassAuthority())
+    return recorded
 
 def test_save_roster_identity_atomic(client, tmp_path, monkeypatch) -> None:
     temp_identity_dir = tmp_path / "identity"
@@ -199,3 +206,119 @@ def test_identity_path_precedence(monkeypatch, tmp_path) -> None:
     })
     path = _identity_data_path()
     assert path == temp_cfg_roster.parent
+
+
+@pytest.mark.parametrize("route,filename,payload", [
+    ("face-clusters/label", "face_clusters.json", {"cluster_id": "fixture", "label": "Changed", "operator_note": "Reviewed"}),
+    ("speaker-clusters/confirm", "speaker_clusters.json", {"cluster_id": "fixture", "confirmed": True, "identity_label": "Changed"}),
+])
+def test_interrupted_json_edit_preserves_original_bytes(client, tmp_path, monkeypatch, route, filename, payload, bypass_miniagent_confirmation):
+    identity_dir = tmp_path / "identity"
+    identity_dir.mkdir()
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(identity_dir))
+    target = identity_dir / filename
+    target.write_text(json.dumps({"epoch_id": "epoch_test", "clusters": [{"cluster_id": "fixture", "label": "Original", "confirmed": False}]}), encoding="utf-8")
+    before = target.read_bytes()
+    real_iterencode = json.JSONEncoder.iterencode
+
+    def interrupted_encode(encoder, value, *args, **kwargs):
+        if isinstance(value, dict) and "clusters" in value:
+            yield '{"clusters": ['
+            raise OSError("fixture interrupted JSON write")
+        yield from real_iterencode(encoder, value, *args, **kwargs)
+
+    monkeypatch.setattr(json.JSONEncoder, "iterencode", interrupted_encode)
+    with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False) as failing_client:
+        response = failing_client.post("/api/identity/" + route, json=payload)
+    assert response.status_code == 500
+    assert target.read_bytes() == before, "failed edit must preserve the previous valid JSON"
+    assert not list(identity_dir.glob("*.tmp"))
+    assert not bypass_miniagent_confirmation
+
+
+@pytest.mark.parametrize("same_cluster", [False, True])
+def test_concurrent_roster_updates_are_one_transaction(tmp_path, monkeypatch, same_cluster):
+    identity_dir = tmp_path / "identity"
+    identity_dir.mkdir()
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(identity_dir))
+    roster = identity_dir / "family_roster.yaml"
+    roster.write_text("identities: []\n", encoding="utf-8")
+    (identity_dir / "face_clusters.json").write_text(json.dumps({
+        "epoch_id": "epoch_test", "clusters": [{"cluster_id": "shared"}],
+    }), encoding="utf-8")
+    first_at_replace = threading.Event()
+    second_finished = threading.Event()
+    real_replace = os.replace
+
+    def pause_first_writer(source, target):
+        if Path(target) == roster and "fixture_first" in Path(source).read_text(encoding="utf-8") and not first_at_replace.is_set():
+            first_at_replace.set()
+            # The old unlocked path lets the second request finish here. A
+            # serialized transaction holds it until the first commit completes.
+            second_finished.wait(timeout=1)
+        return real_replace(source, target)
+
+    monkeypatch.setattr(os, "replace", pause_first_writer)
+
+    def save(identity_id):
+        with TestClient(app, client=("127.0.0.1", 50000)) as concurrent_client:
+            return concurrent_client.post("/api/identity/roster/save", json={"identity": {
+                "id": identity_id, "display_name": identity_id,
+                "face_cluster_ids": ["shared"] if same_cluster else [],
+            }})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(save, "fixture_first")
+        assert first_at_replace.wait(timeout=5), "first request did not reach its commit"
+        def second_save():
+            try:
+                return save("fixture_second")
+            finally:
+                second_finished.set()
+        second = pool.submit(second_save)
+        responses = [first.result(timeout=10), second.result(timeout=10)]
+
+    identities = yaml.safe_load(roster.read_text(encoding="utf-8"))["identities"]
+    if same_cluster:
+        assert sorted(response.status_code for response in responses) == [200, 409]
+        assert len(identities) == 1
+    else:
+        assert [response.status_code for response in responses] == [200, 200]
+        assert {entry["id"] for entry in identities} == {"fixture_first", "fixture_second"}
+
+
+@pytest.mark.parametrize("route,filename,payload", [
+    ("face-clusters/label", "face_clusters.json", {"cluster_id": "fixture", "label": "Changed"}),
+    ("speaker-clusters/confirm", "speaker_clusters.json", {"cluster_id": "fixture", "confirmed": True}),
+    ("roster/save", "family_roster.yaml", {"identity": {"id": "fixture", "display_name": "Changed"}}),
+    ("roster/export", "family_roster.yaml", {"identities": [{"id": "fixture", "display_name": "Changed"}]}),
+])
+def test_failed_identity_replace_preserves_data_and_allows_retry(
+        tmp_path, monkeypatch, route, filename, payload, bypass_miniagent_confirmation):
+    identity_dir = tmp_path / "identity"
+    identity_dir.mkdir()
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(identity_dir))
+    target = identity_dir / filename
+    target.write_text(
+        'identities: [{id: fixture, display_name: Original}]\n' if filename.endswith("yaml")
+        else json.dumps({"epoch_id": "epoch_test", "clusters": [{"cluster_id": "fixture", "label": "Original", "confirmed": False}]}),
+        encoding="utf-8",
+    )
+    before = target.read_bytes()
+    real_replace = os.replace
+
+    def failed_replace(source, destination):
+        if Path(destination) == target:
+            raise PermissionError("fixture replacement denied")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", failed_replace)
+    with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False) as failing_client:
+        assert failing_client.post("/api/identity/" + route, json=payload).status_code == 500
+        assert target.read_bytes() == before
+        assert not list(identity_dir.glob("*.tmp"))
+        assert not bypass_miniagent_confirmation
+        monkeypatch.setattr(os, "replace", real_replace)
+        assert failing_client.post("/api/identity/" + route, json=payload).status_code == 200
+    assert target.read_bytes() != before
+    assert len(bypass_miniagent_confirmation) == 1

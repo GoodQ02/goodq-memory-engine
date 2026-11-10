@@ -212,7 +212,7 @@ def test_search_multimodal_records_audio_encoder_unavailable_diagnostic(
     }
 
 
-def test_visual_query_loader_uses_safetensors(
+def test_visual_query_loader_uses_local_supported_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -250,7 +250,7 @@ def test_visual_query_loader_uses_safetensors(
 
     engine._load_clip_model()
 
-    assert calls == [{"use_safetensors": True, "local_files_only": True}]
+    assert calls == [{"use_safetensors": None, "local_files_only": True}]
 
 
 def test_visual_query_encoder_accepts_pooled_model_output(monkeypatch: pytest.MonkeyPatch) -> None:

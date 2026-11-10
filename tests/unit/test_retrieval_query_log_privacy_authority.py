@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from api import server as api_server
-from retrieval.multimodal_search import MultimodalSearchEngine
+from retrieval.multimodal_search import MultimodalSearchEngine, VisualQueryUnavailable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -89,6 +89,7 @@ def test_text_search_preserves_encoder_and_fts_query_without_logging_it(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     engine = object.__new__(MultimodalSearchEngine)
+    engine._last_search_diagnostics = {}
     calls: list[tuple[str, str, int | None]] = []
 
     def encode(query: str) -> np.ndarray:
@@ -122,11 +123,12 @@ def test_visual_search_preserves_encoder_query_without_logging_it(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     engine = object.__new__(MultimodalSearchEngine)
+    engine._last_search_diagnostics = {}
     calls: list[str] = []
 
     def encode(query: str) -> np.ndarray:
         calls.append(query)
-        return np.zeros(1, dtype=np.float32)
+        raise VisualQueryUnavailable("model_not_cached")
 
     engine.encode_text_for_visual_search = encode  # type: ignore[method-assign]
     caplog.set_level(logging.INFO, logger="retrieval.multimodal_search")
@@ -140,6 +142,7 @@ def test_visual_search_preserves_encoder_query_without_logging_it(
 
     assert result == []
     assert calls == [QUERY_CANARY]
+    assert engine.last_search_diagnostics()["visual"]["status"] == "unavailable"
     _assert_safe_operation_log(caplog, operation="visual", top_k=3)
 
 

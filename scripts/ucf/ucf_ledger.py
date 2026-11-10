@@ -3,15 +3,54 @@ import json
 import time
 import random
 import hashlib
+import math
+import re
+import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Sequence
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+
+
+from steps.common.ucf_retirement import _read_scene_retirements, assert_scene_write_allowed
+
+
+def audio_occurrence_id(video_hash, scene_id, worker_name, payload):
+    """Identity within a retained recording projection, independent of display rounding."""
+    if worker_name == 'audio_transcribe':
+        key = payload.get('utterance_id')
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError('Recording transcript occurrence requires its native utterance ID')
+    elif worker_name == 'speaker_merge':
+        key = payload.get('turn_index')
+        if type(key) is not int or key < 0:
+            raise ValueError('Recording speaker occurrence requires its retained turn index')
+    else:
+        raise ValueError('Unsupported recording occurrence producer')
+    if not scene_id:
+        raise ValueError('Recording occurrence requires a source scene')
+    value = ['recording_occurrence_v1', video_hash, scene_id, worker_name, key]
+    return hashlib.sha256(json.dumps(value, separators=(',', ':')).encode()).hexdigest()
+
+
+def read_scene_retirements(db_path, *, video_hash, epoch_id=None):
+    """Read durable scene exclusions without creating a database or schema."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        return _read_scene_retirements(conn, video_hash=video_hash, epoch_id=epoch_id)
+    finally:
+        conn.close()
+
 
 class UCFRecord(BaseModel):
     video_hash: str = Field(..., description="Unique hash identifier of the video source")
     ucf_schema_version: str = Field("ucf.v0.1", description="UCF schema version for future-proof parsing")
     epoch_id: str = Field(..., description="Active epoch identity tracking")
     run_id: str = Field(..., description="Active ingestion run identity tracking")
+    occurrence_id: str = Field("", description="Stable producer occurrence; empty preserves legacy timestamp identity")
     t_start: float = Field(..., description="Start timestamp in seconds relative to video start")
     t_end: float = Field(..., description="End timestamp in seconds relative to video start")
     modality: str = Field(..., description="Modality category (audio, video, text, multimodal)")
@@ -87,9 +126,14 @@ class UCFRecord(BaseModel):
 
     @field_validator("payload")
     @classmethod
-    def validate_payload_flatness(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_payload_flatness(cls, v: Dict[str, Any], info: ValidationInfo) -> Dict[str, Any]:
+        if "embedding_chunks" in v:
+            from steps.common.embedding_references import expand_embedding_references
+            expand_embedding_references({**info.data, "payload": v})
         allowed_types = (str, int, float, bool, type(None))
         for key, value in v.items():
+            if key == "embedding_chunks":
+                continue  # The complete document-only group was validated above.
             if not isinstance(value, allowed_types):
                 raise ValueError(f"payload value for key '{key}' must be flat (str, int, float, bool, None); got type {type(value)}")
         return v
@@ -158,8 +202,9 @@ class UCFLedgerClient:
                 payload_hash TEXT NOT NULL,
                 promotion_status TEXT NOT NULL DEFAULT 'staged',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                occurrence_id TEXT NOT NULL DEFAULT '',
                 FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash),
-                UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end)
+                UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id)
             );
             """,
             "CREATE INDEX IF NOT EXISTS idx_cf_temporal ON context_frames(video_hash, t_start, t_end);",
@@ -184,6 +229,72 @@ class UCFLedgerClient:
 
         for q in queries:
             self.execute_with_retry(q)
+        self._migrate_occurrences()
+
+    def _migrate_occurrences(self):
+        """Atomically extend the old unique key, retaining IDs, audit links and a backup.
+
+        Uses SQLite's create/copy/drop/rename migration, never writable_schema.
+        Unknown constraints or dependent views fail visibly and roll back.
+        """
+        if 'occurrence_id' in {r[1] for r in self.conn.execute('PRAGMA table_info(context_frames)')}:
+            return
+        foreign_keys = self.conn.execute('PRAGMA foreign_keys').fetchone()[0]
+        self.conn.execute('PRAGMA foreign_keys=OFF')
+        try:
+            self.conn.execute('BEGIN IMMEDIATE')
+            if 'occurrence_id' in {r[1] for r in self.conn.execute('PRAGMA table_info(context_frames)')}:
+                self.conn.commit()
+                return
+            sql = self.conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='context_frames'").fetchone()[0]
+            pattern = r'UNIQUE\s*\(\s*video_hash\s*,\s*epoch_id\s*,\s*modality\s*,\s*worker_name\s*,\s*t_start\s*,\s*t_end\s*\)'
+            sql, count = re.subn(pattern, 'UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id)', sql, flags=re.I)
+            if count != 1:
+                raise ValueError('Unrecognized legacy context_frames uniqueness constraint')
+            sql, count = re.subn(r'^CREATE TABLE\s+(?:"context_frames"|context_frames)\s*\(',
+                'CREATE TABLE context_frames_occurrences (', sql, count=1, flags=re.I)
+            if count != 1:
+                raise ValueError('Unrecognized legacy context_frames table definition')
+            sql, count = re.subn(r'FOREIGN\s+KEY\s*\(\s*video_hash\s*\)',
+                "occurrence_id TEXT NOT NULL DEFAULT '', FOREIGN KEY (video_hash)", sql, count=1, flags=re.I)
+            if count != 1:
+                raise ValueError('Unrecognized legacy context_frames source constraint')
+            # A second read connection sees the committed WAL snapshot while this
+            # writer lock prevents concurrent changes until migration commits.
+            backup = Path(self.db_path).with_name(Path(self.db_path).name+'.pre-occurrence-v1.'+uuid.uuid4().hex+'.sqlite')
+            with backup.open('xb'):
+                pass
+            source = sqlite3.connect(f'{Path(self.db_path).resolve().as_uri()}?mode=ro', uri=True)
+            destination = sqlite3.connect(str(backup))
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+                source.close()
+            objects = self.conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name='context_frames' AND type IN ('index','trigger') AND sql IS NOT NULL").fetchall()
+            sequence = self.conn.execute("SELECT seq FROM sqlite_sequence WHERE name='context_frames'").fetchone()
+            columns = [r[1] for r in self.conn.execute('PRAGMA table_info(context_frames)')]
+            quoted = ','.join('"'+name.replace('"', '""')+'"' for name in columns)
+            self.conn.execute(sql)
+            self.conn.execute(f'INSERT INTO context_frames_occurrences ({quoted}) SELECT {quoted} FROM context_frames')
+            rows = self.conn.execute("SELECT frame_id,video_hash,source_artifact_id,worker_name,payload FROM context_frames WHERE model_tag='recording_audio_v1' AND worker_name IN ('audio_transcribe','speaker_merge')").fetchall()
+            for frame, video, scene, worker, payload in rows:
+                occurrence = audio_occurrence_id(video, scene, worker, json.loads(payload))
+                self.conn.execute('UPDATE context_frames_occurrences SET occurrence_id=? WHERE frame_id=?', (occurrence, frame))
+            self.conn.execute('DROP TABLE context_frames')
+            self.conn.execute('ALTER TABLE context_frames_occurrences RENAME TO context_frames')
+            for (statement,) in objects:
+                self.conn.execute(statement)
+            if sequence:
+                self.conn.execute("UPDATE sqlite_sequence SET seq=MAX(seq,?) WHERE name='context_frames'", sequence)
+            if foreign_keys and self.conn.execute('PRAGMA foreign_key_check').fetchone():
+                raise ValueError('Foreign key check failed during occurrence migration')
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        finally:
+            self.conn.execute(f'PRAGMA foreign_keys={foreign_keys}')
 
     def execute_with_retry(self, query: str, params: tuple = (), max_retries: int = 5) -> sqlite3.Cursor:
         """Executes a query with retry logic on database locks."""
@@ -269,7 +380,8 @@ class UCFLedgerClient:
         source_artifact_id: Optional[str] = None,
         raw_ref: Optional[str] = None,
         payload: Optional[Dict[str, Any]] = None,
-        promotion_status: str = "staged"
+        promotion_status: str = "staged",
+        occurrence_id: str = "",
     ) -> int:
         """Logs a Unified Context Frame event to the ledger, enforcing strict Pydantic validation."""
         # Instantiate and validate record
@@ -277,6 +389,7 @@ class UCFLedgerClient:
             video_hash=video_hash,
             epoch_id=epoch_id,
             run_id=run_id,
+            occurrence_id=occurrence_id,
             t_start=t_start,
             t_end=t_end,
             modality=modality,
@@ -305,28 +418,57 @@ class UCFLedgerClient:
             video_hash, ucf_schema_version, epoch_id, run_id, t_start, t_end,
             modality, worker_name, model_tag, confidence, spatial_region, spatial_space,
             vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
-            source_artifact_id, raw_ref, payload, payload_hash, promotion_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(video_hash, epoch_id, modality, worker_name, t_start, t_end) DO UPDATE SET
+            source_artifact_id, raw_ref, payload, payload_hash, promotion_status, occurrence_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id) DO UPDATE SET
             payload = excluded.payload,
             payload_hash = excluded.payload_hash,
             run_id = excluded.run_id,
             vector_key = excluded.vector_key,
+            vector_backend = excluded.vector_backend,
+            vector_collection = excluded.vector_collection,
+            vector_dim = excluded.vector_dim,
+            vector_model_tag = excluded.vector_model_tag,
             confidence = excluded.confidence,
             promotion_status = excluded.promotion_status,
             model_tag = excluded.model_tag,
             raw_ref = excluded.raw_ref,
             source_artifact_id = excluded.source_artifact_id
         """
-        cursor = self.execute_with_retry(query, (
+        params = (
             record.video_hash, record.ucf_schema_version, record.epoch_id, record.run_id,
             record.t_start, record.t_end, record.modality, record.worker_name, record.model_tag,
             record.confidence, spatial_str, record.spatial_space, record.vector_key,
             record.vector_backend, record.vector_collection, record.vector_dim, record.vector_model_tag,
             record.source_artifact_id, record.raw_ref, payload_str, record.payload_hash,
-            record.promotion_status
-        ))
-        return cursor.lastrowid
+            record.promotion_status, record.occurrence_id
+        )
+        # Serialize replay admission with retirement. A retried producer may not
+        # reopen a retired scene, including newly emitted workers for its alias.
+        for attempt in range(5):
+            try:
+                self.conn.execute("BEGIN IMMEDIATE")
+                conflict = self.conn.execute(
+                    "SELECT frame_id FROM context_frames WHERE video_hash=? AND epoch_id=? AND modality=? AND worker_name=? AND t_start=? AND t_end=? AND occurrence_id=?",
+                    (video_hash, epoch_id, modality, worker_name, record.t_start, record.t_end, record.occurrence_id),
+                ).fetchone()
+                assert_scene_write_allowed(
+                    self.conn, video_hash=video_hash, epoch_id=epoch_id,
+                    source_artifact_id=source_artifact_id, payload=payload,
+                    conflict_frame_id=conflict[0] if conflict else None,
+                )
+                cursor = self.conn.execute(query, params)
+                self.conn.commit()
+                return conflict[0] if conflict else cursor.lastrowid
+            except sqlite3.OperationalError as exc:
+                self.conn.rollback()
+                if "locked" in str(exc).lower() and attempt < 4:
+                    time.sleep(0.05 + random.uniform(0, 0.05))
+                    continue
+                raise
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def query_overlap(
         self,

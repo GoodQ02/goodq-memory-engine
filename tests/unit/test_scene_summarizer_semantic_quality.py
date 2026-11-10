@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from steps.common.scene_summarizer import generate_scene_summary_template
+from steps.common.scene_summarizer import _format_objects, generate_scene_summary, generate_scene_summary_template
 
 
 def test_scene_summary_prefers_clean_semantic_lists():
@@ -118,3 +118,44 @@ def test_scene_summary_uses_nested_speaker_ids_when_only_audio_shape_is_present(
     assert "2 anonymous speakers" in summary
     assert "SPEAKER_00" not in summary
     assert "SPEAKER_01" not in summary
+
+
+def test_scene_summary_deduplicates_repeated_object_observations_in_first_seen_order():
+    repeated_objects = (
+        [{"label": "book", "score": 0.9 - idx * 0.01} for idx in range(10)]
+        + [
+            {"label": "   "},
+            {"label": None},
+            {"name": "chair", "score": 0.82},
+            {"label": "BOOK", "score": 0.99},
+            {"class": "coffee table", "score": 0.77},
+            "curtain",
+            {"label": "lamp", "score": 0.71},
+            {"label": "sofa", "score": 0.68},
+        ]
+    )
+    scene_meta = {
+        "index": 27,
+        "start": 100.0,
+        "end": 112.0,
+        "caption": "A study room with bookshelves and curtains.",
+        "objects": repeated_objects,
+    }
+
+    assert _format_objects(repeated_objects, max_items=5) == "book, chair, coffee table, curtain, lamp"
+    summary = generate_scene_summary(scene_meta, cfg={}, use_llm=False)
+    assert "Objects: book, chair, coffee table, curtain, lamp" in summary
+    assert "Objects: book, book" not in summary
+
+
+def test_scene_summary_omits_objects_section_when_only_invalid_object_entries_exist():
+    scene_meta = {
+        "index": 28,
+        "start": 112.0,
+        "end": 120.0,
+        "caption": "An empty hallway.",
+        "objects": [{"label": ""}, {"label": "   "}, {"score": 0.5}, None],
+    }
+
+    summary = generate_scene_summary_template(scene_meta)
+    assert "Objects:" not in summary

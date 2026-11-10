@@ -33,8 +33,10 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def isolate_identity_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(identity_route, "_CFG", {})
+def isolate_identity_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(identity_route, "_CFG", {
+        "paths": {"db_path": str(tmp_path / "epochs" / "epoch-test" / "memory.db")},
+    })
 
 
 class _Authority:
@@ -176,6 +178,62 @@ class _FakeProcess:
 
     def poll(self) -> int | None:
         return self.returncode
+
+
+@pytest.mark.parametrize("path_state", ["bound", "missing", "mismatch"])
+def test_actual_api_rebuild_binds_child_to_configured_epoch_root(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path_state: str,
+) -> None:
+    """Keep a contained identity rebuild away from the builder's legacy default."""
+    epoch_root = tmp_path / "contained-epochs"
+    epoch_dir = epoch_root / "epoch-test"
+    epoch_dir.mkdir(parents=True)
+    identity_dir = tmp_path / "identity"
+    identity_dir.mkdir()
+    monkeypatch.setattr(identity_route, "_CFG", {
+        "epoch_id": "epoch-test",
+        "paths": (
+            {} if path_state == "missing" else
+            {"db_path": str((epoch_root / "other-epoch" if path_state == "mismatch" else epoch_dir) / "memory.db")}
+        ),
+        "identity_search": {"roster_path": str(identity_dir / "family_roster.yaml")},
+    })
+    process = _FakeProcess(
+        [],
+        on_communicate=lambda: (identity_dir / "face_clusters.json").write_text(
+            json.dumps(_valid_manifest()), encoding="utf-8"
+        ),
+    )
+    monkeypatch.setattr(
+        identity_route, "_probe_process_start_token",
+        lambda pid: ("live", "abc123") if pid == process.pid else ("unknown", None),
+    )
+    popen = MagicMock(return_value=process)
+    monkeypatch.setattr(identity_route.subprocess, "Popen", popen)
+
+    prepare = client.post("/api/identity/rebuild-face-clusters", json={"eps": 0.4})
+    assert prepare.status_code == 403, prepare.text
+    popen.assert_not_called()
+    token = prepare.json()["result"]["confirmation_token"]
+    response = client.post(
+        "/api/identity/rebuild-face-clusters",
+        json={"eps": 0.4, "confirmation_token": token},
+    )
+    if path_state != "bound":
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"] == "identity_epoch_path_invalid"
+        popen.assert_not_called()
+        assert not (identity_dir / "process_jobs").exists()
+        return
+    assert response.status_code == 200, response.text
+    command = popen.call_args.args[0]
+    assert "--epoch-root" in command, command
+    assert Path(command[command.index("--epoch-root") + 1]) == epoch_root.resolve()
+    assert command[command.index("--epoch-id") + 1] == "epoch-test"
+    assert Path(command[command.index("--data-path") + 1]) == identity_dir
 
 
 def _install_rebuild_fakes(
@@ -735,16 +793,20 @@ def test_successful_child_requires_generator_shaped_manifest_before_success_audi
     identity_dir = tmp_path / case
     identity_dir.mkdir()
     manifest_path = identity_dir / "face_clusters.json"
-    if case != "missing":
-        invalid = _invalid_manifest(case)
-        if isinstance(invalid, str):
-            manifest_path.write_text(invalid, encoding="utf-8")
-        else:
-            manifest_path.write_text(json.dumps(invalid), encoding="utf-8")
+    def write_child_result() -> None:
+        # Invalid output must appear after the child runs. An invalid existing
+        # artifact is rejected by the separate readiness preflight (HTTP 409).
+        if case != "missing":
+            invalid = _invalid_manifest(case)
+            manifest_path.write_text(
+                invalid if isinstance(invalid, str) else json.dumps(invalid),
+                encoding="utf-8",
+            )
+
     events: list[str] = []
-    process = _FakeProcess(events)
+    process = _FakeProcess(events, on_communicate=write_child_result)
     authority = _Authority()
-    _install_rebuild_fakes(monkeypatch, identity_dir, process, authority)
+    popen = _install_rebuild_fakes(monkeypatch, identity_dir, process, authority)
     monkeypatch.setattr(
         identity_route.subprocess,
         "run",
@@ -758,6 +820,7 @@ def test_successful_child_requires_generator_shaped_manifest_before_success_audi
 
     assert response.status_code == 500, (case, response.text)
     assert response.json() == {"detail": "face_cluster_rebuild_failed"}
+    popen.assert_called_once()
     persisted = ActionJobLedger(identity_dir / "process_jobs").list_records()[0]
     assert persisted["state"] == "failed"
     assert all(call["status"] != "succeeded" for call in authority.audit_calls)

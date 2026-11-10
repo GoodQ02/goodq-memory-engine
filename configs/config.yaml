@@ -4,6 +4,11 @@
 
 ingestion_isolation: true
 
+# The selected Paddle backend never changes engine or execution device on failure.
+# CUDA is an explicit host/witness override after device qualification.
+image_ocr:
+  device: cpu
+
 
 # ============================================================================
 # USER & MODEL IDENTITY
@@ -90,7 +95,6 @@ paths:
 config:
   tools:
     ffmpeg_exe: ${GOODQ_FFMPEG_EXE:-ffmpeg}
-    tesseract_exe: ${GOODQ_TESSERACT_EXE:-tesseract}
     poppler_bin: ${GOODQ_POPPLER_BIN:-}
 
 # ============================================================================

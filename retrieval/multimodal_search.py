@@ -11,6 +11,8 @@ import logging
 import numpy as np
 import re
 import sqlite3
+import math
+from collections import Counter
 from pathlib import Path
 
 from steps.common.model_cache_inspector import resolve_pinned_model_snapshot
@@ -30,6 +32,14 @@ _CLAP_MODEL_ID = "laion/clap-htsat-unfused"
 _CLAP_INSTALL_HINT = "conda run -n goodq_core python scripts/bootstrap_models.py"
 _CLIP_MODEL_REGISTRY_KEY = "clip_vit"
 _TEXT_MODEL_REGISTRY_KEY = "sentence_transformer"
+
+
+class VisualQueryUnavailable(RuntimeError):
+    """A visual query cannot run with the available local model/runtime."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _classify_audio_text_encoder_error(exc: Exception) -> str:
@@ -95,33 +105,7 @@ _QUERY_INTENT_ALIASES = {
     "surprise": {"surprise", "reunion", "greeting"},
     "upset": {"angry", "negative", "sad", "complaint", "confrontation"},
 }
-_QUERY_INTENT_PREVIEW_HINTS = {
-    "complaint_like": {
-        "terms": {"angry", "annoyed", "complain", "complaining", "complaint", "frustrated", "upset"},
-        "phrases": {
-            "affected by",
-            "no one has any interest",
-            "wait a second",
-            "what woman is coming in",
-            "where were you",
-            "why coming in",
-            "why even",
-        },
-        "bonus": 0.045,
-    },
-    "awkward_social": {
-        "terms": {"awkward", "greet", "greeting", "surprise"},
-        "phrases": {
-            "can't believe you're here",
-            "good to see you",
-            "hi!",
-            "interesting greeting",
-            "surprise blindfold greeting",
-            "you're back",
-        },
-        "bonus": 0.04,
-    },
-}
+
 _QUERY_ARTIFACT_TERMS = {
     "phone_call": {"call", "called", "caller", "calling", "hello", "hold", "phone"},
     "repeated_greeting": {"awkward", "greet", "greeting", "hello", "reunion", "surprise"},
@@ -182,6 +166,45 @@ _QUERY_CARRYOVER_TOKENS = {
 }
 
 
+def _lexical_payload_predicate(spec, depth=0):
+    """Compile scoped equality/boolean filters for SQLite payloads.
+
+    Advanced Qdrant predicates remain available to vector search. Lexical
+    candidates are withheld with a diagnostic if their filter cannot be checked.
+    """
+    if depth > 16 or not isinstance(spec, dict):
+        raise ValueError('Unsupported lexical payload filter')
+    if set(spec) == {'key', 'match'}:
+        key, match = spec['key'], spec['match']
+        if (not isinstance(key, str) or not key or any(c in key for c in '.[]')
+                or not isinstance(match, dict) or set(match) != {'value'}
+                or type(match['value']) not in (str, int, bool)):
+            raise ValueError('Unsupported lexical match predicate')
+        expected = match['value']
+
+        def matches(payload):
+            actual = payload.get(key)
+            values = actual if isinstance(actual, list) else [actual]
+            return any(type(value) is type(expected) and value == expected for value in values)
+
+        return matches
+    if set(spec) - {'must', 'should', 'must_not'}:
+        raise ValueError('Unsupported lexical filter clause')
+    groups = {}
+    for name, conditions in spec.items():
+        if conditions is None:
+            continue
+        conditions = [conditions] if isinstance(conditions, dict) else conditions
+        if not isinstance(conditions, list):
+            raise ValueError('Unsupported lexical filter conditions')
+        groups[name] = [_lexical_payload_predicate(condition, depth + 1) for condition in conditions]
+    return lambda payload: (
+        all(test(payload) for test in groups.get('must', []))
+        and ('should' not in groups or any(test(payload) for test in groups['should']))
+        and not any(test(payload) for test in groups.get('must_not', []))
+    )
+
+
 class MultimodalSearchEngine:
     """
     Multimodal retrieval engine for GoodQ.
@@ -227,6 +250,7 @@ class MultimodalSearchEngine:
         
         # Lazy-load models and clients
         self._clip_model = None
+        self._clip_model_error_reason: Optional[str] = None
         self._text_model = None
         self._audio_text_model = None
         self._audio_text_model_error = False
@@ -454,25 +478,6 @@ class MultimodalSearchEngine:
 
         return min(bonus, 0.06)
 
-    def _intent_preview_bonus(self, query_terms: set[str], payload: Dict[str, Any]) -> float:
-        preview = payload.get("text_preview")
-        if not isinstance(preview, str) or not preview.strip():
-            return 0.0
-
-        lowered_preview = preview.lower()
-        bonus = 0.0
-        for group in _QUERY_INTENT_PREVIEW_HINTS.values():
-            terms = group.get("terms")
-            phrases = group.get("phrases")
-            group_bonus = group.get("bonus", 0.0)
-            if not isinstance(terms, set) or not isinstance(phrases, set):
-                continue
-            if not query_terms.intersection(terms):
-                continue
-            if any(phrase in lowered_preview for phrase in phrases):
-                bonus += float(group_bonus)
-        return min(bonus, 0.12)
-
     def _artifact_penalty(self, query_terms: set[str], payload: Dict[str, Any]) -> float:
         artifact_hints = payload.get("artifact_hints")
         if not isinstance(artifact_hints, list):
@@ -635,15 +640,7 @@ class MultimodalSearchEngine:
             return 0.0
 
         intent_terms = expanded_query_terms.difference(query_named_terms)
-        relevant_phrases: set[str] = set()
-        for group in _QUERY_INTENT_PREVIEW_HINTS.values():
-            terms = group.get("terms")
-            phrases = group.get("phrases")
-            if not isinstance(terms, set) or not isinstance(phrases, set):
-                continue
-            if intent_terms.intersection(terms):
-                relevant_phrases.update(phrases)
-        if not intent_terms and not relevant_phrases:
+        if not intent_terms:
             return 0.0
 
         clauses = [part.strip().lower() for part in re.split(r"[.!?;:\n]+", preview) if part.strip()]
@@ -656,7 +653,7 @@ class MultimodalSearchEngine:
             clause_terms = set(self._tokenize_terms(clause))
             if query_named_terms.intersection(clause_terms):
                 subject_clause_indexes.append(idx)
-            if intent_terms.intersection(clause_terms) or any(phrase in clause for phrase in relevant_phrases):
+            if intent_terms.intersection(clause_terms):
                 intent_clause_indexes.append(idx)
 
         if not subject_clause_indexes or not intent_clause_indexes:
@@ -695,15 +692,7 @@ class MultimodalSearchEngine:
             return 0.0
 
         intent_terms = expanded_query_terms.difference(query_named_terms)
-        relevant_phrases: set[str] = set()
-        for group in _QUERY_INTENT_PREVIEW_HINTS.values():
-            terms = group.get("terms")
-            phrases = group.get("phrases")
-            if not isinstance(terms, set) or not isinstance(phrases, set):
-                continue
-            if intent_terms.intersection(terms):
-                relevant_phrases.update(phrases)
-        if not intent_terms and not relevant_phrases:
+        if not intent_terms:
             return 0.0
 
         clauses = [part.strip().lower() for part in re.split(r"[.!?;:\n]+", preview) if part.strip()]
@@ -719,7 +708,7 @@ class MultimodalSearchEngine:
             clause_raw_tokens[idx] = raw_tokens
             if query_named_terms.intersection(clause_terms):
                 subject_clause_indexes.append(idx)
-            if intent_terms.intersection(clause_terms) or any(phrase in clause for phrase in relevant_phrases):
+            if intent_terms.intersection(clause_terms):
                 intent_clause_indexes.append(idx)
 
         if not subject_clause_indexes or not intent_clause_indexes:
@@ -772,15 +761,7 @@ class MultimodalSearchEngine:
             return 0.0
 
         intent_terms = expanded_query_terms.difference(query_named_terms)
-        relevant_phrases: set[str] = set()
-        for group in _QUERY_INTENT_PREVIEW_HINTS.values():
-            terms = group.get("terms")
-            phrases = group.get("phrases")
-            if not isinstance(terms, set) or not isinstance(phrases, set):
-                continue
-            if intent_terms.intersection(terms):
-                relevant_phrases.update(phrases)
-        if not intent_terms and not relevant_phrases:
+        if not intent_terms:
             return 0.0
 
         clauses = [part.strip().lower() for part in re.split(r"[.!?;:\n]+", preview) if part.strip()]
@@ -790,13 +771,11 @@ class MultimodalSearchEngine:
         clause_data: List[Dict[str, Any]] = []
         for clause in clauses:
             clause_terms = set(self._tokenize_terms(clause))
-            phrase_hits = sum(1 for phrase in relevant_phrases if phrase in clause)
             clause_data.append(
                 {
                     "terms": clause_terms,
                     "subject_hits": len(query_named_terms.intersection(clause_terms)),
                     "intent_hits": len(intent_terms.intersection(clause_terms)),
-                    "phrase_hits": phrase_hits,
                     "term_count": max(len(clause_terms), 1),
                 }
             )
@@ -811,7 +790,7 @@ class MultimodalSearchEngine:
                 if idx + 1 < len(clause_data):
                     local_subject_hits += 0.5 * clause_data[idx + 1]["subject_hits"]
 
-            intent_signal = clause["intent_hits"] + (1.25 * clause["phrase_hits"])
+            intent_signal = clause["intent_hits"]
             if local_subject_hits <= 0 or intent_signal <= 0:
                 continue
 
@@ -819,7 +798,7 @@ class MultimodalSearchEngine:
             bonus = 0.008 + (0.006 * min(local_subject_hits, 2.0)) + (0.008 * min(intent_signal, 2.0))
             bonus += 0.01 * density
 
-            if clause["subject_hits"] > 0 and (clause["intent_hits"] > 0 or clause["phrase_hits"] > 0):
+            if clause["subject_hits"] > 0 and clause["intent_hits"] > 0:
                 bonus += 0.008
             elif clause["subject_hits"] <= 0:
                 bonus -= 0.004
@@ -833,6 +812,10 @@ class MultimodalSearchEngine:
         return max(min(best_bonus, 0.032), 0.0)
 
     def _metadata_bonus(self, query: str, payload: Dict[str, Any]) -> float:
+        # Scene/dialogue heuristics are not document relevance. In particular,
+        # a document's opening preview must not overturn its retrieval rank.
+        if payload.get("source_kind") == "document" or payload.get("content_type") == "document_text":
+            return 0.0
         query_terms = set(self._tokenize_terms(query))
         if not query_terms:
             return 0.0
@@ -847,7 +830,6 @@ class MultimodalSearchEngine:
         bonus += 0.03 * len(expanded_query_terms.intersection(payload_terms["emotion"]))
         bonus += 0.02 * len(expanded_query_terms.intersection(payload_terms["sentiment"]))
         bonus += 0.01 * len(query_terms.intersection(payload_terms["text_preview"]))
-        bonus += self._intent_preview_bonus(query_terms, payload)
         bonus += self._named_entity_specificity_adjustment(query_named_terms, expanded_query_terms, payload, payload_terms)
         bonus += self._dialogue_focus_bonus(query_named_terms, expanded_query_terms, payload, payload_terms)
         bonus += self._subject_role_bonus(query_named_terms, expanded_query_terms, payload, payload_terms)
@@ -975,7 +957,9 @@ class MultimodalSearchEngine:
     def _result_scene_key(self, result: Dict[str, Any]) -> Tuple[str, str]:
         payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
         video_id = payload.get("video_id") or payload.get("video_hash") or result.get("id") or "unknown_video"
-        scene_id = payload.get("scene_id") or payload.get("scene_index") or result.get("id") or "unknown_scene"
+        scene_id = next((value for value in (
+            payload.get("scene_id"), payload.get("scene_index"), result.get("id"),
+        ) if value is not None and value != ""), "unknown_scene")
         return str(video_id), str(scene_id)
 
     def _fuse_scene_results(self, query: str, results: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
@@ -996,6 +980,7 @@ class MultimodalSearchEngine:
                     "modality_scores": {},
                     "raw_results": [],
                     "_best_component_score": float("-inf"),
+                    "_document_match": None,
                 }
                 fused[key] = entry
 
@@ -1012,6 +997,12 @@ class MultimodalSearchEngine:
                 entry["modality"] = modality
 
             entry["modalities"].add(modality)
+            if modality == "visual" and result.get("clip_score") is not None:
+                entry["clip_score"] = result["clip_score"]
+            if modality == "text" and isinstance(payload.get("document_chunk"), dict):
+                current_match = entry["_document_match"]
+                if current_match is None or score > current_match[0]:
+                    entry["_document_match"] = (score, payload["document_chunk"])
             entry["raw_results"].append(
                 {
                     "id": result.get("id"),
@@ -1026,6 +1017,9 @@ class MultimodalSearchEngine:
             entry["modalities"] = sorted(entry["modalities"])
             entry["raw_results"].sort(key=lambda item: item.get("score", 0.0), reverse=True)
             entry.pop("_best_component_score", None)
+            document_match = entry.pop("_document_match", None)
+            if document_match is not None:
+                entry["payload"] = {**entry["payload"], "document_chunk": document_match[1]}
             fused_results.append(entry)
 
         fused_results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
@@ -1043,6 +1037,7 @@ class MultimodalSearchEngine:
             required_files=("preprocessor_config.json",),
         )
         if model_source is None:
+            self._clip_model_error_reason = "model_not_cached"
             logger.warning(
                 "Visual search unavailable because pinned CLIP model cache is missing "
                 "registry_key=%s install_hint=\"%s\"",
@@ -1058,13 +1053,22 @@ class MultimodalSearchEngine:
             processor = CLIPProcessor.from_pretrained(source, local_files_only=True)
             model = CLIPModel.from_pretrained(
                 source,
-                use_safetensors=True,
+                # Prefer safetensors when present; the pinned registry also
+                # supports .bin weights through the library's native safety gate.
+                use_safetensors=None,
                 local_files_only=True,
             ).eval()
 
             self._clip_model = {'model': model, 'processor': processor}
+            self._clip_model_error_reason = None
             logger.info("[OK] CLIP model loaded from pinned local cache for text encoding")
         except Exception as e:
+            message = str(e).lower()
+            self._clip_model_error_reason = (
+                "torch_version_unsupported"
+                if "torch.load" in message and "2.6" in message
+                else "clip_model_load_failed"
+            )
             logger.error(f"Failed to load CLIP model: {e}")
 
     def _load_text_model(self):
@@ -1211,8 +1215,7 @@ class MultimodalSearchEngine:
         self._load_clip_model()
         
         if self._clip_model is None:
-            logger.error("CLIP model unavailable")
-            return np.zeros(512)
+            raise VisualQueryUnavailable(self._clip_model_error_reason or "clip_model_load_failed")
         
         import torch
         
@@ -1230,7 +1233,16 @@ class MultimodalSearchEngine:
             embedding = text_features.detach().cpu().numpy()[0]
         
         # Normalize
-        embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
+        norm = np.linalg.norm(embedding)
+        if (
+            embedding.ndim != 1
+            or embedding.size != self.collection_dims[self.visual_collection]
+            or not np.isfinite(embedding).all()
+            or not np.isfinite(norm)
+            or norm == 0
+        ):
+            raise ValueError("clip_query_embedding_invalid")
+        embedding = embedding / norm
         return embedding
 
     def encode_text_for_audio_search(self, query: str) -> np.ndarray:
@@ -1282,7 +1294,7 @@ class MultimodalSearchEngine:
         except Exception:
             return False
 
-    def search_fts(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_fts(self, query: str, top_k: int = 5, *, _predicate=None) -> List[Dict[str, Any]]:
         """
         Search exact phrases using FTS5 (or fallback substring search).
         """
@@ -1295,6 +1307,18 @@ class MultimodalSearchEngine:
             return []
 
         results = []
+        from steps.common.transcript_binding import fts_provenance
+
+        def accept(result):
+            payload = result['payload']
+            payload.update(fts_provenance(payload, self.config))
+            if _predicate is None or _predicate(payload):
+                results.append(result)
+            return top_k > 0 and len(results) >= top_k
+
+        # Stream scoped matches until enough eligible rows are found. Applying
+        # LIMIT before the predicate could hide a valid later source/run.
+        scan_limit = -1 if _predicate is not None else top_k
         conn = sqlite_read_authority.open_sqlite_read_connection(self.db_path)
         try:
             is_fts = self._is_fts5_available(conn)
@@ -1309,9 +1333,9 @@ class MultimodalSearchEngine:
                         ORDER BY rank ASC
                         LIMIT ?
                         """,
-                        (sanitized_query, top_k),
+                        (sanitized_query, scan_limit),
                     )
-                    rows = cur.fetchall()
+                    rows = cur
                     for scene_id, video_hash, content_type, text, rank, start, end, meta_json in rows:
                         score = float(-rank) if rank is not None else 1.0
                         try:
@@ -1319,7 +1343,7 @@ class MultimodalSearchEngine:
                         except Exception:
                             meta = {}
                         
-                        results.append({
+                        if accept({
                             "id": scene_id,
                             "score": score,
                             "payload": {
@@ -1333,7 +1357,8 @@ class MultimodalSearchEngine:
                                 "content_type": content_type,
                                 "meta": meta
                             }
-                        })
+                        }):
+                            break
                 except sqlite3.OperationalError as match_err:
                     logger.warning(f"FTS5 MATCH failed, falling back to LIKE: {match_err}")
                     like_pattern = f"%{query}%"
@@ -1345,15 +1370,15 @@ class MultimodalSearchEngine:
                         WHERE f.text LIKE ?
                         LIMIT ?
                         """,
-                        (like_pattern, top_k),
+                        (like_pattern, scan_limit),
                     )
-                    rows = cur.fetchall()
+                    rows = cur
                     for scene_id, video_hash, content_type, text, start, end, meta_json in rows:
                         try:
                             meta = json.loads(meta_json) if meta_json else {}
                         except Exception:
                             meta = {}
-                        results.append({
+                        if accept({
                             "id": scene_id,
                             "score": 1.0,
                             "payload": {
@@ -1367,7 +1392,8 @@ class MultimodalSearchEngine:
                                 "content_type": content_type,
                                 "meta": meta
                             }
-                        })
+                        }):
+                            break
             else:
                 like_pattern = f"%{query}%"
                 cur = conn.execute(
@@ -1378,15 +1404,15 @@ class MultimodalSearchEngine:
                     WHERE f.text LIKE ?
                     LIMIT ?
                     """,
-                    (like_pattern, top_k),
+                    (like_pattern, scan_limit),
                 )
-                rows = cur.fetchall()
+                rows = cur
                 for scene_id, video_hash, content_type, text, start, end, meta_json in rows:
                     try:
                         meta = json.loads(meta_json) if meta_json else {}
                     except Exception:
                         meta = {}
-                    results.append({
+                    if accept({
                         "id": scene_id,
                         "score": 1.0,
                         "payload": {
@@ -1400,7 +1426,8 @@ class MultimodalSearchEngine:
                             "content_type": content_type,
                             "meta": meta
                         }
-                    })
+                    }):
+                        break
         except Exception as e:
             logger.error(f"FTS search encountered error: {e}")
         finally:
@@ -1417,16 +1444,24 @@ class MultimodalSearchEngine:
         """
         Reciprocal Rank Fusion (RRF) to fuse semantic and lexical runs.
         """
-        rrf_scores: Dict[str, float] = {}
-        best_results: Dict[str, Dict[str, Any]] = {}
+        rrf_scores: Dict[Tuple[str, str], float] = {}
+        best_results: Dict[Tuple[str, str], Dict[str, Any]] = {}
         
         for run in runs:
-            for rank_idx, item in enumerate(run):
-                item_id = item.get('id') or (item.get('payload') or {}).get('scene_id')
-                if not item_id:
+            seen = set()
+            for item in run:
+                payload = item.get('payload') or {}
+                scene_id = payload.get('scene_id') or item.get('id')
+                if scene_id is None:
                     continue
-                
-                rank = rank_idx + 1
+                # Vector points identify artifacts; FTS identifies scenes. Fuse
+                # the shared scene, with one vote per retrieval run, so multiple
+                # embeddings or lexical rows cannot inflate a scene's rank.
+                item_id = (str(payload.get('video_id') or payload.get('video_hash') or ''), str(scene_id))
+                if item_id in seen:
+                    continue
+                seen.add(item_id)
+                rank = len(seen)
                 score = 1.0 / (k + rank)
                 rrf_scores[item_id] = rrf_scores.get(item_id, 0.0) + score
                 
@@ -1435,7 +1470,11 @@ class MultimodalSearchEngine:
                 else:
                     current_payload = best_results[item_id].get('payload') or {}
                     new_payload = item.get('payload') or {}
-                    if not current_payload.get('text') and new_payload.get('text'):
+                    # Keep the highest-ranked semantic passage when FTS adds
+                    # its scene vote; full lexical text is not the matched span.
+                    if (not current_payload.get('document_chunk')
+                            and (new_payload.get('document_chunk')
+                                 or (not current_payload.get('text') and new_payload.get('text')))):
                         best_results[item_id] = item
 
         sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
@@ -1450,7 +1489,7 @@ class MultimodalSearchEngine:
             norm_score = raw_rrf / max_possible_rrf if max_possible_rrf > 0 else raw_rrf
             
             fused_results.append({
-                "id": item_id,
+                "id": original_item.get("id") or item_id[1],
                 "score": norm_score,
                 "payload": original_item.get("payload", {}),
                 "modality": "text"
@@ -1469,6 +1508,10 @@ class MultimodalSearchEngine:
             return p_filter
 
         must_list = p_filter.setdefault("must", [])
+        if isinstance(must_list, dict):
+            must_list = p_filter['must'] = [must_list]
+        elif must_list is None:
+            must_list = p_filter['must'] = []
         has_status_filter = False
         for item in must_list:
             if isinstance(item, dict) and item.get("key") == "ucf_promotion_status":
@@ -1501,6 +1544,8 @@ class MultimodalSearchEngine:
             List of fused search results with normalized RRF scores
         """
         logger.info("retrieval_search operation=text top_k=%s", top_k)
+        self._last_search_diagnostics.pop("text_passages", None)
+        self._last_search_diagnostics.pop("text_lexical", None)
         
         candidate_k = max(top_k * 3, 20)
         
@@ -1510,12 +1555,26 @@ class MultimodalSearchEngine:
         if np.any(query_embedding):
             try:
                 client = self._get_qdrant_client(self.text_collection)
-                results_semantic = client.query(
-                    query_embedding.tolist(),
-                    top_k=candidate_k,
-                    payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
-                    retrieval_context=retrieval_context,
-                )
+                semantic_limit = candidate_k
+                while True:
+                    results_semantic = client.query(
+                        query_embedding.tolist(),
+                        top_k=semantic_limit,
+                        payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
+                        retrieval_context=retrieval_context,
+                    )
+                    # A long document contributes many vectors but still one
+                    # ranked source. Expand only a full, chunk-crowded result
+                    # window; bound work when fewer sources exist than top_k.
+                    distinct_scenes = {self._result_scene_key(item) for item in results_semantic}
+                    has_document_chunks = any(
+                        isinstance((item.get("payload") or {}).get("document_chunk"), dict)
+                        for item in results_semantic if isinstance(item.get("payload"), dict)
+                    )
+                    if (len(distinct_scenes) >= top_k or len(results_semantic) < semantic_limit
+                            or not has_document_chunks or semantic_limit >= max(candidate_k, 4096)):
+                        break
+                    semantic_limit = min(semantic_limit * 2, max(candidate_k, 4096))
                 for r in results_semantic:
                     r['modality'] = 'text'
             except Exception as e:
@@ -1524,7 +1583,44 @@ class MultimodalSearchEngine:
             logger.warning("Text search skipped semantic pathway because query embedding is unavailable")
 
         # 2. FTS search
-        results_fts = self.search_fts(query, top_k=candidate_k)
+        if payload_filter:
+            try:
+                accepts = _lexical_payload_predicate(payload_filter)
+            except ValueError:
+                results_fts = []
+                self._set_search_diagnostic(
+                    "text_lexical", status="unavailable",
+                    label="Lexical search cannot apply the requested filter",
+                    reason="unsupported_lexical_payload_filter",
+                )
+                logger.warning("Lexical candidates withheld: unsupported caller payload filter")
+            else:
+                results_fts = self.search_fts(query, top_k=candidate_k, _predicate=accepts)
+        else:
+            results_fts = self.search_fts(query, top_k=candidate_k)
+
+        # FTS votes for the full document. When a literal query is present in a
+        # retained passage, show that passage instead of an unrelated semantic
+        # sibling. Keep source ranking and paraphrase order unchanged.
+        lexical_documents = {
+            self._result_scene_key(item) for item in results_fts
+            if isinstance(item.get("payload"), dict)
+            and item["payload"].get("content_type") == "document_text"
+        }
+        literal = " ".join(query.casefold().split())
+        literal_passages = {}
+        if lexical_documents and literal:
+            pattern = re.compile(r"(?<!\w)" + re.escape(literal) + r"(?!\w)")
+            for item in results_semantic:
+                key = self._result_scene_key(item)
+                payload = item.get("payload") or {}
+                chunk = payload.get("document_chunk")
+                if (key in lexical_documents and key not in literal_passages
+                        and isinstance(chunk, dict) and isinstance(chunk.get("text"), str)
+                        and pattern.search(" ".join(chunk["text"].casefold().split()))):
+                    literal_passages[key] = item
+            results_semantic = [literal_passages.get(self._result_scene_key(item), item)
+                                for item in results_semantic]
         
         # 3. Reciprocal Rank Fusion
         runs = []
@@ -1535,9 +1631,156 @@ class MultimodalSearchEngine:
             
         if runs:
             fused = self.reciprocal_rank_fusion(runs, k=60, top_k=top_k)
+            # Rank evidence within already selected sources. Source IDs, scores,
+            # metadata bonuses and literal passage selection remain unchanged.
+            eligible = {self._result_scene_key(item) for item in fused} - literal_passages.keys()
+            passages = self._rank_document_passages(query, query_embedding, results_semantic, eligible)
+            for item in fused:
+                evidence = passages.get(self._result_scene_key(item))
+                if evidence is not None:
+                    item["payload"] = {**item["payload"], **evidence}
             return fused
         
         return []
+
+    def _rank_document_passages(self, query, query_embedding, candidates, eligible):
+        """Select retained evidence with bounded short-window semantic/BM25 RRF.
+
+        All budgets apply to the whole request, never once per source. Windows
+        are ranking aids only: the returned evidence is an original stored chunk.
+        """
+        selected = [item for item in candidates
+                    if self._result_scene_key(item) in eligible
+                    and isinstance(item.get("payload"), dict)
+                    and item["payload"].get("source_kind") == "document"
+                    and "document_chunk" in item["payload"]]
+        if len(selected) < 2:
+            return {}
+        limited = len(selected) > 32
+        selected = selected[:32]
+        groups = {}
+        for index, item in enumerate(selected):
+            groups.setdefault(self._result_scene_key(item), []).append(index)
+        groups = {key: indices for key, indices in groups.items() if len(indices) > 1}
+        if not groups:
+            return {}
+        reason = "passage_ranking_failed"
+        try:
+            reason = "document_passage_input_limit"
+            if len(query) > 4096:
+                raise ValueError(reason)
+            texts = []
+            for item in selected:
+                chunk = item["payload"]["document_chunk"]
+                reason = "invalid_document_chunk"
+                if not isinstance(chunk, dict):
+                    raise ValueError(reason)
+                text = chunk.get("text")
+                fields = [chunk.get(key) for key in ("chunk_index", "char_start", "char_end", "token_count")]
+                if (not isinstance(text, str) or not text or any(type(v) is not int for v in fields)
+                        or fields[0] < 0 or fields[1] < 0 or fields[2]-fields[1] != len(text) or fields[3] < 1):
+                    raise ValueError(reason)
+                reason = "document_passage_input_limit"
+                if len(text) > 32768:
+                    raise ValueError(reason)
+                texts.append(text)
+            if sum(map(len, texts)) > 262144:
+                raise ValueError(reason)
+            reason = "passage_encoder_unavailable"
+            model = self._text_model  # Already loaded for the original query; never load another model.
+            tokenizer = model.tokenizer
+            windows, owners = [], []
+            reason = "invalid_passage_tokenization"
+            for index, text in enumerate(texts):
+                offsets = tokenizer(text, add_special_tokens=False, truncation=False,
+                                    return_offsets_mapping=True)["offset_mapping"]
+                if not offsets or any(not 0 <= a <= b <= len(text) for a, b in offsets):
+                    raise ValueError(reason)
+                cursor = 0
+                while cursor < len(offsets):
+                    end = min(cursor+96, len(offsets))
+                    a = 0 if cursor == 0 else offsets[cursor][0]
+                    while True:
+                        b = len(text) if end == len(offsets) else offsets[end][0]
+                        window = text[a:b]
+                        count = len(tokenizer(window, add_special_tokens=False, truncation=False)["input_ids"])
+                        if 0 < count <= 96 and b > a:
+                            break
+                        if end <= cursor+1:
+                            raise ValueError(reason)
+                        end -= 1
+                    if len(windows) >= 192:
+                        reason = "document_passage_window_limit"
+                        raise ValueError(reason)
+                    windows.append(window)
+                    owners.append(index)
+                    if end == len(offsets):
+                        break
+                    cursor = max(cursor+1, end-48)
+            reason = "passage_encoding_failed"
+            vectors = np.asarray(model.encode(windows, normalize_embeddings=True, batch_size=32,
+                                              show_progress_bar=False))
+            query_vector = np.asarray(query_embedding)
+            reason = "invalid_passage_vectors"
+            if (query_vector.ndim != 1 or vectors.shape != (len(windows), query_vector.size)
+                    or not np.isfinite(vectors).all() or not np.isfinite(query_vector).all()):
+                raise ValueError(reason)
+            with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+                norms, query_norm = np.linalg.norm(vectors, axis=1), np.linalg.norm(query_vector)
+                if (not np.isfinite(norms).all() or not np.isfinite(query_norm)
+                        or query_norm == 0 or np.any(norms == 0)):
+                    raise ValueError(reason)
+                cosines = (vectors @ query_vector) / (norms*query_norm)
+            if not np.isfinite(cosines).all():
+                raise ValueError(reason)
+            dense = [-float("inf")]*len(selected)
+            for index, cosine in zip(owners, cosines):
+                dense[index] = max(dense[index], float(cosine))
+
+            reason = "passage_lexical_ranking_failed"
+            from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+            def words(text):
+                return [word for word in re.findall(r"\w+", text.casefold()) if word not in ENGLISH_STOP_WORDS]
+            frequencies = [Counter(words(text)) for text in texts]
+            lengths = [sum(freq.values()) for freq in frequencies]
+            average = max(sum(lengths)/len(lengths), 1)
+            document_frequency = Counter(word for freq in frequencies for word in freq)
+            query_terms = set(words(query))
+            lexical = [sum(math.log(1+(len(selected)-document_frequency[word]+.5)/(document_frequency[word]+.5))
+                           * freq[word]*2.2/(freq[word]+1.2*(.25+.75*length/average))
+                           for word in query_terms if freq[word])
+                       for freq, length in zip(frequencies, lengths)]
+            def concepts(text):
+                return {word[:-1] if len(word) > 4 and word.endswith("s")
+                        and not word.endswith(("ss", "us", "ies")) else word for word in words(text)}
+            coverage = [0]*len(selected)
+            query_concepts = concepts(query)
+            for index, window in zip(owners, windows):
+                coverage[index] = max(coverage[index], len(query_concepts.intersection(concepts(window))))
+            winners = {}
+            for key, indices in groups.items():
+                dense_order = sorted(indices, key=lambda index: dense[index], reverse=True)
+                lexical_order = sorted((index for index in indices if lexical[index] > 0),
+                                       key=lambda index: lexical[index], reverse=True)
+                scores = {index: 1/(60+rank) for rank, index in enumerate(dense_order, 1)}
+                for rank, index in enumerate(lexical_order, 1):
+                    scores[index] += 1/(60+rank)
+                winner = max(indices, key=lambda index: scores[index])
+                evidence = {"document_chunk": selected[winner]["payload"]["document_chunk"]}
+                # Complement the proven match instead of replacing it when a
+                # distant window covers more distinct query concepts.
+                extra = max(indices, key=lambda index: (coverage[index], scores[index]))
+                if coverage[extra] > coverage[winner]:
+                    evidence["document_lexical_chunk"] = selected[extra]["payload"]["document_chunk"]
+                winners[key] = evidence
+            self._set_search_diagnostic("text_passages", status="limited" if limited else "ok",
+                                        label="Document passage ranking", reason="candidate_limit" if limited else "combined_ranking")
+            self._last_search_diagnostics["text_passages"].update(candidates=len(selected), windows=len(windows))
+            return winners
+        except Exception as exc:
+            logger.warning("Document passage ranking fallback reason=%s error_type=%s", reason, type(exc).__name__)
+            self._set_search_diagnostic("text_passages", status="fallback", label="Document passage ranking unavailable", reason=reason)
+            return {}
     
     def search_visual(
         self,
@@ -1553,7 +1796,7 @@ class MultimodalSearchEngine:
         
         Args:
             query: Text description of visual content
-            top_k: Number of results to return
+            top_k: Number of distinct source/scene results to return
             payload_filter: Optional payload filter dict
             ucf_include_terminal: Bypass promotion filter if True
             retrieval_context: Origin-owned retrieval audit label
@@ -1562,21 +1805,116 @@ class MultimodalSearchEngine:
             List of search results with scores
         """
         logger.info("retrieval_search operation=visual top_k=%s", top_k)
-        
-        query_embedding = self.encode_text_for_visual_search(query)
-        if not np.any(query_embedding):
-            logger.warning("Visual search skipped because CLIP query encoding is unavailable")
+
+        try:
+            query_embedding = self.encode_text_for_visual_search(query)
+        except VisualQueryUnavailable as exc:
+            self._set_search_diagnostic("visual", status="unavailable", label="Visual search unavailable", reason=exc.reason)
             return []
-        
-        client = self._get_qdrant_client(self.visual_collection)
-        results = client.query(
-            query_embedding.tolist(),
-            top_k=top_k,
-            payload_filter=self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal),
-            retrieval_context=retrieval_context,
+        except Exception as exc:
+            self._set_search_diagnostic("visual", status="error", label="Visual query encoding failed", reason="clip_query_encoding_failed")
+            logger.warning("Visual query encoding failed exc_type=%s exc=%s", type(exc).__name__, exc)
+            return []
+
+        from steps.common.qdrant_client import QdrantQueryError
+
+        try:
+            client = self._get_qdrant_client(self.visual_collection)
+            # Frame and pooled-scene points can represent the same scene.
+            # Apply the result limit to distinct scenes, retaining their best
+            # CLIP hit without adding duplicate evidence to the score.
+            candidate_limit = max(100, top_k * 8)
+            candidate_count = min(candidate_limit, max(10, top_k * 2))
+            query_filter = self._build_ucf_filter(payload_filter, ucf_include_terminal=ucf_include_terminal)
+            while True:
+                candidates = client.query(
+                    query_embedding.tolist(),
+                    top_k=candidate_count,
+                    payload_filter=query_filter,
+                    retrieval_context=retrieval_context,
+                    raise_on_error=True,
+                )
+                scenes = {}
+                for result in sorted(candidates, key=lambda item: item['score'], reverse=True):
+                    scenes.setdefault(self._result_scene_key(result), result)
+                results = list(scenes.values())[:top_k]
+                exhausted = len(candidates) < candidate_count
+                limited = len(results) < top_k and not exhausted and candidate_count == candidate_limit
+                if len(results) >= top_k or exhausted or limited:
+                    break
+                candidate_count = min(candidate_limit, candidate_count * 2)
+        except QdrantQueryError as exc:
+            status = "unavailable" if exc.reason in {"qdrant_disabled", "collection_unavailable"} else "error"
+            self._set_search_diagnostic("visual", status=status, label="Visual search backend unavailable", reason=exc.reason)
+            return []
+        except Exception as exc:
+            self._set_search_diagnostic("visual", status="error", label="Visual search failed", reason="qdrant_query_failed")
+            logger.warning("Visual search backend failed exc_type=%s exc=%s", type(exc).__name__, exc)
+            return []
+
+        self._set_search_diagnostic(
+            "visual", status="limited" if limited else "ready" if results else "no_results",
+            label="Visual search candidate limit reached" if limited else
+            "Visual search active" if results else "Visual search returned no matching scenes",
+            reason="visual_scene_candidate_limit" if limited else
+            "qdrant_visual_search_returned_results" if results else "qdrant_visual_search_empty",
         )
-        
-        return results
+        return [{**result, "clip_score": result["score"]} for result in results]
+
+    def rank_visual_captions(self, query, results, captions):
+        """Rerank a bounded CLIP set with qualified, scene-bound midpoint text.
+
+        Missing evidence falls back for the whole set rather than penalizing
+        scenes whose captions are unavailable. No vectors or text are persisted.
+        The strongest CLIP match stays first; remaining matches retain RRF order.
+        """
+        reason = "caption_evidence_incomplete"
+        try:
+            if not results:
+                return results
+            if len(results) > 50 or len(captions) != len(results) or not all(captions):
+                raise ValueError(reason)
+            reason = "caption_encoder_unavailable"
+            self._load_text_model()
+            if self._text_model is None:
+                raise ValueError(reason)
+            reason = "caption_encoding_failed"
+            vectors = np.asarray(self._text_model.encode(
+                [query, *[item["text"] for item in captions]], batch_size=32,
+                normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False,
+            ))
+            if (vectors.ndim != 2 or vectors.shape[0] != len(results) + 1
+                    or not np.isfinite(vectors).all()
+                    or not np.allclose(np.linalg.norm(vectors, axis=1), 1, atol=1e-3)):
+                raise ValueError("invalid_caption_vectors")
+            similarities = vectors[1:] @ vectors[0]
+            order = sorted(range(len(results)), key=lambda i: (-float(similarities[i]), i))
+            ranks = {i: rank for rank, i in enumerate(order, 1)}
+            ranked = []
+            for i, result in enumerate(results):
+                # Normalize by the theoretical two-channel maximum. This is
+                # rank evidence, never a calibrated probability or CLIP score.
+                score = (1 / (60 + i + 1) + 1 / (60 + ranks[i])) / (2 / 61)
+                ranked.append({**result, "score": score,
+                    "visual_ranking": {"method": "midpoint_caption_clip_rrf", "k": 60,
+                        "ordering": "clip_anchor_then_rrf", "is_clip_anchor": i == 0,
+                        "clip_rank": i + 1, "clip_score": result.get("clip_score"),
+                        "caption_rank": ranks[i], "caption_similarity": float(similarities[i]),
+                        "caption_field": "visual_caption", "caption_status": "ok",
+                        "sample_timestamp": captions[i].get("sample_timestamp"),
+                        "qualification": "unverified_model_observation"}})
+            # Captions remain unverified observations. Protect the strongest
+            # image match without inflating its score or reordering other matches.
+            ranked.sort(key=lambda item: (not item["visual_ranking"]["is_clip_anchor"], -item["score"]))
+            self._set_search_diagnostic("visual_captions", status="ready",
+                label="Saved midpoint captions and CLIP; strongest CLIP match first", reason="midpoint_caption_clip_rrf")
+            self._last_search_diagnostics["visual_captions"].update(candidates=len(results), candidate_limit=50)
+            return ranked
+        except Exception as exc:
+            logger.warning("Visual caption ranking fallback reason=%s error_type=%s", reason, type(exc).__name__)
+            self._set_search_diagnostic("visual_captions", status="fallback",
+                label="Saved caption ranking unavailable; using CLIP", reason=reason)
+            return results
 
     def search_audio(
         self,
@@ -1700,6 +2038,8 @@ class MultimodalSearchEngine:
                 result['modality'] = 'visual'
                 result['score'] = result.get('score', 0.0) * self.weight_visual
                 all_results.append(result)
+        elif 'visual' in modalities:
+            self._set_search_diagnostic("visual", status="disabled", label="Visual search disabled", reason="visual_weight_zero")
         
         # Search audio modality
         if 'audio' in modalities and self.weight_audio > 0:

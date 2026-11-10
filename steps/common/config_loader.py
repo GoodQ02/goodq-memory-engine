@@ -197,12 +197,6 @@ def _ensure_runtime_path_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if res["found"]:
             tools_cfg["ffmpeg_exe"] = res["path"]
 
-    tesseract_cfg = tools_cfg.get("tesseract_exe")
-    if not isinstance(tesseract_cfg, str) or tesseract_cfg.strip() in {"", "tesseract", "tesseract.exe"}:
-        res = ToolResolver.resolve_tool("tesseract")
-        if res["found"]:
-            tools_cfg["tesseract_exe"] = res["path"]
-
     poppler_cfg = tools_cfg.get("poppler_bin")
     if not isinstance(poppler_cfg, str) or not poppler_cfg.strip():
         res = ToolResolver.resolve_tool("pdftotext")

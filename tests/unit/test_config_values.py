@@ -156,7 +156,7 @@ def test_resolved_config_validates_identity_search_without_scripts_path(
         sys.path.remove(scripts_path)
     monkeypatch.delitem(sys.modules, "config_schema", raising=False)
     try:
-        result = load_configs({})
+        result = load_configs({}, include_local=False)
 
         # Portable defaults stay disabled; a project-local override may enable
         # the feature for the active epoch, but validation must not depend on it.
@@ -342,7 +342,7 @@ def test_config_derives_modality_faiss_paths_from_faiss_dir(tmp_path):
             "db_dir": str(epoch_dir),
             "faiss_dir": str(faiss_dir),
         }
-    })
+    }, include_local=False)
 
     paths = result.get("paths", {})
     expected_suffixes = {

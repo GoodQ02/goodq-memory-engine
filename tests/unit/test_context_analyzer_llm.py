@@ -65,11 +65,12 @@ def test_build_scene_context_prompts_enforces_grounded_dry_contract() -> None:
     assert "Transcript excerpt:" in user_prompt
     assert "Transcript topic hints:" in user_prompt
     assert "Audio emotion signal:" in user_prompt
-    assert "narrative_summary MUST mention that topic" in user_prompt
+    assert "Topic hints are incomplete literal excerpts" in user_prompt
     assert 'Minimal visual or dialogue content.' in user_prompt
     assert "- relationships:" not in user_prompt
     assert '"relationships"' not in user_prompt
-    assert '"context_tags": ["indoor conversation", "rental car", "living room"]' in user_prompt
+    assert 'context_tags: an array of 0-4 short evidence-backed tags; use [] when unsupported' in user_prompt
+    assert 'or "unqualified" when scene mood is not established' in user_prompt
 
 
 def test_analyze_scene_context_llm_uses_new_prompt_contract(monkeypatch) -> None:
@@ -95,13 +96,13 @@ def test_analyze_scene_context_llm_uses_new_prompt_contract(monkeypatch) -> None
                 ]
             }
 
-    def _fake_post(url: str, json: dict[str, Any], timeout: int) -> _Response:
-        captured["url"] = url
-        captured["payload"] = json
-        captured["timeout"] = timeout
-        return _Response()
+    class Client:
+        last_model_used = None
+        last_provider_used = None
 
-    monkeypatch.setattr(analyzer.requests, "post", _fake_post)
+        def chat(self, **kwargs):
+            captured["payload"] = kwargs
+            return _Response().json()
 
     result = analyzer.analyze_scene_context_llm(
         {
@@ -116,10 +117,12 @@ def test_analyze_scene_context_llm_uses_new_prompt_contract(monkeypatch) -> None
             "speakers": ["SPEAKER_02", "SPEAKER_01"],
         },
         {"llm": {"api_url": "http://localhost:38005/v1/chat/completions", "timeout": 12}},
+        llm_client=Client(),
     )
 
-    assert captured["url"] == "http://localhost:38005/v1/chat/completions"
-    assert captured["timeout"] == 12
+    assert result["status"] == "ok"
+    assert result["source"] == "scene_context_llm"
+    assert result["reason"] == "model_output"
     assert captured["payload"]["temperature"] == 0.1
 
     system_prompt = captured["payload"]["messages"][0]["content"]
@@ -130,13 +133,14 @@ def test_analyze_scene_context_llm_uses_new_prompt_contract(monkeypatch) -> None
     assert "- relationships:" not in user_prompt
     assert '"relationships"' not in user_prompt
     assert "Transcript topic hints:" in user_prompt
-    assert "narrative_summary MUST mention that topic" in user_prompt
+    assert "Topic hints are incomplete literal excerpts" in user_prompt
     assert "Return ONLY a JSON object with exactly these keys" in user_prompt
 
+    assert result["emotion_qualification"]["status"] == "unqualified"
     _assert_context_payload(result, {
         "narrative_summary": "Living room conversation about rental car.",
         "key_moments": ["They mention rental car.", "They argue about the rental car"],
-        "emotional_arc": "mild tension during conversation",
+        "emotional_arc": "unqualified",
         "context_tags": ["rental car", "living room"],
         "activity_description": "Living room conversation about rental car.",
     }, primary_tags=["rental car"], contextual_tags=["living room"], structural_tags=[])
@@ -149,10 +153,9 @@ def test_analyze_scene_context_llm_uses_grounded_fallback_for_bad_llm_json(monke
         def json(self) -> dict[str, Any]:
             return {"choices": [{"message": {"content": "not json"}}]}
 
-    def _fake_post(*args, **kwargs):  # type: ignore[no-untyped-def]
-        return _Response()
-
-    monkeypatch.setattr(analyzer.requests, "post", _fake_post)
+    class Client:
+        def chat(self, **_kwargs):
+            return _Response().json()
 
     result = analyzer.analyze_scene_context_llm(
         {
@@ -167,15 +170,17 @@ def test_analyze_scene_context_llm_uses_grounded_fallback_for_bad_llm_json(monke
             "speakers": ["SPEAKER_00"],
         },
         {"llm": {"api_url": "http://localhost:38005/v1/chat/completions", "timeout": 12}},
+        llm_client=Client(),
     )
 
+    assert result["emotion_qualification"]["status"] == "unqualified"
     _assert_context_payload(result, {
-        "narrative_summary": "Living room conversation about rental car.",
-        "key_moments": ["They mention rental car."],
-        "emotional_arc": "neutral audio emotion signal",
-        "context_tags": ["rental car", "living room"],
-        "activity_description": "Living room conversation about rental car.",
-    }, primary_tags=["rental car"], contextual_tags=["living room"], structural_tags=[])
+        "narrative_summary": "Living room conversation.",
+        "key_moments": ["Living room conversation."],
+        "emotional_arc": "unqualified",
+        "context_tags": ["living room"],
+        "activity_description": "Living room conversation.",
+    }, primary_tags=[], contextual_tags=["living room"], structural_tags=[])
 
 
 def test_analyze_scene_context_llm_uses_low_signal_fallback_without_call(monkeypatch) -> None:
@@ -203,6 +208,9 @@ def test_analyze_scene_context_llm_uses_low_signal_fallback_without_call(monkeyp
     )
 
     assert called["value"] is False
+    assert result["status"] == "not_applicable"
+    assert result["source"] == "scene_context_heuristic"
+    assert result["reason"] == "low_signal"
     _assert_context_payload(result, {
         "narrative_summary": "Minimal visual or dialogue content.",
         "key_moments": ["Minimal visual or dialogue content"],
@@ -238,12 +246,12 @@ def test_analyze_scene_context_llm_uses_monologue_fallback_for_low_signal_transc
 
     assert called["value"] is False
     _assert_context_payload(result, {
-        "narrative_summary": "Spoken monologue about bathing suit.",
-        "key_moments": ["Speaker delivers a monologue about bathing suit"],
+        "narrative_summary": "Spoken monologue.",
+        "key_moments": ["Speaker delivers a monologue"],
         "emotional_arc": "spoken performance",
-        "context_tags": ["spoken monologue", "bathing suit"],
-        "activity_description": "Spoken monologue about bathing suit.",
-    }, primary_tags=["bathing suit"], contextual_tags=[], structural_tags=["spoken monologue"])
+        "context_tags": ["spoken monologue"],
+        "activity_description": "Spoken monologue.",
+    }, primary_tags=[], contextual_tags=[], structural_tags=["spoken monologue"])
 
 
 def test_analyze_scene_context_llm_uses_stage_monologue_fallback(monkeypatch) -> None:
@@ -274,13 +282,14 @@ def test_analyze_scene_context_llm_uses_stage_monologue_fallback(monkeypatch) ->
     )
 
     assert called["value"] is False
+    assert result["emotion_qualification"]["status"] == "unqualified"
     _assert_context_payload(result, {
-        "narrative_summary": "Spoken monologue about pharmacist.",
-        "key_moments": ["Speaker delivers a monologue about pharmacist"],
-        "emotional_arc": "spoken performance",
-        "context_tags": ["spoken monologue", "pharmacist"],
-        "activity_description": "Spoken monologue about pharmacist.",
-    }, primary_tags=["pharmacist"], contextual_tags=[], structural_tags=["spoken monologue"])
+        "narrative_summary": "Spoken monologue.",
+        "key_moments": ["Speaker delivers a monologue"],
+        "emotional_arc": "unqualified",
+        "context_tags": ["spoken monologue"],
+        "activity_description": "Spoken monologue.",
+    }, primary_tags=[], contextual_tags=[], structural_tags=["spoken monologue"])
 
 
 def test_analyze_scene_context_llm_uses_minimal_fallback_for_stage_oh_scene(monkeypatch) -> None:
@@ -308,10 +317,11 @@ def test_analyze_scene_context_llm_uses_minimal_fallback_for_stage_oh_scene(monk
     )
 
     assert called["value"] is False
+    assert result["emotion_qualification"]["status"] == "unqualified"
     _assert_context_payload(result, {
         "narrative_summary": "Minimal visual or dialogue content.",
         "key_moments": ["Minimal visual or dialogue content"],
-        "emotional_arc": "low-signal scene",
+        "emotional_arc": "unqualified",
         "context_tags": ["low-signal scene"],
         "activity_description": "Minimal visual or dialogue content.",
     }, primary_tags=[], contextual_tags=[], structural_tags=["low-signal scene"])
@@ -323,7 +333,7 @@ def test_normalize_scene_context_payload_filters_generic_tags_and_promotes_topic
             "narrative_summary": "A group of people are talking in a living room about renting a car.",
             "key_moments": ["People greet each other indoors", "They argue about the rental car"],
             "emotional_arc": "mild tension during conversation",
-            "context_tags": ["indoor conversation", "living room", "woman", "man"],
+            "context_tags": ["rental car", "living room", "air conditioning", "florida", "woman", "man"],
             "activity_description": "People talk indoors about travel and a rental car.",
         },
         {
@@ -439,7 +449,7 @@ def test_normalize_scene_context_payload_keeps_grounded_domain_topic() -> None:
     }, primary_tags=["clothing business"], contextual_tags=["designer", "new look"], structural_tags=[])
 
 
-def test_normalize_scene_context_payload_rewrites_business_end_to_business_deal() -> None:
+def test_normalize_scene_context_payload_keeps_literal_business_topic_without_plot_expansion() -> None:
     result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
         {
             "narrative_summary": "Conversation about business end.",
@@ -463,17 +473,17 @@ def test_normalize_scene_context_payload_rewrites_business_end_to_business_deal(
     )
 
     _assert_context_payload(result, {
-        "narrative_summary": "Conversation about business deal.",
+        "narrative_summary": "Conversation about business end.",
         "key_moments": [
-            "They mention business deal.",
+            "They mention business end.",
         ],
         "emotional_arc": "anger and frustration escalate as the argument intensifies",
-        "context_tags": ["business deal"],
-        "activity_description": "Conversation about business deal.",
-    }, primary_tags=["business deal"], contextual_tags=[], structural_tags=[])
+        "context_tags": ["business end"],
+        "activity_description": "Conversation about business end.",
+    }, primary_tags=["business end"], contextual_tags=[], structural_tags=[])
 
 
-def test_normalize_scene_context_payload_rewrites_position_he_was_to_deformed_hand() -> None:
+def test_normalize_scene_context_payload_rejects_dangling_topic_without_inventing_a_label() -> None:
     result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
         {
             "narrative_summary": "Conversation about position he was.",
@@ -496,16 +506,10 @@ def test_normalize_scene_context_payload_rewrites_position_he_was_to_deformed_ha
         },
     )
 
-    _assert_context_payload(result, {
-        "narrative_summary": "Conversation about deformed hand.",
-        "key_moments": [
-            "They mention deformed hand.",
-            "Tie hangs from their hands",
-        ],
-        "emotional_arc": "Fear and disgust",
-        "context_tags": ["deformed hand"],
-        "activity_description": "Conversation about deformed hand.",
-    }, primary_tags=["deformed hand"], contextual_tags=[], structural_tags=[])
+    # A dangling model fragment cannot authorize an invented medical label.
+    assert "deformed hand" not in str(result).lower()
+    assert "position he was" not in result["context_tags"]
+    assert result["primary_tags"] == []
 
 
 def test_extract_transcript_topic_hints_keeps_coherent_rehabilitation_phrase() -> None:
@@ -514,116 +518,50 @@ def test_extract_transcript_topic_hints_keeps_coherent_rehabilitation_phrase() -
     ) == ["further rehabilitation"]
 
 
-def test_extract_transcript_topic_hints_suppresses_low_value_fragments() -> None:
-    assert analyzer._extract_transcript_topic_hints("Are you people aware? There must be some mistake.") == []
-    assert analyzer._extract_transcript_topic_hints(
-        "He's this guy in the neighborhood. Parks cars on the block. "
-        "The whole block. 40, 50 cars."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "So, I was in the drugstore the other day trying to get a cold medication. "
-        "First of all, they always show you the human body."
-    ) == ["cold medication", "drugstore"]
-    assert analyzer._extract_transcript_topic_hints(
-        "My capillaries burst and the pressure on my mask was terrible."
-    ) == ["mask", "capillaries"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Is it the white shoes? Isn't he supposed to be the emcee? What about those muscle relaxers?"
-    ) == ["emcee", "white shoes", "muscle relaxers"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Can you give me an explanation as to why the pharmacist has to be two and a half feet up? "
-        "Look out everybody, I'm working with pills."
-    ) == ["pharmacist", "pills"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Hello, Miss Pepper. It's a pleasure to meet you and you must be Professor von Nostrand. "
-        "I've read your book about Shakespeare."
-    ) == ["miss pepper", "professor von nostrand", "shakespeare"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Maybe you should go to Long Island. Thanks for the ride, George."
-    ) == ["Long Island"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Anyway, thanks a lot for letting us stay here Steve. If you're ever in the city, come to a comedy club."
-    ) == ["Steve"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Mr. Pocotillo! Do I know you? This is the kind of lasting impression I make on people."
-    ) == ["Steve Pocatillo"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Ask Mark. Mark, is this true?"
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "Maybe Kramer can come pick us up."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "We made a reservation for dinner."
-    ) == ["reservation"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Do you have a question? Sure."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "The blue Ford Escort is parked outside."
-    ) == ["Ford Escort"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Jerry Baby says we should watch cable station lov."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "He moves them from one side of the street to the other so you don't get a ticket."
-    ) == ["alternate side"]
-    assert analyzer._extract_transcript_topic_hints(
-        "That's my rent-a-car. What happened to the car?"
-    ) == ["rental car"]
-    assert analyzer._extract_transcript_topic_hints(
-        "It's a different interpretation. No job. Pocketing cars."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "This is the kind of lasting impression I make on people."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "Go off oppression. Wild oppression. Don't."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "the dentist appointment is tomorrow morning"
-    ) == ["dentist appointment"]
-    assert analyzer._extract_transcript_topic_hints(
-        "This is our drug company, see the public. And he's always in like a certain pain."
-    ) == ["drug company"]
-    assert analyzer._extract_transcript_topic_hints(
-        "Peanut brittle, peanut butter, peanut oil. I wonder what happened to my fiancé."
-    ) == ["peanut"]
-
-    assert analyzer._extract_transcript_topic_hints(
-        "But to have a good pickle, you gotta understand the process. "
-        "I don't understand this jewel that Jimmy Shar-"
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "The phone machine is like this relationship respirator keeping "
-        "these marginal brain-dead relationships alive."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "It has a slight sing-songy quality."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "Operation Yeah. Yeah. Dr. Yeah."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "The thing about stand-up was, it always encouraged experimentation."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "Got a nice girl in a clean apartment. Yep. Just one little problem."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "Well, maybe she just wanted to move on to other business. "
-        "No, no, this wasn't moving on."
-    ) == []
-    assert analyzer._extract_transcript_topic_hints(
-        "So what do you want me to do? I want restitution. Restitution? You want restitution? "
-        "Why should I give you restitution? Because it's no good. Well, I got a perfect solution "
-        "for you. Take your business elsewhere. I don't want your business."
-    ) == ["restitution"]
-
-
-    assert analyzer._extract_transcript_topic_hints(
-        "These pretzels are making me thirsty. Do you know anything about this pretzel guy?"
-    ) == ["pretzel"]
+def test_extract_transcript_topic_hints_are_literal_across_legacy_corpus() -> None:
+    transcripts = [
+        'Are you people aware? There must be some mistake.',
+        "He's this guy in the neighborhood. Parks cars on the block. The whole block. 40, 50 cars.",
+        'So, I was in the drugstore the other day trying to get a cold medication. First of all, they always show you the human body.',
+        'My capillaries burst and the pressure on my mask was terrible.',
+        "Is it the white shoes? Isn't he supposed to be the emcee? What about those muscle relaxers?",
+        "Can you give me an explanation as to why the pharmacist has to be two and a half feet up? Look out everybody, I'm working with pills.",
+        "Hello, Miss Pepper. It's a pleasure to meet you and you must be Professor von Nostrand. I've read your book about Shakespeare.",
+        'Maybe you should go to Long Island. Thanks for the ride, George.',
+        "Anyway, thanks a lot for letting us stay here Steve. If you're ever in the city, come to a comedy club.",
+        'Mr. Pocotillo! Do I know you? This is the kind of lasting impression I make on people.',
+        'Ask Mark. Mark, is this true?',
+        'Maybe Kramer can come pick us up.',
+        'We made a reservation for dinner.',
+        'Do you have a question? Sure.',
+        'The blue Ford Escort is parked outside.',
+        'Jerry Baby says we should watch cable station lov.',
+        "He moves them from one side of the street to the other so you don't get a ticket.",
+        "That's my rent-a-car. What happened to the car?",
+        "It's a different interpretation. No job. Pocketing cars.",
+        'This is the kind of lasting impression I make on people.',
+        "Go off oppression. Wild oppression. Don't.",
+        'the dentist appointment is tomorrow morning',
+        "This is our drug company, see the public. And he's always in like a certain pain.",
+        'Peanut brittle, peanut butter, peanut oil. I wonder what happened to my fiancé.',
+        "But to have a good pickle, you gotta understand the process. I don't understand this jewel that Jimmy Shar-",
+        'The phone machine is like this relationship respirator keeping these marginal brain-dead relationships alive.',
+        'It has a slight sing-songy quality.',
+        'Operation Yeah. Yeah. Dr. Yeah.',
+        'The thing about stand-up was, it always encouraged experimentation.',
+        'Got a nice girl in a clean apartment. Yep. Just one little problem.',
+        "Well, maybe she just wanted to move on to other business. No, no, this wasn't moving on.",
+        "So what do you want me to do? I want restitution. Restitution? You want restitution? Why should I give you restitution? Because it's no good. Well, I got a perfect solution for you. Take your business elsewhere. I don't want your business.",
+        'These pretzels are making me thirsty. Do you know anything about this pretzel guy?',
+    ]
+    for transcript in transcripts:
+        hints = analyzer._extract_transcript_topic_hints(transcript)
+        assert len(hints) <= 5
+        assert len({hint.casefold() for hint in hints}) == len(hints)
+        for hint in hints:
+            assert analyzer._is_evidence_grounded_topic_candidate(hint, transcript)
+    assert analyzer._extract_transcript_topic_hints("The blue Ford Escort is parked outside.") == ["Ford Escort"]
+    assert analyzer._extract_transcript_topic_hints("the dentist appointment is tomorrow morning") == ["dentist appointment"]
 
 
 def test_spoken_monologue_payload_without_topic_avoids_spoken_topic_fallback() -> None:
@@ -637,16 +575,16 @@ def test_spoken_monologue_payload_without_topic_avoids_spoken_topic_fallback() -
     }, primary_tags=[], contextual_tags=[], structural_tags=["spoken monologue"])
 
 
-def test_transcript_grounded_topic_candidate_accepts_explicit_pattern_aliases() -> None:
-    assert analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
+def test_transcript_grounded_topic_candidate_rejects_unstated_plot_aliases() -> None:
+    assert not analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
         "Steve Pocatillo",
         "Who is it? Mr. Pocotillo! You mean you don't recognize my voice?",
     )
-    assert analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
+    assert not analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
         "alternate side",
         "He moves them from one side of the street to the other so you don't get a ticket.",
     )
-    assert analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
+    assert not analyzer._is_transcript_grounded_topic_candidate(  # type: ignore[attr-defined]
         "rental car",
         "That's my rent-a-car. What happened to the car?",
     )
@@ -850,7 +788,11 @@ def test_normalize_scene_context_payload_rewrites_unsupported_social_roles_and_w
         "emotional_arc": "tense discussion",
         "context_tags": ["lawyer", "couch", "case"],
         "activity_description": "Couch conversation about lawyer.",
-    }, primary_tags=["lawyer"], contextual_tags=["couch", "case"], structural_tags=[])
+    }, primary_tags=["lawyer"], contextual_tags=["couch", "case"], structural_tags=["microwave"])
+
+    # Retain a detector candidate without turning it into a scene claim.
+    assert "microwave" not in result["context_tags"]
+    assert "microwave" not in result["narrative_summary"].lower()
 
 
 def test_normalize_scene_context_payload_rewrites_coworker_plans_language_to_grounded_topic() -> None:
@@ -873,13 +815,10 @@ def test_normalize_scene_context_payload_rewrites_coworker_plans_language_to_gro
         },
     )
 
-    _assert_context_payload(result, {
-        "narrative_summary": "Conversation about peanut.",
-        "key_moments": ["They mention peanut."],
-        "emotional_arc": "Neutral tone between coworkers",
-        "context_tags": ["peanut"],
-        "activity_description": "Conversation about peanut.",
-    })
+    assert result["narrative_summary"].startswith('Transcript: "')
+    assert "coworker" not in result["narrative_summary"].lower()
+    assert "plans for the day" not in result["narrative_summary"].lower()
+    assert result["context_tags"] == []
 
 
 def test_normalize_scene_context_payload_keeps_transcript_supported_social_roles() -> None:
@@ -900,7 +839,7 @@ def test_normalize_scene_context_payload_keeps_transcript_supported_social_roles
 
     _assert_context_payload(result, {
         "narrative_summary": "Friends talk in the kitchen about the condo.",
-        "key_moments": ["Friends talk in the kitchen", "They mention condo."],
+        "key_moments": ["Friends talk in the kitchen", "They discuss the condo rules"],
         "emotional_arc": "mild tension",
         "context_tags": ["condo", "kitchen"],
         "activity_description": "Friends gather in the kitchen to discuss the condo.",
@@ -974,12 +913,12 @@ def test_normalize_scene_context_payload_drops_low_value_human_category_tags() -
     )
 
     _assert_context_payload(result, {
-        "narrative_summary": "Store conversation about medicine.",
-        "key_moments": ["They mention medicine."],
+        "narrative_summary": "Store conversation.",
+        "key_moments": ["Store conversation."],
         "emotional_arc": "urgent disagreement",
-        "context_tags": ["medicine", "store"],
-        "activity_description": "Store conversation about medicine.",
-    }, primary_tags=["medicine"], contextual_tags=["store"], structural_tags=[])
+        "context_tags": ["store"],
+        "activity_description": "Store conversation.",
+    }, primary_tags=[], contextual_tags=["store"], structural_tags=[])
 
 
 def test_normalize_scene_context_payload_rewrites_low_value_gendered_visual_phrasing() -> None:
@@ -1052,7 +991,7 @@ def test_normalize_scene_context_payload_drops_generic_tags_once_specific_topic_
         "narrative_summary": "Conversation about Long Island Expressway.",
         "key_moments": ["They mention Long Island Expressway."],
         "emotional_arc": "neutral tone",
-        "context_tags": ["Long Island Expressway", "Long Island"],
+        "context_tags": ["Long Island Expressway"],
         "activity_description": "Conversation about Long Island Expressway.",
     })
 
@@ -1087,9 +1026,9 @@ def test_normalize_scene_context_payload_drops_residual_low_value_tags() -> None
         "narrative_summary": "Table conversation about reservation.",
         "key_moments": ["They mention reservation."],
         "emotional_arc": "neutral discussion",
-        "context_tags": ["reservation"],
+        "context_tags": ["reservation", "glove compartment"],
         "activity_description": "Table conversation about reservation.",
-    }, primary_tags=["reservation"], contextual_tags=[], structural_tags=["table"])
+    }, primary_tags=["reservation"], contextual_tags=["glove compartment"], structural_tags=["table"])
 
 
 def test_normalize_scene_context_payload_drops_caption_shaped_people_tags_and_mojibake() -> None:
@@ -1135,7 +1074,7 @@ def test_normalize_scene_context_payload_clamps_caption_shaped_visual_narration_
 
     _assert_context_payload(result, {
         "narrative_summary": "Conversation about Pendant Publishing.",
-        "key_moments": ["They mention Pendant Publishing."],
+        "key_moments": ["The woman reads a manuscript", "They mention Pendant Publishing."],
         "emotional_arc": "neutral discussion",
         "context_tags": ["Pendant Publishing"],
         "activity_description": "Conversation about Pendant Publishing.",
@@ -1166,9 +1105,14 @@ def test_normalize_scene_context_payload_rewrites_interpretive_summary_to_ground
         "narrative_summary": "Conversation about Civil War.",
         "key_moments": ["They mention Civil War."],
         "emotional_arc": "uneasy discussion",
-        "context_tags": ["Civil War"],
+        "context_tags": ["Civil War", "Big Bang"],
         "activity_description": "Conversation about Civil War.",
     })
+
+    # The caption remains a qualified independent tag, not transcript speech.
+    source = result["claim_provenance"]["tag_sources"]["Big Bang"]
+    assert source["sources"] == ["image_caption"]
+    assert source["establishes_visible_presence"] is False
 
 
 def test_normalize_scene_context_payload_drops_caption_shaped_visual_action_without_topic() -> None:
@@ -1187,16 +1131,12 @@ def test_normalize_scene_context_payload_drops_caption_shaped_visual_action_with
         },
     )
 
-    _assert_context_payload(result, {
-        "narrative_summary": "Minimal visual or dialogue content.",
-        "key_moments": ["Minimal visual or dialogue content."],
-        "emotional_arc": "neutral tone",
-        "context_tags": [],
-        "activity_description": "Minimal visual or dialogue content.",
-    })
+    assert result["narrative_summary"] == 'Transcript: "I\'m in a transition phase right now."'
+    assert "desk" not in result["narrative_summary"].lower()
+    assert result["context_tags"] == []
 
 
-def test_normalize_scene_context_payload_collapses_low_value_transcript_garbage_to_minimal() -> None:
+def test_normalize_scene_context_payload_does_not_adjudicate_recognition_by_vocabulary() -> None:
     result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
         {
             "narrative_summary": "Conversation about go off oppression.",
@@ -1216,13 +1156,13 @@ def test_normalize_scene_context_payload_collapses_low_value_transcript_garbage_
         },
     )
 
-    _assert_context_payload(result, {
-        "narrative_summary": "Minimal visual or dialogue content.",
-        "key_moments": ["Minimal visual or dialogue content."],
-        "emotional_arc": "mild tension during conversation",
-        "context_tags": [],
-        "activity_description": "Minimal visual or dialogue content.",
-    })
+    # Recognition quality comes from recognition evidence, not a vocabulary veto.
+    assert result["narrative_summary"] != "Minimal visual or dialogue content."
+    assert "off oppression wild" not in result["context_tags"]
+    assert "oppression wild oppression" not in result["context_tags"]
+    for tag in result["context_tags"]:
+        assert analyzer._is_transcript_grounded_topic_candidate(tag, "Go off oppression. Wild oppression. Don't.")
+        assert result["claim_provenance"]["tag_sources"][tag]["scope"] == "spoken_mention"
 
 
 def test_normalize_scene_context_payload_drops_descriptive_visual_support_tag_when_topic_wins() -> None:
@@ -1250,7 +1190,7 @@ def test_normalize_scene_context_payload_drops_descriptive_visual_support_tag_wh
     })
 
 
-def test_normalize_scene_context_payload_does_not_promote_low_value_object_tags() -> None:
+def test_normalize_scene_context_payload_keeps_visible_objects_contextual_without_a_vocabulary_veto() -> None:
     result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
         {
             "narrative_summary": "Table conversation.",
@@ -1270,9 +1210,13 @@ def test_normalize_scene_context_payload_does_not_promote_low_value_object_tags(
         "narrative_summary": "Table conversation.",
         "key_moments": ["Table conversation."],
         "emotional_arc": "neutral tone",
-        "context_tags": [],
+        "context_tags": ["potted plant", "wine glass"],
         "activity_description": "Table conversation.",
-    }, primary_tags=[], contextual_tags=[], structural_tags=["potted plant", "wine glass"])
+    }, primary_tags=[], contextual_tags=["potted plant", "wine glass"], structural_tags=[])
+
+    for tag in result["context_tags"]:
+        assert result["claim_provenance"]["tag_sources"][tag]["scope"] == "qualified_visual_observation"
+        assert result["claim_provenance"]["tag_sources"][tag]["establishes_visible_presence"] is False
 
 
 def test_normalize_scene_context_payload_keeps_contextual_setting_but_contains_sitting_as_structural() -> None:
@@ -1298,3 +1242,366 @@ def test_normalize_scene_context_payload_keeps_contextual_setting_but_contains_s
         "context_tags": ["living room", "couch"],
         "activity_description": "Living room conversation.",
     }, primary_tags=[], contextual_tags=["living room", "couch"], structural_tags=["sitting"])
+
+
+def test_normalize_scene_context_payload_preserves_grounded_summary_when_no_topic_hint() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "A speaker asks to stop, wishes they had insurance, and says the thing never shuts up.",
+            "key_moments": [
+                "Speaker wishes they had insurance",
+                "Speaker says the thing never shuts up",
+            ],
+            "emotional_arc": "frustration",
+            "context_tags": ["insurance", "living room"],
+            "activity_description": "Two people converse indoors while expressing annoyance.",
+        },
+        {
+            "caption": "two people standing in a living room",
+            "transcript": (
+                "Can we stop now? Well, you have insurance. I wish. Unbelievable. Yeah. "
+                "What is with this thing? It never shuts up!"
+            ),
+            "objects": [{"label": "person"}],
+        },
+    )
+
+    assert "never shuts up" in result["narrative_summary"].lower()
+    assert result["narrative_summary"] != "Living room conversation."
+    assert any("never shuts up" in km.lower() for km in result["key_moments"])
+
+
+def test_extract_transcript_topic_hints_avoids_cross_clause_and_non_head_suffix_fragments() -> None:
+    hints = analyzer._extract_transcript_topic_hints(  # type: ignore[attr-defined]
+        "Yeah, he has a huge problem. No, it was the greatest moment of my life. "
+        "I am a marine biologist."
+    )
+    lowered = {h.lower() for h in hints}
+    assert "marine biologist" in lowered
+    assert "yeah he" not in lowered
+    assert "problem no" not in lowered
+    assert "greatest moment" not in lowered
+    assert "moment of" not in lowered
+
+
+def test_normalize_scene_context_payload_preserves_rockaway_ocean_key_moment() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": (
+                "Two men converse in a restaurant as one describes hitting golf balls into the ocean at Rockaway."
+            ),
+            "key_moments": [
+                "Speaker describes a scenario involving Rockaway and the ocean",
+                "Speaker exclaims about a hole in one",
+            ],
+            "emotional_arc": "enthusiastic",
+            "context_tags": ["restaurant", "ocean", "rockaway"],
+            "activity_description": "Two men converse at a restaurant booth.",
+        },
+        {
+            "caption": "two men sitting in a booth at a restaurant",
+            "transcript": (
+                "So I'm driving out to Rockaway, and I got these clubs in the back of my car, "
+                "and I decide I'm gonna hit a few balls into the ocean. What is that, a Titleist? "
+                "A hole in one, huh?"
+            ),
+            "objects": [{"label": "person"}],
+        },
+    )
+
+    assert "rockaway" in result["narrative_summary"].lower()
+    assert "ocean" in result["narrative_summary"].lower()
+    assert "hitting a bar with a car" not in result["narrative_summary"].lower()
+
+
+def test_normalize_scene_context_payload_routes_scene36_detector_only_sandwich_claim_to_attributed_fallback() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Two people talk indoors while one person recounts a story about the sea.",
+            "key_moments": [
+                "One speaker asks what happened",
+                "Individuals talk indoors near a table with a sandwich",
+            ],
+            "emotional_arc": "curious conversation",
+            "context_tags": ["table", "sandwich", "indoor conversation"],
+            "activity_description": "Individuals talk indoors near a table with a sandwich.",
+        },
+        {
+            "caption": "a woman sitting at a table talking to a man",
+            "transcript": (
+                "What happened? Come on. Well, you know that I went out with Elaine "
+                "and she told me the whole story about the sea."
+            ),
+            "objects": [
+                {"label": "person", "score": 0.90524},
+                {"label": "person", "score": 0.858898},
+                {"label": "sandwich", "score": 0.377349},
+            ],
+        },
+    )
+
+    assert result is not None
+    assert result["narrative_summary"] == "Two people talk indoors while one person recounts a story about the sea."
+    assert result["activity_description"] == "Table conversation."
+    assert all("sandwich" not in km.lower() for km in result["key_moments"])
+    assert "sandwich" not in [t.lower() for t in result["primary_tags"]]
+    assert "sandwich" not in [t.lower() for t in result["contextual_tags"]]
+    assert "sandwich" not in [t.lower() for t in result["context_tags"]]
+    assert "sandwich" in [t.lower() for t in result["structural_tags"]]
+    assert result["claim_provenance"]["tag_sources"]["sandwich"] == {
+        "sources": ["object_detect"],
+        "scope": "candidate_detection",
+        "establishes_visible_presence": False,
+    }
+
+
+def test_normalize_scene_context_payload_rejects_scene9_uncorroborated_caption_and_llm_hallucination() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "Two people converse indoors about hitting a bar with a car.",
+            "key_moments": [
+                "A man brushes his teeth while talking",
+                "They talk about hitting a bar with a car",
+            ],
+            "emotional_arc": "casual conversation",
+            "context_tags": ["indoor conversation"],
+            "activity_description": "A man brushes his teeth in a room.",
+        },
+        {
+            "caption": "a man in a blue shirt is brushing his teeth",
+            "transcript": "She was at the bar. We were talking for a minute and then we left.",
+            "objects": [{"label": "person", "score": 0.923363}],
+        },
+    )
+
+    assert result is not None
+    assert "brushing" not in result["narrative_summary"].lower()
+    assert "teeth" not in result["narrative_summary"].lower()
+    assert "hitting a bar" not in result["narrative_summary"].lower()
+    assert "brushing" not in result["activity_description"].lower()
+    assert result["claim_provenance"]["narrative_summary"]["establishes_visible_presence"] is False
+
+
+def test_normalize_scene_context_payload_preserves_visual_only_positive_evidence_with_caption_provenance() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "A person walks into the water at the beach.",
+            "key_moments": ["A person walks into the water at the beach"],
+            "emotional_arc": "calm coastal scene",
+            "context_tags": ["beach", "water"],
+            "activity_description": "Walking into the water at the beach.",
+        },
+        {
+            "caption": "a person is walking into the water at the beach",
+            "transcript": "",
+            "objects": [{"label": "person", "score": 0.80876}],
+        },
+    )
+
+    assert result is not None
+    assert result["narrative_summary"] == "A person walks into the water at the beach."
+    assert result["activity_description"] == "Walking into the water at the beach."
+    assert result["key_moments"] == ["A person walks into the water at the beach"]
+    assert result["contextual_tags"] == ["beach", "water"]
+    assert result["context_tags"] == ["beach", "water"]
+    assert result["claim_provenance"]["narrative_summary"] == {
+        "source": "scene_context_llm",
+        "depends_on": ["image_caption"],
+        "qualification": "qualified_visual_observation",
+        "establishes_visible_presence": False,
+    }
+    assert result["claim_provenance"]["tag_sources"]["water"] == {
+        "sources": ["image_caption"],
+        "scope": "qualified_visual_observation",
+        "establishes_visible_presence": False,
+    }
+
+
+def test_normalize_scene_context_payload_attributes_spoken_object_mention_without_visible_presence() -> None:
+    result = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": (
+                "Two men converse in a restaurant as one mentions ordering a sandwich "
+                "and hitting a ball into the ocean at Rockaway."
+            ),
+            "key_moments": ["Speaker mentions ordering a sandwich and driving to Rockaway"],
+            "emotional_arc": "enthusiastic",
+            "context_tags": ["restaurant", "ocean", "rockaway", "sandwich"],
+            "activity_description": "Restaurant conversation.",
+        },
+        {
+            "caption": "two men sitting in a booth at a restaurant",
+            "transcript": (
+                "I ordered a sandwich at the counter, drove out to Rockaway, "
+                "and hit a ball into the ocean."
+            ),
+            "objects": [{"label": "person", "score": 0.91}],
+        },
+    )
+
+    assert result is not None
+    assert "sandwich" in result["context_tags"]
+    assert result["claim_provenance"]["tag_sources"]["sandwich"] == {
+        "sources": ["transcribe"],
+        "scope": "spoken_mention",
+        "establishes_visible_presence": False,
+    }
+    assert result["claim_provenance"]["tag_sources"]["restaurant"] == {
+        "sources": ["image_caption"],
+        "scope": "qualified_visual_observation",
+        "establishes_visible_presence": False,
+    }
+
+
+def test_select_scene_object_labels_deduplicates_duplicate_heavy_and_preserves_later_distinct_labels() -> None:
+    duplicate_heavy_objects = [
+        {"label": "book", "score": round(0.20 + idx * 0.01, 4)} for idx in range(12)
+    ] + [
+        {"label": "chair", "score": 0.54},
+        {"label": "coffee table", "score": 0.42},
+        {"label": "curtain", "score": 0.49},
+        {"label": "lamp", "score": 0.51},
+    ]
+    scene_meta = {
+        "index": 27,
+        "start": 100.0,
+        "end": 108.0,
+        "caption": "an indoor room with a chair and a curtain",
+        "transcript": "",
+        "objects": duplicate_heavy_objects,
+    }
+
+    _sys_prompt, user_prompt = analyzer._build_scene_context_prompts(scene_meta)  # type: ignore[attr-defined]
+    visible_line = next(line for line in user_prompt.splitlines() if line.startswith("- Visible objects:"))
+    assert visible_line == "- Visible objects: book, chair, coffee table, curtain, lamp"
+
+    normalized = analyzer._normalize_scene_context_payload(  # type: ignore[attr-defined]
+        {
+            "narrative_summary": "An indoor room with a chair and a curtain.",
+            "activity_description": "Indoor room with a chair and a curtain.",
+            "key_moments": ["An indoor room with a chair and a curtain"],
+            "emotional_arc": "calm indoor setting",
+            "context_tags": ["room", "chair", "curtain", "lamp"],
+        },
+        scene_meta,
+    )
+    assert normalized is not None
+    assert "curtain" in normalized["context_tags"]
+    assert "chair" in normalized["context_tags"]
+    assert "lamp" in normalized["structural_tags"]
+    assert "object_detect" in normalized["claim_provenance"]["tag_sources"]["curtain"]["sources"]
+    assert normalized["claim_provenance"]["tag_sources"]["lamp"] == {
+        "sources": ["object_detect"],
+        "scope": "candidate_detection",
+        "establishes_visible_presence": False,
+    }
+
+    fallback = analyzer._scene_context_failure_fallback_payload(  # type: ignore[attr-defined]
+        {
+            "caption": "a person standing indoors",
+            "transcript": "We should talk about the schedule tomorrow morning.",
+            "objects": [{"label": "book"} for _ in range(12)] + [{"label": "couch"}],
+        }
+    )
+    assert "couch" in fallback["context_tags"] or "room" in fallback["narrative_summary"].casefold()
+
+
+def test_select_scene_object_labels_caps_more_than_ten_distinct_labels_in_first_seen_order() -> None:
+    many_objects = [
+        {"label": "book"},
+        {"label": "BOOK"},
+        {"label": "chair"},
+        {"label": "coffee table"},
+        {"label": "Chair"},
+        {"label": "curtain"},
+        {"label": "lamp"},
+        {"label": "lampshade"},
+        {"label": "mobile phone"},
+        {"label": "person"},
+        {"label": "Person"},
+        {"label": "backpack"},
+        {"label": "bed"},
+        {"label": "headboard"},
+        {"label": "painting"},
+        {"label": "vase"},
+    ]
+    selected = analyzer._select_scene_object_labels(many_objects, limit=10)  # type: ignore[attr-defined]
+    assert selected == [
+        "book",
+        "chair",
+        "coffee table",
+        "curtain",
+        "lamp",
+        "lampshade",
+        "mobile phone",
+        "person",
+        "backpack",
+        "bed",
+    ]
+    assert len(selected) == 10
+
+
+def test_select_scene_object_labels_handles_mixed_empty_and_invalid_controls() -> None:
+    mixed_objects = [
+        {"label": "person"},
+        {"label": "book"},
+        {"label": "laptop"},
+        {"label": "laptop"},
+        {"label": "person"},
+        {"label": "suitcase"},
+        {"label": "chair"},
+        {"label": "chair"},
+    ]
+    assert analyzer._select_scene_object_labels(mixed_objects, limit=10) == [  # type: ignore[attr-defined]
+        "person",
+        "book",
+        "laptop",
+        "suitcase",
+        "chair",
+    ]
+
+    for empty_control in ([], None, "not-a-list", 123, {}):
+        assert analyzer._select_scene_object_labels(empty_control, limit=10) == []  # type: ignore[attr-defined]
+
+    _sys_empty, user_empty = analyzer._build_scene_context_prompts({"objects": []})  # type: ignore[attr-defined]
+    assert "- Visible objects: none" in user_empty
+
+    invalid_controls = [
+        None,
+        {},
+        {"label": None},
+        {"label": ""},
+        {"label": "   "},
+        {"label": 123},
+        {"label": True},
+        {"label": ["nested"]},
+        456,
+        True,
+        "   ",
+        {"name": "  curtain  "},
+        {"class": "lamp"},
+        "Chair",
+        {"label": "CURTAIN"},
+    ]
+    assert analyzer._select_scene_object_labels(invalid_controls, limit=10) == [  # type: ignore[attr-defined]
+        "curtain",
+        "lamp",
+        "Chair",
+    ]
+
+
+def test_derive_setting_hint_ignores_hedged_caption_places_and_preserves_unhedged() -> None:
+    hedged_hint = analyzer._derive_setting_hint(  # type: ignore[attr-defined]
+        (
+            "Two people stand indoors in front of wood paneling. "
+            "The setting appears to be a cozy indoor environment, possibly a home office or living room."
+        ),
+        [],
+    )
+    assert hedged_hint is None
+
+    unhedged_hint = analyzer._derive_setting_hint(  # type: ignore[attr-defined]
+        "A man is sitting indoors in a bathroom setting.",
+        [],
+    )
+    assert unhedged_hint == "bathroom"

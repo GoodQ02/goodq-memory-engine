@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-10-23 -->
 
 # Phase 6: Multimodal Fusion & Temporal Indexing
 
@@ -86,6 +86,27 @@ Phase 6 consumes persisted scene artifacts, not ad hoc in-memory guesses.
 - backend truth fields (`audio_backend_*`)
 
 When WSL audio is enabled, Phase 6 consumes WSL-produced transcript/diarization/signature outputs through the same manifest contract. When Windows-local audio is used, the same downstream contract still applies.
+
+### Speaker summary evidence
+
+Scene `speaker_ids` and `speaker_count` describe anonymous diarization tracks,
+not recognized sentences or verified people. The harmonizer prefers valid
+`audio.diarization` turns, then `audio.speaker_segments`; transcript-aligned
+segments and explicit IDs remain compatibility fallbacks when turn evidence is
+absent. A sentence receives at most one label during alignment, so its label set
+may omit brief or overlapping tracks and must not replace the raw track count.
+
+Dominant-speaker shares and conversation-track selection use those same turns,
+clipped to the scene. The denominator is summed attributed track time, including
+overlap, rather than elapsed wall time. Scene payload timing retains the existing
+relative/absolute compatibility handling; aggregate artifact turns are already
+absolute and must not be shifted again. Invalid or nonpositive spans do not
+contribute duration. Word/mention evidence still uses the aligned transcript.
+
+Raw diarization, signatures and review flags are retained. Reusing a local label
+in another scene does not identify the same person; identity promotion remains
+governed by the [identity contract](IDENTITY_STITCHING_CONTRACT.md). This repair
+does not certify diarization accuracy or rewrite historical corpus output.
 
 ### Progressive Ingestion Processing
 

@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _load_route_module(module_name: str):
     repo_root = Path(__file__).resolve().parents[2]
@@ -74,6 +76,33 @@ def test_videos_route_projects_thumbnail_without_exposing_local_paths(monkeypatc
     )
     assert getattr(video, "thumbnail_path_redacted", None) is True
     assert video.thumbnail == "/api/media/video/video_001/frame/scene_0000_frame_01.jpg"
+
+
+@pytest.mark.parametrize("duration_fields,expected", [
+    ({"total_duration": 1329.56}, 1329.56),
+    ({"duration": 12.5}, 12.5),
+    ({"total_duration": 1329.56, "duration": 0}, 1329.56),
+    ({"total_duration": 0, "duration": 12.5}, 0),
+    ({}, 0),
+])
+def test_video_list_reads_producer_duration_without_using_scene_extent(monkeypatch, tmp_path, duration_fields, expected):
+    from api.utils.loaders import DataLoader
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    processing = tmp_path / "processing"
+    dataset = processing / "example"
+    dataset.mkdir(parents=True)
+    (dataset / "temporal_index.json").write_text(json.dumps({
+        **duration_fields, "segments": [{"start": 20, "end": 30}],
+    }))
+    loader = DataLoader(processing_root=str(processing))
+    monkeypatch.setattr(system_module, "get_data_loader", lambda: loader)
+    app = FastAPI()
+    app.include_router(system_module.router)
+    response = TestClient(app).get("/api/system/videos")
+    assert response.status_code == 200
+    assert response.json()[0]["duration"] == expected
 
 
 def test_ingest_route_declares_guarded_future_facade() -> None:

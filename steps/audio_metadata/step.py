@@ -3,6 +3,11 @@ from typing import Any, Dict, Optional, List
 
 import os
 import datetime as _dt
+import json
+from pathlib import Path
+import subprocess
+
+from steps.common.tool_resolver import ToolResolver
 
 
 def _file_times(path: str) -> Dict[str, str]:
@@ -14,6 +19,36 @@ def _file_times(path: str) -> Dict[str, str]:
     except Exception as e:
         print('[WARN] _file_times returning empty dict')
         return {}
+
+
+def _tag_metadata(tags: Dict[str, Any]) -> Dict[str, Any]:
+    loc_keys = [k for k in tags.keys() if 'gps' in k.lower() or 'location' in k.lower() or 'geotag' in k.lower()]
+    time_keys = [
+        'date', 'year', 'originaldate', 'recording_time', 'tdrc', 'tdrl', 'tden', 'releasetime'
+    ]
+    time_hints: Dict[str, Any] = {"raw": {}}
+    for tk in time_keys:
+        for k in tags:
+            if tk in k.lower():
+                time_hints["raw"][k] = tags[k]
+
+    normalized_dates: List[str] = []
+    for value in time_hints["raw"].values():
+        for fmt in ("%Y-%m-%d", "%Y", "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y"):
+            try:
+                date = _dt.datetime.strptime(str(value)[:10], fmt)
+                normalized_dates.append(date.date().isoformat())
+                break
+            except ValueError:
+                continue
+    if normalized_dates:
+        time_hints["normalized"] = normalized_dates
+    out: Dict[str, Any] = {"tags": tags}
+    if loc_keys:
+        out["location_hints"] = {k: tags[k] for k in loc_keys}
+    if time_hints.get("raw") or time_hints.get("normalized"):
+        out["tag_time_hints"] = time_hints
+    return out
 
 
 def _mutagen_tags(path: str) -> Dict[str, Any]:
@@ -33,44 +68,32 @@ def _mutagen_tags(path: str) -> Dict[str, Any]:
             except Exception as e:
                 print(f'[ERROR] Exception in step.py line 33: {str(e)}')
                 continue
-        loc_keys = [k for k in tags.keys() if 'gps' in k.lower() or 'location' in k.lower() or 'geotag' in k.lower()]
-
-        time_keys = [
-            'date', 'year', 'originaldate', 'recording_time', 'tdrc', 'tdrl', 'tden', 'releasetime'
-        ]
-        time_hints: Dict[str, Any] = {"raw": {}}
-        for tk in time_keys:
-            for k in list(tags.keys()):
-                if tk in k.lower():
-                    time_hints["raw"][k] = tags[k]
-
-        def _try_norm(vals: List[str | Any]) -> List[str]:
-            out: List[str] = []
-            for v in vals:
-                s = str(v)
-                for fmt in ("%Y-%m-%d", "%Y", "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y"):
-                    try:
-                        dt = _dt.datetime.strptime(s[:10], fmt)
-                        out.append(dt.date().isoformat())
-                        break
-                    except Exception as e:
-                        print(f'[ERROR] Exception in step.py line 56: {str(e)}')
-                        continue
-            return out
-
-        normalized_dates: List[str] = _try_norm(list(time_hints["raw"].values())) if time_hints["raw"] else []
-        if normalized_dates:
-            time_hints["normalized"] = normalized_dates
-
-        out = {"tags": tags}
-        if loc_keys:
-            out["location_hints"] = {k: tags[k] for k in loc_keys}
-        if time_hints.get("raw") or time_hints.get("normalized"):
-            out["tag_time_hints"] = time_hints
-        return out
+        return _tag_metadata(tags)
     except Exception as e:
         print('[WARN] _mutagen_tags returning empty dict')
         return {}
+
+
+def _ffprobe_wav_tags(path: str) -> Dict[str, Any]:
+    """Read RIFF container tags that Mutagen's WAV/ID3 reader can miss."""
+    reader = {"engine": "ffprobe", "source": "container_tags"}
+    try:
+        tool = ToolResolver.resolve_tool("ffprobe")
+        if not tool.get("found") or not tool.get("path"):
+            return {"tag_reader": {**reader, "status": "unavailable", "reason": "ffprobe_missing"}}
+        result = subprocess.run(
+            [tool["path"], "-v", "error", "-show_entries", "format_tags", "-of", "json", path],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+            check=False,
+        )
+        if result.returncode != 0:
+            return {"tag_reader": {**reader, "status": "error", "reason": "ffprobe_failed"}}
+        tags = json.loads(result.stdout).get("format", {}).get("tags", {})
+        if not isinstance(tags, dict):
+            raise ValueError("invalid container tags")
+        return {"tags": tags, "tag_reader": {**reader, "status": "ok" if tags else "no_tags"}}
+    except (OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        return {"tag_reader": {**reader, "status": "error", "reason": type(exc).__name__}}
 
 
 def _probe_audio(path: str) -> Dict[str, Any]:
@@ -120,6 +143,17 @@ def audio_metadata(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         return {"audio_meta": None}
     meta: Dict[str, Any] = {}
     meta.update(_file_times(path))
-    meta.update(_mutagen_tags(path))
+    tag_metadata = _mutagen_tags(path)
+    if Path(path).suffix.lower() in {".wav", ".wave"} and not tag_metadata.get("tag_time_hints"):
+        probed = _ffprobe_wav_tags(path)
+        tags = {**probed.get("tags", {}), **tag_metadata.get("tags", {})}
+        if tags:
+            tag_metadata = _tag_metadata(tags)
+        tag_metadata["tag_reader"] = probed["tag_reader"]
+    elif tag_metadata:
+        tag_metadata["tag_reader"] = {"engine": "mutagen", "source": "container_tags", "status": "ok"}
+    # Filesystem creation/modification times describe this file, including a
+    # freshly extracted WAV. Only explicit container tags feed recording hints.
+    meta.update(tag_metadata)
     meta.update(_probe_audio(path))
     return {"audio_meta": meta}

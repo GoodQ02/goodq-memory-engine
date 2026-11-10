@@ -736,7 +736,7 @@ def render_current_state_markdown(evidence: dict[str, Any]) -> str:
     qdrant = qdrant_observation["collections"]
     lifecycle = _lifecycle_state(evidence)
     lifecycle_claim = (
-        "This capture proves the active corpus complete and fully promoted; it is not an ingestion target."
+        "This capture proves the recorded corpus complete and fully promoted at capture; it is not an ingestion target."
         if lifecycle["complete_and_fully_promoted"]
         else "The active corpus is not proven complete or fully promoted by this capture."
     )
@@ -759,13 +759,18 @@ def render_current_state_markdown(evidence: dict[str, Any]) -> str:
 <!-- DOC_STATUS: GENERATED_CURRENT_STATE -->
 <!-- DOC_LAST_VERIFIED: {evidence['captured_at_utc'][:10]} -->
 
-# GoodQ4All Current Agent State
+# GoodQ4All Captured Agent State
 
 Generated from evidence `{evidence['evidence_id']}` captured at
 `{evidence['captured_at_utc']}`. Do not hand-edit this file; regenerate it with
 `scripts/docs/build_current_state.py` from the checked evidence snapshot.
 
-## Authority
+All runtime, corpus and configuration claims below apply only to that capture.
+Regeneration does not refresh the evidence date or prove present health. Use
+[PROJECT.md](../../PROJECT.md) for the latest bounded checkpoint, and verify
+current configuration and runtime ownership before acting.
+
+## Authority at Capture
 
 - Active epoch: `{epoch}`
 - Host profile: `{evidence['authority']['profile']}`
@@ -859,11 +864,13 @@ def render_rag_context_pack(evidence: dict[str, Any]) -> str:
 # GoodQ RAG Context Pack
 
 Generated from evidence `{evidence['evidence_id']}` captured at
-`{evidence['captured_at_utc']}`. This is the portable read-only contract for
-GoodQ retrieval agents. Runtime snapshots and local agent configuration do not
-override this epoch authority.
+`{evidence['captured_at_utc']}`. The epoch, corpus and configured runtime below
+describe that capture, not the present deployment. Regeneration does not refresh
+the evidence date. Use [PROJECT.md](../PROJECT.md) for the latest bounded
+checkpoint; reconcile current resolved configuration and bridge authority before
+reading data. Local agent configuration cannot redefine GoodQ epoch authority.
 
-## Active Authority
+## Authority at Capture
 
 - Epoch: `{epoch}`
 - Lifecycle: `{lifecycle['state']}`; {lifecycle_claim}

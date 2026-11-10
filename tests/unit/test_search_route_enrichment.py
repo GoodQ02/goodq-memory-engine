@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import json
 import sys
+import pytest
 from pathlib import Path
 from typing import List, Optional
 
@@ -132,6 +133,112 @@ class _FakeDataLoader:
         }
 
 
+@pytest.mark.parametrize("change,expected", [
+    ({}, True), ({"char_start": -1}, False), ({"char_end": 999}, False),
+    ({"char_start": True}, False), ({"chunk_index": "2"}, False),
+    ({"token_count": -1}, False), ({"text": "forged answer"}, False),
+    ({"char_start": 4.0}, False), ({"text": ["answer"]}, False),
+])
+def test_document_passage_is_projected_only_when_bound_to_persisted_text(monkeypatch, change, expected):
+    text = "The <answer> belongs to the late document."
+    passage = {"chunk_index": 2, "char_start": 4, "char_end": 12,
+               "text": "<answer>", "token_count": 3, "parser_path": r"C:\private\source.pdf"}
+    passage.update(change)
+    class Engine(_FakeSearchEngine):
+        def search_multimodal(self, *args, **kwargs):
+            return [{"score": 0.9, "modality": "text", "payload": {
+                "video_id": "hashed-video-id", "scene_id": "hashed-scene-id",
+                "source_kind": "document", "document_chunk": passage, "document_lexical_chunk": passage}}]
+    class Loader(_FakeDataLoader):
+        def load_temporal_index(self, video_id):
+            index = super().load_temporal_index(video_id)
+            index["segments"][0].update(source_kind="document", document_text=text, start=0, end=0)
+            return index
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: Engine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: Loader())
+    response = asyncio.run(search_module.search_multimodal(
+        search_module.MultimodalSearchRequest(query="late answer", modalities=["text"], top_k=1)))
+    result = response.results[0].model_dump()
+    assert result["document_text"] == text
+    assert result["start"] == result["end"] == 0
+    assert result["matched_document_span"] == (
+        {key: passage[key] for key in ("chunk_index", "char_start", "char_end", "text", "token_count")}
+        if expected else None)
+    assert result["document_context_span"] == ({
+        "char_start": 0, "char_end": len(text), "text": text,
+        "matched_char_start": 4, "matched_char_end": 12,
+    } if expected else None)
+    assert "C:\\private" not in json.dumps(result)
+    assert result["lexical_document_span"] is None  # Invalid or already displayed.
+
+
+@pytest.mark.parametrize("start,end", [(0, 100), (2300, 3500), (5200, 5500),
+                                       (100, 3600), (0, 5500), (0, 4096)])
+def test_document_context_is_bounded_around_unchanged_match_through_route(monkeypatch, start, end):
+    text = "\U0001f600 <source> " * 500
+    passage = {"chunk_index": 1, "char_start": start, "char_end": end,
+               "text": text[start:end], "token_count": 100}
+    lexical = {"chunk_index": 0, "char_start": 0, "char_end": 100, "text": text[:100], "token_count": 20}
+    class Engine(_FakeSearchEngine):
+        def search_multimodal(self, *args, **kwargs):
+            return [{"score": 0.9, "modality": "text", "payload": {
+                "video_id": "hashed-video-id", "scene_id": "hashed-scene-id",
+                "source_kind": "document", "document_chunk": passage, "document_lexical_chunk": lexical}}]
+    class Loader(_FakeDataLoader):
+        def load_temporal_index(self, video_id):
+            index = super().load_temporal_index(video_id)
+            index["segments"][0].update(source_kind="document", document_text=text)
+            return index
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: Engine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: Loader())
+    result = asyncio.run(search_module.search_multimodal(
+        search_module.MultimodalSearchRequest(query="source", modalities=["text"], top_k=1))).results[0]
+    assert result.matched_document_span == passage
+    assert result.score == 0.9
+    context = result.document_context_span
+    displayed = context or passage
+    assert result.lexical_document_span == (lexical if displayed["char_start"] > 0 else None)
+    if end - start >= 4096:
+        assert context is None
+    else:
+        assert context["matched_char_start"] == start
+        assert context["matched_char_end"] == end
+        left, right = context["char_start"], context["char_end"]
+        assert 0 <= left <= start < end <= right <= len(text)
+        assert start - left <= 1024 and right - end <= 1024 and right - left <= 4096
+        assert context["text"] == text[left:right]
+        assert left == 0 or left == start or text[left - 1].isspace()
+        assert right == len(text) or right == end or text[right].isspace()
+
+
+def test_metadata_is_shared_within_search_but_refreshed_for_next_request(monkeypatch):
+    class Engine(_FakeSearchEngine):
+        def search_multimodal(self, *args, **kwargs):
+            return super().search_multimodal(*args, **kwargs) * 50
+
+    class Loader(_FakeDataLoader):
+        calls = 0
+        title = "Original title"
+
+        def get_video_metadata(self, video_id):
+            self.calls += 1
+            return {**super().get_video_metadata(video_id), "title": self.title,
+                    "phase6_complete": True}
+
+    loader = Loader()
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: Engine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: loader)
+    request = search_module.MultimodalSearchRequest(query="family", top_k=50)
+    first = asyncio.run(search_module.search_multimodal(request))
+    assert len(first.results) == 50
+    assert loader.calls == 1
+    assert all(r.display_title == "Original title" and r.phase6_complete for r in first.results)
+    loader.title = "Updated title"
+    second = asyncio.run(search_module.search_multimodal(request))
+    assert loader.calls == 2
+    assert all(r.display_title == "Updated title" and r.phase6_complete for r in second.results)
+
+
 def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) -> None:
     monkeypatch.setattr(search_module, "get_search_engine", lambda: _FakeSearchEngine())
     monkeypatch.setattr(search_module, "get_data_loader", lambda: _FakeDataLoader())
@@ -245,7 +352,9 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
     }
     assert result.scene_context_epistemic == {"state": "supported", "dominant_evidence": "mixed"}
     assert result.scene_context_arbitration == {"resolved_by": "mixed"}
-    assert result.confidence["overall"] == 0.51
+    assert result.score == 0.51
+    assert result.confidence["overall"] is None
+    assert result.confidence["intrinsic"] is None
     assert result.confidence["source"] == "timeline_segment"
     assert result.confidence["evidence_state"] == "supported"
     assert result.confidence["dominant_evidence"] == "mixed"
@@ -260,8 +369,33 @@ def test_multimodal_search_enriches_hashed_results_from_timeline(monkeypatch) ->
     }
 
 
+@pytest.mark.parametrize("supplied", [0.0, 0.83])
+def test_search_preserves_explicit_confidence_independent_of_rank(monkeypatch, supplied):
+    class Engine(_FakeSearchEngine):
+        def search_multimodal(self, *args, **kwargs):
+            results = super().search_multimodal(*args, **kwargs)
+            results[0]["confidence"] = {"overall": supplied, "intrinsic": None, "source": "explicit_evidence"}
+            return results
+
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: Engine())
+    monkeypatch.setattr(search_module, "get_data_loader", lambda: _FakeDataLoader())
+    response = asyncio.run(search_module.search_multimodal(
+        search_module.MultimodalSearchRequest(query="kitchen", top_k=1)))
+    result = response.results[0]
+    assert result.score == 0.51
+    assert result.confidence["overall"] == supplied
+    assert result.confidence["intrinsic"] is None
+    assert result.confidence["source"] == "explicit_evidence"
+    assert result.confidence["evidence_state"] == "supported"
+
+
 def test_text_search_redacts_provenance_paths_and_projects_frame_endpoint(monkeypatch) -> None:
-    monkeypatch.setattr(search_module, "get_search_engine", lambda: _FakeSearchEngine())
+    engine = _FakeSearchEngine()
+    def unified_text(query, top_k, modalities, **kwargs):
+        assert modalities == ["text"]
+        return engine.search_text(query, top_k, **kwargs)
+    monkeypatch.setattr(engine, "search_multimodal", unified_text)
+    monkeypatch.setattr(search_module, "get_search_engine", lambda: engine)
     monkeypatch.setattr(search_module, "get_data_loader", lambda: _FakeDataLoader())
 
     response = asyncio.run(search_module.search_text(q="kitchen", top_k=1))

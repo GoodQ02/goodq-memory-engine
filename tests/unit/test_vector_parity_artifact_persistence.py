@@ -38,6 +38,7 @@ def test_register_scene_bundle_reports_summary_vector_parity(monkeypatch, tmp_pa
     assert len(inserted[0]["vector"]) == 384
     assert inserted[0]["payload"]["modality"] == "text"
     assert inserted[0]["payload"]["embedding_source"] == "scene_summary"
+    assert inserted[0]["payload"]["worker_name"] == "scene_summary_embed"
     assert result["vector_points_attempted"] == 1
     assert result["vector_store_results"] == {"qdrant": True, "faiss": False}
     assert result["qdrant_ok"] is True

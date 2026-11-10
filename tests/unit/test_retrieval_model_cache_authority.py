@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from retrieval.multimodal_search import MultimodalSearchEngine
+from retrieval.multimodal_search import MultimodalSearchEngine, VisualQueryUnavailable
 
 
 def test_prewarm_search_engine_loads_each_query_encoder_once(monkeypatch):
@@ -365,7 +365,8 @@ def test_retrieval_loaders_do_not_call_libraries_or_create_absent_cache(
     assert engine._text_model is None
     assert engine._clip_model is None
     assert np.array_equal(engine.encode_text_query("fixture"), np.zeros(384))
-    assert np.array_equal(engine.encode_text_for_visual_search("fixture"), np.zeros(512))
+    with pytest.raises(VisualQueryUnavailable, match="model_not_cached"):
+        engine.encode_text_for_visual_search("fixture")
     assert calls == []
     assert not models_root.exists()
 
@@ -401,7 +402,7 @@ def test_retrieval_loaders_use_exact_pinned_snapshots_without_mutation(
         (
             "clip_model",
             str(clip_snapshot),
-            {"use_safetensors": True, "local_files_only": True},
+            {"use_safetensors": None, "local_files_only": True},
         ),
     ]
     assert engine._text_model is not None

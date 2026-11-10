@@ -20,12 +20,10 @@ function monitor-all() {
     
     echo -e "${YELLOW}API Endpoints:${NC}"
     curl -s http://localhost:38005/v1/models > /dev/null 2>&1 && echo -e "  ✅ vLLM @ localhost:38005" || echo -e "  ❌ vLLM @ localhost:38005"
-    if curl -s http://localhost:11434/v1/models > /dev/null 2>&1; then
-        echo -e "  ✅ Ollama @ localhost:11434"
-    elif curl -s http://localhost:31434/v1/models > /dev/null 2>&1; then
-        echo -e "  ✅ Ollama @ localhost:31434 (fallback)"
+    if curl -fsS --max-time 5 http://localhost:11434/v1/models > /dev/null 2>&1; then
+        echo -e "  ✅ PAIR Ollama @ localhost:11434"
     else
-        echo -e "  ❌ Ollama @ localhost:11434 (fallback 31434)"
+        echo -e "  ❌ PAIR Ollama @ localhost:11434"
     fi
     echo ""
     
@@ -50,7 +48,7 @@ function monitor-ports() {
     echo -e "${BLUE}=== Port Usage ===${NC}"
     echo ""
     echo -e "${YELLOW}GoodQ4All Ports:${NC}"
-    sudo netstat -tlnp 2>/dev/null | grep -E ':(38000|38001|38004|38005|31434|11434|6333)' || echo "  No services detected"
+    sudo netstat -tlnp 2>/dev/null | grep -E ':(38000|38001|38004|38005|11434|6333)' || echo "  No services detected"
     echo ""
 }
 

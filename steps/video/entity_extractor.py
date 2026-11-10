@@ -5,6 +5,7 @@ Extracts and resolves entities from multi-modal scene data
 import os
 import json
 import logging
+import math
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, asdict
@@ -18,6 +19,7 @@ _SCENE_PLACE_LABELS = {
     "kitchen": "Kitchen",
     "living room": "Living Room",
     "bedroom": "Bedroom",
+    "bathroom": "Bathroom",
     "office": "Office",
     "cafe": "Cafe",
     "coffee shop": "Cafe",
@@ -28,10 +30,24 @@ _SCENE_PLACE_LABELS = {
     "intersection": "Street",
 }
 
+# Model-generated descriptions hedge ("possibly a home office or living room").
+# A place named only inside a hedged clause is a guess, not a scene place.
+_HEDGE_CUE = re.compile(
+    r"\b(?:possibly|perhaps|maybe|likely|probably|presumably|appears? to be|seems? to be|"
+    r"could be|might be|may be|suggest(?:s|ing)?|resembl(?:es|ing)|or)\b"
+)
+
+
+def is_hedged_mention(text: str, start: int) -> bool:
+    """Return True when the phrase at ``start`` sits after a hedge cue in its clause."""
+    clause_start = max(text.rfind(mark, 0, start) for mark in (".", ";", "!", "?", "\n")) + 1
+    return _HEDGE_CUE.search(text[clause_start:start].lower()) is not None
+
+
 _OBJECT_PLACE_SIGNATURES = (
+    # A sink occurs in several rooms; retain the detection without guessing a room.
     ({"refrigerator"}, "Kitchen", 0.78),
     ({"oven"}, "Kitchen", 0.78),
-    ({"sink"}, "Kitchen", 0.78),
     ({"traffic light"}, "Street", 0.76),
     ({"couch", "chair"}, "Living Room", 0.68),
     ({"dining table", "chair"}, "Dining Room", 0.66),
@@ -44,7 +60,7 @@ class ExtractedEntity:
     entity_id: str
     entity_type: str  # person, object, location, event, concept
     name: str
-    confidence: float
+    confidence: Optional[float]
     source_modality: str  # vision, audio, text, metadata
     source_step: str  # face_embed, transcription, ocr, etc.
     properties: Dict[str, Any]
@@ -104,19 +120,23 @@ class EntityExtractor:
         }
         
     def _load_family_names(self) -> Set[str]:
-        """Load known family member names from config"""
-        # These should come from your config.yaml user section
-        return {
-            "grace", "gracie",
-            "joe", "joseph", "joey",
-            "mom", "mother", "donna",
-            "dad", "father", "dominick", "dom",
-            "jamie",
-            "katy", "kate", "katie",
-            "ryder",
-            "suzie", "susan", "aunt suzie",
-            # Add more from your family tree
+        """Load optional configured person/role terms without hardcoding a private family tree."""
+        defaults: Set[str] = {
+            "mom", "mother",
+            "dad", "father",
+            "grandma", "grandmother",
+            "grandpa", "grandfather",
+            "aunt", "uncle",
         }
+        configured = self.config.get("family_names")
+        if configured is None and isinstance(self.config.get("user"), dict):
+            configured = self.config["user"].get("family_names")
+        if isinstance(configured, (list, tuple, set)):
+            for item in configured:
+                val = str(item or "").strip().lower()
+                if val:
+                    defaults.add(val)
+        return defaults
     
     def extract_from_scene(
         self,
@@ -213,10 +233,28 @@ class EntityExtractor:
     def _extract_from_vision(self, scene_data: Dict, scene_id: str) -> List[ExtractedEntity]:
         """Extract entities from visual analysis (captions, descriptions)"""
         entities = []
-        
+        caption_texts: List[str] = []
+        seen_texts: set[str] = set()
+
+        primary_caption = scene_data.get("caption")
+        if isinstance(primary_caption, str) and primary_caption.strip():
+            seen_texts.add(primary_caption.strip().casefold())
+            caption_texts.append(primary_caption.strip())
+
+        keyframe_data = scene_data.get("keyframe") if isinstance(scene_data.get("keyframe"), dict) else {}
+        cap_obs = scene_data.get("caption_observations") or keyframe_data.get("caption_observations")
+        if isinstance(cap_obs, list):
+            for obs in cap_obs:
+                if isinstance(obs, dict):
+                    obs_cap = obs.get("caption")
+                    if isinstance(obs_cap, str) and obs_cap.strip():
+                        norm_cap = obs_cap.strip().casefold()
+                        if norm_cap not in seen_texts:
+                            seen_texts.add(norm_cap)
+                            caption_texts.append(obs_cap.strip())
+
         # From BLIP/BLIP2 captions
-        if "caption" in scene_data:
-            caption = scene_data["caption"]
+        for caption in caption_texts:
             # Simple keyword extraction (can be enhanced with NER)
             entities.extend(self._extract_names_from_text(
                 caption, scene_id, "vision", "image_caption"
@@ -299,7 +337,15 @@ class EntityExtractor:
                     obj_name = obj.get("class", obj.get("label", "unknown"))
                     if not self._is_valid_entity_candidate(obj_name):
                         continue
-                    confidence = obj.get("confidence", 0.5)
+                    # Preserve observed detector scores; keep missing scores unknown (None) rather than inventing a default.
+                    raw_score = obj.get("score") if "score" in obj else obj.get("confidence")
+                    has_observed_score = isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
+                    confidence = float(raw_score) if has_observed_score else None
+                    raw_ts = (
+                        obj.get("timestamp")
+                        if isinstance(obj.get("timestamp"), (int, float)) and not isinstance(obj.get("timestamp"), bool)
+                        else scene_data.get("start_time", 0)
+                    )
                     
                     entities.append(ExtractedEntity(
                         entity_id=f"{scene_id}_obj_{obj_name}",
@@ -308,8 +354,17 @@ class EntityExtractor:
                         confidence=confidence,
                         source_modality="vision",
                         source_step="object_detect",
-                        properties={"bbox": obj.get("bbox"), "detection": obj},
-                        timestamps=[scene_data.get("start_time", 0)]
+                        properties={
+                            "bbox": obj.get("bbox"),
+                            "detection": obj,
+                            "verification_status": "candidate_unconfirmed",
+                            "source_step": "object_detect",
+                            "score_status": "observed" if has_observed_score else "unknown",
+                            "detector_score": confidence,
+                            "raw_score": confidence,
+                            "establishes_visible_presence": False,
+                        },
+                        timestamps=[raw_ts]
                     ))
             entities.extend(self._infer_locations_from_objects(objects, scene_id, scene_data))
         
@@ -431,14 +486,28 @@ class EntityExtractor:
                         continue
                     if not self._is_meaningful_person_name(name):
                         continue
+                resolved_step = str(entity.get("source_step") or default_step)
+                ner_props: Dict[str, Any] = {"ner_entity": entity}
+                if entity_type == "object":
+                    ner_props["mention_scope"] = (
+                        "spoken_mention"
+                        if modality == "audio"
+                        else ("written_text" if "ocr" in resolved_step.lower() else "caption_mention")
+                    )
+                    ner_props["verification_status"] = (
+                        "mentioned_not_visibly_confirmed"
+                        if modality == "audio" or "ocr" in resolved_step.lower()
+                        else "candidate_unconfirmed"
+                    )
+                    ner_props["establishes_visible_presence"] = False
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_{modality}_ner_{idx}",
                     entity_type=entity_type,
                     name=str(name).strip(),
                     confidence=0.92,
                     source_modality=modality,
-                    source_step=str(entity.get("source_step") or default_step),
-                    properties={"ner_entity": entity},
+                    source_step=resolved_step,
+                    properties=ner_props,
                     timestamps=timestamps,
                 ))
 
@@ -466,6 +535,20 @@ class EntityExtractor:
                     if not self._is_meaningful_person_name(name):
                         continue
 
+                detail_props: Dict[str, Any] = {"detail_sources": sorted(detail_sources), "detail": detail}
+                if entity_type == "object":
+                    detail_props["mention_scope"] = (
+                        "spoken_mention"
+                        if modality == "audio"
+                        else ("written_text" if "ocr" in str(default_step).lower() else "caption_mention")
+                    )
+                    detail_props["verification_status"] = (
+                        "mentioned_not_visibly_confirmed"
+                        if modality == "audio" or "ocr" in str(default_step).lower()
+                        else "candidate_unconfirmed"
+                    )
+                    detail_props["establishes_visible_presence"] = False
+
                 entities.append(ExtractedEntity(
                     entity_id=f"{scene_id}_{modality}_detail_{idx}",
                     entity_type=entity_type,
@@ -473,7 +556,7 @@ class EntityExtractor:
                     confidence=self._score_to_confidence(detail.get("score"), default=0.82),
                     source_modality=modality,
                     source_step=default_step,
-                    properties={"detail_sources": sorted(detail_sources), "detail": detail},
+                    properties=detail_props,
                     timestamps=timestamps,
                 ))
 
@@ -499,7 +582,7 @@ class EntityExtractor:
         
         # Check for family names
         for name in self.family_names:
-            if name in text_lower:
+            if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text_lower):
                 if not self._is_valid_entity_candidate(name):
                     continue
                     
@@ -531,7 +614,9 @@ class EntityExtractor:
 
         lowered = text.lower()
         for phrase, canonical in _SCENE_PLACE_LABELS.items():
-            if not re.search(rf"\b{re.escape(phrase)}\b", lowered):
+            matches = [m for m in re.finditer(rf"\b{re.escape(phrase)}\b", lowered)
+                       if not is_hedged_mention(lowered, m.start())]
+            if not matches:
                 continue
             entities.append(ExtractedEntity(
                 entity_id=f"{scene_id}_{modality}_place_{self._normalize_name(canonical)}",
@@ -553,18 +638,29 @@ class EntityExtractor:
         scene_data: Dict[str, Any],
     ) -> List[ExtractedEntity]:
         entities: List[ExtractedEntity] = []
-        object_labels = {
-            self._normalize_name(str(obj.get("class") or obj.get("label") or ""))
-            for obj in objects
-            if isinstance(obj, dict)
-        }
-        object_labels.discard("")
-        if not object_labels:
+        object_scores: Dict[str, float] = {}
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            label = self._normalize_name(str(obj.get("class") or obj.get("label") or ""))
+            score = obj.get("score") if "score" in obj else obj.get("confidence")
+            if (
+                not label
+                or not isinstance(score, (int, float))
+                or isinstance(score, bool)
+                or not math.isfinite(score)
+                or not 0.0 <= score <= 1.0
+            ):
+                continue
+            object_scores[label] = max(object_scores.get(label, 0.0), float(score))
+        if not object_scores:
             return entities
 
         for required_labels, location_name, confidence in _OBJECT_PLACE_SIGNATURES:
             normalized_required = {self._normalize_name(label) for label in required_labels}
-            if not normalized_required.issubset(object_labels):
+            # Do not turn weak or unknown detections into a stronger room claim.
+            # Every defining object must support the rule's existing confidence.
+            if any(object_scores.get(label, 0.0) < confidence for label in normalized_required):
                 continue
             entities.append(ExtractedEntity(
                 entity_id=f"{scene_id}_vision_place_{self._normalize_name(location_name)}",
@@ -573,7 +669,15 @@ class EntityExtractor:
                 confidence=confidence,
                 source_modality="vision",
                 source_step="object_place_inference",
-                properties={"matched_objects": sorted(normalized_required)},
+                properties={
+                    "matched_objects": sorted(normalized_required),
+                    "matched_object_scores": {
+                        label: object_scores[label] for label in sorted(normalized_required)
+                    },
+                    "verification_status": "candidate_unconfirmed",
+                    "depends_on": ["object_detect"],
+                    "establishes_visible_presence": False,
+                },
                 timestamps=[scene_data.get("start_time", 0)],
             ))
 
@@ -601,21 +705,95 @@ class EntityExtractor:
             # Combine all sources
             sources = [e.source_modality for e in group]
             steps = [e.source_step for e in group]
-            confidences = [e.confidence for e in group]
+            numeric_confidences = [
+                e.confidence
+                for e in group
+                if isinstance(e.confidence, (int, float)) and not isinstance(e.confidence, bool)
+            ]
             all_timestamps = []
             for e in group:
                 all_timestamps.extend(e.timestamps)
             
             # Aggregate properties
             properties = {}
-            for e in group:
-                properties.update(e.properties)
+            if etype == "object":
+                detector_entities = [
+                    e for e in group
+                    if e.source_step == "object_detect" or "detection" in e.properties
+                ]
+                mention_entities = [e for e in group if e not in detector_entities]
+                for e in mention_entities:
+                    properties.update(e.properties)
+                for e in detector_entities:
+                    properties.update(e.properties)
+                detector_scores = [
+                    float(e.confidence)
+                    for e in detector_entities
+                    if isinstance(e.confidence, (int, float)) and not isinstance(e.confidence, bool)
+                ]
+                mention_confidences = [
+                    float(e.confidence)
+                    for e in mention_entities
+                    if isinstance(e.confidence, (int, float)) and not isinstance(e.confidence, bool)
+                ]
+                detections = [
+                    e.properties["detection"]
+                    for e in detector_entities
+                    if "detection" in e.properties
+                ]
+                bboxes = [
+                    e.properties["bbox"]
+                    for e in detector_entities
+                    if e.properties.get("bbox") is not None
+                ]
+                detector_timestamps = [ts for e in detector_entities for ts in e.timestamps]
+                mention_timestamps = [ts for e in mention_entities for ts in e.timestamps]
+                properties["establishes_visible_presence"] = False
+                if detector_entities:
+                    detector_score = max(detector_scores) if detector_scores else None
+                    properties["detector_score"] = detector_score
+                    properties["raw_score"] = detector_score
+                    properties["score_status"] = "observed" if detector_score is not None else "unknown"
+                    properties["source_step"] = "object_detect"
+                    properties["verification_status"] = "candidate_unconfirmed"
+                    if detections:
+                        properties["detection"] = detections[0]
+                        properties["detections"] = detections
+                        properties["bboxes"] = bboxes
+                        properties["bbox"] = bboxes[0] if bboxes else None
+                    properties["detector_timestamps"] = sorted(list(set(detector_timestamps)))
+                    if mention_entities:
+                        properties["mention_confidence"] = (
+                            max(mention_confidences) if mention_confidences else None
+                        )
+                        properties["mention_sources"] = sorted(
+                            {e.source_step for e in mention_entities if e.source_step}
+                        )
+                        properties["mention_modalities"] = sorted(
+                            {e.source_modality for e in mention_entities if e.source_modality}
+                        )
+                        properties["mention_timestamps"] = sorted(list(set(mention_timestamps)))
+                    merged_confidence = detector_score
+                else:
+                    mention_score = max(mention_confidences) if mention_confidences else None
+                    properties["detector_score"] = None
+                    properties["raw_score"] = None
+                    properties["score_status"] = "unknown"
+                    properties["mention_confidence"] = mention_score
+                    properties["verification_status"] = (
+                        properties.get("verification_status") or "mentioned_not_visibly_confirmed"
+                    )
+                    merged_confidence = mention_score
+            else:
+                for e in group:
+                    properties.update(e.properties)
+                merged_confidence = max(numeric_confidences) if numeric_confidences else None
             
             merged_entity = {
                 "entity_id": group[0].entity_id,
                 "entity_type": etype,
                 "name": group[0].name,  # Use first occurrence name
-                "confidence": max(confidences),  # Highest confidence
+                "confidence": merged_confidence,
                 "occurrences": len(group),
                 "source_modalities": list(set(sources)),
                 "source_steps": list(set(steps)),

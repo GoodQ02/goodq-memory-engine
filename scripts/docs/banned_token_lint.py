@@ -47,6 +47,10 @@ def is_excluded(path: Path, repo_root: Path) -> bool:
     # Check if any parent component is in excluded directory names
     try:
         relative = path.relative_to(repo_root)
+        # Root tmp/ holds ignored runtime witnesses, including WSL model links.
+        # It is not product source; do not traverse those links during a lint.
+        if relative.parts and relative.parts[0] == "tmp":
+            return True
         for part in relative.parts[:-1]:
             if part in EXCLUDED_DIR_NAMES:
                 return True
@@ -61,13 +65,13 @@ def main() -> int:
 
     # Recursively find all files
     for path in repo_root.rglob("*"):
-        if not path.is_file():
-            continue
         if path.suffix.lower() not in TARGET_SUFFIXES:
             continue
         if is_excluded(path, repo_root):
             continue
         if path.name == "banned_token_lint.py":
+            continue
+        if not path.is_file():
             continue
 
         try:

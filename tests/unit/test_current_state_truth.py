@@ -24,7 +24,7 @@ from scripts.docs.build_current_state import (
 )
 
 
-EPOCH_ID = "epoch_2026_07_05_home_memory_clean_01"
+EPOCH_ID = "epoch_2026_07_05_sample_clean_01"
 
 
 def _seal_evidence(value):

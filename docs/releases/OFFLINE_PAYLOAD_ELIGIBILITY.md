@@ -44,6 +44,41 @@ an installation failure rather than a misleading single-scene fallback.
 
 ## Personal Source Vault
 
+### VLC desktop playback addition — 2026-10-07
+
+`PERSONAL_AIR_GAP` selects the unmodified VideoLAN VLC 3.0.24 Windows x64
+portable ZIP as `vlc`, installed at `<install_root>/vlc/vlc.exe`. The public
+CPU/GPU profiles do not select it. This is a fixed player footprint, not a
+converted copy of each recording. No user preferences, playlists or media are
+packaged.
+
+The official binary ZIP SHA-256 is
+`fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323`
+(82,765,861 bytes). Its 584 original members total 197,063,123 bytes. Both the
+binary and matching VLC source archive were checked against VideoLAN's published
+SHA-256 files and retained in a new immutable `vlc/3.0.24-6900211fde74` source
+snapshot. The snapshot's source-manifest SHA-256 is
+`6900211fde74a7846344e27325f2f2d7b286e39a95c75f5c6ee07ddb62be755a`.
+The runtime inventory is pinned independently in
+`configs/offline_dependencies_manifest.json`; the builder and installed offline
+suite use `scripts/install/vlc_runtime_payload.py` to verify all original
+members and execute an isolated version/dummy-interface probe.
+
+An isolated extraction and that execution probe passed on this workstation.
+This proves the scoped VLC restore, not a complete installer build, clean-machine
+installation or full offline GoodQ rebuild. Existing build and follower gates
+still apply.
+
+VLC permits redistribution under its licenses, but VideoLAN's
+[redistribution guidance](https://images.videolan.org/legal.html) requires
+corresponding source for underlying included libraries as well as VLC itself.
+This intake preserves the matching VLC source tarball, GPL/LGPL license text,
+and upstream legal-page evidence. Complete matching third-party source/build
+closure has **not** been established. Its `personal_only` catalog disposition
+therefore holds VLC out of public profiles; this is an evidence gate, not a claim
+that VLC forbids redistribution. Future public packaging must close that source
+obligation, preserve notices/attribution and review the exact distribution method.
+
 The complete non-code runtime inventory is tracked in
 `configs/offline_asset_catalog.yaml`. It covers every active model-registry
 and installer payload reference, including optional lexicons and system tools.
@@ -179,7 +214,7 @@ Scope column explicitly says the capability is already bundled.
 | Silero VAD | `snakers4/silero-vad` tag `v4.0` (`7a176cc294a2c40615458e50895ed9703782638d`) | upstream MIT license | sealed CPU baseline payload |
 | CLIP visual embedding | `laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K` (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`) | model card MIT declaration | sealed CPU baseline payload |
 | Emotion classification | `cardiffnlp/twitter-roberta-base-emotion-latest` (`415620c4fbc8bd82b82b9fd46642fcec6519d537`) | model card MIT declaration | sealed CPU baseline payload; 11-label multilabel semantics verified from sealed config |
-| Captioning | `Salesforce/blip-image-captioning-base` and `nlpconnect/vit-gpt2-image-captioning` | model cards BSD-3-Clause and Apache-2.0 | sealed CPU baseline payloads |
+| Captioning | `tencent/WeVisOne-VL-2B` (`3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf`); retained alternate/baseline `Salesforce/blip-image-captioning-base` and `nlpconnect/vit-gpt2-image-captioning` | model cards Apache-2.0 and BSD-3-Clause | active VLM caption runtime target (`WeVisOne-VL-2B`) and retained CPU baseline payloads |
 | Visual embedding | `facebook/dinov2-large` | model card Apache-2.0 declaration | sealed CPU baseline payload; active DINO runtime target |
 | Visual embedding reference | `facebook/dinov2-base` | model card Apache-2.0 declaration | sealed source candidate only; intentionally outside profiles until a registered runtime path owns it |
 | Text embedding | `sentence-transformers/all-MiniLM-L6-v2` | model card Apache-2.0 declaration | sealed CPU baseline payload |

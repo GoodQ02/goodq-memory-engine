@@ -14,6 +14,95 @@ import shlex
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+
+def _run_native_recording(args, *, root, log, timeout, env=None):
+    """Keep a caller-lifetime pipe open; EOF cancels the Linux process group."""
+    with subprocess.Popen(args, cwd=root, env=env, stdin=subprocess.PIPE,
+                          stdout=log, stderr=subprocess.STDOUT) as process:
+        try:
+            return process.wait(timeout=timeout)
+        finally:
+            process.stdin.close()
+            if process.poll() is None:
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=10)
+
+
+def run_recording_request(request, profile, output, options):
+    """Existing subprocess transport for an explicit isolated recording runtime.
+
+    No workspace synchronization, dependency installation, GPU takeover or
+    legacy-worker fallback. Paths are argv values, never shell source.
+    """
+    from steps.audio.recording_ingestion import runtime_path
+    root = Path(__file__).resolve().parents[1]
+    transport = options['transport']
+    args = [options['python'], '-m', 'wsl2_audio.recording_engine',
+            *(runtime_path(path, transport) for path in (request, profile, output))]
+    if options.get('native_scratch_root'):
+        from wsl2_audio.native_scratch import SCHEMA
+        from wsl2_audio.recording_audio import _atomic_json, _sha_file
+        from wsl2_audio.recording_engine import _identity, _worker_digest
+        if transport != 'wsl':
+            raise ValueError('Native Linux scratch requires WSL transport')
+        plan = {'schema': SCHEMA, 'scratch_root': options['native_scratch_root'],
+            'request': runtime_path(request, transport), 'profile': runtime_path(profile, transport),
+            'output': runtime_path(output, transport), 'worker_root': runtime_path(root, transport),
+            'request_sha256': _sha_file(Path(request)), 'profile_sha256': _sha_file(Path(profile)),
+            'worker_sha256': _worker_digest(), 'python': options['python'],
+            'timeout_seconds': options['timeout_seconds'],
+            'ecapa_model_dir': runtime_path(options['ecapa_model_dir'], transport) if options.get('ecapa_model_dir') else None}
+        plan['job_key'] = _identity(plan)
+        _atomic_json(plan, Path(output)/'native-plan.json')
+        args = [options['python'], '-B', '-m', 'wsl2_audio.native_scratch', 'run',
+                runtime_path(Path(output)/'native-plan.json', transport), '--watch-parent']
+    offline = {'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
+        'HF_HUB_DISABLE_TELEMETRY': '1', 'PYANNOTE_METRICS_ENABLED': '0',
+        'DO_NOT_TRACK': '1', 'PYTHONDONTWRITEBYTECODE': '1',
+        'OMP_NUM_THREADS': '4', 'MKL_NUM_THREADS': '4', 'TOKENIZERS_PARALLELISM': 'false'}
+    if options.get('ecapa_model_dir'):
+        offline['GOODQ_ECAPA_MODEL_DIR'] = runtime_path(options['ecapa_model_dir'], transport)
+    if transport == 'wsl':
+        args = ['wsl.exe', '-d', options['distro'], '-u', options['user'],
+                '--cd', runtime_path(root, transport), '--exec', 'env',
+                *(key + '=' + value for key, value in offline.items()), *args]
+    with (Path(output) / 'worker.log').open('w', encoding='utf-8') as log:
+        if options.get('native_scratch_root'):
+            returncode = _run_native_recording(args, root=root, log=log,
+                env={**os.environ, **offline}, timeout=options['timeout_seconds']+30)
+        else:
+            returncode = subprocess.run(args, cwd=root, env={**os.environ, **offline},
+                stdout=log, stderr=subprocess.STDOUT,
+                timeout=options['timeout_seconds'], check=False).returncode
+    if returncode:
+        raise RuntimeError(f'Recording engine failed ({returncode}); inspect {Path(output) / "worker.log"}')
+
+
+def finalize_recording_request(output, options):
+    """Retire only this job after the caller accepted verified Windows bytes."""
+    if not options.get('native_scratch_root'):
+        return
+    from steps.audio.recording_ingestion import runtime_path
+    output = Path(output)
+    plan = json.loads((output/'native-plan.json').read_text(encoding='utf-8'))
+    cleanup = output/'native-cleanup.json'
+    if cleanup.is_file():
+        value = json.loads(cleanup.read_text(encoding='utf-8'))
+        if value.get('job_key') != plan['job_key'] or value.get('status') != 'retired_after_verified_windows_acceptance':
+            raise ValueError('Native cleanup receipt changed')
+        return
+    root = Path(__file__).resolve().parents[1]
+    args = ['wsl.exe', '-d', options['distro'], '-u', options['user'], '--cd',
+        runtime_path(root, 'wsl'), '--exec', options['python'], '-B', '-m',
+        'wsl2_audio.native_scratch', 'finalize', runtime_path(output/'native-plan.json', 'wsl'), '--watch-parent']
+    with (output/'native-finalize.log').open('a', encoding='utf-8') as log:
+        returncode = _run_native_recording(args, root=root, log=log, timeout=options['timeout_seconds']+30)
+    if returncode:
+        raise RuntimeError('Windows result is accepted; native cleanup remains pending: '+str(output))
+
 try:
     from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 except Exception:  # noqa: BLE001
@@ -36,6 +125,7 @@ def _read_timeout_sequence(env_name: str, default: tuple[int, ...]) -> tuple[int
 
 _WORKSPACE_PREFLIGHT_TIMEOUTS = _read_timeout_sequence("GOODQ_WSL_WORKSPACE_PREFLIGHT_TIMEOUTS", (30, 90))
 _WORKSPACE_PREFLIGHT_RETRY_DELAY_SEC = 0.25
+_OFFLINE_ENV_KEYS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE")
 
 
 def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -62,10 +152,14 @@ def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "wav2vec_enrichment_ready": bool(probe.get("wav2vec_enrichment_ready")),
         "torch_lane_status": probe.get("torch_lane_status"),
         "expected_torch_lane": probe.get("expected_torch_lane"),
+        "runtime_manifest": probe.get("runtime_manifest"),
         "package_versions": package_versions or {},
         "active_env_kind": black_box.get("active_env_kind"),
         "python_version": black_box.get("python_version"),
         "torchcodec_ready": probe.get("torchcodec_ready"),
+        "torchcodec_applicability": probe.get("torchcodec_applicability", "unknown"),
+        "audio_decode_ready": probe.get("audio_decode_ready"),
+        "transcription_decode_ready": probe.get("transcription_decode_ready"),
         "torchcodec_detail": probe.get("torchcodec_detail"),
         "torchcodec_error_families": torchcodec.get("error_families") or [],
         "ffmpeg_available": ffmpeg.get("available"),
@@ -76,7 +170,7 @@ def _compact_runtime_probe(probe: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 class AudioRunner:
-    def process_audio(self, audio_file: str, output_file: Optional[str] = None, timeout: Optional[int] = None, audio_duration: Optional[float] = None) -> dict:
+    def process_audio(self, audio_file: str, output_file: Optional[str] = None, timeout: Optional[int] = None, audio_duration: Optional[float] = None, transcription_vocabulary=None, transcription_temperature=None) -> dict:
         raise NotImplementedError()
 
     def check_status(self) -> bool:
@@ -208,7 +302,8 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 from scripts.bootstrap_models import resolve_models_root
             except ImportError:
                 resolve_models_root = None
-        if resolve_models_root:
+        # A disposable witness may read shared assets, but may not repair them.
+        if resolve_models_root and not os.environ.get("GOODQ_WSL_AUDIO_OUTPUT_ROOT", "").strip():
             try:
                 models_root = resolve_models_root()
                 if models_root:
@@ -304,12 +399,15 @@ class WindowsWSL2AudioRunner(AudioRunner):
         return wsl_path
 
     def _wsl_model_cache_exports(self) -> Dict[str, str]:
-        """Return the canonical cache authority for a managed WSL audio run.
+        """Return the canonical cache and explicit offline policy for WSL audio.
 
         WSL does not inherit the Windows process environment.  Passing these
         variables in the bridge command prevents Hugging Face from silently
         creating or consuming a per-user fallback cache on GPU-managed hosts.
         """
+        exports = {key: os.environ[key] for key in _OFFLINE_ENV_KEYS if key in os.environ}
+        if os.environ.get("GOODQ_WSL_AUDIO_OUTPUT_ROOT", "").strip():
+            exports["PYTHONDONTWRITEBYTECODE"] = "1"
         paths_cfg = self._config.get("paths", {}) if isinstance(self._config, dict) else {}
         # The loaded runtime configuration is the authority for a managed run.
         # Ambient cache variables are intentionally a portable fallback only:
@@ -326,22 +424,24 @@ class WindowsWSL2AudioRunner(AudioRunner):
                     "GOODQ_REQUIRE_WSL_AUDIO=1 requires a configured canonical models_cache; "
                     "refusing the per-user Hugging Face cache fallback."
                 )
-            return {}
+            return exports
 
         root = self.wsl_path(Path(str(raw_root)))
         hub = f"{root.rstrip('/')}/hub"
-        return {
+        exports.update({
             "GOODQ_MODEL_CACHE_ROOT": root,
             "HF_HOME": root,
             "TORCH_HOME": root,
             "HUGGINGFACE_HUB_CACHE": hub,
             "HF_HUB_CACHE": hub,
             "PYANNOTE_CACHE": hub,
-        }
+        })
+        return exports
 
     @staticmethod
     def _worker_file_names() -> tuple[str, ...]:
-        return ("setup_cuda_env.sh", "process_audio.py", "model_cache.py")
+        return ("setup_cuda_env.sh", "process_audio.py", "model_cache.py", "speaker_signature.py",
+                "acoustic_events.py", "transcription_contract.py", "fw_transcribe.py")
 
     def _expected_worker_hashes(self) -> Dict[str, str]:
         source_root = Path(__file__).resolve().parents[1] / "wsl2_audio"
@@ -373,7 +473,7 @@ class WindowsWSL2AudioRunner(AudioRunner):
         ]
         return mismatches + list(self._worker_file_names()[len(actual):])
         
-    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None, transcription_vocabulary=None, transcription_temperature=None):
         audio_path = Path(audio_file)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
@@ -412,8 +512,13 @@ class WindowsWSL2AudioRunner(AudioRunner):
                     "Ensure the file has been successfully written and has appropriate read permissions."
                 )
 
-        wsl_output = f"{self.audio_workspace}/output"
         request_uuid = str(uuid.uuid4())
+        witness_output_root = os.environ.get("GOODQ_WSL_AUDIO_OUTPUT_ROOT", "").strip()
+        wsl_output = (
+            f"{self.wsl_path(Path(witness_output_root)).rstrip('/')}/{request_uuid}"
+            if witness_output_root
+            else f"{self.audio_workspace}/output"
+        )
 
         setup_script = f"{self.audio_workspace}/setup_cuda_env.sh"
         processor = f"{self.audio_workspace}/process_audio.py"
@@ -450,14 +555,13 @@ class WindowsWSL2AudioRunner(AudioRunner):
             if os.name != "nt":
                 return None
             try:
-                if self.audio_workspace.startswith("/mnt/"):
-                    win_workspace = self.windows_path(self.audio_workspace)
-                    return os.path.join(win_workspace, "output", "result.json")
+                if wsl_output.startswith("/mnt/"):
+                    return os.path.join(self.windows_path(wsl_output), "result.json")
                 
-                wsl_path_part = self.audio_workspace.replace('/', '\\')
+                wsl_path_part = wsl_output.replace('/', '\\')
                 if not wsl_path_part.startswith("\\"):
                     wsl_path_part = "\\" + wsl_path_part
-                unc_path = f"\\\\wsl.localhost\\{self.wsl_distro}{wsl_path_part}\\output\\result.json"
+                unc_path = f"\\\\wsl.localhost\\{self.wsl_distro}{wsl_path_part}\\result.json"
                 return unc_path
             except Exception:
                 return None
@@ -606,12 +710,24 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 f"export {key}={shlex.quote(value)}; "
                 for key, value in cache_exports.items()
             )
+            # The sourced workspace environment must not override this run's policy.
+            worker_policy_export_script = "".join(
+                f"export {key}={shlex.quote(cache_exports[key])}; "
+                for key in (*_OFFLINE_ENV_KEYS, "PYTHONDONTWRITEBYTECODE") if key in cache_exports
+            )
+            request_args = []
+            if transcription_vocabulary is not None or transcription_temperature is not None:
+                request_args.append(json.dumps(transcription_vocabulary))
+            if transcription_temperature is not None:
+                request_args.append(json.dumps(transcription_temperature, allow_nan=False))
+            vocabulary_arg = ''.join(' ' + shlex.quote(arg) for arg in request_args)
             bridge_script = (
                 f'set -euo pipefail; '
                 f'{cache_export_script}'
                 f'source {shlex.quote(setup_script)}; '
+                f'{worker_policy_export_script}'
                 f'export GOODQ_BRIDGE_REQUEST_UUID={shlex.quote(request_uuid)}; '
-                f'exec python3 {shlex.quote(processor)} {shlex.quote(wsl_input)} {shlex.quote(wsl_output)}'
+                f'exec python3 {shlex.quote(processor)} {shlex.quote(wsl_input)} {shlex.quote(wsl_output)}{vocabulary_arg}'
             )
             result = subprocess.run(
                 [
@@ -662,7 +778,7 @@ class WindowsWSL2AudioRunner(AudioRunner):
                 error_message = f"WSL audio processor exited with return code {result.returncode}"
                 if processor_error:
                     error_message = f"{error_message}: {processor_error}"
-                return _build_error(
+                failure = _build_error(
                     "wsl_subprocess_nonzero",
                     error_message=error_message,
                     wsl_returncode=result.returncode,
@@ -678,6 +794,23 @@ class WindowsWSL2AudioRunner(AudioRunner):
                     used_fallback_result_json=fallback_used,
                     env_warnings=env_warnings,
                 )
+                # A nonzero worker may have written its partial coverage receipt.
+                # Forward only evidence bound to this exact request and source;
+                # it remains a transport failure, never a fallback success.
+                diagnostic = output if isinstance(output, dict) else fallback_debug
+                if (isinstance(diagnostic, dict) and diagnostic.get("request_uuid") == request_uuid
+                        and diagnostic.get("audio_file") == wsl_input):
+                    for key in ('transcription_decoding', 'word_alignment', 'transcription_context',
+                                'transcription_quality', 'transcription_timing', 'speech_detection'):
+                        if isinstance(diagnostic.get(key), dict):
+                            failure[key] = diagnostic[key]
+                    for key in ('segments', 'word_timestamps'):
+                        if isinstance(diagnostic.get(key), list):
+                            failure[key] = diagnostic[key]
+                    for key in ("transcription_status", "transcription_error", "transcription"):
+                        if isinstance(diagnostic.get(key), str):
+                            failure[key] = diagnostic[key]
+                return failure
 
             if output is None:
                 details = {
@@ -872,7 +1005,7 @@ class NativeAudioRunner(AudioRunner):
         self.audio_workspace = str(Path(__file__).resolve().parent.parent / "wsl2_audio")
         self.output_dir = f"{self.audio_workspace}/output"
 
-    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None, transcription_vocabulary=None, transcription_temperature=None):
         audio_path = Path(audio_file)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
@@ -897,6 +1030,10 @@ class NativeAudioRunner(AudioRunner):
             str(audio_path.resolve()),
             str(out_path.resolve())
         ]
+        if transcription_vocabulary is not None or transcription_temperature is not None:
+            cmd.append(json.dumps(transcription_vocabulary))
+        if transcription_temperature is not None:
+            cmd.append(json.dumps(transcription_temperature, allow_nan=False))
         
         env = os.environ.copy()
         env["GOODQ_BRIDGE_REQUEST_UUID"] = request_uuid
@@ -996,8 +1133,11 @@ class WSL2AudioBridge(AudioRunner):
         else:
             self.runner = WindowsWSL2AudioRunner()
 
-    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None):
-        return self.runner.process_audio(audio_file, output_file, timeout, audio_duration)
+    def process_audio(self, audio_file, output_file=None, timeout=None, audio_duration=None, transcription_vocabulary=None, transcription_temperature=None):
+        options = {"transcription_vocabulary": transcription_vocabulary} if transcription_vocabulary is not None else {}
+        if transcription_temperature is not None:
+            options["transcription_temperature"] = transcription_temperature
+        return self.runner.process_audio(audio_file, output_file, timeout, audio_duration, **options)
 
     def check_status(self):
         return self.runner.check_status()

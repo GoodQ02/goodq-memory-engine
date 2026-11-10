@@ -16,6 +16,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Path as PathParam, Body, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 import asyncio
+import copy
 
 from api.utils.response_models import (
     SummaryDashboardResponse,
@@ -715,7 +716,11 @@ async def list_collections():
         data = summary_aggregator.load_collections(db_path)
         collections = data.get("collections") or []
         # Filter out deleted collections
-        active_collections = [col for col in collections if col.get("status") == "active"]
+        loader = get_data_loader()
+        active_collections = [
+            {**col, "scene_refs": [ref for ref in col.get("scene_refs", []) if loader.is_search_result_active(ref)]}
+            for col in collections if col.get("status") == "active"
+        ]
         return active_collections
     except Exception as e:
         logger.error(f"Failed to list collections: {e}", exc_info=True)
@@ -1395,9 +1400,13 @@ async def _generate_summary_worker(job_id: str, video_hash: str, cfg: dict):
     try:
         from steps.video_summarizer.step import run_step as run_video_summarizer
 
+        # Isolation governs automatic ingestion. This separately confirmed job
+        # owns the summary write; preserve the caller's ingestion configuration.
+        execution_cfg = copy.deepcopy(cfg)
+        execution_cfg["ingestion_isolation"] = False
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            None, run_video_summarizer, cfg, video_hash
+            None, run_video_summarizer, execution_cfg, video_hash
         )
         succeeded = isinstance(result, dict) and result.get("success") is True
         outcome = (
@@ -1493,6 +1502,9 @@ async def get_video_summary(
         conn = summary_aggregator.open_summary_read_connection(db_path)
         try:
             cursor = conn.cursor()
+            active_scene_ids = summary_aggregator.active_summary_scene_ids(conn, db_path, video_hash)
+            if not active_scene_ids:
+                raise HTTPException(status_code=404, detail="Video summary not found")
             cursor.execute(
                 "SELECT name FROM sqlite_master "
                 "WHERE type='table' AND name='summaries'"
@@ -1502,19 +1514,25 @@ async def get_video_summary(
             if has_summaries:
                 cursor.execute(
                     "SELECT content, created_at FROM summaries "
-                    "WHERE summary_type='video' AND category='video_summary'"
+                    "WHERE summary_type='video' AND category='video_summary' ORDER BY id DESC"
                 )
                 rows = cursor.fetchall()
         finally:
             conn.close()
 
         if not has_summaries:
-            return _check_kg_existence_fallback(video_hash)
+            return _check_scene_existence_fallback(video_hash, db_path)
 
+        retirements = summary_aggregator.summary_scene_retirements(db_path, video_hash)
         for content_json, created_at in rows:
             try:
                 data = json.loads(content_json)
                 if data.get("video_hash") == video_hash:
+                    versions = (data.get("provenance") or {}).get("source_artifact_versions")
+                    if retirements and (not isinstance(versions, list) or not versions or any(
+                        not isinstance(row, dict) or row.get("scene_id") not in active_scene_ids for row in versions
+                    )):
+                        continue
                     return {
                         "video_hash": video_hash,
                         "summary": data.get("summary", ""),
@@ -1525,27 +1543,23 @@ async def get_video_summary(
             except Exception:
                 continue
                 
-        return _check_kg_existence_fallback(video_hash)
+        return _check_scene_existence_fallback(video_hash, db_path)
         
-    except (sqlite3.Error, OSError) as se:
+    except (sqlite3.Error, OSError, ValueError) as se:
         logger.error(f"Database query error: {se}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database query failed")
 
 
-def _check_kg_existence_fallback(video_hash: str) -> dict:
+def _check_scene_existence_fallback(video_hash: str, db_path: Path) -> dict:
     import sqlite3
-    kg_path = _get_kg_db_path()
-    if kg_path.exists():
+    if db_path.exists():
         try:
-            conn_kg = summary_aggregator.open_summary_read_connection(kg_path)
+            conn = summary_aggregator.open_summary_read_connection(db_path)
             try:
-                row_kg = conn_kg.execute(
-                    "SELECT 1 FROM scenes WHERE video_hash=? LIMIT 1",
-                    (video_hash,),
-                ).fetchone()
+                row = summary_aggregator.active_summary_scene_ids(conn, db_path, video_hash)
             finally:
-                conn_kg.close()
-            if row_kg:
+                conn.close()
+            if row:
                 return {
                     "video_hash": video_hash,
                     "summary": "Summary not yet generated for this video.",
@@ -1554,7 +1568,7 @@ def _check_kg_existence_fallback(video_hash: str) -> dict:
                     "created_at": None
                 }
         except Exception as e:
-            logger.warning(f"Failed to query KG fallback for existence: {e}")
+            logger.warning(f"Failed to query scene fallback for existence: {e}")
             
     raise HTTPException(status_code=404, detail="Video summary not found")
 
@@ -1624,14 +1638,17 @@ async def generate_video_summary(
     action = _validate_summary_action_body(body)
 
     # 2. Database Existence Check
-    db_path = _get_kg_db_path()
+    cfg = load_configs({})
+    db_path = Path(cfg.get("paths", {}).get("db_path", "data/memory.db"))
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Database file not initialized")
 
     try:
-        conn = sqlite3.connect(db_path)
-        row = conn.execute("SELECT 1 FROM scenes WHERE video_hash=? LIMIT 1", (video_hash,)).fetchone()
-        conn.close()
+        conn = summary_aggregator.open_summary_read_connection(db_path)
+        try:
+            row = summary_aggregator.active_summary_scene_ids(conn, db_path, video_hash)
+        finally:
+            conn.close()
         if not row:
             raise HTTPException(status_code=404, detail=f"Video hash '{video_hash}' not found in database")
     except sqlite3.Error as se:
@@ -1639,7 +1656,6 @@ async def generate_video_summary(
         raise HTTPException(status_code=500, detail="Database query failed")
 
     # 3. Durable authorization preparation
-    cfg = load_configs({})
     try:
         ledger = _get_summary_job_ledger(cfg)
     except ValueError:

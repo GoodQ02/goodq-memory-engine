@@ -255,6 +255,17 @@ def _git_ignored_paths(repo_root: Path, paths: list[Path]) -> set[Path]:
     if not paths:
         return set()
     try:
+        # Git searches ancestors automatically. An exported tree or fixture
+        # nested in an ignored parent directory must still be checked in full.
+        git_root = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if git_root.returncode != 0 or Path(git_root.stdout.strip()).resolve() != repo_root.resolve():
+            return set()
         relative_paths = [path.relative_to(repo_root).as_posix() for path in paths]
         result = subprocess.run(
             ["git", "-C", str(repo_root), "check-ignore", "-z", "--stdin"],

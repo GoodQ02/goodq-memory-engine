@@ -52,17 +52,30 @@ def _format_emotions(emotions: list, max_items: int = 3) -> str:
 
 
 def _format_objects(objects: list, max_items: int = 5) -> str:
-    """Format object list with counts"""
-    if not objects:
+    """Format distinct object labels in first-seen observation order."""
+    if not isinstance(objects, list) or not objects or max_items <= 0:
         return "none"
     formatted = []
-    for obj in objects[:max_items]:
+    seen = set()
+    for obj in objects:
+        raw_label = None
         if isinstance(obj, dict):
-            label = obj.get('label', 'unknown')
-            formatted.append(label)
-        else:
-            formatted.append(str(obj))
-    return ", ".join(formatted)
+            raw_label = obj.get("label") or obj.get("name") or obj.get("class")
+        elif isinstance(obj, str):
+            raw_label = obj
+        if not isinstance(raw_label, str):
+            continue
+        cleaned = raw_label.strip()
+        if not cleaned:
+            continue
+        normalized = cleaned.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        formatted.append(cleaned)
+        if len(formatted) >= max_items:
+            break
+    return ", ".join(formatted) if formatted else "none"
 
 
 def _scene_keyframe(scene_meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -302,7 +315,30 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     
     # Visual information
     caption = _first_non_empty(scene_meta.get('caption'), keyframe_meta.get('caption')) or ''
-    objects = _first_non_empty(scene_meta.get('objects'), keyframe_meta.get('objects')) or []
+    caption_observations = _first_non_empty(
+        scene_meta.get('caption_observations'),
+        keyframe_meta.get('caption_observations'),
+    )
+    distinct_captions: List[str] = []
+    seen_captions: set[str] = set()
+    if isinstance(caption, str) and caption.strip():
+        seen_captions.add(caption.strip().casefold())
+        distinct_captions.append(caption.strip())
+    if isinstance(caption_observations, list):
+        for obs in caption_observations:
+            if isinstance(obs, dict):
+                obs_cap = obs.get('caption')
+                if isinstance(obs_cap, str) and obs_cap.strip():
+                    norm_cap = obs_cap.strip().casefold()
+                    if norm_cap not in seen_captions:
+                        seen_captions.add(norm_cap)
+                        distinct_captions.append(obs_cap.strip())
+    caption_summary = '; '.join(distinct_captions) if distinct_captions else caption
+    objects = _first_non_empty(
+        scene_meta.get('objects'),
+        scene_meta.get('detected_objects'),
+        keyframe_meta.get('objects'),
+    ) or []
     face_count = _coerce_numeric(
         _first_non_empty(
             scene_meta.get('face_count'),
@@ -331,10 +367,11 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     parts.append(f"Scene {index} ({start:.1f}s-{end:.1f}s, {duration:.1f}s duration)")
     
     # Visual description
-    if caption:
-        parts.append(f"Visual: {caption}")
-    if objects:
-        parts.append(f"Objects: {_format_objects(objects)}")
+    if caption_summary:
+        parts.append(f"Visual: {caption_summary}")
+    formatted_objects = _format_objects(objects)
+    if formatted_objects and formatted_objects != "none":
+        parts.append(f"Objects: {formatted_objects}")
     if face_count > 0:
         parts.append(f"Faces detected: {face_count}")
     
@@ -399,12 +436,18 @@ def generate_scene_summary_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) 
         speakers = scene_meta.get('speakers', [])
         emotions = scene_meta.get('emotions', [])
         sentiment_label = scene_meta.get('sentiment_label', 'neutral')
-        objects = scene_meta.get('objects', [])
+        keyframe_meta = _scene_keyframe(scene_meta)
+        objects = _first_non_empty(
+            scene_meta.get('objects'),
+            scene_meta.get('detected_objects'),
+            keyframe_meta.get('objects'),
+        ) or []
         
         # Format emotions
         emotions_str = _format_emotions(emotions) if emotions else "neutral"
         speakers_str = _speaker_summary(scene_meta) or "unknown"
-        objects_str = _format_objects(objects) if objects else "none visible"
+        formatted_objects = _format_objects(objects)
+        objects_str = formatted_objects if formatted_objects != "none" else "none visible"
         
         # Build prompt
         prompt = f"""Analyze this video scene and generate a concise 2-3 sentence summary:

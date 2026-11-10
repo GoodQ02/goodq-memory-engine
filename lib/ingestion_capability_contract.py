@@ -15,18 +15,18 @@ CAPABILITY_SCHEMA_VERSION = CAPABILITY_RECEIPT_SCHEMA_VERSION
 
 RUNTIME_CAPABILITY_POLICIES: dict[str, dict[str, Any]] = {
     "audio_transcribe_local": {"classification": "core_required", "status_surface": "transcript_meta", "asset_ids": ["faster_whisper_medium"]},
-    "image_ocr": {"classification": "enhancement_optional", "status_surface": "ocr_meta", "asset_ids": ["tesseract"]},
-    "image_caption": {"classification": "enhancement_optional", "status_surface": "caption_meta", "asset_ids": ["blip_caption", "vit_gpt2_caption"]},
-    "object_detect": {"classification": "enhancement_optional", "status_surface": "object_meta", "asset_ids": ["opencv_nanodet", "opencv_yolox"]},
-    "face_embed": {"classification": "enhancement_optional", "status_surface": "face_meta", "asset_ids": ["opencv_yunet", "opencv_sface"]},
+    "image_ocr": {"classification": "enhancement_optional", "status_surface": "ocr_meta", "asset_ids": ["paddle_ocr_det", "paddle_ocr_rec"]},
+    "image_caption": {"classification": "enhancement_optional", "status_surface": "caption_meta", "asset_ids": ["wevisone_vl_2b"]},
+    "object_detect": {"classification": "enhancement_optional", "status_surface": "detect_meta", "asset_ids": ["opencv_nanodet", "opencv_yolox"]},
+    "face_embed": {"classification": "enhancement_optional", "status_surface": "faces_meta", "asset_ids": ["opencv_yunet", "opencv_sface"]},
     "image_embed_dino": {"classification": "enhancement_optional", "status_surface": "dino_meta", "asset_ids": ["dinov2"]},
     "image_embed_clip": {"classification": "enhancement_optional", "status_surface": "clip_meta", "asset_ids": ["clip_vit"]},
     "tagger": {"classification": "enhancement_optional", "status_surface": "tagger_meta", "asset_ids": ["bert_ner"]},
     "audio_metadata": {"classification": "enhancement_optional", "status_surface": "audio_meta", "asset_ids": []},
     "audio_speaker_merge": {"classification": "profile_optional", "status_surface": "speaker_meta", "asset_ids": ["pyannote_diarization", "pyannote_segmentation", "pyannote_wespeaker"]},
-    "audio_music_events": {"classification": "enhancement_optional", "status_surface": "music_meta", "asset_ids": []},
-    "audio_time_hints": {"classification": "enhancement_optional", "status_surface": "time_hints", "asset_ids": []},
-    "audio_emotion": {"classification": "enhancement_optional", "status_surface": "audio_emotion_meta", "asset_ids": ["hubert_emotion", "wav2vec2_emotion"]},
+    "audio_music_events": {"classification": "enhancement_optional", "status_surface": "music_events_meta", "asset_ids": []},
+    "audio_time_hints": {"classification": "enhancement_optional", "status_surface": "time_hints_meta", "asset_ids": []},
+    "audio_emotion": {"classification": "enhancement_optional", "status_surface": "wsl_capability_outcomes.acoustic_emotion", "asset_ids": ["hubert_emotion", "wav2vec2_emotion"]},
     "audio_wav2vec2_enrichment": {"classification": "profile_optional", "status_surface": "wsl_capability_outcomes.wav2vec2", "asset_ids": ["wav2vec2_base_960h"]},
     "audio_clap_handoff": {"classification": "profile_optional", "status_surface": "wsl_capability_outcomes.clap_handoff", "asset_ids": []},
     "sentiment": {"classification": "enhancement_optional", "status_surface": "sentiment_meta", "asset_ids": ["sentiment_model", "vader_lexicon"]},
@@ -77,6 +77,18 @@ def build_capability_receipt(
     for capability in observations:
         capability["closure_status"] = _closure_status(capability)
     capabilities = _aggregate_capabilities(observations)
+    # Ordinary receipts have no release profile expansion, but must still
+    # distinguish deliberate output retirement from an unavailable feature.
+    if not full_coverage:
+        for capability in capabilities:
+            if capability["step"] == "audio_wav2vec2_enrichment" and all(
+                row["status"] == "skipped"
+                and row["reason"] == "whole_scene_vector_retired"
+                and not row.get("error")
+                for row in capability["observations"]
+            ):
+                capability["status"] = "not_applicable"
+                capability["closure_status"] = "policy_excluded"
     if evidence_paths.get("step_runs"):
         for capability in capabilities:
             if not capability.get("evidence_references"):
@@ -105,12 +117,41 @@ def build_capability_receipt(
                     }
                 )
                 if str(policy.get("disposition") or "runtime") == "policy_excluded":
+                    if (
+                        step == "audio_wav2vec2_enrichment"
+                        and policy.get("reason") == "whole_scene_vector_retired"
+                        and all(
+                            row["status"] == "skipped"
+                            and row["reason"] == "whole_scene_vector_retired"
+                            and not row.get("error")
+                            for row in capability["observations"]
+                        )
+                    ):
+                        capability["status"] = "not_applicable"
+                        capability["closure_status"] = "policy_excluded"
+                        continue
                     capability["closure_status"] = "policy_exclusion_violated"
                     capability["reason"] = str(
                         policy.get("reason") or "policy_exclusion_violated"
                     )
                     continue
-                if capability["closure_status"] == "ran_content_appropriate_empty":
+                if step == "image_ocr":
+                    truth_key = str(policy.get("content_applicability") or "ocr_text")
+                    if (
+                        capability["closure_status"] == "ran_content_appropriate_empty"
+                        or _has_ocr_content_truth(content_truth, truth_key)
+                    ) and capability["closure_status"] in {
+                        "ran_with_output",
+                        "ran_content_appropriate_empty",
+                    }:
+                        if not _ocr_content_truth_matches(
+                            capability=capability,
+                            scenes=scenes,
+                            content_truth=content_truth,
+                            truth_key=truth_key,
+                        ):
+                            capability["closure_status"] = "content_truth_mismatch"
+                elif capability["closure_status"] == "ran_content_appropriate_empty":
                     truth_key = str(policy.get("content_applicability") or "")
                     scene_ids = capability.get("affected_scene_ids") or []
                     if not truth_key or not scene_ids or not all(
@@ -136,9 +177,13 @@ def build_capability_receipt(
                     capability["closure_status"] = "unapproved_fallback"
                 elif (
                     fallback_chain
-                    and capability["closure_status"] == "ran_with_output"
+                    and capability["closure_status"] in {
+                        "ran_with_output", "ran_content_appropriate_empty"
+                    }
                 ):
-                    capability["closure_status"] = "ran_with_approved_fallback"
+                    capability["fallback_approved"] = True
+                    if capability["closure_status"] == "ran_with_output":
+                        capability["closure_status"] = "ran_with_approved_fallback"
                 continue
             disposition = str(policy.get("disposition") or "runtime")
             closure_status = (
@@ -671,7 +716,7 @@ def _normalize_capability(row: dict[str, Any]) -> dict[str, Any]:
         ]
     else:
         evidence_references = []
-    return {
+    normalized: dict[str, Any] = {
         "step": step,
         "classification": str(policy["classification"]),
         "status_surface": str(policy["status_surface"]),
@@ -684,6 +729,68 @@ def _normalize_capability(row: dict[str, Any]) -> dict[str, Any]:
         "error": str(row.get("error") or ""),
         "evidence_references": evidence_references,
     }
+    if step == "image_ocr":
+        result_meta = (
+            extra.get("result_meta")
+            if isinstance(extra.get("result_meta"), dict)
+            else {}
+        )
+        ocr_meta = (
+            result_meta.get("ocr_meta")
+            if isinstance(result_meta.get("ocr_meta"), dict)
+            else {}
+        )
+        sample_ts = ocr_meta.get("sample_timestamp", row.get("timestamp"))
+        if sample_ts is not None and not isinstance(sample_ts, bool):
+            try:
+                normalized["sample_timestamp"] = float(sample_ts)
+            except (TypeError, ValueError):
+                pass
+        if ocr_meta.get("is_midpoint_sample") is not None:
+            normalized["is_midpoint_sample"] = bool(ocr_meta.get("is_midpoint_sample"))
+        if ocr_meta.get("accepted_text") is not None:
+            normalized["accepted_text"] = str(ocr_meta.get("accepted_text"))
+    elif step == "image_caption":
+        result_meta = (
+            extra.get("result_meta")
+            if isinstance(extra.get("result_meta"), dict)
+            else {}
+        )
+        caption_meta = (
+            result_meta.get("caption_meta")
+            if isinstance(result_meta.get("caption_meta"), dict)
+            else {}
+        )
+        sample_ts = caption_meta.get("sample_timestamp", row.get("timestamp"))
+        if sample_ts is not None and not isinstance(sample_ts, bool):
+            try:
+                normalized["sample_timestamp"] = float(sample_ts)
+            except (TypeError, ValueError):
+                pass
+        if caption_meta.get("is_midpoint_sample") is not None:
+            normalized["is_midpoint_sample"] = bool(caption_meta.get("is_midpoint_sample"))
+        if isinstance(caption_meta.get("image_stats"), dict):
+            normalized["image_stats"] = dict(caption_meta["image_stats"])
+    elif step == "object_detect":
+        result_meta = (
+            extra.get("result_meta")
+            if isinstance(extra.get("result_meta"), dict)
+            else {}
+        )
+        detect_meta = (
+            result_meta.get("detect_meta")
+            if isinstance(result_meta.get("detect_meta"), dict)
+            else {}
+        )
+        sample_ts = detect_meta.get("sample_timestamp", row.get("timestamp"))
+        if sample_ts is not None and not isinstance(sample_ts, bool):
+            try:
+                normalized["sample_timestamp"] = float(sample_ts)
+            except (TypeError, ValueError):
+                pass
+        if detect_meta.get("is_midpoint_sample") is not None:
+            normalized["is_midpoint_sample"] = bool(detect_meta.get("is_midpoint_sample"))
+    return normalized
 
 
 def _fallback_chain(extra: dict[str, Any]) -> list[str]:
@@ -705,6 +812,13 @@ def _aggregate_capabilities(observations: list[dict[str, Any]]) -> list[dict[str
     failure_precedence = ("error", "skipped", "missing", "unknown")
     for step, rows in grouped.items():
         aggregate = dict(rows[0])
+        for sample_key in (
+            "sample_timestamp",
+            "is_midpoint_sample",
+            "accepted_text",
+            "image_stats",
+        ):
+            aggregate.pop(sample_key, None)
         statuses = Counter(str(row["status"]) for row in rows)
         aggregate["status_counts"] = dict(sorted(statuses.items()))
         aggregate["affected_scene_ids"] = sorted(
@@ -751,6 +865,175 @@ def _aggregate_capabilities(observations: list[dict[str, Any]]) -> list[dict[str
     return aggregates
 
 
+def _has_ocr_content_truth(
+    content_truth: dict[str, dict[str, bool]] | dict[str, dict[str, Any]],
+    truth_key: str,
+) -> bool:
+    if not isinstance(content_truth, dict) or not content_truth:
+        return False
+    return any(
+        isinstance(scene_truth, dict)
+        and (
+            truth_key in scene_truth
+            or "expected_non_midpoint_timestamp" in scene_truth
+            or "non_midpoint_timestamp" in scene_truth
+            or "expected_text" in scene_truth
+        )
+        for scene_truth in content_truth.values()
+    )
+
+
+def _ocr_content_truth_matches(
+    *,
+    capability: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    content_truth: dict[str, dict[str, bool]] | dict[str, dict[str, Any]],
+    truth_key: str,
+) -> bool:
+    if not truth_key or not isinstance(content_truth, dict) or not content_truth:
+        return False
+    observations = capability.get("observations") or []
+    if not isinstance(observations, list) or not observations:
+        return False
+
+    obs_by_scene: dict[str, list[dict[str, Any]]] = {}
+    for obs in observations:
+        if not isinstance(obs, dict):
+            return False
+        obs_scene_ids = [
+            str(sid).strip()
+            for sid in (obs.get("affected_scene_ids") or [])
+            if str(sid).strip()
+        ]
+        if len(obs_scene_ids) != 1:
+            return False
+        obs_by_scene.setdefault(obs_scene_ids[0], []).append(obs)
+
+    manifest_scene_ids: set[str] = set()
+    scene_midpoints: dict[str, float] = {}
+    for scene in scenes or []:
+        if not isinstance(scene, dict):
+            continue
+        sid = str(scene.get("scene_id") or "").strip()
+        if not sid:
+            continue
+        manifest_scene_ids.add(sid)
+        if scene.get("start") is not None and scene.get("duration") is not None:
+            try:
+                start_val = float(scene["start"])
+                dur_val = float(scene["duration"])
+                scene_midpoints[sid] = (
+                    start_val + (dur_val / 2.0) if dur_val > 0 else start_val
+                )
+            except (TypeError, ValueError):
+                pass
+
+    truth_scene_ids = {
+        str(sid).strip() for sid in content_truth.keys() if str(sid).strip()
+    }
+    all_scene_ids = set(obs_by_scene.keys()) | manifest_scene_ids | truth_scene_ids
+    if not all_scene_ids:
+        return False
+
+    for scene_id in sorted(all_scene_ids):
+        scene_obs = obs_by_scene.get(scene_id)
+        scene_truth = content_truth.get(scene_id)
+        if not scene_obs or not isinstance(scene_truth, dict) or truth_key not in scene_truth:
+            return False
+        if any(
+            obs.get("closure_status")
+            not in {"ran_with_output", "ran_content_appropriate_empty"}
+            for obs in scene_obs
+        ):
+            return False
+
+        expected_has_text = scene_truth.get(truth_key)
+        if expected_has_text is False:
+            if not all(
+                obs.get("closure_status") == "ran_content_appropriate_empty"
+                for obs in scene_obs
+            ):
+                return False
+        elif expected_has_text is True:
+            requires_non_midpoint_ts = (
+                "expected_non_midpoint_timestamp" in scene_truth
+                or "non_midpoint_timestamp" in scene_truth
+            )
+            expected_text = str(scene_truth.get("expected_text") or "").strip().lower()
+            if not requires_non_midpoint_ts:
+                matched_positive = False
+                for obs in scene_obs:
+                    if obs.get("closure_status") != "ran_with_output":
+                        continue
+                    if "accepted_text" in obs:
+                        accepted_text = str(obs.get("accepted_text") or "").strip()
+                        if not accepted_text:
+                            continue
+                        if expected_text and expected_text not in accepted_text.lower():
+                            continue
+                    elif expected_text:
+                        continue
+                    matched_positive = True
+                    break
+                if not matched_positive:
+                    return False
+                continue
+
+            expected_ts_raw = scene_truth.get(
+                "expected_non_midpoint_timestamp",
+                scene_truth.get("non_midpoint_timestamp"),
+            )
+            if expected_ts_raw is None or isinstance(expected_ts_raw, bool):
+                return False
+            try:
+                expected_ts = float(expected_ts_raw)
+            except (TypeError, ValueError):
+                return False
+
+            if (
+                scene_id in scene_midpoints
+                and abs(expected_ts - scene_midpoints[scene_id]) <= 1e-3
+            ):
+                return False
+            for obs in scene_obs:
+                if (
+                    obs.get("is_midpoint_sample") is True
+                    and obs.get("sample_timestamp") is not None
+                    and not isinstance(obs.get("sample_timestamp"), bool)
+                ):
+                    if abs(expected_ts - float(obs["sample_timestamp"])) <= 1e-3:
+                        return False
+
+            matched_non_midpoint = False
+            for obs in scene_obs:
+                if obs.get("closure_status") != "ran_with_output":
+                    continue
+                if obs.get("is_midpoint_sample") is not False:
+                    continue
+                sample_ts = obs.get("sample_timestamp")
+                if sample_ts is None or isinstance(sample_ts, bool):
+                    continue
+                try:
+                    sample_ts_val = float(sample_ts)
+                except (TypeError, ValueError):
+                    continue
+                if abs(sample_ts_val - expected_ts) > 1e-3:
+                    continue
+                accepted_text = str(obs.get("accepted_text") or "").strip()
+                if not accepted_text:
+                    continue
+                if expected_text and expected_text not in accepted_text.lower():
+                    continue
+                matched_non_midpoint = True
+                break
+            if not matched_non_midpoint:
+                return False
+        else:
+            return False
+
+    return True
+
+
 def _closure_status(capability: dict[str, Any]) -> str:
     status = str(capability.get("status") or "unknown")
     if status in {"ok", "completed"}:
@@ -759,9 +1042,11 @@ def _closure_status(capability: dict[str, Any]) -> str:
         "content_appropriate_empty",
         "no_text",
         "silence",
+        "no_speech_detected",
         "no_face",
         "no_ocr_text",
         "no_detected_object",
+        "blank_or_low_variance_frame",
     }:
         return "ran_content_appropriate_empty"
     return status
@@ -790,6 +1075,7 @@ def _summarize(capabilities: list[dict[str, Any]]) -> dict[str, int]:
             1
             for row in capabilities
             if row.get("closure_status") == "ran_with_approved_fallback"
+            or row.get("fallback_approved") is True
         ),
         "unapproved_fallbacks": sum(
             1

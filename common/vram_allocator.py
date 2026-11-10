@@ -17,21 +17,12 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _get_registry_dir() -> Path:
-    repo_processing = REPO_ROOT / "processing"
-    try:
-        repo_processing.mkdir(parents=True, exist_ok=True)
-        test_file = repo_processing / ".write_test"
-        test_file.touch()
-        test_file.unlink()
-        return repo_processing
-    except (PermissionError, OSError):
-        program_data = os.environ.get("ProgramData", "C:\\ProgramData")
-        fallback_dir = Path(program_data) / "GoodQ4All" / "processing"
-        try:
-            fallback_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-        return fallback_dir
+    # A device has one owner across checkouts and isolated corpus epochs. Never
+    # fall back to a checkout-local file when the shared owner is unavailable.
+    # Upgrades from the old checkout-local registry require quiescent workers.
+    if os.name == "nt":
+        return Path(os.environ.get("ProgramData", "C:\\ProgramData")) / "GoodQ4All" / "processing"
+    return Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "goodq4all" / "processing"
 
 REGISTRY_DIR = _get_registry_dir()
 REGISTRY_PATH = REGISTRY_DIR / "vram_registry.json"
@@ -44,19 +35,102 @@ STEP_VRAM_FRACTIONS = {
     "audio_transcribe": 0.25,
     "audio_transcribe_local": 0.25,
     "audio_diarize": 0.35,
-    "face_embed": 0.20,
     "emotion_classify": 0.20,
     "text_embed": 0.15,
     "image_embed_clip": 0.25,
-    "image_embed_dino": 0.25,
+    "image_embed_dino": 0.15,
     "object_detect": 0.25,
     "object_track_yolo": 0.25,
-    "image_caption": 0.20,
+    "image_caption": 0.40,
+    "image_ocr": 0.25,
     "audio_embed_clap": 0.20,
     "audio_emotion": 0.15,
-    "image_ocr": 0.15,
     "llm_chat": 0.40,
 }
+
+_STEP_FORCE_CPU_ENV_VARS = {
+    "image_caption": "GOODQ_IMAGE_CAPTION_FORCE_CPU",
+    "object_detect": "GOODQ_OBJECT_DETECT_FORCE_CPU",
+    "audio_embed_clap": "GOODQ_CLAP_FORCE_CPU",
+    "image_embed_dino": "GOODQ_DINO_FORCE_CPU",
+    "emotion_classify": "GOODQ_EMOTION_FORCE_CPU",
+}
+
+
+def validate_ocr_device_policy(cfg: Dict[str, Any], env: Dict[str, str]) -> bool:
+    """Return selected CUDA usage, rejecting contradictory host CPU controls."""
+    from steps.image_ocr.step import resolve_ocr_device
+
+    uses_cuda = resolve_ocr_device(cfg).startswith("cuda")
+    if uses_cuda and (
+        env.get("GOODQ_FORCE_CPU") == "1"
+        or env.get("GOODQ_NO_AUTO_GPU") == "1"
+        or env.get("GOODQ_HOST_PROFILE", "").upper() == "BASELINE"
+        or env.get("CUDA_VISIBLE_DEVICES", "0").strip() in {"", "-1"}
+        or env.get("GOODQ_DEVICE", "").lower() == "cpu"
+    ):
+        raise RuntimeError("Selected OCR CUDA provider conflicts with host CPU policy")
+    return uses_cuda
+
+
+def step_uses_gpu_backend(
+    step_name: str,
+    *,
+    env: Dict[str, str] | None = None,
+    conda_env: str | None = None,
+    cfg: Dict[str, Any] | None = None,
+) -> bool:
+    """Return True only when step_name has a GPU reservation entry and its effective backend is GPU."""
+    if step_name not in STEP_VRAM_FRACTIONS:
+        return False
+    if step_name == "image_ocr":
+        from steps.image_ocr.step import resolve_ocr_device
+
+        # Selection is a configuration decision; admission may not silently
+        # turn a CUDA request into a CPU execution.
+        return resolve_ocr_device(cfg or {}).startswith("cuda")
+    active_env = env if env is not None else os.environ
+    if (
+        str(active_env.get("GOODQ_FORCE_CPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_NO_AUTO_GPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_HOST_PROFILE", "")).strip().upper() == "BASELINE"
+        or str(active_env.get("CUDA_VISIBLE_DEVICES", "0")).strip() in {"", "-1"}
+        or str(active_env.get("GOODQ_DEVICE", "")).strip().lower() == "cpu"
+    ):
+        return False
+    force_cpu_key = _STEP_FORCE_CPU_ENV_VARS.get(step_name)
+    if force_cpu_key and str(active_env.get(force_cpu_key, "")).strip() == "1":
+        return False
+    if step_name == "object_detect":
+        try:
+            from steps.object_detect.step import resolve_effective_device as resolve_object_detect_device
+
+            device = str(
+                resolve_object_detect_device(
+                    env=dict(active_env),
+                    conda_env=conda_env or "goodq_object_detect",
+                )
+                or ""
+            ).strip().lower()
+            return device.startswith("cuda") or device == "unknown"
+        except Exception:
+            return True
+    if step_name == "emotion_classify":
+        try:
+            from steps.emotion_classify.step import resolve_effective_device as resolve_emotion_device
+
+            device = str(
+                resolve_emotion_device(
+                    env=dict(active_env),
+                    conda_env=conda_env or "goodq_core",
+                )
+                or ""
+            ).strip().lower()
+            return device.startswith("cuda") or device == "unknown"
+        except Exception:
+            return True
+    return True
+
 
 
 def pid_exists(pid: int) -> bool:
@@ -133,26 +207,41 @@ class FileLock:
 class VRAMAllocator:
     """Manages VRAM allocation requests, processes registry, and heartbeat monitoring."""
 
-    def __init__(self, budget_fraction: float = 0.90, stale_timeout_sec: float = 300.0):
+    def __init__(
+        self,
+        budget_fraction: float = 0.90,
+        stale_timeout_sec: float = 300.0,
+        *,
+        env: Dict[str, str] | None = None,
+        conda_env: str | None = None,
+        cfg: Dict[str, Any] | None = None,
+    ):
         self.budget_fraction = budget_fraction
         self.stale_timeout_sec = stale_timeout_sec
+        self.env = dict(env) if isinstance(env, dict) else None
+        self.conda_env = conda_env
+        self.cfg = cfg
 
     def _read_registry(self) -> Dict[str, Any]:
-        if not REGISTRY_PATH.exists():
-            return {}
+        from steps.common.atomic_io import read_text_during_atomic_replace
+
         try:
-            with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to read VRAM registry: {e}")
+            registry = json.loads(read_text_during_atomic_replace(REGISTRY_PATH))
+            if not isinstance(registry, dict):
+                raise ValueError("Expected a reservation object")
+            return registry
+        except FileNotFoundError:
             return {}
+        except Exception as e:
+            raise RuntimeError(f"Failed to read VRAM registry {REGISTRY_PATH}: {e}") from e
 
     def _write_registry(self, registry: Dict[str, Any]) -> None:
         try:
-            from steps.common.atomic_io import atomic_write_json
-            atomic_write_json(REGISTRY_PATH, registry)
+            from steps.common.atomic_io import atomic_write_json_for_concurrent_readers
+            atomic_write_json_for_concurrent_readers(REGISTRY_PATH, registry)
         except Exception as e:
-            logger.error(f"Failed to write VRAM registry: {e}")
+            # Admission, PID handoff and release must never claim an uncommitted change.
+            raise RuntimeError(f"Failed to write VRAM registry {REGISTRY_PATH}: {e}") from e
 
     def query_gpu_memory(self) -> Tuple[int, int]:
         """Query total and used VRAM in MB via nvidia-smi. Return (total, used) or (0, 0) if failed."""
@@ -179,8 +268,8 @@ class VRAMAllocator:
         now = time.time()
         for pid_str, claim in registry.items():
             try:
-                pid = int(pid_str)
-            except ValueError:
+                pid = int(claim.get("pid", pid_str))
+            except (ValueError, TypeError):
                 continue
 
             # Check OS process activity
@@ -202,14 +291,30 @@ class VRAMAllocator:
                 )
         return cleaned
 
-    def reserve(self, step_name: str, pid: int, command: str = "") -> bool:
+    def reserve(
+        self,
+        step_name: str,
+        pid: int,
+        command: str = "",
+        *,
+        reservation_id: str | None = None,
+        env: Dict[str, str] | None = None,
+        conda_env: str | None = None,
+        cfg: Dict[str, Any] | None = None,
+    ) -> bool:
         """Attempt to reserve VRAM for a step."""
+        effective_env = env if env is not None else getattr(self, "env", None)
+        effective_conda_env = conda_env if conda_env is not None else getattr(self, "conda_env", None)
+        effective_cfg = cfg if cfg is not None else getattr(self, "cfg", None)
         fraction = STEP_VRAM_FRACTIONS.get(step_name)
-        if fraction is None:
-            # Non-GPU step, always succeeds
+        if fraction is None or not step_uses_gpu_backend(
+            step_name, env=effective_env, conda_env=effective_conda_env, cfg=effective_cfg
+        ):
+            # Non-GPU step or effective backend resolved to CPU, always succeeds
             return True
 
-        if os.getenv("GOODQ_BYPASS_VRAM_LIMITS") == "1":
+        active_env = effective_env if effective_env is not None else os.environ
+        if step_name != "image_ocr" and str(active_env.get("GOODQ_BYPASS_VRAM_LIMITS", os.getenv("GOODQ_BYPASS_VRAM_LIMITS", ""))).strip() == "1":
             logger.info(f"Bypassing VRAM limit checks for step '{step_name}' via GOODQ_BYPASS_VRAM_LIMITS=1")
             return True
 
@@ -219,6 +324,8 @@ class VRAMAllocator:
 
             total_vram, used_vram = self.query_gpu_memory()
             if total_vram == 0:
+                if step_name == "image_ocr":
+                    raise RuntimeError("Cannot admit selected OCR CUDA provider: GPU memory is unavailable")
                 # nvidia-smi not available or GPU disabled, proceed without blocking
                 self._write_registry(registry)
                 return True
@@ -250,7 +357,11 @@ class VRAMAllocator:
 
             # Grant reservation
             now = time.time()
-            registry[str(pid)] = {
+            claim_key = reservation_id or str(pid)
+            if claim_key in registry:
+                raise RuntimeError(f"VRAM reservation already exists: {claim_key}")
+            registry[claim_key] = {
+                "pid": pid,
                 "step_name": step_name,
                 "start_time": now,
                 "command": command,
@@ -261,22 +372,25 @@ class VRAMAllocator:
             logger.info(f"Reserved {req_mb} MB VRAM for step '{step_name}' on PID {pid}")
 
             # Start background heartbeat daemon for this reservation
-            self.start_heartbeat_daemon(pid)
+            self.start_heartbeat_daemon(claim_key)
             return True
 
-    def update_pid(self, old_pid: int, new_pid: int) -> None:
-        """Update a claim's process ID (e.g. from parent PID to subprocess PID)."""
+    def update_pid(self, old_pid: int | str, new_pid: int) -> None:
+        """Bind a reservation to its worker; retain unique launch keys across handoff."""
         with FileLock():
             registry = self._read_registry()
             if str(old_pid) in registry:
                 claim = registry.pop(str(old_pid))
                 claim["updated_at"] = time.time()
-                registry[str(new_pid)] = claim
+                claim["pid"] = new_pid
+                key = str(new_pid) if isinstance(old_pid, int) else old_pid
+                registry[key] = claim
                 self._write_registry(registry)
                 logger.info(f"Updated VRAM claim PID from {old_pid} to {new_pid} for step '{claim['step_name']}'")
-                self.start_heartbeat_daemon(new_pid)
+                if isinstance(old_pid, int):
+                    self.start_heartbeat_daemon(key)
 
-    def release(self, pid: int) -> None:
+    def release(self, pid: int | str) -> None:
         """Release VRAM reservation."""
         with FileLock():
             registry = self._read_registry()
@@ -287,7 +401,7 @@ class VRAMAllocator:
                     f"Released VRAM claim of {claim.get('claimed_vram_mb', 0)} MB for step '{claim.get('step_name')}' on PID {pid}"
                 )
 
-    def refresh_heartbeat(self, pid: int) -> None:
+    def refresh_heartbeat(self, pid: int | str) -> None:
         """Refresh the updated_at timestamp of a claim."""
         with FileLock():
             registry = self._read_registry()
@@ -295,40 +409,54 @@ class VRAMAllocator:
                 registry[str(pid)]["updated_at"] = time.time()
                 self._write_registry(registry)
 
-    def start_heartbeat_daemon(self, pid: int, interval: float = 15.0) -> None:
+    def start_heartbeat_daemon(self, pid: int | str, interval: float = 15.0) -> None:
         """Start a daemon thread that periodically refreshes the heartbeat for pid while it exists."""
 
         def run():
             while True:
                 time.sleep(interval)
-                # Check if process is still running
                 try:
-                    if not pid_exists(pid):
+                    # Passive readers must not prevent atomic replacement on Windows.
+                    with FileLock():
+                        registry = self._read_registry()
+                        if str(pid) not in registry:
+                            break
+                        owner_pid = registry[str(pid)].get("pid", pid)
+                    if not pid_exists(int(owner_pid)):
                         break
-                except Exception:
-                    break
-
-                # Check if the claim still exists in registry (hasn't been released manually)
-                with FileLock():
-                    registry = self._read_registry()
-                    if str(pid) not in registry:
-                        break
-
-                try:
                     self.refresh_heartbeat(pid)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Failed to refresh VRAM reservation %s: %s", pid, exc)
 
         t = threading.Thread(target=run, daemon=True)
         t.start()
 
     def wait_and_reserve(
-        self, step_name: str, pid: int, command: str = "", timeout_seconds: float = 60.0
+        self, step_name: str, pid: int, command: str = "", timeout_seconds: float = 60.0,
+        *, reservation_id: str | None = None, cancel_event: threading.Event | None = None,
+        env: Dict[str, str] | None = None, conda_env: str | None = None,
+        cfg: Dict[str, Any] | None = None,
     ) -> bool:
         """Wait until VRAM is available and reserve it, or timeout."""
         start_time = time.time()
         while time.time() - start_time < timeout_seconds:
-            if self.reserve(step_name, pid, command):
+            if cancel_event is not None and cancel_event.is_set():
+                return False
+            if self.reserve(
+                step_name,
+                pid,
+                command,
+                reservation_id=reservation_id,
+                env=env,
+                conda_env=conda_env,
+                cfg=cfg,
+            ):
+                if cancel_event is not None and cancel_event.is_set():
+                    self.release(reservation_id or pid)
+                    return False
                 return True
-            time.sleep(1.0)
+            if cancel_event is None:
+                time.sleep(1.0)
+            elif cancel_event.wait(1.0):
+                return False
         return False

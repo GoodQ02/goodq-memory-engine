@@ -3,8 +3,8 @@ GoodQ4All Canonical Configuration Schema
 Pydantic v2 validation layer for the unified config.yaml
 """
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional, Dict, List, Any
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from typing import Optional, Dict, List, Any, Literal
 
 
 # ============================================================================
@@ -55,8 +55,7 @@ class HostConfig(BaseModel):
     require_gpu: Optional[bool] = None
     require_wsl_audio: Optional[bool] = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 # ============================================================================
@@ -99,8 +98,12 @@ class PathsConfig(BaseModel):
 # ============================================================================
 class ToolsConfig(BaseModel):
     ffmpeg_exe: str = "ffmpeg"
-    tesseract_exe: str = "tesseract"
     poppler_bin: str = ""
+
+
+class ImageOCRConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device: Literal["cpu", "cuda:0"] = "cpu"
 
 
 class RuntimeConfigSection(BaseModel):
@@ -326,10 +329,72 @@ class APIConfig(BaseModel):
 # ============================================================================
 # UI CONFIGURATION
 # ============================================================================
+class SavedCollectionConfig(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    retro_url: str
+    identity_url: str
+
+    @field_validator("retro_url", "identity_url")
+    @classmethod
+    def local_view_url(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        url = urlsplit(value)
+        if (
+            url.scheme != "http"
+            or url.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or url.username is not None
+            or url.password is not None
+            or url.fragment
+            or url.path not in {"/ui/retro_console_v1/", "/ui/identity_workbench/"}
+            or not url.port
+        ):
+            raise ValueError("Saved collections require an explicit local workbench URL")
+        return value
+
+
+class LibrarySourceConfig(BaseModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,47}$")
+    name: str = Field(min_length=1, max_length=100)
+    api_origin: str
+    epoch_id: str = Field(min_length=1, max_length=256)
+    video_ids: List[str] = Field(min_length=1)
+    review_report_id: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("api_origin")
+    @classmethod
+    def local_api(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        url = urlsplit(value)
+        if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or not url.port or url.path or url.query or url.fragment
+                or url.username is not None or url.password is not None):
+            raise ValueError("Library sources require an explicit loopback API origin")
+        return value
+
+
 class UIConfig(BaseModel):
     enabled: bool = True
     serve_from: str
     theme: str = "dark"
+    saved_collections: List[SavedCollectionConfig] = Field(default_factory=list)
+    library_port: int = Field(default=30000, ge=1, le=65535)
+    library_sources: List[LibrarySourceConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique_library_sources(self):
+        from urllib.parse import urlsplit
+
+        ids, videos = set(), set()
+        for source in self.library_sources:
+            if source.id == "local" or source.id in ids or videos.intersection(source.video_ids):
+                raise ValueError("Library collection and movie identifiers must be unique")
+            if urlsplit(source.api_origin).port == self.library_port:
+                raise ValueError("A library source cannot point back to the combined API")
+            ids.add(source.id)
+            videos.update(source.video_ids)
+        return self
 
 
 # ============================================================================
@@ -429,6 +494,71 @@ class IdentitySearchConfig(BaseModel):
 # ============================================================================
 # ROOT CONFIG
 # ============================================================================
+class IdentityReferenceSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    epoch_root: str = Field(min_length=1)
+    identity_path: str = Field(min_length=1)
+    results_path: str = Field(min_length=1)
+
+
+class IdentityMatchingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = False
+    reference_sources: List[IdentityReferenceSource] = Field(default_factory=list)
+    reviewed_face_sources: List[str] = Field(default_factory=list)
+    face_min_similarity: float = Field(default=0.6, ge=0, le=1)
+    voice_min_similarity: float = Field(default=0.25, ge=0, le=1)
+    minimum_margin: float = Field(default=0.05, ge=0, le=1)
+
+
+class AudioTranscriptionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    vocabulary: Optional[List[str]] = Field(default=None, max_length=32)
+    # A single explicit temperature; never inherit Whisper's sampling schedule.
+    temperature: float = Field(default=0.0, ge=0, le=1, allow_inf_nan=False, strict=True)
+
+    @field_validator("vocabulary")
+    @classmethod
+    def validate_vocabulary_terms(cls, value):
+        if value is not None and any(
+            not term.strip() or len(term.strip()) > 64 or not term.isprintable()
+            for term in value
+        ):
+            raise ValueError("vocabulary terms must be nonempty printable strings of at most 64 characters")
+        return value
+
+
+class RecordingEngineConfig(BaseModel):
+    """Explicit candidate runtime; never selected by host/backend discovery."""
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    profile: Optional[str] = None
+    python: Optional[str] = None
+    source_revision: Optional[str] = None
+    transport: Literal['native', 'wsl'] = 'native'
+    distro: Optional[str] = None
+    user: Optional[str] = None
+    ecapa_model_dir: Optional[str] = None
+    native_scratch_root: Optional[str] = None
+    max_pcm_bytes: int = Field(default=536870912, gt=0)
+    timeout_seconds: int = Field(default=3600, gt=0)
+
+    @model_validator(mode='after')
+    def validate_native_scratch(self):
+        if self.native_scratch_root is not None:
+            root = self.native_scratch_root
+            if (self.transport != 'wsl' or not root.startswith('/') or root == '/'
+                    or '\\' in root or '..' in root.split('/')):
+                raise ValueError('native_scratch_root requires WSL and a dedicated absolute Linux path')
+        return self
+
+
+class AudioConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    transcribe: AudioTranscriptionConfig = Field(default_factory=AudioTranscriptionConfig)
+    recording_engine: RecordingEngineConfig = Field(default_factory=RecordingEngineConfig)
+
+
 class GoodQConfig(BaseModel):
     """
     The canonical GoodQ4All configuration schema.
@@ -457,7 +587,18 @@ class GoodQConfig(BaseModel):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     memory: Optional[MemoryConfigSection] = None
     identity_search: Optional[IdentitySearchConfig] = None
+    identity_matching: Optional[IdentityMatchingConfig] = None
     ingestion_isolation: Optional[bool] = None
+    image_ocr: ImageOCRConfig = Field(default_factory=ImageOCRConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
+    progressive_chunk_size: float = Field(default=300.0, gt=0, allow_inf_nan=False)
+    progressive_chunk_overlap: float = Field(default=10.0, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_progressive_windows(self):
+        if self.progressive_chunk_overlap >= self.progressive_chunk_size:
+            raise ValueError("progressive_chunk_overlap must be less than progressive_chunk_size")
+        return self
 
     @field_validator("memory", mode="before")
     @classmethod
@@ -469,6 +610,7 @@ class GoodQConfig(BaseModel):
             )
         return value
 
-    class Config:
-        extra = "forbid"  # Reject unknown keys
-        validate_assignment = True
+    model_config = ConfigDict(
+        extra="forbid",  # Reject unknown keys
+        validate_assignment=True,
+    )

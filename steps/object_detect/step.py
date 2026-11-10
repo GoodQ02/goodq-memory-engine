@@ -1,9 +1,10 @@
 """Sealed OpenCV Zoo object detection with a stable GoodQ payload contract.
 
-The detector is intentionally independent of the retired AGPL model stack. NanoDet is the
-bundled CPU-safe baseline; YOLOX is selected only on an available GPU when its
-separate sealed capability asset is present.  Both emit COCO labels and the
-same ``bbox`` / ``label`` / ``score`` dictionaries consumed by GoodQ.
+YOLOX (the sealed ``opencv_yolox`` ONNX asset) runs through ONNX Runtime on
+CUDA when the detector runtime exposes it, otherwise on CPU; a CUDA failure
+retries the same model on CPU and records the fallback. NanoDet is used only
+when the YOLOX pack is not installed. Both emit COCO labels and the same
+``bbox`` / ``label`` / ``score`` dictionaries consumed by GoodQ.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ except ImportError as exc:  # pragma: no cover - source-only resilience
 
 
 ENGINE = "opencv-dnn"
+YOLOX_ENGINE = "onnxruntime"
 CPU_MODEL_ID = "opencv_nanodet"
 GPU_MODEL_ID = "opencv_yolox"
 COCO_CLASSES = (
@@ -57,22 +59,53 @@ class DetectorRuntime:
     model_id: str
     device: str
     net: Any
+    engine: str = ENGINE
+    fallback_from: str | None = None
+    fallback_reason: str | None = None
 
 
 _RUNTIMES: Dict[str, DetectorRuntime] = {}
 
 
-def _force_cpu() -> bool:
-    return os.getenv("GOODQ_OBJECT_DETECT_FORCE_CPU", "").strip() == "1"
+def _force_cpu(env: Dict[str, str] | None = None) -> bool:
+    active_env = env if env is not None else os.environ
+    return (
+        str(active_env.get("GOODQ_OBJECT_DETECT_FORCE_CPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_FORCE_CPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_NO_AUTO_GPU", "")).strip() == "1"
+        or str(active_env.get("GOODQ_HOST_PROFILE", "")).strip().upper() == "BASELINE"
+        or str(active_env.get("CUDA_VISIBLE_DEVICES", "0")).strip() in {"", "-1"}
+        or str(active_env.get("GOODQ_DEVICE", "")).strip().lower() == "cpu"
+    )
 
 
-def _select_model_id(cfg: Dict[str, Any]) -> str:
-    """Choose the capability without allowing a runtime network acquisition."""
+def _select_model_id(cfg: Dict[str, Any], *, env: Dict[str, str] | None = None) -> str:
+    """Choose the capability without allowing a runtime network acquisition.
 
-    if _force_cpu():
+    YOLOX met the frozen detector criteria on both CPU and CUDA execution, so it
+    is selected whenever its sealed asset is installed. NanoDet remains only for
+    installs that do not carry the YOLOX pack.
+    """
+
+    try:
+        _sealed_model_path(GPU_MODEL_ID)
+    except DetectorUnavailable:
         return CPU_MODEL_ID
-    device = str(setup_step_gpu("object_detect").get("device") or "cpu").casefold()
-    return GPU_MODEL_ID if device.startswith("cuda") else CPU_MODEL_ID
+    return GPU_MODEL_ID
+
+
+def _onnxruntime_cuda_available() -> bool:
+    try:
+        import onnxruntime as ort  # type: ignore
+    except Exception:
+        return False
+    return "CUDAExecutionProvider" in ort.get_available_providers()
+
+
+def _yolox_device(env: Dict[str, str] | None = None) -> str:
+    if _force_cpu(env):
+        return "cpu"
+    return "cuda" if _onnxruntime_cuda_available() else "cpu"
 
 
 def _sealed_model_path(model_id: str) -> Path:
@@ -87,41 +120,175 @@ def _sealed_model_path(model_id: str) -> Path:
     return path
 
 
+_WORKER_ORT_CUDA_CACHE: Dict[str, bool] = {}
+
+_GPU_ENV_OVERRIDE_KEYS = (
+    "GOODQ_DEVICE",
+    "GOODQ_FORCE_CPU",
+    "GOODQ_NO_AUTO_GPU",
+    "GOODQ_HOST_PROFILE",
+    "CUDA_VISIBLE_DEVICES",
+    "GOODQ_OBJECT_DETECT_FORCE_CPU",
+    "GOODQ_EMOTION_FORCE_CPU",
+)
+
+
+def _build_worker_probe_env(env: Dict[str, str] | None) -> Dict[str, str]:
+    probe_env = os.environ.copy()
+    if isinstance(env, dict):
+        for key in _GPU_ENV_OVERRIDE_KEYS:
+            probe_env.pop(key, None)
+        for key, value in env.items():
+            if value is not None:
+                probe_env[str(key)] = str(value)
+    probe_env.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    return probe_env
+
+
+def _onnxruntime_supports_cuda(
+    *,
+    conda_env: str | None = None,
+    env: Dict[str, str] | None = None,
+) -> bool | None:
+    """Return whether the worker runtime's ONNX Runtime exposes CUDA, or None if unknown."""
+    import subprocess
+
+    target_env = (conda_env or (env or {}).get("GOODQ_WORKER_CONDA_ENV") or "goodq_object_detect").strip()
+    python_exe = None
+    try:
+        from configs.python_paths import get_env_python
+
+        python_exe = get_env_python(target_env)
+    except Exception:
+        python_exe = None
+    if python_exe is None or not Path(python_exe).exists():
+        return None
+    resolved_exe = str(Path(python_exe).resolve())
+    cached = _WORKER_ORT_CUDA_CACHE.get(resolved_exe)
+    if cached is not None:
+        return cached
+    try:
+        proc = subprocess.run(
+            [
+                resolved_exe,
+                "-c",
+                (
+                    "import sys, onnxruntime as o; "
+                    "sys.exit(0 if 'CUDAExecutionProvider' in o.get_available_providers() else 1)"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=_build_worker_probe_env(env),
+        )
+    except Exception:
+        return None
+    if proc.returncode == 0:
+        _WORKER_ORT_CUDA_CACHE[resolved_exe] = True
+        return True
+    if proc.returncode == 1 and "Traceback" not in (proc.stderr or ""):
+        _WORKER_ORT_CUDA_CACHE[resolved_exe] = False
+        return False
+    return None
+
+
+def resolve_effective_device(
+    cfg: Dict[str, Any] | None = None,
+    *,
+    env: Dict[str, str] | None = None,
+    conda_env: str | None = None,
+) -> str:
+    """Return 'cuda', 'cpu', or 'unknown' when object_detect capability cannot be confirmed."""
+    active_env = env if env is not None else os.environ
+    if _force_cpu(active_env):
+        return "cpu"
+    try:
+        _sealed_model_path(GPU_MODEL_ID)
+    except DetectorUnavailable:
+        return "cpu"
+    except Exception:
+        return "unknown"
+    supported = _onnxruntime_supports_cuda(conda_env=conda_env, env=dict(active_env))
+    if supported is None:
+        return "unknown"
+    return "cuda" if supported else "cpu"
+
+
+class _OnnxRuntimeNet:
+    """cv2.dnn.Net-compatible facade so the YOLOX decode is engine-independent."""
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
+        self.input_name = session.get_inputs()[0].name
+        self.output_names = [output.name for output in session.get_outputs()]
+        self._blob = None
+
+    def setInput(self, blob: Any) -> None:  # noqa: N802 - mirrors cv2.dnn.Net
+        import numpy as np
+
+        self._blob = np.ascontiguousarray(blob, dtype=np.float32)
+
+    def getUnconnectedOutLayersNames(self) -> list[str]:  # noqa: N802
+        return self.output_names
+
+    def forward(self, names: Any) -> list[Any]:
+        return self.session.run(list(names), {self.input_name: self._blob})
+
+
+def _create_yolox_runtime(device: str) -> DetectorRuntime:
+    """Create a YOLOX ONNX Runtime session and verify the provider it actually uses."""
+    try:
+        import onnxruntime as ort  # type: ignore
+    except Exception as exc:
+        raise DetectorUnavailable(f"ONNX Runtime is unavailable: {exc}") from exc
+    model_path = _sealed_model_path(GPU_MODEL_ID)
+    provider = "CUDAExecutionProvider" if device == "cuda" else "CPUExecutionProvider"
+    if provider not in ort.get_available_providers():
+        raise DetectorUnavailable(f"Selected ONNX Runtime provider unavailable: {provider}")
+    if device == "cuda":
+        # CUDA 12 / cuDNN 9 libraries ship as pinned NVIDIA wheels in the
+        # detector runtime; without preloading, ONNX Runtime silently creates a
+        # CPU session on Windows.
+        ort.preload_dlls()
+    session = ort.InferenceSession(str(model_path), providers=[provider])
+    if device == "cuda":
+        session.disable_fallback()
+    if session.get_providers()[0] != provider:
+        raise DetectorUnavailable(f"YOLOX session did not initialize selected provider: {provider}")
+    return DetectorRuntime(model_id=GPU_MODEL_ID, device=device, net=_OnnxRuntimeNet(session), engine=YOLOX_ENGINE)
+
+
 def _load_detector(cfg: Dict[str, Any]) -> DetectorRuntime:
     selected = _select_model_id(cfg)
-    if selected in _RUNTIMES:
-        return _RUNTIMES[selected]
-
-    try:
-        import cv2  # type: ignore
-    except Exception as exc:
-        raise DetectorUnavailable(f"OpenCV DNN is unavailable: {exc}") from exc
-
-    candidates = [selected]
-    if selected == GPU_MODEL_ID:
-        candidates.append(CPU_MODEL_ID)
-    errors: list[str] = []
-    for model_id in candidates:
+    if selected == CPU_MODEL_ID:
+        return _load_cpu_detector(cfg)
+    device = _yolox_device()
+    key = f"{GPU_MODEL_ID}:{device}"
+    if key in _RUNTIMES:
+        return _RUNTIMES[key]
+    if device == "cuda":
         try:
-            model_path = _sealed_model_path(model_id)
-            net = cv2.dnn.readNet(str(model_path))
-            device = "cpu"
-            if model_id == GPU_MODEL_ID and not _force_cpu():
-                try:
-                    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-                    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16)
-                    device = "cuda"
-                except Exception as exc:
-                    errors.append(f"{model_id} CUDA setup: {exc}")
-            if device == "cpu":
-                net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-                net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-            runtime = DetectorRuntime(model_id=model_id, device=device, net=net)
-            _RUNTIMES[model_id] = runtime
-            return runtime
+            runtime = _create_yolox_runtime("cuda")
         except Exception as exc:
-            errors.append(f"{model_id}: {exc}")
-    raise DetectorUnavailable("; ".join(errors) or "no object detector could be initialized")
+            runtime = _load_yolox_cpu()
+            runtime = DetectorRuntime(
+                model_id=runtime.model_id, device=runtime.device, net=runtime.net, engine=runtime.engine,
+                fallback_from=f"{GPU_MODEL_ID}:cuda", fallback_reason=f"YOLOX CUDA session unavailable: {exc}",
+            )
+        _RUNTIMES[key] = runtime
+        return runtime
+    return _load_yolox_cpu()
+
+
+def _load_yolox_cpu() -> DetectorRuntime:
+    key = f"{GPU_MODEL_ID}:cpu"
+    cached = _RUNTIMES.get(key)
+    if cached is not None:
+        return cached
+    runtime = _create_yolox_runtime("cpu")
+    _RUNTIMES[key] = runtime
+    return runtime
 
 
 def _load_cpu_detector(cfg: Dict[str, Any]) -> DetectorRuntime:
@@ -135,7 +302,8 @@ def _load_cpu_detector(cfg: Dict[str, Any]) -> DetectorRuntime:
     except Exception as exc:
         raise DetectorUnavailable(f"OpenCV DNN is unavailable: {exc}") from exc
     try:
-        net = cv2.dnn.readNet(str(_sealed_model_path(CPU_MODEL_ID)))
+        model_path = _sealed_model_path(CPU_MODEL_ID)
+        net = cv2.dnn.readNet(str(model_path))
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
     except Exception as exc:
@@ -146,7 +314,12 @@ def _load_cpu_detector(cfg: Dict[str, Any]) -> DetectorRuntime:
 
 
 def _runtime_metadata(runtime: DetectorRuntime) -> Dict[str, str]:
-    return {"engine": ENGINE, "model": runtime.model_id, "device": runtime.device}
+    metadata = {"engine": runtime.engine, "model": runtime.model_id, "device": runtime.device}
+    if runtime.fallback_from:
+        metadata["fallback_from"] = runtime.fallback_from
+    if runtime.fallback_reason:
+        metadata["fallback_reason"] = runtime.fallback_reason
+    return metadata
 
 
 def _letterbox_nanodet(image: Any, cv2: Any) -> tuple[Any, tuple[int, int, int, int]]:
@@ -267,34 +440,39 @@ def _log(stage: str, *, source_path: str, metadata: Dict[str, str], model_loaded
 
 
 def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    sample_provenance: Dict[str, Any] = {}
+    if item.get("timestamp") is not None:
+        sample_provenance["sample_timestamp"] = item.get("timestamp")
+    if item.get("is_midpoint_sample") is not None:
+        sample_provenance["is_midpoint_sample"] = bool(item.get("is_midpoint_sample"))
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
-        return {"objects": [], "detect_meta": {"status": "no_file"}}
+        return {"objects": [], "detect_meta": {"status": "no_file", **sample_provenance}}
     try:
         selected = _select_model_id(cfg)
-        model_loaded_now = selected not in _RUNTIMES
+        model_loaded_now = not any(key.split(":")[0] == selected for key in _RUNTIMES)
         runtime = _load_detector(cfg)
         metadata = _runtime_metadata(runtime)
         _log("before_inference", source_path=path, metadata=metadata, model_loaded_now=model_loaded_now)
         try:
             detections = _detect_with_runtime(runtime, path)
         except Exception as exc:
-            if runtime.model_id != GPU_MODEL_ID:
+            if not (runtime.model_id == GPU_MODEL_ID and runtime.device == "cuda"):
                 raise
-            logger.warning("GPU object detection failed; retrying sealed CPU detector: %s", exc)
-            runtime = _load_cpu_detector(cfg)
+            logger.warning("YOLOX CUDA inference failed; retrying the same model on CPU: %s", exc)
+            runtime = _load_yolox_cpu()
             metadata = {
                 **_runtime_metadata(runtime),
-                "fallback_from": GPU_MODEL_ID,
+                "fallback_from": f"{GPU_MODEL_ID}:cuda",
                 "fallback_reason": str(exc),
             }
             detections = _detect_with_runtime(runtime, path)
         _log("after_inference", source_path=path, metadata=metadata, model_loaded_now=model_loaded_now)
-        return {"objects": detections, "detect_meta": {"status": "ok", **metadata}}
+        return {"objects": detections, "detect_meta": {"status": "ok", **metadata, **sample_provenance}}
     except DetectorUnavailable as exc:
         logger.warning("object detection unavailable: %s", exc)
-        return {"objects": [], "detect_meta": {"status": "unavailable", "engine": ENGINE, "error": str(exc)}}
+        return {"objects": [], "detect_meta": {"status": "unavailable", "engine": ENGINE, "error": str(exc), **sample_provenance}}
     except Exception as exc:
         logger.exception("object detection failed")
         GPUManager.clear_cache()
-        return {"objects": [], "detect_meta": {"status": "error", "engine": ENGINE, "error": str(exc), "exc_type": type(exc).__name__}}
+        return {"objects": [], "detect_meta": {"status": "error", "engine": ENGINE, "error": str(exc), "exc_type": type(exc).__name__, **sample_provenance}}

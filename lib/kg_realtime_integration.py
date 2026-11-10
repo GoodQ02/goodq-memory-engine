@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+import hashlib
+from wsl2_audio import speaker_signature
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 import re
@@ -34,8 +36,9 @@ _TRANSCRIPT_ENTITY_SOURCES = {
 _PERSON_ENTITY_TYPES = {"PERSON", "PER", "CHARACTER"}
 _LOCATION_ENTITY_TYPES = {"LOCATION", "LOC", "GPE", "PLACE", "FAC"}
 _CO_OCCURRENCE_NODE_TYPES = {"person", "location", "speaker", "object", "audio_event"}
-_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:speaker|face)_\d+$", re.IGNORECASE)
-_PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+)$", re.IGNORECASE)
+_RECORDING_TRACK_PATTERN = r"[0-9a-f]{64}:c\d+:[a-z0-9_]+"
+_PLACEHOLDER_SPEAKER_PATTERN = re.compile(r"^(?:(?:speaker|face)_\d+|" + _RECORDING_TRACK_PATTERN + r")$", re.IGNORECASE)
+_PLACEHOLDER_IDENTITY_PATTERN = re.compile(r"^(?:unknown(?:_\d+)?|speaker_\d+|face_\d+|person_\d+|" + _RECORDING_TRACK_PATTERN + r")$", re.IGNORECASE)
 _IDENTITY_SUPPORT_MIN_SCENES = 2
 _SPEAKER_PATTERN_SUPPORT_MIN_SCENES = 3
 _SPEAKER_PATTERN_EVIDENCE_MIN_SCENES = 5
@@ -332,8 +335,14 @@ def _speaker_voice_signature_map(scene_data: Dict[str, Any]) -> Dict[str, Dict[s
     for signature in signatures:
         if not isinstance(signature, dict):
             continue
+        if 'review_evidence' in signature:
+            from wsl2_audio.scene_consumers import validate_signature
+            validate_signature(signature)
+        space = speaker_signature.validate_metadata(signature)
         speaker = normalize_entity_name(str(signature.get("speaker") or ""))
         embedding = _normalize_embedding(signature.get("embedding"))
+        if space and (len(embedding) != speaker_signature.DIMENSION or not speaker):
+            raise ValueError("Invalid tagged speaker signature")
         if not speaker or not embedding:
             continue
         voiced_seconds = signature.get("voiced_seconds")
@@ -347,13 +356,21 @@ def _speaker_voice_signature_map(scene_data: Dict[str, Any]) -> Dict[str, Dict[s
         except Exception:
             segment_count_val = 0
         by_label[speaker] = {
+            **(speaker_signature.metadata() if space else {}),
             "speaker": speaker,
             "embedding": embedding,
             "embedding_dim": len(embedding),
             "voiced_seconds": voiced_seconds_val,
             "segment_count": segment_count_val,
             "available_segment_count": int(signature.get("available_segment_count") or segment_count_val or 0),
-            "selected_segments": list(signature.get("selected_segments") or []),
+            "selected_segments": (list(signature["selected_segments"])
+                                  if signature.get("selected_segments") is not None else None),
+            "excluded_segments": list(signature.get("excluded_segments") or []),
+            "admission_policy": signature.get("admission_policy"),
+            "contribution_id": signature.get("contribution_id"),
+            "owner_scene_id": signature.get("owner_scene_id"),
+            "contribution_sha256": signature.get("content_sha256"),
+            "review_evidence": signature.get("review_evidence"),
         }
     return by_label
 
@@ -376,18 +393,60 @@ def _upsert_speaker_pattern_node(
     if not embedding:
         return {"node_id": None, "similarity": None, "created": False, "pattern_name": None}
 
+    space = speaker_signature.validate_metadata(signature)
+    threshold = speaker_signature.THRESHOLD if space else _SPEAKER_PATTERN_SIMILARITY_MIN
     cur = kg.conn.cursor()
+    # Similar acoustic vectors must not erase distinct diarization tracks in
+    # the same scene. Consult persisted links so this also holds after reload.
+    scoped_speaker = _scene_scoped_synthetic_speaker_name(scene_identifier, speaker_label)
+    conflicting_patterns = {
+        int(row["target_id"])
+        for row in cur.execute(
+            """
+            SELECT DISTINCT e.target_id
+            FROM edges e
+            JOIN nodes s ON s.id = e.source_id
+            JOIN node_media nm ON nm.node_id = s.id
+            JOIN media_nodes m ON m.id = nm.media_id
+            WHERE e.edge_type = 'voice_pattern_match'
+              AND s.node_type = 'speaker'
+              AND m.scene_id = ? AND s.name != ?
+            """,
+            (scene_identifier, scoped_speaker or speaker_label),
+        ).fetchall()
+    }
     rows = cur.execute(
         "SELECT id, name, properties FROM nodes WHERE node_type = ?",
         ("speaker_pattern",),
     ).fetchall()
+    contribution = signature.get('contribution_id')
+    contribution_hash = signature.get('contribution_sha256')
+    if contribution:
+        if signature.get('owner_scene_id') != scene_identifier or not contribution_hash:
+            raise ValueError('Voice contribution has no bound owning scene')
+        for row in rows:
+            recorded = _parse_edge_properties(row['properties']).get('voice_contributions', {})
+            if contribution in recorded:
+                if recorded[contribution] != contribution_hash:
+                    raise ValueError('Replayed voice contribution changed; reconciliation required')
+                return {'node_id': int(row['id']), 'similarity': 1., 'created': False,
+                        'pattern_name': str(row['name']), 'replayed': True}
 
     best_match = None
     best_similarity = -1.0
+    possible_splits = []
     for row in rows:
         props = _parse_edge_properties(row["properties"])
+        if props.get("embedding_space") != space:
+            continue
+        if space and any(props.get(key) != value for key, value in speaker_signature.metadata().items()):
+            continue
         similarity = _cosine_similarity(embedding, props.get("embedding"))
-        if similarity is None or similarity < _SPEAKER_PATTERN_SIMILARITY_MIN:
+        if similarity is None or similarity < threshold:
+            continue
+        if int(row["id"]) in conflicting_patterns:
+            if space:
+                possible_splits.append({"node_id": int(row["id"]), "similarity": round(similarity, 6)})
             continue
         if similarity > best_similarity:
             best_similarity = similarity
@@ -399,10 +458,15 @@ def _upsert_speaker_pattern_node(
 
     if best_match is None:
         pattern_name = _speaker_pattern_name(scene_identifier, speaker_label)
+        if space:
+            pattern_name += "_" + hashlib.sha256(space.encode()).hexdigest()[:16]
         node_id = kg.add_node(
             "speaker_pattern",
             pattern_name,
             {
+                **(speaker_signature.metadata() if space else {}),
+                "match_threshold": threshold,
+                "separation_policy": "same_scene_guard_may_preserve_false_splits",
                 "embedding": embedding,
                 "embedding_dim": len(embedding),
                 "signature_count": 1,
@@ -410,6 +474,8 @@ def _upsert_speaker_pattern_node(
                 "total_voiced_seconds": float(signature.get("voiced_seconds") or 0.0),
                 "speaker_labels": [speaker_label],
                 "source": "speaker_voice_signature",
+                **({'voice_contributions': {contribution: contribution_hash},
+                    'source_scene_ids': [scene_identifier]} if contribution else {}),
             },
             timestamp,
         )
@@ -418,6 +484,7 @@ def _upsert_speaker_pattern_node(
             "similarity": 1.0,
             "created": True,
             "pattern_name": pattern_name,
+            "possible_splits": possible_splits,
         }
 
     props = dict(best_match["properties"])
@@ -434,6 +501,12 @@ def _upsert_speaker_pattern_node(
     props["embedding_dim"] = len(embedding)
     props["signature_count"] = signature_count + 1
     props["scene_count"] = int(props.get("scene_count") or 1) + 1
+    if contribution:
+        props.setdefault('voice_contributions', {})[contribution] = contribution_hash
+        previous_scenes = props.get('source_scene_ids')
+        if previous_scenes is not None:
+            props['source_scene_ids'] = sorted(set(previous_scenes) | {scene_identifier})
+            props['scene_count'] = len(props['source_scene_ids'])
     props["total_voiced_seconds"] = float(props.get("total_voiced_seconds") or 0.0) + float(signature.get("voiced_seconds") or 0.0)
     speaker_labels = {
         normalize_entity_name(str(label or ""))
@@ -446,12 +519,13 @@ def _upsert_speaker_pattern_node(
         "UPDATE nodes SET properties = ?, occurrence_count = occurrence_count + 1, last_seen = ? WHERE id = ?",
         (json.dumps(props, ensure_ascii=False, sort_keys=True), float(timestamp), int(best_match["id"])),
     )
-    kg.conn.commit()
+    kg._commit()
     return {
         "node_id": int(best_match["id"]),
         "similarity": round(float(best_similarity), 6),
         "created": False,
         "pattern_name": best_match["name"],
+        "possible_splits": possible_splits,
     }
 
 
@@ -1063,7 +1137,7 @@ def _preferred_entity_node_type(
     return "entity"
 
 
-def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str, Any], ts: float) -> Dict[str, int]:
+def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str, Any], ts: float, *, structural_only: bool = False) -> Dict[str, int]:
     counts = {
         "nodes_added": 0,
         "links_added": 0,
@@ -1138,6 +1212,8 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             "scene_id": scene_identifier.strip(),
             "video_id": scene_data.get("video_id"),
             "scene_index": scene_data.get("index"),
+            **({"speaker_change_review": scene_data["speaker_change_review"]}
+               if isinstance(scene_data.get("speaker_change_review"), dict) else {}),
         },
         context={"start": scene_data.get("start"), "end": scene_data.get("end")},
     )
@@ -1330,6 +1406,8 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
         if not isinstance(speaker, str) or not speaker.strip():
             continue
         speaker_clean = normalize_entity_name(speaker)
+        if structural_only and not _is_synthetic_speaker_label(speaker_clean):
+            continue
         emitted_speaker_ids.add(speaker_clean)
         if _is_synthetic_speaker_label(speaker_clean):
             speaker_node_id = add_structural_speaker(
@@ -1381,6 +1459,8 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
                     counts["edges_added"] += 1
 
     for speaker_id in _extract_speaker_ids(scene_data):
+        if structural_only and not _is_synthetic_speaker_label(speaker_id):
+            continue
         if speaker_id in emitted_speaker_ids:
             continue
         if _is_synthetic_speaker_label(speaker_id):
@@ -1466,6 +1546,9 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             weight=float(pattern_result.get("similarity") or 1.0),
             properties={
                 "source": "speaker_voice_signature",
+                "embedding_space": signature.get("embedding_space", "legacy_untagged"),
+                "match_threshold": speaker_signature.THRESHOLD if signature.get("embedding_space") else _SPEAKER_PATTERN_SIMILARITY_MIN,
+                "separation_policy": "same_scene_guard_may_preserve_false_splits",
                 "scene_id": scene_identifier,
                 "video_id": str(scene_data.get("video_id") or ""),
                 "media_id": media_id,
@@ -1475,9 +1558,22 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
                 "dominant_share": dominant_share,
                 "pattern_name": pattern_result.get("pattern_name"),
                 "created": bool(pattern_result.get("created")),
+                "selected_segments": signature.get("selected_segments"),
+                "excluded_segments": signature.get("excluded_segments", []),
+                "admission_policy": signature.get("admission_policy"),
+                "contribution_id": signature.get("contribution_id"),
+                "review_evidence": signature.get("review_evidence"),
             },
         )
         counts["edges_added"] += 1
+        for candidate in pattern_result.get("possible_splits", []):
+            if candidate["node_id"] != pattern_node_id:
+                kg.add_edge(source_id=pattern_node_id, target_id=candidate["node_id"],
+                            edge_type="possible_same_speaker", weight=candidate["similarity"],
+                            properties={"scene_id": scene_identifier,
+                                        "reason": "same_scene_guard_blocked_compatible_match",
+                                        "status": "unreviewed", "identity_claim": False})
+                counts["edges_added"] += 1
 
     for event in scene_data.get("music_events", []) or []:
         if not isinstance(event, dict):
@@ -1632,8 +1728,9 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             )
             counts["edges_added"] += 1
 
-    counts["edges_added"] += _accumulate_identity_candidate_support(kg)
-    counts["edges_added"] += _accumulate_identity_supported_evidence(kg)
+    if not structural_only:
+        counts["edges_added"] += _accumulate_identity_candidate_support(kg)
+        counts["edges_added"] += _accumulate_identity_supported_evidence(kg)
 
     person_ids_sorted = sorted(person_node_ids)
     for left_idx, left_node_id in enumerate(person_ids_sorted):
@@ -1647,6 +1744,64 @@ def _add_scene_entities(kg: KnowledgeGraph, media_id: int, scene_data: Dict[str,
             )
             counts["edges_added"] += 1
 
+    return counts
+
+
+def _promoted_speaker_payload(scene_data: Dict[str, Any]):
+    keys = (
+        "scene_id", "video_id", "index", "start", "end", "speaker_ids",
+        "speaker_transcript", "speaker_voice_signatures", "speaker_change_review",
+    )
+    payload = {key: scene_data[key] for key in keys if key in scene_data}
+    # Standalone audio retains speakers/diarization, while video scenes may
+    # provide speaker_ids. Reuse the established extractor for both forms.
+    payload["speaker_ids"] = _extract_speaker_ids(scene_data)
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return payload, digest
+
+
+def validate_promoted_scene_speakers(conn, scene_data: Dict[str, Any]) -> bool:
+    """Reject changed replay inputs before the promotion caller writes views."""
+    payload, digest = _promoted_speaker_payload(scene_data)
+    row = conn.execute(
+        "SELECT id, properties FROM nodes WHERE node_type='scene' AND name=?",
+        (payload["scene_id"],),
+    ).fetchone()
+    properties = _parse_edge_properties(row["properties"]) if row else {}
+    previous = properties.get("promoted_speaker_projection_sha256")
+    if previous:
+        if previous != digest:
+            raise ValueError("Promoted speaker evidence changed; explicit reconciliation required")
+        return True
+    return False
+
+
+def project_promoted_scene_speakers(
+    kg: KnowledgeGraph, media_id: int, scene_data: Dict[str, Any],
+) -> Dict[str, int]:
+    """Project anonymous voice evidence atomically, without double-counting replay.
+
+    Human names and other enrichment channels remain outside this projection.
+    """
+    if not kg._transaction_active:
+        raise RuntimeError("Speaker projection requires a knowledge graph transaction")
+    if validate_promoted_scene_speakers(kg.conn, scene_data):
+        return {"nodes_added": 0, "edges_added": 0, "replayed": 1}
+    payload, digest = _promoted_speaker_payload(scene_data)
+    row = kg.conn.execute(
+        "SELECT id FROM nodes WHERE node_type='scene' AND name=?", (payload["scene_id"],),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Speaker projection requires a materialized scene")
+    counts = _add_scene_entities(
+        kg, media_id, payload, float(payload.get("start") or 0.0), structural_only=True,
+    )
+    # Re-read because the shared projector adds scene review metadata.
+    properties = _parse_edge_properties(kg.conn.execute(
+        "SELECT properties FROM nodes WHERE id=?", (row["id"],),
+    ).fetchone()[0])
+    properties["promoted_speaker_projection_sha256"] = digest
+    kg.conn.execute("UPDATE nodes SET properties=? WHERE id=?", (json.dumps(properties), row["id"]))
     return counts
 
 

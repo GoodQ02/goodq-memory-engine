@@ -9,6 +9,7 @@ const state = {
   currentPlaylistScenes: [],
   llmSummarizationEnabled: false,
   currentVideoHash: null,
+  currentSourceKind: "video",
   summarizationInProgress: false,
   activeSummaryJobId: null
 };
@@ -126,8 +127,23 @@ function formatTimecode(seconds) {
 }
 
 // Convert frame path/name to a safe media endpoint
+function profileSceneSpan(scenes) {
+  if (!Array.isArray(scenes) || !scenes.length) return null;
+  const sources = new Set(scenes.map(scene => scene.video_id));
+  if (sources.has(undefined) || sources.has(null) || sources.has("")) return null;
+  if (sources.size > 1) return `${sources.size} sources; see individual scene spans`;
+  if (!scenes.every(scene => Number.isFinite(scene.start) && Number.isFinite(scene.end) &&
+      scene.start >= 0 && scene.end >= scene.start)) return null;
+  return `${formatTimecode(Math.min(...scenes.map(scene => scene.start)))} - ${formatTimecode(Math.max(...scenes.map(scene => scene.end)))}`;
+}
+
 function getFrameEndpoint(videoId, representativeFrame) {
   if (!representativeFrame) return '';
+  if (typeof representativeFrame !== 'string') return '';
+  // Preserve explicit original-image URLs; do not reinterpret them as frame filenames.
+  if (/^\/api\/media\/video\/[^/?#]+\/(?:source|frame\/[^/?#]+)$/.test(representativeFrame)) {
+    return representativeFrame;
+  }
   // Extract frame filename (e.g., scene_0000_frame_01.jpg)
   const parts = representativeFrame.split(/[\\/]/);
   const filename = parts[parts.length - 1];
@@ -335,7 +351,7 @@ function renderLeaderboards(data) {
       el.setAttribute('data-id', p.entity_id);
       el.innerHTML = `
         <span class="entity-name">${p.name}</span>
-        <span class="entity-count">${p.occurrence_count} scenes</span>
+        <span class="entity-count">${p.scene_count ?? "Unknown"} scenes</span>
       `;
       el.addEventListener('click', () => handleEntitySelect(p, el));
       peopleContainer.appendChild(el);
@@ -354,7 +370,7 @@ function renderLeaderboards(data) {
       el.setAttribute('data-id', pl.entity_id);
       el.innerHTML = `
         <span class="entity-name">${pl.name}</span>
-        <span class="entity-count">${pl.occurrence_count} scenes</span>
+        <span class="entity-count">${pl.scene_count ?? "Unknown"} scenes</span>
       `;
       el.addEventListener('click', () => handleEntitySelect(pl, el));
       placesContainer.appendChild(el);
@@ -371,6 +387,23 @@ function renderLeaderboards(data) {
       const el = document.createElement('div');
       el.className = 'entity-item';
       el.setAttribute('data-id', occ.entity_id);
+      if (occ.source === 'retained_transcript_pattern') {
+        const name = document.createElement('div');
+        name.className = 'entity-name';
+        name.textContent = occ.name;
+        const provenance = document.createElement('div');
+        provenance.className = 'occasion-meta';
+        provenance.textContent = 'Transcript cue · not a confirmed event';
+        const counts = document.createElement('span');
+        counts.className = 'entity-count';
+        counts.textContent = `${occ.occurrence_count} cues / ${occ.scene_count} scenes`;
+        el.appendChild(name);
+        el.appendChild(provenance);
+        el.appendChild(counts);
+        el.addEventListener('click', () => handleEntitySelect(occ, el));
+        occasionsContainer.appendChild(el);
+        return;
+      }
       el.innerHTML = `
         <div>
           <div class="entity-name">${occ.name}</div>
@@ -397,22 +430,39 @@ function renderLeaderboards(data) {
   document.getElementById('sent-pos-val').textContent = `${dist.POSITIVE || 0} (${Math.round(posPct)}%)`;
   document.getElementById('sent-neu-val').textContent = `${dist.NEUTRAL || 0} (${Math.round(neuPct)}%)`;
   document.getElementById('sent-neg-val').textContent = `${dist.NEGATIVE || 0} (${Math.round(negPct)}%)`;
+  const coverage = data.sentiment_coverage;
+  document.getElementById('sentiment-coverage').textContent = coverage
+    ? `Sentiment available for ${coverage.classified} of ${coverage.total} scenes; ${coverage.unavailable} unavailable. ` +
+      (coverage.classified ? 'Percentages use classified scenes.' : 'No classified sentiment to display.')
+    : 'Sentiment coverage unavailable.';
 
-  const emotionsContainer = document.getElementById('emotions-list');
+  renderEmotionEvidence(data.top_emotions, 'emotions-list');
+}
+
+function renderEmotionEvidence(rows, containerId) {
+  const emotionsContainer = document.getElementById(containerId);
+  if (!emotionsContainer) return;
   emotionsContainer.innerHTML = '';
-  if (!data.top_emotions || !data.top_emotions.length) {
-    emotionsContainer.innerHTML = '<div class="empty-state">No emotional markers found.</div>';
-  } else {
-    data.top_emotions.forEach(emo => {
-      const el = document.createElement('div');
-      el.className = 'emotion-entry';
-      el.innerHTML = `
-        <span class="emotion-label">${emo.emotion}</span>
-        <span class="emotion-count-val">${emo.count} scenes</span>
-      `;
-      emotionsContainer.appendChild(el);
-    });
+  if (!rows || !rows.length) {
+    emotionsContainer.innerHTML = '<div class="empty-state">No emotion evidence available for these scenes.</div>';
+    return;
   }
+  rows.forEach(emo => {
+    const el = document.createElement('div');
+    el.className = 'emotion-entry';
+    const label = document.createElement('span');
+    label.className = 'emotion-label';
+    const source = emo.channel === 'audio' && emo.basis === 'stored_label' ? 'Audio · stored label'
+      : emo.channel === 'text' && emo.basis === 'top_ranked' ? 'Text · top-ranked' : 'Source unspecified';
+    label.textContent = `${source}: ${emo.emotion}`;
+    const count = document.createElement('span');
+    count.className = 'emotion-count-val';
+    count.textContent = emo.count_unit === 'scenes'
+      ? `${emo.count} scene${emo.count === 1 ? '' : 's'}` : `${emo.count} · unit unspecified`;
+    el.appendChild(label);
+    el.appendChild(count);
+    emotionsContainer.appendChild(el);
+  });
 }
 
 // Highlight and select left panel items
@@ -455,15 +505,18 @@ async function loadEntityProfile(entityId) {
     document.getElementById('profile-name').textContent = profile.name;
     
     const typeBadge = document.getElementById('profile-type');
-    typeBadge.textContent = profile.node_type;
+    typeBadge.textContent = profile.node_type === 'transcript_cue'
+      ? 'Transcript cue · not a confirmed event' : profile.node_type;
     typeBadge.className = `meta-badge badge-${profile.node_type}`;
     
-    document.getElementById('profile-occurrences').textContent = profile.occurrence_count;
+    document.getElementById('profile-occurrences').textContent = profile.scene_count ?? "Unknown";
+    renderEmotionEvidence(profile.top_emotions, 'profile-emotions-list');
     
     const spanLabel = document.getElementById('profile-span-label');
-    if (profile.first_seen !== null && profile.last_seen !== null) {
+    const sceneSpan = profileSceneSpan(profile.scenes);
+    if (sceneSpan !== null) {
       spanLabel.hidden = false;
-      document.getElementById('profile-span').textContent = `${formatTimecode(profile.first_seen)} - ${formatTimecode(profile.last_seen)}`;
+      document.getElementById('profile-span').textContent = sceneSpan;
     } else {
       spanLabel.hidden = true;
     }
@@ -521,20 +574,45 @@ function renderPlaylistGrid(scenes) {
     const card = document.createElement('div');
     card.className = 'scene-card';
     
-    const frameUrl = getFrameEndpoint(scene.video_id, scene.representative_frame);
+    const frameUrl = getFrameEndpoint(scene.video_id, scene.representative_frame_endpoint || scene.representative_frame);
     const hasFrame = !!frameUrl;
     
     card.innerHTML = `
       <div class="scene-card-frame">
         ${hasFrame ? `<img src="${frameUrl}" alt="Scene frame" />` : '<div class="empty-state">NO VISUAL EVIDENCE</div>'}
         <span class="card-video-title">${scene.video_title || scene.video_id}</span>
-        <span class="card-timecode">${formatTimecode(scene.start)} - ${formatTimecode(scene.end)}</span>
+        <span class="card-timecode">${['image', 'document'].includes(scene.source_kind) ? 'Static source' : `${formatTimecode(scene.start)} - ${formatTimecode(scene.end)}`}</span>
       </div>
       <div class="scene-card-info">
         <div class="scene-card-id">SCENE ID: ${scene.scene_id.substring(0, 12)}...</div>
-        <p class="scene-card-transcript">"${scene.transcript || 'No dialogue transcript recorded.'}"</p>
       </div>
     `;
+    const evidence = document.createElement('p');
+    evidence.className = 'scene-card-transcript';
+    evidence.textContent = scene.source_kind === 'document'
+      ? `Document text: ${scene.document_text || 'No extracted text available.'}`
+      : scene.source_kind === 'image'
+        ? scene.visual_caption || 'Image source'
+        : scene.transcript || 'No dialogue transcript recorded.';
+    card.appendChild(evidence);
+    if (Array.isArray(scene.music_events)) {
+      scene.music_events.forEach(cue => {
+        const row = document.createElement('p');
+        row.className = 'scene-card-transcript';
+        const label = typeof cue === 'string' ? cue : cue.label;
+        const validOffsets = cue && typeof cue === 'object'
+          && Number.isFinite(cue.start) && Number.isFinite(cue.end)
+          && cue.start >= 0 && cue.end >= cue.start;
+        const offsets = validOffsets
+          ? `${cue.start.toFixed(2)}–${cue.end.toFixed(2)}s scene-relative`
+          : 'offset unavailable';
+        const score = cue && typeof cue === 'object' && Number.isFinite(cue.confidence)
+          ? ` · heuristic score ${cue.confidence}` : '';
+        const context = cue && typeof cue.context === 'string' ? ` · ${cue.context}` : '';
+        row.textContent = `Transcript cue: ${label} · ${offsets}${score}${context}`;
+        card.appendChild(row);
+      });
+    }
     grid.appendChild(card);
   });
 }
@@ -837,7 +915,7 @@ async function checkCapabilities() {
 async function loadVideos() {
   const container = document.getElementById('videos-list');
   if (!container) return;
-  container.innerHTML = '<div class="empty-state">Loading processed videos...</div>';
+  container.innerHTML = '<div class="empty-state">Loading processed sources...</div>';
   
   try {
     const resp = await fetch('/api/system/videos');
@@ -847,7 +925,7 @@ async function loadVideos() {
     container.innerHTML = '';
     
     if (!videos || !videos.length) {
-      container.innerHTML = '<div class="empty-state">No processed videos found.</div>';
+      container.innerHTML = '<div class="empty-state">No processed sources found.</div>';
       return;
     }
     
@@ -856,12 +934,13 @@ async function loadVideos() {
       el.className = 'entity-item';
       el.setAttribute('data-id', v.video_id);
       
-      const durationStr = v.duration ? `${formatTimecode(v.duration)}` : 'N/A';
+      const durationStr = ['image', 'document'].includes(v.source_kind) ? 'Static source'
+        : v.duration ? `${formatTimecode(v.duration)}` : 'N/A';
       const scenesStr = v.total_scenes ? `${v.total_scenes} scenes` : '0 scenes';
       
       el.innerHTML = `
         <span class="entity-name">${v.title || v.video_id}</span>
-        <span class="entity-count">${durationStr} / ${scenesStr}</span>
+        <span class="entity-count">${v.source_kind || 'video'} / ${durationStr} / ${scenesStr}</span>
       `;
       el.addEventListener('click', () => handleVideoSelect(v, el));
       container.appendChild(el);
@@ -877,10 +956,10 @@ function handleVideoSelect(video, element) {
   document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('selected'));
   
   element.classList.add('selected');
-  loadVideoProfile(video.video_id, video.title);
+  loadVideoProfile(video.video_id, video.title, video.source_kind || 'video');
 }
 
-async function loadVideoProfile(videoId, videoTitle) {
+async function loadVideoProfile(videoId, videoTitle, sourceKind = 'video') {
   const standby = document.getElementById('no-profile-selected');
   const details = document.getElementById('profile-details-view');
   const coOccurBox = document.getElementById('co-occurrences-box');
@@ -893,6 +972,7 @@ async function loadVideoProfile(videoId, videoTitle) {
     state.activeEntity = null;
     state.activeCollection = null;
     state.currentVideoHash = videoId;
+    state.currentSourceKind = sourceKind;
     
     if (pollInterval) {
       clearTimeout(pollInterval);
@@ -904,56 +984,62 @@ async function loadVideoProfile(videoId, videoTitle) {
     document.getElementById('profile-name').textContent = videoTitle || videoId;
     
     const typeBadge = document.getElementById('profile-type');
-    typeBadge.textContent = 'VIDEO';
+    typeBadge.textContent = sourceKind.toUpperCase();
     typeBadge.className = 'meta-badge badge-video';
     
     summaryContent.textContent = 'Loading summary...';
     provBox.innerHTML = '';
     
-    const sumResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}`);
-    if (sumResp.ok) {
-      const sumData = await sumResp.json();
-      summaryContent.textContent = sumData.summary || 'No narrative summary generated yet.';
-      
-      if (sumData.provenance && sumData.provenance.model_backend) {
-        const prov = sumData.provenance;
-        const dateStr = prov.timestamp ? new Date(prov.timestamp).toLocaleString() : 'N/A';
-        const sourceCount = prov.source_artifact_versions ? prov.source_artifact_versions.length : 0;
-        
-        provBox.innerHTML = `
-          <div class="provenance-title">Summary Provenance Information</div>
-          <div><strong>Model/Backend:</strong> ${prov.model_backend}</div>
-          <div><strong>Prompt Version:</strong> ${prov.prompt_version || 'N/A'}</div>
-          <div><strong>Generated At:</strong> ${dateStr}</div>
-          <div><strong>Source Artifacts:</strong> ${sourceCount} scene summaries used</div>
-        `;
+    summaryBox.hidden = sourceKind !== 'video';
+    regenBtn.hidden = sourceKind !== 'video';
+    if (sourceKind === 'video') {
+      const sumResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}`);
+      if (state.currentVideoHash !== videoId || state.currentSourceKind !== sourceKind) return;
+      if (sumResp.ok) {
+        const sumData = await sumResp.json();
+        summaryContent.textContent = sumData.summary || 'No narrative summary generated yet.';
+
+        if (sumData.provenance && sumData.provenance.model_backend) {
+          const prov = sumData.provenance;
+          const dateStr = prov.timestamp ? new Date(prov.timestamp).toLocaleString() : 'N/A';
+          const sourceCount = prov.source_artifact_versions ? prov.source_artifact_versions.length : 0;
+
+          provBox.innerHTML = `
+            <div class="provenance-title">Summary Provenance Information</div>
+            <div><strong>Model/Backend:</strong> ${prov.model_backend}</div>
+            <div><strong>Prompt Version:</strong> ${prov.prompt_version || 'N/A'}</div>
+            <div><strong>Generated At:</strong> ${dateStr}</div>
+            <div><strong>Source Artifacts:</strong> ${sourceCount} scene summaries used</div>
+          `;
+        } else {
+          provBox.innerHTML = `<div class="provenance-title">Summary Provenance Information</div><div>No provenance metadata tracked for this summary.</div>`;
+        }
       } else {
-        provBox.innerHTML = `<div class="provenance-title">Summary Provenance Information</div><div>No provenance metadata tracked for this summary.</div>`;
+        summaryContent.textContent = 'Failed to load video summary.';
+        provBox.innerHTML = '';
       }
-    } else {
-      summaryContent.textContent = 'Failed to load video summary.';
-      provBox.innerHTML = '';
-    }
-    
-    if (state.llmSummarizationEnabled) {
-      summaryBox.hidden = false;
-      regenBtn.hidden = false;
-      
-      const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
-      if (statusResp.ok) {
-        const statusData = await statusResp.json();
-        resumeExistingSummaryJobStatus(videoId, statusData, regenBtn);
+
+      if (state.llmSummarizationEnabled) {
+        summaryBox.hidden = false;
+        regenBtn.hidden = false;
+
+        const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
+        if (statusResp.ok) {
+          const statusData = await statusResp.json();
+          resumeExistingSummaryJobStatus(videoId, statusData, regenBtn);
+        } else {
+          stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+        }
       } else {
-        stopSummaryPolling(regenBtn, "Unknown summary status. Try again.");
+        summaryBox.hidden = false;
+        regenBtn.hidden = true;
       }
-    } else {
-      summaryBox.hidden = false;
-      regenBtn.hidden = true;
     }
-    
+
     if (coOccurBox) coOccurBox.hidden = true;
     
     const timelineResp = await fetch(`/api/videos/${encodeURIComponent(videoId)}/timeline`);
+    if (state.currentVideoHash !== videoId || state.currentSourceKind !== sourceKind) return;
     if (!timelineResp.ok) throw new Error('Failed to load video timeline segments.');
     
     const timelineData = await timelineResp.json();
@@ -964,11 +1050,16 @@ async function loadVideoProfile(videoId, videoTitle) {
     
     const spanLabel = document.getElementById('profile-span-label');
     spanLabel.hidden = false;
-    document.getElementById('profile-span').textContent = `00:00 - ${formatTimecode(duration)}`;
+    document.getElementById('profile-span').textContent = ['image', 'document'].includes(sourceKind)
+      ? 'Static source' : `00:00 - ${formatTimecode(duration)}`;
     
     const segments = timelineData.segments || [];
     const scenes = segments.map(seg => ({
       video_id: videoId,
+      source_kind: seg.source_kind || sourceKind,
+      document_text: seg.document_text,
+      visual_caption: seg.visual_caption,
+      representative_frame_endpoint: seg.representative_frame_endpoint,
       scene_id: seg.scene_id ? String(seg.scene_id) : String(seg.segment_id),
       start: seg.start,
       end: seg.end,
@@ -1167,6 +1258,7 @@ function setupRegenListener() {
   regenBtn.addEventListener("click", async () => {
     const videoHash = state.currentVideoHash;
     if (!videoHash) return;
+    if ((state.currentSourceKind || 'video') !== 'video') return;
     
     if (state.summarizationInProgress) return;
 

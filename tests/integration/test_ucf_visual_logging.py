@@ -238,3 +238,150 @@ def test_ucf_visual_logging_mock(tmp_path, monkeypatch):
         assert raw_file.exists(), f"Raw file {raw_file} was not written to disk"
         
     conn.close()
+
+
+def test_log_visual_to_ucf_ledger_records_non_midpoint_object_and_caption_provenance(tmp_path: Path):
+    db_dir = tmp_path / "epoch_visual_obs"
+    db_dir.mkdir(parents=True)
+    frame_dir = tmp_path / "frames"
+    frame_dir.mkdir(parents=True)
+
+    cfg = {
+        "paths": {"db_dir": str(db_dir)},
+        "run": {"id": "run_visual_obs_001"},
+    }
+    cfg_json = tmp_path / "cfg_obs.json"
+    cfg_json.write_text(json.dumps(cfg), encoding="utf-8")
+
+    expected_db_dir = db_dir / "ucf"
+    expected_db_dir.mkdir(parents=True, exist_ok=True)
+    ucf_db_path = expected_db_dir / "ucf_ledger.db"
+    ucf_module = _load_ucf_ledger()
+    client = ucf_module.UCFLedgerClient(str(ucf_db_path))
+    client.init_schema()
+    video_hash = "vid_non_midpoint_001"
+    client.register_media(
+        video_hash=video_hash,
+        file_path="/fake/path/clip.mp4",
+        duration=10.0,
+        fps=30.0,
+        width=1920,
+        height=1080,
+    )
+    client.close()
+
+    scene = {"start": 0.0, "end": 4.0, "duration": 4.0}
+    item = {
+        "caption": "an empty pier walkway by the water",
+        "caption_meta": {
+            "status": "ok",
+            "engine": "blip",
+            "accepted_sample_timestamps": [1.0, 2.0],
+            "observations": [
+                {
+                    "sample_index": 1,
+                    "timestamp": 1.0,
+                    "is_midpoint_sample": False,
+                    "source_path": str(frame_dir / "scene_0000_cap_01.jpg"),
+                    "caption": "a person carrying a suitcase near dock 4",
+                    "engine": "blip",
+                },
+                {
+                    "sample_index": 2,
+                    "timestamp": 2.0,
+                    "is_midpoint_sample": True,
+                    "source_path": str(frame_dir / "scene_0000.jpg"),
+                    "caption": "an empty pier walkway by the water",
+                    "engine": "blip",
+                },
+            ],
+        },
+        "caption_observations": [
+            {
+                "sample_index": 1,
+                "timestamp": 1.0,
+                "is_midpoint_sample": False,
+                "source_path": str(frame_dir / "scene_0000_cap_01.jpg"),
+                "caption": "a person carrying a suitcase near dock 4",
+                "caption_meta": {"status": "ok", "engine": "blip"},
+            },
+            {
+                "sample_index": 2,
+                "timestamp": 2.0,
+                "is_midpoint_sample": True,
+                "source_path": str(frame_dir / "scene_0000.jpg"),
+                "caption": "an empty pier walkway by the water",
+                "caption_meta": {"status": "ok", "engine": "blip"},
+            },
+        ],
+        "objects": [
+            {
+                "label": "suitcase",
+                "score": 0.89,
+                "bbox": [192.0, 108.0, 384.0, 216.0],
+                "timestamp": 1.0,
+                "sample_index": 1,
+                "is_midpoint_sample": False,
+            }
+        ],
+        "detect_meta": {
+            "status": "ok",
+            "engine": "opencv-dnn",
+            "model": "opencv_yolox",
+            "accepted_sample_timestamps": [1.0],
+            "non_midpoint_objects_observed": True,
+        },
+    }
+
+    _log_visual_to_ucf_ledger(
+        cfg_json=cfg_json,
+        video_hash=video_hash,
+        scene_id="scene_0000",
+        scene=scene,
+        frame_dir=frame_dir,
+        item=item,
+    )
+
+    # Also log a blank-suppressed scene (scene_0001) and verify no hallucinated caption row is written
+    _log_visual_to_ucf_ledger(
+        cfg_json=cfg_json,
+        video_hash=video_hash,
+        scene_id="scene_0001",
+        scene={"start": 4.0, "end": 6.0, "duration": 2.0},
+        frame_dir=frame_dir,
+        item={
+            "caption": None,
+            "caption_meta": {
+                "status": "not_applicable",
+                "reason": "blank_or_low_variance_frame",
+                "engine": "blip",
+            },
+            "objects": [],
+        },
+    )
+
+    conn = sqlite3.connect(str(ucf_db_path))
+    conn.row_factory = sqlite3.Row
+
+    cap_rows = conn.execute("SELECT * FROM context_frames WHERE worker_name='image_caption'").fetchall()
+    assert len(cap_rows) == 1
+    assert cap_rows[0]["source_artifact_id"] == "scene_0000"
+    assert cap_rows[0]["t_start"] == 2.0
+    cap_payload = json.loads(cap_rows[0]["payload"])
+    assert cap_payload["accepted_sample_count"] == 2
+    assert json.loads(cap_payload["accepted_sample_timestamps_json"]) == [1.0, 2.0]
+    obs_list = json.loads(cap_payload["observations_json"])
+    assert len(obs_list) == 2
+    assert obs_list[0]["timestamp"] == 1.0
+    assert obs_list[0]["caption"] == "a person carrying a suitcase near dock 4"
+
+    obj_rows = conn.execute("SELECT * FROM context_frames WHERE worker_name='object_detect'").fetchall()
+    assert len(obj_rows) == 1
+    assert obj_rows[0]["t_start"] == 1.0
+    assert obj_rows[0]["t_end"] == 1.0
+    obj_payload = json.loads(obj_rows[0]["payload"])
+    assert obj_payload["label"] == "suitcase"
+    assert obj_payload["observation_timestamp"] == 1.0
+    assert obj_payload["is_midpoint_sample"] is False
+    assert obj_payload["sample_index"] == 1
+    conn.close()

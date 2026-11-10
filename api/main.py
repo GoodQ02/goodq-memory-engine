@@ -13,11 +13,13 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from api.route_effects import install_route_effect_authority
 from api.routes import control_recurrence, identity, ingest, media, meta, runtime, scenes, search, system, timeline, summary
 from goodq_version import GOODQ_VERSION
+from lib.grounding_markup import strip_grounding_markup_json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,6 +65,25 @@ class UTF8JSONMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class GroundingMarkupMiddleware(BaseHTTPMiddleware):
+    """Keep caption-model grounding tags out of every JSON consumer.
+
+    Saved stores retain the original model text; only served JSON is cleaned.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if not response.headers.get("content-type", "").startswith("application/json"):
+            return response
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        cleaned = strip_grounding_markup_json(body)
+        headers = [(k, v) for k, v in response.raw_headers if k.lower() != b"content-length"]
+        result = Response(content=cleaned, status_code=response.status_code, background=response.background)
+        result.raw_headers = headers + [(b"content-length", str(len(cleaned)).encode())]
+        return result
+
+
+app.add_middleware(GroundingMarkupMiddleware)
 app.add_middleware(UTF8JSONMiddleware)
 
 if bool(_API_CFG.get("cors_enabled", False)):
@@ -180,6 +201,9 @@ except Exception as e:
     logger.warning(f"DataLoader config injection failed: {e}")
 
 
+from api.library import SavedLibraryMiddleware
+
+app.add_middleware(SavedLibraryMiddleware, cfg=_CFG, routes=lambda: app.routes)
 install_route_effect_authority(app, static_root=_REPO_ROOT / _UI_SUBDIR)
 
 

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_ROADMAP -->
-<!-- DOC_LAST_VERIFIED: 2026-09-16 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-09 -->
 
 # Public release qualification
 

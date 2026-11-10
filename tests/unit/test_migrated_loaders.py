@@ -201,29 +201,49 @@ def test_tagger_governed_loading(tmp_path, monkeypatch):
     monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda *args: {"verification": {"offline_mode": True}})
     
     pipeline_calls = []
+    tokenizer_calls = []
+    model_calls = []
+    tokenizer = object()
+    model = object()
+
+    class MockTokenizer:
+        @classmethod
+        def from_pretrained(cls, path, *, local_files_only):
+            tokenizer_calls.append((path, local_files_only))
+            return tokenizer
+
+    class MockModel:
+        @classmethod
+        def from_pretrained(cls, path, *, local_files_only):
+            model_calls.append((path, local_files_only))
+            return model
     
-    def mock_pipeline(task, model, local_files_only, aggregation_strategy):
-        pipeline_calls.append((task, model, local_files_only))
+    def mock_pipeline(task, *, model, tokenizer, aggregation_strategy):
+        pipeline_calls.append((task, model, tokenizer, aggregation_strategy))
         return lambda text: [{"word": "Alice", "entity_group": "PER"}]
         
     transformers_mock = types.ModuleType("transformers")
     transformers_mock.pipeline = mock_pipeline
+    transformers_mock.AutoTokenizer = MockTokenizer
+    transformers_mock.AutoModelForTokenClassification = MockModel
     transformers_mock.logging = types.SimpleNamespace(set_verbosity_error=lambda: None)
     monkeypatch.setitem(sys.modules, "transformers", transformers_mock)
     
-    from steps.tagger.step import _NER_PIPELINES, tagger
-    _NER_PIPELINES.clear()
+    from steps.tagger import step as tagger_step
+    monkeypatch.setattr(tagger_step, "_NER_PIPELINES", {})
     
     item = {"transcript": "Hello my name is Alice."}
     cfg = {"config": {"tagger": {"ner_model": "dslim/bert-base-NER"}}}
     
-    res = tagger(item, cfg)
+    res = tagger_step.tagger(item, cfg)
     
     assert "Alice" in res["entities"]
+    assert res["tagger_meta"]["status"] == "ok"
+    assert res["ner_entities"][0]["type"] == "PER"
     assert len(pipeline_calls) == 1
-    assert pipeline_calls[0][0] == "token-classification"
-    assert Path(pipeline_calls[0][1]) == snapshots_dir.absolute()
-    assert pipeline_calls[0][2] is True  # local_files_only should be True
+    assert pipeline_calls[0] == ("token-classification", model, tokenizer, "simple")
+    assert tokenizer_calls == [(str(snapshots_dir.absolute()), True)]
+    assert model_calls == [(str(snapshots_dir.absolute()), True)]
 
 
 def test_object_detect_governed_loading(tmp_path, monkeypatch):

@@ -50,6 +50,12 @@ It owns:
 
 No step module owns pipeline orchestration.
 
+The runner owns the active pipeline progress receipt, including filename, run ID,
+stage and terminal outcome. The scene-detection subprocess returns scenes and
+`scene_meta` diagnostics without writing shared pipeline progress: its process-local
+tracker cannot represent the parent run. The runner publishes detection progress
+before and after the worker call; worker error output remains observable.
+
 ### 2. Convergence entrypoints
 
 Programmatic and wrapper entrypoints converge downward into the same canonical
@@ -66,6 +72,43 @@ input with `input_file`, retains a unique result file in the configured log
 directory, and requires that result's content identity to match the input.
 Missing or unbound results and runner exits fail visibly; old output files and
 an empty exception message cannot establish success.
+
+The ordinary configuration schema preserves `progressive_chunk_size` and
+`progressive_chunk_overlap` for the adapter's runner call. Defaults remain 300
+and 10 seconds. Size must be finite and positive; overlap must be finite,
+nonnegative and smaller than size. These settings change window grouping, not
+detected scene boundaries or source timestamps.
+
+### Watchdog retained-completion reconciliation
+
+The inbox monitor verifies persisted video completion even when the processed
+registry says success. Matching source identity, scene coverage and committed
+Phase 6 evidence are required; contradictory evidence reports failure and queues
+recovery rather than declaring a completed skip. This check establishes retained
+completion compatibility, not acceptance of current models or every stage.
+
+Before final source movement, the existing registry records `status=finalizing`
+and `finalization.target_name`. Only durable final movement and registry completion
+permit completed progress. Restart revalidates evidence and source hashes before
+finishing a pending move; an already matching retained destination is reused.
+Failed finalization remains recoverable and must not dispatch the source as new
+work or block unrelated inbox files. Registry persistence errors remain visible.
+No separate store or ingestion engine is introduced by this protocol.
+
+### Watchdog request retry history
+
+The content-hash registry's top-level result remains the deduplication and stage
+coverage authority. Replacing it with a different attempt retains the preceding
+terminal result in a flat `previous_attempts` list in the same atomic write.
+Normal success, failure and retained-completion reconciliation share that writer;
+repeated writes for the same staged filename/run do not duplicate history.
+
+Request status matches the content hash and exact staged filename against the
+current result, then prior terminal attempts. It preserves that attempt's run ID,
+completion time and failed/completed state without writing during GET. Raw errors
+remain local; public failure responses retain the existing sanitized message.
+Legacy registry records remain readable. Attempts overwritten before history was
+retained cannot be reconstructed from the current registry and are not backfilled.
 
 ### 2a. API mutation boundary
 

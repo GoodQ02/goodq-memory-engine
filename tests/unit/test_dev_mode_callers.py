@@ -137,6 +137,7 @@ def test_dev_off_waits_for_owner_before_teardown_and_never_force_kills_windows_r
     result, calls = run_mode("off")
     assert result.returncode == 0, result.stdout + result.stderr
     stop, = _owner(calls, "-StopCurrent")
+    assert "-PreserveDependencies" not in calls[stop][1], "Dev Off bypassed the global release guard"
     teardown, = [i for i, (name, _) in enumerate(calls) if name == "stop_vllm"]
     assert stop < teardown
     assert not any("Stop-Process" in arg for _, args in calls for arg in args)

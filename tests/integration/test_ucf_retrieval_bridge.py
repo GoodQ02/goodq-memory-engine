@@ -8,6 +8,7 @@ import json
 import uuid
 
 from steps.common.qdrant_client import QdrantClient, QdrantConfig
+from steps.common.memory import _make_id
 from agents.mini_agent_client import MiniAgentClient
 
 # Helper: Create a mock database with frame records
@@ -74,6 +75,25 @@ def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key=
     conn.commit()
     conn.close()
     return db_path
+
+
+def _configure_scene_materialization(client, tmp_path):
+    """Bind the historical ledger alias to one source-scoped manifest scene."""
+    db_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test"
+    client.config["paths"].update({
+        "db_dir": str(db_dir),
+        "db_path": str(db_dir / "memory.db"),
+        "knowledge_graph_db": str(db_dir / "knowledge_graph.db"),
+        "processing": str(db_dir / "processing"),
+    })
+    video_dir = db_dir / "processing" / "test" / "video"
+    video_dir.mkdir(parents=True)
+    scene_id = _make_id("scene", ["vh_test_001", "0.000", "1.000"])
+    (video_dir / "scene_manifest.json").write_text(json.dumps({
+        "video_hash": "vh_test_001",
+        "scenes": [{"id": scene_id, "index": 1, "start": 0.0, "end": 1.0}],
+    }), encoding="utf-8")
+
 
 # Helper for HITL confirmation
 def _confirm_tool_directly(client, tool_name, tool_args):
@@ -217,6 +237,7 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monke
     ]
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
     monkeypatch.setattr(
@@ -265,6 +286,7 @@ def test_promote_qdrant_sync_failure_is_visible_and_pending(mock_post, tmp_path,
     mock_post.return_value = MagicMock(status_code=500, text="Internal Server Error")
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
     monkeypatch.setattr(
@@ -344,6 +366,7 @@ def test_null_vector_key_frames_use_verified_scope_readback(mock_post, tmp_path,
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(
         client,
@@ -697,7 +720,8 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     conn_mem = sqlite3.connect(client.config["paths"]["db_path"])
     scenes = conn_mem.execute("SELECT id, video_hash, start, end FROM scenes").fetchall()
     assert len(scenes) == 1
-    assert scenes[0][0] == "scene_001"
+    scene_id = _make_id("scene", ["vh_test_001", "0.000", "1.000"])
+    assert scenes[0] == (scene_id, "vh_test_001", 0.0, 1.0)
     
     segments = conn_mem.execute("SELECT id, speaker FROM segments").fetchall()
     assert len(segments) == 1
@@ -706,9 +730,11 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     embeddings = conn_mem.execute("SELECT hash, modality, scene_id FROM embeddings").fetchall()
     assert len(embeddings) == 1
     assert embeddings[0][0] == "vec-key-1"
+    assert embeddings[0][2] == scene_id
 
     fts = conn_mem.execute("SELECT scene_id, text FROM scene_text_fts").fetchall()
     assert len(fts) == 2  # OCR + transcript
+    assert {row[0] for row in fts} == {scene_id}
     
     links = conn_mem.execute("SELECT parent_hash, child_hash, relation FROM links").fetchall()
     assert len(links) > 0
@@ -737,6 +763,7 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
     assert "scene" in mapping_types
     assert "segment" in mapping_types
     assert "embedding" in mapping_types
+    assert {record_id for record_type, record_id, _ in mapping if record_type == "scene"} == {scene_id}
     conn_mem.close()
 
     # 5. Reject (trigger dematerialization)

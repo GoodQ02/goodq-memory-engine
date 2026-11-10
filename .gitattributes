@@ -1,1 +1,3 @@
 *.sh text eol=lf
+# Recording identities hash worker bytes; checkout platform must not change them.
+wsl2_audio/*.py text eol=lf

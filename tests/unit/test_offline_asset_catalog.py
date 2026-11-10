@@ -45,9 +45,9 @@ OFFLINE_MANIFEST_CATALOG_MAP = {
     "python_runtime": {"python_runtime"},
     "qdrant": {"qdrant"},
     "ffmpeg": {"ffmpeg", "ffprobe"},
+    "vlc": {"vlc"},
     "nssm": {"nssm"},
     "vc_redist": {"vc_redist"},
-    "tesseract": {"tesseract"},
     "poppler": {"poppler"},
     "cublas64_12": {"cublas64_12"},
     "cublasLt64_12": {"cublasLt64_12"},
@@ -84,7 +84,6 @@ def _installer_asset_ids() -> set[str]:
         "ffmpeg": "ffmpeg.exe",
         "ffprobe": "ffprobe.exe",
         "python_wheelhouse": "wheelhouse",
-        "tesseract": "tesseract_setup.exe",
         "vc_redist": "vc_redist.x64.exe",
         "nssm": "staged\\nssm\\nssm.exe",
     }
@@ -177,10 +176,11 @@ def test_installer_profiles_select_only_sealed_and_permitted_assets() -> None:
         "pyannote_diarization",
         "pyannote_segmentation",
         "pyannote_wespeaker",
+        "vlc",
     }
 
-    assert len(gpu_assets) == 33
-    assert len(personal_assets) == 36
+    assert len(gpu_assets) == 35
+    assert len(personal_assets) == 39
     assert excluded_large_models.isdisjoint(gpu_assets)
     assert excluded_large_models.isdisjoint(personal_assets)
     assert set(personal_assets) - set(gpu_assets) == personal_overlay

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1245**
+Indexed active tracked paths: **1368**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -85,6 +85,7 @@ Indexed active tracked paths: **1245**
 | `/agents/stack/schema/goodq-tool-contract-v1.schema.json` | Agent control | Agent control or contract implementation. |
 | `/agents/stack/schema/runtime-policy-v1.schema.json` | Agent control | Agent control or contract implementation. |
 | `/api/API_DOCUMENTATION.md` | API | API or local control-plane implementation. |
+| `/api/library.py` | API | API or local control-plane implementation. |
 | `/api/main.py` | API | API or local control-plane implementation. |
 | `/api/requirements.txt` | API | API or local control-plane implementation. |
 | `/api/route_effects.py` | API | API or local control-plane implementation. |
@@ -105,12 +106,19 @@ Indexed active tracked paths: **1245**
 | `/api/server.py` | API | API or local control-plane implementation. |
 | `/api/utils/__init__.py` | API | API or local control-plane implementation. |
 | `/api/utils/action_jobs.py` | API | API or local control-plane implementation. |
+| `/api/utils/audio_evidence.py` | API | API or local control-plane implementation. |
+| `/api/utils/desktop_player.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_appearance.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_evidence_pack.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_match_review.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_matching.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_read_projection.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_readiness.py` | API | API or local control-plane implementation. |
 | `/api/utils/ingest_requests.py` | API | API or local control-plane implementation. |
 | `/api/utils/loaders.py` | API | API or local control-plane implementation. |
 | `/api/utils/media_projection.py` | API | API or local control-plane implementation. |
 | `/api/utils/response_models.py` | API | API or local control-plane implementation. |
+| `/api/utils/scene_relationships.py` | API | API or local control-plane implementation. |
 | `/api/utils/temporal_summary_results.py` | API | API or local control-plane implementation. |
 | `/branding/README.md` | Repository root | Root-level project or runtime surface. |
 | `/branding/favicon.ico` | Repository root | Root-level project or runtime surface. |
@@ -135,6 +143,7 @@ Indexed active tracked paths: **1245**
 | `/cli/content_state_reconciliation.py` | CLI | Command-line operator surface. |
 | `/cli/control_recurrence_report.py` | CLI | Command-line operator surface. |
 | `/cli/diarization_outcome_reconciliation.py` | CLI | Command-line operator surface. |
+| `/cli/document_text.py` | CLI | Command-line operator surface. |
 | `/cli/golden_witness.py` | CLI | Command-line operator surface. |
 | `/cli/goodq_doctor.py` | CLI | Command-line operator surface. |
 | `/cli/links.py` | CLI | Command-line operator surface. |
@@ -157,6 +166,7 @@ Indexed active tracked paths: **1245**
 | `/cli/signature_backfill_execute.py` | CLI | Command-line operator surface. |
 | `/cli/signature_backfill_plan.py` | CLI | Command-line operator surface. |
 | `/cli/signature_backfill_serial_run.py` | CLI | Command-line operator surface. |
+| `/cli/standalone_persistence.py` | CLI | Command-line operator surface. |
 | `/cli/step_runner.py` | CLI | Command-line operator surface. |
 | `/cli/system_status.py` | CLI | Command-line operator surface. |
 | `/cli/temporal_audio_reconciliation.py` | CLI | Command-line operator surface. |
@@ -167,6 +177,7 @@ Indexed active tracked paths: **1245**
 | `/cli/ucf_promotion.py` | CLI | Command-line operator surface. |
 | `/cli/ui_conduits_rollup.py` | CLI | Command-line operator surface. |
 | `/cli/watchdog.py` | CLI | Command-line operator surface. |
+| `/cli/witness_environment.py` | CLI | Command-line operator surface. |
 | `/common/gpu_manager.py` | Repository root | Root-level project or runtime surface. |
 | `/common/gpu_monitor.py` | Repository root | Root-level project or runtime surface. |
 | `/common/progress_tracker.py` | Repository root | Root-level project or runtime surface. |
@@ -205,10 +216,7 @@ Indexed active tracked paths: **1245**
 | `/docs/agent/PROJECT_ORIENTATION.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/README.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/current_state.json` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/skills/fable-prompt-cache/SKILL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/skills/goodq4all-audit/SKILL.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/skills/goodq4all-operator/SKILL.md` | Documentation | Active documentation or governance surface. |
-| `/docs/agent/skills/using-agent-skills/SKILL.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/CLEAN_MEMORY_START.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` | Documentation | Active documentation or governance surface. |
 | `/docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` | Documentation | Active documentation or governance surface. |
@@ -238,6 +246,7 @@ Indexed active tracked paths: **1245**
 | `/docs/architecture/PHASE6_MULTIMODAL_FUSION.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/PROJECT_STRUCTURE.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/README.md` | Documentation | Active documentation or governance surface. |
+| `/docs/architecture/REPOSITORY_MAP.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/RUNTIME_AUTHORITY_MEMO.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/SCENE_MANIFEST_SPECIFICATION.md` | Documentation | Active documentation or governance surface. |
 | `/docs/architecture/SUMMARY_CONSOLE_CONTRACT.md` | Documentation | Active documentation or governance surface. |
@@ -321,6 +330,7 @@ Indexed active tracked paths: **1245**
 | `/docs/reference/DEPENDENCIES.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/FACE_EMBEDDING_POLICY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/GPU_CAPABILITY_MATRIX.md` | Documentation | Active documentation or governance surface. |
+| `/docs/reference/INGESTION_FAILURE_MODES.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/OBJECT_DETECTION_POLICY.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/PLATFORM_SUPPORT.md` | Documentation | Active documentation or governance surface. |
 | `/docs/reference/WSL_AUDIO_RUNTIME.md` | Documentation | Active documentation or governance surface. |
@@ -382,6 +392,8 @@ Indexed active tracked paths: **1245**
 | `/envs/audio_emotion/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/audio_metadata/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/audio_transcribe/requirements.txt` | Repository root | Root-level project or runtime surface. |
+| `/envs/caption_vlm/README.md` | Repository root | Root-level project or runtime surface. |
+| `/envs/caption_vlm/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/emotion_classify/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/face_embed/KNOWN_ISSUES.md` | Repository root | Root-level project or runtime surface. |
 | `/envs/face_embed/requirements.txt` | Repository root | Root-level project or runtime surface. |
@@ -394,6 +406,7 @@ Indexed active tracked paths: **1245**
 | `/envs/locks/audio_emotion.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/audio_metadata.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/audio_transcribe.lock.txt` | Repository root | Root-level project or runtime surface. |
+| `/envs/locks/caption_vlm.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/emotion_classify.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/face_embed.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/home_assistant_status.lock.txt` | Repository root | Root-level project or runtime surface. |
@@ -409,8 +422,10 @@ Indexed active tracked paths: **1245**
 | `/envs/locks/text_embed.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/tts.lock.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/locks/video_scene_detect.lock.txt` | Repository root | Root-level project or runtime surface. |
+| `/envs/object_detect/README.md` | Repository root | Root-level project or runtime surface. |
 | `/envs/object_detect/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/object_track_yolo/requirements.txt` | Repository root | Root-level project or runtime surface. |
+| `/envs/ocr/README.md` | Repository root | Root-level project or runtime surface. |
 | `/envs/ocr/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/pdf_text/requirements.txt` | Repository root | Root-level project or runtime surface. |
 | `/envs/sentiment/requirements.txt` | Repository root | Root-level project or runtime surface. |
@@ -426,8 +441,11 @@ Indexed active tracked paths: **1245**
 | `/lib/control_recurrence_recommendations.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/control_recurrence_report.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/control_recurrence_trend.py` | Core library | Core memory, control, or persistence implementation. |
+| `/lib/face_observation.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/goodq_logger.py` | Core library | Core memory, control, or persistence implementation. |
+| `/lib/grounding_markup.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/identity_ledger.py` | Core library | Core memory, control, or persistence implementation. |
+| `/lib/identity_matching.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/identity_resolver.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/ingestion_capability_contract.py` | Core library | Core memory, control, or persistence implementation. |
 | `/lib/kg_realtime_integration.py` | Core library | Core memory, control, or persistence implementation. |
@@ -458,6 +476,10 @@ Indexed active tracked paths: **1245**
 | `/samples/assets/q-multicolor-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/q-white-square.png` | Repository root | Root-level project or runtime surface. |
 | `/samples/assets/retro_console_preview.png` | Repository root | Root-level project or runtime surface. |
+| `/samples/assets/ui_match_review_correction_night.png` | Repository root | Root-level project or runtime surface. |
+| `/samples/assets/ui_memory_explorer_day.png` | Repository root | Root-level project or runtime surface. |
+| `/samples/assets/ui_memory_explorer_night.png` | Repository root | Root-level project or runtime surface. |
+| `/samples/assets/ui_people_appearances_night.png` | Repository root | Root-level project or runtime surface. |
 | `/scripts/INSTALL_AUDIO_DIARIZE_ENV.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/INSTALL_WSL2_AUDIO.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/PIN_MODEL_VERSIONS.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -479,6 +501,8 @@ Indexed active tracked paths: **1245**
 | `/scripts/assets/hf_snapshot_intake.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/assets/offline_reproducibility_audit.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/assets/personal_asset_vault.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/audio/__init__.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/audio/run_acceptance.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_monitor.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audio_gpu_report.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/audit_codebase.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -569,6 +593,7 @@ Indexed active tracked paths: **1245**
 | `/scripts/install/launcher_windows.go` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/prebuild_readiness.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/preflight_check.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/probe_paddle_ocr_asset.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/release_payload_packs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_build.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/run_offline_release_with_network_toggle.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -584,6 +609,7 @@ Indexed active tracked paths: **1245**
 | `/scripts/install/verify_release_asset.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/verify_remote_release_hash.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install/versioninfo.json` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/install/vlc_runtime_payload.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_audio_deps_retry.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_gpu_support.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_pipeline_windows.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -591,7 +617,6 @@ Indexed active tracked paths: **1245**
 | `/scripts/install_vad.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_vision_gpu.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/install_vision_gpu.py` | Tooling | Operator, validation, bootstrap, or development utility. |
-| `/scripts/internal/verify_entity_quality.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/login_hf.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/monitor_gpu_pipeline.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/monitor_ingestion.py` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -631,6 +656,7 @@ Indexed active tracked paths: **1245**
 | `/scripts/setup/VALIDATE_PYTHON_PATHS.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/setup/configure_envs_pythonpath.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/setup/install_goodq.py` | Tooling | Operator, validation, bootstrap, or development utility. |
+| `/scripts/setup/install_ocr_runtime.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/setup/install_package_all_envs.py` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/setup/start_agents.ps1` | Tooling | Operator, validation, bootstrap, or development utility. |
 | `/scripts/setup_gpu_environments.bat` | Tooling | Operator, validation, bootstrap, or development utility. |
@@ -689,6 +715,7 @@ Indexed active tracked paths: **1245**
 | `/steps/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/audio_wsl2_bridge.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/audio/recording_ingestion.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/segmentation/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/segmentation/orchestrator.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio/segmentation/phase0_normalization.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -711,6 +738,7 @@ Indexed active tracked paths: **1245**
 | `/steps/audio_transcribe/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio_transcribe/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/audio_transcribe/step_wsl2.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/audio_transcribe/whisper_cpp.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/atomic_io.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/audio_gpu_optimizer.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -724,6 +752,7 @@ Indexed active tracked paths: **1245**
 | `/steps/common/config_redaction.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/context_analyzer_llm.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/device_config.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/embedding_references.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/epistemic_diff.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/epistemic_formatter.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/faiss_utils.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -759,9 +788,13 @@ Indexed active tracked paths: **1245**
 | `/steps/common/tag_utils.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/tool_paths.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/tool_resolver.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/transcript_authority.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/transcript_binding.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/ucf_retirement.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/vad_preprocessor.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/windows_held_handle.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/common/windows_security_mechanics.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/common/worker_launch.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/discover_sources/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/discover_sources/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/emotion_classify/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -783,6 +816,7 @@ Indexed active tracked paths: **1245**
 | `/steps/image_embed_dino/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/image_exif/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/image_ocr/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
+| `/steps/image_ocr/native.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/image_ocr/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/llm_chat/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/llm_chat/step.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -801,8 +835,6 @@ Indexed active tracked paths: **1245**
 | `/steps/tagger/step_llm_enhanced.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/text_embed/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/text_embed/step.py` | Pipeline | Pipeline processing step or shared step utility. |
-| `/steps/tts/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
-| `/steps/tts/step.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/video/__init__.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/video/cross_modal_harmonizer.py` | Pipeline | Pipeline processing step or shared step utility. |
 | `/steps/video/embedding_pooler.py` | Pipeline | Pipeline processing step or shared step utility. |
@@ -845,66 +877,6 @@ Indexed active tracked paths: **1245**
 | `/tests/integration/test_ucf_vector_integrity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/integration/test_ucf_visual_logging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/integration/test_watchdog.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/LAUNCH_WEB_INTERFACE.bat.old` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/README.md` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/integration_harnesses/test_ingestion_verbose.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/integration_harnesses/test_scene_comprehensive.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/integration_harnesses/verify_clip.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/run_test_ingestion.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_analytics_query.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_analytics_sample.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_audio_diarize_optimized.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_audio_pipeline_comprehensive.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_config_nesting.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_consolidation.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_diarization_chunking.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_diarize_status.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_direct_run.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_entities.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_full_pipeline_llm.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_gpu_management.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_ingestion.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_ingestion_debug.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_ingestion_fix.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_ingestion_simple.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_kg_build.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_llm_client.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_llm_integration.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_module_import.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase2_verification.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase3_llm_integration.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase3_standalone.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase4_audio.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase6.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase6_harness.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase6_kg_integration.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_phase7_analytics.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_pipeline_gpu.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_python_paths.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_sample.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_scene_detection_config.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_scene_structure.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_scene_summarizer.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_segment_text.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_vad_diarization.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_validation.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/test_wsl_audio.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/root_harnesses/validate_analytics.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_audio_diarize_cuda_path.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_audio_duration_wave_fallback.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_audio_transcribe_backend_unavailable.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_audio_transcribe_fw_contract.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_db_creation.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_knowledge_graph.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/test_memory_context.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/__init__.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/quick_test_storage.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/test_clean_run.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/test_hf_auth.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/test_mission_logger.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/validate_all_steps.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/validate_ingestion_output.py` | Verification | Test, fixture, or verification asset. |
-| `/tests/legacy/utilities/validate_results.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/runtime_evidence_manifest.json` | Verification | Test, fixture, or verification asset. |
 | `/tests/runtime_profile.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/test_face_output.json` | Verification | Test, fixture, or verification asset. |
@@ -917,22 +889,68 @@ Indexed active tracked paths: **1245**
 | `/tests/test_scene_output.json` | Verification | Test, fixture, or verification asset. |
 | `/tests/test_system.bat` | Verification | Test, fixture, or verification asset. |
 | `/tests/test_ucf_challenger_verification.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/ui/test_library_availability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/ui/test_ui_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/__init__.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/api_main_test_harness.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/audio_recording_review_render.cjs` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/fixtures/dev_startup_harness.ps1` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/fixtures/runtime_lifecycle_worker.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/identity_matching_review.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/identity_scene_metrics_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/operator_time_hints_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/reviewed_voice_search_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/revoke_confirmation_ui.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/speaker_change_review_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/stitch_confirmation_flow.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/summary_emotion_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/summary_music_cues_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/summary_sentiment_render.cjs` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_acoustic_signal_disposition.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_action_jobs.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_health_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_main_legacy_prune_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_route_effect_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_api_surface_truth.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_api_ucf_lifecycle_visibility.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_async_dag.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_atomic_io.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_atomic_json_write.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_acceptance_manifest.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_acceptance_metrics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_bridge_native.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_capability_receipt_boundary.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_decode_policy.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_callers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_clock.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_consumers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_eligibility.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_empty_speakers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_enrichment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_enrichment_call.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_envelopes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_evidence.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_frame_events.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_long_recording.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_observer_models.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_phrases.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_recognition.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_recording.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_recording_call.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_engine_windows.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_lossless_phrase_repair.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_metadata.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_native_scratch.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_pipeline_repair.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_qualification_features.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_quality_followup.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_runtime_manifest.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_segment_timeline_normalization.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_source_regions.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_speaker_merge_step.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_stereo_phrase_repair.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_summary_evidence.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audio_timing_stereo_followup.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_transcribe_terminal_chunk_receipts.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_transcribe_windows_cpu_threads.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_banned_token_lint.py` | Verification | Test, fixture, or verification asset. |
@@ -943,10 +961,13 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_bootstrap_install_wsl.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_models_resilience.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_verify_model_cache.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_build_face_clusters_producer_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_build_face_clusters_start_gate.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_cache_readiness_check.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_challenger_stress.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ci_locked_baseline.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clap_retry_policy.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_clap_scene_audio.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_cli.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_external_pin.py` | Verification | Test, fixture, or verification asset. |
@@ -958,6 +979,9 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_clean_memory_qdrant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_windows_program_data_locator.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_clean_memory_windows_reader_identity.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_cli_retrieve.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_combined_library.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_conda_runner_utf8.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_config_values.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_content_state_reconciliation.py` | Verification | Test, fixture, or verification asset. |
@@ -969,8 +993,10 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_control_recurrence_recommendations.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_recurrence_report.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_control_recurrence_trend.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_corpus_neutral_context.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_crash_family_env_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_current_state_truth.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_desktop_player.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_callers.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_dev_mode_dashboard.py` | Verification | Test, fixture, or verification asset. |
@@ -978,11 +1004,19 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_dev_startup.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_device_config.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_diarization_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_dino_ucf_model_provenance.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_direct_ingestion_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_doc_authority_lint.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_document_chunk_validation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_document_enrichment_caller.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_docx_ingestion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ecapa_integration.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_emotion_classify_semantics.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_emotion_phrase_boundaries.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_emotion_utterance_admission.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_logging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_entity_extractor_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_entity_name_boundaries.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_episode_reference_eval.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_epistemic_diff_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_epistemic_formatter_smoke.py` | Verification | Test, fixture, or verification asset. |
@@ -991,10 +1025,12 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_faiss_id_mapping.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_lock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_faiss_replay_persistence.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_family_producer_boundaries.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_generate_release_fixture_pack.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_golden_witness_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_goodq_doctor_governance.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_gpu_config_console.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_grounding_markup.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_healer_retry_ceiling.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_health_intake_normalizer_smoke.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hermes_llm_policy.py` | Verification | Test, fixture, or verification asset. |
@@ -1002,16 +1038,24 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_hitl_stitching.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_human_perceived_quality_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_hybrid_search_rrf.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_hybrid_search_scope.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_action_readiness.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_appearance_flow.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_epoch_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_evidence_pack.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_ledger.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_match_review.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_matching.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_matching_review.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_mutation_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_process_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_process_recovery.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_resolver_evidence.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_retirement_readers.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_roster_writes.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_routes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_scene_metrics.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_search_ranking.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_workbench_behavior.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_workbench_static.py` | Verification | Test, fixture, or verification asset. |
@@ -1033,6 +1077,7 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_legacy_wsl_audio_bridge_compat.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_llm_client_activation_policy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_llm_client_endpoint_selection.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_media_audio_chunks.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_media_containment_hardening.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_commit_events.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_memory_embedding_keying.py` | Verification | Test, fixture, or verification asset. |
@@ -1044,7 +1089,9 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_multimodal_search_similar_scene.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_narrative_summarization.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_native_model_stability_smoke.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_nemotron_long_input.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_non_action_contract_smoke.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ocr_runtime_binding.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_asset_catalog.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_mode_challenger.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_offline_mode_robustness_challenger.py` | Verification | Test, fixture, or verification asset. |
@@ -1053,8 +1100,11 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_offline_reproducibility_audit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_opencv_object_detect_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_operator_console_static.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_operator_time_hints.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_optional_vision_observability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_overview_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_paddle_ocr_callers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_pdf_text_dispatch.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_persistent_store_alignment.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_personal_asset_vault.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_phase6_audio_artifact_path_unified.py` | Verification | Test, fixture, or verification asset. |
@@ -1069,6 +1119,7 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_profile_model_pack_staging.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_profile_override_metadata.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_progressive_ingestion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_progressive_ingestion_caller.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_promote_identity_layer.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_public_state_template.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_qdrant_loopback_transport.py` | Verification | Test, fixture, or verification asset. |
@@ -1084,6 +1135,7 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_retrieval_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retrieval_telemetry_persistence_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_retro_console_static.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_reviewed_voice_search.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_artifact_persisted_on_failure_exit.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_index.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_run_ingestion_audio_backend_reducer.py` | Verification | Test, fixture, or verification asset. |
@@ -1101,16 +1153,29 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_runtime_run_preview.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_status.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_runtime_test_profile.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_saved_collection_navigation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_bundle_transaction_atomicity.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_context_fallback_boundary.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_context_prompt_grounding.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_embedder_clip_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_embedder_device_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_embedder_isolation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_frame_extractor_zero_duration.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_place_grounding.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_range_filtering.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_relationships.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_retirement_read_consumers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_scoped_retirement.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_speaker_summary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_scene_summarizer_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_scene_worker_progress_ownership.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_search_route_audio.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_search_route_completion.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_search_route_enrichment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_search_route_responsiveness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_search_route_sentiment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_search_route_text.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_search_route_visual.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_season3_feature_ladder.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_seg_p5_authoritative_compare.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_seg_p5_promotion_envelope.py` | Verification | Test, fixture, or verification asset. |
@@ -1123,11 +1188,24 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_signature_backfill_execute.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_signature_backfill_plan.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_signature_backfill_serial_run.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_source_audio_phrase_timing.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_speaker_change_review.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_speaker_pattern_scene_separation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_speech_emotion_gate.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_speech_phrase_edge_purity.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_standalone_lifecycle_producer.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_standalone_read_consumers.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_standalone_ucf_promotion.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_standalone_upload_name.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_step_runner_config_overlay.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_step_runner_openmp_guard.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_console_static.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_emotion_provenance.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_music_cues.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_persistence_boundary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_routes.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_summary_sentiment_availability.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_summary_sqlite_read_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_sync_wsl_audio_worker.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_system_engine_truth.py` | Verification | Test, fixture, or verification asset. |
@@ -1135,6 +1213,7 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_system_stitch_confirmation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tag_utils_taxonomy.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_llm_enhanced_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_tagger_ner_receipt_boundary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tagger_semantic_quality.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_audio_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_temporal_projection_repair.py` | Verification | Test, fixture, or verification asset. |
@@ -1145,12 +1224,19 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_time_hint_truth.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_paths_piper.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_tool_resolver.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_transcript_integration.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_transcript_outcome_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_transcript_timestamp_reconciliation.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_transcription_callers_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_turboquant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_turboquant_candidate_benchmark.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ucf_audio_occurrences.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_canonical_loader.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ucf_promotion_cli.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ucf_promotion_faiss_mapping.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ucf_promotion_scene_identity.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ucf_promotion_scene_summaries.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_ucf_promotion_speakers.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_ui_conduits_audio_doctrine.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vector_parity_artifact_persistence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_verify_entity_quality_metrics.py` | Verification | Test, fixture, or verification asset. |
@@ -1160,28 +1246,43 @@ Indexed active tracked paths: **1245**
 | `/tests/unit/test_video_scene_detect_duration_fallback.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_scene_detect_entity_refine_retired.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_video_summarizer.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_video_summary_llm_routing.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_vision_capability_receipt_boundary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vision_gpu_import_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vision_step_diagnostics.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_vlc_runtime_payload.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vllm_served_model_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vllm_start_control.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vllm_stop_control.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_vram_allocator.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_vram_registry_persistence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_completion_evidence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_lock_identity.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_processed_prefix_idempotent.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_reconciliation.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_registry_deadlock.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_safety.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_stage_coverage.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_window_config.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_watchdog_worker_failure_boundary.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_watchdog_worker_lifecycle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wheelhouse_sbom.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_held_handle.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_windows_security_mechanics.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_witness_admission.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_witness_environment.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_worker_execution_transport.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_worker_process_lifecycle.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_worker_runtime_selection.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_cache_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_preflight.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl2_audio_bridge_robustness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_audio_preflight.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl_audio_trained_weights.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_audio_unified_bridge.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl_audio_witness_containment.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_diarization_model_authority.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_wsl_no_speech_confidence.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_process_audio_diarization.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_signature_only_contract.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_wsl_unified_clap_contract.py` | Verification | Test, fixture, or verification asset. |
@@ -1193,6 +1294,7 @@ Indexed active tracked paths: **1245**
 | `/ui/identity_workbench/index.html` | User interface | User-interface implementation or asset. |
 | `/ui/identity_workbench/static/css/identity.css` | User interface | User-interface implementation or asset. |
 | `/ui/identity_workbench/static/js/identity.js` | User interface | User-interface implementation or asset. |
+| `/ui/identity_workbench/static/js/matches.js` | User interface | User-interface implementation or asset. |
 | `/ui/justification_v1/README.md` | User interface | User-interface implementation or asset. |
 | `/ui/justification_v1/example_envelope.json` | User interface | User-interface implementation or asset. |
 | `/ui/justification_v1/index.html` | User interface | User-interface implementation or asset. |
@@ -1212,7 +1314,9 @@ Indexed active tracked paths: **1245**
 | `/ui/retro_console_v1/README.md` | User interface | User-interface implementation or asset. |
 | `/ui/retro_console_v1/index.html` | User interface | User-interface implementation or asset. |
 | `/ui/retro_console_v1/static/css/retro.css` | User interface | User-interface implementation or asset. |
+| `/ui/retro_console_v1/static/js/library-context.js` | User interface | User-interface implementation or asset. |
 | `/ui/retro_console_v1/static/js/retro.js` | User interface | User-interface implementation or asset. |
+| `/ui/retro_console_v1/static/js/saved-collections.js` | User interface | User-interface implementation or asset. |
 | `/ui/stitching_workbench/README.md` | User interface | User-interface implementation or asset. |
 | `/ui/stitching_workbench/index.html` | User interface | User-interface implementation or asset. |
 | `/ui/stitching_workbench/static/css/stitching.css` | User interface | User-interface implementation or asset. |
@@ -1243,24 +1347,43 @@ Indexed active tracked paths: **1245**
 | `/wsl2_audio/README.md` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/TEST_RESULTS.md` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/WSL2_AUDIO_FIX_COMPLETE.md` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/acoustic_events.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/audio_bridge.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/audio_service.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/bounded_audio.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/bridge_config.json` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/channel_reconciliation.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/check_cuda.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/config.json` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/config_wsl2_audio.json` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/eligibility.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/enrichment.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/enrichment_models.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/evidence_contract.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/frame_events.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/fw_transcribe.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/model_cache.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/native_scratch.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/phrase_resolution.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/process.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/process_audio.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/process_minimal.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/profile_identity.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/recognition.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/recording_audio.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/recording_engine.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/requirements-bootstrap-constraints.txt` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/requirements-locked.txt` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/scene_consumers.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/scene_projection.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/setup_cuda_env.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/setup_windows.ps1` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/setup_wsl2_audio.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/signature_only.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/source_clock.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/speaker_signature.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/start_wsl2_service.bat` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/test_bridge.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/test_pipeline.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
 | `/wsl2_audio/test_simple.sh` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |
+| `/wsl2_audio/transcription_contract.py` | WSL audio | WSL audio runtime, bootstrap, or verification asset. |

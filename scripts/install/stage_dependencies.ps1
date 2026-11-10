@@ -137,6 +137,9 @@ foreach ($prop in $Manifest.toolchains.psobject.properties) {
 foreach ($prop in $Manifest.dependencies.psobject.properties) {
     $Artifacts += $Manifest.dependencies.$($prop.Name)
 }
+$Artifacts = @($Artifacts | Where-Object {
+    -not $_.profiles -or $Profile -in @($_.profiles)
+})
 $DeclaredWheelArtifacts = @($Manifest.wheels.wheelhouse | Where-Object {
     $selectedLane = if ($GpuProfile) { $_.gpu_lane -ne "cpu" } else { $_.gpu_lane -ne "cuda" }
     $selectedLane -and -not [string]::IsNullOrWhiteSpace($_.source_url) -and -not [string]::IsNullOrWhiteSpace($_.sha256)
@@ -501,7 +504,10 @@ if ($Mode -eq "Acquire") {
         Write-Host "  License: $($art.license)" -ForegroundColor Yellow
         Write-Host "  Redistribution Status: $($art.redistribution_status)" -ForegroundColor Yellow
         
-        if ($art.redistribution_status -ne "allowed") {
+        $personalOnly = $Profile -eq "PERSONAL_AIR_GAP" -and
+            $art.redistribution_status -eq "personal_only" -and
+            @($art.profiles).Count -eq 1 -and $art.profiles[0] -eq "PERSONAL_AIR_GAP"
+        if ($art.redistribution_status -ne "allowed" -and -not $personalOnly) {
             Write-Host "  [ERROR] Non-permissive redistribution status: $($art.redistribution_status)" -ForegroundColor Red
             $AuditFailed = $true
         }

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 import sys
 import uuid
+import json
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -211,6 +212,8 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
                     "torchaudio": "2.5.1+cu121",
                 },
                 "torchcodec_ready": False,
+                "torchcodec_applicability": "unknown",
+                "audio_decode_ready": True,
                 "torchcodec_detail": "ffmpeg_shared_library_unavailable",
                 "runtime_warnings": [
                     "torch_lane_differs_from_expected",
@@ -244,6 +247,8 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         runtime_probe = result.get("bridge_runtime_probe") or {}
         self.assertEqual(runtime_probe.get("torch_lane_status"), "differs_from_expected")
         self.assertFalse(runtime_probe.get("torchcodec_ready"))
+        self.assertEqual(runtime_probe.get("torchcodec_applicability"), "unknown")
+        self.assertTrue(runtime_probe.get("audio_decode_ready"))
         self.assertEqual(runtime_probe.get("active_env_kind"), "env")
         self.assertIn("torchcodec_decoder_unavailable", runtime_probe.get("runtime_warnings", []))
         self.assertEqual(runtime_probe.get("package_versions", {}).get("torch"), "2.8.0+cu128")
@@ -327,6 +332,45 @@ class WSL2BridgeIntegrityTests(unittest.TestCase):
         self.assertEqual(details.get("processor_transcription_status"), "success")
         self.assertEqual(details.get("processor_diarization_status"), "error")
         self.assertIn("Traceback", details.get("processor_traceback_tail", ""))
+
+    def test_failed_worker_preserves_only_request_bound_coverage(self) -> None:
+        scene_file = self._make_scene_file('scene_coverage.wav')
+        bridge = self._make_bridge()
+        evidence = {'source_regions': {'status': 'error', 'completed_region_count': 1}}
+        for transport in ('stdout', 'result_file'):
+            for mismatch in ('none', 'request', 'source'):
+                with self.subTest(transport=transport, mismatch=mismatch):
+                    payload = {'status': 'error', 'transcription_status': 'error', 'transcription_error': 'decoder failed',
+                        'transcription_decoding': evidence, 'request_uuid': self.TEST_UUID,
+                        'transcription': 'hello', 'segments': [{'start': .1, 'end': .4, 'text': 'hello'}],
+                        'word_alignment': {'timebase': 'input_audio_seconds', 'words': [
+                            {'start': .1, 'end': .4, 'text': 'hello', 'timing_status': 'aligned'}]},
+                        'audio_file': bridge.runner.wsl_path(scene_file)}
+                    if mismatch == 'request': payload['request_uuid'] = str(uuid.UUID(int=0))
+                    if mismatch == 'source': payload['audio_file'] = '/mnt/l/other/scene_coverage.wav'
+                    def fake_run(cmd, **kwargs):
+                        command = ' '.join(map(str, cmd))
+                        if 'process_audio.py' in command:
+                            return _Result(returncode=1, stdout=json.dumps(payload) if transport == 'stdout' else '')
+                        if ' cat ' in f' {command} ' and 'result.json' in command:
+                            return _Result(stdout=json.dumps(payload))
+                        return _Result()
+                    with patch('wsl2_audio_bridge.uuid.uuid4', return_value=uuid.UUID(self.TEST_UUID)), patch(
+                        'wsl2_audio_bridge.subprocess.run', side_effect=fake_run), patch(
+                        'wsl2_audio_bridge.probe_wsl_audio_runtime', return_value={
+                            'workspace_ready': True, 'runtime_ready': True, 'abi_ready': True}):
+                        result = bridge.process_audio(str(scene_file), timeout=5)
+                    self.assertEqual(result['status'], 'error')
+                    self.assertEqual(result['bridge_error_reason'], 'wsl_subprocess_nonzero')
+                    if mismatch == 'none':
+                        self.assertEqual(result.get('transcription_decoding'), evidence)
+                        self.assertEqual(result.get('transcription_status'), 'error')
+                        for key in ('transcription', 'segments', 'word_alignment'):
+                            self.assertEqual(result.get(key), payload[key])
+                    else:
+                        self.assertNotIn('transcription_decoding', result)
+                        self.assertNotIn('transcription', result)
+                        self.assertNotIn('word_alignment', result)
 
     def test_result_json_freshness_via_direct_windows_path(self) -> None:
         scene_file = self._make_scene_file("scene_0004.wav")

@@ -6,7 +6,6 @@ import re
 import unicodedata
 from pathlib import Path
 
-from steps.common.lexicon import score_nrc_sentiment
 from steps.common.config_loader import get_runtime_paths, load_configs
 
 logger = logging.getLogger(__name__)
@@ -95,11 +94,12 @@ def _load(preferred_device: Optional[str] = None) -> bool:
         _configure_model_env()
         device = target_device if target_device == "cpu" or torch.cuda.is_available() else "cpu"
         
+        offline_mode = os.getenv("HF_HUB_OFFLINE") == "1" or os.getenv("TRANSFORMERS_OFFLINE") == "1"
         try:
             from steps.common.config_loader import load_configs
-            offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
-        except Exception:
-            offline_mode = False
+            offline_mode = offline_mode or load_configs({}).get("verification", {}).get("offline_mode", False)
+        except Exception as exc:
+            logger.warning("sentiment config unavailable; retaining environment offline policy: %s", exc)
             
         provision_result = ensure_model_cached("sentiment_model", offline=offline_mode)
         if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
@@ -127,7 +127,7 @@ def _load(preferred_device: Optional[str] = None) -> bool:
 
 
 def _gather_text(item: Dict[str, Any]) -> str:
-    for k in ("transcript", "ocr_text", "caption"):
+    for k in ("document_text", "transcript", "ocr_text", "caption"):
         v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v
@@ -141,81 +141,74 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     if _looks_too_short(text):
         return {"sentiment": None, "sentiment_meta": {"status": "skipped", "reason": "too_short"}}
 
-    offline = (os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_DATASETS_OFFLINE") == "1")
-    use_nrc_cfg = bool(((cfg.get("config", {}) or {}).get("analysis", {}) or {}).get("use_nrc_lexicon", False))
 
-    if not offline:
-        preferred_device = _preferred_device()
-        if _load(preferred_device):
-            try:
-                import torch  # type: ignore
-                from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
-                from steps.common.memory import update_fields
+    preferred_device = _preferred_device()
+    loaded = _load(preferred_device)
+    failure_reason, failure_error = "model_unavailable", _SENT.get("load_error")
+    if loaded:
+        try:
+            import torch  # type: ignore
+            from steps.text_embed.step import _content_fingerprint  # reuse fingerprint
+            from steps.common.memory import update_fields
 
-                inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
-                with torch.no_grad():
-                    if _SENT.get("device") == "cuda":
-                        with torch.amp.autocast("cuda"):
-                            logits = _SENT["model"](**inputs).logits
-                    else:
+            inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
+            with torch.no_grad():
+                if _SENT.get("device") == "cuda":
+                    with torch.amp.autocast("cuda"):
                         logits = _SENT["model"](**inputs).logits
-                    probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
-                labels = ["NEGATIVE", "POSITIVE"]
-                idx = int(probs[1] >= probs[0])
-                label = labels[idx]
-                score = float(probs[idx])
-                try:
-                    update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
-                except Exception as e:
-                    logger.warning(
-                        "sentiment sqlite update failed exc_type=%s exc=%s",
-                        type(e).__name__,
-                        e,
-                    )
-                return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
+                else:
+                    logits = _SENT["model"](**inputs).logits
+                probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
+            labels = ["NEGATIVE", "POSITIVE"]
+            idx = int(probs[1] >= probs[0])
+            label = labels[idx]
+            score = float(probs[idx])
+            try:
+                update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
             except Exception as e:
                 logger.warning(
-                    "sentiment inference failed device=%s exc_type=%s exc=%s",
-                    _SENT.get("device"),
+                    "sentiment sqlite update failed exc_type=%s exc=%s",
                     type(e).__name__,
                     e,
                 )
-                if _SENT.get("device") == "cuda" and _should_retry_on_cpu(e) and _load("cpu"):
+            return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf", "status": "ok", "model_id": _SENTIMENT_MODEL}}
+        except Exception as e:
+            failure_reason, failure_error = "inference_failed", f"{type(e).__name__}: {e}"
+            logger.warning(
+                "sentiment inference failed device=%s exc_type=%s exc=%s",
+                _SENT.get("device"),
+                type(e).__name__,
+                e,
+            )
+            if _SENT.get("device") == "cuda" and _should_retry_on_cpu(e) and _load("cpu"):
+                try:
+                    inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
+                    with torch.no_grad():
+                        logits = _SENT["model"](**inputs).logits
+                        probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
+                    labels = ["NEGATIVE", "POSITIVE"]
+                    idx = int(probs[1] >= probs[0])
+                    label = labels[idx]
+                    score = float(probs[idx])
                     try:
-                        inputs = _SENT["tok"](text, return_tensors="pt", truncation=True, max_length=512).to(_SENT["device"])
-                        with torch.no_grad():
-                            logits = _SENT["model"](**inputs).logits
-                            probs = torch.softmax(logits, dim=-1).cpu().numpy().tolist()[0]
-                        labels = ["NEGATIVE", "POSITIVE"]
-                        idx = int(probs[1] >= probs[0])
-                        label = labels[idx]
-                        score = float(probs[idx])
-                        try:
-                            update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
-                        except Exception as update_exc:
-                            logger.warning(
-                                "sentiment sqlite update failed after cpu retry exc_type=%s exc=%s",
-                                type(update_exc).__name__,
-                                update_exc,
-                            )
-                        return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf"}}
-                    except Exception as retry_exc:
+                        update_fields(cfg, _content_fingerprint(item), sentiment_label=label, sentiment_score=score)
+                    except Exception as update_exc:
                         logger.warning(
-                            "sentiment cpu retry failed exc_type=%s exc=%s",
-                            type(retry_exc).__name__,
-                            retry_exc,
+                            "sentiment sqlite update failed after cpu retry exc_type=%s exc=%s",
+                            type(update_exc).__name__,
+                            update_exc,
                         )
+                    return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "hf", "status": "ok", "model_id": _SENTIMENT_MODEL}}
+                except Exception as retry_exc:
+                    failure_error = f"{type(retry_exc).__name__}: {retry_exc}"
+                    logger.warning(
+                        "sentiment cpu retry failed exc_type=%s exc=%s",
+                        type(retry_exc).__name__,
+                        retry_exc,
+                    )
 
-    # Lexicon fallback when configured or HF failed
-    if False and use_nrc_cfg:  # Disabled for now
-        try:
-            res = score_nrc_sentiment(text, cfg)
-        except Exception:
-            res = None
-        if res:
-            label, score = res
-            return {"sentiment": {"label": label, "score": score}, "sentiment_meta": {"engine": "nrc-lex"}}
-
+    fallback_meta = {"engine": "rule-lex-fast", "status": "fallback", "reason": failure_reason,
+                     "error": failure_error, "score_kind": "heuristic"}
     # Fast rule-based fallback with tiny lexicon
     lex_pos = {
         "good", "great", "excellent", "amazing", "love", "like", "enjoy", "happy", "joy", "wonderful",
@@ -240,12 +233,12 @@ def sentiment(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
                 neg -= 1
                 pos += 1
     if pos == 0 and neg == 0:
-        return {"sentiment": {"label": "NEUTRAL", "score": 0.5}, "sentiment_meta": {"engine": "rule-lex-fast"}}
+        return {"sentiment": {"label": "NEUTRAL", "score": 0.5}, "sentiment_meta": fallback_meta}
     label = "POSITIVE" if pos >= neg else "NEGATIVE"
     margin = abs(pos - neg)
     total = max(1, pos + neg)
     conf = 0.5 + min(0.45, (margin / total) * 0.5)
     return {
         "sentiment": {"label": label, "score": float(f"{conf:.3f}")},
-        "sentiment_meta": {"engine": "rule-lex-fast"},
+        "sentiment_meta": fallback_meta,
     }

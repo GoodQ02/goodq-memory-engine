@@ -604,6 +604,16 @@ def register_scene_bundle(
                 'caption': frame_data.get('caption'),
                 'ocr_text': frame_data.get('ocr_text'),
             })
+            for optional_key in (
+                'caption_meta',
+                'caption_observations',
+                'detect_meta',
+                'object_observations',
+                'ocr_meta',
+                'ocr_observations',
+            ):
+                if frame_data.get(optional_key) is not None:
+                    frame_meta[optional_key] = frame_data.get(optional_key)
             ocr_text = frame_data.get('ocr_text')
             if frame_data.get('timestamp') is not None:
                 frame_timestamp = float(frame_data.get('timestamp'))
@@ -937,7 +947,8 @@ def register_scene_bundle(
                             'video_hash': video_hash,
                             'modality': 'text',
                             'embedding_source': 'scene_summary',
-                            'worker_name': 'text_embed',
+                            'run_id': (cfg.get('run') or {}).get('id'),
+                            'worker_name': 'scene_summary_embed',
                             'vector_model_tag': 'sentence-transformers/all-MiniLM-L6-v2',
                             'start': scene_start,
                             'end': scene_end,

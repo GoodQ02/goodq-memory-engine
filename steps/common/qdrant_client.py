@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, List
 import logging
+import math
 import os
 import uuid
 import string
@@ -55,6 +56,14 @@ class QdrantConfig:
     retrieval_event_policy: RetrievalEventPolicy = field(
         default_factory=RetrievalEventPolicy
     )
+
+
+class QdrantQueryError(RuntimeError):
+    """A query did not complete; the reason is safe for caller diagnostics."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
 
 
 class QdrantClient:
@@ -378,10 +387,16 @@ class QdrantClient:
         payload_filter: Optional[Dict[str, Any]] = None,
         *,
         retrieval_context: str,
+        raise_on_error: bool = False,
     ) -> List[Dict[str, Any]]:
+        """Query points, optionally distinguishing backend failures from no hits."""
         if not self.cfg.enabled:
+            if raise_on_error:
+                raise QdrantQueryError("qdrant_disabled")
             return []
         if not self.collection_exists():
+            if raise_on_error:
+                raise QdrantQueryError("collection_unavailable")
             return []
         try:
             body: Dict[str, Any] = {
@@ -401,7 +416,25 @@ class QdrantClient:
                         timeout=5,
                     )
                     if r.status_code == 200:
-                        res = r.json().get("result", []) or []
+                        try:
+                            response = r.json()
+                        except Exception as exc:
+                            if raise_on_error:
+                                raise QdrantQueryError("qdrant_response_invalid") from exc
+                            raise
+                        if raise_on_error:
+                            if not isinstance(response, dict) or not isinstance(response.get("result"), list):
+                                raise QdrantQueryError("qdrant_response_invalid")
+                            for hit in response["result"]:
+                                if (
+                                    not isinstance(hit, dict)
+                                    or not isinstance(hit.get("id"), (str, int))
+                                    or not isinstance(hit.get("score"), (int, float))
+                                    or not math.isfinite(hit["score"])
+                                    or not isinstance(hit.get("payload", {}), dict)
+                                ):
+                                    raise QdrantQueryError("qdrant_response_invalid")
+                        res = response.get("result", []) or []
                         break
                     else:
                         body_text = _truncate_http_body(getattr(r, "text", None))
@@ -414,6 +447,8 @@ class QdrantClient:
                             attempt + 1,
                         )
                         self._collection_ready = False
+                except QdrantQueryError:
+                    raise
                 except Exception as e:
                     logger.warning(
                         "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s attempt=%s",
@@ -427,8 +462,12 @@ class QdrantClient:
                 if attempt == 0:
                     time.sleep(0.5)
                     if not self.collection_exists():
+                        if raise_on_error:
+                            raise QdrantQueryError("collection_unavailable")
                         return []
             if res is None:
+                if raise_on_error:
+                    raise QdrantQueryError("qdrant_query_failed")
                 return []
             hits = [
                 {
@@ -527,6 +566,8 @@ class QdrantClient:
                     e,
                 )
             return hits
+        except QdrantQueryError:
+            raise
         except Exception as e:
             logger.warning(
                 "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",
@@ -535,6 +576,8 @@ class QdrantClient:
                 type(e).__name__,
                 e,
             )
+            if raise_on_error:
+                raise QdrantQueryError("qdrant_query_failed") from e
             return []
 
     def stats(self) -> Dict[str, Any]:

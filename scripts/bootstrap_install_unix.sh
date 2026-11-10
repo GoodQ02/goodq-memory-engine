@@ -50,7 +50,6 @@ DEPS_FAIL=0
 check_dep "Conda" "conda" || DEPS_FAIL=1
 check_dep "FFmpeg" "ffmpeg" || DEPS_FAIL=1
 check_dep "Poppler (pdftotext)" "pdftotext" || DEPS_FAIL=1
-check_dep "Tesseract OCR" "tesseract" || DEPS_FAIL=1
 
 # Check for Qdrant either system-wide or in vendor/
 if command -v qdrant >/dev/null 2>&1; then
@@ -74,9 +73,9 @@ fi
 if [ $DEPS_FAIL -eq 1 ]; then
     echo "[BOOTSTRAP] [ERROR] Some critical system dependencies are missing."
     if [ "$OS_TYPE" = "darwin" ]; then
-        echo "Please run: brew install ffmpeg poppler tesseract qdrant"
+        echo "Please run: brew install ffmpeg poppler qdrant"
     else
-        echo "Please run: sudo apt install ffmpeg poppler-utils tesseract-ocr qdrant"
+        echo "Please run: sudo apt install ffmpeg poppler-utils qdrant"
     fi
     exit 1
 fi

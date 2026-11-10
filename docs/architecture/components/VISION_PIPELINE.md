@@ -4,9 +4,15 @@
 
 # Vision Processing Pipeline
 
-**Status:** ✅ Production operational (optimized)
-**Last Verified:** May 27, 2026
+**Status:** Existing production pipeline; perception quality is not fully accepted.
+**Current scope review:** October 24, 2026; the detailed runtime history remains dated.
 **Scope:** Scene detection, keyframe extraction, visual embedding generation, and Phase 6a/6b integration
+
+Image/video OCR uses the pinned PaddleOCR PP-OCRv6 medium detector and recognizer
+through ONNX Runtime. The replacement qualification and remaining recognition
+limits are recorded in the `perception assessment` (omitted from public source).
+Object detection runs `opencv_yolox` on ONNX Runtime CUDA in `envs/object_detect/.venv` (with CPU retry), and scene captioning runs `tencent/WeVisOne-VL-2B` in `envs/caption_vlm/.venv` once per scene across sampled frames. [PROJECT.md](../../../PROJECT.md)
+owns the deployment checkpoint and the fresh context/UI witness.
 
 ---
 
@@ -21,8 +27,8 @@ The flow consists of:
 ```text
 scene keyframe
   -> OCR
-  -> image caption (BLIP)
-  -> object detection (YOLO)
+  -> image caption (WeVisOne-VL-2B)
+  -> object detection (YOLOX / NanoDet CPU fallback)
   -> face embedding / face metadata
   -> DINOv2-Large embedding (1024-d)
   -> CLIP-ViT-Large embedding (768-d)
@@ -81,14 +87,40 @@ Those persisted outputs are then consumed by:
 ### 1. `image_ocr`
 
 **Purpose**
-- extract text visible in the keyframe
+- extract visible text while retaining its original source evidence
 
-**Typical Output Fields**
-- `ocr_text`
-
-**Behavior**
-- CPU-safe
-- failure is recoverable and should not halt the scene
+**Runtime and outputs**
+- `goodq_ocr` resolves a dedicated project-local OCR interpreter. The pinned
+  dependencies are in `envs/ocr/requirements.txt` and `envs/locks/ocr.lock.txt`;
+  model identities and file hashes are in `configs/model_registry.yaml`.
+- `image_ocr.device` explicitly selects `cpu` or `cuda:0`. A selected CUDA
+  provider must initialize and execute kernels; a whole-session CPU fallback
+  fails visibly. Native ONNX placement of individual CPU nodes is reported.
+  GPU workers share the host reservation owner and release claims on exit or
+  cancellation. The 16 GB host witness does not qualify untested 8/6 GB devices.
+- `ocr_text` and `ocr_meta.accepted_regions` retain native text, source-pixel boxes,
+  polygons and recognizer sequence scores. Scores are model evidence, not
+  calibrated probabilities. Mismatched arrays and malformed geometry fail visibly.
+  New Paddle ledger rows label their required numeric aggregate as the arithmetic
+  mean of retained recognizer sequence scores, with its observation count. Raw
+  region scores remain unchanged. Historical presence scores keep their meaning.
+- Both video callers and standalone-image ingestion use one native Paddle pass.
+  Tesseract, image variants, crop agreement, enhancement retries and automatic OCR
+  engine fallback are retired. Historical records retain their original engine
+  labels and score meanings; they are not reinterpreted as Paddle results.
+- `ocr_meta` records both pinned model revisions, actual provider execution,
+  settings fingerprint, source hash and frame timestamp. Scene aggregation retains
+  per-sample evidence. A missing selected model/provider is an error; `no_text`
+  means no admitted native reading, not proof that no visible text exists.
+- Dates are a separate calendar-valid interpretation of raw observed text.
+  `date_evidence` links interpreted or uncertain dates to their exact text, box,
+  polygon and frame offset. Invalid dates are not promoted; ambiguous numeric
+  order or century remains uncertain. No character insertion or engine-specific
+  repair changes the native reading.
+- Runtime inference uses verified local assets and disables remote model checks.
+  The local environment resolves the experimental dependency conflict without
+  altering audio, location or core environments. Packaging qualification is
+  recorded separately from local runtime qualification.
 
 ### 2. `image_caption`
 
@@ -100,8 +132,9 @@ Those persisted outputs are then consumed by:
 - `caption_meta`
 
 **Behavior**
-- contributes strongly to semantic rollups and KG text surfaces
-- native crashes are treated as partial keyframe failures, not as scene-bundle invalidation
+- runs the sealed `tencent/WeVisOne-VL-2B` (`3dad9ce8bcb6fbe0aea945bf8860bd2cfc3663bf`) model inside `envs/caption_vlm/.venv` (`goodq_caption_vlm`), loading the model once per scene across all sampled frames (`samples: [...]`)
+- deterministic greedy decoding (`max_new_tokens=256`, `do_sample=False`) with `caption_meta.inference_kind = "model_generated_description"`
+- hedged place clauses in VLM descriptions (`possibly a home office or living room`) are suppressed by `is_hedged_mention` before place entity extraction or setting-hint derivation
 
 ### 3. `object_detect`
 
@@ -180,6 +213,11 @@ Those persisted outputs are then consumed by:
 - thin semantic scaffolding noise is suppressed
 - the taste layer now rejects filler/fragments and known joke aliases
 - conservative place inference from captions/objects is active
+- explicit bathroom captions are recognized; a sink alone does not identify a room
+- object-based room inference requires every defining detection to meet the rule's
+  existing confidence level; missing, invalid and weaker scores remain object
+  evidence without becoming stronger room claims. Matched detector scores remain
+  in the inferred entity's provenance. These are candidates, not verified places.
 
 ---
 

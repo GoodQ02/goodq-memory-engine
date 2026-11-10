@@ -75,6 +75,31 @@ literal workstation roots or a dated active epoch.
 - `cli.print_config` prints sanitized operator JSON by default and has no supported raw-secret print mode.
 - Local path tokenization is display-only; it must not change runtime config semantics or persisted runtime paths.
 
+### 4b) Hugging Face token aliases
+
+Source-verified on 2026-09-30; these are existing behaviors, not a new
+credential-selection policy. `.env.local` loading uses python-dotenv's default
+`override=False`, so existing process variables win. `_apply_env_aliases()`
+fills a missing HF_TOKEN from HUGGINGFACE_TOKEN or vice versa and fills a
+missing PYANNOTE_TOKEN from the primary alias. It leaves conflicting nonempty
+values intact. Use one intended credential consistently across applicable
+aliases in the approved store; variable names do not identify HF account labels.
+
+| Consumer | Existing resolution order |
+| --- | --- |
+| `steps/common/model_provisioner.py::resolve_hf_token` | For `pyannote/` repositories, PYANNOTE_TOKEN first; then HF_TOKEN, HF_HUB_TOKEN, HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN. Tooling fallback reads repository `.env.local`, then models-root parent's `.env.local`, returning the first eligible nonempty HF_TOKEN or pyannote-specific PYANNOTE_TOKEN line in file order. |
+| `wsl2_audio/process_audio.py` | HF_TOKEN, PYANNOTE_TOKEN, HUGGINGFACE_TOKEN, then configured secret/environment reference. |
+| `wsl2_audio/audio_service.py` | Configured secret/environment reference; default environment name is PYANNOTE_TOKEN. |
+| `wsl2_audio/setup_cuda_env.sh` | Sources worker `.goodq_env` first, which can replace inherited bindings. Saved HF login is a fallback only when HF_TOKEN and HUGGINGFACE_TOKEN are both absent; otherwise fills a missing alias. |
+| Bundled `huggingface_hub/utils/_auth.py` | HF_TOKEN, legacy HUGGING_FACE_HUB_TOKEN, then saved-login file. Separately installed packages must be checked independently. |
+
+The service installer template uses worker `.goodq_env` as EnvironmentFile
+and sources the setup script. This describes the tracked template, not proof
+of a deployed service's bindings. Do not change these differing orders without
+a reviewed design and focused behavior tests. Use the
+[HF guide](../guides/wsl2/HF_CLI_LOGIN_GUIDE.md) for presence-only diagnostics;
+see [security audit limits](../../SECURITY.md#hugging-face-credential-handling).
+
 ### 5) Windows ↔ WSL2 Interop
 - Tracked active configuration must not contain literal Windows drive roots.
 - Local overrides may resolve host-specific paths from environment variables;

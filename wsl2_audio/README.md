@@ -6,8 +6,12 @@ This system offloads audio processing (transcription and diarization) from Windo
 
 ### Architecture
 
-The active runtime uses a unified local WSL worker selected by the canonical
-Windows ingestion/runtime surface.
+The configured runtime uses a unified local WSL worker selected by the canonical
+Windows ingestion/runtime surface. The published recording engine is a separate
+opt-in path, disabled by default; private source delivery does not activate it.
+See the [runtime reference](../docs/reference/WSL_AUDIO_RUNTIME.md) for source
+contracts and [PROJECT.md](../PROJECT.md#next-session-checkpoint) for verified
+scope, quality limits and the next-chat read-only review.
 
 - Windows remains the primary host.
 - WSL is a compute extension for accelerated audio.
@@ -17,11 +21,20 @@ Windows ingestion/runtime surface.
 
 ### Benefits
 
-1. **Better GPU Utilization**: Linux PyTorch has better CUDA support than Windows
-2. **Faster Processing**: faster-whisper is significantly faster than OpenAI Whisper
-3. **VAD Preprocessing**: Silero VAD removes silence, reducing processing time by 30-60%
-4. **Stability**: Fewer environment conflicts, no Windows-specific issues
-5. **Scalability**: Easy to add more processing power or distribute across machines
+For the current speaker path, use the [audio runtime reference](../docs/reference/WSL_AUDIO_RUNTIME.md#speaker-change-review-evidence)
+and [identity contract](../docs/architecture/IDENTITY_STITCHING_CONTRACT.md).
+ECAPA produces versioned voice signatures; Wav2Vec remains for emotion, not new
+whole-scene vectors or signature fallback. The conservative speaker-change flag
+is review-only and does not change admission. Deployment and next-agent actions
+belong to [PROJECT.md](../PROJECT.md#next-session-checkpoint); older setup and
+performance notes below are not permission to reinstall or repeat witnesses.
+
+The worker provides local transcription, activity/diarization observations and
+retained evidence through the Windows caller boundary. Device, timing and quality
+claims require a source-bound witness; WSL alone does not guarantee speed,
+encoding correctness or model accuracy. The
+[November 4 checkpoint](../docs/testing/AUDIO_QUALIFICATION_CHECKPOINT_2026-11-04.md)
+records the verified caller/UTF-8 repairs and remaining audio quality limits.
 
 ### Performance Notes
 

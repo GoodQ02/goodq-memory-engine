@@ -859,6 +859,62 @@ def test_passive_get_returns_exact_receipt_without_changing_job(
     assert ledger.record_path(record["job_id"]).read_bytes() == before_bytes
 
 
+@pytest.mark.parametrize("retirement_scope", ["source", "neighbor", "other_epoch", "corrupt"])
+def test_passive_get_excludes_retired_summary_sources_without_rewriting_evidence(
+    temporal_runtime, client, retirement_scope,
+) -> None:
+    from scripts.ucf.ucf_ledger import UCFLedgerClient
+
+    cfg, _authority, _load_configs = temporal_runtime
+    ledger, record, _request_bytes, snapshot = _queued_job(cfg)
+    running = ledger.transition(record["job_id"], expected_states="queued", new_state="running")
+    store = TemporalSummaryResultStore(search_route._temporal_summary_result_root(cfg))
+    store.write_success(
+        job_id=record["job_id"], **record["scope"], started_at_utc=running["updated_at_utc"],
+        result={"summary": "A grounded private narrative.", "segments": [],
+                "source_scene_ids": ["scene_0001"], "source_count": 1,
+                "truncated": False, "warning_codes": []},
+        model_evidence={"model_id": snapshot.models[0].model_id, "provider": snapshot.models[0].backend},
+    )
+    ledger.transition(record["job_id"], expected_states="running", new_state="succeeded")
+    paths = (ledger.record_path(record["job_id"]), store.record_path(record["job_id"]))
+    before = {path: path.read_bytes() for path in paths}
+    route = f"/api/search/temporal/summarize/{record['job_id']}"
+    assert client.get(route).status_code == 200
+
+    ucf_path = Path(cfg["paths"]["db_path"]).parent / "ucf" / "ucf_ledger.db"
+    ucf_path.parent.mkdir()
+    ucf = UCFLedgerClient(str(ucf_path))
+    ucf.init_schema()
+    video_hash = "a" * 64
+    epoch = "other_epoch" if retirement_scope == "other_epoch" else snapshot.epoch_id
+    scene_id = hashlib.sha256(f"scene{video_hash}|0.000|10.000|".encode()).hexdigest()
+    alias = "scene_neighbor" if retirement_scope == "neighbor" else "scene_0001"
+    frame_id = ucf.log_frame(video_hash=video_hash, epoch_id=epoch, run_id="fixture",
+                            t_start=0, t_end=10, modality="video", worker_name="scene_summary",
+                            model_tag="fixture", source_artifact_id=alias, promotion_status="rejected")
+    evidence = {"kind": "scene_retirement", "version": 1, "video_hash": video_hash,
+                "epoch_id": epoch, "scene_id": scene_id, "aliases": [scene_id, alias],
+                "start": 0, "end": 10, "frame_ids": [frame_id], "vectors": []}
+    if retirement_scope == "corrupt":
+        evidence["aliases"] = None
+    ucf.log_status_transition(old_status="promoted", new_status="rejected",
+                              tool_name="ucf_retire_scene", video_hash=video_hash, epoch_id=epoch,
+                              scope=f"scene_retirement:{scene_id}", frame_ids=[frame_id], evidence=evidence)
+    ucf.close()
+
+    response = client.get(route)
+    if retirement_scope in {"source", "corrupt"}:
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "result_invalid"
+        if retirement_scope == "source":
+            assert response.json()["detail"]["reason"] == "source_scene_retired"
+        assert "private narrative" not in response.text
+    else:
+        assert response.status_code == 200, response.text
+    assert before == {path: path.read_bytes() for path in paths}
+
+
 def test_passive_get_allows_preexecution_failure_without_receipt(
     temporal_runtime,
     client,

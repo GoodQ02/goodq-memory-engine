@@ -137,6 +137,11 @@ runtime_ok:
   SetOutPath "$INSTDIR\ffmpeg"
   File /r "staged\ffmpeg\*.*"
 
+!if "${GOODQ_INSTALLER_PROFILE}" == "PERSONAL_AIR_GAP"
+  SetOutPath "$INSTDIR\vlc"
+  File /r "staged\vlc\*.*"
+!endif
+
   SetOutPath "$INSTDIR\poppler"
   File /r "staged\poppler\*.*"
 
@@ -225,7 +230,6 @@ runtime_ok:
   StrCpy $InstallStage "vc_runtime_stage"
   SetOutPath "$INSTDIR\binaries"
   File "staged\binaries\vc_redist.x64.exe"
-  File "staged\binaries\tesseract_setup.exe"
   ; The VC runtime is machine-wide. Reuse a healthy x64 runtime so a follower
   ; repair does not relaunch a GUI bootstrapper during an unattended install.
   SetRegView 64
@@ -256,43 +260,12 @@ vcredist_verify:
     Abort
   ${EndIf}
 
-  ; The engine is machine-wide. Reuse a working prior install so a repair or
-  ; upgrade does not relaunch its nested NSIS setup and block unattended work.
-  StrCpy $InstallStage "tesseract_stage"
-  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" tesseract_verify tesseract_install
-tesseract_install:
-  DetailPrint "Installing bundled Tesseract OCR prerequisite..."
-  nsExec::ExecToLog '"$INSTDIR\binaries\tesseract_setup.exe" /S'
-  Pop $0
-  DetailPrint "Tesseract OCR setup completed. exit code = $0"
-  ${If} $0 != 0
-  ${AndIf} $0 != 2
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR installation failed. Code $0"
-    Abort
-  ${EndIf}
-tesseract_verify:
-  StrCpy $InstallStage "tesseract_verify"
-  IfFileExists "$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" tesseract_command_verify tesseract_missing
-tesseract_missing:
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR executable was not installed."
-    Abort
-tesseract_command_verify:
-  nsExec::ExecToLog '"$PROGRAMFILES64\Tesseract-OCR\tesseract.exe" --version'
-  Pop $0
-  ${If} $0 != 0
-    IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "Error: Tesseract OCR verification failed. Code $0"
-    Abort
-  ${EndIf}
-
   ; --- STATE 7: install local wheelhouse ---
   DetailPrint "Step 7/12: Installing Python packages from signed offline payload..."
   StrCpy $InstallStage "wheelhouse_stage"
   SetOutPath "$INSTDIR"
   File "staged\wheelhouse-sbom.json"
-  IfFileExists "$INSTDIR\wheels\pytesseract-0.3.10-py3-none-any.whl" wheelhouse_ready wheelhouse_missing
+  IfFileExists "$INSTDIR\wheels\*.whl" wheelhouse_ready wheelhouse_missing
 wheelhouse_missing:
   IfSilent +2
   MessageBox MB_OK|MB_ICONSTOP "Error: Required offline wheelhouse artifact is missing."
@@ -316,8 +289,16 @@ wheelhouse_ready:
     Abort
   ${EndIf}
 !endif
-  StrCpy $InstallStage "ocr_binding_verify"
-  nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" -c "import pytesseract; print(pytesseract.__version__)"'
+  ; OCR owns an isolated NumPy/Paddle runtime. Packaging must supply it;
+  ; never silently run OCR in the shared embedded interpreter.
+  StrCpy $InstallStage "ocr_runtime_verify"
+  IfFileExists "$INSTDIR\ocr-runtime\python.exe" ocr_runtime_present ocr_runtime_missing
+ocr_runtime_missing:
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "Error: Required isolated Paddle OCR runtime payload is missing."
+  Abort
+ocr_runtime_present:
+  nsExec::ExecToLog '"$INSTDIR\ocr-runtime\python.exe" -c "import paddleocr, onnxruntime; assert tuple(map(int,paddleocr.__version__.split(chr(46)))) == (3,7,0); assert tuple(map(int,onnxruntime.__version__.split(chr(46)))) == (1,23,2)"'
   Pop $0
   ${If} $0 != 0
     IfSilent +2
@@ -513,6 +494,7 @@ preserve_wsl_distro:
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\qdrant"
   RMDir /r "$INSTDIR\ffmpeg"
+  RMDir /r "$INSTDIR\vlc"
   RMDir /r "$INSTDIR\scripts"
   RMDir /r "$INSTDIR\configs"
   RMDir /r "$INSTDIR\api"

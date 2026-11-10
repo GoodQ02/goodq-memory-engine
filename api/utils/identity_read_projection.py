@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 from pathlib import Path
@@ -170,6 +171,84 @@ def _face_evidence(raw_ref: Path, face_id: str, face_index: int) -> dict[str, An
     }
 
 
+def _sampled_representative(epoch_root: Path, frame_id: int, face_index: int | None = None,
+                            manifest_cache: dict | None = None) -> tuple[str, Path, float] | None:
+    from lib.face_observation import resolve_sampled_face
+    ledger = epoch_root / 'ucf/ucf_ledger.db'
+    try:
+        with sqlite3.connect(f'{ledger.resolve().as_uri()}?mode=ro', uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT raw_ref,t_start,payload,payload_hash,video_hash,source_artifact_id,promotion_status "
+                "FROM context_frames WHERE frame_id=? AND worker_name='face_embed' "
+                "AND epoch_id=?", (frame_id, epoch_root.name),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    if row is None:
+        return None
+    record = dict(row)
+    record['payload'] = json.loads(record['payload'])
+    if 'observation_timestamp' in record['payload'] and record['promotion_status'] != 'promoted':
+        raise ValueError('Face observation is not promoted')
+    raw = Path(record['raw_ref'])
+    sampled = resolve_sampled_face(epoch_root, raw, [record], manifest_cache=manifest_cache)
+    if sampled is None:
+        return None
+    if face_index is not None:
+        payload = record['payload']
+        evidence = _face_evidence(raw, f'{frame_id}_{face_index}', face_index)
+        if payload.get('face_index') != face_index or evidence.get('bbox') != [
+            payload.get(key) for key in ('x1', 'y1', 'x2', 'y2')
+        ]:
+            raise ValueError('Face target disagrees with saved observation')
+    video_id = raw.resolve().relative_to((epoch_root / 'processing').resolve()).parts[0]
+    return video_id, sampled[0], sampled[1]
+
+
+def _project_face_member(epoch_root: Path, face_id: str, manifest_cache: dict) -> tuple[dict | None, dict]:
+    """Keep one entry per saved member, even when its exact evidence is unavailable."""
+    member = {"target_face_id": face_id, "evidence_status": "unavailable",
+              "reason": "saved_evidence_unavailable"}
+    try:
+        raw_frame_id, raw_face_index = face_id.split("_", 1)
+        frame_id, face_index = int(raw_frame_id), int(raw_face_index)
+        context = _context_frame(epoch_root, frame_id)
+        if context is None:
+            return None, member
+        sampled = _sampled_representative(epoch_root, frame_id, face_index, manifest_cache)
+        representative = sampled[:2] if sampled else _representative_frame(epoch_root, *context)
+        if representative is None:
+            return None, member
+        endpoint = frame_endpoint(representative[0], str(representative[1]))
+        if not endpoint:
+            return None, member
+        evidence = {"frame_url": endpoint,
+                    **({'timestamp': sampled[2]} if sampled else {}),
+                    **_face_evidence(context[0], face_id, face_index)}
+        if sampled is None:
+            # Preserve historical representative compatibility, but never put its
+            # unrelated midpoint image inside a claimed exact target crop.
+            return evidence, {**member, "reason": "exact_source_unavailable"}
+        from PIL import Image
+
+        with Image.open(representative[1]) as image:
+            width, height = image.size
+        bbox = evidence.get('bbox')
+        if not isinstance(bbox, list) or len(bbox) != 4 or not all(
+            type(value) in (int, float) and math.isfinite(value) for value in bbox
+        ):
+            raise ValueError('Invalid face box')
+        x1, y1, x2, y2 = bbox
+        crop = [max(0, x1), max(0, y1), min(width, x2), min(height, y2)]
+        if crop[2] <= crop[0] or crop[3] <= crop[1]:
+            raise ValueError('Face box lies outside its source image')
+        return evidence, {**evidence, "evidence_status": "available",
+                          "image_width": width, "image_height": height, "crop_bbox": crop}
+    except (ValueError, OSError, TypeError, KeyError):
+        return None, member
+
+
 def project_face_cluster_images(
     data: Mapping[str, Any],
     cfg: Mapping[str, Any],
@@ -183,29 +262,18 @@ def project_face_cluster_images(
     epoch_root = _epoch_root(cfg)
     if epoch_root is None:
         return projected
+    manifest_cache: dict = {}
     for cluster in clusters:
         face_ids = cluster.get("face_ids")
         if not isinstance(face_ids, list) or not face_ids:
             continue
-        face_id = str(face_ids[0])
-        try:
-            raw_frame_id, raw_face_index = face_id.split("_", 1)
-            frame_id = int(raw_frame_id)
-            face_index = int(raw_face_index)
-        except (TypeError, ValueError):
-            continue
-        context = _context_frame(epoch_root, frame_id)
-        if context is None:
-            continue
-        representative = _representative_frame(epoch_root, *context)
-        if representative is None:
-            continue
-        endpoint = frame_endpoint(representative[0], str(representative[1]))
-        if endpoint:
-            cluster["representative_frames"] = [
-                {
-                    "frame_url": endpoint,
-                    **_face_evidence(context[0], face_id, face_index),
-                }
-            ]
+        members = []
+        for index, face_id in enumerate(face_ids):
+            evidence, member = _project_face_member(epoch_root, str(face_id), manifest_cache)
+            members.append(member)
+            if index == 0 and evidence:
+                cluster["representative_frames"] = [evidence]
+        cluster["members"] = members
+        cluster["members_available"] = sum(m["evidence_status"] == "available" for m in members)
+        cluster["members_unavailable"] = len(members) - cluster["members_available"]
     return projected

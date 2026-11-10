@@ -1,4 +1,4 @@
-"""Read-only preflight authority for isolated Golden Witness runs."""
+"""Read-only planning and one-use store admission for isolated Golden Witness runs."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Any, Mapping
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from steps.common.model_provisioner import resolve_models_root
@@ -17,6 +19,184 @@ from steps.common.tool_resolver import ToolResolver
 
 class WitnessAuthorityError(RuntimeError):
     """Raised when a proposed witness cannot prove its isolation boundary."""
+
+
+_WITNESS_STORE_FILES = (
+    "db_path", "knowledge_graph_db", "faiss_audio_path", "faiss_index_path",
+    "faiss_clip_path", "faiss_dino_path", "clip_id_map_db", "dino_id_map_db",
+    "clap_id_map_db",
+)
+
+
+def _witness_store_paths(cfg: Mapping[str, Any], root: Path) -> dict[str, Path]:
+    paths = cfg.get("paths") or {}
+    targets = {}
+    for key in _WITNESS_STORE_FILES:
+        value = paths.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise WitnessAuthorityError(f"witness store path is missing: {key}")
+        targets[key] = Path(value)
+    targets["ucf_ledger"] = Path(paths["db_dir"]) / "ucf" / "ucf_ledger.db"
+    for key, original in targets.items():
+        path = original.resolve()
+        if not _is_within(path, root):
+            raise WitnessAuthorityError(f"witness store path escapes root: {key}")
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            if os.path.lexists(str(original) + suffix) or os.path.lexists(str(path) + suffix):
+                raise WitnessAuthorityError(f"witness store is not fresh: {key}{suffix}")
+    # Logs, config and import-created directories are permitted. Prior scene or
+    # result artifacts are not evidence for a newly admitted ingestion.
+    for key in ("processing", "output_directory", "faiss_dir"):
+        directory = Path(paths[key]).resolve()
+        if not _is_within(directory, root):
+            raise WitnessAuthorityError(f"witness artifact path escapes root: {key}")
+        if directory.exists() and any(item.is_file() or item.is_symlink() for item in directory.rglob("*")):
+            raise WitnessAuthorityError(f"witness artifacts are not fresh: {key}")
+    return {key: path.resolve() for key, path in targets.items()}
+
+
+def _witness_shared_exceptions(cfg: Mapping[str, Any], root: Path) -> dict[str, Any]:
+    models = Path(cfg["paths"]["models_cache"]).resolve()
+    if not models.is_dir() or _is_within(models, root) or _is_within(root, models):
+        raise WitnessAuthorityError("shared model cache must exist and not overlap witness root")
+    allocator = sys.modules.get("common.vram_allocator")
+    repo_processing = Path(__file__).resolve().parents[1] / "processing"
+    fallback = Path(os.environ.get("ProgramData", "C:\\ProgramData")) / "GoodQ4All" / "processing"
+    vram = {
+        "purpose": "shared singleton GPU reservation and lock coordination",
+        "resolution": "loaded" if allocator is not None else "unverified_until_allocator_load",
+        "registry_path": str(allocator.REGISTRY_PATH) if allocator is not None else None,
+        "lock_path": str(allocator.LOCK_PATH) if allocator is not None else None,
+        "configured_candidates": [str(repo_processing), str(fallback)],
+    }
+    return {"models_cache": {"path": str(models), "purpose": "reuse existing shared model assets"},
+            "vram_coordination": vram}
+
+
+def _initialize_witness_collection(cfg: dict[str, Any], key: str, dim: int) -> None:
+    from steps.common.qdrant_client import build_qdrant_client
+
+    client = build_qdrant_client(cfg, dim, key)
+    if client is None:
+        raise WitnessAuthorityError("witness Qdrant initialization is disabled")
+    original_get, original_put = client.session.get, client.session.put
+
+    def require_absent(url, **kwargs):
+        response = original_get(url, **kwargs, allow_redirects=False)
+        if response.status_code != 404:
+            raise WitnessAuthorityError("witness collection changed after absence check")
+        return response
+
+    def create_without_redirect(url, **kwargs):
+        return original_put(url, **kwargs, allow_redirects=False)
+
+    # The existing initializer otherwise accepts existing collections and creates
+    # after any non-200 GET. A witness must never adopt that behavior silently.
+    client.session.get = require_absent
+    client.session.put = create_without_redirect
+    try:
+        if not client.ensure_collection():
+            raise WitnessAuthorityError(f"witness collection initialization failed: {key}")
+    finally:
+        client.session.close()
+
+
+def admit_witness_run(cfg: dict[str, Any], snapshot_path: Path) -> dict[str, Any]:
+    """Claim a fresh run once, then initialize and verify only its four stores.
+
+    Configuration/CLI containment must already have passed in the runner. A
+    partial initialization leaves its admission marker and collections intact;
+    retries require a new sealed witness, never silent reuse or cleanup.
+    """
+    from steps.common.atomic_io import atomic_write_json
+    from steps.common.qdrant_client import build_qdrant_session
+
+    witness = cfg.get("witness") or {}
+    if (cfg.get("ingestion_isolation") is not True or
+            witness.get("ingestion_isolation") is not True or witness.get("promotion_enabled") is not False):
+        raise WitnessAuthorityError("witness admission requires non-promoting isolation")
+    root = Path(witness["artifact_root"]).resolve()
+    snapshot = Path(snapshot_path).resolve()
+    if not root.is_dir() or not _is_within(snapshot, root):
+        raise WitnessAuthorityError("witness snapshot must belong to the sealed root")
+    if not snapshot.is_file():
+        raise WitnessAuthorityError("witness snapshot must be an existing file")
+    snapshot_sha256 = _sha256_file(snapshot)
+    marker = root / "witness-admission.json"
+    if os.path.lexists(marker):
+        raise WitnessAuthorityError("witness already admitted; use a fresh run")
+    stores = _witness_store_paths(cfg, root)
+    shared = _witness_shared_exceptions(cfg, root)
+    qcfg = cfg.get("qdrant") or {}
+    host = qcfg.get("host", "")
+    try:
+        parsed = urlparse(host)
+        port = parsed.port
+    except ValueError as exc:
+        raise WitnessAuthorityError("witness admission requires an explicit valid loopback Qdrant port") from exc
+    if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}
+            or port is None or not 1 <= port <= 65535 or parsed.username or parsed.password
+            or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
+        raise WitnessAuthorityError("witness admission requires plain loopback Qdrant with an explicit valid port")
+    collections = qcfg.get("collections") or {}
+    expected = {key: f"goodq_{key}_{cfg['epoch_id']}" for key in ("clip", "dino", "text", "audio")}
+    dims = qcfg.get("embedding_dims") or {}
+    if collections != expected or qcfg.get("enabled") is not True:
+        raise WitnessAuthorityError("witness admission requires four exact enabled epoch collections")
+    if any(type(dims.get(key)) is not int or dims[key] <= 0 for key in expected):
+        raise WitnessAuthorityError("witness admission requires explicit positive collection dimensions")
+    host = host.rstrip("/")
+    initializer_cfg = {**cfg, "qdrant": {**qcfg, "host": host}}
+    with build_qdrant_session(host) as session:
+        for key, name in expected.items():
+            try:
+                response = session.get(f"{host}/collections/{name}", timeout=3, allow_redirects=False)
+            except Exception as exc:
+                raise WitnessAuthorityError(f"witness collection absence unverified: {key}") from exc
+            if response.status_code != 404:
+                raise WitnessAuthorityError(f"witness collection is existing or unverified: {key}")
+        # Recheck paths after network I/O, then reserve this run exclusively.
+        _witness_store_paths(cfg, root)
+        receipt = {
+            "status": "initializing", "epoch_id": cfg["epoch_id"],
+            "snapshot_path": str(snapshot),
+            "snapshot_sha256": snapshot_sha256,
+            "resolved_config_sha256": hashlib.sha256(json.dumps(cfg, sort_keys=True, default=str).encode()).hexdigest(),
+            "stores_absent": {key: str(path) for key, path in stores.items()},
+            "collections_absent": expected, "collections_verified": {},
+            "shared_exceptions": shared,
+        }
+        try:
+            with marker.open("x", encoding="utf-8") as handle:
+                json.dump(receipt, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError as exc:
+            raise WitnessAuthorityError("witness already admitted; use a fresh run") from exc
+        try:
+            for key, name in expected.items():
+                _initialize_witness_collection(initializer_cfg, key, dims[key])
+                response = session.get(f"{host}/collections/{name}", timeout=3, allow_redirects=False)
+                if response.status_code != 200:
+                    raise WitnessAuthorityError(f"witness collection verification failed: {key}")
+                result = response.json().get("result", {})
+                vectors = result.get("config", {}).get("params", {}).get("vectors", {})
+                if (type(result.get("points_count")) is not int or result["points_count"] != 0
+                        or type(vectors.get("size")) is not int or vectors["size"] != dims[key]
+                        or vectors.get("distance") != "Cosine"):
+                    raise WitnessAuthorityError(f"witness collection is not empty with required schema: {key}")
+                receipt["collections_verified"][key] = {"name": name, "points_count": 0,
+                                                          "size": dims[key], "distance": "Cosine"}
+            _witness_store_paths(cfg, root)
+            receipt["status"] = "admitted"
+        except Exception as exc:
+            receipt["status"] = "failed"
+            receipt["failure_type"] = type(exc).__name__
+            atomic_write_json(marker, receipt)
+            raise WitnessAuthorityError("witness collection initialization/verification failed; preserve partial run") from exc
+        atomic_write_json(marker, receipt)
+    return receipt
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -137,7 +317,6 @@ def preflight_witness(artifact_root: Path, input_path: Path) -> dict[str, Any]:
     config = build_witness_config(artifact_root, source)
     tools = {
         "ffmpeg": ToolResolver.resolve_tool("ffmpeg"),
-        "tesseract": ToolResolver.resolve_tool("tesseract"),
     }
     return {
         "status": "ready",
@@ -195,7 +374,8 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
     faiss_root = epoch_root / "faiss"
     return {
         "ingestion_isolation": True,
-        "host": config.get("host") if isinstance(config, Mapping) else {},
+        "epoch_id": epoch_id,
+        "host": {**dict(config.get("host") or {}), "data_root": str(data_root)},
         "witness": {
             "ingestion_isolation": True,
             "promotion_enabled": False,
@@ -227,6 +407,13 @@ def _isolated_runtime_snapshot(prepared_receipt: Mapping[str, Any], root: Path) 
             "processed": str(data_root / "processed"),
             "failed": str(data_root / "failed"),
             "models_cache": models_cache,
+            "reports_dir": str(root / "reports"),
+            "csv_path": str(epoch_root / "logs" / "system_metrics.csv"),
+            "nas_path": str(data_root / "archive"),
+        },
+        "identity_search": {
+            "roster_path": str(root / "identity" / "family_roster.yaml"),
+            "kg_db_path": str(epoch_root / "knowledge_graph.db"),
         },
         "memory": {
             "routing": {

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **406**
+Indexed active Python paths: **449**
 
 ## Repository root
 
@@ -40,6 +40,7 @@ Indexed active Python paths: **406**
 
 ## api
 
+- `api/library.py`
 - `api/main.py`
 - `api/route_effects.py`
 - `api/routes/__init__.py`
@@ -59,12 +60,19 @@ Indexed active Python paths: **406**
 - `api/server.py`
 - `api/utils/__init__.py`
 - `api/utils/action_jobs.py`
+- `api/utils/audio_evidence.py`
+- `api/utils/desktop_player.py`
+- `api/utils/identity_appearance.py`
 - `api/utils/identity_evidence_pack.py`
+- `api/utils/identity_match_review.py`
+- `api/utils/identity_matching.py`
 - `api/utils/identity_read_projection.py`
+- `api/utils/identity_readiness.py`
 - `api/utils/ingest_requests.py`
 - `api/utils/loaders.py`
 - `api/utils/media_projection.py`
 - `api/utils/response_models.py`
+- `api/utils/scene_relationships.py`
 - `api/utils/temporal_summary_results.py`
 
 ## cli
@@ -87,6 +95,7 @@ Indexed active Python paths: **406**
 - `cli/content_state_reconciliation.py`
 - `cli/control_recurrence_report.py`
 - `cli/diarization_outcome_reconciliation.py`
+- `cli/document_text.py`
 - `cli/golden_witness.py`
 - `cli/goodq_doctor.py`
 - `cli/links.py`
@@ -108,6 +117,7 @@ Indexed active Python paths: **406**
 - `cli/signature_backfill_execute.py`
 - `cli/signature_backfill_plan.py`
 - `cli/signature_backfill_serial_run.py`
+- `cli/standalone_persistence.py`
 - `cli/step_runner.py`
 - `cli/system_status.py`
 - `cli/temporal_audio_reconciliation.py`
@@ -118,6 +128,7 @@ Indexed active Python paths: **406**
 - `cli/ucf_promotion.py`
 - `cli/ui_conduits_rollup.py`
 - `cli/watchdog.py`
+- `cli/witness_environment.py`
 
 ## common
 
@@ -139,8 +150,11 @@ Indexed active Python paths: **406**
 - `lib/control_recurrence_recommendations.py`
 - `lib/control_recurrence_report.py`
 - `lib/control_recurrence_trend.py`
+- `lib/face_observation.py`
 - `lib/goodq_logger.py`
+- `lib/grounding_markup.py`
 - `lib/identity_ledger.py`
+- `lib/identity_matching.py`
 - `lib/identity_resolver.py`
 - `lib/ingestion_capability_contract.py`
 - `lib/kg_realtime_integration.py`
@@ -182,6 +196,8 @@ Indexed active Python paths: **406**
 - `scripts/assets/hf_snapshot_intake.py`
 - `scripts/assets/offline_reproducibility_audit.py`
 - `scripts/assets/personal_asset_vault.py`
+- `scripts/audio/__init__.py`
+- `scripts/audio/run_acceptance.py`
 - `scripts/audio_gpu_monitor.py`
 - `scripts/audio_gpu_report.py`
 - `scripts/audit_codebase.py`
@@ -251,15 +267,16 @@ Indexed active Python paths: **406**
 - `scripts/install/generate_wheelhouse_sbom.py`
 - `scripts/install/installer_contract.py`
 - `scripts/install/prebuild_readiness.py`
+- `scripts/install/probe_paddle_ocr_asset.py`
 - `scripts/install/release_payload_packs.py`
 - `scripts/install/sandbox_env_setup.py`
 - `scripts/install/stage_profile_model_packs.py`
 - `scripts/install/sync_nsi_version.py`
 - `scripts/install/verify_installer_semantic_contract.py`
 - `scripts/install/verify_profile_model_payload.py`
+- `scripts/install/vlc_runtime_payload.py`
 - `scripts/install_pipeline_wsl.py`
 - `scripts/install_vision_gpu.py`
-- `scripts/internal/verify_entity_quality.py`
 - `scripts/login_hf.py`
 - `scripts/monitor_gpu_pipeline.py`
 - `scripts/monitor_ingestion.py`
@@ -282,6 +299,7 @@ Indexed active Python paths: **406**
 - `scripts/segmentation_shadow_campaign.py`
 - `scripts/setup/configure_envs_pythonpath.py`
 - `scripts/setup/install_goodq.py`
+- `scripts/setup/install_ocr_runtime.py`
 - `scripts/setup/install_package_all_envs.py`
 - `scripts/setup_wsl2_audio.py`
 - `scripts/setup_wsl2_audio_fast.py`
@@ -320,6 +338,7 @@ Indexed active Python paths: **406**
 - `steps/__init__.py`
 - `steps/audio/__init__.py`
 - `steps/audio/audio_wsl2_bridge.py`
+- `steps/audio/recording_ingestion.py`
 - `steps/audio/segmentation/__init__.py`
 - `steps/audio/segmentation/orchestrator.py`
 - `steps/audio/segmentation/phase0_normalization.py`
@@ -342,6 +361,7 @@ Indexed active Python paths: **406**
 - `steps/audio_transcribe/__init__.py`
 - `steps/audio_transcribe/step.py`
 - `steps/audio_transcribe/step_wsl2.py`
+- `steps/audio_transcribe/whisper_cpp.py`
 - `steps/common/__init__.py`
 - `steps/common/atomic_io.py`
 - `steps/common/audio_gpu_optimizer.py`
@@ -355,6 +375,7 @@ Indexed active Python paths: **406**
 - `steps/common/config_redaction.py`
 - `steps/common/context_analyzer_llm.py`
 - `steps/common/device_config.py`
+- `steps/common/embedding_references.py`
 - `steps/common/epistemic_diff.py`
 - `steps/common/epistemic_formatter.py`
 - `steps/common/faiss_utils.py`
@@ -390,9 +411,13 @@ Indexed active Python paths: **406**
 - `steps/common/tag_utils.py`
 - `steps/common/tool_paths.py`
 - `steps/common/tool_resolver.py`
+- `steps/common/transcript_authority.py`
+- `steps/common/transcript_binding.py`
+- `steps/common/ucf_retirement.py`
 - `steps/common/vad_preprocessor.py`
 - `steps/common/windows_held_handle.py`
 - `steps/common/windows_security_mechanics.py`
+- `steps/common/worker_launch.py`
 - `steps/discover_sources/__init__.py`
 - `steps/discover_sources/step.py`
 - `steps/emotion_classify/__init__.py`
@@ -414,6 +439,7 @@ Indexed active Python paths: **406**
 - `steps/image_embed_dino/step.py`
 - `steps/image_exif/step.py`
 - `steps/image_ocr/__init__.py`
+- `steps/image_ocr/native.py`
 - `steps/image_ocr/step.py`
 - `steps/llm_chat/__init__.py`
 - `steps/llm_chat/step.py`
@@ -432,8 +458,6 @@ Indexed active Python paths: **406**
 - `steps/tagger/step_llm_enhanced.py`
 - `steps/text_embed/__init__.py`
 - `steps/text_embed/step.py`
-- `steps/tts/__init__.py`
-- `steps/tts/step.py`
 - `steps/video/__init__.py`
 - `steps/video/cross_modal_harmonizer.py`
 - `steps/video/embedding_pooler.py`
@@ -449,12 +473,31 @@ Indexed active Python paths: **406**
 
 ## wsl2_audio
 
+- `wsl2_audio/acoustic_events.py`
 - `wsl2_audio/audio_bridge.py`
 - `wsl2_audio/audio_service.py`
+- `wsl2_audio/bounded_audio.py`
+- `wsl2_audio/channel_reconciliation.py`
 - `wsl2_audio/check_cuda.py`
+- `wsl2_audio/eligibility.py`
+- `wsl2_audio/enrichment.py`
+- `wsl2_audio/enrichment_models.py`
+- `wsl2_audio/evidence_contract.py`
+- `wsl2_audio/frame_events.py`
 - `wsl2_audio/fw_transcribe.py`
 - `wsl2_audio/model_cache.py`
+- `wsl2_audio/native_scratch.py`
+- `wsl2_audio/phrase_resolution.py`
 - `wsl2_audio/process_audio.py`
+- `wsl2_audio/profile_identity.py`
+- `wsl2_audio/recognition.py`
+- `wsl2_audio/recording_audio.py`
+- `wsl2_audio/recording_engine.py`
+- `wsl2_audio/scene_consumers.py`
+- `wsl2_audio/scene_projection.py`
 - `wsl2_audio/signature_only.py`
+- `wsl2_audio/source_clock.py`
+- `wsl2_audio/speaker_signature.py`
 - `wsl2_audio/test_bridge.py`
 - `wsl2_audio/test_pipeline.py`
+- `wsl2_audio/transcription_contract.py`

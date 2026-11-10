@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Dict, Optional
 
 from steps.common.atomic_io import atomic_write_json
@@ -40,6 +40,46 @@ def compute_file_hash(path: Path) -> str:
 
 def is_supported_ingest_path(path: Path) -> bool:
     return path.suffix.lower() in SUPPORTED_INGEST_EXTENSIONS
+
+
+def resolve_ingest_original_name(
+    requests_dir: Path | str | None, staged_name: str, file_hash: str,
+) -> str:
+    """Recover display metadata from one matching authorized request, never a path."""
+    request_id, separator, _basename = staged_name.partition("__")
+    if not requests_dir or not separator or not INGEST_REQUEST_ID_RE.fullmatch(request_id):
+        return staged_name
+    try:
+        record = json.loads((Path(requests_dir) / f"{request_id}.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return staged_name
+    except (OSError, ValueError):
+        logger.warning("Ingest display metadata could not be read request_id=%s", request_id, exc_info=True)
+        return staged_name
+    if not isinstance(record, dict):
+        return staged_name
+    if (
+        record.get("request_id") != request_id
+        or record.get("staged_name") != staged_name
+        or record.get("status") not in ("staging", "staged", "processing", "completed")
+        or not record.get("authorization_confirmed_at")
+        or (record.get("file_sha256") or record.get("file_hash")) != file_hash
+        or record.get("file_hash", file_hash) != file_hash
+    ):
+        return staged_name
+    staged_path = record.get("staged_path")
+    if not isinstance(staged_path, str) or PureWindowsPath(staged_path).name != staged_name:
+        return staged_name
+    original_name = record.get("original_name")
+    if (
+        not isinstance(original_name, str) or not original_name.strip()
+        or original_name in {".", ".."}
+        or PureWindowsPath(original_name).name != original_name
+        or any(ord(character) < 32 or ord(character) == 127 for character in original_name)
+        or Path(original_name).suffix.lower() != Path(staged_name).suffix.lower()
+    ):
+        return staged_name
+    return original_name
 
 
 def count_supported_inbox_items(import_inbox: Path) -> int:
@@ -184,8 +224,19 @@ def resolve_ingest_request_status(
     registry = load_watchdog_registry(runtime_paths["watchdog_state_file"])
     registry_entry = registry.get(file_hash) if file_hash else None
     staged_name = record.get("staged_name")
+    if isinstance(registry_entry, dict) and staged_name:
+        # A retry updates the hash's latest result, but each request owns its
+        # original terminal attempt. Reading status must never write the ledger.
+        if registry_entry.get("original_name") != staged_name:
+            history = registry_entry.get("previous_attempts", [])
+            registry_entry = next((
+                attempt for attempt in reversed(history if isinstance(history, list) else [])
+                if isinstance(attempt, dict)
+                and attempt.get("original_name") == staged_name
+                and attempt.get("status") in {"success", "failed"}
+            ), None)
     registry_matches_request = bool(
-        registry_entry
+        isinstance(registry_entry, dict)
         and staged_name
         and registry_entry.get("original_name") == staged_name
     )

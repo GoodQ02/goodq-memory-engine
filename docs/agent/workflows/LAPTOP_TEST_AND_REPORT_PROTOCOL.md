@@ -4,7 +4,7 @@
 
 # Laptop Setup Test & Report Protocol
 
-This document defines the operational protocol for the agent executing on the target Windows 11 laptop (`GOOD-SPEED-32` / `GOOD-SPEED-16` / `GOOD-RECON-16`) to install, verify, and document the offline sandboxed ingestion system.
+This document defines the operational protocol for the agent executing on the target Windows 11 laptop (`follower-gpu-node` / `GOOD-SPEED-16` / `FOLLOWER-CPU-NODE`) to install, verify, and document the offline sandboxed ingestion system.
 
 ---
 
@@ -70,6 +70,6 @@ After verifying ingestion, compile a verification summary report and save it to 
 
 The report must contain:
 1. A **Status** heading confirming that the installer completed and transcription succeeded.
-2. The exact hostname (`GOOD-SPEED-32`, `GOOD-SPEED-16`, or `GOOD-RECON-16`) and local time of the run.
+2. The exact hostname (`follower-gpu-node`, `GOOD-SPEED-16`, or `FOLLOWER-CPU-NODE`) and local time of the run.
 3. The count of database embeddings in the SQLite store (`%PROGRAMDATA%\GoodQ4All\GoodQ_Data\epochs\epoch_2025_12_22\memory.db`) verifying that visual and audio features were written.
 4. Raw log snippets from the successful `faster_whisper` transcription block.

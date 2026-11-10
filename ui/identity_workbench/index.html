@@ -1,198 +1,320 @@
 <!doctype html>
-<html lang="en" style="background-color:#0a0a0c;">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ Identity Curation Workbench</title>
     <meta name="description" content="GoodQ4All identity curation tool — label face clusters, confirm speaker hypotheses, and build the family roster." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050c1e'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2300d2ff'%3EIC%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/identity.css?v=20260726-curation-reconcile" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2305070b'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2338bdf8'%3EIC%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/identity.css?v=20261109-obsidian" />
+    <script>
+      (function() {
+        var theme = localStorage.getItem("goodq-theme") || "night";
+        var isDay = theme === "day" || (theme === "auto" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (isDay) {
+          var apply = function() { if (document.body) document.body.classList.add("theme-day"); };
+          if (document.body) apply();
+          else document.addEventListener("DOMContentLoaded", apply);
+        }
+      })();
+    </script>
   </head>
   <body>
-    <div class="crt-screen">
+    <div class="crt-screen no-sfx">
       <div class="scanlines"></div>
 
-      <!-- Header -->
-      <header class="app-header">
-        <div class="header-brand">
-          <span class="header-logo">GOODQ // IDENTITY CURATION WORKBENCH</span>
-          <span class="header-status" id="system-status">Status: CONNECTING</span>
+      <div class="workspace-shell">
+        <!-- Obsidian-Inspired Left Activity Ribbon -->
+        <nav class="workspace-ribbon" aria-label="Primary Workspace Views">
+          <div class="ribbon-group">
+            <a class="ribbon-btn" href="/ui/retro_console_v1/" title="Memory Explorer (Scenes, Graph &amp; Search)">
+              <span class="ribbon-icon" aria-hidden="true">◈</span>
+              <span class="ribbon-label">Explore</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=appearances" data-ribbon-tab="appearances" title="People &amp; Connected Scenes">
+              <span class="ribbon-icon" aria-hidden="true">◉</span>
+              <span class="ribbon-label">People</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=matches" data-ribbon-tab="matches" title="Review Face &amp; Voice Matches">
+              <span class="ribbon-icon" aria-hidden="true">⬡</span>
+              <span class="ribbon-label">Matches</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=faces" data-ribbon-tab="faces" title="Face Clusters">
+              <span class="ribbon-icon" aria-hidden="true">⊞</span>
+              <span class="ribbon-label">Faces</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=names" data-ribbon-tab="names" title="Spoken Name Mentions">
+              <span class="ribbon-icon" aria-hidden="true">@</span>
+              <span class="ribbon-label">Mentions</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=roster" data-ribbon-tab="roster" title="Family Roster">
+              <span class="ribbon-icon" aria-hidden="true">◼</span>
+              <span class="ribbon-label">Roster</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/stitching_workbench/" title="Speaker Stitching Workbench">
+              <span class="ribbon-icon" aria-hidden="true">≋</span>
+              <span class="ribbon-label">Voices</span>
+            </a>
+          </div>
+        </nav>
+
+        <div class="workspace-main">
+          <!-- Header -->
+          <header class="app-header">
+            <div class="header-brand">
+              <span class="header-logo">GOODQ // IDENTITY CURATION WORKBENCH</span>
+              <span class="header-status" id="system-status">Status: CONNECTING</span>
+            </div>
+            <div class="header-center">
+              <div class="progress-text" id="header-progress-text">Labeled: 0 / 0</div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="header-progress-fill" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="header-controls">
+              <label class="collection-switcher-pill" id="collection-switcher-pill" hidden>
+                <span>SOURCE:</span>
+                <select id="collection-source-select" aria-label="Active movie collection"></select>
+              </label>
+              <span class="phase-indicator" id="phase-indicator">PHASE 1 — FACE CLUSTERS</span>
+              <button type="button" class="theme-toggle-btn" id="toggle-theme" title="Toggle Theme (Night / Day / Auto)">Theme: NIGHT</button>
+              <a class="nav-link" href="/ui/stitching_workbench/" title="Speaker Stitching Workbench">STITCHING ›</a>
+              <a class="nav-link" href="/ui/retro_console_v1/" title="Return to Memory Explorer">EXPLORER ›</a>
+            </div>
+          </header>
+
+          <!-- Tab Navigation -->
+          <nav class="tab-nav" role="tablist" aria-label="Curation phases">
+            <button class="tab-btn active" id="tab-faces" role="tab" aria-selected="true" aria-controls="panel-faces" data-tab="faces">
+              <span class="tab-icon">⬡</span> FACE CLUSTERS
+              <span class="tab-badge" id="badge-faces">—</span>
+            </button>
+            <button class="tab-btn" id="tab-speakers" role="tab" aria-selected="false" aria-controls="panel-speakers" data-tab="speakers">
+              <span class="tab-icon">◈</span> SPEAKER HYPOTHESES
+              <span class="tab-badge" id="badge-speakers">—</span>
+            </button>
+            <button class="tab-btn" id="tab-names" role="tab" aria-selected="false" aria-controls="panel-names" data-tab="names">
+              <span class="tab-icon">◉</span> NAME MENTIONS
+              <span class="tab-badge" id="badge-names">—</span>
+            </button>
+            <button class="tab-btn" id="tab-roster" role="tab" aria-selected="false" aria-controls="panel-roster" data-tab="roster">
+              <span class="tab-icon">◼</span> FAMILY ROSTER
+              <span class="tab-badge" id="badge-roster">—</span>
+            </button>
+            <button class="tab-btn" id="tab-appearances" role="tab" aria-selected="false" aria-controls="panel-appearances" data-tab="appearances">SCENE CONNECTIONS</button>
+            <button class="tab-btn" id="tab-matches" role="tab" aria-selected="false" aria-controls="panel-matches" data-tab="matches">MATCH REVIEW</button>
+          </nav>
+
+          <section id="epoch-authority-status" class="epoch-authority-status" role="alert" aria-live="assertive" hidden></section>
+
+          <!-- Main content area -->
+          <main class="workspace" id="workspace">
+
+            <section id="panel-matches" class="tab-panel match-workspace" role="tabpanel" aria-labelledby="tab-matches" hidden>
+              <div class="match-heading"><div><h1>Review face matches</h1>
+                <p>Is the displayed person correct? Choose Correct, Incorrect or Unsure. Your decisions stay in a draft until you preview and apply them.</p></div>
+                <button class="toolbar-btn" id="reload-matches">Reload comparisons</button></div>
+              <p id="matches-status" role="status" aria-live="polite">Loading saved comparisons…</p>
+              <div class="match-review-bar">
+                <p id="match-review-status" role="status" aria-live="polite">No review decisions yet.</p>
+                <button class="toolbar-btn" id="preview-face-matches" disabled>Preview review</button>
+                <button class="toolbar-btn" id="clear-face-selections" disabled>Clear draft</button>
+              </div>
+              <div id="legacy-face-review" class="match-review-migration" hidden>
+                <p>Your earlier Correct selections have been carried forward. If you finished the whole batch, preserve the remaining faces as reviewed, not accepted. The old controls did not distinguish wrong from uncertain.</p>
+                <button class="toolbar-btn" id="complete-legacy-review">Carry forward my completed batch</button>
+              </div>
+              <label class="match-reuse"><input type="checkbox" id="reuse-confirmed-faces" checked> Reuse Correct faces as reference examples for future movies after Apply.</label>
+              <section id="face-match-preview" class="match-preview" aria-label="Selected face preview" hidden></section>
+              <div id="face-match-history"></div>
+              <div class="match-filters">
+                <label>Movie <select id="matches-report"></select></label>
+                <label>Evidence <select id="matches-kind"><option value="face">Faces</option><option value="voice">Voices</option></select></label>
+                <label>Person <select id="matches-person"><option value="">Everyone</option></select></label>
+                <label>Result <select id="matches-result"><option value="">All results</option><option value="proposed">Proposed</option><option value="ambiguous">Uncertain</option><option value="no_match">Below match threshold</option><option value="no_reference">No compatible reference</option></select></label>
+                <label>Your review <select id="matches-review"><option value="">All decisions</option><option value="correct">Correct</option><option value="incorrect">Incorrect</option><option value="unsure">Unsure</option><option value="not_accepted">Earlier review: not accepted</option><option value="unreviewed">Not reviewed</option></select></label>
+              </div>
+              <p id="matches-summary" class="match-summary"></p>
+              <p class="match-explanation">Scores measure similarity, not the probability that a name is correct. An unidentified voice match means possible recurrence; you still need to name the speaker.</p>
+              <div id="matches-list" class="match-list"></div>
+              <button class="toolbar-btn" id="more-matches" hidden>Show more</button>
+              <details class="match-references"><summary>Saved reference examples</summary><div id="matches-references" class="match-list"></div></details>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 PANEL 1 — FACE CLUSTERS
+            ════════════════════════════════════════════════════════════════ -->
+            <section id="panel-faces" class="tab-panel active" role="tabpanel" aria-labelledby="tab-faces">
+              <div class="panel-toolbar">
+                <div class="toolbar-left">
+                  <span class="toolbar-label">EPS THRESHOLD</span>
+                  <input type="number" id="eps-input" class="mini-input" value="0.4" min="0.05" max="0.95" step="0.05" title="DBSCAN eps — lower = stricter separation" />
+                  <button class="toolbar-btn" id="rerun-faces-btn" disabled title="Prepare face candidates from saved observations; no media inference">PREPARE FACE CANDIDATES</button>
+                </div>
+                <div class="toolbar-center filter-group" id="faces-filter-group" style="display:flex; gap: 4px;">
+                  <button class="toolbar-btn filter-btn" data-filter="ALL">ALL</button>
+                  <button class="toolbar-btn filter-btn active" data-filter="UNLABELED">UNLABELED</button>
+                  <button class="toolbar-btn filter-btn" data-filter="LABELED">LABELED</button>
+                </div>
+                <div class="toolbar-right">
+                  <span class="toolbar-note" id="faces-note">Load face_clusters.json to begin.</span>
+                  <button class="toolbar-btn secondary" id="load-faces-btn">LOAD FROM DATA PATH</button>
+                </div>
+              </div>
+
+              <div class="clusters-grid" id="faces-grid">
+                <div class="empty-card">
+                  <span class="pulse-icon">⬡</span>
+                  <p>No face cluster data loaded.</p>
+                  <p class="hint">Use Prepare Face Candidates when saved face observations are available. This groups existing evidence without running media inference.</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 PANEL 2 — SPEAKER HYPOTHESES
+            ════════════════════════════════════════════════════════════════ -->
+            <section id="panel-speakers" class="tab-panel" role="tabpanel" aria-labelledby="tab-speakers" hidden>
+              <div class="panel-toolbar">
+                <span id="voice-review-note">Checking saved voice evidence…</span>
+                <a class="nav-link" id="voice-review-link" href="/ui/stitching_workbench/" hidden>REVIEW SAVED VOICE PATTERNS ›</a>
+              </div>
+              <div class="panel-toolbar">
+                <div class="toolbar-left">
+                  <span class="toolbar-label">SPEAKER CLUSTERS</span>
+                  <span class="hypothesis-badge">HYPOTHESIS ONLY — MANUAL CONFIRMATION REQUIRED</span>
+                </div>
+                <div class="toolbar-right">
+                  <span class="toolbar-note" id="speakers-note">Load speaker_clusters.json.</span>
+                  <button class="toolbar-btn secondary" id="load-speakers-btn">LOAD FROM DATA PATH</button>
+                </div>
+              </div>
+
+              <div class="speakers-list" id="speakers-list">
+                <div class="empty-card">
+                  <span class="pulse-icon">◈</span>
+                  <p>No speaker hypothesis data loaded.</p>
+                  <p class="hint">Speaker hypotheses and saved voice patterns are separate evidence sources. Use the saved-pattern review above when available.</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 PANEL 3 — NAME MENTIONS
+            ════════════════════════════════════════════════════════════════ -->
+            <section id="panel-names" class="tab-panel" role="tabpanel" aria-labelledby="tab-names" hidden>
+              <div class="panel-toolbar">
+                <div class="toolbar-left">
+                  <span class="toolbar-label">TRANSCRIPT NAME SIGNALS</span>
+                  <input type="search" id="name-search" class="mini-input wide" placeholder="filter terms..." autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="toolbar-right">
+                  <span class="toolbar-note" id="names-note">Load name_mentions.json.</span>
+                  <button class="toolbar-btn secondary" id="load-names-btn">LOAD FROM DATA PATH</button>
+                </div>
+              </div>
+
+              <div class="names-table-wrap" id="names-table-wrap">
+                <table class="names-table" id="names-table" hidden>
+                  <thead>
+                    <tr>
+                      <th>TERM</th>
+                      <th>TYPE</th>
+                      <th class="num-col" id="sort-count" title="Sort by count (click)">MENTIONS ↕</th>
+                      <th class="num-col">SCENES</th>
+                      <th class="num-col">VIDEOS</th>
+                      <th>ROSTER ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="names-tbody"></tbody>
+                </table>
+                <div class="empty-card" id="names-empty">
+                  <span class="pulse-icon">◉</span>
+                  <p>No name mention data loaded.</p>
+                  <p class="hint">Run Phase 3 first:<br><code>python scripts/identity/extract_name_mentions.py --epoch-id &lt;epoch&gt;</code></p>
+                </div>
+              </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 PANEL 4 — FAMILY ROSTER
+            ════════════════════════════════════════════════════════════════ -->
+            <section id="panel-roster" class="tab-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
+              <div class="panel-toolbar">
+                <div class="toolbar-left">
+                  <span class="toolbar-label">FAMILY ROSTER EDITOR</span>
+                  <span class="hypothesis-badge" style="--hbg: rgba(56,189,248,0.12); --hcol: #38bdf8; --hborder: #38bdf844;">HUMAN AUTHORITY — THIS FILE DEFINES IDENTITY</span>
+                </div>
+                <div class="toolbar-right">
+                  <button class="toolbar-btn secondary" id="load-roster-btn">LOAD ROSTER</button>
+                  <button class="toolbar-btn" id="validate-roster-btn" title="Run validate_roster.py">VALIDATE ✓</button>
+                  <button class="toolbar-btn danger" id="export-roster-btn" title="Export current roster as YAML to data path">EXPORT YAML</button>
+                </div>
+              </div>
+
+              <!-- Roster identity list -->
+              <div class="roster-layout">
+                <aside class="roster-sidebar">
+                  <div class="roster-sidebar-header">
+                    IDENTITIES <span class="count-badge" id="roster-count">0</span>
+                  </div>
+                  <div class="roster-sidebar-list" id="roster-sidebar-list">
+                    <div class="empty-state-small">No identities. Add one below.</div>
+                  </div>
+                  <div class="roster-add-form">
+                    <input type="text" id="new-identity-input" class="mini-input wide" placeholder="New identity display name..." autocomplete="off" spellcheck="false" />
+                    <button class="toolbar-btn" id="add-identity-btn">+ ADD</button>
+                  </div>
+                </aside>
+
+                <div class="roster-detail" id="roster-detail">
+                  <div class="roster-no-selection">
+                    <span class="pulse-icon" style="font-size:2.5rem">◼</span>
+                    <p>SELECT AN IDENTITY FROM THE LEFT PANEL TO EDIT</p>
+                    <p class="hint">Or add a new identity using the input below the list.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section id="panel-appearances" class="tab-panel" role="tabpanel" aria-labelledby="tab-appearances" hidden>
+              <div class="appearance-workspace">
+                <div class="appearance-heading">
+                  <div>
+                    <h1>People and their scenes</h1>
+                    <p>Choose a person, then watch a connected scene from your saved movie.</p>
+                  </div>
+                  <button class="toolbar-btn secondary" id="reload-saved-people">Reload saved scenes</button>
+                </div>
+                <p id="saved-people-status" role="status" aria-live="polite">Loading saved connections…</p>
+                <p class="appearance-scope">Saved appearance links only. Mentions and voice identities remain on hold.</p>
+                <div id="saved-people-browser" class="appearance-layout" hidden>
+                  <nav id="saved-people-list" class="appearance-people" aria-label="People with saved scenes"></nav>
+                  <section id="saved-person-scenes" aria-label="Saved scenes"></section>
+                </div>
+                <details class="appearance-manage">
+                  <summary>Review or change connections</summary>
+                <div class="appearance-heading">
+                  <div>
+                    <h2>Connect people to their scenes</h2>
+                    <p>Review where your labeled face groups appear in the saved movie. Apply adds these appearance links to memory.</p>
+                  </div>
+                  <button class="toolbar-btn" id="preview-appearances-btn">Preview connections</button>
+                </div>
+                <p class="appearance-scope">Appearance only. Transcript mentions and voice identities stay on hold.</p>
+                <p id="appearance-status" role="status" aria-live="polite">Preview uses your saved roster and labels. Save any roster edits first.</p>
+                <div id="appearance-review" hidden></div>
+                <section id="appearance-history" aria-label="Applied connections" hidden></section>
+                </details>
+              </div>
+            </section>
+          </main>
+
+          <section id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></section>
         </div>
-                <div class="header-center">
-          <div class="progress-text" id="header-progress-text">Labeled: 0 / 0</div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="header-progress-fill" style="width: 0%"></div>
-          </div>
-        </div>
-        <div class="header-controls">
-          <span class="phase-indicator" id="phase-indicator">PHASE 1 — FACE CLUSTERS</span>
-          <a class="nav-link" href="/ui/stitching_workbench/" title="Speaker Stitching Workbench">STITCHING ›</a>
-          <a class="nav-link" href="/ui/retro_console_v1/" title="Return to Memory Explorer">EXPLORER ›</a>
-        </div>
-      </header>
+      </div>
 
-      <!-- Tab Navigation -->
-      <nav class="tab-nav" role="tablist" aria-label="Curation phases">
-        <button class="tab-btn active" id="tab-faces" role="tab" aria-selected="true" aria-controls="panel-faces" data-tab="faces">
-          <span class="tab-icon">⬡</span> FACE CLUSTERS
-          <span class="tab-badge" id="badge-faces">—</span>
-        </button>
-        <button class="tab-btn" id="tab-speakers" role="tab" aria-selected="false" aria-controls="panel-speakers" data-tab="speakers">
-          <span class="tab-icon">◈</span> SPEAKER HYPOTHESES
-          <span class="tab-badge" id="badge-speakers">—</span>
-        </button>
-        <button class="tab-btn" id="tab-names" role="tab" aria-selected="false" aria-controls="panel-names" data-tab="names">
-          <span class="tab-icon">◉</span> NAME MENTIONS
-          <span class="tab-badge" id="badge-names">—</span>
-        </button>
-        <button class="tab-btn" id="tab-roster" role="tab" aria-selected="false" aria-controls="panel-roster" data-tab="roster">
-          <span class="tab-icon">◼</span> FAMILY ROSTER
-          <span class="tab-badge" id="badge-roster">—</span>
-        </button>
-      </nav>
-
-      <section id="epoch-authority-status" class="epoch-authority-status" role="alert" aria-live="assertive" hidden></section>
-
-      <!-- Main content area -->
-      <main class="workspace" id="workspace">
-
-        <!-- ═══════════════════════════════════════════════════════════
-             PANEL 1 — FACE CLUSTERS
-        ════════════════════════════════════════════════════════════════ -->
-        <section id="panel-faces" class="tab-panel active" role="tabpanel" aria-labelledby="tab-faces">
-          <div class="panel-toolbar">
-            <div class="toolbar-left">
-              <span class="toolbar-label">EPS THRESHOLD</span>
-              <input type="number" id="eps-input" class="mini-input" value="0.4" min="0.05" max="0.95" step="0.05" title="DBSCAN eps — lower = stricter separation" />
-              <button class="toolbar-btn" id="rerun-faces-btn" title="Re-run face clustering with new eps">RE-CLUSTER ↻</button>
-            </div>
-                        <div class="toolbar-center filter-group" id="faces-filter-group" style="display:flex; gap: 4px;">
-              <button class="toolbar-btn filter-btn" data-filter="ALL">ALL</button>
-              <button class="toolbar-btn filter-btn active" data-filter="UNLABELED">UNLABELED</button>
-              <button class="toolbar-btn filter-btn" data-filter="LABELED">LABELED</button>
-            </div>
-            <div class="toolbar-right">
-              <span class="toolbar-note" id="faces-note">Load face_clusters.json to begin.</span>
-              <button class="toolbar-btn secondary" id="load-faces-btn">LOAD FROM DATA PATH</button>
-            </div>
-          </div>
-
-          <div class="clusters-grid" id="faces-grid">
-            <div class="empty-card">
-              <span class="pulse-icon">⬡</span>
-              <p>No face cluster data loaded.</p>
-              <p class="hint">Run Phase 1 first:<br><code>python scripts/identity/build_face_clusters.py --epoch-id &lt;epoch&gt;</code></p>
-            </div>
-          </div>
-        </section>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             PANEL 2 — SPEAKER HYPOTHESES
-        ════════════════════════════════════════════════════════════════ -->
-        <section id="panel-speakers" class="tab-panel" role="tabpanel" aria-labelledby="tab-speakers" hidden>
-          <div class="panel-toolbar">
-            <div class="toolbar-left">
-              <span class="toolbar-label">SPEAKER CLUSTERS</span>
-              <span class="hypothesis-badge">HYPOTHESIS ONLY — MANUAL CONFIRMATION REQUIRED</span>
-            </div>
-            <div class="toolbar-right">
-              <span class="toolbar-note" id="speakers-note">Load speaker_clusters.json.</span>
-              <button class="toolbar-btn secondary" id="load-speakers-btn">LOAD FROM DATA PATH</button>
-            </div>
-          </div>
-
-          <div class="speakers-list" id="speakers-list">
-            <div class="empty-card">
-              <span class="pulse-icon">◈</span>
-              <p>No speaker hypothesis data loaded.</p>
-              <p class="hint">Run Phase 2 first:<br><code>python scripts/identity/build_speaker_clusters.py --epoch-id &lt;epoch&gt;</code></p>
-            </div>
-          </div>
-        </section>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             PANEL 3 — NAME MENTIONS
-        ════════════════════════════════════════════════════════════════ -->
-        <section id="panel-names" class="tab-panel" role="tabpanel" aria-labelledby="tab-names" hidden>
-          <div class="panel-toolbar">
-            <div class="toolbar-left">
-              <span class="toolbar-label">TRANSCRIPT NAME SIGNALS</span>
-              <input type="search" id="name-search" class="mini-input wide" placeholder="filter terms..." autocomplete="off" spellcheck="false" />
-            </div>
-            <div class="toolbar-right">
-              <span class="toolbar-note" id="names-note">Load name_mentions.json.</span>
-              <button class="toolbar-btn secondary" id="load-names-btn">LOAD FROM DATA PATH</button>
-            </div>
-          </div>
-
-          <div class="names-table-wrap" id="names-table-wrap">
-            <table class="names-table" id="names-table" hidden>
-              <thead>
-                <tr>
-                  <th>TERM</th>
-                  <th>TYPE</th>
-                  <th class="num-col" id="sort-count" title="Sort by count (click)">MENTIONS ↕</th>
-                  <th class="num-col">SCENES</th>
-                  <th class="num-col">VIDEOS</th>
-                  <th>ROSTER ACTION</th>
-                </tr>
-              </thead>
-              <tbody id="names-tbody"></tbody>
-            </table>
-            <div class="empty-card" id="names-empty">
-              <span class="pulse-icon">◉</span>
-              <p>No name mention data loaded.</p>
-              <p class="hint">Run Phase 3 first:<br><code>python scripts/identity/extract_name_mentions.py --epoch-id &lt;epoch&gt;</code></p>
-            </div>
-          </div>
-        </section>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             PANEL 4 — FAMILY ROSTER
-        ════════════════════════════════════════════════════════════════ -->
-        <section id="panel-roster" class="tab-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
-          <div class="panel-toolbar">
-            <div class="toolbar-left">
-              <span class="toolbar-label">FAMILY ROSTER EDITOR</span>
-              <span class="hypothesis-badge" style="--hbg: rgba(0,210,255,0.12); --hcol: #00d2ff; --hborder: #00d2ff44;">HUMAN AUTHORITY — THIS FILE DEFINES IDENTITY</span>
-            </div>
-            <div class="toolbar-right">
-              <button class="toolbar-btn secondary" id="load-roster-btn">LOAD ROSTER</button>
-              <button class="toolbar-btn" id="validate-roster-btn" title="Run validate_roster.py">VALIDATE ✓</button>
-              <button class="toolbar-btn danger" id="export-roster-btn" title="Export current roster as YAML to data path">EXPORT YAML</button>
-            </div>
-          </div>
-
-          <!-- Roster identity list -->
-          <div class="roster-layout">
-            <aside class="roster-sidebar">
-              <div class="roster-sidebar-header">
-                IDENTITIES <span class="count-badge" id="roster-count">0</span>
-              </div>
-              <div class="roster-sidebar-list" id="roster-sidebar-list">
-                <div class="empty-state-small">No identities. Add one below.</div>
-              </div>
-              <div class="roster-add-form">
-                <input type="text" id="new-identity-input" class="mini-input wide" placeholder="New identity display name..." autocomplete="off" spellcheck="false" />
-                <button class="toolbar-btn" id="add-identity-btn">+ ADD</button>
-              </div>
-            </aside>
-
-            <div class="roster-detail" id="roster-detail">
-              <div class="roster-no-selection">
-                <span class="pulse-icon" style="font-size:2.5rem">◼</span>
-                <p>SELECT AN IDENTITY FROM THE LEFT PANEL TO EDIT</p>
-                <p class="hint">Or add a new identity using the input below the list.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-      </main>
-
-      <section id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></section>
-
-            <!-- Focus Panel Overlay -->
+      <!-- Focus Panel Overlay -->
       <dialog id="focus-panel" class="focus-panel">
         <div class="focus-panel-content">
           <div class="focus-panel-header">
@@ -213,6 +335,7 @@
             </div>
           </div>
           <div id="focus-operation-failure" class="operation-failure" role="alert" hidden></div>
+          <p class="member-review-note">Each crop shows the saved target detection. The outline locates it in the source frame. Review all members before using a group label as an identity. Multiple groups can belong to the same person.</p>
           <div class="focus-grid" id="focus-grid"></div>
         </div>
       </dialog>
@@ -237,6 +360,8 @@
       <div class="toast-container" id="toast-container" aria-live="polite"></div>
     </div>
 
-    <script src="./static/js/identity.js?v=20260726-curation-reconcile"></script>
+    <script src="/ui/retro_console_v1/static/js/library-context.js?v=1"></script>
+    <script src="./static/js/identity.js?v=20261027-library"></script>
+    <script src="./static/js/matches.js?v=20261027-library"></script>
   </body>
 </html>

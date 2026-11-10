@@ -7,6 +7,11 @@ import pytest
 from scripts import sync_wsl_audio_worker as sync
 
 
+def test_bridge_and_sync_require_the_same_worker_files():
+    from scripts.wsl2_audio_bridge import WindowsWSL2AudioRunner
+    assert WindowsWSL2AudioRunner._worker_file_names() == sync.WORKER_FILES
+
+
 def _worker_root(tmp_path: Path) -> Path:
     root = tmp_path / "worker"
     root.mkdir()
@@ -14,6 +19,10 @@ def _worker_root(tmp_path: Path) -> Path:
         "setup_cuda_env.sh": b"setup\n",
         "process_audio.py": b"processor\n",
         "model_cache.py": b"cache\n",
+        "speaker_signature.py": b"signature\n",
+        "acoustic_events.py": b"sound events\n",
+        "transcription_contract.py": b"transcription policy\n",
+        "fw_transcribe.py": b"transcription entrypoint\n",
     }.items():
         (root / name).write_bytes(content)
     return root
@@ -44,8 +53,13 @@ def test_synchronize_worker_writes_only_stale_files_and_requires_postwrite_match
     assert sync.synchronize_worker("Ubuntu-22.04", "/home/test/goodq_audio", source_root=root) == (
         "process_audio.py",
         "model_cache.py",
+        "speaker_signature.py",
+        "acoustic_events.py",
+        "transcription_contract.py",
+        "fw_transcribe.py",
     )
-    assert writes == ["process_audio.py", "model_cache.py"]
+    assert writes == ["process_audio.py", "model_cache.py", "speaker_signature.py", "acoustic_events.py",
+                      "transcription_contract.py", "fw_transcribe.py"]
 
 
 def test_synchronize_worker_fails_closed_when_postwrite_hashes_remain_stale(tmp_path: Path, monkeypatch) -> None:

@@ -2,7 +2,78 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath, PureWindowsPath
+import re
 from urllib.parse import quote
+
+
+def project_legacy_name_matches(segment: dict) -> dict:
+    """Exclude proven substring-only name matches without changing saved evidence."""
+    texts = [segment.get(k) for k in ("full_transcript", "visual_caption", "ocr_text")]
+    texts.extend(row.get("caption") for row in (segment.get("caption_observations") or [])
+                 if isinstance(row, dict))
+    source_text = "\n".join(value for value in texts if isinstance(value, str))
+    rejected = set()
+    independently_supported = set()
+    for entity in segment.get("entities") or []:
+        if not isinstance(entity, dict) or entity.get("entity_type") != "person":
+            continue
+        name = entity.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        properties = entity.get("properties") or {}
+        matched = properties.get("matched_text") if isinstance(properties, dict) else None
+        steps = entity.get("source_steps") or []
+        if not (isinstance(matched, str)
+                and any(step in steps for step in ("image_caption", "transcription", "ocr"))):
+            independently_supported.add(name.casefold())
+            continue
+        whole_name = rf"(?<!\w){re.escape(name)}(?!\w)"
+        # matched_text is only the extractor's first 100 characters. The
+        # triggering substring can be later in any retained source caption.
+        if (name.casefold() in (matched + "\n" + source_text).casefold()
+                and not re.search(whole_name, matched, re.IGNORECASE)
+                and not re.search(whole_name, source_text, re.IGNORECASE)):
+            rejected.add(name.casefold())
+    rejected.difference_update(independently_supported)
+    if not rejected:
+        return segment
+    projected = dict(segment)
+
+    def keep_person(row):
+        return not (isinstance(row, dict)
+                    and str(row.get("entity_type") or row.get("type") or "person").lower() in {"person", "per"}
+                    and str(row.get("name") or row.get("text") or "").casefold() in rejected)
+
+    for field in ("entities", "scene_present_entities", "dialogue_mentioned_entities",
+                  "visible_people", "mentioned_people", "dialogue_topics"):
+        rows = segment.get(field)
+        if isinstance(rows, list):
+            projected[field] = [row for row in rows if keep_person(row)]
+    disagreements = segment.get("transcript_entity_disagreements")
+    if isinstance(disagreements, list):
+        projected["transcript_entity_disagreements"] = [
+            {**row,
+             "entity_names": [name for name in row.get("entity_names", [])
+                              if str(name).casefold() not in rejected],
+             "mentioned_people": [person for person in row.get("mentioned_people", []) if keep_person(person)]}
+            if isinstance(row, dict) else row for row in disagreements
+        ]
+    arbitration = segment.get("scene_context_arbitration")
+    if isinstance(arbitration, dict) and isinstance(arbitration.get("hypotheses"), list):
+        projected["scene_context_arbitration"] = {
+            **arbitration, "hypotheses": [row for row in arbitration["hypotheses"] if not (
+                isinstance(row, dict) and row.get("axis") == "conversation_focus"
+                and row.get("evidence_family") == "identity"
+                and str(row.get("claim", "")).casefold() in rejected)]}
+    return projected
+
+
+def document_meta_projection(meta: object) -> dict[str, object] | None:
+    """Expose extraction scope without publishing local parser paths or diagnostics."""
+    if not isinstance(meta, dict):
+        return None
+    fields = ("engine", "status", "text_scope", "parts_read", "omitted_parts", "omitted_features", "limitations")
+    return {key: meta[key] for key in fields if key in meta}
 
 
 def frame_name_from_reference(frame_reference: object) -> str | None:
@@ -84,3 +155,53 @@ def thumbnail_projection(video_id: str, frame_reference: object) -> dict[str, ob
             endpoint is not None and is_path_like_reference(frame_reference)
         ),
     }
+
+
+def _sanitize_visual_value(video_id: str, value: object) -> object:
+    if isinstance(value, dict):
+        sanitized: dict[str, object] = {}
+        for k, v in value.items():
+            if k in {"source_path", "path", "file_path"} and isinstance(v, str):
+                endpoint = frame_endpoint(video_id, v)
+                if endpoint:
+                    sanitized["frame_endpoint"] = endpoint
+                frame_name = frame_name_from_reference(v)
+                if frame_name:
+                    sanitized["frame_name"] = frame_name
+                continue
+            sanitized[str(k)] = _sanitize_visual_value(video_id, v)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_visual_value(video_id, item) for item in value]
+    return value
+
+
+def sanitize_visual_observations(video_id: str, observations: object) -> list[dict[str, object]]:
+    if not isinstance(observations, list):
+        return []
+    out: list[dict[str, object]] = []
+    for item in observations:
+        if isinstance(item, dict):
+            projected = _sanitize_visual_value(video_id, item)
+            if isinstance(projected, dict):
+                out.append(projected)
+    return out
+
+
+def sanitize_detected_objects(video_id: str, objects: object) -> list[dict[str, object]]:
+    if not isinstance(objects, list):
+        return []
+    out: list[dict[str, object]] = []
+    for item in objects:
+        if isinstance(item, dict):
+            projected = _sanitize_visual_value(video_id, item)
+            if isinstance(projected, dict):
+                out.append(projected)
+    return out
+
+
+def sanitize_visual_meta(video_id: str, meta: object) -> dict[str, object] | None:
+    if not isinstance(meta, dict):
+        return None
+    projected = _sanitize_visual_value(video_id, meta)
+    return projected if isinstance(projected, dict) else None

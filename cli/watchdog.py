@@ -293,6 +293,7 @@ class ProcessedRegistry:
                 atomic_write_json(self.state_file, self.processed)
             except Exception as e:
                 logger.error(f"Failed to save state file: {e}")
+                raise
     
     def is_processed(self, file_hash: str) -> bool:
         """Check if file hash has been processed successfully"""
@@ -331,6 +332,30 @@ class ProcessedRegistry:
                     return "recover"
             return "skip"
     
+    def store_record(self, file_hash: str, record: Dict[str, Any]):
+        """Keep terminal attempt provenance when replacing the hash's latest result."""
+        with self.lock:
+            previous = self.processed.get(file_hash, {})
+            history = list(previous.get('previous_attempts', []))
+            identity = (previous.get('original_name'), previous.get('run_id'))
+            if (
+                previous.get('status') in {'success', 'failed'}
+                and identity != (record.get('original_name'), record.get('run_id'))
+                and not any((item.get('original_name'), item.get('run_id')) == identity
+                            for item in history)
+            ):
+                history.append({key: previous[key] for key in
+                                ('original_name', 'status', 'run_id', 'timestamp', 'error')
+                                if key in previous})
+            replacement = {key: value for key, value in record.items()
+                           if key != 'previous_attempts'}
+            if history:
+                replacement['previous_attempts'] = history
+            updated = {**self.processed, file_hash: replacement}
+            # Publish memory only after the complete current/history write succeeds.
+            atomic_write_json(self.state_file, updated)
+            self.processed = updated
+
     def mark_processed(
         self,
         file_hash: str,
@@ -349,8 +374,7 @@ class ProcessedRegistry:
             }
             if stage_coverage is not None:
                 record['stage_coverage'] = stage_coverage
-            self.processed[file_hash] = record
-            self.save()
+            self.store_record(file_hash, record)
 
     def mark_failed(
         self,
@@ -361,14 +385,13 @@ class ProcessedRegistry:
     ):
         """Mark file as failed"""
         with self.lock:
-            self.processed[file_hash] = {
+            self.store_record(file_hash, {
                 'original_name': original_name,
                 'status': 'failed',
                 'error': error,
                 'run_id': run_id,
                 'timestamp': datetime.now().isoformat()
-            }
-            self.save()
+            })
 
 
 class WatchdogProcessor:
@@ -581,9 +604,79 @@ class WatchdogProcessor:
             logger.warning(f"Error checking video completion on disk for {file_path.name}: {e}")
         return False
 
+    def _finalize_retained_completion(self, file_path: Path, file_hash: str):
+        """Journal the final move in the existing registry before publishing Done."""
+        from steps.common.progress_tracker import start_processing, finish_processing, add_error
+
+        def persist(record):
+            self.registry.store_record(file_hash, record)
+
+        start_processing(file_path.name, total_steps=1, run_id='pre-existing-on-disk')
+        try:
+            record = self.registry.processed.get(file_hash, {})
+            pending = record.get('finalization')
+            if pending:
+                target_name = pending['target_name']
+                if Path(target_name).name != target_name or not target_name.startswith('PROCESSED_'):
+                    raise ValueError('Invalid retained-completion destination')
+                target = self.processed_dir / target_name
+            else:
+                target = self.processed_dir / f"PROCESSED_{file_path.name}"
+                counter = 0
+                while target.exists() and FileState(target).compute_hash() != file_hash:
+                    counter += 1
+                    if counter > 1000:
+                        raise RuntimeError('Too many retained-completion naming collisions')
+                    target = self.processed_dir / f"PROCESSED_{file_path.stem}_{counter}{file_path.suffix}"
+                persist({
+                    **record, 'original_name': file_path.name, 'status': 'finalizing',
+                    'run_id': record.get('run_id') or 'pre-existing-on-disk',
+                    'finalization': {'target_name': target.name},
+                })
+            if target.exists():
+                if FileState(target).compute_hash() != file_hash:
+                    raise ValueError('Retained-completion destination content changed')
+                if file_path.exists():
+                    if FileState(file_path).compute_hash() != file_hash:
+                        raise ValueError('Retained-completion inbox content changed')
+                    file_path.unlink()  # An exact byte-identical retained copy already exists.
+            else:
+                if not file_path.is_file() or FileState(file_path).compute_hash() != file_hash:
+                    raise ValueError('Retained-completion source missing or changed')
+                actual_path = safe_move_file(file_path, target)
+                if actual_path != target:
+                    raise RuntimeError('Retained-completion destination changed during movement')
+            persist({**self.registry.processed[file_hash], 'status': 'success', 'finalization': None})
+            finish_processing('completed')
+        except Exception as error:
+            add_error(str(error), 'completion_finalization')
+            finish_processing('failed')
+            raise
+
+    def _resume_retained_finalizations(self):
+        from steps.common.progress_tracker import start_processing, add_error, finish_processing
+        for file_hash, record in list(self.registry.processed.items()):
+            if record.get('status') != 'finalizing' or not record.get('finalization'):
+                continue
+            name = record.get('original_name', '')
+            try:
+                if not name or Path(name).name != name:
+                    raise ValueError('Invalid retained-completion source name')
+                source = self.watch_dir / name
+                # Revalidate even when movement finished before interruption.
+                if self.get_file_type(source) == 'video' and not self.check_video_completion_on_disk(source, file_hash):
+                    raise ValueError('Pending completion no longer has valid persisted evidence')
+                self._finalize_retained_completion(source, file_hash)
+            except Exception as error:
+                start_processing(name, total_steps=1, run_id='completion-recovery')
+                add_error(str(error), 'completion_recovery')
+                finish_processing('failed')
+                logger.error('Cannot reconcile retained completion: %s', error)
+
     def monitor_loop(self):
         """Main monitoring loop"""
         logger.info("Starting file monitor...")
+        self._resume_retained_finalizations()
         
         while not self.shutdown.is_set():
             try:
@@ -616,35 +709,26 @@ class WatchdogProcessor:
                         
                         # Compute hash and check if already processed
                         file_hash = state.compute_hash()
+                        if self.registry.processed.get(file_hash, {}).get('status') == 'finalizing':
+                            # Failed finalization stays recoverable; never dispatch it as new work.
+                            continue
                         
-                        # Check registry first, then perform structural disk check for completion
+                        # A registry success cannot overrule contradictory video evidence.
                         already_processed = self.registry.is_processed(file_hash)
-                        if not already_processed:
+                        if self.get_file_type(file_path) == 'video':
+                            had_success = already_processed
                             already_processed = self.check_video_completion_on_disk(file_path, file_hash)
-                            if already_processed:
-                                logger.info(f"Detected previous completed ingestion for {file_path.name} (hash: {file_hash[:8]}...) on disk. Syncing registry.")
-                                self.registry.mark_processed(file_hash, file_path.name, 'success', run_id='pre-existing-on-disk')
+                            if had_success and not already_processed:
+                                from steps.common.progress_tracker import start_processing, add_error, finish_processing
+                                reason = 'Registry success lacks matching complete persisted video evidence; recovery queued'
+                                self.registry.mark_failed(file_hash, file_path.name, reason)
+                                start_processing(file_path.name, total_steps=1, run_id='completion-recovery')
+                                add_error(reason, 'completion_evidence')
+                                finish_processing('failed')
                         
                         if already_processed:
                             logger.info(f"File already processed (hash: {file_hash[:8]}...), skipping: {file_path.name}")
-                            # Update progress tracker so the UI reflects success
-                            try:
-                                from steps.common.progress_tracker import start_processing, update_step, finish_processing
-                                start_processing(file_path.name, total_steps=1, run_id='pre-existing-on-disk')
-                                update_step("completed", 1)
-                                finish_processing("completed")
-                            except Exception as pe:
-                                logger.error(f"Failed to update progress tracker for pre-processed file: {pe}")
-                            
-                            # Move the file to the processed directory
-                            processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
-                            try:
-                                actual_processed_path = safe_move_file(file_path, processed_path)
-                                logger.info(f"Moved pre-processed file to processed directory: {actual_processed_path.name}")
-                            except Exception as me:
-                                logger.error(f"Failed to move pre-processed file to processed directory: {me}")
-                                # Fallback to renaming in inbox
-                                self.mark_file_processed(file_path)
+                            self._finalize_retained_completion(file_path, file_hash)
                         else:
                             # Add to processing queue
                             self.queue.put((file_path, file_hash))
@@ -911,21 +995,17 @@ class WatchdogProcessor:
         from steps.common.conda_runner import run_conda_step, StepExecutionError
         from steps.common.tag_utils import canonicalize_taxonomy
 
-        audio_hash = hashlib.sha256(audio_path.name.encode()).hexdigest()[:16]
-        temp_input = self.processing_dir / f"audio_{audio_hash}"
-        temp_input.mkdir(parents=True, exist_ok=True)
-
-        temp_audio = temp_input / audio_path.name
+        from cli.standalone_persistence import prepare_source, persist_result, preserve_failure, merge_worker_result
+        cfg = self._build_run_config("watchdog_audio_ingest", run_id=run_id)
+        cfg["ingestion_isolation"] = True
         try:
-            if temp_audio.exists():
-                logger.debug(f"Temp audio already exists, removing: {temp_audio}")
-                temp_audio.unlink()
-            logger.info(f"[SYMBOL] Copying asset to processing area: {audio_path.name}")
-            shutil.copy2(audio_path, temp_audio)
-            logger.debug(f"[OK] Copy complete: {temp_audio}")
+            item = prepare_source(cfg, audio_path, "audio")
         except Exception as e:
-            logger.error(f"Failed to copy audio to temp dir: {e}")
+            logger.error(f"Failed to retain standalone audio: {e}")
             return False
+        audio_hash = item["video_hash"]
+        temp_audio = Path(item["source_path"])
+        temp_input = temp_audio.parent
 
         file_size_gb = audio_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
@@ -938,12 +1018,7 @@ class WatchdogProcessor:
         _step_timeout_ms = 900_000 if _mp.cpu_count() < 20 else 600_000
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
-        cfg = self._build_run_config("watchdog_audio_ingest", run_id=run_id)
-        item: Dict[str, Any] = {
-            "modality": "audio",
-            "source_path": str(temp_audio),
-            "filename": audio_path.name,
-        }
+        item["modality"] = 'audio'
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
@@ -966,6 +1041,58 @@ class WatchdogProcessor:
             atomic_write_json(sidecar_path, payload)
             logger.info(f"[AUDIO] Wrote standalone audio result sidecar: {sidecar_path}")
 
+        def _require_transcription_result(result: Any, *, wsl: bool = False) -> None:
+            """An empty payload is not evidence that a transcriber ran."""
+            if not isinstance(result, dict):
+                raise StepExecutionError("Transcription returned a non-object result")
+            if "transcript" not in result:
+                raise StepExecutionError("Transcription result is missing text")
+            transcript = result.get("transcript")
+            meta = result.get("transcript_meta", {})
+            if not isinstance(meta, dict) or not (transcript is None or isinstance(transcript, str)):
+                raise StepExecutionError("Transcription returned malformed text or metadata")
+            has_text = bool(transcript and transcript.strip())
+            status = str(meta.get("status") or "missing").lower()
+            reason = meta.get("error") or meta.get("reason") or "no terminal transcription evidence"
+            if meta.get("error"):
+                raise StepExecutionError(f"Transcription status={status}: {reason}")
+            if wsl:
+                outcomes = result.get("wsl_capability_outcomes") or {}
+                outcome = outcomes.get("transcription") if isinstance(outcomes, dict) else None
+                if str(result.get("status") or "").lower() != "success":
+                    raise StepExecutionError(f"Transcription backend failed: {result.get('error') or result.get('bridge_error_reason') or result.get('status')}")
+                if status not in {"missing", "success", "ok"}:
+                    raise StepExecutionError(f"Transcription status={status}: {reason}")
+                if isinstance(outcome, dict):
+                    status = str(outcome.get("status") or "missing").lower()
+                    reason = outcome.get("error") or outcome.get("reason") or reason
+                    if outcome.get("error"):
+                        raise StepExecutionError(f"Transcription status={status}: {reason}")
+                    if status == "ok" and has_text:
+                        return
+                    if (status == "not_applicable" and not has_text
+                            and outcome.get("reason") == "no_text"
+                            and outcome.get("raw_status") == "success"):
+                        return
+                    if (status == "not_applicable" and not has_text
+                            and outcome.get("reason") == "no_speech_detected"
+                            and result.get("transcript_outcome") == "no_speech"):
+                        from steps.audio.audio_wsl2_bridge import _build_wsl_capability_outcomes
+                        verified = _build_wsl_capability_outcomes({
+                            "transcription_status": meta.get("status"),
+                            "speech_detection": meta.get("speech_detection"),
+                            "transcription_quality": meta.get("transcription_quality"),
+                        })["transcription"]
+                        if verified.get("transcript_outcome") == "no_speech":
+                            return
+                elif "wsl_capability_outcomes" not in result and has_text:
+                    # Older unified bridges emitted text without component receipts.
+                    return
+            elif (status == "ok" and has_text) or (
+                    status == "empty" and not has_text and meta.get("reason") == "no_speech_detected"):
+                return
+            raise StepExecutionError(f"Transcription status={status}: {reason}")
+
         def _try_wsl_unified_audio() -> bool:
             if not bool(wsl_audio_auto_enabled() or require_wsl_audio()):
                 return False
@@ -976,8 +1103,6 @@ class WatchdogProcessor:
                     raise RuntimeError(message)
                 logger.warning(f"[AUDIO] {message}; falling back to Conda audio step runner")
                 return False
-
-            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
 
             try:
                 from steps.common.progress_tracker import get_tracker
@@ -995,106 +1120,133 @@ class WatchdogProcessor:
                 logger.warning(f"[AUDIO] Failed to update WSL audio progress: {progress_error}")
 
             logger.info(f"[AUDIO] Running standalone audio through WSL2 unified backend: {audio_path.name}")
-            result = audio_unified_wsl2(str(temp_audio), scene_id=audio_hash, duration=None)
-
-            if not isinstance(result, dict):
-                message = f"WSL unified audio returned unexpected payload: {type(result).__name__}"
-            elif str(result.get("status", "")).strip().lower() == "error":
-                message = str(
-                    result.get("error")
-                    or result.get("bridge_error_reason")
-                    or "WSL unified audio error"
-                ).strip()
+            try:
+                from steps.audio.audio_wsl2_bridge import audio_unified_wsl2, unified_transcription_options
+                result = audio_unified_wsl2(str(temp_audio), scene_id=item["scene_id"], duration=item["duration"],
+                                           **unified_transcription_options(cfg))
+                _require_transcription_result(result, wsl=True)
+            except Exception as error:
+                message = f"WSL transcription failed: {error}"
+                if require_wsl_audio():
+                    raise StepExecutionError(message) from error
+                logger.warning(f"[AUDIO] {message}; falling back to Conda audio step runner")
+                return False
             else:
-                item.update(result)
+                merge_worker_result(item, result, "audio_unified_wsl2")
                 item["audio_backend_selected"] = "wsl"
                 item["audio_backend_reason"] = "watchdog_audio_wsl_requested"
                 item["audio_backend_effective"] = "wsl"
                 item["audio_backend_effective_reason"] = "wsl_unified_success"
-                canonicalize_taxonomy(item)
-                _write_audio_result_sidecar()
                 return True
 
-            if require_wsl_audio():
-                raise RuntimeError(message)
-            logger.warning(f"[AUDIO] {message}; falling back to Conda audio step runner")
-            return False
-
-        success = True
+        success = False
         try:
-            if _try_wsl_unified_audio():
-                return True
+            from steps.audio.recording_ingestion import selected, prepare, scene_result
+            if selected(cfg):
+                recording_audio = prepare(cfg, temp_audio, [{'scene_id': item['scene_id'],
+                    'start': 0., 'end': item['duration']}])
+                result = scene_result(recording_audio, item['scene_id'])
+                if result['status'] == 'error':
+                    raise StepExecutionError('Recording analysis failed; no legacy fallback is permitted')
+                merge_worker_result(item, result, 'recording_audio')
+                wsl_completed = True  # Shared recognition/emotion already consumed.
+            else:
+                wsl_completed = _try_wsl_unified_audio()
 
+            if not wsl_completed:
+                # Match the video caller's local contract; do not re-enter WSL after fallback.
+                cfg["audio"] = dict(cfg.get("audio") or {})
+                cfg["audio"]["transcribe"] = dict(cfg["audio"].get("transcribe") or {})
+                cfg["audio"]["transcribe"]["use_wsl2"] = False
+                wsl_requested = bool(wsl_audio_auto_enabled() or require_wsl_audio())
+                item["audio_backend_selected"] = "wsl" if wsl_requested else "windows"
+                item["audio_backend_reason"] = "watchdog_audio_wsl_requested" if wsl_requested else "watchdog_audio_local"
+                item["audio_backend_effective"] = "windows"
+                item["audio_backend_effective_reason"] = "wsl_fallback" if wsl_requested else "local_requested"
             step_plan = [
-                ("goodq_audio_transcribe", "audio_transcribe"),
+                ("goodq_audio_transcribe", "audio_transcribe_local"),
+                ("goodq_audio_transcribe", "audio_speaker_merge"),
                 ("goodq_audio_embed", "audio_embed_clap"),
                 ("goodq_audio_emotion", "audio_emotion"),
                 ("goodq_audio_metadata", "audio_metadata"),
                 ("goodq_audio_metadata", "audio_time_hints"),
                 ("goodq_audio_metadata", "audio_music_events"),
-                ("goodq_text_embed", "text_embed"),
                 ("goodq_core", "sentiment"),
                 ("goodq_core", "emotion_classify"),
                 ("goodq_core", "tagger"),
+                ("goodq_text_embed", "text_embed"),
             ]
 
+            if wsl_completed:
+                step_plan = [(env, name) for env, name in step_plan if name not in {"audio_transcribe_local", "audio_emotion"}]
             for env_name, step_name in step_plan:
                 if not _check_timeout():
                     raise TimeoutError(f"Audio ingestion exceeded timeout of {timeout_seconds}s")
                 logger.info(f"[AUDIO] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
+                if step_name == "audio_transcribe_local":
+                    _require_transcription_result(result)
                 if isinstance(result, dict):
-                    item.update(result)
+                    merge_worker_result(item, result, step_name)
+                    if step_name == "text_embed":
+                        item["audio_text_embed_meta" if item["source_kind"] in {"audio", "document"} else "frame_text_embed_meta"] = result.get("embedding_meta", {})
 
-            if success:
-                canonicalize_taxonomy(item)
+            canonicalize_taxonomy(item)
+            persist_result(cfg, item)
+            _write_audio_result_sidecar()
+            success = True
         except StepExecutionError as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission failed during audio pipeline: {e}")
             from steps.common.progress_tracker import add_error
             add_error(f"Audio pipeline step failed: {e}", "ingestion")
             raise e
         except Exception as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission error during audio pipeline: {e}", exc_info=True)
             from steps.common.progress_tracker import add_error
             add_error(f"Audio pipeline error: {e}", "ingestion")
             raise e
         finally:
-            if success:
-                try:
-                    logger.debug(f"Cleaning up temp files: {temp_input}")
-                    temp_audio.unlink(missing_ok=True)
-                    for f in temp_input.iterdir():
-                        if f.is_file():
-                            f.unlink()
-                    temp_input.rmdir()
-                    logger.debug("[OK] Cleanup complete")
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp directory: {e}")
-            else:
-                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+            if not success:
+                logger.warning(f"Standalone evidence retained for debugging: {temp_input}")
 
         return success
     
     def ingest_image(self, image_path: Path, run_id: str) -> bool:
         """Ingest image file via conda step runner pipeline."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
+        from steps.common.progress_tracker import get_tracker
         from steps.common.tag_utils import canonicalize_taxonomy
 
-        image_hash = hashlib.sha256(image_path.name.encode()).hexdigest()[:16]
-        temp_input = self.processing_dir / f"image_{image_hash}"
-        temp_input.mkdir(parents=True, exist_ok=True)
-
-        temp_image = temp_input / image_path.name
+        from cli.standalone_persistence import prepare_source, persist_result, preserve_failure, merge_worker_result
+        step_plan = [
+            ("goodq_ocr", "image_ocr"),
+            ("goodq_caption_vlm", "image_caption"),
+            ("goodq_object_detect", "object_detect"),
+            ("goodq_face_embed", "face_embed"),
+            ("goodq_image_caption", "image_exif"),
+            ("goodq_image_caption", "image_embed_dino"),
+            ("goodq_image_caption", "image_embed_clip"),
+            ("goodq_text_embed", "text_embed"),
+            ("goodq_core", "sentiment"),
+            ("goodq_core", "emotion_classify"),
+            ("goodq_core", "tagger"),
+        ]
+        cfg = self._build_run_config("watchdog_image_ingest", run_id=run_id)
+        cfg["ingestion_isolation"] = True
+        tracker = get_tracker()
+        tracker.set_total_steps(len(step_plan) + 2)  # Retained source, workers, persistence.
+        tracker.update_step("retain_source", 0, {"stage": "retain_source", "run_id": run_id, "file": image_path.name})
         try:
-            if temp_image.exists():
-                logger.debug(f"Temp image already exists, removing: {temp_image}")
-                temp_image.unlink()
-            logger.info(f"[SYMBOL] Copying asset to processing area: {image_path.name}")
-            shutil.copy2(image_path, temp_image)
-            logger.debug(f"[OK] Copy complete: {temp_image}")
+            item = prepare_source(cfg, image_path, "image")
         except Exception as e:
-            logger.error(f"Failed to copy image to temp dir: {e}")
+            logger.error(f"Failed to retain standalone image: {e}")
             return False
+        tracker.complete_step("retain_source")
+        image_hash = item["video_hash"]
+        temp_image = Path(item["source_path"])
+        temp_input = temp_image.parent
 
         file_size_gb = image_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
@@ -1106,12 +1258,7 @@ class WatchdogProcessor:
         _step_timeout_ms = 1_800_000 if _mp.cpu_count() < 20 else 600_000
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
-        cfg = self._build_run_config("watchdog_image_ingest", run_id=run_id)
-        item: Dict[str, Any] = {
-            "modality": "image",
-            "source_path": str(temp_image),
-            "filename": image_path.name,
-        }
+        item["modality"] = 'image'
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
@@ -1119,84 +1266,74 @@ class WatchdogProcessor:
                 return False
             return True
 
-        success = True
+        success = False
         try:
-            step_plan = [
-                ("goodq_image_caption", "image_ocr"),
-                ("goodq_image_caption", "image_caption"),
-                ("goodq_object_detect", "object_detect"),
-                ("goodq_face_embed", "face_embed"),
-                ("goodq_image_caption", "image_exif"),
-                ("goodq_image_caption", "image_embed_dino"),
-                ("goodq_image_caption", "image_embed_clip"),
-                ("goodq_text_embed", "text_embed"),
-                ("goodq_core", "sentiment"),
-                ("goodq_core", "emotion_classify"),
-                ("goodq_core", "tagger"),
-            ]
-
-            for env_name, step_name in step_plan:
+            for step_index, (env_name, step_name) in enumerate(step_plan, start=1):
                 if not _check_timeout():
                     raise TimeoutError(f"Image ingestion exceeded timeout of {timeout_seconds}s")
+                tracker.update_step(step_name, step_index, {"stage": step_name})
                 logger.info(f"[IMAGE] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
                 if isinstance(result, dict):
-                    item.update(result)
+                    merge_worker_result(item, result, step_name)
+                    if step_name == "text_embed":
+                        item["audio_text_embed_meta" if item["source_kind"] in {"audio", "document"} else "frame_text_embed_meta"] = result.get("embedding_meta", {})
+                tracker.complete_step(step_name)
 
-            if success:
-                canonicalize_taxonomy(item)
+            tracker.update_step("persist_result", len(step_plan) + 1, {"stage": "persist_result"})
+            canonicalize_taxonomy(item)
+            persist_result(cfg, item)
+            tracker.complete_step("persist_result")
+            success = True
         except StepExecutionError as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission failed during image pipeline: {e}")
             from steps.common.progress_tracker import add_error
             add_error(f"Image pipeline step failed: {e}", "ingestion")
             raise e
         except Exception as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission error during image pipeline: {e}", exc_info=True)
             from steps.common.progress_tracker import add_error
             add_error(f"Image pipeline error: {e}", "ingestion")
             raise e
         finally:
-            if success:
-                try:
-                    logger.debug(f"Cleaning up temp files: {temp_input}")
-                    temp_image.unlink(missing_ok=True)
-                    for f in temp_input.iterdir():
-                        if f.is_file():
-                            f.unlink()
-                    temp_input.rmdir()
-                    logger.debug("[OK] Cleanup complete")
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp directory: {e}")
-            else:
-                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+            if not success:
+                logger.warning(f"Standalone evidence retained for debugging: {temp_input}")
 
         return success
     
     def ingest_document(self, doc_path: Path, run_id: str) -> bool:
-        """Ingest document file (PDF / text) via conda step runner pipeline."""
+        """Ingest document text through the existing standalone step pipeline."""
         from steps.common.conda_runner import run_conda_step, StepExecutionError
+        from steps.common.progress_tracker import get_tracker
         from steps.common.tag_utils import canonicalize_taxonomy
 
         ext = doc_path.suffix.lower()
-        if ext not in {'.pdf', '.txt', '.md'}:
-            logger.warning(f"Document ingestion skipped for unsupported extension: {ext}")
-            return False
+        if ext not in {'.pdf', '.txt', '.md', '.docx'}:
+            raise StepExecutionError(f"Document text extraction is unsupported for extension: {ext}")
 
-        doc_hash = hashlib.sha256(doc_path.name.encode()).hexdigest()[:16]
-        temp_input = self.processing_dir / f"doc_{doc_hash}"
-        temp_input.mkdir(parents=True, exist_ok=True)
-
-        temp_doc = temp_input / doc_path.name
+        from cli.standalone_persistence import prepare_source, persist_result, preserve_failure, merge_worker_result
+        step_plan = [
+            ("goodq_text_embed", "text_embed"),
+            ("goodq_core", "sentiment"),
+            ("goodq_core", "emotion_classify"),
+            ("goodq_core", "tagger"),
+        ]
+        cfg = self._build_run_config("watchdog_document_ingest", run_id=run_id)
+        cfg["ingestion_isolation"] = True
+        tracker = get_tracker()
+        tracker.set_total_steps(len(step_plan) + 3)  # Retained source, extraction, workers, persistence.
+        tracker.update_step("retain_source", 0, {"stage": "retain_source", "run_id": run_id, "file": doc_path.name})
         try:
-            if temp_doc.exists():
-                logger.debug(f"Temp document already exists, removing: {temp_doc}")
-                temp_doc.unlink()
-            logger.info(f"[SYMBOL] Copying asset to processing area: {doc_path.name}")
-            shutil.copy2(doc_path, temp_doc)
-            logger.debug(f"[OK] Copy complete: {temp_doc}")
+            item = prepare_source(cfg, doc_path, "document")
         except Exception as e:
-            logger.error(f"Failed to copy document to temp dir: {e}")
+            logger.error(f"Failed to retain standalone document: {e}")
             return False
+        tracker.complete_step("retain_source")
+        doc_hash = item["video_hash"]
+        temp_doc = Path(item["source_path"])
+        temp_input = temp_doc.parent
 
         file_size_gb = doc_path.stat().st_size / (1024**3)
         timeout_seconds = max(28800, int(file_size_gb * 10800))
@@ -1209,12 +1346,7 @@ class WatchdogProcessor:
         os.environ["GOODQ_STEP_TIMEOUT_MS"] = str(_step_timeout_ms)
 
         modality = 'pdf' if ext == '.pdf' else 'text'
-        cfg = self._build_run_config("watchdog_document_ingest", run_id=run_id)
-        item: Dict[str, Any] = {
-            "modality": modality,
-            "source_path": str(temp_doc),
-            "filename": doc_path.name,
-        }
+        item["modality"] = modality
 
         def _check_timeout() -> bool:
             if time.time() - start_time > timeout_seconds:
@@ -1222,69 +1354,77 @@ class WatchdogProcessor:
                 return False
             return True
 
-        success = True
+        success = False
         try:
+            extraction_step = {".pdf": "pdf_text", ".docx": "docx_text"}.get(ext, "read_document_text")
+            tracker.update_step(extraction_step, 1, {"stage": extraction_step})
             # For PDFs, first extract text via pdf_text
             if ext == '.pdf':
                 logger.info("[DOC] Running step pdf_text in goodq_text_embed")
                 pdf_result = run_conda_step("goodq_text_embed", "pdf_text", item, cfg)
                 if isinstance(pdf_result, dict):
-                    item.update(pdf_result)
+                    merge_worker_result(item, pdf_result, "pdf_text")
                     pdf_text = pdf_result.get("pdf_text")
+                    if not isinstance(pdf_text, str):
+                        raise StepExecutionError("PDF extraction returned no text result")
+                    item["document_text"] = pdf_text
+                    if not isinstance(item.get("document_meta"), dict):
+                        item["document_meta"] = {"engine": "pdf_text", "status": "ok" if pdf_text.strip() else "empty"}
                     if isinstance(pdf_text, str) and pdf_text.strip():
                         item["frame_text"] = pdf_text
+            elif ext == '.docx':
+                from cli.document_text import extract_docx_text
+                merge_worker_result(item, extract_docx_text(temp_doc), "docx_text")
+                item["frame_text"] = item["document_text"]
             else:
                 # For plain text / markdown, read content directly
                 try:
-                    text_content = temp_doc.read_text(encoding="utf-8", errors="ignore")
+                    text_content = temp_doc.read_text(encoding="utf-8")
                 except Exception as e:
                     logger.error(f"Failed to read document text: {e}")
                     from steps.common.progress_tracker import add_error
                     add_error(f"Failed to read document text: {e}", "ingestion")
                     raise e
                 item["frame_text"] = text_content
+                item["document_text"] = text_content
+                item["document_meta"] = {"engine": "python_utf8", "status": "ok" if text_content.strip() else "empty"}
 
-            step_plan = [
-                ("goodq_text_embed", "text_embed"),
-                ("goodq_core", "sentiment"),
-                ("goodq_core", "emotion_classify"),
-                ("goodq_core", "tagger"),
-            ]
+            if not str(item.get("document_text") or "").strip():
+                raise StepExecutionError("Document extraction produced no usable text")
+            tracker.complete_step(extraction_step)
 
-            for env_name, step_name in step_plan:
+            for step_index, (env_name, step_name) in enumerate(step_plan, start=2):
                 if not _check_timeout():
                     raise TimeoutError(f"Document ingestion exceeded timeout of {timeout_seconds}s")
+                tracker.update_step(step_name, step_index, {"stage": step_name})
                 logger.info(f"[DOC] Running step {step_name} in {env_name}")
                 result = run_conda_step(env_name, step_name, item, cfg)
                 if isinstance(result, dict):
-                    item.update(result)
+                    merge_worker_result(item, result, step_name)
+                    if step_name == "text_embed":
+                        item["audio_text_embed_meta" if item["source_kind"] in {"audio", "document"} else "frame_text_embed_meta"] = result.get("embedding_meta", {})
+                tracker.complete_step(step_name)
 
-            if success:
-                canonicalize_taxonomy(item)
+            tracker.update_step("persist_result", len(step_plan) + 2, {"stage": "persist_result"})
+            canonicalize_taxonomy(item)
+            persist_result(cfg, item)
+            tracker.complete_step("persist_result")
+            success = True
         except StepExecutionError as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission failed during document pipeline: {e}")
             from steps.common.progress_tracker import add_error
             add_error(f"Document pipeline step failed: {e}", "ingestion")
             raise e
         except Exception as e:
+            preserve_failure(item, e)
             logger.error(f"[FAIL] Mission error during document pipeline: {e}", exc_info=True)
             from steps.common.progress_tracker import add_error
             add_error(f"Document pipeline error: {e}", "ingestion")
             raise e
         finally:
-            if success:
-                try:
-                    logger.debug(f"Cleaning up temp files: {temp_input}")
-                    temp_doc.unlink(missing_ok=True)
-                    for f in temp_input.iterdir():
-                        if f.is_file():
-                            f.unlink()
-                    temp_input.rmdir()
-                    logger.debug("[OK] Cleanup complete")
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp directory: {e}")
-            else:
-                logger.warning(f"Temp files preserved for debugging: {temp_input}")
+            if not success:
+                logger.warning(f"Standalone evidence retained for debugging: {temp_input}")
 
         return success
     

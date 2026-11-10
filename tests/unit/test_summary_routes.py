@@ -101,6 +101,7 @@ def mock_db_paths(tmp_path):
 def _mock_existing_video(monkeypatch):
     mock_conn = MagicMock()
     mock_conn.execute.return_value.fetchone.return_value = (1,)
+    mock_conn.execute.return_value.__iter__.return_value = [("active-scene",)]
     monkeypatch.setattr("sqlite3.connect", lambda *_args, **_kwargs: mock_conn)
     return mock_conn
 
@@ -3195,11 +3196,13 @@ def test_get_video_summary_success(mock_connect, client) -> None:
     def readonly_execute(statement, *_args):
         result = MagicMock()
         result.fetchone.return_value = (1,) if statement == "PRAGMA query_only" else None
+        if statement.startswith("SELECT id FROM scenes"):
+            result.__iter__.return_value = [("active-scene",)]
         return result
 
     mock_conn.execute.side_effect = readonly_execute
     
-    # Mock master table check: summaries table exists
+    # The video is active in memory and its summaries table exists.
     mock_cursor.fetchone.side_effect = [("summaries",)]
     
     # Mock summaries row payload

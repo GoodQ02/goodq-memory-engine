@@ -97,7 +97,6 @@ $envs = @(
     @{ name="goodq_emotion_classify"; py="3.12"; req="envs/emotion_classify/requirements.txt"; torch=$true; faiss=$false },
     @{ name="goodq_llm_chat"; py="3.12"; req="envs/llm_chat/requirements.txt"; torch=$false; faiss=$false },
     @{ name="goodq_tts"; py="3.12"; req="envs/tts/requirements.txt"; torch=$false; faiss=$false },
-    @{ name="goodq_ocr"; py="3.12"; req="envs/ocr/requirements.txt"; torch=$false; faiss=$false },
     @{ name="goodq_pdf_text"; py="3.12"; req="envs/pdf_text/requirements.txt"; torch=$false; faiss=$false },
     @{ name="goodq_system_metrics"; py="3.12"; req="envs/system_metrics/requirements.txt"; torch=$false; faiss=$false },
     @{ name="goodq_home_assistant_status"; py="3.12"; req="envs/home_assistant_status/requirements.txt"; torch=$false; faiss=$false }
@@ -125,4 +124,5 @@ foreach ($env in $envs) {
 
 EnsureCoreFallbackDependency
 
+LogQ "Paddle OCR uses a separate Python 3.10 runtime: scripts/setup/install_ocr_runtime.py --wheelhouse <local-wheelhouse>. See envs/ocr/README.md."
 LogQ "All done. Rerun anytime for self-heal."

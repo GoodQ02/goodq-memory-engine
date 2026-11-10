@@ -14,12 +14,18 @@ param(
     # Dev Off discovers this checkout's surviving invocation, then waits for
     # the owner's terminal drain evidence. Explicit StopReceipt remains request-only.
     [switch]$StopCurrent,
+    # Isolated stop only: verify this invocation's drain without authorizing
+    # shared compute release. Dev Off must retain the default global guard.
+    [switch]$PreserveDependencies,
     [switch]$CheckStart,
     [switch]$CheckRunning
 )
 
 $ErrorActionPreference = 'Stop'
 $rootDir = $PSScriptRoot
+if ($PreserveDependencies -and -not $StopCurrent) {
+    throw 'PreserveDependencies requires StopCurrent; it cannot authorize startup or dependency release.'
+}
 function Get-GoodQUtcTicks($Value) {
     # PowerShell 7 deserializes ISO timestamps as DateTime; Windows PowerShell
     # leaves them as strings. Re-parsing a DateTime as text applies local time.
@@ -32,7 +38,9 @@ function Read-GoodQReceiptText([string]$Path) {
         try { return [IO.File]::ReadAllText($Path) }
         catch [IO.IOException] {
             $code = $_.Exception.GetBaseException().HResult -band 0xffff
-            if ($code -notin @(32, 33) -or $timer.Elapsed.TotalSeconds -ge 1) { throw }
+            # A receipt can disappear between existence checks and opening it.
+            # Persistent absence still fails within the existing read budget.
+            if ($code -notin @(2, 32, 33) -or $timer.Elapsed.TotalSeconds -ge 1) { throw }
             Start-Sleep -Milliseconds 50
         }
     }
@@ -105,8 +113,13 @@ if ($StopCurrent -or $CheckStart -or $CheckRunning) {
     # state writer. A newer historical receipt cannot override a live owner.
     foreach ($directory in @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'goodq-startup-*')) {
         $path = Join-Path $directory.FullName 'supervisor.json'
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $path = Join-Path $directory.FullName 'startup.json' }
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $path = Join-Path $directory.FullName 'startup.json'
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        }
+        # Once observed, read through the bounded replacement retry. A second
+        # existence probe can miss the supervisor during ReplaceFile and skip
+        # its live roles before Read-GoodQReceiptText gets a chance to retry.
         try { $record = Read-GoodQReceiptText $path | ConvertFrom-Json }
         catch { Write-Warning "Cannot read runtime receipt $path; it cannot establish ownership."; continue }
         if (-not $record.repository -or
@@ -227,6 +240,14 @@ if ($StopReceipt) {
                         if ([GoodQ.RuntimeJobQuery]::ActiveProcesses("$($terminal.stop_event).$role.$($terminal.$role.pid)")) {
                             throw 'A stopped receipt still has active descendants; dependencies are preserved.'
                         }
+                    }
+                    if ($PreserveDependencies) {
+                        $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object LocalPort -eq $ApiPort)
+                        if ($listeners.Count) {
+                            throw 'Owned jobs drained but the target API listener remains; shared dependencies are preserved.'
+                        }
+                        Write-Host 'GoodQ owned drain verified; shared dependencies preserved. This result does not authorize compute release.'
+                        return
                     }
                     Assert-GoodQRuntimeAbsent
                     Write-Host 'GoodQ API and Watchdog drain verified; compute dependencies may now be released.'

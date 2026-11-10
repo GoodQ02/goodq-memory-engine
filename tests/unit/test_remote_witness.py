@@ -18,6 +18,7 @@ def test_execute_persists_terminal_receipt(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
     monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "build_witness_environment", lambda *_: {})
     monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: type("Qdrant", (), {"pid": 24})())
     monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda *_: None)
 
@@ -47,6 +48,7 @@ def test_execute_bounds_each_isolated_witness_step(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
     monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "build_witness_environment", lambda *_: {})
     monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: type("Qdrant", (), {"pid": 24})())
     monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda *_: None)
 
@@ -90,6 +92,7 @@ def test_execute_owns_and_stops_isolated_qdrant(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(remote_witness, "prepare_witness_run", lambda *_: {"status": "prepared"})
     monkeypatch.setattr(remote_witness, "seal_prepared_receipt", lambda *_: sealed)
+    monkeypatch.setattr(remote_witness, "build_witness_environment", lambda *_: {})
     monkeypatch.setattr(remote_witness, "_start_isolated_qdrant", lambda *_: qdrant)
     monkeypatch.setattr(remote_witness, "_stop_isolated_qdrant", lambda process: stopped.append(process))
 

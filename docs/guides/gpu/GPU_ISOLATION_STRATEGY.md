@@ -246,7 +246,7 @@ nvidia-smi -c EXCLUSIVE_PROCESS  # DON'T USE
 ### Immediate (Phase 1): 🚀 **START HERE**
 1. Create `steps/common/gpu_manager.py`
 2. Update `audio_diarize` step (current bottleneck)
-3. Test with 1987-1988.mp4
+3. Test with 2024-2025.mp4
 4. Verify no hangs
 
 ### Short-term (Phase 2):

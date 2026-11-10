@@ -376,6 +376,15 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
     scene_data.setdefault('video_hash', video_id)
     
     scenes = scene_data.get('scenes', [])
+    # Resolve each retained scene independently; never stamp a global retry run.
+    from steps.common.transcript_authority import lookup as transcript_authority_lookup
+    scene_run_ids = {}
+    for scene in scenes:
+        scene_id = scene.get('scene_id')
+        authority = transcript_authority_lookup(video_id, scene_id, cfg)
+        if authority and scene.get('transcript_outcome_evidence') == authority:
+            scene_run_ids[scene_id] = authority['run_id']
+
     if not scenes:
         logger.warning("No scenes found in manifest")
         return {"video_id": video_id, "phase6_status": "skipped", "reason": "no_scenes"}
@@ -694,6 +703,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         "video_hash": item.get("video_hash") or video_id,
                         "scene_id": scene_id,
                         "epoch_id": epoch_id,
+                        "run_id": scene_run_ids.get(scene_id),
                         "type": "scene",
                         "model": "clip",
                         "worker_name": "scene_visual_embeddings_clip",
@@ -773,6 +783,7 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
                         "video_hash": item.get("video_hash") or video_id,
                         "scene_id": scene_id,
                         "epoch_id": epoch_id,
+                        "run_id": scene_run_ids.get(scene_id),
                         "type": "scene",
                         "model": "dino",
                         "worker_name": "scene_visual_embeddings_dino",

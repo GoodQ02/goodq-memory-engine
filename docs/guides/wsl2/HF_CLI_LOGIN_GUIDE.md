@@ -1,8 +1,11 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_GUIDE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-07 -->
+<!-- DOC_LAST_VERIFIED: 2026-09-30 -->
 
 # HuggingFace CLI Login Guide
+
+Verification scope: offline checks and source resolution only; this date does
+not attest current authentication or gated-model access.
 
 ## Purpose
 
@@ -43,7 +46,8 @@ Typical locations:
 Example:
 
 ```bash
-export HF_TOKEN="hf_..."
+# Provision HF_TOKEN through the approved local secret store.
+# Do not paste a credential into a shell command or tracked file.
 ```
 
 ### Option B: HuggingFace CLI Cache
@@ -79,26 +83,40 @@ Legacy command still works if needed:
 huggingface-cli login
 ```
 
-## Step 4: Verify
+## Step 4: Check Presence Without Authentication
+
+Run this offline check in the environment you intend to use. It reports only
+whether each variable has a nonempty value; it does not load configuration,
+read saved credentials, authenticate, or prove validity or model access.
 
 ```bash
-hf auth whoami
-python3 -c "from huggingface_hub import HfFolder; print(bool(HfFolder.get_token()))"
+python3 -c "import os; print('HF_TOKEN present:', bool(os.environ.get('HF_TOKEN'))); print('PYANNOTE_TOKEN present:', bool(os.environ.get('PYANNOTE_TOKEN'))); print('HUGGINGFACE_TOKEN present:', bool(os.environ.get('HUGGINGFACE_TOKEN')))"
 ```
 
-If you want a repo-local sanity check from the WSL audio workspace:
+From PowerShell, report presence without printing values:
 
-```bash
-python3 ~/goodq_audio/check_hf_token.py
+```powershell
+'HF_TOKEN', 'PYANNOTE_TOKEN', 'HUGGINGFACE_TOKEN' | ForEach-Object {
+    '{0} present: {1}' -f $_, (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_, 'Process')))
+}
 ```
+
+Never print a token, its prefix, or a process's complete environment. Do not
+use a login or model-download command as a presence check. `hf auth whoami`
+is a separate network authentication test, appropriate only when intended;
+it was not run for the September 30 audit.
 
 ## Token Resolution Model
 
-The WSL helper scripts prefer:
-1. `HF_TOKEN` from the environment
-2. a token already stored by `hf auth login`
+There is no single precedence across all GoodQ consumers. See the
+[configuration loading contract](../../architecture/CONFIG_LOADING_CONTRACT.md#4b-hugging-face-token-aliases)
+for the source-verified order. Keep aliases consistent in the approved local
+store: a nonempty conflicting alias is not overwritten by normalization.
 
-That means either method can work, but `HF_TOKEN` is the best source for predictable automation.
+The worker setup script sources its `.goodq_env` before resolving aliases and
+saved-login fallback. Sourcing that script can therefore change bindings;
+do not source it merely to inspect the current shell. Windows variable
+presence does not establish the environment of an already running WSL worker.
 
 ## Required Model Agreements
 
@@ -111,7 +129,7 @@ If diarization is part of your workload, make sure the HuggingFace account behin
 ### Check Environment Token
 
 ```bash
-echo $HF_TOKEN
+python3 -c "import os; print('HF_TOKEN present:', bool(os.environ.get('HF_TOKEN')))"
 ```
 
 ### Check CLI Identity
@@ -120,10 +138,10 @@ echo $HF_TOKEN
 hf auth whoami
 ```
 
-### Check Python Access
+### Check Python Environment Presence
 
 ```bash
-python3 -c "from huggingface_hub import HfFolder; token = HfFolder.get_token(); print(bool(token))"
+python3 -c "import os; print('HF_TOKEN present:', bool(os.environ.get('HF_TOKEN')))"
 ```
 
 ### Logout
@@ -147,12 +165,12 @@ hf auth whoami
 # Login interactively
 hf auth login
 
-# Login non-interactively
-hf auth login --token YOUR_TOKEN_HERE
+# Login interactively; avoid credential-bearing command-line arguments
+hf auth login
 
 # Logout
 hf auth logout
 
 # Inspect environment token presence
-echo $HF_TOKEN
+python3 -c "import os; print('HF_TOKEN present:', bool(os.environ.get('HF_TOKEN')))"
 ```

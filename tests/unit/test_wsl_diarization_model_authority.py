@@ -3,6 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def test_local_pyannote_pipeline_does_not_require_legacy_child_repos(tmp_path, monkeypatch):
+    from wsl2_audio import model_cache
+    monkeypatch.setattr(model_cache, 'check_hf_model_cache', lambda *a: False)
+    pipeline = tmp_path/'isolated-community-1'
+    pipeline.mkdir()
+    assert not model_cache.check_pyannote_cache(str(pipeline))
+    (pipeline/'config.yaml').write_text('')
+    assert not model_cache.check_pyannote_cache(str(pipeline))
+    (pipeline/'config.yaml').write_text('pipeline: {}')
+    assert model_cache.check_pyannote_cache(str(pipeline))
+
+
 def test_pyannote_pipeline_cache_accepts_its_config_plus_cached_dependencies(monkeypatch, tmp_path: Path):
     """The 3.1 pipeline repo is config-only; weights live in its child repos."""
     from wsl2_audio import model_cache

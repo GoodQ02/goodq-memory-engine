@@ -42,7 +42,7 @@ def client() -> TestClient:
 @pytest.fixture(autouse=True)
 def isolate_cfg(monkeypatch):
     """Prevent _CFG module-level state leaks."""
-    monkeypatch.setattr("api.routes.identity._CFG", {})
+    monkeypatch.setattr("api.routes.identity._CFG", {"epoch_id": "epoch_test"})
 
 
 class _MockAuthority:
@@ -122,7 +122,7 @@ def test_label_face_cluster_with_token_succeeds(
     # Seed data file
     face_file = identity_dir / "face_clusters.json"
     face_file.write_text(
-        json.dumps({"clusters": [{"cluster_id": "fc_001", "label": ""}]})
+        json.dumps({"epoch_id": "epoch_test", "clusters": [{"cluster_id": "fc_001", "label": ""}]})
     )
 
     mock_authority = _make_authority_patch(authorized=True)
@@ -215,7 +215,7 @@ def test_confirm_speaker_cluster_with_token_succeeds(
 
     speaker_file = identity_dir / "speaker_clusters.json"
     speaker_file.write_text(
-        json.dumps({"clusters": [{"cluster_id": "sc_001", "confirmed": False}]})
+        json.dumps({"epoch_id": "epoch_test", "clusters": [{"cluster_id": "sc_001", "confirmed": False}]})
     )
 
     mock_authority = _make_authority_patch(authorized=True)
@@ -238,6 +238,94 @@ def test_confirm_speaker_cluster_with_token_succeeds(
 
     assert len(mock_authority.record_calls) == 1
     assert mock_authority.record_calls[0]["status"] == "succeeded"
+
+
+@pytest.mark.parametrize(
+    "route, filename, original_payload, changed_payload",
+    [
+        (
+            "/api/identity/face-clusters/label",
+            "face_clusters.json",
+            {"cluster_id": "fc_001", "label": "Alice", "operator_note": "Reviewed fixture"},
+            {"cluster_id": "fc_001", "label": "Alice", "operator_note": "Different evidence"},
+        ),
+        (
+            "/api/identity/speaker-clusters/confirm",
+            "speaker_clusters.json",
+            {"cluster_id": "sc_001", "confirmed": True, "identity_label": "Alice"},
+            {"cluster_id": "sc_001", "confirmed": True, "identity_label": "Bob"},
+        ),
+        (
+            "/api/identity/roster/save",
+            "family_roster.yaml",
+            {"identity": {"id": "p1", "display_name": "Alice", "aliases": ["Al"]}},
+            {"identity": {"id": "p1", "display_name": "Alice", "aliases": ["Changed"]}},
+        ),
+        (
+            "/api/identity/roster/export",
+            "family_roster.yaml",
+            {"identities": [{"id": "p1", "display_name": "Alice"}]},
+            {"identities": [{"id": "p1", "display_name": "Bob"}]},
+        ),
+    ],
+    ids=["face-note", "speaker-label", "roster-content", "export-content"],
+)
+def test_identity_confirmation_binds_complete_payload_and_rejects_replay(
+    client, tmp_path, monkeypatch, route, filename, original_payload, changed_payload
+) -> None:
+    """Real HTTP preparation/confirmation must bind every persisted input field."""
+    import yaml
+
+    from agents.mini_agent_client import MiniAgentClient
+
+    identity_dir = tmp_path / "identity"
+    identity_dir.mkdir()
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(identity_dir))
+    monkeypatch.setenv("GOODQ_MINI_AGENT_HOME", str(tmp_path / "agent-home"))
+    monkeypatch.setenv("GOODQ_TOOL_AUDIT_LOG", str(tmp_path / "audit" / "events.jsonl"))
+    monkeypatch.setenv("GOODQ_AGENT_EXECUTION_MODE", "in_process")
+    for name, data in {
+        "face_clusters.json": {"epoch_id": "epoch_test", "clusters": [{"cluster_id": "fc_001", "label": "Original"}]},
+        "speaker_clusters.json": {"epoch_id": "epoch_test", "clusters": [{"cluster_id": "sc_001", "confirmed": False}]},
+        "family_roster.yaml": {"identities": [{"id": "p1", "display_name": "Original"}]},
+    }.items():
+        (identity_dir / name).write_text(json.dumps(data), encoding="utf-8")
+
+    # Exercise real scope validation, token persistence, and token consumption.
+    # Native identity authorization does not execute an external agent process.
+    authority = MiniAgentClient(profile="safe", config={"agent": {"execution_mode": "in_process"}})
+    authority.agent_available = True
+    monkeypatch.setattr("api.routes.identity.MiniAgentClient", lambda **_kwargs: authority)
+    target = identity_dir / filename
+    before = target.read_bytes()
+
+    prepared = client.post(route, json=original_payload)
+    assert prepared.status_code == 403, prepared.text
+    assert prepared.json()["status"] == "needs_confirmation"
+    token = prepared.json()["result"]["confirmation_token"]
+    assert target.read_bytes() == before
+
+    changed = client.post(route, json={**changed_payload, "confirmation_token": token})
+    assert changed.status_code == 403, changed.text
+    assert changed.json()["errors"][0]["code"] == "token_scope_mismatch"
+    assert target.read_bytes() == before
+
+    confirmed = client.post(route, json={**original_payload, "confirmation_token": token})
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["ok"] is True
+    after = target.read_bytes()
+    saved = yaml.safe_load(after)
+    if "identity" in original_payload:
+        assert saved["identities"] == [original_payload["identity"]]
+    elif "identities" in original_payload:
+        assert saved["identities"] == original_payload["identities"]
+    else:
+        assert all(saved["clusters"][0][key] == value for key, value in original_payload.items())
+
+    replay = client.post(route, json={**original_payload, "confirmation_token": token})
+    assert replay.status_code == 403, replay.text
+    assert replay.json()["errors"][0]["code"] == "token_already_used"
+    assert target.read_bytes() == after
 
 
 def test_confirm_speaker_cluster_no_file_mutation_on_403(

@@ -79,8 +79,6 @@ def _resolve_tool_path(tool_key: str, raw_value: str, cfg: Dict[str, Any], model
     if not resolved:
         if tool_key == "ffmpeg":
             resolved = _cfg_get(cfg, "config.tools.ffmpeg_exe") or "ffmpeg"
-        elif tool_key == "tesseract":
-            resolved = _cfg_get(cfg, "config.tools.tesseract_exe") or "tesseract"
         elif tool_key == "poppler":
             resolved = _cfg_get(cfg, "config.tools.poppler_bin")
 

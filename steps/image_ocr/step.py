@@ -1,295 +1,164 @@
+"""Pinned Paddle OCR evidence, with dates interpreted separately from recognition."""
 from __future__ import annotations
-# GPU Configuration - Auto-configured on import
-from steps.common.gpu_config import configure_gpu, get_device, clear_cache, print_memory_stats
 
-
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
-import os
+from datetime import date
+import hashlib
+import math
+from pathlib import Path
 import re
+import time
+from typing import Any
 
-from steps.common.tool_paths import resolve_tesseract
+from steps.image_ocr.native import (
+    MODEL_IDENTITIES,
+    OCRRuntimeError,
+    resolve_ocr_device,
+    run_native_ocr,
+)
 
 
 def _sanitize_error_message(exc: BaseException) -> str:
-    msg = str(exc).strip()
-    if not msg:
-        return type(exc).__name__
-    msg = re.sub(r"\b[A-Za-z]:[\\/][^\s'\"\)]+", "<path>", msg)
-    msg = re.sub(r"\\\\[^\s'\"\)]+", "<path>", msg)
-    return msg[:300]
+    message = str(exc).strip() or type(exc).__name__
+    message = re.sub(r"\b[A-Za-z]:[\\/][^\s'\"\)]+", "<path>", message)
+    message = re.sub(r"\\\\[^\s'\"\)]+", "<path>", message)
+    return message[:300]
 
 
-def _meta(status: str, **fields: Any) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"status": status}
-    payload.update({k: v for k, v in fields.items() if v is not None})
-    return payload
+def _regions(raw: dict[str, Any], size: tuple[int, int]) -> list[dict[str, Any]]:
+    """Validate native parallel arrays without filtering or reordering readings."""
+    arrays = [raw.get(name) for name in ("rec_texts", "rec_boxes", "rec_polys", "rec_scores")]
+    if any(not isinstance(value, list) for value in arrays):
+        raise OCRRuntimeError("malformed_native_result", "Missing native OCR region arrays")
+    if len({len(value) for value in arrays}) != 1:
+        raise OCRRuntimeError("malformed_native_result", "Native OCR region arrays are misaligned")
+    width, height = size
+    regions = []
+    for text, box, polygon, score in zip(*arrays):
+        if not isinstance(text, str):
+            raise OCRRuntimeError("malformed_native_result", "Native OCR text is not a string")
+        if not isinstance(score, (int, float)) or isinstance(score, bool) or not math.isfinite(score) or not 0 <= score <= 1:
+            raise OCRRuntimeError("malformed_native_result", "Invalid native recognition score")
+        if not isinstance(box, list) or len(box) != 4:
+            raise OCRRuntimeError("malformed_native_result", "Invalid native OCR box")
+        if not isinstance(polygon, list) or len(polygon) < 4 or any(not isinstance(point, list) or len(point) != 2 for point in polygon):
+            raise OCRRuntimeError("malformed_native_result", "Invalid native OCR polygon")
+        coordinates = [*box, *(coordinate for point in polygon for coordinate in point)]
+        if any(not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) for value in coordinates):
+            raise OCRRuntimeError("malformed_native_result", "Non-finite native OCR coordinates")
+        if not (0 <= box[0] <= box[2] <= width and 0 <= box[1] <= box[3] <= height):
+            raise OCRRuntimeError("malformed_native_result", "Native OCR box is outside source pixels")
+        if any(not (0 <= x <= width and 0 <= y <= height) for x, y in polygon):
+            raise OCRRuntimeError("malformed_native_result", "Native OCR polygon is outside source pixels")
+        regions.append({"text": text, "bbox": box, "polygon": polygon,
+                        "confidence": float(score), "confidence_kind": "recognizer_sequence_score"})
+    return regions
 
 
-_MONTH_ABBREVIATIONS = {
-    "JAN": "JAN",
-    "FEB": "FEB",
-    "MAR": "MAR",
-    "APR": "APR",
-    "MAY": "MAY",
-    "JUN": "JUN",
-    "JUL": "JUL",
-    "AUG": "AUG",
-    "SEP": "SEP",
-    "SEPT": "SEP",
-    "OCT": "OCT",
-    "NOV": "NOV",
-    "DEC": "DEC",
-}
-_MONTH_FULL_NAMES = {
-    "JAN": "january",
-    "FEB": "february",
-    "MAR": "march",
-    "APR": "april",
-    "MAY": "may",
-    "JUN": "june",
-    "JUL": "july",
-    "AUG": "august",
-    "SEP": "september",
-    "OCT": "october",
-    "NOV": "november",
-    "DEC": "december",
-}
-_MONTH_NUMBERS = {
-    "JAN": 1,
-    "FEB": 2,
-    "MAR": 3,
-    "APR": 4,
-    "MAY": 5,
-    "JUN": 6,
-    "JUL": 7,
-    "AUG": 8,
-    "SEP": 9,
-    "OCT": 10,
-    "NOV": 11,
-    "DEC": 12,
-}
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july",
+           "august", "september", "october", "november", "december")
+_MONTH_NUMBER = {name: index for index, full in enumerate(_MONTHS, 1) for name in (full, full[:3])}
+_MONTH_NUMBER["sept"] = 9
+_MONTH_PATTERN = "|".join(sorted(_MONTH_NUMBER, key=len, reverse=True))
+_DATE_PATTERNS = (
+    ("named", re.compile(rf"\b(?P<month>{_MONTH_PATTERN})\.?\s+(?P<day>\d{{1,2}})(?:st|nd|rd|th)?\s*,?\s+(?P<year>\d{{4}}|\d{{2}})\b", re.I)),
+    # A named month makes compact day/year overlays separable without changing
+    # the native reading. A two-digit year still has an unresolved century.
+    ("named", re.compile(rf"\b(?P<month>{_MONTH_PATTERN})\.?(?P<day>\d{{1,2}})(?P<year>\d{{4}}|\d{{2}})\b", re.I)),
+    ("named", re.compile(rf"\b(?P<day>\d{{1,2}})\s+(?P<month>{_MONTH_PATTERN})\.?\s*,?\s+(?P<year>\d{{4}}|\d{{2}})\b", re.I)),
+    ("iso", re.compile(r"\b(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})\b")),
+    ("numeric", re.compile(r"\b(?P<month>\d{1,2})/(?P<day>\d{1,2})/(?P<year>\d{4}|\d{2})\b")),
+)
 
 
-def _clean_ocr_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text.strip())
+def _date_hints(regions: list[dict[str, Any]], timestamp: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Interpret calendar-valid observations, never repair recognition characters."""
+    hints: dict[str, Any] = {key: [] for key in ("explicit_dates", "ambiguous_dates", "times", "weekdays", "months", "relative_phrases")}
+    evidence = []
+    first_seen = {}
+    for index, region in enumerate(regions):
+        for kind, pattern in _DATE_PATTERNS:
+            for match in pattern.finditer(region["text"]):
+                month_text, day_text, year_text = match.group("month", "day", "year")
+                month = _MONTH_NUMBER[month_text.lower()] if kind == "named" else int(month_text)
+                day, year = int(day_text), int(year_text)
+                short_year = len(year_text) == 2
+                row = {"raw_text": region["text"], "matched_text": match.group(), "region_index": index,
+                       "bbox": region["bbox"], "polygon": region["polygon"], "sample_timestamp": timestamp}
+                # Slash dates can use either order; retain uncertainty if both work.
+                possibilities = []
+                for mm, dd in ([(month, day), (day, month)] if kind == "numeric" else [(month, day)]):
+                    try:
+                        value = date(2000 + year if short_year else year, mm, dd)
+                    except ValueError:
+                        continue
+                    if value not in possibilities:
+                        possibilities.append(value)
+                if not possibilities:
+                    row.update(status="invalid", reason="invalid_calendar_date")
+                elif short_year or len(possibilities) != 1:
+                    literal = match.group()
+                    row.update(status="ambiguous", reason="unresolved_century" if short_year else "unresolved_numeric_date_order")
+                    if literal not in hints["ambiguous_dates"]:
+                        hints["ambiguous_dates"].append(literal)
+                    if timestamp is not None:
+                        first_seen.setdefault(literal, timestamp)
+                else:
+                    value = possibilities[0]
+                    iso = value.isoformat()
+                    row.update(status="explicit", date=iso)
+                    if iso not in hints["explicit_dates"]:
+                        hints["explicit_dates"].append(iso)
+                    month_name = _MONTHS[value.month - 1]
+                    if month_name not in hints["months"]:
+                        hints["months"].append(month_name)
+                    if timestamp is not None:
+                        first_seen.setdefault(iso, timestamp)
+                evidence.append(row)
+    if first_seen:
+        hints["first_seen_ts"] = first_seen
+    return hints, evidence
 
 
-def _dedupe_texts(values: Iterable[str]) -> List[str]:
-    seen = set()
-    out: List[str] = []
-    for value in values:
-        cleaned = _clean_ocr_text(value)
-        key = cleaned.upper()
-        if cleaned and key not in seen:
-            seen.add(key)
-            out.append(cleaned)
-    return out
-
-
-def _extract_vhs_date_candidates(texts: Iterable[str]) -> List[str]:
-    """Extract conservative VHS-style date candidates from OCR variants."""
-    candidates: List[str] = []
-    for text in texts:
-        normalized = re.sub(r"[^A-Z0-9]+", " ", text.upper())
-        tokens = normalized.split()
-        for idx in range(len(tokens) - 2):
-            month_token = tokens[idx]
-            month = _MONTH_ABBREVIATIONS.get(month_token)
-            repair_prefix = False
-            if month is None and month_token == "EC":
-                # Tesseract commonly drops the leading D in noisy DEC overlays.
-                month = "DEC"
-                repair_prefix = True
-            if month is None:
-                continue
-
-            day_token = tokens[idx + 1].replace("O", "0").replace("I", "1").replace("G", "6")
-            year_token = tokens[idx + 2].replace("O", "0").replace("I", "1")
-            if not day_token.isdigit() or not year_token.isdigit():
-                continue
-            day = int(day_token)
-            if day < 1 or day > 31 or len(year_token) != 4:
-                continue
-            candidate = f"{month} {day:02d} {year_token}"
-            if repair_prefix:
-                candidate = f"{candidate}"
-            candidates.append(candidate)
-    return _dedupe_texts(candidates)
-
-
-def _select_vhs_ocr_candidate(texts: Sequence[str]) -> Optional[str]:
-    dates = _extract_vhs_date_candidates(texts)
-    if dates:
-        return dates[0]
-
-    digitful = [text for text in texts if re.search(r"\d", text)]
-    if digitful:
-        return _clean_ocr_text(digitful[0])
-    return None
-
-
-def _time_hints_from_vhs_dates(dates: Sequence[str]) -> Dict[str, List[str]]:
-    hints: Dict[str, List[str]] = {
-        "explicit_dates": [],
-        "times": [],
-        "weekdays": [],
-        "months": [],
-        "relative_phrases": [],
+def image_ocr(item: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
+    """Run the selected Paddle backend once; empty text and failure remain distinct."""
+    started = time.perf_counter()
+    detector, recognizer = MODEL_IDENTITIES.values()
+    meta: dict[str, Any] = {
+        "engine": "paddleocr-3.7-onnxruntime", "model": recognizer[0], "model_revision": recognizer[1],
+        "detector_model": detector[0], "detector_revision": detector[1],
+        "requested_implementation": recognizer[0], "effective_implementation": None,
+        "strategy": "single_model_native_inference", "fallback_chain": [],
     }
-    for date in dates:
-        match = re.match(r"\b([A-Z]{3})\s+(\d{1,2})\s+(\d{4})\b", str(date).strip().upper())
-        if not match:
-            continue
-        month, day, year = match.groups()
-        month_num = _MONTH_NUMBERS.get(month)
-        month_name = _MONTH_FULL_NAMES.get(month)
-        if not month_num or not month_name:
-            continue
-        iso = f"{int(year):04d}-{month_num:02d}-{int(day):02d}"
-        if iso not in hints["explicit_dates"]:
-            hints["explicit_dates"].append(iso)
-        if month_name not in hints["months"]:
-            hints["months"].append(month_name)
-    return hints
-
-
-def _vhs_timestamp_variants(image: Any) -> Iterable[Tuple[str, Any, str]]:
-    """Yield lower-frame OCR variants tuned for small camcorder overlays."""
-    from PIL import ImageEnhance, ImageFilter, ImageOps  # type: ignore
-
-    width, height = image.size
-    crop_boxes = (
-        ("lower_right", (int(width * 0.42), int(height * 0.45), width, height)),
-        ("timestamp_zone", (int(width * 0.50), int(height * 0.54), width, int(height * 0.96))),
-        ("bottom_band", (0, int(height * 0.48), width, height)),
-    )
-    for crop_name, crop_box in crop_boxes:
-        crop = image.crop(crop_box)
-        gray = ImageOps.grayscale(crop)
-        for scale in (2, 3, 4):
-            upscaled = gray.resize((gray.width * scale, gray.height * scale))
-            contrasted = ImageEnhance.Contrast(upscaled).enhance(2.8).filter(ImageFilter.SHARPEN)
-            thresholded = contrasted.point(lambda pixel: 255 if pixel > 120 else 0)
-            yield f"{crop_name}_gray_x{scale}", contrasted, "--psm 6"
-            yield f"{crop_name}_binary_x{scale}", thresholded, "--psm 6"
-            yield f"{crop_name}_sparse_x{scale}", thresholded, "--psm 11"
-
-
-def _run_vhs_timestamp_fallback(image: Any, image_to_string: Callable[..., str]) -> Dict[str, Any]:
-    attempts: List[str] = []
-    for _variant_name, variant_image, config in _vhs_timestamp_variants(image):
-        try:
-            raw_text = image_to_string(variant_image, config=config)
-        except Exception:
-            continue
-        if isinstance(raw_text, str) and raw_text.strip():
-            attempts.append(raw_text)
-
-    texts = _dedupe_texts(attempts)
-    candidate = _select_vhs_ocr_candidate(texts)
-    return {
-        "text": candidate,
-        "texts": texts[:8],
-        "date_candidates": _extract_vhs_date_candidates(texts),
-    }
-
-
-def image_ocr(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract text from images using Tesseract OCR.
-    
-    Gracefully handles missing dependencies (pytesseract/Pillow).
-    Returns None for ocr_text if extraction fails or tools unavailable.
-    """
-    text: Optional[str] = None
-    img_path = item.get("source_path")
-    if not isinstance(img_path, str) or not os.path.isfile(img_path):
-        return {
-            "ocr_text": None,
-            "ocr_meta": _meta(
-                "no_source_path",
-                reason="source_image_missing",
-                source_path_present=isinstance(img_path, str) and bool(img_path.strip()),
-            ),
-        }
-
+    for key, source in (("sample_timestamp", "timestamp"), ("is_midpoint_sample", "is_midpoint_sample")):
+        if source in item:
+            meta[key] = bool(item[source]) if source == "is_midpoint_sample" else item[source]
+    source = item.get("source_path")
+    if not isinstance(source, str) or not Path(source).is_file():
+        meta.update(status="no_source_path", reason="source_image_missing")
+        return {"ocr_text": None, "ocr_meta": meta}
     try:
-        import pytesseract  # type: ignore
-        from PIL import Image  # type: ignore
+        device = resolve_ocr_device(cfg)
+        meta.update(device=device, engine=f"paddleocr-3.7-onnxruntime-{'cpu' if device == 'cpu' else 'cuda'}")
+        from PIL import Image
+
+        with Image.open(source) as original:
+            size = original.size
+        meta["input_sha256"] = hashlib.sha256(Path(source).read_bytes()).hexdigest()
+        raw, runtime = run_native_ocr(source, cfg, device)
+        meta.update(runtime, raw_result=raw)
+        regions = _regions(raw, size)
+        text = "\n".join(region["text"] for region in regions if region["text"].strip()) or None
+        hints, dates = _date_hints(regions, item.get("timestamp"))
+        meta.update(status="ok" if text else "no_text", accepted_text=text, accepted_regions=regions,
+                    date_evidence=dates, text_length=len(text or ""), effective_implementation=recognizer[0])
+        if text is None:
+            meta["reason"] = "empty_ocr_text"
+        return {"ocr_text": text, "ocr_meta": meta, "time_hints": hints if any(hints.values()) else None}
     except (ImportError, ModuleNotFoundError) as exc:
-        return {
-            "ocr_text": None,
-            "ocr_meta": _meta(
-                "dependency_missing",
-                reason=getattr(exc, "name", None) or type(exc).__name__,
-                exc_type=type(exc).__name__,
-                error=_sanitize_error_message(exc),
-            ),
-        }
-
-    try:
-        tess = resolve_tesseract(cfg)
-        if tess:
-            pytesseract.pytesseract.tesseract_cmd = tess
-        image = Image.open(img_path)
-        raw_text = pytesseract.image_to_string(image)
-        text = raw_text.strip() if isinstance(raw_text, str) and raw_text.strip() else None
-    except Exception as e:
-        return {
-            "ocr_text": None,
-            "ocr_meta": _meta(
-                "error",
-                reason="ocr_exception",
-                exc_type=type(e).__name__,
-                error=_sanitize_error_message(e),
-            ),
-        }
-
-    if text:
-        return {
-            "ocr_text": text,
-            "ocr_meta": _meta(
-                "ok",
-                engine="tesseract",
-                tesseract_configured=bool(tess),
-                text_length=len(text),
-            ),
-        }
-    fallback: Dict[str, Any] = {"text": None, "texts": [], "date_candidates": []}
-    try:
-        fallback = _run_vhs_timestamp_fallback(image, pytesseract.image_to_string)
-    except Exception as e:
-        fallback = {
-            "text": None,
-            "texts": [],
-            "date_candidates": [],
-            "error": _sanitize_error_message(e),
-            "exc_type": type(e).__name__,
-        }
-    if fallback.get("text"):
-        fallback_text = str(fallback["text"])
-        fallback_time_hints = _time_hints_from_vhs_dates(fallback.get("date_candidates") or [])
-        return {
-            "ocr_text": fallback_text,
-            "ocr_meta": _meta(
-                "ok",
-                engine="tesseract",
-                tesseract_configured=bool(tess),
-                text_length=len(fallback_text),
-                strategy="vhs_timestamp_fallback",
-                candidates=fallback.get("texts"),
-                date_candidates=fallback.get("date_candidates"),
-            ),
-            "time_hints": fallback_time_hints if any(fallback_time_hints.values()) else None,
-        }
-    return {
-        "ocr_text": None,
-        "ocr_meta": _meta(
-            "no_text",
-            reason="empty_ocr_text",
-            engine="tesseract",
-            tesseract_configured=bool(tess),
-            fallback_candidates=fallback.get("texts"),
-            fallback_error=fallback.get("error"),
-            fallback_exc_type=fallback.get("exc_type"),
-        ),
-    }
+        meta.update(status="dependency_missing", reason="ocr_dependency_missing", exc_type=type(exc).__name__, error=_sanitize_error_message(exc))
+    except Exception as exc:
+        meta.update(status="error", reason=exc.reason if isinstance(exc, OCRRuntimeError) else "ocr_exception",
+                    exc_type=type(exc).__name__, error=_sanitize_error_message(exc))
+    finally:
+        meta["duration_seconds"] = time.perf_counter() - started
+    return {"ocr_text": None, "ocr_meta": meta}

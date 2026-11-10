@@ -430,6 +430,14 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
                             "faiss_id": 2602,
                             "model": "laion/clap-htsat-unfused",
                         },
+                        "transcript_outcome": "transcript_available",
+                        "transcript_outcome_reason": "transcript_emitted",
+                        "emotion_note": "test retained emotion evidence",
+                        "transcript_meta": {
+                            "status": "ok",
+                            "engine": "wsl_unified",
+                            "speech_detection": {"status": "completed", "method": "silero_vad", "input_duration_seconds": 4, "speech_duration_seconds": 2},
+                        },
                     },
                     "keyframe": {
                         "caption": "a girl playing a trumpet in a room",
@@ -587,6 +595,11 @@ def test_harmonizer_rolls_up_audio_context_surfaces(tmp_path: Path, monkeypatch)
         "faiss_id": 2602,
         "model": "laion/clap-htsat-unfused",
     }
+    assert segment['transcript_outcome'] == persisted_scene['transcript_outcome'] == 'transcript_available'
+    assert segment['transcript_outcome_reason'] == persisted_scene['transcript_outcome_reason'] == 'transcript_emitted'
+    assert segment['transcript_meta'] == persisted_scene['transcript_meta']
+    assert segment['transcript_meta']['speech_detection']['speech_duration_seconds'] == 2
+    assert segment['emotion_note'] == persisted_scene['emotion_note'] == 'test retained emotion evidence'
 
 
 def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Path, monkeypatch) -> None:
@@ -636,7 +649,7 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
     monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
     captured_scene_meta: Dict[str, Any] = {}
 
-    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any], **_kwargs) -> Dict[str, Any]:
         captured_scene_meta.update(scene_meta)
         return {
             "narrative_summary": "Jerry outlines a tense plan to George in the kitchen.",
@@ -690,7 +703,7 @@ def test_harmonizer_applies_scene_context_llm_when_feature_enabled(tmp_path: Pat
     assert segment["scene_context_epistemic"]["state"] in {"supported", "partially_supported"}
     assert segment["scene_context_epistemic"]["dominant_evidence"] in {"transcript", "visual", "mixed"}
     assert any(
-        item["role"] == "support" and item["kind"] in {"transcript_topic", "visual_signal"}
+        item["role"] in {"support", "candidate"} and item["kind"] in {"transcript_topic", "visual_signal"}
         for item in segment["scene_context_epistemic"]["evidence"]
     )
     assert segment["scene_context_arbitration"]["read_model_version"] == 1
@@ -760,7 +773,7 @@ def test_harmonizer_applies_scene_context_llm_to_visual_audio_signal_without_tra
     monkeypatch.setattr(harmonizer_module, "SCENE_CONTEXT_LLM_AVAILABLE", True)
     captured_scene_meta: Dict[str, Any] = {}
 
-    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    def _fake_analyze_scene_context_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any], **_kwargs) -> Dict[str, Any]:
         captured_scene_meta.update(scene_meta)
         return {
             "narrative_summary": "Minimal visual or dialogue content.",
@@ -860,7 +873,7 @@ def test_scene_context_epistemic_uses_transcript_and_visual_support() -> None:
         },
     )
 
-    assert result["state"] == "supported"
+    assert result["state"] == "partially_supported"
     assert result["dominant_evidence"] == "mixed"
     assert result["evidence_family"] == "transcript+visual+audio"
     assert result["fallback_mode"] is None
@@ -870,7 +883,7 @@ def test_scene_context_epistemic_uses_transcript_and_visual_support() -> None:
         for item in result["evidence"]
     )
     assert any(
-        item["role"] == "support" and item["kind"] == "visual_signal" and item["value"] == "living room"
+        item["role"] == "candidate" and item["kind"] == "visual_signal" and item["value"] == "living room" and item["source_step"] == "image_caption" and item["establishes_visible_presence"] is False
         for item in result["evidence"]
     )
     assert any(
@@ -948,7 +961,7 @@ def test_scene_context_arbitration_marks_unreflected_topics() -> None:
     result = harmonizer_module._derive_scene_context_arbitration(  # type: ignore[attr-defined]
         {
             "caption": "a stage with a spotlight",
-            "transcript": "The pharmacist keeps asking about pills.",
+            "transcript": "They keep asking about Cedar Observatory.",
             "objects": [{"label": "stage"}],
             "emotions": [],
         },
@@ -968,7 +981,7 @@ def test_scene_context_arbitration_marks_unreflected_topics() -> None:
         {
             "axis": "topic",
             "reason": "transcript_topics_not_reflected",
-            "transcript_topics": ["pharmacist", "pills"],
+            "transcript_topics": ["Cedar Observatory"],
         }
     ]
     assert result["unresolved_axes"] == ["topic"]
@@ -1199,7 +1212,7 @@ def test_scene_context_arbitration_excludes_structural_tags_from_setting_claims(
             "axis": "setting",
             "claim": "restaurant",
             "evidence_family": "visual",
-            "weight": "supporting",
+            "weight": "candidate",
         }
     ]
     assert result["evidence_conflicts"] == []
@@ -1295,7 +1308,7 @@ def test_harmonizer_preserves_empty_tier_arrays_for_low_signal_scene(tmp_path: P
     monkeypatch.setattr(
         harmonizer_module,
         "analyze_scene_context_llm",
-        lambda scene_meta, cfg: {
+        lambda scene_meta, cfg, **_kwargs: {
             "narrative_summary": "Minimal visual or dialogue content.",
             "key_moments": ["Minimal visual or dialogue content."],
             "emotional_arc": "low-signal scene",
@@ -3030,14 +3043,15 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     run_cross_modal_harmonization(item, cfg)
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
 
-    assert temporal_index["segments_with_transcript_entity_disagreements"] == 3
-    assert temporal_index["segments_with_full_name_partial_entity_disagreements"] == 0
+    assert temporal_index["segments_with_transcript_entity_disagreements"] == 4
+    assert temporal_index["segments_with_full_name_partial_entity_disagreements"] == 1
     category_counts = {
         item["category"]: item["count"]
         for item in temporal_index["transcript_entity_disagreement_category_counts"]
     }
     assert category_counts == {
         "title_elision_in_entity_projection": 1,
+        "transcript_full_name_reduced_to_partial_entity": 1,
         "transcript_spelling_drift_vs_entity_name": 1,
         "title_bearing_transcript_name_not_resolved": 1,
     }
@@ -3055,7 +3069,7 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
     assert families[
         ("title_bearing_transcript_name_not_resolved", "title_unresolved::mrs swedler")
     ]["example"]["transcript_candidate"] == "Mrs. Swedler"
-    assert temporal_index["top_transcript_full_name_partial_entity_families"] == []
+    assert temporal_index["top_transcript_full_name_partial_entity_families"][0]["family_key"] == "partial::jerry"
     segment_disagreements = {
         segment["scene_id"]: segment.get("transcript_entity_disagreements", [])
         for segment in temporal_index["segments"]
@@ -3079,7 +3093,10 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "reason": "transcript title form collapses cleanly to existing local person surface",
         }
     ]
-    assert segment_disagreements["scene_0001"] == []
+    assert len(segment_disagreements["scene_0001"]) == 1
+    assert segment_disagreements["scene_0001"][0]["category"] == "transcript_full_name_reduced_to_partial_entity"
+    assert segment_disagreements["scene_0001"][0]["transcript_candidate"] == "Jerry Seinfeld"
+    assert segment_disagreements["scene_0001"][0]["entity_names"] == ["Jerry"]
     assert segment_disagreements["scene_0002"] == [
         {
             "category": "transcript_spelling_drift_vs_entity_name",
@@ -3110,8 +3127,8 @@ def test_harmonizer_reports_transcript_entity_disagreement_hotspots_read_only(
             "normalization_source": None,
         },
         "scene_0001": {
-            "normalization_applied": True,
-            "normalization_source": "exact_pair_allowlist",
+            "normalization_applied": False,
+            "normalization_source": None,
         },
         "scene_0002": {
             "normalization_applied": False,
@@ -3208,3 +3225,281 @@ def test_harmonizer_does_not_promote_unknown_speaker_fallback_ids(
     temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
 
     assert temporal_index["segments"][0]["speaker_ids"] == []
+
+
+def test_scene_context_epistemic_and_arbitration_preserve_provenance_on_good_and_bad_fixtures() -> None:
+    # Scene 36 bad fixture: false sandwich detection (0.377349) + missing-score object
+    scene36_inputs = {
+        "caption": "a man and a woman sitting at a table",
+        "transcript": "Why didn't you say something? I didn't want to.",
+        "objects": [
+            {"label": "person", "score": 0.996356},
+            {"label": "sandwich", "score": 0.377349},
+            {"label": "cup"},
+        ],
+        "emotions": [],
+    }
+    scene36_ctx = {
+        "narrative_summary": "Table conversation.",
+        "activity_description": "Table conversation.",
+        "key_moments": ["Table conversation."],
+        "emotional_arc": "calm conversation",
+        "context_tags": ["table"],
+        "primary_tags": [],
+        "contextual_tags": [],
+        "structural_tags": ["table", "sandwich", "cup"],
+        "source": "scene_context_llm",
+        "claim_provenance": {
+            "narrative_summary": {
+                "source": "scene_context_llm",
+                "depends_on": ["image_caption", "object_detect", "transcribe"],
+                "qualification": "model_derived_summary_from_qualified_visual_and_transcript_inputs",
+                "establishes_visible_presence": False,
+            }
+        },
+    }
+    sanitized36 = harmonizer_module._sanitize_scene_context_llm(scene36_ctx)  # type: ignore[attr-defined]
+    assert sanitized36 is not None
+    assert "claim_provenance" in sanitized36
+
+    epistemic36 = harmonizer_module._derive_scene_context_epistemic(scene36_inputs, sanitized36)  # type: ignore[attr-defined]
+    assert epistemic36["state"] == "partially_supported"
+    sandwich_ev = next(item for item in epistemic36["evidence"] if item["value"] == "sandwich")
+    assert sandwich_ev["role"] == "candidate"
+    assert sandwich_ev["source_step"] == "object_detect"
+    assert sandwich_ev["depends_on"] == ["object_detect", "scene_context_llm"]
+    assert sandwich_ev["establishes_visible_presence"] is False
+    assert sandwich_ev["score"] == 0.377349
+    assert sandwich_ev["score_status"] == "observed"
+
+    cup_ev = next(item for item in epistemic36["evidence"] if item["value"] == "cup")
+    assert cup_ev["role"] == "candidate"
+    assert cup_ev["score"] is None
+    assert cup_ev["score_status"] == "unknown"
+
+    # Scene 9 bad fixture: misleading brushing-teeth caption vs LLM summary "hitting a bar"
+    scene9_inputs = {
+        "caption": "a man and a woman are brushing their teeth",
+        "transcript": "No, I meant a woman.",
+        "objects": [{"label": "person", "score": 0.996}],
+        "emotions": [],
+    }
+    scene9_ctx = {
+        "narrative_summary": "A man and a woman are talking about hitting a bar.",
+        "activity_description": "A man and a woman are talking.",
+        "key_moments": ["A man and a woman are talking."],
+        "emotional_arc": "calm conversation",
+        "context_tags": ["conversation"],
+        "primary_tags": [],
+        "contextual_tags": ["conversation"],
+        "structural_tags": [],
+        "source": "scene_context_llm",
+    }
+    epistemic9 = harmonizer_module._derive_scene_context_epistemic(scene9_inputs, scene9_ctx)  # type: ignore[attr-defined]
+    assert epistemic9["state"] == "unknown"
+    assert "evidence_coverage_limited" in epistemic9["limits"]
+    assert all(
+        item["role"] != "support"
+        for item in epistemic9["evidence"]
+        if item["kind"] == "visual_signal"
+    )
+
+    # Scene 35 good fixture: visual-only beach/water caption without transcript
+    scene35_inputs = {
+        "caption": "a person is walking into the water at the beach",
+        "transcript": "",
+        "objects": [{"label": "person", "score": 0.922526}],
+        "emotions": [],
+    }
+    scene35_ctx = {
+        "narrative_summary": "A person is walking into the water at the beach.",
+        "activity_description": "A person walks into the water at the beach.",
+        "key_moments": ["A person walks into the water at the beach."],
+        "emotional_arc": "calm",
+        "context_tags": ["beach", "water"],
+        "primary_tags": [],
+        "contextual_tags": ["beach", "water"],
+        "structural_tags": [],
+        "source": "scene_context_llm",
+    }
+    epistemic35 = harmonizer_module._derive_scene_context_epistemic(scene35_inputs, scene35_ctx)  # type: ignore[attr-defined]
+    assert epistemic35["state"] == "partially_supported"
+    water_ev = next(item for item in epistemic35["evidence"] if item["value"] == "water")
+    assert water_ev["role"] == "candidate"
+    assert water_ev["source_step"] == "image_caption"
+    assert water_ev["establishes_visible_presence"] is False
+    arb35 = harmonizer_module._derive_scene_context_arbitration(scene35_inputs, scene35_ctx, epistemic35)  # type: ignore[attr-defined]
+    assert arb35 is not None
+    assert any(
+        h["axis"] == "setting" and h["claim"] == "beach" and h["weight"] == "candidate"
+        for h in arb35["hypotheses"]
+    )
+    assert any(
+        h["axis"] == "setting" and h["claim"] == "water" and h["weight"] == "candidate"
+        for h in arb35["hypotheses"]
+    )
+
+    # Spoken object mention without visible presence: transcript topic establishes spoken mention, not visible object
+    spoken_inputs = {
+        "caption": "two men talking in a hallway",
+        "transcript": "Did you leave the sandwich in the taxi?",
+        "objects": [{"label": "person", "score": 0.99}],
+        "emotions": [],
+    }
+    spoken_ctx = {
+        "narrative_summary": "Conversation about a sandwich in the taxi.",
+        "activity_description": "Conversation about a sandwich in the taxi.",
+        "key_moments": ["They mention the sandwich in the taxi."],
+        "emotional_arc": "calm conversation",
+        "context_tags": ["sandwich", "taxi"],
+        "primary_tags": ["sandwich", "taxi"],
+        "contextual_tags": [],
+        "structural_tags": [],
+        "source": "scene_context_llm",
+    }
+    epistemic_spoken = harmonizer_module._derive_scene_context_epistemic(spoken_inputs, spoken_ctx)  # type: ignore[attr-defined]
+    spoken_ev = next(item for item in epistemic_spoken["evidence"] if item["value"] == "sandwich")
+    assert spoken_ev["kind"] == "transcript_topic"
+    assert spoken_ev["source_step"] == "transcribe"
+    assert spoken_ev["establishes_visible_presence"] is False
+    assert not any(
+        item["kind"] == "visual_signal" and item["value"] == "sandwich"
+        for item in epistemic_spoken["evidence"]
+    )
+
+
+def test_count_visible_person_objects_groups_by_sampled_frame_and_preserves_single_frame() -> None:
+    single_person_five_frames = [
+        {"label": "person", "score": 0.91, "sample_index": idx, "timestamp": float(idx)}
+        for idx in range(5)
+    ]
+    assert harmonizer_module._count_visible_person_objects(single_person_five_frames) == 1
+
+    a_scene_12_shape = [
+        {"label": "person", "score": 0.68, "sample_index": 0, "timestamp": 390.432},
+        {"label": "person", "score": 0.79, "sample_index": 0, "timestamp": 390.432},
+        {"label": "person", "score": 0.74, "sample_index": 1, "timestamp": 398.0645},
+        {"label": "person", "score": 0.68, "sample_index": 1, "timestamp": 398.0645},
+        {"label": "person", "score": 0.89, "sample_index": 2, "timestamp": 405.697},
+        {"label": "person", "score": 0.79, "sample_index": 3, "timestamp": 413.3295},
+        {"label": "person", "score": 0.76, "sample_index": 4, "timestamp": 420.912},
+        {"label": "person", "score": 0.41, "sample_index": 4, "timestamp": 420.912},
+    ]
+    assert harmonizer_module._count_visible_person_objects(a_scene_12_shape) == 2
+
+    timestamp_only_frames = [
+        {"name": "person", "timestamp": 1.25},
+        {"class": "person", "timestamp": 2.50},
+        {"label": "person", "timestamp": 2.50},
+    ]
+    assert harmonizer_module._count_visible_person_objects(timestamp_only_frames) == 2
+
+    legacy_single_frame = [
+        {"label": "person", "score": 0.99},
+        {"label": "person", "score": 0.97},
+    ]
+    assert harmonizer_module._count_visible_person_objects(legacy_single_frame) == 2
+
+
+def test_harmonizer_multi_frame_person_observations_do_not_falsely_trigger_crowd_risk(
+    tmp_path: Path,
+) -> None:
+    processing_root = tmp_path / "processing"
+    video_id = "video_multiframe_person_counts"
+    processing_dir = processing_root / video_id
+    scene_manifest_path = processing_dir / "video" / "scene_manifest.json"
+
+    scene0_objects = [
+        {"label": "person", "score": 0.93, "sample_index": 1, "timestamp": 1.0},
+        {"label": "person", "score": 0.90, "sample_index": 2, "timestamp": 2.0, "is_midpoint_sample": True},
+        {"label": "person", "score": 0.87, "sample_index": 3, "timestamp": 3.0},
+        {"label": "person", "score": 0.91, "sample_index": 4, "timestamp": 4.0},
+    ]
+    scene1_objects = [
+        {"label": "person", "score": 0.68, "sample_index": 0, "timestamp": 10.0},
+        {"label": "person", "score": 0.79, "sample_index": 0, "timestamp": 10.0},
+        {"label": "person", "score": 0.75, "sample_index": 1, "timestamp": 11.0},
+        {"label": "person", "score": 0.69, "sample_index": 1, "timestamp": 11.0},
+        {"label": "person", "score": 0.90, "sample_index": 2, "timestamp": 12.0, "is_midpoint_sample": True},
+        {"label": "person", "score": 0.80, "sample_index": 3, "timestamp": 13.0},
+        {"label": "person", "score": 0.76, "sample_index": 4, "timestamp": 14.0},
+        {"label": "person", "score": 0.41, "sample_index": 4, "timestamp": 14.0},
+    ]
+
+    _write_json(
+        scene_manifest_path,
+        {
+            "video_id": video_id,
+            "phase5_complete": True,
+            "phase6_complete": True,
+            "scenes": [
+                {
+                    "scene_id": "scene_single_person_4frames",
+                    "start": 0.0,
+                    "end": 5.0,
+                    "duration": 5.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "keyframe": {"faces": [{}]},
+                    "objects": scene0_objects,
+                },
+                {
+                    "scene_id": "scene_two_people_5frames",
+                    "start": 10.0,
+                    "end": 15.0,
+                    "duration": 5.0,
+                    "confidence": 0.9,
+                    "content_state": "signal",
+                    "keyframe": {"faces": []},
+                    "objects": scene1_objects,
+                },
+            ],
+        },
+    )
+
+    audio_artifact_dir = tmp_path / "canonical_audio_artifacts"
+    _write_json(audio_artifact_dir / "segmentation.json", {"segments": []})
+    _write_json(audio_artifact_dir / "transcript.json", {"segments": []})
+    _write_json(audio_artifact_dir / "diarization.json", {"speakers": []})
+
+    item = {
+        "id": video_id,
+        "source_path": str(tmp_path / "video.mp4"),
+        "processing_dir": str(processing_dir),
+        "scene_manifest_path": str(scene_manifest_path),
+        "audio_artifact_dir": str(audio_artifact_dir),
+    }
+    cfg = {"paths": {"processing": str(processing_root)}}
+
+    run_cross_modal_harmonization(item, cfg)
+    temporal_index = json.loads((processing_dir / "temporal_index.json").read_text(encoding="utf-8"))
+    seg0, seg1 = temporal_index["segments"]
+
+    assert len(seg0["detected_objects"]) == 4
+    assert seg0["visible_face_count"] == 1
+    assert seg0["visible_person_object_count"] == 1
+    assert seg0["visible_anonymous_people_count"] == 1
+    assert seg0["visible_person_confidence"]["crowd_risk"] == "low"
+    assert seg0["candidate_visible_people"] == [
+        {
+            "text": "anonymous_person_1",
+            "name": "anonymous_person_1",
+            "type": "PERSON",
+            "source": "visual_scene_presence",
+            "confidence": "supported",
+            "evidence": {
+                "source_modalities": ["object_detect", "face_embed"],
+                "frame_consistency": "keyframe_only",
+                "visible_person_object_count": 1,
+                "visible_face_count": 1,
+                "crowd_risk": "low",
+            },
+        }
+    ]
+
+    assert len(seg1["detected_objects"]) == 8
+    assert seg1["visible_face_count"] == 0
+    assert seg1["visible_person_object_count"] == 2
+    assert seg1["visible_anonymous_people_count"] == 2
+    assert seg1["visible_person_confidence"]["crowd_risk"] == "high"
+    assert seg1["candidate_visible_people"] == []

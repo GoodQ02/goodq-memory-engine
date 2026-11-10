@@ -95,6 +95,32 @@ def setup_validator_env(tmp_path, monkeypatch):
     }
 
 
+@pytest.mark.parametrize("worker_name", ["image_embed_clip", "scene_visual_embeddings_clip"])
+def test_native_validator_accepts_current_clip_registry_model(setup_validator_env, worker_name):
+    from agents.mini_agent_client import MiniAgentClient
+    from scripts.ucf.ucf_ledger import UCFLedgerClient
+    from steps.common.model_provisioner import lookup_model
+
+    model_tag, _metadata = lookup_model("clip_vit")
+    assert model_tag
+    ledger = UCFLedgerClient(str(setup_validator_env["ucf_db_path"]))
+    ledger.log_frame(
+        video_hash=setup_validator_env["video_hash"], epoch_id="db", run_id="registry-model-proof",
+        t_start=1.0, t_end=2.0, modality="video", worker_name=worker_name,
+        model_tag=model_tag, vector_key="a" * 64, vector_backend="qdrant",
+        vector_collection="test_clip_col", vector_dim=768, vector_model_tag=model_tag,
+        source_artifact_id="scene_0001", raw_ref=setup_validator_env["raw_ref_str"],
+        payload={"faiss_id": 12345}, promotion_status="staged",
+    )
+    ledger.close()
+    client = MiniAgentClient(profile="safe", config=setup_validator_env["cfg_data"])
+
+    result, return_code = client.execute_tool("validate_ucf_epoch", {})
+
+    assert return_code == 0, result
+    assert result["output"] == {"success": True, "errors": []}
+
+
 def test_offline_validation_failures(setup_validator_env):
     """Verifies that offline validation correctly flags malformed schema, dims, or collections."""
     ucf_db_path = setup_validator_env["ucf_db_path"]
@@ -149,6 +175,10 @@ def test_offline_validation_failures(setup_validator_env):
     code = test_log_row("a" * 64, "qdrant", "test_clip_col", 768, "openai/clip-vit-large-patch14", modality="text")
     assert code == 1
 
+    # An unregistered model must still fail even when all vector fields match.
+    code = test_log_row("a" * 64, "qdrant", "test_clip_col", 768, "unknown/clip-model")
+    assert code == 1
+
 
 class MockResponse:
     def __init__(self, json_data, status_code):
@@ -160,7 +190,9 @@ class MockResponse:
         return self.json_data
 
 
-def test_online_validation_qdrant(setup_validator_env, monkeypatch):
+@pytest.mark.parametrize("worker_name", ["image_embed_clip", "scene_visual_embeddings_clip"])
+@pytest.mark.parametrize("model_tag", ["openai/clip-vit-large-patch14", "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"])
+def test_online_validation_qdrant(setup_validator_env, monkeypatch, worker_name, model_tag):
     """Verifies that online/strict modes connect to Qdrant, check payloads, and find orphans."""
     ucf_db_path = setup_validator_env["ucf_db_path"]
     video_hash = setup_validator_env["video_hash"]
@@ -180,9 +212,9 @@ def test_online_validation_qdrant(setup_validator_env, monkeypatch):
             modality, worker_name, model_tag, confidence, spatial_region, spatial_space,
             vector_key, vector_backend, vector_collection, vector_dim, vector_model_tag,
             source_artifact_id, raw_ref, payload, payload_hash, promotion_status
-        ) VALUES (?, 'ucf.v0.1', 'db', 'run_1', 1.0, 2.0, 'video', 'image_embed_clip', 'openai/clip-vit-large-patch14', 1.0, NULL, 'normalized_yxyx_top_left', ?, 'qdrant', 'test_clip_col', 768, 'openai/clip-vit-large-patch14', 'scene_0001', ?, ?, ?, 'staged')
+        ) VALUES (?, 'ucf.v0.1', 'db', 'run_1', 1.0, 2.0, 'video', ?, ?, 1.0, NULL, 'normalized_yxyx_top_left', ?, 'qdrant', 'test_clip_col', 768, ?, 'scene_0001', ?, ?, ?, 'staged')
         """,
-        (video_hash, "a" * 64, raw_ref_str, payload_str, payload_hash)
+        (video_hash, worker_name, model_tag, "a" * 64, model_tag, raw_ref_str, payload_str, payload_hash)
     )
     conn.commit()
     conn.close()
@@ -229,8 +261,8 @@ def test_online_validation_qdrant(setup_validator_env, monkeypatch):
         "video_hash": video_hash,
         "scene_id": "scene_0001",
         "scene_hash": "a" * 64,
-        "worker_name": "image_embed_clip",
-        "vector_model_tag": "openai/clip-vit-large-patch14",
+        "worker_name": worker_name,
+        "vector_model_tag": model_tag,
         "modality": "video",
         "ucf_frame_id": 1,
         "source_path": "mock_video.mp4",
@@ -240,6 +272,16 @@ def test_online_validation_qdrant(setup_validator_env, monkeypatch):
     # Strict mode: should pass now with standardized payload!
     code = run_validation(mode="strict")
     assert code == 0
+
+    # A different allowed model is still a provenance mismatch for this row.
+    qdrant_points["a" * 64]["vector_model_tag"] = (
+        "openai/clip-vit-large-patch14" if model_tag.startswith("laion/")
+        else "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K"
+    )
+    assert run_validation(mode="online") == 1
+    report = json.loads((setup_validator_env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+    assert any("Qdrant point vector_model_tag mismatch" in error for error in report["vector_integrity"]["errors"])
+    qdrant_points["a" * 64]["vector_model_tag"] = model_tag
 
     # Case B: Qdrant point video_id mismatched -> Fail
     qdrant_points["a" * 64]["video_hash"] = "wrong_video_hash"
@@ -826,6 +868,123 @@ def test_text_embed_audio_valid_registry_entry(setup_gapc_env):
     )
     code = run_validation(mode="offline")
     assert code == 0, "Valid text_embed from audio transcript must pass offline validation"
+
+
+@pytest.mark.parametrize("worker_name", ["text_embed", "scene_summary_embed"])
+def test_summary_qdrant_and_faiss_original_identity_validate(setup_gapc_env, monkeypatch, worker_name):
+    """Historical and current summary producers keep their original FAISS identity."""
+    import uuid
+
+    import faiss
+    import numpy as np
+
+    from steps.common.memory import to_faiss_id
+    from steps.common.qdrant_client import GOODQ_POINT_ID_NAMESPACE
+
+    env = setup_gapc_env
+    embedding_id = "scene_0001_summary"
+    vector_key = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, embedding_id))
+    faiss_id = to_faiss_id(embedding_id)
+    model_tag = "sentence-transformers/all-MiniLM-L6-v2"
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="text", worker_name=worker_name, vector_key=vector_key,
+        vector_backend="qdrant", vector_collection="test_text_col", vector_dim=384,
+        vector_model_tag=model_tag,
+        payload_dict={"embedding_id": embedding_id, "embedding_source": "scene_summary"},
+    )
+    index = faiss.IndexIDMap2(faiss.IndexFlatL2(384))
+    index.add_with_ids(np.ones((1, 384), dtype="float32"), np.array([faiss_id], dtype="int64"))
+    faiss.write_index(index, env["cfg_data"]["paths"]["faiss_index_path"])
+    with sqlite3.connect(env["cfg_data"]["paths"]["db_path"]) as conn:
+        conn.execute("CREATE TABLE embeddings (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, modality TEXT)")
+        conn.execute("INSERT INTO embeddings VALUES (?, ?, ?, 'text')", (
+            faiss_id, embedding_id,
+            str(env["tmp_path"] / "epochs/db/processing/mock_video_gapc/audio/scene_0001.wav"),
+        ))
+    point = {"id": vector_key, "payload": {
+        "epoch_id": "db", "video_hash": env["video_hash"], "scene_id": "scene_0001",
+        "scene_hash": vector_key, "worker_name": worker_name,
+        "vector_model_tag": model_tag, "modality": "text", "ucf_frame_id": 1,
+        "embedding_source": "scene_summary",
+    }}
+
+    def mock_post(url, json, timeout=None):
+        if "scroll" in url:
+            points = [point] if "/test_text_col/" in url else []
+            return MockResponse({"result": {"points": points, "next_page_offset": None}}, 200)
+        assert json["ids"] == [vector_key]
+        return MockResponse({"result": [point]}, 200)
+
+    monkeypatch.setattr(requests, "post", mock_post)
+    assert run_validation(mode="strict") == 0
+
+    # Resuming a historical summary updates its existing Qdrant point to the
+    # new producer. Compatibility is one-way and summary-specific.
+    point["payload"]["worker_name"] = "scene_summary_embed" if worker_name == "text_embed" else "text_embed"
+    assert run_validation(mode="strict") == (0 if worker_name == "text_embed" else 1)
+    if worker_name == "text_embed":
+        point["id"] = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, "wrong-summary"))
+        assert run_validation(mode="strict") == 1
+        report = json.loads((env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+        assert any("Qdrant point worker_name mismatch" in error for error in report["vector_integrity"]["errors"])
+        point["id"] = vector_key
+        invalid_payloads = [
+            {"embedding_id": embedding_id, "embedding_source": source}
+            for source in ("audio_transcript", "frame_text", None)
+        ] + [
+            {"embedding_id": embedding_id, "embedding_source": "audio_transcript", "origin_modality": "scene_summary"},
+            {"embedding_id": "wrong-summary", "embedding_source": "scene_summary"},
+            {"embedding_id": 42, "embedding_source": "scene_summary"},
+            {"embedding_id": True, "embedding_source": "scene_summary"},
+        ]
+        for payload in invalid_payloads:
+            canonical = json.dumps(payload, sort_keys=True)
+            with sqlite3.connect(env["ucf_db_path"]) as conn:
+                conn.execute("UPDATE context_frames SET payload = ?, payload_hash = ?", (
+                    json.dumps(payload), hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+                ))
+            assert run_validation(mode="strict") == 1
+            report = json.loads((env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+            assert any("Qdrant point worker_name mismatch" in error for error in report["vector_integrity"]["errors"])
+    else:
+        report = json.loads((env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+        assert any("Qdrant point worker_name mismatch" in error for error in report["vector_integrity"]["errors"])
+
+
+@pytest.mark.parametrize("worker_name", ["text_embed", "scene_summary_embed"])
+def test_summary_faiss_backend_routes_to_text_sidecar(setup_gapc_env, monkeypatch, worker_name):
+    import faiss
+    import numpy as np
+
+    env = setup_gapc_env
+    vector_key = "e" * 64
+    _insert_ucf_row(
+        env["ucf_db_path"], env["video_hash"], env["raw_ref_str"],
+        modality="text", worker_name=worker_name, vector_key=vector_key,
+        vector_backend="faiss", vector_collection="text", vector_dim=384,
+        vector_model_tag="sentence-transformers/all-MiniLM-L6-v2",
+        payload_dict={"faiss_id": 42, "embedding_source": "scene_summary"},
+    )
+    index = faiss.IndexIDMap2(faiss.IndexFlatL2(384))
+    index.add_with_ids(np.ones((1, 384), dtype="float32"), np.array([42], dtype="int64"))
+    faiss.write_index(index, env["cfg_data"]["paths"]["faiss_index_path"])
+    with sqlite3.connect(env["cfg_data"]["paths"]["db_path"]) as conn:
+        conn.execute("CREATE TABLE embeddings (faiss_id INTEGER PRIMARY KEY, hash TEXT, source_path TEXT, modality TEXT)")
+        conn.execute("INSERT INTO embeddings VALUES (42, ?, ?, 'text')", (
+            vector_key, str(env["tmp_path"] / "processing/mock_video_gapc/audio/scene_0001.wav"),
+        ))
+    monkeypatch.setattr(requests, "post", lambda *a, **k: MockResponse(
+        {"result": {"points": [], "next_page_offset": None}}, 200))
+    assert run_validation(mode="online") == 0
+    report = json.loads((env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+    assert report["vector_integrity"]["warnings"] == []
+
+    with sqlite3.connect(env["cfg_data"]["paths"]["db_path"]) as conn:
+        conn.execute("DELETE FROM embeddings")
+    assert run_validation(mode="online") == 1
+    report = json.loads((env["tmp_path"] / "reports/ucf_validation_report.json").read_text())
+    assert any("FAISS ID 42 not found in sidecar database" in error for error in report["vector_integrity"]["errors"])
 
 
 def test_text_embed_frame_valid_registry_entry(setup_gapc_env):

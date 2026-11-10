@@ -526,7 +526,47 @@ def _probe_lexicon(path: Path, device: str) -> dict[str, Any]:
     }
 
 
+def _probe_paddle_ocr_onnx(path: Path, device: str) -> dict[str, Any]:
+    # Paddle has a distinct locked NumPy/runtime lane. This probe must not
+    # accidentally validate the shared installer interpreter instead.
+    from configs.python_paths import get_env_python
+
+    python = get_env_python("goodq_ocr")
+    if python is None:
+        raise RuntimeError("required isolated Paddle OCR runtime payload is missing")
+    script = Path(__file__).with_name("probe_paddle_ocr_asset.py")
+    completed = subprocess.run(
+        [str(python), str(script), str(_onnx_file(path)), device],
+        capture_output=True, text=True, timeout=90, check=True,
+    )
+    return json.loads(completed.stdout.strip().splitlines()[-1])
+
+
+def _probe_wevisone_vl_caption(path: Path, device: str) -> dict[str, Any]:
+    # WeVisOne-VL-2B requires the isolated caption_vlm runtime (transformers 5.5.3).
+    from configs.python_paths import get_env_python
+
+    python = get_env_python("goodq_caption_vlm")
+    if python is None:
+        raise RuntimeError("required isolated WeVisOne-VL caption runtime payload is missing")
+    code = (
+        "import json, sys, torch; "
+        "from transformers import AutoConfig, AutoProcessor; "
+        "p, dev = sys.argv[1], sys.argv[2]; "
+        "cfg = AutoConfig.from_pretrained(p, local_files_only=True); "
+        "proc = AutoProcessor.from_pretrained(p, local_files_only=True); "
+        "print(json.dumps({'device': dev, 'output': {'classification': 'vlm_caption_config', 'model_type': getattr(cfg, 'model_type', '')}}))"
+    )
+    completed = subprocess.run(
+        [str(python), "-c", code, str(path), device],
+        capture_output=True, text=True, timeout=90, check=True,
+    )
+    return json.loads(completed.stdout.strip().splitlines()[-1])
+
+
 DEFAULT_PROBE_LOADERS: dict[str, ProbeLoader] = {
+    "paddle_ocr_onnx": _probe_paddle_ocr_onnx,
+    "wevisone_vl_caption": _probe_wevisone_vl_caption,
     "transformers_token_classification": _probe_transformers_token_classification,
     "transformers_text_classification": _probe_transformers_text_classification,
     "transformers_text_classification_safetensors": _probe_transformers_text_classification,

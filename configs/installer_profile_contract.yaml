@@ -22,7 +22,7 @@ profiles:
   PUBLIC_GPU_ENHANCED:
     distribution: public
     extends: PUBLIC_CPU_BASELINE
-    expected_asset_count: 33
+    expected_asset_count: 35
     forbidden_assets:
       - qwen2_5_vl_7b
       - qwen2_5_vl_3b
@@ -38,9 +38,10 @@ profiles:
     distribution: personal
     extends: PUBLIC_GPU_ENHANCED
     acceptance_required: true
-    expected_asset_count: 36
+    expected_asset_count: 39
     include_packs:
       - audio_optional
+      - media_playback_personal
     component_dispositions:
       wsl_audio:
         status: host_prerequisite
@@ -69,9 +70,13 @@ asset_contracts:
     runtime_owner: steps.tagger.step.tagger
     probe: transformers_token_classification
   blip_caption:
-    disposition: ingest_runtime
+    disposition: alternate_model
     runtime_owner: steps.image_caption.step.image_caption
     probe: transformers_blip_caption
+  wevisone_vl_2b:
+    disposition: ingest_runtime
+    runtime_owner: steps.image_caption.step.image_caption
+    probe: wevisone_vl_caption
   cacert:
     disposition: infrastructure_runtime
     runtime_owner: embedded_python_tls
@@ -116,6 +121,10 @@ asset_contracts:
     disposition: infrastructure_runtime
     runtime_owner: media_subprocess_runtime
     probe: executable_version
+  vlc:
+    disposition: infrastructure_runtime
+    runtime_owner: api.utils.desktop_player
+    probe: pinned_member_inventory_and_executable_version
   hubert_emotion:
     disposition: ingest_runtime
     runtime_owner: steps.audio_emotion.step.audio_emotion
@@ -180,10 +189,14 @@ asset_contracts:
     disposition: ingest_runtime
     runtime_owner: steps.common.vad_preprocessor
     probe: silero_vad_load
-  tesseract:
-    disposition: infrastructure_runtime
+  paddle_ocr_det:
+    disposition: ingest_runtime
     runtime_owner: steps.image_ocr.step.image_ocr
-    probe: executable_version
+    probe: paddle_ocr_onnx
+  paddle_ocr_rec:
+    disposition: ingest_runtime
+    runtime_owner: steps.image_ocr.step.image_ocr
+    probe: paddle_ocr_onnx
   vader_lexicon:
     disposition: ingest_runtime
     runtime_owner: steps.sentiment.step.sentiment

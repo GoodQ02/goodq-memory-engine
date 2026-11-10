@@ -1,43 +1,27 @@
 ---
 name: goodq4all-audit
-description: Use for running automated LLM codebase audits with Gemini 2.5 Pro, ensuring AGENTS.md compliance, API thread safety, and security hardening.
+description: Run an explicitly requested external LLM code audit of GoodQ using its existing audit script.
 ---
 
-# GoodQ4All Automated Codebase Audit
+# External GoodQ code audit
 
-Use this skill when performing static and LLM-based compliance and security audits on the codebase.
+This is an optional cloud audit, not a startup check or ordinary code-review
+requirement. Use local source inspection and deterministic checks first.
 
-## Prerequisites
+`scripts/audit_llm.py` bundles source/configuration for a Vertex AI request.
+Before execution, inspect its current bundle selection, model/region, output
+path and credential behavior. Confirm that the task authorizes sending that
+exact content to the external service and charging the selected project. Exclude
+secrets and personal data; if the script cannot honor the approved scope, stop
+before sending. Do not enable APIs, change authentication/billing defaults or
+install dependencies as an implicit prerequisite.
 
-1. Active Google Cloud SDK authentication:
-   ```powershell
-   gcloud auth login
-   gcloud auth application-default login
-   ```
-2. The billing/quota project must be set (e.g., `project-begood`):
-   ```powershell
-   gcloud config set project project-begood
-   gcloud config set billing/quota_project project-begood
-   ```
+Use an existing appropriate environment and explicit approved project/region
+arguments supported by the script. Resolve current provider/model availability
+from official documentation when needed; historical model names and quota
+examples are not present configuration. Keep generated reports in task evidence.
 
-## Running the Codebase Audit
-
-Run the native LLM-based audit tool using the base python environment:
-```powershell
-conda run -n base python scripts/audit_llm.py --project project-begood
-```
-
-### Command Parameters
-
-* `--project`: GCP Project ID to charge Vertex AI billing.
-* `--region`: Google Cloud location region (defaults to `us-central1`).
-* `--output`: Path to write the generated markdown audit report (defaults to `reports/llm_audit_report.md`).
-
-## Verification & Conformance Checklist
-
-When auditing the codebase, ensure that:
-1. **No Hardcoded Absolute Paths:** Check that no literal Windows drive roots (e.g., drive prefix followed by a slash or backslash) exist in runtime code. Use environment variables (like `GOODQ_DATA_ROOT`) instead.
-2. **Explicit Config Gating:** Ensure config dependencies fail fast (`ValueError`) when required directories or environment variables are not supplied.
-3. **Concurrency Locks:** Wrap mutable global data structures accessed by ASGI web entry points (like `_active_tokens` in `api/routes/ingest.py`) with thread-safe synchronization locks (`threading.Lock`).
-4. **Observable Exception Handling:** Avoid silent suppression or bare `except:` clauses. Always catch specific exceptions (like `json.JSONDecodeError` or `ValueError`) and log descriptive warnings to preserve the "fail visible, not loud" protocol.
-5. **No Test Backdoors:** Verify that no hardcoded debug bypass tokens (like `"confirm-123"` - historical/backdoor removed) exist in the route handlers.
+Treat model findings as leads. Check the actual code path and reproduce material
+claims before proposing fixes. Report validated findings and material uncertainty
+with locations, evidence and impact. Apply `AGENTS.md` and relevant contracts;
+do not turn generic audit advice into unconditional code rewrites.

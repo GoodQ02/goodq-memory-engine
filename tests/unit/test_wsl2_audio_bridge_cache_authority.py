@@ -34,7 +34,8 @@ def test_worker_coherence_identifies_only_the_stale_deployed_helper(monkeypatch)
     monkeypatch.setenv("GOODQ_WSL_USER", "goodq")
     runner = WindowsWSL2AudioRunner()
     expected = runner._expected_worker_hashes()
-    actual = [expected["setup_cuda_env.sh"], expected["process_audio.py"], "0" * 64]
+    actual = ['0' * 64 if name == 'model_cache.py' else expected[name]
+              for name in runner._worker_file_names()]
 
     with patch("scripts.wsl2_audio_bridge.subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout="\n".join(f"{digest} file" for digest in actual))

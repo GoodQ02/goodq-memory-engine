@@ -229,11 +229,14 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                     "payload": {
                         "epoch_id": epoch_id,
                         "video_hash": video_hash,
+                        "video_id": item.get("video_id") or item.get("video_hash"),
+                        "run_id": item.get("run_id") or (cfg.get("run") or {}).get("id"),
                         "scene_id": scene_id,
                         "scene_hash": h,
                         "worker_name": "image_embed_dino",
                         "vector_model_tag": "facebook/dinov2-large",
-                        "modality": "video",
+                        "modality": "multimodal" if item.get("source_kind") == "image" else "video",
+                        **({"source_kind": item["source_kind"]} if item.get("source_kind") else {}),
                         "ucf_frame_id": None,
                         "source_path": path,
                         "faiss_id": faiss_id,
@@ -276,7 +279,8 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
                         (
                             faiss_id, h, path, datetime.utcnow().isoformat(),
                             epoch_id, video_hash, scene_id, h,
-                            "image_embed_dino", "facebook/dinov2-large", "video"
+                            "image_embed_dino", "facebook/dinov2-large",
+                            "multimodal" if item.get("source_kind") == "image" else "video"
                         ),
                     )
                 map_ok = True
@@ -332,7 +336,7 @@ def image_embed_dino(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             "provenance_version": 1,
             "component": "image_embed_dino",
             "step": "image_embed_dino",
-            "model": "facebook/dinov2-base",
+            "model": "facebook/dinov2-large",
             "embedding_id": h,
             "faiss_committed": True,
             "qdrant_attempted": bool(qdrant_attempted),

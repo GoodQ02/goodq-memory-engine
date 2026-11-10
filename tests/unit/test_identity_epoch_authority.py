@@ -109,7 +109,7 @@ def test_status_and_identity_get_share_same_epoch_projection(
     assert status_projection["ready"] is True
 
 
-def test_face_projection_uses_workbench_representative_frame_url_shape(tmp_path: Path) -> None:
+def test_face_projection_uses_workbench_representative_frame_url_shape(tmp_path: Path, monkeypatch) -> None:
     epoch_root = tmp_path / "epochs" / "epoch_same"
     processing_root = epoch_root / "processing"
     frames_root = processing_root / "video_a" / "video" / "frames"
@@ -178,3 +178,16 @@ def test_face_projection_uses_workbench_representative_frame_url_shape(tmp_path:
             "bbox": [10, 20, 30, 40],
         }
     ]
+    # The production caller must project this face evidence without unrelated manifests.
+    identity_root = tmp_path / "identity"
+    identity_root.mkdir()
+    (identity_root / "face_clusters.json").write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(identity, "_CFG", {
+        "epoch_id": "epoch_same", "paths": {"db_path": str(epoch_root / "memory.db")},
+        "identity_search": {"roster_path": str(identity_root / "family_roster.yaml")},
+    })
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
+        response = client.get("/api/identity/face-clusters")
+    assert response.status_code == 200
+    assert response.json()["epoch_authority"]["ready"] is False
+    assert response.json()["clusters"] == projected["clusters"]

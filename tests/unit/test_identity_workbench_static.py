@@ -45,6 +45,30 @@ def _function_source(name: str) -> str:
     raise AssertionError(f"Unclosed JavaScript function: {name}")
 
 
+def test_curated_relationships_show_statement_without_media_identity_claim():
+    import json
+    import subprocess
+
+    # The common quote scanner does not parse regex literals in escHtml.
+    escape_source = re.search(r"  function escHtml\(str\) \{.*?^  \}", IDENTITY_JS, re.S | re.M)
+    assert escape_source is not None
+    source = _function_source("rosterRelationshipsHtml") + escape_source.group(0)
+    harness = r'''
+const assert=require('node:assert/strict');
+eval(JSON.parse(require('node:fs').readFileSync(0,'utf8')));
+const html=rosterRelationshipsHtml({relationships:[{target_id:'b',type:'parent',review_status:'user_provided',
+ evidence:{kind:'operator_statement',source_id:'statement-1',date:'2026-10-21',statement:'<img src=x> is my parent'}}]},
+ [{id:'b',display_name:'Bob'}]);
+assert.match(html,/parent → Bob/);assert.match(html,/user_provided/);assert.match(html,/statement-1/);
+assert.match(html,/&lt;img src=x&gt;/);assert.ok(!html.includes('<img'));
+assert.match(html,/does not identify a face or voice/);
+assert.match(rosterRelationshipsHtml({},[]),/No directed relationship recorded/);
+'''
+    result = subprocess.run(["node", "-e", harness], input=json.dumps(source), text=True,
+                            capture_output=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
 def test_label_mutation_preserves_note_and_uses_local_confirmation_token() -> None:
     labeler = _function_source("applyLabel")
     confirmer = _function_source("confirmedIdentityRequest")

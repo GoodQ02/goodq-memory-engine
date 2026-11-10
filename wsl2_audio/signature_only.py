@@ -1,4 +1,4 @@
-"""Offline Wav2Vec speaker-signature generation from existing audio evidence.
+"""Offline ECAPA speaker-signature generation from existing audio evidence.
 
 This worker deliberately does not transcribe, diarize, classify emotion, or
 persist anything.  It accepts an existing scene audio file and the scene's
@@ -17,16 +17,9 @@ import process_audio as audio_worker
 
 
 def build_signatures(audio_file: str | Path, diarization_segments: list[dict[str, Any]]) -> dict[str, Any]:
-    """Return signature-only evidence using the pinned offline Wav2Vec model."""
-    if not audio_worker.TRANSFORMERS_AVAILABLE:
-        raise RuntimeError("Wav2Vec signature runtime is unavailable: transformers not installed")
+    """Return signature-only evidence using the pinned offline ECAPA model."""
     if not isinstance(diarization_segments, list) or not diarization_segments:
         raise ValueError("signature-only work requires existing diarization segments")
-
-    repo = "facebook/wav2vec2-base-960h"
-    revision = os.getenv("GOODQ_WAV2VEC2_BASE_REVISION", "22aad52d435eb6dbaf354bdad9b0da84ce7d6156").strip()
-    if model_cache.is_offline_mode() and not model_cache.check_hf_model_cache(repo):
-        raise OSError(f"Offline Wav2Vec model is unavailable in the configured cache: {repo}")
 
     waveform, sample_rate = audio_worker.torchaudio.load(str(audio_file))
     if int(sample_rate) != audio_worker._SPEAKER_SIGNATURE_TARGET_SR:
@@ -36,18 +29,15 @@ def build_signatures(audio_file: str | Path, diarization_segments: list[dict[str
     waveform = waveform.detach().cpu()
     cache_dir = audio_worker._resolve_hf_cache_dir()
     device = "cuda" if audio_worker.torch.cuda.is_available() else "cpu"
-    model = audio_worker.Wav2Vec2Model.from_pretrained(
-        repo, revision=revision or None, cache_dir=cache_dir, local_files_only=True
-    ).to(device)
-    extractor = audio_worker.Wav2Vec2FeatureExtractor.from_pretrained(
-        repo, revision=revision or None, cache_dir=cache_dir, local_files_only=True
-    )
+    import tempfile
+    links = tempfile.TemporaryDirectory(prefix="goodq-speaker-")
+    model = None
     try:
+        model = audio_worker.speaker_signature.load_encoder(device, links.name, cache_dir)
         signature_result = audio_worker._build_speaker_voice_signatures(
             waveform,
             diarization_segments,
             embed_model=model,
-            embed_extractor=extractor,
             device=device,
             sample_rate=audio_worker._SPEAKER_SIGNATURE_TARGET_SR,
         )
@@ -55,15 +45,15 @@ def build_signatures(audio_file: str | Path, diarization_segments: list[dict[str
             "status": "success",
             "mode": "signature_only",
             "source_audio_file": str(audio_file),
-            "model_repo": repo,
-            "model_revision": revision,
+            "model_repo": audio_worker.speaker_signature.MODEL_ID,
+            "model_revision": audio_worker.speaker_signature.REVISION,
             "device": device,
             "speaker_voice_signatures": signature_result.get("signatures", []),
             "speaker_voice_signature_meta": signature_result.get("meta", {}),
         }
     finally:
         del model
-        del extractor
+        links.cleanup()
         audio_worker.clear_gpu_memory()
 
 

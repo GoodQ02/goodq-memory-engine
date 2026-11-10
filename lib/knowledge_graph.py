@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -33,12 +34,17 @@ def _json_loads(value: Any) -> Dict[str, Any]:
 class KnowledgeGraph:
     """SQLite-backed lightweight knowledge graph store."""
 
-    def __init__(self, db_path: str, read_only: bool = False):
+    def __init__(self, db_path: str, read_only: bool = False, *, read_live_wal: bool = False):
+        self._transaction_active = False
         self.db_path = Path(db_path)
         if read_only:
             if not self.db_path.exists():
                 raise FileNotFoundError(f"Database file not found: {self.db_path}")
-            self.conn = sqlite3.connect(f"file:{self.db_path.absolute().as_posix()}?mode=ro&immutable=1", uri=True)
+            # Preserve sidecar-free snapshot reads. Live operator routes must
+            # opt into WAL visibility; SQLite may then maintain WAL sidecars.
+            options = "?mode=ro" if read_live_wal else "?mode=ro&immutable=1"
+            self.conn = sqlite3.connect(self.db_path.resolve().as_uri() + options, uri=True)
+            self.conn.execute("PRAGMA query_only=ON")
             self.conn.row_factory = sqlite3.Row
         else:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +61,26 @@ class KnowledgeGraph:
     def close(self) -> None:
         if getattr(self, "conn", None) is not None:
             self.conn.close()
+
+    def _commit(self) -> None:
+        if not self._transaction_active:
+            self.conn.commit()
+
+    @contextmanager
+    def transaction(self):
+        """Keep a composed projection atomic despite per-operation commits."""
+        if self._transaction_active:
+            raise RuntimeError("Nested knowledge graph transactions are unsupported")
+        self.conn.execute("BEGIN IMMEDIATE")
+        self._transaction_active = True
+        try:
+            yield self
+            self.conn.commit()
+        except BaseException:
+            self.conn.rollback()
+            raise
+        finally:
+            self._transaction_active = False
 
     def _init_schema(self) -> None:
         cur = self.conn.cursor()
@@ -146,7 +172,7 @@ class KnowledgeGraph:
             CREATE INDEX IF NOT EXISTS idx_event_nodes_node ON event_nodes(node_id);
             """
         )
-        self.conn.commit()
+        self._commit()
 
     def add_node(
         self,
@@ -187,7 +213,7 @@ class KnowledgeGraph:
                     int(row["id"]),
                 ),
             )
-            self.conn.commit()
+            self._commit()
             return int(row["id"])
 
         cur.execute(
@@ -195,7 +221,7 @@ class KnowledgeGraph:
             "VALUES (?, ?, ?, 1, ?, ?, ?)",
             (node_type, name, _json_dumps(incoming_props), ts, ts, _utc_now_iso()),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def add_media_node(
@@ -230,7 +256,7 @@ class KnowledgeGraph:
                     int(row["id"]),
                 ),
             )
-            self.conn.commit()
+            self._commit()
             return int(row["id"])
 
         cur.execute(
@@ -246,7 +272,7 @@ class KnowledgeGraph:
                 _utc_now_iso(),
             ),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def link_node_to_media(
@@ -261,7 +287,7 @@ class KnowledgeGraph:
             "INSERT INTO node_media (node_id, media_id, confidence, context, created_at) VALUES (?, ?, ?, ?, ?)",
             (int(node_id), int(media_id), float(confidence), _json_dumps(dict(context or {})), _utc_now_iso()),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def add_edge(
@@ -285,7 +311,7 @@ class KnowledgeGraph:
                 "UPDATE edges SET weight = ?, properties = ? WHERE id = ?",
                 (float(weight), _json_dumps(merged_props), int(row["id"])),
             )
-            self.conn.commit()
+            self._commit()
             return int(row["id"])
 
         cur.execute(
@@ -299,7 +325,7 @@ class KnowledgeGraph:
                 _utc_now_iso(),
             ),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def add_temporal_event(
@@ -314,7 +340,7 @@ class KnowledgeGraph:
             "INSERT INTO events (event_type, timestamp, duration, properties, created_at) VALUES (?, ?, ?, ?, ?)",
             (event_type, float(timestamp), duration, _json_dumps(dict(properties or {})), _utc_now_iso()),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def link_event_to_node(self, event_id: int, node_id: int, role: Optional[str] = None) -> int:
@@ -323,7 +349,7 @@ class KnowledgeGraph:
             "INSERT INTO event_nodes (event_id, node_id, role, created_at) VALUES (?, ?, ?, ?)",
             (int(event_id), int(node_id), role, _utc_now_iso()),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def get_statistics(self) -> Dict[str, Any]:

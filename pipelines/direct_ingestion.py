@@ -102,12 +102,10 @@ def run_direct_ingestion(video_path: str | Path, cfg: Dict[str, Any] | None = No
     
     # Get processing directory from config
     processing_root = _resolve_processing_root(cfg)
-    processing_root.mkdir(parents=True, exist_ok=True)
     
     # Call the existing scene ingestion runtime
     try:
         logs_dir = Path(get_runtime_paths(cfg, "log_dir", require_canonical=False)["log_dir"]).resolve()
-        logs_dir.mkdir(parents=True, exist_ok=True)
         output_json = logs_dir / f"direct_ingest_{uuid.uuid4().hex}.json"
         expected_hash = _compute_sha256(video_path)
         chunk_size = cfg.get("progressive_chunk_size", 300.0)

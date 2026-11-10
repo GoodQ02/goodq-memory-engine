@@ -2,8 +2,18 @@ from __future__ import annotations
 
 import importlib
 import sys
+import types
 from pathlib import Path
 import subprocess
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolate_preflight_model_cache(monkeypatch, tmp_path):
+    resolver = types.ModuleType("bootstrap_models")
+    resolver.resolve_models_root = lambda: tmp_path / "models"
+    monkeypatch.setitem(sys.modules, "bootstrap_models", resolver)
 
 
 def _load_bridge_module():

@@ -97,6 +97,18 @@ Poppler only after license evidence and hashes are recorded. Piper is a
 deprecated external TTS integration and is not acquired or shipped by the
 baseline installer.
 
+The personal profile additionally selects the pinned unmodified VLC 3.0.24
+portable runtime at `<install_root>/vlc/vlc.exe`. Its original ZIP belongs in
+the existing private dependency cache at
+`staged_cache/external/vlc-3.0.24-win64.zip`. Restore that archive from the
+selected immutable `vlc` vault snapshot; never copy an installed user's VLC
+configuration. The ordinary builder invokes `vlc_runtime_payload.py stage`;
+the installed offline suite invokes its `verify --probe` command. Both bind all
+584 original runtime members to the pinned manifest. Public profiles exclude
+VLC until the [eligibility ledger](../releases/OFFLINE_PAYLOAD_ELIGIBILITY.md#vlc-desktop-playback-addition--2026-10-07)
+records complete corresponding-source eligibility. A scoped player restore does
+not supersede the existing complete offline build and clean-install gates.
+
 The browser is not a host-tools payload. The launcher opens the loopback UI
 through the user's existing URL handler and prints the exact local URL if that
 operation fails. A dedicated browser can be considered only as a separately

@@ -46,12 +46,13 @@ from scripts.wsl_audio_preflight import probe_wsl_audio_runtime
 
 SCHEMA = "goodq.prebuild-readiness.v1"
 PUBLIC_PROFILE, PERSONAL_PROFILE = RELEASE_BUILD_PROFILES
-PUBLIC_ASSET_COUNT = 33
-PERSONAL_ASSET_COUNT = 36
+PUBLIC_ASSET_COUNT = 35
+PERSONAL_ASSET_COUNT = 39
 PERSONAL_ONLY_DELTA = (
     "pyannote_diarization",
     "pyannote_segmentation",
     "pyannote_wespeaker",
+    "vlc",
 )
 LARGE_MODEL_ASSET_IDS = (
     "deepseek_r1_distill_qwen_14b",
@@ -319,6 +320,21 @@ def _collect_profiles(repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "closures": closures,
     }
     return profiles, context
+
+
+def _require_packaged_runtimes(profile_context: Mapping[str, Any]) -> None:
+    """Local model qualification cannot admit an unfinished installer runtime."""
+    assets = _mapping(profile_context["catalog"].get("assets"), "asset catalog")
+    selected = {asset_id for values in profile_context["selections"].values() for asset_id in values}
+    pending = sorted(
+        asset_id for asset_id in selected
+        if _mapping(assets.get(asset_id), "catalog asset").get("packaging_status") == "pending"
+    )
+    if pending:
+        raise PrebuildReadinessError(
+            "isolated runtime payload and distribution snapshots are not qualified: "
+            + ", ".join(pending)
+        )
 
 
 def _snapshot_for(vault_root: Path, asset_id: str, revision: str) -> Path:
@@ -1012,15 +1028,15 @@ def validate_readiness(
     public_ids = _list(public.get("asset_ids"), "Public GPU assets")
     personal_ids = _list(personal.get("asset_ids"), "Personal assets")
     if int(public.get("asset_count", -1)) != PUBLIC_ASSET_COUNT or len(public_ids) != PUBLIC_ASSET_COUNT:
-        raise PrebuildReadinessError("Public GPU profile must contain exactly 33 assets")
+        raise PrebuildReadinessError("Public GPU profile must contain exactly 35 assets")
     if int(personal.get("asset_count", -1)) != PERSONAL_ASSET_COUNT or len(personal_ids) != PERSONAL_ASSET_COUNT:
-        raise PrebuildReadinessError("Personal profile must contain exactly 36 assets")
+        raise PrebuildReadinessError("Personal profile must contain exactly 39 assets")
     if public_ids != sorted(set(public_ids)) or personal_ids != sorted(set(personal_ids)):
         raise PrebuildReadinessError("profile asset lists must be unique and sorted")
     if set(public_ids) & set(LARGE_MODEL_ASSET_IDS) or set(personal_ids) & set(LARGE_MODEL_ASSET_IDS):
         raise PrebuildReadinessError("profile selected a forbidden large-model asset")
     if sorted(set(personal_ids) - set(public_ids)) != list(PERSONAL_ONLY_DELTA):
-        raise PrebuildReadinessError("Personal profile delta is not the exact three Pyannote assets")
+        raise PrebuildReadinessError("Personal profile delta must be three Pyannote assets and VLC")
     if sorted(profiles.get("personal_only_delta") or []) != list(PERSONAL_ONLY_DELTA):
         raise PrebuildReadinessError("declared Personal profile delta is incorrect")
     if sorted(profiles.get("forbidden_asset_ids") or []) != list(LARGE_MODEL_ASSET_IDS):
@@ -1233,6 +1249,7 @@ def collect_readiness(
     if int(initial["remote_alignment"].get("behind_origin_dev", -1)) != 0:
         raise PrebuildReadinessError("release source is behind origin/dev")
     profiles, profile_context = _collect_profiles(repo_root)
+    _require_packaged_runtimes(profile_context)
     private_build_inputs = _collect_private_build_inputs(
         repo_root=repo_root,
         private_build_root=private_build_root,

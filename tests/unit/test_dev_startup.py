@@ -636,18 +636,62 @@ def _request_stop(sandbox, receipt=None):
 
 
 @contextmanager
-def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powershell.exe"):
-    """Run the real stop caller; only the unrelated machine process scan is scoped."""
+def _stop_current(sandbox, port, timeout=3, action="StopCurrent", shell="powershell.exe",
+                  hide_terminal_receipt=False, preserve_dependencies=False, foreign_pid=0,
+                  hide_discovery_receipt=False):
+    """Run the real control caller with optional fixture-only receipt fault injection."""
     harness = sandbox / "stop-current-harness.ps1"
+    receipt_fault = r'''
+function Test-Path {
+    [CmdletBinding()]param($LiteralPath, $PathType)
+    $exists = Microsoft.PowerShell.Management\Test-Path @PSBoundParameters
+    if ($exists -and $terminalPath -and $LiteralPath -eq $terminalPath -and -not $script:receiptHidden) {
+        # Wait for the fixture supervisor to finish before hiding its final
+        # receipt, so no later heartbeat can repair this injected read race.
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        while (-not [IO.File]::Exists((Join-Path $PSScriptRoot 'receipt.json'))) {
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Fixture supervisor did not finish before receipt fault.' }
+            Start-Sleep -Milliseconds 25
+        }
+        $terminal = [IO.File]::ReadAllText($LiteralPath) | ConvertFrom-Json
+        if ($terminal.state -ne 'stopped' -or $terminal.drain_verified -ne $true) {
+            throw 'Receipt fault requires a real completed drain.'
+        }
+        [IO.File]::Move($LiteralPath, $LiteralPath + '.held')
+        [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'receipt-hidden.txt'), $LiteralPath)
+        $script:receiptHidden = $true
+    }
+    return $exists
+}
+''' if hide_terminal_receipt else ""
+    if hide_discovery_receipt:
+        receipt_fault = r'''
+function Test-Path {
+    [CmdletBinding()]param($LiteralPath, $PathType)
+    $exists = Microsoft.PowerShell.Management\Test-Path @PSBoundParameters
+    if ($exists -and $LiteralPath.EndsWith('\supervisor.json') -and
+        $LiteralPath -notlike '*goodq-startup-stale*' -and -not $script:discoveryHidden) {
+        # Reproduce the observed ReplaceFile absence after a successful probe.
+        # The Python caller restores this fixture receipt within the read budget.
+        [IO.File]::Move($LiteralPath, $LiteralPath + '.discovery-held')
+        [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'discovery-hidden.txt'), $LiteralPath)
+        $script:discoveryHidden = $true
+    }
+    return $exists
+}
+'''
     harness.write_text(
         "param($Script, [int]$Port, [double]$Timeout, $Action)\n"
         "[Console]::WriteLine('control-start ' + $Action + ' PowerShell ' + $PSVersionTable.PSVersion)\n"
         "function Add-Type { [CmdletBinding()]param($TypeDefinition); [Console]::WriteLine('Add-Type begin'); Microsoft.PowerShell.Utility\\Add-Type @PSBoundParameters; [Console]::WriteLine('Add-Type end') }\n"
         "function Get-NetTCPConnection { [CmdletBinding()]param($LocalPort,$State); [Console]::WriteLine('listener-query begin'); NetTCPIP\\Get-NetTCPConnection @PSBoundParameters; [Console]::WriteLine('listener-query end') }\n"
-        "function Get-CimInstance { param($ClassName,$Filter) }\n"
-        "function Start-Service { param($Name); throw 'Unexpected service action in a stop/preflight control' }\n"
-        "$arguments=@{ApiPort=$Port;DrainTimeoutSeconds=$Timeout}; $arguments[$Action]=$true\n"
-        "& $Script @arguments\n",
+        + (f"function Get-CimInstance {{ [CmdletBinding()]param($ClassName,$Filter); CimCmdlets\\Get-CimInstance @PSBoundParameters | Where-Object ProcessId -eq {foreign_pid} }}\n"
+         if foreign_pid else "function Get-CimInstance { param($ClassName,$Filter) }\n")
+        + "function Start-Service { param($Name); throw 'Unexpected service action in a stop/preflight control' }\n"
+        + receipt_fault
+        + "$arguments=@{ApiPort=$Port;DrainTimeoutSeconds=$Timeout}; $arguments[$Action]=$true\n"
+        + ("$arguments.PreserveDependencies=$true\n" if preserve_dependencies else "")
+        + "& $Script @arguments\n",
         encoding="utf-8-sig",
     )
     env = {k: v for k, v in os.environ.items() if k.casefold() != "psmodulepath"}
@@ -697,7 +741,10 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
         port = int(initial["api_endpoint"].rsplit(":", 1)[1])
         with _stop_current(sandbox, port, action="CheckRunning", shell=shell) as checker:
             _check_running(sandbox, checker)
-        with _stop_current(sandbox, port, shell=shell) as stopper:
+        # Match this owner's drain budget. A stop can arrive inside a real
+        # listener/HTTP check; the old three-second caller budget could expire
+        # before the owner next observes the event and attests its empty jobs.
+        with _stop_current(sandbox, port, timeout=12, shell=shell) as stopper:
             try:
                 _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=CONTROL_TIMEOUT_SECONDS)
                 assert stopper.poll() is None, "Stop caller returned before active work drained"
@@ -718,10 +765,194 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
     assert result["ChildStarts"] == ["api", "watchdog"]
 
 
-def test_stop_current_timeout_preserves_busy_owner_and_returns_failure(launch):
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+@pytest.mark.parametrize("fault_action", ["CheckRunning", "StopCurrent"])
+def test_control_discovery_retries_receipt_replaced_after_existence_check(launch, shell, fault_action):
     def exercise(sandbox, process):
         initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
-        with _stop_current(sandbox, int(initial["api_endpoint"].rsplit(":", 1)[1]), timeout=.5) as stopper:
+        stale = sandbox / "goodq-startup-stale"
+        stale.mkdir()
+        (stale / "supervisor.json").write_text(json.dumps(dict(
+            initial, stop_event="Local\\GoodQRuntime-" + "0" * 32)))
+        port = int(initial["api_endpoint"].rsplit(":", 1)[1])
+        marker = sandbox / "discovery-hidden.txt"
+        # The invocation directory is stable while its receipt is replaced.
+        receipt = next(d for d in sandbox.glob("goodq-startup-*") if d != stale) / "supervisor.json"
+        for action in ("CheckRunning", "StopCurrent"):
+            marker.unlink(missing_ok=True)
+            with _stop_current(sandbox, port, timeout=12, action=action, shell=shell,
+                               hide_discovery_receipt=action == fault_action) as controller:
+                if action == fault_action:
+                    _wait_for_file(marker, controller, seconds=CONTROL_TIMEOUT_SECONDS)
+                    assert Path(marker.read_text(encoding="utf-8-sig")) == receipt
+                    held = receipt.with_name(receipt.name + ".discovery-held")
+                    try:
+                        time.sleep(0.2)
+                    finally:
+                        # Only restore the fixture's hidden receipt; keep old run evidence.
+                        held.replace(receipt)
+                if action == "CheckRunning":
+                    _check_running(sandbox, controller)
+                else:
+                    _wait_for_file(sandbox / "drain-requested.json", controller,
+                                   seconds=CONTROL_TIMEOUT_SECONDS)
+                    assert controller.poll() is None, "Discovery bypassed the active-work drain"
+                    assert not (sandbox / "work-completed.json").exists()
+                    (sandbox / "release-work").touch()
+                    assert controller.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0, (
+                        sandbox / "stop-current.log").read_text(errors="replace")
+                    terminal = json.loads(receipt.read_text(encoding="utf-8-sig"))
+                    assert terminal["state"] == "stopped" and terminal["drain_verified"] is True
+        assert not list(sandbox.glob("goodq-startup-*/*.discovery-held"))
+
+    result = launch("active_work", supervise=exercise, max_restarts=2, drain_timeout=12)
+    assert result["Completed"], result
+    assert result["ChildStarts"] == ["api", "watchdog"]
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+@pytest.mark.parametrize("preserve_dependencies", [False, True])
+def test_stop_current_isolated_drain_preserves_foreign_owner(launch, tmp_path, shell, preserve_dependencies):
+    foreign_root = tmp_path / "foreign-runtime"
+    package = foreign_root / "cli"
+    package.mkdir(parents=True)
+    (package / "__init__.py").touch()
+    (package / "watchdog.py").write_text("import time; time.sleep(120)\n", encoding="utf-8")
+    foreign = subprocess.Popen([sys.executable, "-B", "-m", "cli.watchdog"], cwd=foreign_root,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+    birth = psutil.Process(foreign.pid).create_time()
+    try:
+        def exercise(sandbox, process):
+            initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+            port = int(initial["api_endpoint"].rsplit(":", 1)[1])
+            with _stop_current(sandbox, port, timeout=12, shell=shell,
+                               preserve_dependencies=preserve_dependencies, foreign_pid=foreign.pid) as stopper:
+                code = stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS)
+                console = (sandbox / "stop-current.log").read_text(encoding="utf-8-sig")
+                terminal = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "stopped")
+                assert terminal["drain_verified"] is True
+                assert not terminal["api"]["alive"] and not terminal["watchdog"]["alive"]
+                assert (code == 0) is preserve_dependencies, console
+                assert "compute dependencies may now be released" not in console
+                if preserve_dependencies:
+                    assert "owned drain verified; shared dependencies preserved" in console
+                else:
+                    assert "without a verified drain" in console
+                assert foreign.poll() is None
+                assert psutil.Process(foreign.pid).create_time() == birth
+                (sandbox / "isolated-stop-verification.json").write_text(json.dumps({
+                    "exit_code": code, "preserve_dependencies": preserve_dependencies,
+                    "foreign_pid": foreign.pid, "foreign_birth": birth, "foreign_preserved": True,
+                    "terminal": terminal, "console": console,
+                }, indent=2), encoding="utf-8")
+        result = launch(supervise=exercise, drain_timeout=12)
+        assert result["Completed"], result
+    finally:
+        if foreign.poll() is None:
+            foreign.terminate()
+        foreign.wait(timeout=5)
+
+
+@pytest.mark.parametrize("permanent", [False, True])
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_stop_current_handles_receipt_disappearing_after_existence_check(launch, permanent, shell):
+    def exercise(sandbox, process):
+        initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+        receipt, = sandbox.glob("goodq-startup-*/supervisor.json")
+        held = receipt.with_name(receipt.name + ".held")
+        port = int(initial["api_endpoint"].rsplit(":", 1)[1])
+        try:
+            with _stop_current(sandbox, port, timeout=12, shell=shell,
+                               hide_terminal_receipt=True) as stopper:
+                _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=CONTROL_TIMEOUT_SECONDS)
+                (sandbox / "release-work").touch()
+                _wait_for_file(sandbox / "receipt-hidden.txt", stopper, seconds=CONTROL_TIMEOUT_SECONDS)
+                assert not receipt.exists()
+                terminal = json.loads(held.read_text(encoding="utf-8-sig"))
+                assert terminal["state"] == "stopped" and terminal["drain_verified"] is True
+                assert not terminal["api"]["alive"] and not terminal["watchdog"]["alive"]
+                if not permanent:
+                    time.sleep(0.15)
+                    held.rename(receipt)
+                code = stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS)
+                console = (sandbox / "stop-current.log").read_text(errors="replace")
+                assert "Graceful stop requested" in console
+                if permanent:
+                    assert code != 0, console
+                    assert "Could not find file" in console
+                    assert "drain verified; compute dependencies may now be released" not in console
+                else:
+                    assert code == 0, console
+                    assert "drain verified; compute dependencies may now be released" in console
+        finally:
+            if held.exists():
+                assert not receipt.exists(), "Unexpected writer recreated the held fixture receipt"
+                held.rename(receipt)
+
+    result = launch("active_work", supervise=exercise, drain_timeout=12)
+    assert result["Completed"], result
+
+
+def test_stop_current_preserve_dependencies_rejects_remaining_target_listener(launch):
+    def exercise(sandbox, process):
+        initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+        port = int(initial["api_endpoint"].rsplit(":", 1)[1])
+        intruder = None
+        with _stop_current(sandbox, port, timeout=12, preserve_dependencies=True) as stopper:
+            try:
+                _wait_for_file(sandbox / "drain-requested.json", stopper, seconds=CONTROL_TIMEOUT_SECONDS)
+                code = '''
+import socket, sys, time
+from pathlib import Path
+listener = socket.socket()
+deadline = time.monotonic() + 10
+while True:
+    try:
+        listener.bind(('127.0.0.1', int(sys.argv[1])))
+        break
+    except OSError:
+        if time.monotonic() > deadline: raise
+        time.sleep(0.05)
+listener.listen()
+Path(sys.argv[2]).touch()
+time.sleep(60)
+'''
+                marker = sandbox / "remaining-listener"
+                intruder = subprocess.Popen([sys.executable, "-c", code, str(port), str(marker)],
+                                            creationflags=subprocess.CREATE_NO_WINDOW)
+                _wait_for_file(marker, intruder, seconds=12)
+                (sandbox / "release-work").touch()
+                assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0
+                console = (sandbox / "stop-current.log").read_text(encoding="utf-8-sig")
+                assert "target API listener remains" in console
+                assert "compute dependencies may now be released" not in console
+                assert intruder.poll() is None
+                terminal = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "stopped")
+                assert terminal["drain_verified"] is True
+            finally:
+                (sandbox / "release-work").touch()
+                if intruder is not None:
+                    if intruder.poll() is None:
+                        intruder.terminate()
+                    intruder.wait(timeout=5)
+    result = launch("active_work", supervise=exercise, drain_timeout=12)
+    assert result["Completed"], result
+
+
+def test_preserve_dependencies_requires_stop_current(launch):
+    result = launch(check_start=True)
+    with _stop_current(result["sandbox"], result["port"], action="CheckStart", preserve_dependencies=True) as checker:
+        assert checker.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0
+    assert "requires StopCurrent" in (result["sandbox"] / "stop-current.log").read_text(encoding="utf-8-sig")
+    assert result["ChildStarts"] == []
+
+
+@pytest.mark.parametrize("preserve_dependencies", [False, True])
+def test_stop_current_timeout_preserves_busy_owner_and_returns_failure(launch, preserve_dependencies):
+    def exercise(sandbox, process):
+        initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+        with _stop_current(sandbox, int(initial["api_endpoint"].rsplit(":", 1)[1]), timeout=.5,
+                           preserve_dependencies=preserve_dependencies) as stopper:
             assert stopper.wait(timeout=CONTROL_TIMEOUT_SECONDS) != 0
         assert (sandbox / "drain-requested.json").exists(), "Caller never requested the owning runtime to drain"
         child = psutil.Process(initial["watchdog"]["pid"])
@@ -813,7 +1044,9 @@ def test_drain_timeout_preserves_busy_child_and_does_not_claim_completion(launch
 
 def test_startup_failure_drains_work_that_started_in_the_startup_window(launch):
     def exercise(sandbox, process):
-        _wait_for_file(sandbox / "active-work.json", process)
+        # This marker follows the real API startup/stability checks, not just
+        # process creation. Use the same cold-start allowance as control tests.
+        _wait_for_file(sandbox / "active-work.json", process, seconds=CONTROL_TIMEOUT_SECONDS)
         _wait_for_file(sandbox / "drain-requested.json", process)
         assert not (sandbox / "work-completed.json").exists()
         (sandbox / "release-work").touch()
@@ -846,7 +1079,13 @@ def test_restart_waits_for_old_job_to_empty_before_replacement(launch):
         assert job, "test could not hold the real job open"
         try:
             _kill_owned_fixture(sandbox, initial["watchdog"])
-            waiting = _supervisor_snapshot(sandbox, process, lambda s: s["cycle"] >= initial["cycle"] + 4)
+            backoff = _supervisor_snapshot(sandbox, process, lambda s:
+                s["state"] == "backoff" and not s["watchdog"]["alive"])
+            # The 0.2s health interval exceeds this fixture's 0.1s backoff.
+            # One subsequent complete cycle must block an eligible restart;
+            # holding for four cycles can instead exhaust the descendant deadline.
+            waiting = _supervisor_snapshot(sandbox, process, lambda s:
+                s["state"] == "backoff" and s["cycle"] > backoff["cycle"])
             assert is_alive(leaf), "fixture did not retain the descendant through the last job handle"
             assert waiting["watchdog"]["restarts"] == 0, "replacement overlaps an old live descendant"
         finally:

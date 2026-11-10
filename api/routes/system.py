@@ -181,6 +181,20 @@ async def get_system_status():
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
+@router.get("/saved-collections")
+def saved_collections():
+    """Local navigation only; never switches, merges or modifies saved stores."""
+    from scripts.config_schema import SavedCollectionConfig
+    from steps.common.config_loader import load_configs
+
+    configured = load_configs({}).get("ui", {}).get("saved_collections", [])
+    return {
+        "collections": [
+            SavedCollectionConfig.model_validate(row).model_dump() for row in configured
+        ]
+    }
+
+
 @router.get("/videos", response_model=List[VideoListItem])
 async def list_videos():
     """
@@ -207,6 +221,7 @@ async def list_videos():
             
             video_item = VideoListItem(
                 video_id=video_id,
+                source_kind=metadata.get('source_kind') or 'video',
                 title=metadata.get('title', video_id),
                 duration=metadata.get('duration'),
                 total_scenes=metadata.get('total_scenes'),
@@ -336,7 +351,7 @@ async def get_unstitched_patterns():
         raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
-        with KnowledgeGraph(str(db_path), read_only=True) as kg:
+        with KnowledgeGraph(str(db_path), read_only=True, read_live_wal=True) as kg:
             cur = kg.conn.cursor()
             rows = cur.execute(
                 """
@@ -355,13 +370,35 @@ async def get_unstitched_patterns():
             ).fetchall()
             
             results = []
+            from lib.summary_aggregator import entity_scene_ids, _retirement_graph_projection
+            retired_media, _ = _retirement_graph_projection(kg.conn, db_path)
             for row in rows:
                 props = json.loads(row["properties"]) if isinstance(row["properties"], str) else (row["properties"] or {})
                 voiced_seconds = float(props.get("total_voiced_seconds") or 0.0)
-                segment_count = int(props.get("signature_count") or 0)
                 
                 # Fetch a sample transcript excerpt
                 pattern_id = int(row["id"])
+                possible_splits = cur.execute(
+                    """SELECT DISTINCT n.name FROM edges e JOIN nodes n
+                       ON n.id = CASE WHEN e.source_id = ? THEN e.target_id ELSE e.source_id END
+                       WHERE e.edge_type = 'possible_same_speaker'
+                       AND (e.source_id = ? OR e.target_id = ?)""",
+                    (pattern_id, pattern_id, pattern_id),
+                ).fetchall()
+                signature_evidence = [json.loads(r["properties"] or "{}") for r in cur.execute(
+                    "SELECT properties FROM edges WHERE target_id = ? AND edge_type = 'voice_pattern_match'",
+                    (pattern_id,),
+                ).fetchall()]
+                scene_ids = entity_scene_ids(kg.conn, [pattern_id], retired_media)
+                # Signatures aggregate turns; missing historical provenance is unknown.
+                active_evidence = [e for e in signature_evidence if e.get("scene_id") in scene_ids]
+                segment_count = None
+                if active_evidence and all(isinstance(e.get("selected_segments"), list) for e in active_evidence):
+                    turns = {(e['contribution_id'], r['utterance_id']) for e in active_evidence
+                             if e.get('contribution_id') for r in (e.get('review_evidence') or [])}
+                    turns.update((e["scene_id"], turn.get("speaker"), turn["start"], turn["end"])
+                                 for e in active_evidence if not e.get('contribution_id') for turn in e["selected_segments"])
+                    segment_count = len(turns)
                 sample_rows = cur.execute(
                     """
                     SELECT nm.context
@@ -385,15 +422,36 @@ async def get_unstitched_patterns():
                         node_id=pattern_id,
                         node_name=str(row["name"]),
                         occurrence_count=int(row["occurrence_count"] or 1),
+                        scene_count=len(scene_ids),
                         voiced_seconds=voiced_seconds,
                         segment_count=segment_count,
                         sample_transcript=sample_transcript,
+                        possible_same_speaker_patterns=[str(r["name"]) for r in possible_splits],
+                        signature_evidence=signature_evidence,
                     )
                 )
             return results
     except Exception as e:
         logger.error("Failed to get unstitched patterns: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="stitch_failed")
+
+
+@router.get("/identity/speaker-reviews")
+async def get_speaker_change_reviews():
+    """Read scene evidence independently of signature eligibility or identity mappings."""
+    from lib.knowledge_graph import KnowledgeGraph
+    db_path = _get_kg_db_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
+    with KnowledgeGraph(str(db_path), read_only=True, read_live_wal=True) as kg:
+        results = []
+        for row in kg.conn.execute("SELECT name, properties FROM nodes WHERE node_type = 'scene' ORDER BY id"):
+            props = json.loads(row["properties"] or "{}")
+            review = props.get("speaker_change_review")
+            if isinstance(review, dict) and review:
+                results.append({"scene_id": props.get("scene_id", row["name"]),
+                                "video_id": props.get("video_id"), "review": review})
+        return results
 
 
 @router.post("/identity/stitch/preview", response_model=StitchPreviewResponse)
@@ -407,7 +465,7 @@ async def preview_stitch(request: StitchPreviewRequest):
         raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
 
     try:
-        with KnowledgeGraph(str(db_path), read_only=True) as kg:
+        with KnowledgeGraph(str(db_path), read_only=True, read_live_wal=True) as kg:
             cur = kg.conn.cursor()
             
             # Find the source pattern id

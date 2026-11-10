@@ -7,6 +7,7 @@ import types
 from pathlib import Path
 
 import pytest
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 
 def _load_run_ingestion_module():
@@ -59,9 +60,15 @@ def test_run_artifact_written_before_failure_exit(monkeypatch: pytest.MonkeyPatc
     output = tmp_path / "results.json"
     workspace = tmp_path / "workspace"
     processing_root = tmp_path / "processing"
+    epoch = tmp_path / "epoch"
+    (epoch / "ucf").mkdir(parents=True)
+    ledger = UCFLedgerClient(str(epoch / "ucf/ucf_ledger.db"))
+    ledger.init_schema()
+    ledger.register_media("videohash", str(input_dir / "demo.mp4"), 1, 30, 320, 240)
+    ledger.close()
 
     cfg_template = {
-        "paths": {"processing": str(processing_root)},
+        "paths": {"processing": str(processing_root), "db_dir": str(epoch)},
         "phase6": {"enabled": False},
         "knowledge_graph": {"enabled": False},
     }

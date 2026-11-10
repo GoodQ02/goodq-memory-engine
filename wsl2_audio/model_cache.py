@@ -166,6 +166,12 @@ def check_pyannote_cache(model_name: str) -> bool:
     deliberately requires a weight/config.json artifact, so using it for the
     pipeline repo incorrectly reports a valid offline chain as absent.
     """
+    # Official pyannote 4 snapshots can be provisioned as self-contained local
+    # directories. The subsequent real pipeline load validates their child assets.
+    local_config = Path(model_name) / "config.yaml"
+    if local_config.is_file():
+        return local_config.stat().st_size > 0
+
     def has_snapshot_file(repo_id: str, names: tuple[str, ...]) -> bool:
         folder_name = "models--" + repo_id.replace("/", "--")
         candidates = []

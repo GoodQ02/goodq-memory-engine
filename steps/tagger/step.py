@@ -1,8 +1,10 @@
 from __future__ import annotations
+import logging
 import re
 from typing import Any, Dict, List, Tuple
 
 _NER_PIPELINES: Dict[str, Any] = {}
+logger = logging.getLogger(__name__)
 
 try:
     from steps.common.tag_utils import (
@@ -77,30 +79,29 @@ _ENTITY_CONTEXT_REJECTIONS = {
 }
 
 
-def _get_ner_pipeline(model_id: str) -> Any:
+def _get_ner_pipeline(model_id: str, *, offline: bool | None = None) -> Any:
     pipeline_obj = _NER_PIPELINES.get(model_id)
     if pipeline_obj is not None:
         return pipeline_obj
     from steps.common.model_provisioner import ensure_model_cached
-    from steps.common.config_loader import load_configs
-    
-    try:
-        offline_mode = load_configs({}).get("verification", {}).get("offline_mode", False)
-    except Exception:
-        offline_mode = False
+    if offline is None:
+        from steps.common.config_loader import load_configs
+        offline = load_configs({}).get("verification", {}).get("offline_mode", False)
         
-    provision_result = ensure_model_cached(model_id, offline=offline_mode)
+    provision_result = ensure_model_cached(model_id, offline=offline)
     if provision_result.status in ("offline_missing", "gated_unauthorized", "failed"):
         raise OSError(f"Failed to provision NER model: {provision_result.error or 'reason unknown'}")
         
     local_path = provision_result.local_path
     
-    from transformers import pipeline, logging as hf_logging  # type: ignore
+    from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline, logging as hf_logging  # type: ignore
     hf_logging.set_verbosity_error()
+    tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
+    model = AutoModelForTokenClassification.from_pretrained(local_path, local_files_only=True)
     pipe = pipeline(
         "token-classification",
-        model=local_path,
-        local_files_only=True,
+        model=model,
+        tokenizer=tokenizer,
         aggregation_strategy="simple",
     )
     _NER_PIPELINES[model_id] = pipe
@@ -123,7 +124,7 @@ def _speaker_transcript_text(item: Dict[str, Any]) -> str:
 def _gather_text(item: Dict[str, Any]) -> str:
     texts: List[str] = []
     seen: set[str] = set()
-    for k in ("transcript", "ocr_text", "caption"):
+    for k in ("document_text", "transcript", "ocr_text", "caption"):
         v = item.get(k)
         if isinstance(v, str) and v.strip():
             text = v.strip()
@@ -159,44 +160,41 @@ def _usefulness_score(text: str, *, entity_count: int = 0, tag_count: int = 0) -
 
 
 def _extract_entities_transformers(text: str, cfg: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, str]]]:
-    try:
-        model_id = (
-            ((cfg.get("config", {}) or {}).get("tagger", {}) or {}).get("ner_model")
-            or "dslim/bert-base-NER"
-        )
-        nlp = _get_ner_pipeline(model_id)
-        ents = nlp(text)
-        labels = []
-        structured = []
-        seen_structured = set()
-        for e in ents:
-            word = (e.get("word") or "").strip()
-            entity_group = (e.get("entity_group") or e.get("entity") or "").strip().upper()
-            normalized = normalize_entity_token(word)
-            trusted = entity_group in _TRUSTED_SHORT_ENTITY_TYPES
-            if (
-                normalized
-                and is_valid_entity_token(normalized)
-                and _is_meaningful_entity_label(normalized, trusted=trusted)
-                and not _contextually_reject_entity(normalized, text)
-                and _appears_as_entity_span(normalized, text, trusted=trusted)
-            ):
-                labels.append(normalized)
-                key = (normalized.casefold(), entity_group)
-                if key in seen_structured:
-                    continue
-                seen_structured.add(key)
-                structured.append(
-                    {
-                        "name": normalized,
-                        "type": entity_group,
-                        "source_step": "tagger",
-                        "source_modality": "text",
-                    }
-                )
-        return list(dict.fromkeys(labels))[:20], structured[:20]
-    except Exception as e:
-        return [], []
+    model_id = (
+        ((cfg.get("config", {}) or {}).get("tagger", {}) or {}).get("ner_model")
+        or "dslim/bert-base-NER"
+    )
+    nlp = _get_ner_pipeline(model_id, offline=(cfg.get("verification") or {}).get("offline_mode"))
+    ents = nlp(text)
+    labels = []
+    structured = []
+    seen_structured = set()
+    for e in ents:
+        word = (e.get("word") or "").strip()
+        entity_group = (e.get("entity_group") or e.get("entity") or "").strip().upper()
+        normalized = normalize_entity_token(word)
+        trusted = entity_group in _TRUSTED_SHORT_ENTITY_TYPES
+        if (
+            normalized
+            and is_valid_entity_token(normalized)
+            and _is_meaningful_entity_label(normalized, trusted=trusted)
+            and not _contextually_reject_entity(normalized, text)
+            and _appears_as_entity_span(normalized, text, trusted=trusted)
+        ):
+            labels.append(normalized)
+            key = (normalized.casefold(), entity_group)
+            if key in seen_structured:
+                continue
+            seen_structured.add(key)
+            structured.append(
+                {
+                    "name": normalized,
+                    "type": entity_group,
+                    "source_step": "tagger",
+                    "source_modality": "text",
+                }
+            )
+    return list(dict.fromkeys(labels))[:20], structured[:20]
 
 
 def _fallback_entities(text: str) -> List[str]:
@@ -686,8 +684,22 @@ def _rank_tags(
 
 
 def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    model_id = (
+        ((cfg.get("config", {}) or {}).get("tagger", {}) or {}).get("ner_model")
+        or "dslim/bert-base-NER"
+    )
+    meta: Dict[str, Any] = {
+        "status": "ok",
+        "engine": "transformers",
+        "model_id": model_id,
+        "requested_implementation": model_id,
+        "effective_implementation": model_id,
+        "fallback_chain": [],
+        "typed_entity_count": 0,
+    }
     text = _gather_text(item)
     if not text:
+        meta.update(status="no_text", reason="no_text")
         return {
             "tags": [],
             "usefulness": 0.0,
@@ -695,9 +707,26 @@ def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "ner_entities": [],
             "tag_details": [],
             "entity_details": [],
+            "tagger_meta": meta,
         }
-    extracted_entities, ner_entities = _extract_entities_transformers(text, cfg)
+    try:
+        extracted_entities, ner_entities = _extract_entities_transformers(text, cfg)
+    except Exception as exc:
+        logger.warning("NER inference failed; retaining pattern tags: %s", exc)
+        extracted_entities, ner_entities = [], []
+        meta.update(
+            status="degraded",
+            reason="ner_inference_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            engine="pattern_tags",
+            effective_implementation="pattern_tags",
+            fallback_chain=["pattern_tags"],
+        )
     ner_entities = _filter_ner_entities(text, ner_entities)
+    meta["typed_entity_count"] = len(ner_entities)
+    if meta["status"] == "ok":
+        meta["reason"] = "typed_entities_emitted" if ner_entities else "content_appropriate_empty"
     extracted_entities = _filter_entity_labels(text, extracted_entities, trusted=True)
     fallback_entities = _fallback_entities(text)
     fallback_entities = _filter_entity_labels(text, fallback_entities, trusted=False)
@@ -715,4 +744,5 @@ def tagger(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         "ner_entities": ner_entities,
         "tag_details": tag_details[:8],
         "entity_details": entity_details[:10],
+        "tagger_meta": meta,
     }

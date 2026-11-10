@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from steps.common.config_loader import load_configs, get_runtime_paths
+from scripts.ucf.ucf_ledger import read_scene_retirements
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def get_scene_date_range(scene_row: sqlite3.Row, filename: str) -> tuple[Optiona
         if years:
             return min(years), max(years), str(explicit_dates[0])
             
-    # Fallback to parsing years in the filename (e.g. "01. 1987 - 1988.mp4")
+    # Fallback to parsing years in the filename (e.g. "archive_2024_2025.mp4")
     years_in_file = [int(y) for y in re.findall(r"\b(19\d{2}|20\d{2})\b", filename)]
     if years_in_file:
         min_y = min(years_in_file)
@@ -332,6 +333,9 @@ def temporal_search(
             
         for row in cursor:
             scene_id = str(row["id"])
+            retired = read_scene_retirements(db_path.parent / "ucf" / "ucf_ledger.db", video_hash=row["video_hash"])
+            if any(scene_id in item["aliases"] for item in retired):
+                continue
             start_time = float(row["start"] or 0.0)
             end_time = float(row["end"] or start_time)
             meta_str = row["meta"]

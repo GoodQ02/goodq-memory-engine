@@ -23,6 +23,7 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
     t = (text or "").lower()
     hints: Dict[str, Any] = {
         "explicit_dates": [],
+        "ambiguous_dates": [],
         "times": [],
         "weekdays": [],
         "months": [],
@@ -43,7 +44,11 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
             if "/" in raw:
                 mm, dd, yy = raw.split("/")
                 if len(yy) == 2:
-                    yy = "20" + yy  # naive 2-digit year handling
+                    # Validate the calendar shape without inventing a century.
+                    # Retain the literal cue for timeline/UI review instead.
+                    datetime(2000 + int(yy), int(mm), int(dd))
+                    _add_unique(hints["ambiguous_dates"], raw)
+                    continue
                 dt = datetime(int(yy), int(mm), int(dd))
                 iso = dt.date().isoformat()
             else:
@@ -66,7 +71,9 @@ def _collect_time_hints(text: str) -> Dict[str, Any]:
         if year:
             try:
                 if len(year) == 2:
-                    year = "20" + year
+                    datetime(2000 + int(year), MONTH_NUMBERS[month], int(m.group(2)))
+                    _add_unique(hints["ambiguous_dates"], m.group(0))
+                    continue
                 dt = datetime(int(year), MONTH_NUMBERS[month], int(m.group(2)))
                 _add_unique(hints["explicit_dates"], dt.date().isoformat())
             except Exception as e:
@@ -133,6 +140,9 @@ def audio_time_hints(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
             if not stext:
                 continue
             for phrase in hints.get("relative_phrases", []):
+                if phrase in stext and phrase not in timestamps:
+                    timestamps[phrase] = float(seg.get("start") or 0.0)
+            for phrase in hints.get("ambiguous_dates", []):
                 if phrase in stext and phrase not in timestamps:
                     timestamps[phrase] = float(seg.get("start") or 0.0)
             # crude mapping for month/weekday words

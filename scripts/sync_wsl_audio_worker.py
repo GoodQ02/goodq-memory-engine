@@ -1,6 +1,6 @@
 """Synchronize the versioned WSL audio worker before a strict audio run.
 
-This tool owns only the three source-controlled worker files.  It writes a
+This tool owns only the source-controlled worker files.  It writes a
 missing or stale file atomically inside the configured WSL workspace, then
 requires the deployed hashes to match the repository before returning success.
 """
@@ -22,7 +22,8 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.wsl_audio_preflight import _default_wsl_distro, _default_wsl_workspace
 
 
-WORKER_FILES = ("setup_cuda_env.sh", "process_audio.py", "model_cache.py")
+WORKER_FILES = ("setup_cuda_env.sh", "process_audio.py", "model_cache.py", "speaker_signature.py",
+                "acoustic_events.py", "transcription_contract.py", "fw_transcribe.py")
 SOURCE_ROOT = REPO_ROOT / "wsl2_audio"
 
 

@@ -49,7 +49,6 @@ def _seed_knowledge_graph(path: Path) -> None:
                 media_path TEXT,
                 properties TEXT
             );
-            CREATE TABLE scenes (video_hash TEXT);
             """
         )
         conn.execute(
@@ -60,14 +59,20 @@ def _seed_knowledge_graph(path: Path) -> None:
             """,
             (1, "person", "Joe", 2, 1.0, 2.0, "{}"),
         )
-        conn.execute("INSERT INTO scenes (video_hash) VALUES (?)", (_VIDEO_HASH,))
+        # Dashboard entities require actual active scene membership. A dangling
+        # node cannot establish the read-authority test's visible person.
+        conn.execute("INSERT INTO media_nodes VALUES (1, 'active-scene', 'source.mp4', '{}')")
+        conn.execute("INSERT INTO node_media VALUES (1, 1)")
 
 
 def _seed_memory_database(path: Path) -> None:
     with sqlite3.connect(path) as conn:
+        conn.execute("CREATE TABLE scenes (id TEXT, video_hash TEXT)")
+        conn.execute("INSERT INTO scenes (id, video_hash) VALUES (?,?)", ("active-scene", _VIDEO_HASH))
         conn.execute(
             """
             CREATE TABLE summaries (
+                id INTEGER PRIMARY KEY,
                 content TEXT,
                 created_at TEXT,
                 summary_type TEXT,
@@ -239,7 +244,7 @@ def test_all_summary_sqlite_readers_use_bounded_read_connection(
         "person:Joe",
     )
     video = asyncio.run(summary_route.get_video_summary(_VIDEO_HASH))
-    fallback = summary_route._check_kg_existence_fallback(_VIDEO_HASH)
+    fallback = summary_route._check_scene_existence_fallback(_VIDEO_HASH, memory_database)
 
     assert dashboard["people"][0]["name"] == "Joe"
     assert entity["name"] == "Joe"
@@ -249,7 +254,7 @@ def test_all_summary_sqlite_readers_use_bounded_read_connection(
         knowledge_graph,
         knowledge_graph,
         memory_database,
-        knowledge_graph,
+        memory_database,
     ]
     assert len(opened_connections) == 4
     for connection in opened_connections:

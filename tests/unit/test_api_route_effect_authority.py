@@ -24,6 +24,16 @@ from starlette.staticfiles import StaticFiles
 
 
 EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
+    ("GET", "/api/identity/readiness"): "passive_read",
+    ("GET", "/api/identity/appearances/preview"): "passive_read",
+    ("GET", "/api/identity/appearances/history"): "passive_read",
+    ("GET", "/api/identity/appearances/saved"): "passive_read",
+    ("GET", "/api/identity/matches"): "passive_read",
+    ("POST", "/api/identity/matches/preview"): "passive_read",
+    ("GET", "/api/identity/matches/{report_id}"): "passive_read",
+    ("GET", "/api/identity/matches/{report_id}/media/{evidence_id}"): "passive_read",
+    ("POST", "/api/identity/appearances/apply"): "curated_mutation",
+    ("POST", "/api/identity/appearances/undo"): "curated_mutation",
     ("GET", "/"): "passive_read",
     ("GET", "/api"): "passive_read",
     ("POST", "/api/search/multimodal"): "automatic_mutation",
@@ -34,6 +44,8 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
     ("GET", "/api/search/temporal/summarize/{job_id}"): "passive_read",
     ("GET", "/api/videos/{video_id}/scenes"): "passive_read",
     ("GET", "/api/videos/{video_id}/scenes/{scene_id}"): "passive_read",
+    ("GET", "/api/videos/{video_id}/scenes/{scene_id}/audio-evidence/{review_id}"): "passive_read",
+    ("GET", "/api/videos/{video_id}/scenes/{scene_id}/relationships"): "passive_read",
     (
         "GET",
         "/api/videos/{video_id}/scenes/{scene_id}/similar",
@@ -45,13 +57,20 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
         "/api/media/video/{video_id}/scene/{scene_id}/frame/{frame_index}",
     ): "passive_read",
     ("GET", "/api/media/audio/{video_id}/{chunk_id}.wav"): "passive_read",
+    ("GET", "/api/media/video/{video_id}/scene/{scene_id}/audio"): "passive_read",
+    ("GET", "/api/media/desktop-player/status"): "passive_read",
+    ("POST", "/api/media/desktop-player/play"): "process_execution",
+    ("POST", "/api/media/desktop-player/done"): "process_execution",
+    ("GET", "/api/media/video/{video_id}/source"): "passive_read",
     ("GET", "/api/media/video/{video_id}/frame/{frame_name}"): "passive_read",
     ("GET", "/api/system/status"): "process_execution",
     ("GET", "/api/system/videos"): "passive_read",
+    ("GET", "/api/system/saved-collections"): "passive_read",
     ("POST", "/api/system/ingest"): "passive_read",
     ("POST", "/api/system/reindex"): "passive_read",
     ("POST", "/api/system/reload"): "passive_read",
     ("GET", "/api/system/identity/unstitched"): "automatic_mutation",
+    ("GET", "/api/system/identity/speaker-reviews"): "passive_read",
     ("POST", "/api/system/identity/stitch/preview"): "automatic_mutation",
     ("POST", "/api/system/identity/stitch"): "curated_mutation",
     ("GET", "/api/system/identity/mappings"): "passive_read",
@@ -112,11 +131,11 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
 }
 
 EXPECTED_COUNTS = {
-    "passive_read": 45,
+    "passive_read": 60,
     "request_staging": 1,
     "automatic_mutation": 10,
-    "curated_mutation": 8,
-    "process_execution": 9,
+    "curated_mutation": 10,
+    "process_execution": 11,
 }
 
 
@@ -185,6 +204,7 @@ def _sample_path(template: str) -> str:
         "video_hash": "a" * 32,
         "request_id": "ingest_20260712T000000Z_12345678",
         "report_id": "report_001",
+        "evidence_id": "evidence_001",
         "job_id": "job_" + "0" * 32,
     }
 
@@ -802,7 +822,7 @@ def test_openapi_projects_every_effect_and_preserves_ingest_schema() -> None:
             if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}:
                 operations.append(operation)
 
-    assert len(operations) == 71
+    assert len(operations) == 90
     assert all(operation.get("x-goodq-effect") in EXPECTED_COUNTS for operation in operations)
 
     submit_operation = schema["paths"]["/api/ingest/submit"]["post"]

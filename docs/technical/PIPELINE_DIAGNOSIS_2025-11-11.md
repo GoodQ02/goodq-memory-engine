@@ -56,7 +56,7 @@ Exit code: 0
 
 ```text
 2025-11-10 20:29:57,492 [INFO] Mission timeout: 78668s (21.9h) for 7.28GB asset
-2025-11-10 20:29:57,492 [INFO] Asset: 01. 1987 - 1988.mp4
+2025-11-10 20:29:57,492 [INFO] Asset: sample_reel_01.mp4
 [CRASH within 1 minute]
 ```
 

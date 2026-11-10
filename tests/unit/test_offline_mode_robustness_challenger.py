@@ -152,11 +152,11 @@ def test_socket_connect_ex_blocked():
 def test_wsl_bridge_path_handling_and_command_construction(monkeypatch):
     """Verify path conversion and shlex-quoted command construction in process_audio."""
     # Mock load_configs to avoid loading actual local file configurations
-    try:
-        import steps.common.config_loader
-        monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda: {})
-    except Exception:
-        pass
+    import steps.common.config_loader
+    monkeypatch.setattr(steps.common.config_loader, "load_configs", lambda: {
+        "paths": {"models_cache": r"C:\My Workspace\Models"},
+    })
+    monkeypatch.setenv("GOODQ_REQUIRE_WSL_AUDIO", "1")
 
     # Mock probe_wsl_audio_runtime to bypass preflight checks
     import scripts.wsl2_audio_bridge
@@ -223,6 +223,8 @@ def test_wsl_bridge_path_handling_and_command_construction(monkeypatch):
     assert bridge_cmd[5] == "-lc"
     
     bridge_script = bridge_cmd[6]
+    assert "export HF_HOME='/mnt/c/My Workspace/Models';" in bridge_script
+    assert "export HF_HUB_CACHE='/mnt/c/My Workspace/Models/hub';" in bridge_script
     assert "source /home/john_doe/workspace/setup_cuda_env.sh" in bridge_script
     assert "'/mnt/c/My Workspace/Audio Files/sample.wav'" in bridge_script
     assert "/home/john_doe/workspace/output" in bridge_script

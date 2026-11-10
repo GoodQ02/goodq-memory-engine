@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from cli.golden_witness import prepare_witness_run, seal_prepared_receipt
+from cli.witness_environment import build_witness_environment
 
 
 def _cpu_aware_step_timeout() -> int:
@@ -193,10 +194,14 @@ def execute(artifact_root: Path, input_file: Path, scene_indices: str = "0") -> 
             "--workspace", str(root / "workspace"), "--scene-indices", scene_indices, "--verbose",
             "--step-timeout", str(_cpu_aware_step_timeout()),
         ]
+        runner_env = build_witness_environment(config_path, os.environ)
         qdrant = _start_isolated_qdrant(root)
         try:
             with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
-                process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, text=True)
+                process = subprocess.Popen(
+                    command, stdout=log_file, stderr=subprocess.STDOUT,
+                    text=True, env=runner_env,
+                )
                 state = _update(
                     receipt,
                     state,

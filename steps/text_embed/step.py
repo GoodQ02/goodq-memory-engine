@@ -252,6 +252,9 @@ def _text_embedding_identity(item: Dict[str, Any], content_hash: Optional[str] =
         "scene": scene_identity,
         "video": str(video_identity) if video_identity is not None else None,
     }
+    chunk = item.get("document_chunk")
+    if item.get("source_kind") == "document" and isinstance(chunk, dict):
+        identity_parts["document_span"] = [chunk["chunk_index"], chunk["char_start"], chunk["char_end"]]
     return hashlib.sha256(
         json.dumps(identity_parts, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
@@ -753,17 +756,71 @@ def _build_text_preview(item: Dict[str, Any], *, max_chars: int = 420) -> str:
     return preview
 
 
+def _document_spans(model: Any, text: str) -> tuple[List[dict], int]:
+    """Use the active encoder's token budget, retaining exact source offsets."""
+    tokenizer = model.tokenizer
+    limit = int(model.max_seq_length) - int(tokenizer.num_special_tokens_to_add(pair=False))
+    if limit < 2:
+        raise ValueError("Document encoder has no usable token window")
+    tokens = tokenizer(text, add_special_tokens=False, truncation=False,
+                       return_offsets_mapping=True)
+    offsets = tokens["offset_mapping"]
+    if not offsets:
+        raise ValueError("Document has no encodable text")
+    spans = []
+    start = 0
+    overlap = min(32, limit // 4)
+    while start < len(offsets):
+        end = min(start + limit, len(offsets))
+        char_start = 0 if start == 0 else offsets[start][0]
+        char_end = len(text) if end == len(offsets) else offsets[end][0]
+        # Include whitespace between windows so coverage has no character gaps.
+        passage = text[char_start:char_end]
+        # Retokenizing a substring can split a wordpiece differently. Back off
+        # until the exact string supplied to encode fits, never silently truncate.
+        count = len(tokenizer(passage, add_special_tokens=False, truncation=False)["input_ids"])
+        while count > limit and end > start + 1:
+            end -= 1
+            char_end = offsets[end][0]
+            passage = text[char_start:char_end]
+            count = len(tokenizer(passage, add_special_tokens=False, truncation=False)["input_ids"])
+        if count > limit or char_end <= char_start:
+            raise ValueError("Cannot construct a bounded document embedding span")
+        spans.append({"chunk_index": len(spans), "char_start": char_start,
+                      "char_end": char_end, "text": passage, "token_count": count})
+        if end == len(offsets):
+            break
+        start = max(start + 1, end - overlap)
+    return spans, limit
+
+
 def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     text = _gather_text(item)
     if not text:
         return {"embedding_meta": {"status": "no_text"}}
-    semantic_text = _build_semantic_text(text, item)
+    semantic_text = text if item.get("document_chunk") else _build_semantic_text(text, item)
 
     model = _load_st()
     if model is None:
         return {"embedding_meta": {"status": "unavailable", "engine": "sentence-transformers"}}
 
     try:
+        if item.get("source_kind") == "document" and not item.get("document_chunk"):
+            spans, limit = _document_spans(model, text)
+            if len(spans) > 1:
+                chunks = []
+                for span in spans:
+                    child = text_embed({**item, "frame_text": span["text"], "document_chunk": span}, cfg)["embedding_meta"]
+                    if child.get("status") != "ok" or not child.get("stores_committed"):
+                        raise RuntimeError(f"Document chunk {span['chunk_index']} embedding was not committed")
+                    chunks.append({**span, "embedding_id": child["embedding_id"], "faiss_id": child["faiss_id"]})
+                return {"embedding_meta": {
+                    "status": "ok", "engine": "all-MiniLM-L6-v2", "embedding_chunks": chunks,
+                    "text_length": len(text), "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    "chunk_count": len(chunks), "chunk_token_limit": limit,
+                    "qdrant_committed": child["qdrant_committed"], "stores_committed": True,
+                    "vector_collection": child["vector_collection"],
+                }}
         vec = model.encode([semantic_text], normalize_embeddings=True)
         vector_list = vec.astype("float32")[0].tolist()
         entities = _gather_entities(item, limit=8)
@@ -775,11 +832,13 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         sentiment = _gather_sentiment_label(item)
         payload_meta = {
             "source_path": item.get("source_path"),
-            "modality": item.get("modality", "text"),
+            "modality": "text" if item.get("source_kind") else item.get("modality", "text"),
+            **({"source_kind": item["source_kind"]} if item.get("source_kind") else {}),
             "scene_id": item.get("scene_id") or item.get("scene_index"),
             "scene_index": item.get("scene_index"),
             "video_id": item.get("video_id") or item.get("video_hash"),
             "video_hash": item.get("video_hash") or item.get("video_id"),
+            "run_id": item.get("run_id") or (cfg.get("run") or {}).get("id"),
             "entities": entities,
             "tags": tags,
             "locations": locations,
@@ -790,6 +849,8 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "speaker_count": item.get("speaker_count"),
             "text_preview": _build_text_preview(item),
         }
+        if item.get("source_kind") == "document" and isinstance(item.get("document_chunk"), dict):
+            payload_meta["document_chunk"] = dict(item["document_chunk"])
         scene_window = item.get("scene")
         if isinstance(scene_window, dict):
             payload_meta["start"] = scene_window.get("start")
@@ -827,6 +888,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         }
         payload_meta["ucf_promotion_status"] = "staged"
         router_results = router.insert([payload])
+        durable_targets = [key for key in ("faiss", "qdrant") if key in stores and key in router.config.write_targets]
         _qdrant_committed = bool((router_results or {}).get("qdrant"))
         _faiss_id = to_faiss_id(embedding_id)
         _qdrant_collection = None
@@ -941,6 +1003,7 @@ def text_embed(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "engine": "all-MiniLM-L6-v2",
             "embedding_id": embedding_id,
             "qdrant_committed": _qdrant_committed,
+            "stores_committed": bool(durable_targets) and all(bool((router_results or {}).get(key)) for key in durable_targets),
             "faiss_id": _faiss_id,
             "vector_collection": _qdrant_collection,
         }}

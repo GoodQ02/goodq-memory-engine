@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-03-26 -->
+<!-- DOC_LAST_VERIFIED: 2026-10-25 -->
 
 # GoodQ4All Environment Index
 
@@ -22,10 +22,14 @@ The supported bootstrap surface provisions `goodq_core` plus the current step-en
 
 - `goodq_video_scene_detect`
   - legacy-but-supported scene detection environment
+- `goodq_ocr` (`envs/ocr/.venv`)
+  - PaddleOCR 3.7 ONNX Runtime CUDA / CPU text detection and recognition
+- `goodq_caption_vlm` (`envs/caption_vlm/.venv`)
+  - WeVisOne-VL-2B vision-language scene captioning
 - `goodq_image_caption`
-  - image captioning plus OCR / EXIF / CLIP / DINO support for the current image lane
-- `goodq_object_detect`
-  - YOLO object detection
+  - EXIF / CLIP / DINO visual embedding support for the current image lane
+- `goodq_object_detect` (`envs/object_detect/.venv`)
+  - YOLOX ONNX Runtime CUDA object detection (and NanoDet CPU fallback)
 - `goodq_face_embed`
   - face detection and embedding
 - `goodq_text_embed`
@@ -76,6 +80,7 @@ These are the environments/operators that should be treated as part of the activ
 
 - `goodq_core`
 - `goodq_video_scene_detect`
+- `goodq_caption_vlm`
 - `goodq_image_caption`
 - `goodq_object_detect`
 - `goodq_face_embed`

@@ -17,6 +17,16 @@ def _clear_gpu_requirements(monkeypatch):
     monkeypatch.delenv("GOODQ_REQUIRE_GPU", raising=False)
     monkeypatch.setattr(process_audio, "require_gpu", lambda: False)
 
+
+@pytest.fixture
+def loader_speech(monkeypatch):
+    # Loader-policy tests need an explicit positive speech observation. The
+    # production VAD may correctly classify a constant synthetic waveform as
+    # nonspeech; that behavior has separate evidence/admission tests.
+    regions = lambda audio: [{'start': 0, 'end': len(audio)}]
+    monkeypatch.setattr(process_audio, '_source_speech_regions', regions)
+    monkeypatch.setattr('wsl2_audio.transcription_contract._recognition_source_regions', regions)
+
 def test_whisper_model_supports_local_files_only():
     """Verify that WhisperModel supports local_files_only argument."""
     from faster_whisper import WhisperModel
@@ -101,7 +111,7 @@ def test_audio_service_corrupted_whisper_cache_propagates_error(monkeypatch):
         
     assert "ctranslate2: Open failed" in str(excinfo.value)
 
-def test_token_redaction_in_process_audio_exceptions(monkeypatch, tmp_path: Path):
+def test_token_redaction_in_process_audio_exceptions(monkeypatch, tmp_path: Path, loader_speech):
     """Verify that sensitive HF tokens are redacted from exception messages when online load fails."""
     monkeypatch.setenv("GOODQ_OFFLINE", "0")
     monkeypatch.setattr(model_cache, "is_offline_mode", lambda: False)
@@ -136,7 +146,8 @@ def test_token_redaction_in_process_audio_exceptions(monkeypatch, tmp_path: Path
     audio_file = tmp_path / "sample.wav"
     audio_file.write_bytes(b"wav")
     
-    waveform = torch.zeros((1, 16000))
+    # Exercise the loader exception path; digital silence deliberately skips it.
+    waveform = torch.full((1, 16000), 0.1)
     monkeypatch.setattr(process_audio.torchaudio, "load", lambda _: (waveform, 16000))
     
     result = process_audio.process_audio(str(audio_file), None)
@@ -253,7 +264,7 @@ def test_faster_whisper_offline_load_from_cache(monkeypatch, tmp_path):
     assert len(constructor_calls) == 1
     assert constructor_calls[0][1].get("local_files_only") is True
 
-def test_pyannote_offline_load_success(monkeypatch, tmp_path):
+def test_pyannote_offline_load_success(monkeypatch, tmp_path, loader_speech):
     """Verify PyAnnote is loaded from local cache using local_files_only=True without network calls."""
     monkeypatch.setenv("GOODQ_OFFLINE", "1")
     monkeypatch.setattr(model_cache, "check_whisper_cache", lambda _: True)
@@ -276,7 +287,7 @@ def test_pyannote_offline_load_success(monkeypatch, tmp_path):
     monkeypatch.setattr(process_audio, "DiarizationPipeline", MockPipeline, raising=False)
     monkeypatch.setattr(process_audio, "DIARIZATION_AVAILABLE", True)
     monkeypatch.setattr(process_audio, "TRANSFORMERS_AVAILABLE", False)
-    monkeypatch.setattr(process_audio.torchaudio, "load", lambda _: (torch.zeros(1, 16000), 16000))
+    monkeypatch.setattr(process_audio.torchaudio, "load", lambda _: (torch.full((1, 16000), 0.1), 16000))
     
     audio_file = tmp_path / "test.wav"
     audio_file.write_bytes(b"dummy")
@@ -306,7 +317,7 @@ def test_pyannote_offline_missing_cache_raises_error(monkeypatch):
     assert "Offline mode: PyAnnote diarization pipeline failed to load locally" in str(excinfo.value)
     mock_pipeline_cls.from_pretrained.assert_called_once()
 
-def test_transformers_offline_load_success(monkeypatch, tmp_path):
+def test_transformers_offline_load_success(monkeypatch, tmp_path, loader_speech):
     """Verify Wav2Vec2 models are loaded from cache using local_files_only=True without network calls."""
     monkeypatch.setenv("GOODQ_OFFLINE", "1")
     monkeypatch.setattr(model_cache, "check_whisper_cache", lambda _: True)
@@ -353,18 +364,44 @@ def test_transformers_offline_load_success(monkeypatch, tmp_path):
             mock_instance.return_value = {"input_values": torch.zeros(1, 1000)}
             return mock_instance
             
-    monkeypatch.setattr(process_audio, "Wav2Vec2ForSequenceClassification", MockClassification)
-    monkeypatch.setattr(process_audio, "Wav2Vec2Model", MockModel)
+    trained_loads = []
+
+    def load_trained(repo, *, cache_dir, is_offline, emotion=False, revision=None):
+        trained_loads.append({"repo": repo, "offline": is_offline, "emotion": emotion})
+        model_cls = MockClassification if emotion else MockModel
+        model = model_cls.from_pretrained(repo, local_files_only=is_offline)
+        model.config.id2label = dict(enumerate(
+            ["angry", "calm", "disgust", "fearful", "happy", "neutral", "sad", "surprised"]
+        ))
+        return model, {"strict": True, "missing_inference_keys": []}
+
+    # The production caller now delegates to the strict checkpoint loader;
+    # real tensor loading in offline mode is exercised with tiny cached
+    # checkpoints in test_wsl_audio_trained_weights.py.
+    monkeypatch.setattr(process_audio, "_load_trained_wav2vec", load_trained)
+    # This case tests offline loaders, independently of acoustic selection.
+    monkeypatch.setattr(process_audio.acoustic_events, 'prepare_inputs', lambda *a, **kw: {
+        'sound_events': [], 'sound_event_meta': {'status': 'success'},
+        'emotion_input': {'policy': 'clear_speech_only_v2', 'status': 'ready',
+                          'selected': [{'start': 0, 'end': 1, 'speaker': 'S0'}],
+                          'phrase_selection': {'selected': [
+                              {'start': 0, 'end': 1, 'speaker': 'S0',
+                               'boundary_status': 'model_estimated_complete_phrase'}]}}})
     monkeypatch.setattr(process_audio, "Wav2Vec2FeatureExtractor", MockExtractor)
-    monkeypatch.setattr(process_audio.torchaudio, "load", lambda _: (torch.zeros(1, 16000), 16000))
+    monkeypatch.setattr(process_audio.torchaudio, "load", lambda _: (torch.full((1, 16000), 0.1), 16000))
     
     audio_file = tmp_path / "test.wav"
     audio_file.write_bytes(b"dummy")
     
     result = process_audio.process_audio(str(audio_file), None)
     
+    assert result["emotion_status"] == "success"
+    assert result["embeddings_status"] == "retired"
+    assert len(trained_loads) == 1
+    assert all(call["offline"] is True for call in trained_loads)
+    assert len(extractor_args) == 1
+    assert all(kwargs.get("local_files_only") is True for _, kwargs in extractor_args)
     assert len(classification_args) == 1
     assert classification_args[0][1].get("local_files_only") is True
-    assert len(model_args) == 1
-    assert model_args[0][1].get("local_files_only") is True
+    assert model_args == []  # No base-model load without diarized speakers.
 

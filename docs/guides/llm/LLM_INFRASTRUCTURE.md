@@ -1,8 +1,11 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_GUIDE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-21 -->
+<!-- DOC_LAST_VERIFIED: 2026-10-21 -->
 
 # GoodQ4All LLM Infrastructure
+
+October 21 verification covers endpoint and lifecycle documentation; the migration
+receipt records the bounded inference checks and their limits.
 
 ## Current Supported Contract
 
@@ -75,9 +78,8 @@ On Windows, prefer `scripts/start_vllm_servers.bat` for operator sessions. It
 starts the systemd service and a single Windows-side `wsl.exe` client named
 `goodq-vllm-keepalive` so WSL does not tear down while the model warms up.
 
-On the primary workstation, the Windows Task Scheduler task
-`GoodQ4All vLLM WSL Startup` may call this wrapper at user logon. Treat that as
-a local machine fixture, not a portable repo requirement.
+On GOOD-CUBE, `GoodQ4All vLLM WSL Startup` remains disabled. Use the existing
+GoodQ vLLM runtime control; do not enable a legacy boot task to satisfy a health check.
 
 ### Manual Recovery / Operator Reference
 
@@ -94,16 +96,18 @@ The older `scripts/start_llm_servers.bat` launcher has been retired with the dir
 
 The older raw-process helper `scripts/wsl/start_all_vllm.sh` has also been retired. The supported operator path is the systemd-backed installer and service flow.
 
-### Fallback Ollama Launcher & Optimizations
+### PAIR Ollama dependency on GOOD-CUBE
 
-Use `scripts/start_ollama_fallback.ps1` to launch the fallback Ollama service. To minimize VRAM overhead and maximize inference throughput, the script automatically configures the following environment parameters:
+PAIR owns the Ollama facade on 11434 and its native local engine on 11435.
+`scripts/start_ollama_fallback.ps1` is now a compatibility readiness check;
+it does not launch Ollama, set GPU/context options, pull models or change stores.
+Use the existing PAIR app/Startup shortcut or Workstation Controls for startup.
+The old fallback task and standalone port are retired.
 
-- `OLLAMA_FLASH_ATTENTION=1`: Enables native Flash Attention in llama.cpp to reduce memory bandwidth pressure during context decoding.
-- `OLLAMA_KV_CACHE_TYPE=q8_0`: Quantizes the Key-Value cache to 8-bit, reclaiming significant GPU VRAM.
-- `OLLAMA_NUM_PARALLEL=1`: Restricts concurrent sequence allocations to avoid memory inflation.
-- `OLLAMA_MAX_LOADED_MODELS=1`: Limits active memory usage to a single loaded model at any given time.
-
-These configurations decrease peak VRAM requirements for the 14B Phi-4 fallback model by **~1.8 GB** (from 15.2 GB to 13.4 GB) and increase generation speed by **50% to 70%** (up to ~59 tok/s).
+`scripts/restart_llm_services.ps1` checks PAIR, then delegates only the configured
+vLLM stop/start to its existing owner scripts. It does not kill PAIR or Ollama.
+The legacy `-GamingMode` CPU-forcing behavior is rejected before service changes.
+See [port boundaries](../../operator/OLLAMA_PORT_BOUNDARIES.md).
 
 ## Quick Verification
 

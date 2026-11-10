@@ -1,4 +1,5 @@
 from __future__ import annotations
+from steps.common import transcript_authority
 import sys
 # Global encoding safeguard for Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
@@ -29,6 +30,13 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+if __name__ == "__main__":
+    # Some runtime helpers bind writable defaults at import time. The explicit
+    # witness CLI must bind its child environment before those imports occur.
+    from cli.witness_environment import bootstrap_witness_environment
+
+    bootstrap_witness_environment()
+
 import re
 import typer
 import yaml
@@ -46,6 +54,14 @@ from steps.common.tag_utils import (
 )
 from steps.common.tool_paths import resolve_ffmpeg, resolve_conda
 from steps.common.step_logger import log_step_run
+from steps.common.worker_launch import (
+    WorkerRequest, WorkerResultError, prepare_worker_launch, worker_payload,
+    apply_env_overrides as _apply_env_overrides,
+    decode_worker_diagnostics, read_worker_result,
+    parse_worker_result_json as _parse_step_result_json,
+    SUBPROCESS_THREAD_CAP_STEPS, SUBPROCESS_THREAD_CAP_ENV,
+    SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS, SUBPROCESS_AUDIO_OPENMP_GUARD_ENV,
+)
 from steps.common.profile_config import is_baseline, require_wsl_audio, wsl_audio_auto_enabled
 from lib.ingestion_capability_contract import (
     RUNTIME_CAPABILITY_POLICIES,
@@ -432,6 +448,26 @@ def _validate_isolated_witness_runtime_config(cfg: Dict[str, Any], snapshot_path
             raise typer.BadParameter(f"isolated runner config is missing paths.{key}")
         if not _is_path_within(Path(value).resolve(), root):
             raise typer.BadParameter(f"paths.{key} escapes witness root")
+    # Defaults/local configuration may add write targets beyond the required
+    # core stores. Shared assets and relative output folder names are read-only
+    # inputs to this check; every other resolved paths entry is witness-owned.
+    shared_keys = {"models_cache", "config_dir", "input_path"}
+    relative_keys = {"chunk_subdir", "audio_subdir", "video_subdir", "metadata_subdir"}
+    for key, value in paths.items():
+        if key in shared_keys or key in _WITNESS_MUTABLE_PATH_KEYS:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise typer.BadParameter(f"isolated runner config has invalid paths.{key}")
+        candidate = (root / value).resolve() if key in relative_keys else Path(value).resolve()
+        if not _is_path_within(candidate, root):
+            raise typer.BadParameter(f"paths.{key} escapes witness root")
+    for section, keys in {"host": ("data_root",), "identity_search": ("roster_path", "kg_db_path")}.items():
+        settings = cfg.get(section, {})
+        for key in keys:
+            value = settings.get(key) if isinstance(settings, dict) else None
+            if value is not None and (not isinstance(value, str) or not value.strip()
+                                      or not _is_path_within(Path(value).resolve(), root)):
+                raise typer.BadParameter(f"{section}.{key} escapes witness root")
     models_cache = paths.get("models_cache")
     if not isinstance(models_cache, str) or not models_cache.strip():
         raise typer.BadParameter("isolated runner config is missing paths.models_cache")
@@ -449,10 +485,52 @@ def _validate_isolated_witness_runtime_config(cfg: Dict[str, Any], snapshot_path
         raise typer.BadParameter("isolated runner config requires four fresh witness collections")
     names = list(collections.values())
     if (
-        len(set(names)) != len(required_collections)
-        or any(not isinstance(name, str) or "witness" not in name for name in names)
+        any(not isinstance(name, str) or "witness" not in name for name in names)
+        or len(set(names)) != len(required_collections)
     ):
         raise typer.BadParameter("isolated runner config requires four fresh witness collections")
+    epoch_id = cfg.get("epoch_id")
+    if not isinstance(epoch_id, str) or not re.fullmatch(r"epoch_witness_[A-Za-z0-9_-]+", epoch_id):
+        raise typer.BadParameter("isolated runner config requires an explicit witness epoch_id")
+    if Path(paths["db_dir"]).resolve().name != epoch_id:
+        raise typer.BadParameter("paths.db_dir must end with the exact witness epoch_id")
+    identity = cfg.get("identity_search")
+    identity_kg = identity.get("kg_db_path") if isinstance(identity, dict) else None
+    if identity_kg is not None and Path(identity_kg).resolve() != Path(paths["knowledge_graph_db"]).resolve():
+        raise typer.BadParameter("identity_search.kg_db_path must match paths.knowledge_graph_db")
+    if collections != {key: f"goodq_{key}_{epoch_id}" for key in required_collections}:
+        raise typer.BadParameter("Qdrant collections must match the exact witness epoch_id")
+    phase6 = cfg.get("phase6", {})
+    for key in ("clip", "dino"):
+        alias = phase6.get(f"{key}_collection") if isinstance(phase6, dict) else None
+        if alias is not None and alias != collections[key]:
+            raise typer.BadParameter(f"phase6.{key}_collection must match the witness epoch")
+
+
+def _validate_witness_process_environment(cfg: Dict[str, Any], snapshot_path: Path) -> None:
+    """Refuse runtime execution when import-time paths were not witness-bound."""
+    from cli.witness_environment import build_witness_environment
+
+    instruction = "Run python -m cli.run_ingestion --config <snapshot> in a fresh process"
+    try:
+        bindings = build_witness_environment(snapshot_path, {})
+    except ValueError as exc:
+        raise typer.BadParameter(f"{instruction}: {exc}") from exc
+    scalar_keys = {
+        "GOODQ_EPOCH_ID", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
+        "HF_DATASETS_OFFLINE", "PYTHONDONTWRITEBYTECODE",
+    }
+    for key, expected in bindings.items():
+        actual = os.environ.get(key)
+        matches = actual == expected if key in scalar_keys else (
+            bool(actual) and Path(actual).resolve() == Path(expected).resolve()
+        )
+        if not matches:
+            raise typer.BadParameter(f"{instruction}: witness environment binding differs for {key}")
+    if PROGRESS_TRACKING_AVAILABLE:
+        expected_progress = Path(cfg["paths"]["log_dir"]).resolve() / "progress.json"
+        if Path(get_tracker().progress_file).resolve() != expected_progress:
+            raise typer.BadParameter(f"{instruction}: progress tracker was imported outside this witness")
 
 
 def load_isolated_runtime_cfg_snapshot(cfg_json: Path) -> Dict[str, Any]:
@@ -466,8 +544,22 @@ def load_isolated_runtime_cfg_snapshot(cfg_json: Path) -> Dict[str, Any]:
         raise typer.BadParameter("Isolated runner config must be valid JSON") from exc
     if not isinstance(parsed, dict):
         raise typer.BadParameter("Isolated runner config must be a JSON object")
+    witness = parsed.get("witness")
+    if (
+        parsed.get("ingestion_isolation") is not True
+        or not isinstance(witness, dict)
+        or witness.get("ingestion_isolation") is not True
+        or witness.get("promotion_enabled") is not False
+        or not isinstance(witness.get("artifact_root"), str)
+        or not witness["artifact_root"].strip()
+    ):
+        raise typer.BadParameter(
+            "isolated runner snapshot requires explicit ingestion_isolation=true and witness bindings"
+        )
+    if not parsed.get("epoch_id"):
+        raise typer.BadParameter("isolated runner config requires an explicit witness epoch_id")
     base_cfg = load_configs({})
-    cfg: Dict[str, Any] = dict(base_cfg) if isinstance(base_cfg, dict) else {}
+    cfg: Dict[str, Any] = copy.deepcopy(base_cfg) if isinstance(base_cfg, dict) else {}
     _deep_merge_dicts(cfg, parsed)
     _validate_isolated_witness_runtime_config(cfg, snapshot_path)
     return cfg
@@ -487,30 +579,6 @@ def _resolve_processing_root(cfg: Dict[str, Any]) -> Path:
     runtime_paths = get_runtime_paths(cfg, "processing", require_canonical=False)
     return Path(runtime_paths["processing"]).resolve()
 
-
-def _parse_step_result_json(
-    raw: str,
-    *,
-    step_name: str,
-    env_name: str,
-    source: str,
-) -> Dict[str, Any]:
-    payload = raw.strip()
-    if not payload:
-        return {}
-    try:
-        parsed = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        preview = payload.splitlines()[0][:200]
-        raise RuntimeError(
-            f"Step {step_name} returned invalid JSON from {source} ({env_name}): "
-            f"{exc.msg} at line {exc.lineno} column {exc.colno}; preview={preview!r}"
-        ) from exc
-    if not isinstance(parsed, dict):
-        raise RuntimeError(
-            f"Step {step_name} returned non-object JSON from {source} ({env_name})"
-        )
-    return parsed
 
 # Populated by CLI options at runtime
 VERBOSE: bool = False
@@ -642,6 +710,9 @@ _PHASE6_MANIFEST_SCENE_KEYS = (
     'frame_count',
     'frame_paths',
     'representative_frame',
+    'scene_context_llm',
+    'scene_context_epistemic',
+    'scene_context_arbitration',
 )
 
 
@@ -739,76 +810,25 @@ AUDIO_PIPELINE_STEPS = [
     'audio_embed_clap',
 ]
 
-# Native-heavy NLP subprocesses can sporadically crash under unrestricted thread fan-out.
-# Apply conservative thread caps only for these subprocess steps.
-SUBPROCESS_THREAD_CAP_STEPS: Set[str] = {
-    'tagger',
-    'sentiment',
-    'emotion_classify',
-}
-SUBPROCESS_THREAD_CAP_ENV: Dict[str, str] = {
-    'OMP_NUM_THREADS': '1',
-    'MKL_NUM_THREADS': '1',
-    'NUMEXPR_MAX_THREADS': '1',
-    'TOKENIZERS_PARALLELISM': 'false',
-}
-# CTranslate2 (used by faster-whisper in audio_transcribe_local) initializes
-# OpenMP thread pools during DLL load.  On hybrid P/E-core Intel CPUs
-# (12th-14th gen) in non-interactive sessions (scheduled tasks / Session 0),
-# the OpenMP runtime deadlocks during thread-pool topology detection unless
-# OMP_NUM_THREADS is pre-set in the inherited subprocess environment.
-SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS: Set[str] = {
-    'audio_embed_clap',
-    'audio_transcribe_local',
-}
-SUBPROCESS_AUDIO_OPENMP_GUARD_ENV: Dict[str, str] = {
-    'KMP_DUPLICATE_LIB_OK': 'TRUE',
-    'OMP_NUM_THREADS': '1',
-    'MKL_NUM_THREADS': '1',
-}
 NATIVE_CRASH_RETRY_STEPS: Set[str] = {'tagger', 'sentiment'}
 MAX_NATIVE_STEP_RETRIES: int = 1
-
-
-def _apply_env_overrides(
-    env: Dict[str, str],
-    overrides: Optional[Dict[str, Optional[str]]],
-) -> Dict[str, str]:
-    if not overrides:
-        return env
-    updated = dict(env)
-    for key, value in overrides.items():
-        if value is None:
-            updated.pop(key, None)
-        else:
-            updated[key] = value
-    return updated
 
 
 def _resolve_native_retry_strategy(
     step_name: str,
     retry_attempt: int,
+    *, gpu_required: bool = False,
 ) -> tuple[int, Optional[Dict[str, Optional[str]]], Optional[str]]:
     if step_name == 'image_caption':
         if retry_attempt == 1:
             return (
-                2,
+                1,
                 {
-                    'GOODQ_IMAGE_CAPTION_DISABLE_AMP': '1',
-                    'GOODQ_IMAGE_CAPTION_FORCE_CPU': None,
-                },
-                'gpu_amp_disabled',
-            )
-        if retry_attempt == 2:
-            return (
-                2,
-                {
-                    'GOODQ_IMAGE_CAPTION_DISABLE_AMP': '1',
                     'GOODQ_IMAGE_CAPTION_FORCE_CPU': '1',
                 },
                 'cpu_fallback',
             )
-        return (2, None, None)
+        return (1, None, None)
     if step_name == 'object_detect':
         if retry_attempt == 1:
             return (
@@ -820,6 +840,8 @@ def _resolve_native_retry_strategy(
             )
         return (1, None, None)
     if step_name == 'audio_embed_clap':
+        if gpu_required:
+            return (0, None, None)
         if retry_attempt == 1:
             return (
                 1,
@@ -1557,25 +1579,31 @@ def _offset_local_audio_result_to_scene(result: Any, scene_start: float) -> Any:
     if not isinstance(result, dict) or abs(scene_start) < 1e-9:
         return result
 
-    normalized = dict(result)
-    if isinstance(normalized.get("segments"), list):
-        normalized["segments"] = _offset_timestamped_segments(normalized["segments"], scene_start)
-
-    transcript_meta = normalized.get("transcript_meta")
-    if isinstance(transcript_meta, dict):
-        transcript_meta_copy = dict(transcript_meta)
-        if isinstance(transcript_meta_copy.get("segments"), list):
-            transcript_meta_copy["segments"] = _offset_timestamped_segments(
-                transcript_meta_copy["segments"],
-                scene_start,
-            )
-        if isinstance(transcript_meta_copy.get("chunks"), list):
-            transcript_meta_copy["chunks"] = _offset_timestamped_segments(
-                transcript_meta_copy["chunks"],
-                scene_start,
-            )
-        normalized["transcript_meta"] = transcript_meta_copy
-
+    import copy
+    import math
+    normalized = copy.deepcopy(result)
+    seen = set()
+    def translate(value):
+        if not isinstance(value, (dict, list)) or id(value) in seen:
+            return
+        seen.add(id(value))
+        if isinstance(value, list):
+            for row in value:
+                translate(row)
+            return
+        for key, item in value.items():
+            if key in ('start', 'end', 'raw_start', 'raw_end'):
+                numeric = _coerce_optional_float(item)
+                if numeric is not None and math.isfinite(numeric):
+                    value[key] = numeric + scene_start
+            else:
+                translate(item)
+        if value.get('timebase') in ('input_audio_seconds', 'source_audio_seconds'):
+            value['timebase'] = 'video_seconds'
+            value['source_offset_seconds'] = scene_start
+        if 'sample_start' in value:
+            value['sample_timebase'] = 'input_audio_samples'
+    translate(normalized)
     return normalized
 
 
@@ -1644,7 +1672,7 @@ def _infer_audio_backend_fields(
     for candidate in candidates:
         selected = candidate.get('audio_backend_selected')
         reason = candidate.get('audio_backend_reason')
-        if isinstance(selected, str) and selected in {'wsl', 'windows', 'none'}:
+        if isinstance(selected, str) and selected in {'wsl', 'windows', 'recording', 'none'}:
             return {
                 'audio_backend_selected': selected,
                 'audio_backend_reason': (
@@ -1748,7 +1776,7 @@ def _resolve_audio_backend_attribution(
     if isinstance(audio_runtime_contract, dict):
         contract_selected = audio_runtime_contract.get('selected')
         contract_reason = audio_runtime_contract.get('reason')
-        if isinstance(contract_selected, str) and contract_selected.strip().lower() in {'wsl', 'windows', 'none'}:
+        if isinstance(contract_selected, str) and contract_selected.strip().lower() in {'wsl', 'windows', 'recording', 'none'}:
             selected = contract_selected.strip().lower()
             if isinstance(contract_reason, str) and contract_reason.strip():
                 selected_reason = contract_reason.strip()
@@ -1760,7 +1788,7 @@ def _resolve_audio_backend_attribution(
 
     explicit_effective = _read_audio_backend_marker(audio_info, 'audio_backend_effective')
     explicit_effective_reason = _read_audio_backend_marker(audio_info, 'audio_backend_effective_reason')
-    if isinstance(explicit_effective, str) and explicit_effective.strip().lower() in {'wsl', 'windows', 'none', 'failed'}:
+    if isinstance(explicit_effective, str) and explicit_effective.strip().lower() in {'wsl', 'windows', 'recording', 'none', 'failed'}:
         effective = explicit_effective.strip().lower()
         if isinstance(explicit_effective_reason, str) and explicit_effective_reason.strip():
             effective_reason = explicit_effective_reason.strip()
@@ -1774,7 +1802,7 @@ def _resolve_audio_backend_attribution(
         effective = 'failed'
         effective_reason = 'audio_processing_error'
 
-    downgraded = selected in {'wsl', 'windows'} and effective in {'wsl', 'windows', 'none', 'failed'} and selected != effective
+    downgraded = selected in {'wsl', 'windows', 'recording'} and effective in {'wsl', 'windows', 'recording', 'none', 'failed'} and selected != effective
     downgrade_reason: Optional[str] = None
     downgrade_details: Dict[str, Any] = {}
     downgrade_ts_utc: Optional[str] = None
@@ -1858,7 +1886,8 @@ def _aggregate_audio_backend(
     Deterministic run-level backend reducer.
 
     Rules:
-    - mixed: scenes include both wsl and windows
+    - mixed: scenes include more than one of wsl, windows and recording
+    - recording: at least one scene uses the recording engine, with no other engine
     - wsl: at least one scene uses wsl, and none use windows
     - windows: at least one scene uses windows, and none use wsl
     - failed: at least one scene reports failed and no wsl/windows present
@@ -1866,6 +1895,7 @@ def _aggregate_audio_backend(
     """
     used_wsl = False
     used_windows = False
+    used_recording = False
     used_failed = False
 
     for scene in scene_outputs:
@@ -1879,11 +1909,15 @@ def _aggregate_audio_backend(
             used_wsl = True
         elif normalized == 'windows':
             used_windows = True
+        elif normalized == 'recording':
+            used_recording = True
         elif normalized == 'failed':
             used_failed = True
 
-    if used_wsl and used_windows:
+    if sum((used_wsl, used_windows, used_recording)) > 1:
         return 'mixed'
+    if used_recording:
+        return 'recording'
     if used_wsl:
         return 'wsl'
     if used_windows:
@@ -1898,6 +1932,11 @@ def _resolve_audio_runtime_contract(cfg: Dict[str, Any]) -> Dict[str, Any]:
     Resolve audio backend contract once per run.
     This prevents per-scene backend discovery drift.
     """
+    from steps.audio.recording_ingestion import selected, settings
+    if selected(cfg):
+        candidate = settings(cfg)
+        return {'selected': 'recording', 'reason': 'explicit_recording_engine',
+                'mode': 'recording', 'requested_wsl': candidate['transport'] == 'wsl'}
     require_wsl = require_wsl_audio()
     requested_wsl = bool(wsl_audio_auto_enabled() or require_wsl)
     host_cfg = cfg.get('host') if isinstance(cfg, dict) else {}
@@ -2627,6 +2666,7 @@ def _completed_checkpoint_window_indices(
     *,
     cfg: Dict[str, Any],
     processing_dir: Path,
+    expected_windows: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Set[int]:
     """Return schema-v2 windows whose current persistence evidence still holds."""
     if state_data.get('checkpoint_version') != 2:
@@ -2656,6 +2696,17 @@ def _completed_checkpoint_window_indices(
             continue
         if str(window_idx) != str(key):
             continue
+        if expected_windows is not None:
+            expected = expected_windows.get(window_idx)
+            if expected is None or any(
+                record.get(field) != expected[field]
+                for field in ('window_start', 'window_end', 'scene_ids')
+            ):
+                logger.info(
+                    "[CHECKPOINT] Replaying window %s because its current bounds or scenes differ",
+                    window_idx,
+                )
+                continue
         if not _checkpoint_window_matches_current_persistence(
             cfg=cfg,
             processing_dir=processing_dir,
@@ -2675,6 +2726,7 @@ def _progressive_checkpoint_cleanup_ready(
     processing_dir: Path,
     expected_window_indices: Iterable[int],
     phase6_complete: bool,
+    expected_windows: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> bool:
     """Require fresh five-target evidence for every current window before cleanup."""
     if phase6_complete is not True:
@@ -2687,6 +2739,7 @@ def _progressive_checkpoint_cleanup_ready(
         video_hash,
         cfg=cfg,
         processing_dir=processing_dir,
+        expected_windows=expected_windows,
     )
     return verified == expected
 
@@ -2736,19 +2789,44 @@ def _rehydrate_video_result_scenes_from_manifest(
     raw_scenes = manifest.get('scenes') if isinstance(manifest, dict) else None
     if not isinstance(raw_scenes, list):
         return False
+    existing_scenes = video_result.get('scenes')
+    existing_by_identity: Dict[tuple[Any, Any], Dict[str, Any]] = {}
+    existing_by_id: Dict[Any, Dict[str, Any]] = {}
+    if isinstance(existing_scenes, list):
+        for existing in existing_scenes:
+            if not isinstance(existing, dict):
+                continue
+            sid = existing.get('scene_id') or existing.get('id')
+            idx = existing.get('index')
+            existing_by_identity[(sid, idx)] = existing
+            if sid is not None and sid not in existing_by_id:
+                existing_by_id[sid] = existing
+
     canonical_scenes: List[Dict[str, Any]] = []
     for scene in raw_scenes:
         if not isinstance(scene, dict):
             continue
-        projected_scene = dict(scene)
+        sid = scene.get('scene_id') or scene.get('id')
+        idx = scene.get('index')
+        base_scene = existing_by_identity.get((sid, idx)) or existing_by_id.get(sid)
+        projected_scene = dict(base_scene) if isinstance(base_scene, dict) else {}
+        for key, val in scene.items():
+            if key in ('keyframe', 'audio') and val == {} and key not in projected_scene:
+                continue
+            projected_scene[key] = val
         scene_context_llm = scene.get('scene_context_llm')
         if isinstance(scene_context_llm, dict):
-            projected_scene.setdefault('summary', scene_context_llm.get('narrative_summary'))
-            projected_scene.setdefault('tags', scene_context_llm.get('context_tags'))
-            projected_scene.setdefault('key_moments', scene_context_llm.get('key_moments'))
+            if 'summary' not in scene or scene.get('summary') is None:
+                projected_scene['summary'] = scene_context_llm.get('narrative_summary')
+            if 'tags' not in scene or not any(scene.get('tags') or []):
+                projected_scene['tags'] = scene_context_llm.get('context_tags')
+            if 'key_moments' not in scene or not any(scene.get('key_moments') or []):
+                projected_scene['key_moments'] = scene_context_llm.get('key_moments')
         canonical_scenes.append(projected_scene)
     if not canonical_scenes:
         return False
+    if isinstance(existing_scenes, list):
+        existing_scenes[:] = canonical_scenes
     video_result['scenes'] = canonical_scenes
     return True
 
@@ -4258,6 +4336,23 @@ def _record_native_retry(
     )
 
 
+def _stop_step_heartbeat(stop_heartbeat, *, preserve_error: bool) -> None:
+    """A progress callback cannot replace an active worker failure/cancellation."""
+    try:
+        stop_heartbeat()
+    except BaseException:
+        if not preserve_error:
+            raise
+        logger.exception("Heartbeat cleanup failed while preserving the worker exception")
+
+
+def _report_step_failure(observer, step, *, error, metadata) -> None:
+    try:
+        observer.step_error(step, error=error, metadata=metadata)
+    except BaseException:
+        logger.exception("Observer notification failed while preserving the worker exception")
+
+
 def _run_step(
     env_name: str,
     step_name: str,
@@ -4273,32 +4368,62 @@ def _run_step(
     work_env = _base_env(cfg_json)
     
     # VRAM preflight allocation check
-    from steps.common.profile_config import is_baseline, require_gpu
-    from common.vram_allocator import VRAMAllocator, STEP_VRAM_FRACTIONS
+    from common.vram_allocator import STEP_VRAM_FRACTIONS, VRAMAllocator, step_uses_gpu_backend, validate_ocr_device_policy
     
-    is_gpu_step = step_name in STEP_VRAM_FRACTIONS
+    # Admission must use the same resolved policy as the worker, not the parent shell.
+    policy_env = _apply_env_overrides(work_env, _step_env_overrides)
+    gpu_required = policy_env.get("GOODQ_REQUIRE_GPU", "").strip().lower() in {"1", "true", "yes", "on"}
+    step_cfg = None
+    if step_name == "image_ocr":
+        from cli.step_runner import load_step_config
+        step_cfg = load_step_config(cfg_json)
+        gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+        env_name = "goodq_ocr"
+    gpu_auto_enabled = (
+        policy_env.get("GOODQ_HOST_PROFILE") != "BASELINE"
+        and policy_env.get("GOODQ_NO_AUTO_GPU") != "1"
+    )
+    if step_name in STEP_VRAM_FRACTIONS and gpu_required and not gpu_auto_enabled:
+        raise RuntimeError(f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled.")
     gpu_enabled = (
-        not is_baseline()
-        and os.getenv("GOODQ_NO_AUTO_GPU") != "1"
-        and (not _step_env_overrides or _step_env_overrides.get("GOODQ_NO_AUTO_GPU") != "1")
+        gpu_auto_enabled
         and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
+    )
+    is_gpu_step = (
+        step_uses_gpu_backend(step_name, env=policy_env, conda_env=env_name, cfg=step_cfg)
+        if gpu_enabled
+        else False
     )
     
     allocator = None
     vram_reserved = False
     parent_pid = os.getpid()
+    reservation_id = "launch:" + uuid.uuid4().hex
     
     if is_gpu_step and gpu_enabled:
         allocator = VRAMAllocator()
+        allocator.env = policy_env
+        allocator.conda_env = env_name
+        allocator.cfg = step_cfg
         cmd_str = f"python cli/step_runner.py --step {step_name}"
-        vram_reserved = allocator.wait_and_reserve(
-            step_name=step_name,
-            pid=parent_pid,
-            command=cmd_str,
-            timeout_seconds=60.0
-        )
+        try:
+            vram_reserved = allocator.wait_and_reserve(
+                step_name=step_name,
+                pid=parent_pid,
+                reservation_id=reservation_id,
+                command=cmd_str,
+                timeout_seconds=180.0,
+                env=policy_env,
+                conda_env=env_name,
+            )
+        except BaseException:
+            try:
+                allocator.release(reservation_id)
+            except BaseException:
+                logger.exception("Admission cleanup failed; preserving the worker interruption")
+            raise
         if not vram_reserved:
-            if require_gpu():
+            if gpu_required:
                 raise RuntimeError(
                     f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
                 )
@@ -4318,161 +4443,32 @@ def _run_step(
                     _step_env_overrides['GOODQ_CLAP_FORCE_CPU'] = '1'
                 elif step_name == 'image_embed_dino':
                     _step_env_overrides['GOODQ_DINO_FORCE_CPU'] = '1'
+                elif step_name == 'emotion_classify':
+                    _step_env_overrides['GOODQ_EMOTION_FORCE_CPU'] = '1'
 
     # Convert payload to JSON-serializable format
-    def make_json_serializable(obj):
-        # Handle typer OptionInfo objects - extract the actual default value
-        if hasattr(obj, 'default'):
-            return make_json_serializable(obj.default)
-        elif isinstance(obj, dict):
-            return {k: make_json_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-            return [make_json_serializable(item) for item in obj]
-        elif isinstance(obj, (str, int, float, bool, type(None))):
-            return obj
-        else:
-            # For other non-serializable objects, convert to string as last resort
-            return str(obj)
     
-    tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
+    tmp_dir = None
+    process = None
+    observer = None
+    failure_in_flight = False
     try:
+        tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
         in_path = tmp_dir / 'input.json'
         out_path = tmp_dir / 'output.json'
-        serializable_payload = make_json_serializable(payload)
+        serializable_payload = worker_payload(payload)
         in_path.write_text(json.dumps(serializable_payload, ensure_ascii=False), encoding='utf-8')
         
         # Resolve conda path to handle subprocess PATH issues across hosts.
-        conda_exe = resolve_conda()
-        conda_available = False
-        if os.path.isabs(conda_exe):
-            conda_available = os.path.exists(conda_exe)
-        else:
-            conda_available = shutil.which(conda_exe) is not None
-
-        def _resolve_env_python_for_step_fallback(name: str) -> Optional[str]:
-            try:
-                from configs.python_paths import get_env_python
-
-                env_python = get_env_python(name)
-            except Exception as e:
-                logger.warning(
-                    "run_ingestion warning context=%s error=%s",
-                    "direct_env_python.resolve",
-                    e,
-                )
-                return None
-            if env_python and Path(env_python).exists():
-                return str(env_python)
-            return None
-
-        direct_env_python = _resolve_env_python_for_step_fallback(env_name)
-        prefer_direct_env_python = bool(
-            _prefer_direct_env_python
-            or (
-                _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
-                and direct_env_python is not None
-            )
-            or (
-                not conda_available
-                and direct_env_python is not None
-            )
+        launch = prepare_worker_launch(
+            WorkerRequest(env_name, step_name, in_path, out_path, cfg_json), work_env,
+            repo_root=REPO_ROOT, conda_exe=resolve_conda(),
+            prefer_direct=_prefer_direct_env_python,
+            prefer_available_python=_PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS,
+            overrides=_step_env_overrides,
         )
-
-        def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
-            if prefer_direct_env_python:
-                if not direct_env_python:
-                    raise RuntimeError(
-                        f"Direct interpreter fallback unavailable for env={env_name} step={step_name}"
-                    )
-                return (
-                    [
-                        direct_env_python,
-                        str(REPO_ROOT / 'cli' / 'step_runner.py'),
-                        '--step', step_name,
-                        '--in', str(in_path),
-                        '--out', str(out_path),
-                        '--cfg', str(cfg_json),
-                    ],
-                    "direct_env_python",
-                )
-            if conda_available:
-                return (
-                    [
-                        conda_exe, 'run', '-n', env_name,
-                        '--no-capture-output',  # Let output flow through
-                        'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),  # Use absolute path instead of -m
-                        '--step', step_name,
-                        '--in', str(in_path),
-                        '--out', str(out_path),
-                        '--cfg', str(cfg_json),
-                    ],
-                    "conda_run",
-                )
-            raise RuntimeError(
-                "Conda unavailable for step execution "
-                f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
-                "Bare interpreter fallback is disabled."
-            )
-
-        try:
-            cmd, launcher_kind = _build_step_runner_cmd(
-                prefer_direct_env_python=prefer_direct_env_python
-            )
-        except RuntimeError:
-            raise
-        except Exception as e:
-            logger.error("run_ingestion abort: step_command_build_failed step=%s env=%s error=%s", step_name, env_name, e)
-            raise
-
-        if not conda_available and launcher_kind != "direct_env_python":
-            error_msg = (
-                "Conda unavailable for step execution "
-                f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
-                "Bare interpreter fallback is disabled."
-            )
-            logger.error("run_ingestion abort: %s", error_msg)
-            raise RuntimeError(error_msg)
-        
-        # CRITICAL: Ensure PYTHONPATH is available in conda env
-        work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')
-        # Ensure PYTHONPATH points to repo parent so goodq4all.steps can be imported.
-        parent_dir = str(REPO_ROOT.parent)
-        if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
-            existing_path = work_env.get('PYTHONPATH', '')
-            work_env['PYTHONPATH'] = (
-                f"{parent_dir}{os.pathsep}{existing_path}" if existing_path else parent_dir
-            )
-
-        step_env = work_env
-        if step_name in SUBPROCESS_THREAD_CAP_STEPS:
-            step_env = dict(work_env)
-            for env_key, env_value in SUBPROCESS_THREAD_CAP_ENV.items():
-                step_env.setdefault(env_key, env_value)
-        if step_name in SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS:
-            if step_env is work_env:
-                step_env = dict(work_env)
-            for env_key, env_value in SUBPROCESS_AUDIO_OPENMP_GUARD_ENV.items():
-                step_env.setdefault(env_key, env_value)
-        if launcher_kind == "direct_env_python" and direct_env_python:
-            env_python_path = Path(direct_env_python)
-            if env_python_path.parent.name.lower() == 'bin':
-                env_root = env_python_path.parent.parent
-                env_bin = env_python_path.parent
-            else:
-                env_root = env_python_path.parent
-                env_bin = env_root / 'Scripts'
-            if step_env is work_env:
-                step_env = dict(work_env)
-            step_env['CONDA_DEFAULT_ENV'] = env_name
-            step_env['CONDA_PREFIX'] = str(env_root)
-            path_entries = [str(env_root)]
-            if env_bin.exists():
-                path_entries.append(str(env_bin))
-            existing_path = step_env.get('PATH', '')
-            if existing_path:
-                path_entries.append(existing_path)
-            step_env['PATH'] = os.pathsep.join(path_entries)
-        step_env = _apply_env_overrides(step_env, _step_env_overrides)
+        cmd, launcher_kind = launch.command, launch.kind
+        direct_env_python, step_env = launch.direct_python, launch.environment
 
         start_ts = time.perf_counter()
         observer = _observer()
@@ -4499,7 +4495,7 @@ def _run_step(
         if VERBOSE:
             typer.echo(f'[step] -> {step_name} ({env_name}) [{launcher_kind}]')
         stop_heartbeat = (lambda: None)
-        process: Optional[subprocess.Popen[str]] = None
+        process: Optional[subprocess.Popen[bytes]] = None
         try:
             process = subprocess.Popen(
                 cmd,
@@ -4507,26 +4503,37 @@ def _run_step(
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
                 env=step_env,
             )
             observer_meta["subprocess_pid"] = int(process.pid)
             if vram_reserved and allocator is not None:
-                allocator.update_pid(parent_pid, process.pid)
+                try:
+                    allocator.update_pid(reservation_id, process.pid)
+                except Exception:
+                    # The child has started but its ownership is not durable.
+                    # Stop/reap it before the outer finally releases the claim.
+                    try:
+                        process.kill()
+                        process.communicate(timeout=5)
+                    except Exception:
+                        vram_reserved = False  # Retain the claim if the child cannot be reaped.
+                        logger.exception("Unbound worker could not be stopped; retaining VRAM claim %s", reservation_id)
+                        raise
+                    raise
             if observer:
                 observer.step_start(observer_step, metadata=observer_meta)
                 stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
+            communicate_failed = True
             try:
                 stdout_text, stderr_text = process.communicate(timeout=STEP_TIMEOUT)
+                communicate_failed = False
             finally:
-                stop_heartbeat()
+                _stop_step_heartbeat(stop_heartbeat, preserve_error=communicate_failed)
             result = subprocess.CompletedProcess(
                 cmd,
                 process.returncode if process.returncode is not None else 1,
-                stdout_text or '',
-                stderr_text or '',
+                decode_worker_diagnostics(stdout_text),
+                decode_worker_diagnostics(stderr_text),
             )
         except subprocess.TimeoutExpired as exc:
             if process is not None:
@@ -4538,8 +4545,10 @@ def _run_step(
                     process.communicate(timeout=5)
                 except Exception:
                     pass
+                if process.returncode is None:
+                    raise RuntimeError(f"Step {step_name} timed out; worker exit was not confirmed") from exc
             if observer:
-                observer.step_error(
+                _report_step_failure(observer,
                     observer_step,
                     error=f"timeout_after_{STEP_TIMEOUT}s",
                     metadata=observer_meta,
@@ -4547,7 +4556,7 @@ def _run_step(
             if VERBOSE:
                 typer.echo(f'[step] !! {step_name} ({env_name}) timed out after {STEP_TIMEOUT}s', err=True)
 
-            if _control_agent_runtime_enabled():
+            if step_name != "image_ocr" and _control_agent_runtime_enabled():
                 try:
                     agent = _get_control_agent(cfg_json)
                     healing_result = agent.auto_heal_failure(
@@ -4640,7 +4649,7 @@ def _run_step(
                 f"STDERR: {stderr}"
             )
             if observer:
-                observer.step_error(
+                _report_step_failure(observer,
                     observer_step,
                     error=f"returncode_{result.returncode}",
                     metadata=observer_meta,
@@ -4650,6 +4659,7 @@ def _run_step(
             retry_limit, retry_env_overrides, retry_mode = _resolve_native_retry_strategy(
                 step_name,
                 _native_retry_attempt + 1,
+                gpu_required=gpu_required,
             )
             if is_native_crash and _native_retry_attempt < retry_limit:
                 retry_attempt = _native_retry_attempt + 1
@@ -4702,7 +4712,7 @@ def _run_step(
                     _native_retry_mode=retry_mode,
                 )
 
-            if _control_agent_runtime_enabled():
+            if step_name != "image_ocr" and _control_agent_runtime_enabled():
                 try:
                     agent = _get_control_agent(cfg_json)
                     healing_result = agent.auto_heal_failure(
@@ -4749,6 +4759,18 @@ def _run_step(
                     typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
 
             raise RuntimeError(error_msg)
+        try:
+            outputs = read_worker_result(out_path, stdout_text, step_name=step_name, env_name=env_name)
+            from cli.step_runner import _derive_step_log_outcome
+            log_status, log_error, extra = _derive_step_log_outcome(step_name, outputs, verbose=VERBOSE)
+            if log_status == "error" or "_error" in outputs:
+                reason = (extra or {}).get("reason", "error")
+                raise WorkerResultError(f"Step {step_name} failed ({env_name}): {outputs.get('_error', log_error)} ({reason})",
+                                        step_name=step_name, outputs=outputs)
+        except (RuntimeError, OSError) as exc:
+            if observer:
+                _report_step_failure(observer,observer_step, error=str(exc), metadata=observer_meta)
+            raise
         duration = time.perf_counter() - start_ts
         if observer:
             observer.step_end(
@@ -4762,7 +4784,7 @@ def _run_step(
             typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
         
         # PHASE 3: Learn from successful execution
-        if _control_agent_runtime_enabled():
+        if step_name != "image_ocr" and _control_agent_runtime_enabled():
             try:
                 models_root = _resolve_models_dir(cfg_json=cfg_json)
                 agent = _get_control_agent(cfg_json)
@@ -4785,43 +4807,51 @@ def _run_step(
                     context={'step': step_name, 'env': env_name},
                 )
         
-        if out_path.exists():
-            output = out_path.read_text(encoding='utf-8')
-            return _parse_step_result_json(
-                output,
-                step_name=step_name,
-                env_name=env_name,
-                source="output.json",
-            )
-        stdout = result.stdout
-        return _parse_step_result_json(
-            stdout,
-            step_name=step_name,
-            env_name=env_name,
-            source="stdout",
-        )
+        return outputs
+    except BaseException:
+        failure_in_flight = True
+        if process is not None and process.returncode is None:
+            # Every worker owns its input and device claim until exit is confirmed.
+            try:
+                process.kill()
+                process.communicate(timeout=5)
+                if process.returncode is None:
+                    raise RuntimeError("Worker exit was not confirmed")
+            except BaseException:
+                vram_reserved = False  # Keep the claim until the live child exits.
+                logger.exception("Worker could not be reaped; retaining VRAM claim %s", reservation_id)
+        raise
     finally:
+        release_error = None
         if 'vram_reserved' in locals() and vram_reserved and 'allocator' in locals() and allocator is not None:
             try:
-                allocator.release(parent_pid)
-                if 'process' in locals() and process is not None and process.pid is not None:
-                    allocator.release(process.pid)
+                allocator.release(reservation_id)
             except Exception as e:
                 logger.warning(
                     "run_ingestion warning context=%s error=%s",
                     "vram_release_failed",
                     e,
                 )
+                release_error = e
+                if observer:
+                    _report_step_failure(observer, observer_step, error=f"vram_release_failed: {e}",
+                                                 metadata=observer_meta)
         try:
-            for child in tmp_dir.iterdir():
+            safe_to_clean = process is None or process.returncode is not None
+            for child in tmp_dir.iterdir() if tmp_dir is not None and safe_to_clean else ():
                 child.unlink(missing_ok=True)
-            tmp_dir.rmdir()
+            if tmp_dir is not None and safe_to_clean:
+                tmp_dir.rmdir()
+            elif tmp_dir is not None:
+                logger.error("Unreaped worker retains input directory %s", tmp_dir)
         except Exception as e:
             logger.warning(
                 "run_ingestion warning context=%s error=%s",
                 "step_temp_cleanup",
                 e,
             )
+        if release_error is not None and not failure_in_flight:
+            raise release_error
 
 
 def _make_async_step_envelope(
@@ -4848,6 +4878,29 @@ def _make_async_step_envelope(
     }
 
 
+async def _reserve_step_vram_async(allocator, **kwargs) -> bool:
+    """Wait for admission without leaving a live allocator thread after cancellation."""
+    import threading
+
+    cancel_event = threading.Event()
+    pending = asyncio.create_task(asyncio.to_thread(
+        allocator.wait_and_reserve, **kwargs, cancel_event=cancel_event,
+    ))
+    try:
+        return await asyncio.shield(pending)
+    except asyncio.CancelledError:
+        cancel_event.set()
+        try:
+            await asyncio.shield(pending)
+        except BaseException:
+            logger.exception("Admission wait failed while preserving cancellation")
+        try:
+            allocator.release(kwargs["reservation_id"])
+        except BaseException:
+            logger.exception("Admission cleanup failed while preserving cancellation")
+        raise
+
+
 async def _run_step_async(
     env_name: str,
     step_name: str,
@@ -4867,33 +4920,56 @@ async def _run_step_async(
         work_env = _base_env(cfg_json)
         
         # VRAM preflight allocation check
-        from steps.common.profile_config import is_baseline, require_gpu
-        from common.vram_allocator import VRAMAllocator, STEP_VRAM_FRACTIONS
+        from common.vram_allocator import STEP_VRAM_FRACTIONS, VRAMAllocator, step_uses_gpu_backend, validate_ocr_device_policy
         
-        is_gpu_step = step_name in STEP_VRAM_FRACTIONS
+        # Admission must use the same resolved policy as the worker, not the parent shell.
+        policy_env = _apply_env_overrides(work_env, _step_env_overrides)
+        gpu_required = policy_env.get("GOODQ_REQUIRE_GPU", "").strip().lower() in {"1", "true", "yes", "on"}
+        step_cfg = None
+        if step_name == "image_ocr":
+            from cli.step_runner import load_step_config
+            step_cfg = load_step_config(cfg_json)
+            gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+            env_name = "goodq_ocr"
+        gpu_auto_enabled = (
+            policy_env.get("GOODQ_HOST_PROFILE") != "BASELINE"
+            and policy_env.get("GOODQ_NO_AUTO_GPU") != "1"
+        )
+        if step_name in STEP_VRAM_FRACTIONS and gpu_required and not gpu_auto_enabled:
+            raise RuntimeError(f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled.")
         gpu_enabled = (
-            not is_baseline()
-            and os.getenv("GOODQ_NO_AUTO_GPU") != "1"
-            and (not _step_env_overrides or _step_env_overrides.get("GOODQ_NO_AUTO_GPU") != "1")
+            gpu_auto_enabled
             and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
+        )
+        is_gpu_step = (
+            step_uses_gpu_backend(step_name, env=policy_env, conda_env=env_name, cfg=step_cfg)
+            if gpu_enabled
+            else False
         )
         
         allocator = None
         vram_reserved = False
         parent_pid = os.getpid()
+        reservation_id = "launch:" + uuid.uuid4().hex
         
         if is_gpu_step and gpu_enabled:
             allocator = VRAMAllocator()
+            allocator.env = policy_env
+            allocator.conda_env = env_name
+            allocator.cfg = step_cfg
             cmd_str = f"python cli/step_runner.py --step {step_name}"
-            vram_reserved = await asyncio.to_thread(
-                allocator.wait_and_reserve,
+            vram_reserved = await _reserve_step_vram_async(
+                allocator,
                 step_name=step_name,
                 pid=parent_pid,
+                reservation_id=reservation_id,
                 command=cmd_str,
-                timeout_seconds=60.0
+                timeout_seconds=180.0,
+                env=policy_env,
+                conda_env=env_name,
             )
             if not vram_reserved:
-                if require_gpu():
+                if gpu_required:
                     raise RuntimeError(
                         f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
                     )
@@ -4913,157 +4989,32 @@ async def _run_step_async(
                         _step_env_overrides['GOODQ_CLAP_FORCE_CPU'] = '1'
                     elif step_name == 'image_embed_dino':
                         _step_env_overrides['GOODQ_DINO_FORCE_CPU'] = '1'
+                    elif step_name == 'emotion_classify':
+                        _step_env_overrides['GOODQ_EMOTION_FORCE_CPU'] = '1'
 
         # Convert payload to JSON-serializable format
-        def make_json_serializable(obj):
-            if hasattr(obj, 'default'):
-                return make_json_serializable(obj.default)
-            elif isinstance(obj, dict):
-                return {k: make_json_serializable(v) for k, v in obj.items()}
-            elif isinstance(obj, (list, tuple)):
-                return [make_json_serializable(item) for item in obj]
-            elif isinstance(obj, (str, int, float, bool, type(None))):
-                return obj
-            else:
-                return str(obj)
         
-        tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
+        tmp_dir = None
         process = None
+        observer = None
+        failure_in_flight = False
         
         try:
+            tmp_dir = Path(tempfile.mkdtemp(prefix='ingest_step_'))
             in_path = tmp_dir / 'input.json'
             out_path = tmp_dir / 'output.json'
-            serializable_payload = make_json_serializable(payload)
+            serializable_payload = worker_payload(payload)
             in_path.write_text(json.dumps(serializable_payload, ensure_ascii=False), encoding='utf-8')
             
-            conda_exe = resolve_conda()
-            conda_available = False
-            if os.path.isabs(conda_exe):
-                conda_available = os.path.exists(conda_exe)
-            else:
-                conda_available = shutil.which(conda_exe) is not None
-
-            def _resolve_env_python_for_step_fallback(name: str) -> Optional[str]:
-                try:
-                    from configs.python_paths import get_env_python
-                    env_python = get_env_python(name)
-                except Exception as e:
-                    logger.warning(
-                        "run_ingestion warning context=%s error=%s",
-                        "direct_env_python.resolve",
-                        e,
-                    )
-                    return None
-                if env_python and Path(env_python).exists():
-                    return str(env_python)
-                return None
-
-            direct_env_python = _resolve_env_python_for_step_fallback(env_name)
-            prefer_direct_env_python = bool(
-                _prefer_direct_env_python
-                or (
-                    _PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS
-                    and direct_env_python is not None
-                )
-                or (
-                    not conda_available
-                    and direct_env_python is not None
-                )
+            launch = prepare_worker_launch(
+                WorkerRequest(env_name, step_name, in_path, out_path, cfg_json), work_env,
+                repo_root=REPO_ROOT, conda_exe=resolve_conda(),
+                prefer_direct=_prefer_direct_env_python,
+                prefer_available_python=_PREFER_DIRECT_ENV_PYTHON_ON_WINDOWS,
+                overrides=_step_env_overrides,
             )
-
-            def _build_step_runner_cmd(*, prefer_direct_env_python: bool) -> tuple[List[str], str]:
-                if prefer_direct_env_python:
-                    if not direct_env_python:
-                        raise RuntimeError(
-                            f"Direct interpreter fallback unavailable for env={env_name} step={step_name}"
-                        )
-                    return (
-                        [
-                            direct_env_python,
-                            str(REPO_ROOT / 'cli' / 'step_runner.py'),
-                            '--step', step_name,
-                            '--in', str(in_path),
-                            '--out', str(out_path),
-                            '--cfg', str(cfg_json),
-                        ],
-                        "direct_env_python",
-                    )
-                if conda_available:
-                    return (
-                        [
-                            conda_exe, 'run', '-n', env_name,
-                            '--no-capture-output',
-                            'python', str(REPO_ROOT / 'cli' / 'step_runner.py'),
-                            '--step', step_name,
-                            '--in', str(in_path),
-                            '--out', str(out_path),
-                            '--cfg', str(cfg_json),
-                        ],
-                        "conda_run",
-                    )
-                raise RuntimeError(
-                    "Conda unavailable for step execution "
-                    f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
-                    "Bare interpreter fallback is disabled."
-                )
-
-            try:
-                cmd, launcher_kind = _build_step_runner_cmd(
-                    prefer_direct_env_python=prefer_direct_env_python
-                )
-            except RuntimeError:
-                raise
-            except Exception as e:
-                logger.error("run_ingestion abort: step_command_build_failed step=%s env=%s error=%s", step_name, env_name, e)
-                raise
-
-            if not conda_available and launcher_kind != "direct_env_python":
-                error_msg = (
-                    "Conda unavailable for step execution "
-                    f"(step={step_name}, env={env_name}, conda_exe={conda_exe}). "
-                    "Bare interpreter fallback is disabled."
-                )
-                logger.error("run_ingestion abort: %s", error_msg)
-                raise RuntimeError(error_msg)
-            
-            work_env['CONDA_PREFIX_1'] = work_env.get('CONDA_PREFIX', '')
-            parent_dir = str(REPO_ROOT.parent)
-            if 'PYTHONPATH' not in work_env or parent_dir not in work_env['PYTHONPATH']:
-                existing_path = work_env.get('PYTHONPATH', '')
-                work_env['PYTHONPATH'] = (
-                    f"{parent_dir}{os.pathsep}{existing_path}" if existing_path else parent_dir
-                )
-
-            step_env = work_env
-            if step_name in SUBPROCESS_THREAD_CAP_STEPS:
-                step_env = dict(work_env)
-                for env_key, env_value in SUBPROCESS_THREAD_CAP_ENV.items():
-                    step_env.setdefault(env_key, env_value)
-            if step_name in SUBPROCESS_AUDIO_OPENMP_GUARD_STEPS:
-                if step_env is work_env:
-                    step_env = dict(work_env)
-                for env_key, env_value in SUBPROCESS_AUDIO_OPENMP_GUARD_ENV.items():
-                    step_env.setdefault(env_key, env_value)
-            if launcher_kind == "direct_env_python" and direct_env_python:
-                env_python_path = Path(direct_env_python)
-                if env_python_path.parent.name.lower() == 'bin':
-                    env_root = env_python_path.parent.parent
-                    env_bin = env_python_path.parent
-                else:
-                    env_root = env_python_path.parent
-                    env_bin = env_root / 'Scripts'
-                if step_env is work_env:
-                    step_env = dict(work_env)
-                step_env['CONDA_DEFAULT_ENV'] = env_name
-                step_env['CONDA_PREFIX'] = str(env_root)
-                path_entries = [str(env_root)]
-                if env_bin.exists():
-                    path_entries.append(str(env_bin))
-                existing_path = step_env.get('PATH', '')
-                if existing_path:
-                    path_entries.append(existing_path)
-                step_env['PATH'] = os.pathsep.join(path_entries)
-            step_env = _apply_env_overrides(step_env, _step_env_overrides)
+            cmd, launcher_kind = launch.command, launch.kind
+            direct_env_python, step_env = launch.direct_python, launch.environment
 
             observer = _observer()
             observer_step = f"step.{step_name}"
@@ -5100,20 +5051,32 @@ async def _run_step_async(
                 )
                 observer_meta["subprocess_pid"] = int(process.pid)
                 if vram_reserved and allocator is not None:
-                    await asyncio.to_thread(allocator.update_pid, parent_pid, process.pid)
+                    try:
+                        await asyncio.to_thread(allocator.update_pid, reservation_id, process.pid)
+                    except Exception:
+                        try:
+                            process.kill()
+                            await asyncio.wait_for(process.communicate(), timeout=5)
+                        except Exception:
+                            vram_reserved = False  # Retain the claim if the child cannot be reaped.
+                            logger.exception("Unbound worker could not be stopped; retaining VRAM claim %s", reservation_id)
+                            raise
+                        raise
                 if observer:
                     observer.step_start(observer_step, metadata=observer_meta)
                     stop_heartbeat = observer.begin_heartbeat(observer_step, metadata=observer_meta)
                 
+                communicate_failed = True
                 try:
                     stdout_bytes, stderr_bytes = await asyncio.wait_for(
                         process.communicate(),
                         timeout=STEP_TIMEOUT
                     )
-                    stdout_text = stdout_bytes.decode('utf-8', errors='replace')
-                    stderr_text = stderr_bytes.decode('utf-8', errors='replace')
+                    stdout_text = decode_worker_diagnostics(stdout_bytes)
+                    stderr_text = decode_worker_diagnostics(stderr_bytes)
+                    communicate_failed = False
                 finally:
-                    stop_heartbeat()
+                    _stop_step_heartbeat(stop_heartbeat, preserve_error=communicate_failed)
                 
                 result = subprocess.CompletedProcess(
                     cmd,
@@ -5135,26 +5098,22 @@ async def _run_step_async(
                         except Exception:
                             pass
                     try:
-                        await process.communicate()
+                        await asyncio.wait_for(process.communicate(), timeout=5)
                     except Exception:
                         pass
-                
-                if vram_reserved and allocator is not None:
-                    try:
-                        await asyncio.to_thread(allocator.release, parent_pid)
-                        if process is not None and process.pid is not None:
-                            await asyncio.to_thread(allocator.release, process.pid)
-                    except Exception:
-                        pass
+                    if process.returncode is None:
+                        if isinstance(exc, asyncio.CancelledError):
+                            raise
+                        raise RuntimeError(f"Step {step_name} timed out; worker exit was not confirmed") from exc
                 
                 if observer:
-                    observer.step_error(
-                        observer_step,
+                    _report_step_failure(
+                        observer, observer_step,
                         error="timeout" if isinstance(exc, asyncio.TimeoutError) else "cancelled",
                         metadata=observer_meta,
                     )
                 
-                if isinstance(exc, asyncio.TimeoutError) and _control_agent_runtime_enabled():
+                if step_name != "image_ocr" and isinstance(exc, asyncio.TimeoutError) and _control_agent_runtime_enabled():
                     try:
                         agent = _get_control_agent(cfg_json)
                         healing_result = await asyncio.to_thread(
@@ -5249,7 +5208,7 @@ async def _run_step_async(
                     f"STDERR: {stderr}"
                 )
                 if observer:
-                    observer.step_error(
+                    _report_step_failure(observer,
                         observer_step,
                         error=f"returncode_{result.returncode}",
                         metadata=observer_meta,
@@ -5259,6 +5218,7 @@ async def _run_step_async(
                 retry_limit, retry_env_overrides, retry_mode = _resolve_native_retry_strategy(
                     step_name,
                     _native_retry_attempt + 1,
+                    gpu_required=gpu_required,
                 )
                 if is_native_crash and _native_retry_attempt < retry_limit:
                     retry_attempt = _native_retry_attempt + 1
@@ -5311,7 +5271,7 @@ async def _run_step_async(
                         _native_retry_mode=retry_mode,
                     )
 
-                if _control_agent_runtime_enabled():
+                if step_name != "image_ocr" and _control_agent_runtime_enabled():
                     try:
                         agent = _get_control_agent(cfg_json)
                         healing_result = await asyncio.to_thread(
@@ -5359,7 +5319,24 @@ async def _run_step_async(
 
                 raise RuntimeError(error_msg)
 
+            try:
+                outputs = read_worker_result(out_path, stdout_bytes, step_name=step_name, env_name=env_name)
+            except (RuntimeError, OSError) as exc:
+                if observer:
+                    _report_step_failure(observer,observer_step, error=str(exc), metadata=observer_meta)
+                raise
             duration = time.perf_counter() - start_ts
+            from cli.step_runner import _derive_step_log_outcome
+            log_status, log_error, extra = _derive_step_log_outcome(step_name, outputs, verbose=VERBOSE)
+            if log_status == "error" or "_error" in outputs:
+                log_error = str(outputs.get("_error", log_error))
+                if observer:
+                    _report_step_failure(observer,observer_step, error=log_error, metadata=observer_meta)
+                return _make_async_step_envelope(
+                    step_name=step_name, status="error", outputs=outputs, errors=log_error,
+                    started_at=started_at_str, finished_at=datetime.now(timezone.utc).isoformat(),
+                    duration_seconds=duration, retry_count=max(_healer_retry_attempt, _native_retry_attempt),
+                )
             if observer:
                 observer.step_end(
                     observer_step,
@@ -5372,7 +5349,7 @@ async def _run_step_async(
                 typer.echo(f'[step] <- {step_name} ({env_name}) [{duration:.1f}s]')
             
             # PHASE 3: Learn from successful execution
-            if _control_agent_runtime_enabled():
+            if step_name != "image_ocr" and _control_agent_runtime_enabled():
                 try:
                     models_root = _resolve_models_dir(cfg_json=cfg_json)
                     agent = _get_control_agent(cfg_json)
@@ -5396,25 +5373,6 @@ async def _run_step_async(
                         context={'step': step_name, 'env': env_name},
                     )
 
-            # Read and parse structured results
-            outputs = {}
-            if out_path.exists():
-                outputs = _parse_step_result_json(
-                    out_path.read_text(encoding='utf-8'),
-                    step_name=step_name,
-                    env_name=env_name,
-                    source="output.json",
-                )
-            else:
-                outputs = _parse_step_result_json(
-                    result.stdout,
-                    step_name=step_name,
-                    env_name=env_name,
-                    source="stdout",
-                )
-
-            from cli.step_runner import _derive_step_log_outcome
-            log_status, log_error, extra = _derive_step_log_outcome(step_name, outputs, verbose=VERBOSE)
             status_to_return = "ok"
             if log_status == "skipped":
                 status_to_return = "skipped"
@@ -5431,28 +5389,51 @@ async def _run_step_async(
                 duration_seconds=duration,
                 retry_count=max(_healer_retry_attempt, _native_retry_attempt),
             )
+        except BaseException:
+            failure_in_flight = True
+            if process is not None and process.returncode is None:
+                # Observer/setup failures can occur after the worker is bound.
+                # Do not release its device while the child may still execute.
+                try:
+                    process.kill()
+                    await asyncio.wait_for(process.communicate(), timeout=5)
+                    if process.returncode is None:
+                        raise RuntimeError("Worker exit was not confirmed")
+                except BaseException:
+                    vram_reserved = False
+                    logger.exception("Worker could not be reaped; retaining VRAM claim %s", reservation_id)
+            raise
         finally:
+            release_error = None
             if vram_reserved and allocator is not None:
                 try:
-                    await asyncio.to_thread(allocator.release, parent_pid)
-                    if process is not None and process.pid is not None:
-                        await asyncio.to_thread(allocator.release, process.pid)
+                    await asyncio.to_thread(allocator.release, reservation_id)
                 except Exception as e:
                     logger.warning(
                         "run_ingestion warning context=%s error=%s",
                         "vram_release_failed",
                         e,
                     )
+                    release_error = e
+                    if observer:
+                        _report_step_failure(observer, observer_step, error=f"vram_release_failed: {e}",
+                                                     metadata=observer_meta)
             try:
-                for child in tmp_dir.iterdir():
+                safe_to_clean = process is None or process.returncode is not None
+                for child in tmp_dir.iterdir() if tmp_dir is not None and safe_to_clean else ():
                     child.unlink(missing_ok=True)
-                tmp_dir.rmdir()
+                if tmp_dir is not None and safe_to_clean:
+                    tmp_dir.rmdir()
+                elif tmp_dir is not None:
+                    logger.error("Unreaped worker retains input directory %s", tmp_dir)
             except Exception as e:
                 logger.warning(
                     "run_ingestion warning context=%s error=%s",
                     "step_temp_cleanup",
                     e,
                 )
+            if release_error is not None and not failure_in_flight:
+                raise release_error
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -5506,12 +5487,16 @@ def _extract_keyframe(
     *,
     scene_id: Optional[str] = None,
     video_id: Optional[str] = None,
+    sample_timestamp: Optional[float] = None,
+    sample_suffix: str = '',
 ) -> Path:
     _ensure_dir(dest_dir)
     duration = float(scene.get('duration', 0.0) or 0.0)
     start = float(scene.get('start', 0.0) or 0.0)
     timestamp = start + (duration / 2.0) if duration > 0 else start
-    outfile = dest_dir / f"scene_{scene.get('index', 0):04d}.jpg"
+    if sample_timestamp is not None:
+        timestamp = sample_timestamp
+    outfile = dest_dir / f"scene_{scene.get('index', 0):04d}{sample_suffix}.jpg"
     observer = _observer()
     observer_step = "ffmpeg.extract_keyframe"
     observer_meta = {
@@ -5556,6 +5541,32 @@ def _extract_keyframe(
         stdout_text or '',
         stderr_text or '',
     )
+    if result.returncode != 0 and (
+        'Non full-range YUV' in result.stderr or 'strict_std_compliance' in result.stderr
+    ):
+        retry_cmd = [
+            ffmpeg,
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-ss', f'{timestamp:.3f}',
+            '-i', str(video_path),
+            '-strict', 'unofficial',
+            '-frames:v', '1',
+            '-y',
+            str(outfile),
+        ]
+        retry_proc = subprocess.Popen(
+            retry_cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+        )
+        r_out, r_err = retry_proc.communicate()
+        if retry_proc.returncode == 0 and outfile.exists() and outfile.stat().st_size > 0:
+            result = subprocess.CompletedProcess(retry_cmd, 0, r_out or '', r_err or '')
     if result.returncode != 0:
         if observer:
             observer.step_error(
@@ -5665,6 +5676,492 @@ def _extract_audio_chunk(
     return outfile
 
 
+def _aggregate_ocr_sample_results(
+    sample_records: List[Dict[str, Any]],
+    midpoint_timestamp: float,
+) -> Dict[str, Any]:
+    from math import isfinite
+
+    observations: List[Dict[str, Any]] = []
+    sample_summaries: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    warnings: List[Dict[str, Any]] = []
+    deduped_lines: List[str] = []
+    seen_lines: set[str] = set()
+    merged_time_hints: Optional[Dict[str, Any]] = None
+    successful_identity: Optional[tuple] = None
+
+    def _non_ok_precedence(meta: Dict[str, Any], rec_status: str, rec_err: Any) -> int:
+        m_status = str(meta.get("status") or "").strip().lower()
+        m_reason = str(meta.get("reason") or "").strip().lower()
+        if rec_status == "error" or m_status == "error" or meta.get("fallback_error") or rec_err:
+            return 60
+        if m_status == "dependency_missing":
+            return 50
+        if m_status == "no_source_path":
+            return 40
+        if m_status == "no_text" and m_reason == "low_confidence_primary_text":
+            return 30
+        if m_status == "no_text" and m_reason == "unvalidated_vhs_candidates":
+            return 20
+        if m_status == "no_text" and m_reason == "empty_ocr_text":
+            return 10
+        return 0
+
+    best_non_ok_meta: Optional[Dict[str, Any]] = None
+    best_non_ok_rank = -1
+
+    for rec in sample_records:
+        ts = float(rec.get("timestamp", midpoint_timestamp))
+        is_mid = bool(rec.get("is_midpoint_sample", abs(ts - midpoint_timestamp) <= 1e-6))
+        src_path = rec.get("source_path")
+        rec_status = str(rec.get("status") or "unknown").strip().lower()
+        outputs = rec.get("outputs") if isinstance(rec.get("outputs"), dict) else {}
+        ocr_meta = dict(outputs.get("ocr_meta")) if isinstance(outputs.get("ocr_meta"), dict) else {}
+        ocr_meta.setdefault("sample_timestamp", ts)
+        ocr_meta.setdefault("is_midpoint_sample", is_mid)
+
+        ocr_text_raw = outputs.get("ocr_text")
+        ocr_text = ocr_text_raw.strip() if isinstance(ocr_text_raw, str) and ocr_text_raw.strip() else None
+        meta_status = str(ocr_meta.get("status") or ("error" if rec.get("error") else "unknown")).strip().lower()
+        meta_reason = str(ocr_meta.get("reason") or ("ocr_sample_error" if rec.get("error") else meta_status)).strip()
+        sample_err = rec.get("error") or ocr_meta.get("fallback_error") or ocr_meta.get("error")
+
+        if rec_status == "error" or meta_status in {"error", "dependency_missing", "no_source_path"} or ocr_meta.get("fallback_error"):
+            err_msg = str(sample_err or f"ocr sample failed ({meta_status}:{meta_reason})")
+            errors.append(f"ocr sample at {ts:.3f}s: {err_msg}")
+        elif meta_status == "no_text" and meta_reason in {"low_confidence_primary_text", "unvalidated_vhs_candidates"}:
+            warnings.append({
+                "timestamp": ts,
+                "is_midpoint_sample": is_mid,
+                "reason": meta_reason,
+                "ocr_meta": ocr_meta,
+            })
+
+        if meta_status in {"ok", "no_text"}:
+            identity_keys = ("engine", "model_revision", "detector_revision", "config_sha256")
+            identity = tuple(ocr_meta.get(key) for key in identity_keys)
+            if successful_identity is not None and successful_identity != identity:
+                raise ValueError("Cannot aggregate OCR observations from different model/configuration identities")
+            successful_identity = identity
+
+        if ocr_text and meta_status == "ok":
+            ocr_meta.setdefault("accepted_text", ocr_text)
+            obs_entry = {
+                "timestamp": ts,
+                "is_midpoint_sample": is_mid,
+                "source_path": src_path,
+                "ocr_text": ocr_text,
+                "ocr_meta": ocr_meta,
+                "time_hints": outputs.get("time_hints"),
+            }
+            observations.append(obs_entry)
+            for line in ocr_text.splitlines():
+                clean_line = line.strip()
+                if clean_line and clean_line not in seen_lines:
+                    seen_lines.add(clean_line)
+                    deduped_lines.append(clean_line)
+            if isinstance(outputs.get("time_hints"), dict) and any(outputs["time_hints"].values()):
+                if merged_time_hints is None:
+                    merged_time_hints = {}
+                for hint_kind, hint_values in outputs["time_hints"].items():
+                    if isinstance(hint_values, list):
+                        retained = merged_time_hints.setdefault(hint_kind, [])
+                        for value in hint_values:
+                            if value not in retained:
+                                retained.append(value)
+                    elif hint_kind == "first_seen_ts" and isinstance(hint_values, dict):
+                        retained = merged_time_hints.setdefault(hint_kind, {})
+                        for hint, timestamp in hint_values.items():
+                            if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool) and isfinite(timestamp):
+                                retained[hint] = min(retained.get(hint, timestamp), timestamp)
+        else:
+            rank = _non_ok_precedence(ocr_meta, rec_status, sample_err)
+            if rank > best_non_ok_rank:
+                best_non_ok_rank = rank
+                best_non_ok_meta = ocr_meta
+
+        sample_summaries.append({
+            "sample_index": rec.get("sample_index"),
+            "timestamp": ts,
+            "is_midpoint_sample": is_mid,
+            "source_path": src_path,
+            "status": meta_status,
+            "reason": meta_reason,
+            "ocr_text": ocr_text,
+            "error": str(sample_err) if sample_err else None,
+            "ocr_meta": ocr_meta,
+        })
+
+    combined_text = "\n".join(deduped_lines) if deduped_lines else None
+    if observations:
+        combined_meta = dict(observations[0]["ocr_meta"])
+        combined_meta["status"] = "ok"
+        combined_meta["text_length"] = len(combined_text or "")
+        combined_meta["accepted_text"] = combined_text
+        combined_meta["accepted_sample_timestamps"] = [obs["timestamp"] for obs in observations]
+        combined_meta["non_midpoint_text_observed"] = any(not obs["is_midpoint_sample"] for obs in observations)
+    else:
+        combined_meta = dict(best_non_ok_meta or {"status": "no_text", "reason": "empty_ocr_text"})
+        combined_meta["accepted_sample_timestamps"] = []
+        combined_meta["non_midpoint_text_observed"] = False
+
+    combined_meta["samples"] = sample_summaries
+    combined_meta["observations"] = [
+        {
+            "timestamp": obs["timestamp"],
+            "is_midpoint_sample": obs["is_midpoint_sample"],
+            "source_path": obs["source_path"],
+            "ocr_text": obs["ocr_text"],
+            "engine": obs["ocr_meta"].get("engine", "unknown"),
+            "strategy": obs["ocr_meta"].get("strategy", "default"),
+            "model_revision": obs["ocr_meta"].get("model_revision"),
+            "detector_revision": obs["ocr_meta"].get("detector_revision"),
+            "config_sha256": obs["ocr_meta"].get("config_sha256"),
+            "accepted_regions": obs["ocr_meta"].get("accepted_regions", []),
+            "date_evidence": obs["ocr_meta"].get("date_evidence", []),
+        }
+        for obs in observations
+    ]
+    combined_meta["sample_errors"] = errors
+    combined_meta["sample_warnings"] = warnings
+
+    out: Dict[str, Any] = {
+        "ocr_text": combined_text,
+        "ocr_meta": combined_meta,
+        "ocr_observations": observations,
+        "ocr_sampling_errors": errors,
+        "ocr_sampling_warnings": warnings,
+    }
+    if merged_time_hints is not None:
+        out["time_hints"] = merged_time_hints
+    return out
+
+
+def _caption_batch_records(batch: List[Dict[str, Any]], outputs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Map a one-call-per-scene caption result back to per-sample records."""
+    results = outputs.get('samples') if isinstance(outputs, dict) else None
+    if not isinstance(results, list) or len(results) != len(batch):
+        raise RuntimeError('image_caption returned a malformed sample batch')
+    return [
+        {**sample, 'status': 'ok', 'outputs': result if isinstance(result, dict) else {}, 'error': None}
+        for sample, result in zip(batch, results)
+    ]
+
+
+def _caption_batch_error_records(batch: List[Dict[str, Any]], error: str) -> List[Dict[str, Any]]:
+    return [
+        {
+            **sample,
+            'status': 'error',
+            'outputs': {'caption': None, 'caption_meta': {
+                'status': 'error', 'reason': 'caption_sample_error', 'error': error,
+                'sample_timestamp': sample['timestamp'], 'is_midpoint_sample': sample['is_midpoint_sample'],
+            }},
+            'error': error,
+        }
+        for sample in batch
+    ]
+
+
+def _aggregate_caption_sample_results(
+    sample_records: List[Dict[str, Any]],
+    midpoint_timestamp: float,
+) -> Dict[str, Any]:
+    """Aggregate multi-frame caption samples into scene-level caption fields while preserving per-sample provenance."""
+    if not sample_records:
+        return {}
+    if all(
+        str(rec.get("status") or "ok") == "ok"
+        and not rec.get("error")
+        and not (rec.get("outputs") or {})
+        for rec in sample_records
+    ):
+        return {}
+
+    observations: List[Dict[str, Any]] = []
+    deduped_captions: List[str] = []
+    seen_captions: set[str] = set()
+    errors: List[str] = []
+    warnings: List[str] = []
+    sample_summaries: List[Dict[str, Any]] = []
+
+    def _non_ok_precedence(meta: Dict[str, Any], rec_status: str, rec_err: Optional[str]) -> int:
+        status = str(meta.get("status") or "").strip().lower()
+        if rec_status == "error" or status == "error" or rec_err:
+            return 4
+        if status in {"dependency_missing", "model_unavailable", "unavailable"}:
+            return 3
+        if status in {"no_source_path", "image_open_failed"}:
+            return 2
+        if status in {"not_applicable", "blank_frame", "empty"}:
+            return 1
+        return 0
+
+    best_non_ok_meta: Optional[Dict[str, Any]] = None
+    best_non_ok_rank = -1
+    best_non_ok_is_mid = False
+
+    for rec in sample_records:
+        sample_index = rec.get("sample_index")
+        ts = float(midpoint_timestamp if rec.get("timestamp") is None else rec["timestamp"])
+        is_mid = bool(rec.get("is_midpoint_sample", abs(ts - midpoint_timestamp) <= 1e-6))
+        src_path = rec.get("source_path")
+        rec_status = str(rec.get("status") or "ok")
+        outputs = rec.get("outputs") if isinstance(rec.get("outputs"), dict) else {}
+        cap_meta_raw = outputs.get("caption_meta") if isinstance(outputs.get("caption_meta"), dict) else {}
+        cap_meta = dict(cap_meta_raw)
+        cap_meta.setdefault("sample_timestamp", ts)
+        cap_meta.setdefault("is_midpoint_sample", is_mid)
+
+        cap_val = outputs.get("caption")
+        cap_text = cap_val.strip() if isinstance(cap_val, str) and cap_val.strip() else None
+        meta_status = str(cap_meta.get("status") or ("ok" if cap_text else "not_applicable")).strip().lower()
+        meta_reason = cap_meta.get("reason")
+        sample_err = rec.get("error") or cap_meta.get("error")
+
+        if rec_status == "error" or meta_status in {"error", "dependency_missing", "model_unavailable"}:
+            err_msg = str(sample_err or meta_reason or meta_status or "image_caption sample error")
+            errors.append(f"image_caption@{ts:.3f}s: {err_msg}")
+        elif meta_status in {"unavailable", "no_source_path", "image_open_failed"} and sample_err:
+            warnings.append(f"image_caption@{ts:.3f}s: {sample_err}")
+
+        if cap_text and meta_status == "ok":
+            obs_entry = {
+                "sample_index": sample_index,
+                "timestamp": ts,
+                "is_midpoint_sample": is_mid,
+                "source_path": src_path,
+                "caption": cap_text,
+                "caption_meta": cap_meta,
+            }
+            observations.append(obs_entry)
+            norm_cap = cap_text.casefold()
+            if norm_cap not in seen_captions:
+                seen_captions.add(norm_cap)
+                deduped_captions.append(cap_text)
+        else:
+            rank = _non_ok_precedence(cap_meta, rec_status, str(sample_err) if sample_err else None)
+            if rank > best_non_ok_rank or (rank == best_non_ok_rank and is_mid and not best_non_ok_is_mid):
+                best_non_ok_rank = rank
+                best_non_ok_meta = cap_meta
+                best_non_ok_is_mid = is_mid
+
+        sample_summaries.append({
+            "sample_index": sample_index,
+            "timestamp": ts,
+            "is_midpoint_sample": is_mid,
+            "source_path": src_path,
+            "status": meta_status,
+            "reason": meta_reason,
+            "caption": cap_text,
+            "error": str(sample_err) if sample_err else None,
+            "caption_meta": cap_meta,
+        })
+
+    if observations:
+        primary_obs = next((obs for obs in observations if obs["is_midpoint_sample"]), observations[0])
+        primary_caption: Optional[str] = primary_obs["caption"]
+        combined_meta = dict(primary_obs["caption_meta"])
+        combined_meta["status"] = "ok"
+        combined_meta["accepted_sample_count"] = len(observations)
+        combined_meta["accepted_sample_timestamps"] = [obs["timestamp"] for obs in observations]
+        combined_meta["distinct_captions"] = deduped_captions
+        combined_meta["non_midpoint_caption_observed"] = any(not obs["is_midpoint_sample"] for obs in observations)
+    else:
+        primary_caption = None
+        combined_meta = dict(
+            best_non_ok_meta
+            or {
+                "status": "not_applicable",
+                "reason": "blank_or_low_variance_frame",
+                "engine": "blip",
+            }
+        )
+        combined_meta["accepted_sample_count"] = 0
+        combined_meta["accepted_sample_timestamps"] = []
+        combined_meta["distinct_captions"] = []
+        combined_meta["non_midpoint_caption_observed"] = False
+
+    combined_meta["sample_count"] = len(sample_summaries)
+    combined_meta["midpoint_timestamp"] = midpoint_timestamp
+    combined_meta["sample_timestamps"] = [s["timestamp"] for s in sample_summaries]
+    combined_meta["samples"] = sample_summaries
+    combined_meta["observations"] = [
+        {
+            "sample_index": obs["sample_index"],
+            "timestamp": obs["timestamp"],
+            "is_midpoint_sample": obs["is_midpoint_sample"],
+            "source_path": obs["source_path"],
+            "caption": obs["caption"],
+            "engine": obs["caption_meta"].get("engine", "blip"),
+            "image_stats": obs["caption_meta"].get("image_stats"),
+        }
+        for obs in observations
+    ]
+    combined_meta["sample_errors"] = errors
+    combined_meta["sample_warnings"] = warnings
+
+    return {
+        "caption": primary_caption,
+        "caption_meta": combined_meta,
+        "caption_observations": observations,
+        "caption_sampling_errors": errors,
+        "caption_sampling_warnings": warnings,
+    }
+
+
+def _aggregate_object_detect_sample_results(
+    sample_records: List[Dict[str, Any]],
+    midpoint_timestamp: float,
+) -> Dict[str, Any]:
+    """Aggregate multi-frame object detection samples into scene-level object fields with per-detection provenance."""
+    if not sample_records:
+        return {}
+    if all(
+        str(rec.get("status") or "ok") == "ok"
+        and not rec.get("error")
+        and not (rec.get("outputs") or {})
+        for rec in sample_records
+    ):
+        return {}
+
+    observations: List[Dict[str, Any]] = []
+    all_objects: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    warnings: List[str] = []
+    sample_summaries: List[Dict[str, Any]] = []
+
+    def _non_ok_precedence(meta: Dict[str, Any], rec_status: str, rec_err: Optional[str]) -> int:
+        status = str(meta.get("status") or "").strip().lower()
+        if rec_status == "error" or status == "error" or rec_err:
+            return 4
+        if status in {"dependency_missing", "model_unavailable", "unavailable"}:
+            return 3
+        if status in {"no_file", "no_source_path", "image_open_failed"}:
+            return 2
+        if status == "ok":
+            return 1
+        return 0
+
+    best_non_ok_meta: Optional[Dict[str, Any]] = None
+    best_non_ok_rank = -1
+    best_non_ok_is_mid = False
+
+    for rec in sample_records:
+        sample_index = rec.get("sample_index")
+        ts = float(midpoint_timestamp if rec.get("timestamp") is None else rec["timestamp"])
+        is_mid = bool(rec.get("is_midpoint_sample", abs(ts - midpoint_timestamp) <= 1e-6))
+        src_path = rec.get("source_path")
+        rec_status = str(rec.get("status") or "ok")
+        outputs = rec.get("outputs") if isinstance(rec.get("outputs"), dict) else {}
+        det_meta_raw = outputs.get("detect_meta") if isinstance(outputs.get("detect_meta"), dict) else {}
+        det_meta = dict(det_meta_raw)
+        det_meta.setdefault("sample_timestamp", ts)
+        det_meta.setdefault("is_midpoint_sample", is_mid)
+
+        raw_objects = outputs.get("objects") if isinstance(outputs.get("objects"), list) else []
+        sample_objects: List[Dict[str, Any]] = []
+        for obj in raw_objects:
+            if not isinstance(obj, dict):
+                continue
+            annotated_obj = dict(obj)
+            annotated_obj.setdefault("timestamp", ts)
+            annotated_obj.setdefault("sample_index", sample_index)
+            annotated_obj.setdefault("is_midpoint_sample", is_mid)
+            if src_path:
+                annotated_obj.setdefault("source_path", src_path)
+            sample_objects.append(annotated_obj)
+            all_objects.append(annotated_obj)
+
+        meta_status = str(det_meta.get("status") or ("ok" if rec_status == "ok" else "error")).strip().lower()
+        meta_reason = det_meta.get("reason")
+        sample_err = rec.get("error") or det_meta.get("error")
+
+        if rec_status == "error" or meta_status in {"error", "dependency_missing", "model_unavailable"}:
+            err_msg = str(sample_err or meta_reason or meta_status or "object_detect sample error")
+            errors.append(f"object_detect@{ts:.3f}s: {err_msg}")
+        elif meta_status in {"unavailable", "no_file", "no_source_path"} and sample_err:
+            warnings.append(f"object_detect@{ts:.3f}s: {sample_err}")
+
+        if sample_objects and meta_status == "ok":
+            observations.append({
+                "sample_index": sample_index,
+                "timestamp": ts,
+                "is_midpoint_sample": is_mid,
+                "source_path": src_path,
+                "objects": sample_objects,
+                "detect_meta": det_meta,
+            })
+        else:
+            rank = _non_ok_precedence(det_meta, rec_status, str(sample_err) if sample_err else None)
+            if rank > best_non_ok_rank or (rank == best_non_ok_rank and is_mid and not best_non_ok_is_mid):
+                best_non_ok_rank = rank
+                best_non_ok_meta = det_meta
+                best_non_ok_is_mid = is_mid
+
+        sample_summaries.append({
+            "sample_index": sample_index,
+            "timestamp": ts,
+            "is_midpoint_sample": is_mid,
+            "source_path": src_path,
+            "status": meta_status,
+            "reason": meta_reason,
+            "object_count": len(sample_objects),
+            "objects": sample_objects,
+            "error": str(sample_err) if sample_err else None,
+            "detect_meta": det_meta,
+        })
+
+    if observations:
+        primary_obs = next((obs for obs in observations if obs["is_midpoint_sample"]), observations[0])
+        combined_meta = dict(primary_obs["detect_meta"])
+        combined_meta["status"] = "ok"
+        combined_meta["count"] = len(all_objects)
+        combined_meta["accepted_sample_count"] = len(observations)
+        combined_meta["accepted_sample_timestamps"] = [obs["timestamp"] for obs in observations]
+        combined_meta["non_midpoint_objects_observed"] = any(not obs["is_midpoint_sample"] for obs in observations)
+    else:
+        combined_meta = dict(best_non_ok_meta or {"status": "ok", "engine": "opencv-dnn"})
+        if combined_meta.get("status") == "ok":
+            # A successful detector run with no observations is supported absence,
+            # matching the step ledger's no_detected_object outcome.
+            combined_meta["status"] = "not_applicable"
+            combined_meta["reason"] = "no_detected_object"
+        combined_meta["count"] = 0
+        combined_meta["accepted_sample_count"] = 0
+        combined_meta["accepted_sample_timestamps"] = []
+        combined_meta["non_midpoint_objects_observed"] = False
+
+    combined_meta["sample_count"] = len(sample_summaries)
+    combined_meta["midpoint_timestamp"] = midpoint_timestamp
+    combined_meta["sample_timestamps"] = [s["timestamp"] for s in sample_summaries]
+    combined_meta["samples"] = sample_summaries
+    combined_meta["observations"] = [
+        {
+            "sample_index": obs["sample_index"],
+            "timestamp": obs["timestamp"],
+            "is_midpoint_sample": obs["is_midpoint_sample"],
+            "source_path": obs["source_path"],
+            "objects": obs["objects"],
+            "count": len(obs["objects"]),
+            "engine": obs["detect_meta"].get("engine", "opencv-dnn"),
+            "model": obs["detect_meta"].get("model"),
+        }
+        for obs in observations
+    ]
+    combined_meta["sample_errors"] = errors
+    combined_meta["sample_warnings"] = warnings
+
+    return {
+        "objects": all_objects,
+        "detect_meta": combined_meta,
+        "object_observations": observations,
+        "object_sampling_errors": errors,
+        "object_sampling_warnings": warnings,
+    }
+
+
 def _process_frame(
     cfg_json: Path,
     ffmpeg: str,
@@ -5722,9 +6219,120 @@ def _process_frame(
         if isinstance(result, dict):
             item.update(result)
 
-    merge('goodq_image_caption', 'image_ocr')
-    merge('goodq_image_caption', 'image_caption')
-    merge('goodq_object_detect', 'object_detect')
+    sample_timestamps = sorted({start + duration * fraction for fraction in (0, .25, .5, .75)} |
+                               {max(start, start + duration - min(.05, duration / 2))}) if duration > 0 else [start]
+    sampled_frames = {frame_timestamp: frame_path}
+
+    def sample_frame(timestamp: float, sample_index: int) -> Path:
+        if timestamp not in sampled_frames:
+            sampled_frames[timestamp] = _extract_keyframe(
+                ffmpeg, video_path, scene, frame_dir,
+                scene_id=scene_id, video_id=video_hash, sample_timestamp=timestamp,
+                sample_suffix=f'_sample_{sample_index:02d}',
+            )
+        return sampled_frames[timestamp]
+
+    ocr_sample_records: List[Dict[str, Any]] = []
+    for ocr_idx, ocr_ts in enumerate(sample_timestamps):
+        is_mid = (ocr_ts == frame_timestamp)
+        try:
+            sampled_ocr_path = sample_frame(ocr_ts, ocr_idx)
+            ocr_out = _run_step(
+                'goodq_ocr',
+                'image_ocr',
+                {**item, 'source_path': str(sampled_ocr_path), 'timestamp': ocr_ts, 'is_midpoint_sample': is_mid},
+                cfg_json,
+            )
+            ocr_sample_records.append({
+                'sample_index': ocr_idx,
+                'timestamp': ocr_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': str(sampled_ocr_path),
+                'status': 'ok',
+                'outputs': ocr_out if isinstance(ocr_out, dict) else {},
+                'error': None,
+            })
+        except Exception as ocr_exc:
+            ocr_sample_records.append({
+                'sample_index': ocr_idx,
+                'timestamp': ocr_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': None,
+                'status': 'error',
+                'outputs': {'ocr_text': None, 'ocr_meta': {'status': 'error', 'reason': 'ocr_sample_error', 'error': str(ocr_exc), 'sample_timestamp': ocr_ts, 'is_midpoint_sample': is_mid}},
+                'error': str(ocr_exc),
+            })
+    item.update(_aggregate_ocr_sample_results(ocr_sample_records, frame_timestamp))
+
+    caption_sample_records: List[Dict[str, Any]] = []
+    caption_batch: List[Dict[str, Any]] = []
+    for cap_idx, cap_ts in enumerate(sample_timestamps):
+        is_mid = (cap_ts == frame_timestamp)
+        try:
+            sampled_cap_path = sample_frame(cap_ts, cap_idx)
+        except Exception as cap_exc:
+            caption_sample_records.append({
+                'sample_index': cap_idx,
+                'timestamp': cap_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': None,
+                'status': 'error',
+                'outputs': {'caption': None, 'caption_meta': {'status': 'error', 'reason': 'caption_sample_error', 'error': str(cap_exc), 'sample_timestamp': cap_ts, 'is_midpoint_sample': is_mid}},
+                'error': str(cap_exc),
+            })
+            continue
+        caption_batch.append({'sample_index': cap_idx, 'timestamp': cap_ts, 'is_midpoint_sample': is_mid, 'source_path': str(sampled_cap_path)})
+    if caption_batch:
+        # One worker call per scene: the caption model loads once for all samples.
+        try:
+            cap_out = _run_step(
+                'goodq_caption_vlm',
+                'image_caption',
+                {**item, 'samples': [
+                    {'source_path': s['source_path'], 'timestamp': s['timestamp'], 'is_midpoint_sample': s['is_midpoint_sample']}
+                    for s in caption_batch
+                ]},
+                cfg_json,
+            )
+            caption_records = _caption_batch_records(caption_batch, cap_out if isinstance(cap_out, dict) else {})
+        except Exception as cap_exc:
+            caption_records = _caption_batch_error_records(caption_batch, str(cap_exc))
+        caption_sample_records.extend(caption_records)
+    caption_sample_records.sort(key=lambda record: record['sample_index'])
+    item.update(_aggregate_caption_sample_results(caption_sample_records, frame_timestamp))
+
+    object_sample_records: List[Dict[str, Any]] = []
+    for obj_idx, obj_ts in enumerate(sample_timestamps):
+        is_mid = (obj_ts == frame_timestamp)
+        try:
+            sampled_obj_path = sample_frame(obj_ts, obj_idx)
+            obj_out = _run_step(
+                'goodq_object_detect',
+                'object_detect',
+                {**item, 'source_path': str(sampled_obj_path), 'timestamp': obj_ts, 'is_midpoint_sample': is_mid},
+                cfg_json,
+            )
+            object_sample_records.append({
+                'sample_index': obj_idx,
+                'timestamp': obj_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': str(sampled_obj_path),
+                'status': 'ok',
+                'outputs': obj_out if isinstance(obj_out, dict) else {},
+                'error': None,
+            })
+        except Exception as obj_exc:
+            object_sample_records.append({
+                'sample_index': obj_idx,
+                'timestamp': obj_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': None,
+                'status': 'error',
+                'outputs': {'objects': [], 'detect_meta': {'status': 'error', 'reason': 'object_detect_sample_error', 'error': str(obj_exc), 'sample_timestamp': obj_ts, 'is_midpoint_sample': is_mid}},
+                'error': str(obj_exc),
+            })
+    item.update(_aggregate_object_detect_sample_results(object_sample_records, frame_timestamp))
+
     merge('goodq_face_embed', 'face_embed')
     merge('goodq_image_caption', 'image_embed_dino')
     merge('goodq_image_caption', 'image_embed_clip')
@@ -5737,10 +6345,32 @@ def _process_frame(
     )
 
     frame_text_parts: List[str] = []
-    if isinstance(item.get('ocr_text'), str):
-        frame_text_parts.append(item['ocr_text'])
-    if isinstance(item.get('caption'), str):
-        frame_text_parts.append(item['caption'])
+    if isinstance(item.get('ocr_text'), str) and item['ocr_text'].strip():
+        frame_text_parts.append(item['ocr_text'].strip())
+    caption_obs_list = item.get('caption_observations') if isinstance(item.get('caption_observations'), list) else []
+    seen_cap_texts: set[str] = set()
+    for obs in caption_obs_list:
+        if isinstance(obs, dict):
+            cap_str = obs.get('caption')
+            if isinstance(cap_str, str) and cap_str.strip():
+                norm_c = cap_str.strip().casefold()
+                if norm_c not in seen_cap_texts:
+                    seen_cap_texts.add(norm_c)
+                    frame_text_parts.append(cap_str.strip())
+    if not seen_cap_texts and isinstance(item.get('caption'), str) and item['caption'].strip():
+        frame_text_parts.append(item['caption'].strip())
+    obj_labels: List[str] = []
+    seen_obj_labels: set[str] = set()
+    for obj in (item.get('objects') if isinstance(item.get('objects'), list) else []):
+        if isinstance(obj, dict):
+            lbl = obj.get('label')
+            if isinstance(lbl, str) and lbl.strip():
+                norm_l = lbl.strip().casefold()
+                if norm_l not in seen_obj_labels:
+                    seen_obj_labels.add(norm_l)
+                    obj_labels.append(lbl.strip())
+    if obj_labels:
+        frame_text_parts.append(' '.join(obj_labels))
     frame_text = ' '.join(part.strip() for part in frame_text_parts if part).strip()
     if frame_text:
         text_payload = {
@@ -5766,6 +6396,19 @@ def _process_frame(
                 item['frame_text_embed_meta'] = frame_text_embed_meta
         item['frame_text'] = frame_text
 
+    if isinstance(cfg_json, Path) and cfg_json.is_file():
+        try:
+            _log_visual_to_ucf_ledger(
+                cfg_json,
+                video_hash,
+                scene_id,
+                scene,
+                frame_dir,
+                item,
+            )
+        except Exception as ucf_err:
+            logger.warning(f"[UCF] Visual logging hook failed: {ucf_err}")
+
     return {
         'path': str(frame_path),
         'timestamp': frame_timestamp,
@@ -5787,14 +6430,19 @@ def _log_audio_to_ucf_ledger(
     scene: Dict[str, Any],
     audio_artifact_dir: Path,
     item: Dict[str, Any],
+    *,
+    strict: bool = False,
 ) -> None:
     """Logs audio transcript and diarization segments to ucf_ledger.db."""
+    client = None
     try:
         import json
         import os
         from pathlib import Path
 
         if not cfg_json.exists():
+            if strict:
+                raise FileNotFoundError(cfg_json)
             logger.warning(f"[UCF] Config file does not exist: {cfg_json}. Skipping UCF logging.")
             return
 
@@ -5803,6 +6451,8 @@ def _log_audio_to_ucf_ledger(
 
         db_dir = cfg.get('paths', {}).get('db_dir')
         if not db_dir:
+            if strict:
+                raise ValueError("Standalone UCF logging requires paths.db_dir")
             logger.warning("[UCF] paths.db_dir not found in config. Skipping UCF logging.")
             return
 
@@ -5825,6 +6475,33 @@ def _log_audio_to_ucf_ledger(
 
         scene_start = scene.get('start', 0.0)
 
+        recording_projection = item.get('audio_evidence')
+        if recording_projection is not None:
+            from wsl2_audio.scene_projection import validate_scene_audio
+            validate_scene_audio(recording_projection)
+            expected_scene = {'scene_id': scene_id, 'start': float(scene['start']), 'end': float(scene['end'])}
+            if recording_projection['scene'] != expected_scene or recording_projection['source']['sha256'] != video_hash:
+                raise ValueError('UCF recording source/scene binding mismatch')
+            raw_recording = audio_artifact_dir / f'{scene_id}_recording_audio.json'
+            atomic_write_json(raw_recording, recording_projection)
+            # Canonical source evidence survives an optional scene-WAV extraction failure.
+            atomic_write_json(audio_artifact_dir / f'{scene_id}_raw_transcript.json', item.get('segments', []))
+            atomic_write_json(audio_artifact_dir / f'{scene_id}_raw_diarization.json', item.get('speaker_segments', []))
+            client.log_frame(video_hash=video_hash, epoch_id=epoch_id, run_id=run_id,
+                t_start=scene['start'], t_end=scene['end'], modality='audio',
+                worker_name='recording_audio', model_tag='recording_audio_v1', confidence=0.0,
+                source_artifact_id=scene_id, raw_ref=str(raw_recording.resolve()),
+                payload={'audio_evidence_sha256': recording_projection['content_sha256'],
+                    'recording_id': recording_projection['recording_id'],
+                    'source_sha256': recording_projection['source']['sha256'],
+                    'schema': recording_projection['schema'], 'audio_status': recording_projection['status'],
+                    'utterance_count': len(recording_projection['utterances']),
+                    'sound_event_count': len(recording_projection['sound_events']),
+                    'voice_signature_count': len(recording_projection.get('voice_signatures', [])),
+                    'quality_qualification': 'unqualified',
+                    'confidence_basis': 'unqualified_numeric_floor',
+                    **({'source_kind': item['source_kind']} if item.get('source_kind') else {})}, promotion_status='staged')
+
         # 1. Transcripts logging
         if item.get('segments') or item.get('transcript'):
             raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_transcript.json"
@@ -5832,7 +6509,7 @@ def _log_audio_to_ucf_ledger(
             for i, segment in enumerate(item.get('segments', [])):
                 start_time = segment.get('start', 0.0)
                 end_time = segment.get('end', 0.0)
-                if start_time < (scene_start - 0.01):
+                if recording_projection is not None or start_time < (scene_start - 0.01):
                     t_start = start_time + scene_start
                     t_end = end_time + scene_start
                 else:
@@ -5850,6 +6527,15 @@ def _log_audio_to_ucf_ledger(
                     'confidence': confidence_val,
                     'identity_status': 'unresolved'
                 }
+                if recording_projection is not None:
+                    raw_confidence = (segment.get('confidence') or {}).get('raw', {})
+                    payload.update(source_sample_start=(segment.get('source_span') or {}).get('start'),
+                        source_sample_end=(segment.get('source_span') or {}).get('end'), utterance_id=segment.get('id'),
+                        audio_evidence_sha256=recording_projection['content_sha256'],
+                        confidence=None, confidence_basis='uncalibrated_model_score',
+                        avg_logprob=raw_confidence.get('avg_logprob'),
+                        no_speech_probability=raw_confidence.get('no_speech_probability'),
+                        timing_scope='scene_display_only')
 
                 client.log_frame(
                     video_hash=video_hash,
@@ -5859,11 +6545,12 @@ def _log_audio_to_ucf_ledger(
                     t_end=t_end,
                     modality='text',
                     worker_name='audio_transcribe',
-                    model_tag='faster_whisper',
-                    confidence=1.0,
+                    occurrence_id=ucf_module.audio_occurrence_id(video_hash, scene_id, 'audio_transcribe', payload) if recording_projection is not None else '',
+                    model_tag='recording_audio_v1' if recording_projection is not None else 'faster_whisper',
+                    confidence=0.0 if recording_projection is not None else 1.0,
                     source_artifact_id=scene_id,
                     raw_ref=raw_ref_str,
-                    payload=payload,
+                    payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged'
                 )
 
@@ -5874,7 +6561,7 @@ def _log_audio_to_ucf_ledger(
             for i, segment in enumerate(item.get('speaker_segments', [])):
                 start_time = segment.get('start', 0.0)
                 end_time = segment.get('end', 0.0)
-                if start_time < (scene_start - 0.01):
+                if recording_projection is not None or start_time < (scene_start - 0.01):
                     t_start = start_time + scene_start
                     t_end = end_time + scene_start
                 else:
@@ -5891,6 +6578,9 @@ def _log_audio_to_ucf_ledger(
                     'source': 'pyannote',
                     'identity_status': 'unresolved'
                 }
+                if recording_projection is not None:
+                    payload.update(speaker_confidence=None, confidence_basis='unqualified_numeric_floor',
+                        source='recording_audio_v1', audio_evidence_sha256=recording_projection['content_sha256'])
 
                 client.log_frame(
                     video_hash=video_hash,
@@ -5900,11 +6590,12 @@ def _log_audio_to_ucf_ledger(
                     t_end=t_end,
                     modality='audio',
                     worker_name='speaker_merge',
-                    model_tag='pyannote',
-                    confidence=1.0,
+                    occurrence_id=ucf_module.audio_occurrence_id(video_hash, scene_id, 'speaker_merge', payload) if recording_projection is not None else '',
+                    model_tag='recording_audio_v1' if recording_projection is not None else 'pyannote',
+                    confidence=0.0 if recording_projection is not None else 1.0,
                     source_artifact_id=scene_id,
                     raw_ref=raw_ref_str,
-                    payload=payload,
+                    payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged'
                 )
 
@@ -5939,7 +6630,7 @@ def _log_audio_to_ucf_ledger(
                     confidence=1.0,
                     source_artifact_id=scene_id,
                     raw_ref=clap_raw_ref_str,
-                    payload=clap_payload,
+                    payload={**clap_payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged',
                     vector_key=clap_embedding_id,
                     vector_backend=clap_meta.get('qdrant_committed') and 'qdrant' or 'faiss',
@@ -5993,8 +6684,8 @@ def _log_audio_to_ucf_ledger(
                 text_embed_raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_text_embed_audio.json"
                 text_embed_payload = {
                     'embedding_id': text_embedding_id,
-                    'embedding_source': 'audio_transcript',
-                    'origin_modality': 'audio',
+                    'embedding_source': 'document_text' if item.get('source_kind') == 'document' else 'audio_transcript',
+                    'origin_modality': 'document' if item.get('source_kind') == 'document' else 'audio',
                     'engine': audio_text_embed_meta.get('engine', 'all-MiniLM-L6-v2'),
                     'faiss_id': audio_text_embed_meta.get('faiss_id'),
                 }
@@ -6014,13 +6705,13 @@ def _log_audio_to_ucf_ledger(
                     confidence=1.0,
                     source_artifact_id=scene_id,
                     raw_ref=text_embed_raw_ref_str,
-                    payload=text_embed_payload,
+                    payload={**text_embed_payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged',
                     vector_key=text_embedding_id,
                     vector_backend='qdrant' if audio_text_embed_meta.get('qdrant_committed') else 'faiss',
                     vector_dim=384,
                     vector_model_tag='sentence-transformers/all-MiniLM-L6-v2',
-                    vector_collection=audio_text_embed_meta.get('vector_collection', 'text'),
+                    vector_collection=audio_text_embed_meta.get('vector_collection') or 'text',
                 )
 
                 # Post-log Qdrant payload update with ucf_frame_id
@@ -6050,6 +6741,11 @@ def _log_audio_to_ucf_ledger(
         client.close()
     except Exception as e:
         logger.warning(f"[UCF] UCF logging failed: {type(e).__name__}: {str(e)}")
+        if strict or item.get('audio_evidence') is not None:
+            raise
+    finally:
+        if client is not None:
+            client.close()
 
 
 def _log_visual_to_ucf_ledger(
@@ -6059,14 +6755,19 @@ def _log_visual_to_ucf_ledger(
     scene: Dict[str, Any],
     frame_dir: Path,
     item: Dict[str, Any],
+    *,
+    strict: bool = False,
 ) -> None:
     """Logs visual modality outputs (object detection, face embeddings, OCR, captions, embeddings) to ucf_ledger.db."""
+    client = None
     try:
         import json
         import os
         from pathlib import Path
 
         if not cfg_json.exists():
+            if strict:
+                raise FileNotFoundError(cfg_json)
             logger.warning(f"[UCF] Config file does not exist: {cfg_json}. Skipping UCF logging.")
             return
 
@@ -6075,6 +6776,8 @@ def _log_visual_to_ucf_ledger(
 
         db_dir = cfg.get('paths', {}).get('db_dir')
         if not db_dir:
+            if strict:
+                raise ValueError("Standalone UCF logging requires paths.db_dir")
             logger.warning("[UCF] paths.db_dir not found in config. Skipping UCF logging.")
             return
 
@@ -6114,6 +6817,9 @@ def _log_visual_to_ucf_ledger(
         duration = float(scene.get('duration', 0.0) or 0.0)
         frame_timestamp = start + (duration / 2.0) if duration > 0 else start
 
+        static_image = item.get('source_kind') == 'image'
+        visual_modality = 'multimodal' if static_image else 'video'
+
         # 1. OCR text
         if item.get('ocr_text'):
             ocr_text = item['ocr_text']
@@ -6122,31 +6828,62 @@ def _log_visual_to_ucf_ledger(
             
             ocr_meta = item.get('ocr_meta', {})
             atomic_write_json(raw_ref_path, ocr_meta)
+            ocr_observations = item.get('ocr_observations') or ocr_meta.get('observations') or []
+            ocr_primary_ts = float(ocr_observations[0].get('timestamp', frame_timestamp)) if ocr_observations else frame_timestamp
             
-            engine = ocr_meta.get('engine', 'tesseract')
+            engine = ocr_meta.get('engine', 'unknown')
             strategy = ocr_meta.get('strategy', 'default')
+            # UCF's scalar confidence is required. Paddle supplies sequence
+            # scores per region; retain them verbatim and label the scene-level
+            # arithmetic mean instead of claiming perfect recognition.
+            ocr_confidence = 1.0
+            confidence_kind = 'legacy_evidence_presence'
+            score_count = 0
+            if str(engine).startswith('paddleocr-'):
+                from math import isfinite
+
+                native_metas = [obs.get('ocr_meta', obs) for obs in ocr_observations] if ocr_observations else [ocr_meta]
+                regions = [region for meta in native_metas for region in meta.get('accepted_regions', [])]
+                scores = [region.get('confidence') for region in regions]
+                if not scores or any(
+                    region.get('confidence_kind') != 'recognizer_sequence_score'
+                    or not isinstance(score, (float, int)) or isinstance(score, bool)
+                    or not isfinite(score) or not 0.0 <= score <= 1.0
+                    for region, score in zip(regions, scores)
+                ):
+                    raise ValueError('Paddle OCR text requires native region scores for UCF confidence')
+                score_count = len(scores)
+                ocr_confidence = sum(scores) / score_count
+                confidence_kind = 'mean_recognizer_sequence_score'
             
             payload = {
                 'text': ocr_text,
+                'ocr_text': ocr_text,
+                'observation_timestamp': ocr_primary_ts,
+                'accepted_sample_count': len(ocr_observations) if ocr_observations else 1,
+                'accepted_sample_timestamps_json': json.dumps(ocr_meta.get('accepted_sample_timestamps') or [ocr_primary_ts]),
+                'observations_json': json.dumps(ocr_meta.get('observations') or []),
                 'engine': engine,
                 'strategy': strategy,
+                'confidence_kind': confidence_kind,
+                'confidence_observation_count': score_count,
             }
             
             client.log_frame(
                 video_hash=video_hash,
                 epoch_id=epoch_id,
                 run_id=run_id,
-                t_start=frame_timestamp,
-                t_end=frame_timestamp,
+                t_start=ocr_primary_ts,
+                t_end=ocr_primary_ts,
                 modality='text',
                 worker_name='image_ocr',
                 model_tag=engine,
-                confidence=1.0,
+                confidence=ocr_confidence,
                 spatial_region=None,
                 spatial_space='normalized_yxyx_top_left',
                 source_artifact_id=scene_id,
                 raw_ref=raw_ref_str,
-                payload=payload,
+                payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                 promotion_status='staged'
             )
 
@@ -6158,20 +6895,40 @@ def _log_visual_to_ucf_ledger(
             
             caption_meta = item.get('caption_meta', {})
             atomic_write_json(raw_ref_path, caption_meta)
+            caption_observations = item.get('caption_observations') or caption_meta.get('observations') or []
+            primary_obs = next(
+                (
+                    obs
+                    for obs in caption_observations
+                    if isinstance(obs, dict) and obs.get('caption') == caption
+                ),
+                caption_observations[0] if caption_observations else None,
+            )
+            caption_primary_ts = (
+                float(primary_obs.get('timestamp', frame_timestamp))
+                if isinstance(primary_obs, dict)
+                else frame_timestamp
+            )
             
             engine = caption_meta.get('engine', 'blip')
             
             payload = {
                 'text': caption,
                 'engine': engine,
+                'observation_timestamp': caption_primary_ts,
+                'accepted_sample_count': len(caption_observations) if caption_observations else 1,
+                'accepted_sample_timestamps_json': json.dumps(
+                    caption_meta.get('accepted_sample_timestamps') or [caption_primary_ts]
+                ),
+                'observations_json': json.dumps(caption_meta.get('observations') or []),
             }
             
             client.log_frame(
                 video_hash=video_hash,
                 epoch_id=epoch_id,
                 run_id=run_id,
-                t_start=frame_timestamp,
-                t_end=frame_timestamp,
+                t_start=caption_primary_ts,
+                t_end=caption_primary_ts,
                 modality='multimodal',
                 worker_name='image_caption',
                 model_tag=engine,
@@ -6180,7 +6937,7 @@ def _log_visual_to_ucf_ledger(
                 spatial_space='normalized_yxyx_top_left',
                 source_artifact_id=scene_id,
                 raw_ref=raw_ref_str,
-                payload=payload,
+                payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                 promotion_status='staged'
             )
 
@@ -6192,10 +6949,16 @@ def _log_visual_to_ucf_ledger(
             
             atomic_write_json(raw_ref_path, objects)
             
-            for idx, obj in enumerate(objects):
+            for idx, obj in enumerate(objects[:1] if static_image else objects):
                 bbox = obj.get('bbox')
                 score = obj.get('score') if obj.get('score') is not None else 1.0
                 label = obj.get('label') or 'unknown'
+                obj_ts = (
+                    float(obj.get('timestamp', frame_timestamp))
+                    if obj.get('timestamp') is not None
+                    else frame_timestamp
+                )
+                is_mid_obj = bool(obj.get('is_midpoint_sample', abs(obj_ts - frame_timestamp) <= 1e-6))
                 
                 spatial_region = None
                 if bbox and len(bbox) == 4 and width and height:
@@ -6208,20 +6971,23 @@ def _log_visual_to_ucf_ledger(
                 payload = {
                     'label': label,
                     'score': score,
-                    'object_index': idx,
+                    **({'object_count': len(objects)} if static_image else {'object_index': idx}),
                     'x1': bbox[0] if bbox else 0.0,
                     'y1': bbox[1] if bbox else 0.0,
                     'x2': bbox[2] if bbox else 0.0,
                     'y2': bbox[3] if bbox else 0.0,
+                    'observation_timestamp': obj_ts,
+                    'is_midpoint_sample': is_mid_obj,
+                    **({'sample_index': int(obj['sample_index'])} if obj.get('sample_index') is not None else {}),
                 }
                 
                 client.log_frame(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
                     run_id=run_id,
-                    t_start=frame_timestamp + 0.001 * idx,
-                    t_end=frame_timestamp + 0.001 * idx,
-                    modality='video',
+                    t_start=obj_ts + (0.0 if static_image else 0.001 * idx),
+                    t_end=obj_ts + (0.0 if static_image else 0.001 * idx),
+                    modality=visual_modality,
                     worker_name='object_detect',
                     model_tag=str((item.get('detect_meta') or {}).get('model') or 'unknown_object_detector'),
                     confidence=score,
@@ -6229,21 +6995,42 @@ def _log_visual_to_ucf_ledger(
                     spatial_space='normalized_yxyx_top_left',
                     source_artifact_id=scene_id,
                     raw_ref=raw_ref_str,
-                    payload=payload,
+                    payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged'
                 )
 
+        # Additional observations use the same writer with their own image/time.
+        # Keep the legacy single-frame representation readable without rewriting it.
+        if 'face_observations' in item:
+            for observation_index, observation in enumerate(item['face_observations']):
+                _log_visual_to_ucf_ledger(
+                    cfg_json, video_hash, scene_id, scene, frame_dir,
+                    {**observation, '_face_observation_index': observation_index}, strict=True,
+                )
+
         # 4. Face Embeddings / Detections
-        if item.get('faces'):
+        if item.get('faces') and 'face_observations' not in item:
             faces = item['faces']
-            raw_ref_path = frame_dir / f"{scene_id}_raw_faces.json"
+            observation_index = item.get('_face_observation_index')
+            observation = {}
+            suffix = ''
+            if observation_index is not None:
+                frame_timestamp = float(item['timestamp'])
+                image_path = Path(item['source_path']).resolve(strict=True)
+                if not image_path.is_relative_to(frame_dir.resolve()):
+                    raise ValueError('Face observation image escapes its frame directory')
+                observation = {'image_path': str(image_path),
+                               'image_sha256': hashlib.sha256(image_path.read_bytes()).hexdigest(),
+                               'observation_timestamp': frame_timestamp}
+                suffix = f'_observation_{observation_index:02d}'
+            raw_ref_path = frame_dir / f"{scene_id}{suffix}_raw_faces.json"
             raw_ref_str = str(raw_ref_path.resolve())
             
             atomic_write_json(raw_ref_path, faces)
             
             face_engine = item.get('faces_meta', {}).get('engine', 'unknown')
             
-            for idx, face in enumerate(faces):
+            for idx, face in enumerate(faces[:1] if static_image else faces):
                 bbox = face.get('bbox')
                 
                 spatial_region = None
@@ -6255,7 +7042,8 @@ def _log_visual_to_ucf_ledger(
                     spatial_region = [ymin, xmin, ymax, xmax]
                 
                 payload = {
-                    'face_index': idx,
+                    **observation,
+                    **({'face_count': len(faces)} if static_image else {'face_index': idx}),
                     'engine': face_engine,
                     'x1': bbox[0] if bbox else 0.0,
                     'y1': bbox[1] if bbox else 0.0,
@@ -6267,9 +7055,9 @@ def _log_visual_to_ucf_ledger(
                     video_hash=video_hash,
                     epoch_id=epoch_id,
                     run_id=run_id,
-                    t_start=frame_timestamp + 0.001 * idx,
-                    t_end=frame_timestamp + 0.001 * idx,
-                    modality='video',
+                    t_start=frame_timestamp + (0.0 if static_image else 0.001 * idx),
+                    t_end=frame_timestamp + (0.0 if static_image else 0.001 * idx),
+                    modality=visual_modality,
                     worker_name='face_embed',
                     model_tag=face_engine,
                     confidence=1.0,
@@ -6277,7 +7065,7 @@ def _log_visual_to_ucf_ledger(
                     spatial_space='normalized_yxyx_top_left',
                     source_artifact_id=scene_id,
                     raw_ref=raw_ref_str,
-                    payload=payload,
+                    payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged'
                 )
 
@@ -6307,7 +7095,7 @@ def _log_visual_to_ucf_ledger(
                 run_id=run_id,
                 t_start=frame_timestamp,
                 t_end=frame_timestamp,
-                modality='video',
+                modality=visual_modality,
                 worker_name='image_embed_dino',
                 model_tag=dino_meta.get('model', 'facebook/dinov2-large'),
                 confidence=1.0,
@@ -6320,7 +7108,7 @@ def _log_visual_to_ucf_ledger(
                 vector_model_tag=dino_meta.get('model', 'facebook/dinov2-large'),
                 source_artifact_id=scene_id,
                 raw_ref=raw_ref_str,
-                payload=payload,
+                payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                 promotion_status='staged'
             )
             
@@ -6386,7 +7174,7 @@ def _log_visual_to_ucf_ledger(
                 run_id=run_id,
                 t_start=frame_timestamp,
                 t_end=frame_timestamp,
-                modality='video',
+                modality=visual_modality,
                 worker_name='image_embed_clip',
                 model_tag=clip_meta.get('model', 'laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K'),
                 confidence=1.0,
@@ -6399,7 +7187,7 @@ def _log_visual_to_ucf_ledger(
                 vector_model_tag=clip_meta.get('model', 'laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K'),
                 source_artifact_id=scene_id,
                 raw_ref=raw_ref_str,
-                payload=payload,
+                payload={**payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                 promotion_status='staged'
             )
             
@@ -6469,7 +7257,7 @@ def _log_visual_to_ucf_ledger(
                     confidence=1.0,
                     source_artifact_id=scene_id,
                     raw_ref=text_embed_raw_ref_str,
-                    payload=text_embed_payload,
+                    payload={**text_embed_payload, **({'source_kind': item['source_kind']} if item.get('source_kind') else {})},
                     promotion_status='staged',
                     vector_key=text_embedding_id,
                     vector_backend='qdrant' if frame_text_embed_meta.get('qdrant_committed') else 'faiss',
@@ -6505,6 +7293,11 @@ def _log_visual_to_ucf_ledger(
         client.close()
     except Exception as e:
         logger.warning(f"[UCF] Visual UCF logging failed: {type(e).__name__}: {str(e)}")
+        if strict:
+            raise
+    finally:
+        if client is not None:
+            client.close()
 
 
 def _log_scene_visual_embeddings_to_ucf_ledger(
@@ -6715,8 +7508,18 @@ def _process_audio(
     audio_runtime_contract: Optional[Dict[str, Any]] = None,
     scene_num: int = 1,
     total_scenes: int = 1,
+    recording_audio: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Process audio for scene - returns None if video has no audio"""
+    from steps.audio.recording_ingestion import selected, scene_result
+    caller_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+    if selected(caller_cfg) or (audio_runtime_contract or {}).get('selected') == 'recording':
+        if recording_audio is None:
+            raise ValueError('Recording audio selected without a shared recording job')
+    if recording_audio is not None:
+        projected_audio = scene_result(recording_audio, scene_id, scene)
+        if projected_audio['audio_evidence']['source'].get('audio_track') == 'absent':
+            return {'path': None, 'data': projected_audio}
     audio_path = _extract_audio_chunk(
         ffmpeg,
         video_path,
@@ -6727,7 +7530,7 @@ def _process_audio(
     )
     
     # If no audio was extracted, return None
-    if audio_path is None:
+    if audio_path is None and recording_audio is None:
         return None
     
     start = float(scene.get('start', 0.0) or 0.0)
@@ -6735,7 +7538,7 @@ def _process_audio(
 
     item: Dict[str, Any] = {
         'modality': 'audio',
-        'source_path': str(audio_path),
+        'source_path': str(audio_path or video_path),
         'scene_id': scene_id,
         'scene_index': scene.get('index'),
         'video_hash': video_hash,
@@ -6750,13 +7553,15 @@ def _process_audio(
     contract_reason = 'runtime_contract_unset'
     if isinstance(audio_runtime_contract, dict):
         selected_value = audio_runtime_contract.get('selected')
-        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'none'}:
+        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'recording', 'none'}:
             contract_selected = selected_value.strip().lower()
         reason_value = audio_runtime_contract.get('reason')
         if isinstance(reason_value, str) and reason_value.strip():
             contract_reason = reason_value.strip()
         else:
             contract_reason = 'runtime_contract_selected'
+    if recording_audio is not None:
+        contract_selected, contract_reason = 'recording', 'explicit_recording_engine'
     item['audio_backend_selected'] = contract_selected
     item['audio_backend_reason'] = contract_reason
     item['audio_backend_effective'] = 'none'
@@ -6935,8 +7740,8 @@ def _process_audio(
             # Local fallback must not recurse back into the WSL path we are explicitly downgrading from.
             tx_cfg['use_wsl2'] = False
             local_item = {
-                'source_path': str(audio_path),
-                'path': str(audio_path),
+                'source_path': str(audio_path or video_path),
+                'path': str(audio_path) if audio_path else None,
                 'scene_id': scene_id,
                 'scene_index': scene.get('index'),
                 'video_hash': video_hash,
@@ -7034,11 +7839,18 @@ def _process_audio(
                 outcomes=result_payload.get('wsl_capability_outcomes'),
             )
 
-    merge('goodq_audio_metadata', 'audio_metadata')
+    if audio_path is None and recording_audio is not None:
+        item.update(projected_audio)
+        item['audio_meta'] = {'status': 'error', 'reason': 'scene_audio_extraction_failed'}
+        item['clap_meta'] = {'status': 'error', 'reason': 'scene_audio_extraction_failed'}
+        merge('goodq_audio_transcribe', 'audio_music_events')
+        merge('goodq_audio_transcribe', 'audio_time_hints')
+    else:
+        merge('goodq_audio_metadata', 'audio_metadata')
     
     # WSL2 unified audio is profile-gated. BASELINE uses CPU-safe local fallback by default.
     if audio_path and audio_path.exists():
-        if contract_selected in {'wsl', 'windows', 'none'}:
+        if contract_selected in {'wsl', 'windows', 'recording', 'none'}:
             use_wsl_unified_audio = contract_selected == 'wsl'
         else:
             use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
@@ -7048,8 +7860,15 @@ def _process_audio(
                 )
                 use_wsl_unified_audio = False
 
-        if use_wsl_unified_audio:
-            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+        if recording_audio is not None:
+            from steps.audio.recording_ingestion import scene_result
+            item.update(scene_result(recording_audio, scene_id, scene))
+            contract_selected, contract_reason = 'recording', 'explicit_recording_engine'
+            item['audio_backend_reason'] = contract_reason
+        elif contract_selected == 'recording':
+            raise ValueError('Recording audio selected without a shared recording job')
+        elif use_wsl_unified_audio:
+            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2, unified_transcription_options
             from steps.common.progress_tracker import get_tracker
             tracker = get_tracker()
             tracker.update_step(
@@ -7066,7 +7885,8 @@ def _process_audio(
             # Single unified call gets transcription, diarization, emotion, embeddings
             try:
                 unified_started = time.perf_counter()
-                unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start)
+                unified_result = audio_unified_wsl2(str(audio_path), scene_id=scene_id, duration=end-start,
+                                                  **unified_transcription_options(_get_step_log_cfg()))
                 unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0
                 if isinstance(unified_result, dict):
                     item.update(unified_result)
@@ -7172,14 +7992,14 @@ def _process_audio(
             atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
 
     else:
-        logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
+        logger.info(f"[AUDIO] No extracted scene audio for {scene_id}; retained recording evidence is preserved")
 
     merge_optional_audio_step('goodq_core', 'sentiment')
     merge_optional_audio_step('goodq_core', 'emotion_classify')
     merge_optional_audio_step('goodq_core', 'tagger')
     if _has_wsl_unified_audio_embeddings(item):
         record_wsl_unified_audio_embed_skip()
-    else:
+    elif audio_path is not None:
         merge_optional_audio_step('goodq_audio_embed', 'audio_embed_clap')
 
     canonicalize_taxonomy(item)
@@ -7187,7 +8007,7 @@ def _process_audio(
     if transcript:
         text_payload = {
             'modality': 'audio_transcript',
-            'source_path': str(audio_path),
+            'source_path': str(audio_path or video_path),
             'text': transcript,
             'scene_id': scene_id,
             'scene_index': scene.get('index'),
@@ -7221,7 +8041,7 @@ def _process_audio(
     )
 
     return {
-        'path': str(audio_path),
+        'path': str(audio_path) if audio_path else None,
         'start': start,
         'end': end,
         'data': item,
@@ -7274,6 +8094,23 @@ async def _process_frame_async(
         },
     }
 
+    sample_timestamps = sorted({start + duration * fraction for fraction in (0, .25, .5, .75)} |
+                               {max(start, start + duration - min(.05, duration / 2))}) if duration > 0 else [start]
+    sampled_frames = {frame_timestamp: frame_path}
+    sample_locks: Dict[float, asyncio.Lock] = {}
+
+    async def sample_frame(timestamp: float, sample_index: int) -> Path:
+        lock = sample_locks.setdefault(timestamp, asyncio.Lock())
+        async with lock:
+            if timestamp not in sampled_frames:
+                sampled_frames[timestamp] = await asyncio.to_thread(
+                    _extract_keyframe, ffmpeg, video_path, scene, frame_dir,
+                    scene_id=scene_id, video_id=video_hash, sample_timestamp=timestamp,
+                    sample_suffix=f'_sample_{sample_index:02d}',
+                )
+            # Cache only success so a later modality can retry a failed decode.
+            return sampled_frames[timestamp]
+
     async def run_frame_step(env_name: str, step_name: str) -> Dict[str, Any]:
         from steps.common.progress_tracker import get_tracker
         tracker = get_tracker()
@@ -7295,11 +8132,292 @@ async def _process_frame_async(
         step_timings[step_name] = time.perf_counter() - t_start
         return res
 
+    async def run_face_samples() -> Dict[str, Any]:
+        # Five bounded native-resolution views retain short appearances which a
+        # midpoint alone misses. Never sample the following scene's boundary;
+        # step back 50ms (>= 1 frame at 23.976/24/25/30 fps) from scene end.
+        observations, errors, warnings = [], [], []
+        midpoint_output = {}
+        t_start = time.perf_counter()
+        for sample_index, timestamp in enumerate(sample_timestamps):
+            try:
+                sampled_path = await sample_frame(timestamp, sample_index)
+                result = await _run_step_async('goodq_face_embed', 'face_embed',
+                    {**item, 'source_path': str(sampled_path), 'timestamp': timestamp}, cfg_json)
+                if result.get('status') != 'ok':
+                    raise RuntimeError(result.get('errors') or 'face worker failed')
+                outputs = result.get('outputs', {})
+                face_status = outputs.get('faces_meta', {}).get('status')
+                if face_status not in {'ok', 'degraded'}:
+                    raise RuntimeError(f"face computation failed: {outputs.get('faces_meta')}")
+                if face_status == 'degraded':
+                    warnings.append({'timestamp': timestamp, 'faces_meta': outputs['faces_meta']})
+                observations.append({**outputs, 'source_path': str(sampled_path), 'timestamp': timestamp})
+                if timestamp == frame_timestamp:
+                    midpoint_output = outputs
+            except Exception as exc:
+                errors.append(f'face sample at {timestamp:.3f}s: {exc}')
+        step_timings['face_embed'] = time.perf_counter() - t_start
+        return {'status': 'ok', 'outputs': {**midpoint_output, 'face_observations': observations,
+                                          'face_sampling_errors': errors,
+                                          'face_sampling_warnings': warnings}}
+
+
+    async def run_ocr_samples() -> Dict[str, Any]:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Running image_ocr",
+                step_index,
+                {
+                    "scene_index": scene_index,
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": "frame_image_ocr",
+                },
+            )
+        sample_records: List[Dict[str, Any]] = []
+        step_log_cfg: Optional[Dict[str, Any]] = None
+        t_start = time.perf_counter()
+        for sample_index, timestamp in enumerate(sample_timestamps):
+            is_midpoint = (timestamp == frame_timestamp)
+            try:
+                sampled_path = await sample_frame(timestamp, sample_index)
+            except Exception as exc:
+                if step_log_cfg is None:
+                    try:
+                        step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+                    except Exception:
+                        step_log_cfg = {}
+                err_meta = {
+                    'status': 'error',
+                    'reason': 'keyframe_extract_failed',
+                    'error': str(exc),
+                    'sample_timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                }
+                log_step_run(
+                    step_log_cfg,
+                    'image_ocr',
+                    {**item, 'timestamp': timestamp, 'is_midpoint_sample': is_midpoint},
+                    0.0,
+                    'error',
+                    str(exc),
+                    extra={
+                        'reason': 'image_ocr_keyframe_extract_failed',
+                        'result_meta': {'ocr_meta': err_meta},
+                    },
+                )
+                sample_records.append({
+                    'sample_index': sample_index,
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                    'source_path': None,
+                    'status': 'error',
+                    'outputs': {'ocr_text': None, 'ocr_meta': err_meta},
+                    'error': str(exc),
+                })
+                continue
+
+            result = await _run_step_async(
+                'goodq_ocr',
+                'image_ocr',
+                {
+                    **item,
+                    'source_path': str(sampled_path),
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                },
+                cfg_json,
+            )
+            sample_records.append({
+                'sample_index': sample_index,
+                'timestamp': timestamp,
+                'is_midpoint_sample': is_midpoint,
+                'source_path': str(sampled_path),
+                'status': result.get('status') if isinstance(result, dict) else 'error',
+                'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
+                'error': result.get('errors') if isinstance(result, dict) else str(result),
+            })
+        step_timings['image_ocr'] = time.perf_counter() - t_start
+        return {'status': 'ok', 'outputs': _aggregate_ocr_sample_results(sample_records, frame_timestamp)}
+
+    async def run_caption_samples() -> Dict[str, Any]:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Running image_caption",
+                step_index,
+                {
+                    "scene_index": scene_index,
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": "frame_image_caption",
+                },
+            )
+        sample_records: List[Dict[str, Any]] = []
+        caption_batch: List[Dict[str, Any]] = []
+        step_log_cfg: Optional[Dict[str, Any]] = None
+        t_start = time.perf_counter()
+        for sample_index, timestamp in enumerate(sample_timestamps):
+            is_midpoint = (timestamp == frame_timestamp)
+            try:
+                sampled_path = await sample_frame(timestamp, sample_index)
+            except Exception as exc:
+                if step_log_cfg is None:
+                    try:
+                        step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+                    except Exception:
+                        step_log_cfg = {}
+                err_meta = {
+                    'status': 'error',
+                    'reason': 'keyframe_extract_failed',
+                    'error': str(exc),
+                    'sample_timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                }
+                log_step_run(
+                    step_log_cfg,
+                    'image_caption',
+                    {**item, 'timestamp': timestamp, 'is_midpoint_sample': is_midpoint},
+                    0.0,
+                    'error',
+                    str(exc),
+                    extra={
+                        'reason': 'image_caption_keyframe_extract_failed',
+                        'result_meta': {'caption_meta': err_meta},
+                    },
+                )
+                sample_records.append({
+                    'sample_index': sample_index,
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                    'source_path': None,
+                    'status': 'error',
+                    'outputs': {'caption': None, 'caption_meta': err_meta},
+                    'error': str(exc),
+                })
+                continue
+
+            caption_batch.append({
+                'sample_index': sample_index,
+                'timestamp': timestamp,
+                'is_midpoint_sample': is_midpoint,
+                'source_path': str(sampled_path),
+            })
+        if caption_batch:
+            # One worker call per scene: the caption model loads once for all samples.
+            result = await _run_step_async(
+                'goodq_caption_vlm',
+                'image_caption',
+                {**item, 'samples': [
+                    {'source_path': s['source_path'], 'timestamp': s['timestamp'], 'is_midpoint_sample': s['is_midpoint_sample']}
+                    for s in caption_batch
+                ]},
+                cfg_json,
+            )
+            if isinstance(result, dict) and result.get('status') == 'ok':
+                try:
+                    sample_records.extend(_caption_batch_records(caption_batch, result.get('outputs') or {}))
+                except Exception as batch_exc:
+                    sample_records.extend(_caption_batch_error_records(caption_batch, str(batch_exc)))
+            else:
+                error = result.get('errors') if isinstance(result, dict) else str(result)
+                sample_records.extend(_caption_batch_error_records(caption_batch, str(error or 'image_caption worker failed')))
+        sample_records.sort(key=lambda record: record['sample_index'])
+        step_timings['image_caption'] = time.perf_counter() - t_start
+        return {'status': 'ok', 'outputs': _aggregate_caption_sample_results(sample_records, frame_timestamp)}
+
+    async def run_object_detect_samples() -> Dict[str, Any]:
+        from steps.common.progress_tracker import get_tracker
+        tracker = get_tracker()
+        step_index = 1 + scene_num
+        if PROGRESS_TRACKING_AVAILABLE:
+            tracker.update_step(
+                f"Scene {scene_num}/{total_scenes} - Running object_detect",
+                step_index,
+                {
+                    "scene_index": scene_index,
+                    "scenes_total": total_scenes,
+                    "video_id": video_hash,
+                    "stage": "frame_object_detect",
+                },
+            )
+        sample_records: List[Dict[str, Any]] = []
+        step_log_cfg: Optional[Dict[str, Any]] = None
+        t_start = time.perf_counter()
+        for sample_index, timestamp in enumerate(sample_timestamps):
+            is_midpoint = (timestamp == frame_timestamp)
+            try:
+                sampled_path = await sample_frame(timestamp, sample_index)
+            except Exception as exc:
+                if step_log_cfg is None:
+                    try:
+                        step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+                    except Exception:
+                        step_log_cfg = {}
+                err_meta = {
+                    'status': 'error',
+                    'reason': 'keyframe_extract_failed',
+                    'error': str(exc),
+                    'sample_timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                }
+                log_step_run(
+                    step_log_cfg,
+                    'object_detect',
+                    {**item, 'timestamp': timestamp, 'is_midpoint_sample': is_midpoint},
+                    0.0,
+                    'error',
+                    str(exc),
+                    extra={
+                        'reason': 'object_detect_keyframe_extract_failed',
+                        'result_meta': {'detect_meta': err_meta},
+                    },
+                )
+                sample_records.append({
+                    'sample_index': sample_index,
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                    'source_path': None,
+                    'status': 'error',
+                    'outputs': {'objects': [], 'detect_meta': err_meta},
+                    'error': str(exc),
+                })
+                continue
+
+            result = await _run_step_async(
+                'goodq_object_detect',
+                'object_detect',
+                {
+                    **item,
+                    'source_path': str(sampled_path),
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                },
+                cfg_json,
+            )
+            sample_records.append({
+                'sample_index': sample_index,
+                'timestamp': timestamp,
+                'is_midpoint_sample': is_midpoint,
+                'source_path': str(sampled_path),
+                'status': result.get('status') if isinstance(result, dict) else 'error',
+                'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
+                'error': result.get('errors') if isinstance(result, dict) else str(result),
+            })
+        step_timings['object_detect'] = time.perf_counter() - t_start
+        return {'status': 'ok', 'outputs': _aggregate_object_detect_sample_results(sample_records, frame_timestamp)}
+
     step_calls = [
-        run_frame_step('goodq_image_caption', 'image_ocr'),
-        run_frame_step('goodq_image_caption', 'image_caption'),
-        run_frame_step('goodq_object_detect', 'object_detect'),
-        run_frame_step('goodq_face_embed', 'face_embed'),
+        run_ocr_samples(),
+        run_caption_samples(),
+        run_object_detect_samples(),
+        run_face_samples(),
         run_frame_step('goodq_image_caption', 'image_embed_dino'),
         run_frame_step('goodq_image_caption', 'image_embed_clip'),
     ]
@@ -7324,6 +8442,10 @@ async def _process_frame_async(
             if warnings:
                 item.setdefault("frame_step_warnings", []).extend(warnings)
 
+    step_errors.extend(item.get('face_sampling_errors', []))
+    step_errors.extend(item.get('ocr_sampling_errors', []))
+    step_errors.extend(item.get('caption_sampling_errors', []))
+    step_errors.extend(item.get('object_sampling_errors', []))
     tagger_res = await run_frame_step('goodq_core', 'tagger')
     if isinstance(tagger_res, dict):
         status = tagger_res.get("status")
@@ -7344,10 +8466,32 @@ async def _process_frame_async(
 
 
     frame_text_parts: List[str] = []
-    if isinstance(item.get('ocr_text'), str):
-        frame_text_parts.append(item['ocr_text'])
-    if isinstance(item.get('caption'), str):
-        frame_text_parts.append(item['caption'])
+    if isinstance(item.get('ocr_text'), str) and item['ocr_text'].strip():
+        frame_text_parts.append(item['ocr_text'].strip())
+    caption_obs_list = item.get('caption_observations') if isinstance(item.get('caption_observations'), list) else []
+    seen_cap_texts: set[str] = set()
+    for obs in caption_obs_list:
+        if isinstance(obs, dict):
+            cap_str = obs.get('caption')
+            if isinstance(cap_str, str) and cap_str.strip():
+                norm_c = cap_str.strip().casefold()
+                if norm_c not in seen_cap_texts:
+                    seen_cap_texts.add(norm_c)
+                    frame_text_parts.append(cap_str.strip())
+    if not seen_cap_texts and isinstance(item.get('caption'), str) and item['caption'].strip():
+        frame_text_parts.append(item['caption'].strip())
+    obj_labels: List[str] = []
+    seen_obj_labels: set[str] = set()
+    for obj in (item.get('objects') if isinstance(item.get('objects'), list) else []):
+        if isinstance(obj, dict):
+            lbl = obj.get('label')
+            if isinstance(lbl, str) and lbl.strip():
+                norm_l = lbl.strip().casefold()
+                if norm_l not in seen_obj_labels:
+                    seen_obj_labels.add(norm_l)
+                    obj_labels.append(lbl.strip())
+    if obj_labels:
+        frame_text_parts.append(' '.join(obj_labels))
     frame_text = ' '.join(part.strip() for part in frame_text_parts if part).strip()
     
     if frame_text:
@@ -7422,7 +8566,18 @@ async def _process_audio_async(
     audio_runtime_contract: Optional[Dict[str, Any]] = None,
     scene_num: int = 1,
     total_scenes: int = 1,
+    wsl_audio_lock: Optional[asyncio.Lock] = None,
+    recording_audio: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
+    from steps.audio.recording_ingestion import selected, scene_result
+    caller_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+    if selected(caller_cfg) or (audio_runtime_contract or {}).get('selected') == 'recording':
+        if recording_audio is None:
+            raise ValueError('Recording audio selected without a shared recording job')
+    if recording_audio is not None:
+        projected_audio = scene_result(recording_audio, scene_id, scene)
+        if projected_audio['audio_evidence']['source'].get('audio_track') == 'absent':
+            return {'path': None, 'data': projected_audio}
     extract_start = time.perf_counter()
     audio_path = await asyncio.to_thread(
         _extract_audio_chunk,
@@ -7436,7 +8591,7 @@ async def _process_audio_async(
     step_timings = {}
     step_timings['extract_audio_chunk'] = time.perf_counter() - extract_start
     
-    if audio_path is None:
+    if audio_path is None and recording_audio is None:
         return None
         
     start = float(scene.get('start', 0.0) or 0.0)
@@ -7444,7 +8599,7 @@ async def _process_audio_async(
 
     item: Dict[str, Any] = {
         'modality': 'audio',
-        'source_path': str(audio_path),
+        'source_path': str(audio_path or video_path),
         'scene_id': scene_id,
         'scene_index': scene.get('index'),
         'video_hash': video_hash,
@@ -7460,7 +8615,7 @@ async def _process_audio_async(
     contract_reason = 'runtime_contract_unset'
     if isinstance(audio_runtime_contract, dict):
         selected_value = audio_runtime_contract.get('selected')
-        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'none'}:
+        if isinstance(selected_value, str) and selected_value.strip().lower() in {'wsl', 'windows', 'recording', 'none'}:
             contract_selected = selected_value.strip().lower()
         reason_value = audio_runtime_contract.get('reason')
         if isinstance(reason_value, str) and reason_value.strip():
@@ -7468,6 +8623,8 @@ async def _process_audio_async(
         else:
             contract_reason = 'runtime_contract_selected'
             
+    if recording_audio is not None:
+        contract_selected, contract_reason = 'recording', 'explicit_recording_engine'
     item['audio_backend_selected'] = contract_selected
     item['audio_backend_reason'] = contract_reason
     item['audio_backend_effective'] = 'none'
@@ -7638,10 +8795,23 @@ async def _process_audio_async(
                 
             if isinstance(res, dict):
                 status = res.get("status")
+                # Absence/failure diagnostics are scene evidence too. Keep only
+                # CLAP metadata from unsuccessful envelopes, never vector output.
+                if step_name == 'audio_embed_clap':
+                    clap_meta = (res.get("outputs") or {}).get("clap_meta")
+                    if isinstance(clap_meta, dict):
+                        item["clap_meta"] = clap_meta
                 if status == "ok":
                     item.update(res.get("outputs", {}))
                 elif status == "error":
                     record_optional_audio_step_failure(env_name, step_name, res.get("errors") or "unknown error")
+                else:
+                    # Unavailable/skipped enrichments still carry diagnostic evidence.
+                    meta_key = {'sentiment': 'sentiment_meta', 'emotion_classify': 'emotion_meta',
+                                'tagger': 'tagger_meta'}.get(step_name)
+                    meta = (res.get('outputs') or {}).get(meta_key)
+                    if meta_key and isinstance(meta, dict):
+                        item[meta_key] = meta
         except Exception as exc:
             record_optional_audio_step_failure(env_name, step_name, exc)
 
@@ -7687,29 +8857,19 @@ async def _process_audio_async(
             )
         try:
             local_item = {
-                'source_path': str(audio_path),
-                'path': str(audio_path),
+                'source_path': str(audio_path or video_path),
+                'path': str(audio_path) if audio_path else None,
                 'scene_id': scene_id,
                 'scene_index': scene.get('index'),
                 'video_hash': video_hash,
                 'video_id': video_hash,
             }
-            prior_require_wsl_audio = os.environ.get('GOODQ_REQUIRE_WSL_AUDIO')
-            os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = '0'
-            try:
-                local_start = time.perf_counter()
-                local_result = await _run_step_async(
-                    'goodq_audio_transcribe',
-                    'audio_transcribe_local',
-                    local_item,
-                    cfg_json
-                )
-                step_timings['audio_transcribe_local'] = time.perf_counter() - local_start
-            finally:
-                if prior_require_wsl_audio is None:
-                    os.environ.pop('GOODQ_REQUIRE_WSL_AUDIO', None)
-                else:
-                    os.environ['GOODQ_REQUIRE_WSL_AUDIO'] = prior_require_wsl_audio
+            local_start = time.perf_counter()
+            local_result = await _run_step_async(
+                'goodq_audio_transcribe', 'audio_transcribe_local', local_item, cfg_json,
+                _step_env_overrides={'GOODQ_REQUIRE_WSL_AUDIO': '0'},
+            )
+            step_timings['audio_transcribe_local'] = time.perf_counter() - local_start
             
             local_result = _normalize_local_transcription_result(local_result)
             if isinstance(local_result, dict):
@@ -7753,14 +8913,23 @@ async def _process_audio_async(
             )
             _set_effective_backend('failed', f'{reason}_failed')
 
-    metadata_res = await run_audio_step('goodq_audio_metadata', 'audio_metadata')
-    if isinstance(metadata_res, dict) and metadata_res.get("status") == "ok":
-        item.update(metadata_res.get("outputs", {}))
+    if audio_path is None and recording_audio is not None:
+        item.update(projected_audio)
+        item['audio_meta'] = {'status': 'error', 'reason': 'scene_audio_extraction_failed'}
+        item['clap_meta'] = {'status': 'error', 'reason': 'scene_audio_extraction_failed'}
+        for name in ('audio_music_events', 'audio_time_hints'):
+            result = await run_audio_step('goodq_audio_transcribe', name)
+            if result.get('status') == 'ok':
+                item.update(result.get('outputs', {}))
+    else:
+        metadata_res = await run_audio_step('goodq_audio_metadata', 'audio_metadata')
+        if isinstance(metadata_res, dict) and metadata_res.get("status") == "ok":
+            item.update(metadata_res.get("outputs", {}))
 
     has_audio_file = False
     if audio_path and audio_path.exists():
         has_audio_file = True
-        if contract_selected in {'wsl', 'windows', 'none'}:
+        if contract_selected in {'wsl', 'windows', 'recording', 'none'}:
             use_wsl_unified_audio = contract_selected == 'wsl'
         else:
             use_wsl_unified_audio = bool(wsl_audio_auto_enabled() or require_wsl_audio())
@@ -7770,8 +8939,15 @@ async def _process_audio_async(
                 )
                 use_wsl_unified_audio = False
 
-        if use_wsl_unified_audio:
-            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2
+        if recording_audio is not None:
+            from steps.audio.recording_ingestion import scene_result
+            item.update(scene_result(recording_audio, scene_id, scene))
+            contract_selected, contract_reason = 'recording', 'explicit_recording_engine'
+            item['audio_backend_reason'] = contract_reason
+        elif contract_selected == 'recording':
+            raise ValueError('Recording audio selected without a shared recording job')
+        elif use_wsl_unified_audio:
+            from steps.audio.audio_wsl2_bridge import audio_unified_wsl2, unified_transcription_options
             from steps.common.progress_tracker import get_tracker
             tracker = get_tracker()
             if PROGRESS_TRACKING_AVAILABLE:
@@ -7788,7 +8964,13 @@ async def _process_audio_async(
 
             try:
                 unified_started = time.perf_counter()
-                unified_result = await asyncio.to_thread(audio_unified_wsl2, str(audio_path), scene_id=scene_id, duration=end-start)
+                if wsl_audio_lock is not None:
+                    async with wsl_audio_lock:
+                        unified_result = await asyncio.to_thread(audio_unified_wsl2, str(audio_path), scene_id=scene_id, duration=end-start,
+                                                               **unified_transcription_options(_get_step_log_cfg()))
+                else:
+                    unified_result = await asyncio.to_thread(audio_unified_wsl2, str(audio_path), scene_id=scene_id, duration=end-start,
+                                                           **unified_transcription_options(_get_step_log_cfg()))
                 unified_duration_ms = (time.perf_counter() - unified_started) * 1000.0
                 step_timings['audio_unified_wsl2'] = unified_duration_ms / 1000.0
                 
@@ -7903,7 +9085,7 @@ async def _process_audio_async(
             await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_diarization.json", item.get('speaker_segments', []))
 
     else:
-        logger.info(f"[AUDIO] No audio stream in scene {scene_id}, skipping audio processing")
+        logger.info(f"[AUDIO] No extracted scene audio for {scene_id}; retained recording evidence is preserved")
 
     enrichment_tasks = [
         merge_optional_audio_step_async('goodq_core', 'sentiment'),
@@ -7912,7 +9094,7 @@ async def _process_audio_async(
     ]
     if _has_wsl_unified_audio_embeddings(item):
         record_wsl_unified_audio_embed_skip()
-    else:
+    elif audio_path is not None:
         enrichment_tasks.append(merge_optional_audio_step_async('goodq_audio_embed', 'audio_embed_clap'))
     await asyncio.gather(*enrichment_tasks, return_exceptions=True)
 
@@ -7922,7 +9104,7 @@ async def _process_audio_async(
     if transcript:
         text_payload = {
             'modality': 'audio_transcript',
-            'source_path': str(audio_path),
+            'source_path': str(audio_path or video_path),
             'text': transcript,
             'scene_id': scene_id,
             'scene_index': scene.get('index'),
@@ -7951,7 +9133,7 @@ async def _process_audio_async(
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
 
-    if has_audio_file:
+    if has_audio_file or recording_audio is not None:
         # Call UCF Audio logging hook after optional enrichment steps so embedding IDs are available
         await asyncio.to_thread(
             _log_audio_to_ucf_ledger,
@@ -7964,7 +9146,7 @@ async def _process_audio_async(
         )
 
     return {
-        'path': str(audio_path),
+        'path': str(audio_path) if audio_path else None,
         'start': start,
         'end': end,
         'data': item,
@@ -8260,11 +9442,24 @@ def run_with_config(
 
     if cfg is not None and config is not None:
         raise typer.BadParameter("runtime cfg and config snapshot are mutually exclusive")
+    # Governed canonical intake also uses ingestion_isolation to defer promotion.
+    # Only disposable witnesses require a fresh, explicitly bound snapshot.
+    if config is None and (
+        "GOODQ_WITNESS_CONFIG" in os.environ
+        or (isinstance(cfg, dict) and "witness" in cfg)
+    ):
+        raise typer.BadParameter(
+            "Witness execution requires python -m cli.run_ingestion --config <snapshot> in a fresh process"
+        )
     caller_run = cfg.get('run') if isinstance(cfg, dict) else None
     caller_run_id = caller_run.get('id') if isinstance(caller_run, dict) else None
     base_cfg = cfg if cfg is not None else (
         load_isolated_runtime_cfg_snapshot(config) if config is not None else load_configs({})
     )
+    if config is None and isinstance(base_cfg, dict) and "witness" in base_cfg:
+        raise typer.BadParameter(
+            "Witness execution requires python -m cli.run_ingestion --config <snapshot> in a fresh process"
+        )
     cfg = copy.deepcopy(base_cfg) if isinstance(base_cfg, dict) else {}
     cfg['progressive_chunk_size'] = chunk_size
     cfg['progressive_chunk_overlap'] = chunk_overlap
@@ -8294,6 +9489,17 @@ def run_with_config(
         or (Path(runtime_paths["processing"]) / "_workspace" / "scene_ingest")
     ).resolve()
 
+    if config is not None:
+        root = Path(cfg["witness"]["artifact_root"]).resolve()
+        snapshot_path = config
+        _validate_isolated_witness_runtime_config(cfg, snapshot_path)
+        for key, path in (("output", output), ("workspace", workspace)):
+            if not _is_path_within(path, root):
+                raise typer.BadParameter(f"{key} escapes witness root")
+        _validate_witness_process_environment(cfg, snapshot_path)
+        from cli.golden_witness import admit_witness_run
+
+        admit_witness_run(cfg, snapshot_path)
     _ensure_dir(workspace)
     baseline_wsl_override = bool(is_baseline() and require_wsl_audio())
     profile_override: Optional[str] = None
@@ -8419,6 +9625,11 @@ def run_with_config(
         videos = videos[:max_videos]
 
     results: List[Dict[str, Any]] = []
+
+    # Freeze reviewed references before new media is processed. New predictions
+    # remain separate from roster/graph identities and never train this run.
+    from lib.identity_matching import prepare_matching, write_video_matches
+    identity_matching_frozen = prepare_matching(cfg, run_id)
 
     # Initialize Control Agent if available
     control_agent_cfg = cfg.get('control_agent', {}) or {}
@@ -8672,6 +9883,32 @@ def run_with_config(
                 else:
                     typer.echo(f"[INFO] Filtered scenes to index range [{scene_start_index}, {scene_end_index}]. {len(scenes)} scenes remaining.")
 
+        # One original-file request, after canonical scene detection and before fan-out.
+        # Scene WAVs below remain inputs to metadata/CLAP, never the recognizer.
+        recording_audio = None
+        recording_failure = None
+        if scenes and audio_runtime_contract.get('selected') == 'recording':
+            from steps.audio.recording_ingestion import prepare
+            canonical_audio_scenes = [{'scene_id': _make_id('scene', [video_hash,
+                f"{float(row['start']):.3f}", f"{float(row['end']):.3f}"]),
+                'start': float(row['start']), 'end': float(row['end'])} for row in scenes]
+            try:
+                recording_audio = prepare(cfg, video_path, canonical_audio_scenes,
+                    processing_root=Path(cfg['paths']['db_dir']) / 'processing')
+            except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+                recording_failure = f'Recording audio failed: {error}'
+                logger.error(recording_failure)
+                atomic_write_json(processing_dir / 'recording_audio_failure.json',
+                    {'status': 'error', 'source_sha256': video_hash, 'run_id': run_context['id'],
+                     'error': recording_failure, 'legacy_fallback': False})
+            previous_manifest = processing_dir / 'video' / 'scene_manifest.json'
+            if recording_audio is not None and previous_manifest.is_file() and not force_reprocess:
+                from steps.audio.recording_ingestion import require_matching_resume
+                current_ids = {row['scene_id'] for row in canonical_audio_scenes}
+                for prior_scene in json.loads(previous_manifest.read_text(encoding='utf-8')).get('scenes', []):
+                    if prior_scene.get('scene_id') in current_ids and prior_scene.get('audio'):
+                        require_matching_resume(prior_scene['audio'], recording_audio, prior_scene['scene_id'])
+
         # Resolve shadow pipeline overlay settings before the scene loop
         segmentation_shadow_result = _run_segmentation_shadow_pipeline(
             video_path,
@@ -8701,10 +9938,20 @@ def run_with_config(
             step_val = 290.0
 
         grouped_scenes = {}
+        expected_windows = {}
         for scene in scenes:
             scene_start = float(scene.get('start', 0.0) or 0.0)
+            scene_end = float(scene.get('end', scene_start) or scene_start)
             window_idx = int(scene_start // step_val)
             grouped_scenes.setdefault(window_idx, []).append(scene)
+            expected = expected_windows.setdefault(window_idx, {
+                'window_start': window_idx * step_val,
+                'window_end': window_idx * step_val + chunk_size_val,
+                'scene_ids': [],
+            })
+            expected['scene_ids'].append(
+                _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
+            )
         
         sorted_window_indices = sorted(grouped_scenes.keys())
 
@@ -8723,6 +9970,7 @@ def run_with_config(
                             video_hash,
                             cfg=cfg,
                             processing_dir=Path(processing_dir),
+                            expected_windows=expected_windows,
                         )
                         logger.info(
                             "[CHECKPOINT] Resuming progressive ingestion from schema v2; "
@@ -8764,6 +10012,7 @@ def run_with_config(
         if completed_window_indices and not force_reprocess:
             for w_idx in sorted_window_indices:
                 if w_idx in completed_window_indices:
+                    recovered_window_scenes = []
                     for scene in grouped_scenes[w_idx]:
                         scene_start = float(scene.get('start', 0.0) or 0.0)
                         scene_end = float(scene.get('end', scene_start) or scene_start)
@@ -8794,14 +10043,16 @@ def run_with_config(
                                       'audio_backend_effective_reason', 'audio_backend_downgraded', 
                                       'audio_backend_downgrade_reason', 'audio_backend_downgrade_ts', 
                                       'audio_backend_downgrade_details', 'transcript_outcome',
-                                      'transcript_outcome_reason', 'vector_points_attempted'):
+                                      'transcript_outcome_reason', 'transcript_outcome_evidence', 'vector_points_attempted'):
                                 if k in meta:
                                     scene_record[k] = meta[k]
-                            scene_outputs.append(scene_record)
+                            recovered_window_scenes.append(scene_record)
                         else:
                             logger.warning(f"[CHECKPOINT] Skipped scene {scene_id} not found in database. Will reprocess from window index {w_idx}")
                             completed_window_indices.discard(w_idx)
                             break
+                    else:
+                        scene_outputs.extend(recovered_window_scenes)
 
         if observer:
             observer.step_start(
@@ -8812,6 +10063,7 @@ def run_with_config(
 
         db_write_lock = asyncio.Lock()
         faiss_write_lock = asyncio.Lock()
+        wsl_audio_lock = asyncio.Lock()
         scene_semaphore = asyncio.Semaphore(2)
         knowledge_graph_status_local = knowledge_graph_status
 
@@ -8846,6 +10098,12 @@ def run_with_config(
 
                 scene_id = _make_id("scene", [video_hash, f"{scene_start:.3f}", f"{scene_end:.3f}"])
 
+                transcript_authority_current = transcript_authority.lookup(video_hash, scene_id, cfg)
+                transcript_authority_previous_digest = (
+                    transcript_authority.sha(transcript_authority_current)
+                    if transcript_authority_current is not None else None
+                )
+
                 existing_meta, materialized = await asyncio.to_thread(
                     _resolve_existing_scene_state,
                     cfg,
@@ -8859,11 +10117,13 @@ def run_with_config(
                 frame_error_step: Optional[str] = None
                 frame_error_env: Optional[str] = None
                 frame_processing_error: Optional[str] = None
-                audio_error: Optional[str] = None
+                audio_error: Optional[str] = recording_failure
 
                 force = cfg.get('force_reprocess', False)
                 skip_frame = bool(materialized.get('keyframe')) if isinstance(materialized, dict) and not force else False
                 skip_audio = bool(materialized.get('audio')) if isinstance(materialized, dict) and not force else False
+                if recording_failure is not None:
+                    skip_audio = False
 
                 if skip_frame:
                     keyframe_meta = existing_meta.get('keyframe')
@@ -8901,6 +10161,9 @@ def run_with_config(
                         typer.echo(f'[DEBUG] Skipping audio (using cached data)')
                     audio_meta = existing_meta.get('audio')
                     if isinstance(audio_meta, dict):
+                        if recording_audio is not None:
+                            from steps.audio.recording_ingestion import require_matching_resume
+                            require_matching_resume(audio_meta, recording_audio, scene_id)
                         audio_info = audio_meta
                     await asyncio.to_thread(
                         _log_skipped_steps,
@@ -8947,7 +10210,7 @@ def run_with_config(
                         total_scenes=total_scenes,
                     )
 
-                if not skip_audio and video_path.exists():
+                if not skip_audio and recording_failure is None and video_path.exists():
                     audio_task = _process_audio_async(
                         cfg_json,
                         ffmpeg,
@@ -8962,6 +10225,8 @@ def run_with_config(
                         audio_runtime_contract=audio_runtime_contract,
                         scene_num=scene_num,
                         total_scenes=total_scenes,
+                        wsl_audio_lock=wsl_audio_lock,
+                        recording_audio=recording_audio,
                     )
 
                 tasks = []
@@ -9087,6 +10352,7 @@ def run_with_config(
                     'error_payload': error_payload,
                     'audio_backend_fields': audio_backend_fields,
                     'transcript_outcome_fields': transcript_outcome_fields,
+                    'transcript_authority_previous_digest': transcript_authority_previous_digest,
                 }
 
         async def process_video_scenes_async() -> str:
@@ -9198,7 +10464,7 @@ def run_with_config(
                                         t_start=_scene_start,
                                         t_end=_scene_end,
                                         modality='text',
-                                        worker_name='text_embed',
+                                        worker_name='scene_summary_embed',
                                         model_tag='sentence-transformers/all-MiniLM-L6-v2',
                                         confidence=1.0,
                                         source_artifact_id=scene_res['scene_id'],
@@ -9418,6 +10684,10 @@ def run_with_config(
                         empty_duration_threshold_sec=empty_duration_threshold_sec,
                     )
 
+                    scene_record['transcript_outcome_evidence'] = transcript_authority.emit(
+                        scene_record, video_hash, run_id, cfg,
+                        previous_digest=scene_res.get('transcript_authority_previous_digest'),
+                    )
                     scene_outputs.append(scene_record)
 
                 scene_outputs[:] = _sort_checkpoint_scene_outputs(scene_outputs)
@@ -9449,10 +10719,12 @@ def run_with_config(
                             'content_state': s.get('content_state', 'signal'),
                             'transcript_outcome': s.get('transcript_outcome'),
                             'transcript_outcome_reason': s.get('transcript_outcome_reason'),
+                            'transcript_outcome_evidence': s.get('transcript_outcome_evidence'),
                             'speaker_ids': s.get('speaker_ids') or [],
                             'speaker_count': len(s.get('speaker_ids') or []),
                             'keyframe': s.get('keyframe', {}),
                             'audio': s.get('audio', {}),
+                            **({'errors': s.get('errors')} if s.get('errors') else {}),
                         }
                         for s in scene_outputs
                     ]
@@ -9482,6 +10754,11 @@ def run_with_config(
                     'audio_artifact_dir': str(phase6_audio_artifact_dir),
                     'scene_manifest_path': str(scene_manifest_path),
                     'scenes': scene_outputs,
+                    'progressive_window_scene_ids': [
+                        str(scene_res.get('scene_id'))
+                        for scene_res in window_results
+                        if isinstance(scene_res, dict) and scene_res.get('scene_id')
+                    ],
                     'video_hash': video_hash,
                 }
                 
@@ -9495,6 +10772,7 @@ def run_with_config(
 
                 p6a_duration = 0.0
                 p6b_duration = 0.0
+                window_scene_context_meta = None
 
                 if phase6_enabled:
                     try:
@@ -9539,9 +10817,11 @@ def run_with_config(
                         harmonization_result = _run_step('goodq_core', 'cross_modal_harmonization', phase6_item, cfg_json)
                         p6b_duration = time.perf_counter() - p6b_start
                         if isinstance(harmonization_result, dict):
+                            window_scene_context_meta = harmonization_result.get('scene_context_meta')
                             if harmonization_result.get('harmonization_status') == 'skipped':
                                 temporal_index_applicable = False
                             else:
+                                _rehydrate_video_result_scenes_from_manifest({'scenes': scene_outputs}, str(scene_manifest_path))
                                 primary_temporal_path = processing_dir / 'temporal_index.json'
                                 video_temporal_path = processing_dir / 'video' / 'temporal_index.json'
                                 temporal_index_path_for_checkpoint = (
@@ -9577,6 +10857,7 @@ def run_with_config(
                     'window_index': w_idx,
                     'window_start': w_idx * step_val,
                     'window_end': (w_idx * step_val) + chunk_size_val,
+                    'window_scene_count': len(window_results),
                     'timing_seconds': {
                         'audio_processing': audio_timings,
                         'frame_processing': frame_timings,
@@ -9586,6 +10867,16 @@ def run_with_config(
                         'phase6b_cross_modal_harmonization': p6b_duration,
                         'manifest_write': manifest_duration,
                     },
+                    'scene_context_meta': (
+                        {
+                            'status': window_scene_context_meta.get('status'),
+                            'evaluated_count': window_scene_context_meta.get('evaluated_count'),
+                            'reused_count': window_scene_context_meta.get('reused_count'),
+                            'ollama_unloaded': window_scene_context_meta.get('ollama_unloaded'),
+                        }
+                        if isinstance(window_scene_context_meta, dict)
+                        else None
+                    ),
                     'total_window_duration_seconds': window_total_duration,
                 }
                 
@@ -9767,6 +11058,7 @@ def run_with_config(
             processing_dir=Path(processing_dir),
             expected_window_indices=sorted_window_indices,
             phase6_complete=video_result.get('phase6_complete') is True,
+            expected_windows=expected_windows,
         )
         if checkpoint_cleanup_ready:
             try:
@@ -9781,6 +11073,12 @@ def run_with_config(
                 "current windows lack verified five-target persistence"
             )
 
+        if identity_matching_frozen is not None:
+            try:
+                video_result['identity_matching'] = write_video_matches(cfg, identity_matching_frozen, video_result)
+            except Exception as exc:
+                logger.exception("Identity comparison failed; retained media will not be rerun automatically")
+                video_result['identity_matching'] = {'status': 'failed', 'applied': False, 'error': str(exc)}
         results.append(video_result)
         if tracker is not None:
             finish_processing(
@@ -9935,7 +11233,10 @@ def run_with_config(
         result.get('scenes') and result.get('phase6_complete') is not True
         for result in results
     )
-    terminal_status = "failed" if phase6_incomplete else "completed"
+    identity_matching_failed = any(
+        result.get('identity_matching', {}).get('status') in {'failed', 'partial'} for result in results
+    )
+    terminal_status = "failed" if phase6_incomplete or identity_matching_failed else "completed"
     capability_receipt = _finalize_capability_receipt(
         terminal_status=terminal_status,
         cfg=cfg,
@@ -9955,6 +11256,9 @@ def run_with_config(
     _PIPELINE_OBSERVER = None
     if phase6_incomplete:
         typer.echo("[ERROR] Required Phase 6 persistence is incomplete; retry evidence was retained.", err=True)
+        raise typer.Exit(code=1)
+    if identity_matching_failed:
+        typer.echo("[ERROR] Identity matching is incomplete; media and comparison diagnostics were retained.", err=True)
         raise typer.Exit(code=1)
     _enforce_release_capability_receipt(
         capability_receipt,

@@ -5,6 +5,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 
 def _load_run_ingestion_module():
@@ -71,6 +72,12 @@ def test_run_updates_and_finishes_progress_tracker(monkeypatch, tmp_path: Path):
     output = tmp_path / "results.json"
     workspace = tmp_path / "workspace"
     processing_root = tmp_path / "processing"
+    epoch = tmp_path / "epoch"
+    (epoch / "ucf").mkdir(parents=True)
+    ledger = UCFLedgerClient(str(epoch / "ucf/ucf_ledger.db"))
+    ledger.init_schema()
+    ledger.register_media("videohash", str(input_dir / "demo.mp4"), 1, 30, 320, 240)
+    ledger.close()
 
     stored_scenes = {
         "scenes": [
@@ -86,7 +93,7 @@ def test_run_updates_and_finishes_progress_tracker(monkeypatch, tmp_path: Path):
 
     tracker = _FakeTracker()
     cfg_template = {
-        "paths": {"processing": str(processing_root)},
+        "paths": {"processing": str(processing_root), "db_dir": str(epoch)},
         "phase6": {"enabled": False},
         "knowledge_graph": {"enabled": False},
     }

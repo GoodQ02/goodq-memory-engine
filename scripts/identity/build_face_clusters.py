@@ -25,15 +25,23 @@ Requires: scikit-learn (confirmed available in goodq_core 1.7.2)
 
 import argparse
 import base64
+import hashlib
+import io
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
 import sys
 from collections import defaultdict
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+
+# The API invokes this file directly; resolve shared product code from its checkout.
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 
@@ -84,80 +92,168 @@ def _ucf_db(epoch_dir: Path) -> Path:
 
 
 def load_face_ucf_provenance(ucf_db_path: Path) -> dict:
-    """
-    Returns a mapping of raw_ref (face JSON path) -> {video_hash, frame_id, t_start}.
-    Only promoted face_embed frames are included.
-    """
-    conn = sqlite3.connect(str(ucf_db_path))
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT frame_id, video_hash, raw_ref, t_start
-        FROM context_frames
-        WHERE worker_name = 'face_embed'
-          AND promotion_status = 'promoted'
-        """
-    )
-    rows = cur.fetchall()
-    conn.close()
-    provenance = {}
-    for frame_id, video_hash, raw_ref, t_start in rows:
-        provenance[raw_ref] = {
-            "frame_id": frame_id,
-            "video_hash": video_hash,
-            "t_start": t_start,
-        }
-    log.info("Loaded %d promoted face_embed UCF frames", len(provenance))
-    return provenance
+    """Read every promoted face row in this epoch, without modifying the ledger."""
+    with closing(sqlite3.connect(f"{ucf_db_path.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT frame_id,video_hash,raw_ref,t_start,payload,payload_hash,model_tag,source_artifact_id "
+            "FROM context_frames WHERE worker_name='face_embed' AND promotion_status='promoted' "
+            "AND epoch_id=? ORDER BY frame_id", (ucf_db_path.parent.parent.name,),
+        ).fetchall()
+    provenance = defaultdict(list)
+    for row in rows:
+        record = dict(row)
+        payload = json.loads(record["payload"])
+        if not isinstance(payload, dict):
+            raise ValueError("Face UCF payload must be an object")
+        if record["payload_hash"] and hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest() != record["payload_hash"]:
+            raise ValueError("Face UCF payload hash mismatch")
+        if not record["raw_ref"]:
+            raise ValueError("Promoted face row has no raw reference")
+        record["payload"] = payload
+        provenance[os.path.normcase(str(Path(record["raw_ref"]).resolve()))].append(record)
+    log.info("Loaded %d promoted face_embed UCF frames", len(rows))
+    return dict(provenance)
+
+
+def _face_authorities(rows: list, face_count: int) -> dict:
+    """Only explicit image aggregates may authorize multiple unindexed faces."""
+    result = {}
+    for row in rows:
+        payload = row["payload"]
+        if "face_index" in payload:
+            index = payload["face_index"]
+            if type(index) is not int or not 0 <= index < face_count:
+                raise ValueError("Invalid face_index in promoted UCF row")
+            indices = [index]
+        elif payload.get("source_kind") == "image" and type(payload.get("face_count")) is int:
+            if len(rows) != 1 or payload["face_count"] != face_count:
+                raise ValueError("Ambiguous or inconsistent image face_count authority")
+            indices = range(face_count)
+        elif len(rows) == 1 and face_count == 1 and "face_count" not in payload:
+            indices = [0]  # Unambiguous historical single-face artifact.
+        else:
+            raise ValueError("Ambiguous missing face_index authority")
+        for index in indices:
+            if index in result:
+                raise ValueError("Ambiguous duplicate face_index authority")
+            result[index] = row
+    return result
+
+
+def _face_image(epoch_dir: Path, raw_path: Path, rows: list) -> tuple[Path, float | None]:
+    """Resolve the image actually embedded, rather than a different scene sample."""
+    from lib.face_observation import resolve_sampled_face
+    sampled = resolve_sampled_face(epoch_dir, raw_path, rows)
+    if sampled is not None:
+        return sampled
+    source_ids = {row["source_artifact_id"] for row in rows}
+    hashes = {row["video_hash"] for row in rows}
+    if len(source_ids) != 1 or len(hashes) != 1:
+        raise ValueError("Face raw reference has conflicting source authority")
+    processing_root = (epoch_dir / "processing").resolve()
+    media_root = processing_root / raw_path.relative_to(processing_root).parts[0]
+    manifest_path = raw_path.parent.parent / "scene_manifest.json"
+    if not manifest_path.resolve().is_relative_to(processing_root):
+        raise ValueError("Face manifest escapes the selected epoch")
+    if not manifest_path.exists():
+        image = raw_path.with_name(raw_path.name.replace("_raw_faces.json", ".jpg"))
+        timestamp = next((row["t_start"] for row in rows if row["payload"].get("face_index", 0) == 0), None)
+    else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        declared_hash = manifest.get("video_hash", manifest.get("video_id"))
+        if declared_hash and declared_hash not in hashes:
+            raise ValueError("Face manifest video identity mismatch")
+        if manifest.get("epoch_id", epoch_dir.name) != epoch_dir.name:
+            raise ValueError("Face manifest epoch mismatch")
+        matches = [scene for scene in manifest.get("scenes", [])
+                   if (scene.get("scene_id") or scene.get("id")) in source_ids]
+        if len(matches) != 1:
+            raise ValueError("Face manifest scene authority is missing or ambiguous")
+        keyframe = matches[0].get("keyframe") or {}
+        path = keyframe.get("path") if isinstance(keyframe, dict) else keyframe
+        if not isinstance(path, str) or not path:
+            raise ValueError("Face manifest keyframe path is missing")
+        image = Path(path)
+        if not image.is_absolute():
+            image = manifest_path.parent / image
+        timestamp = keyframe.get("timestamp") if isinstance(keyframe, dict) else None
+        if timestamp is not None and (type(timestamp) not in (int, float) or not math.isfinite(timestamp)):
+            raise ValueError("Face manifest keyframe timestamp is invalid")
+        if timestamp is not None:
+            scene = matches[0]
+            start, end = scene.get("start"), scene.get("end")
+            if any(type(value) not in (int, float) or not math.isfinite(value) for value in (start, end)) or not start <= timestamp <= end:
+                raise ValueError("Face manifest timestamp is outside its scene")
+            for row in rows:
+                index = row["payload"].get("face_index", 0)
+                expected = timestamp + (0.001 * index if row["payload"].get("source_kind") != "image" else 0)
+                if abs(row["t_start"] - expected) > 0.00051:
+                    raise ValueError("Face manifest timestamp disagrees with UCF authority")
+    image = image.resolve()
+    if not image.is_relative_to(processing_root):
+        raise ValueError("Face image escapes the selected processing root")
+    if not image.is_relative_to(media_root):
+        raise ValueError("Face image escapes its source media directory")
+    return image, timestamp
+
+
+def _bbox_coordinates(bbox) -> tuple | None:
+    if isinstance(bbox, dict):
+        bbox = [bbox.get(key, bbox.get(index, bbox.get(str(index))))
+                for index, key in enumerate(("left", "top", "right", "bottom"))]
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4 or any(
+        type(value) not in (int, float) or not math.isfinite(value) for value in bbox
+    ):
+        return None
+    return tuple(bbox)
 
 
 def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
-    """
-    Walks all processing/<video_hash>/video/frames/*_raw_faces.json files.
-    Returns a list of detection dicts with embedding, provenance, and path.
-    """
-    processing_dir = epoch_dir / "processing"
+    """Join each raw detection to its exact promoted authority and source image."""
+    processing_dir = (epoch_dir / "processing").resolve()
     detections = []
-    missing_provenance = 0
-
-    for video_dir in sorted(processing_dir.iterdir()):
-        frames_dir = video_dir / "video" / "frames"
-        if not frames_dir.exists():
-            continue
-        for fname in sorted(frames_dir.iterdir()):
-            if "raw_faces" not in fname.name:
-                continue
-            raw_ref = str(fname)
-            prov = provenance.get(raw_ref)
-            if prov is None:
-                # Try with forward slashes
-                prov = provenance.get(raw_ref.replace("\\", "/"))
-            if prov is None:
-                missing_provenance += 1
-                continue
-            try:
-                with open(fname, encoding="utf-8") as f:
-                    faces = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
-                log.warning("Could not read %s: %s", fname, e)
-                continue
-            if not isinstance(faces, list):
-                log.warning("Unexpected face file format in %s", fname)
-                continue
-            for face_idx, face in enumerate(faces):
-                enc = face.get("encoding")
-                if enc is None:
-                    continue
-                detections.append({
+    for raw_ref, rows in sorted(provenance.items()):
+        fname = Path(raw_ref).resolve()
+        if not fname.is_relative_to(processing_dir):
+            raise ValueError("Face raw reference escapes selected processing root")
+        faces = json.loads(fname.read_text(encoding="utf-8"))
+        if not isinstance(faces, list):
+            raise ValueError("Face raw artifact must be a list")
+        authorities = _face_authorities(rows, len(faces))
+        image, timestamp = _face_image(epoch_dir, fname, rows)
+        for face_idx, prov in sorted(authorities.items()):
+            face = faces[face_idx]
+            payload = prov["payload"]
+            # An explicit image aggregate seals only its first detection's box.
+            # Indexed video rows and historical single-face rows seal their own.
+            aggregate = payload.get("source_kind") == "image" and "face_index" not in payload
+            box_keys = ("x1", "y1", "x2", "y2")
+            if (not aggregate or face_idx == 0) and any(key in payload for key in box_keys):
+                sealed_box = _bbox_coordinates([payload.get(key) for key in box_keys])
+                raw_box = _bbox_coordinates(face.get("bbox"))
+                if sealed_box is None or raw_box is None or any(abs(a - b) > 1e-6 for a, b in zip(sealed_box, raw_box)):
+                    raise ValueError("Face bbox disagrees with promoted UCF authority")
+            enc = face.get("encoding")
+            if not isinstance(enc, list) or not enc or any(type(v) not in (int, float) or not math.isfinite(v) for v in enc) or not any(enc):
+                raise ValueError("Face embedding must be a nonzero finite vector")
+            if face.get("embedding_dimension", len(enc)) != len(enc):
+                raise ValueError("Face embedding dimension metadata mismatch")
+            engines = {str(value) for value in (face.get("engine"), prov["payload"].get("engine"), prov["model_tag"])
+                       if value and value not in {"unknown", "legacy_unsealed"}}
+            if len(engines) > 1:
+                raise ValueError("Face engine disagrees with UCF model authority")
+            detections.append({
                     "detection_id": f"{prov['frame_id']}_{face_idx}",
                     "frame_id": prov["frame_id"],
                     "video_hash": prov["video_hash"],
-                    "t_start": prov["t_start"],
+                    "t_start": timestamp,
                     "raw_ref": raw_ref,
                     "face_idx": face_idx,
                     "bbox": face.get("bbox"),
                     "embedding": enc,
-                    "image_path": str(fname).replace("_raw_faces.json", ".jpg"),
+                    "engine": next(iter(engines), "legacy_unsealed"),
+                    "image_path": str(image),
                 })
 
     engine_dimensions = {
@@ -170,10 +266,7 @@ def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
             f"{sorted(engine_dimensions)}. Re-ingest into a clean epoch before clustering."
         )
 
-    log.info(
-        "Collected %d face detections (%d files missing UCF provenance)",
-        len(detections), missing_provenance,
-    )
+    log.info("Collected %d promoted face detections", len(detections))
     return detections
 
 
@@ -241,31 +334,28 @@ def build_cluster_manifest(detections: list, labels: np.ndarray, epoch_id: str, 
     }
 
 
-def _crop_face_b64(image_path: str, bbox: dict | None) -> str | None:
+def _crop_face_b64(image_path: str, bbox: dict | list | None) -> str | None:
     """Tries to crop and base64-encode a face thumbnail for the HTML sheet."""
     try:
-        import cv2
-        if not os.path.exists(image_path):
-            return None
-        img = cv2.imread(image_path)
-        if img is None:
-            return None
-        if bbox:
-            # bbox may be {left, top, right, bottom} or similar
-            left = int(bbox.get("left", bbox.get(0, 0)))
-            top  = int(bbox.get("top",  bbox.get(1, 0)))
-            right = int(bbox.get("right", bbox.get(2, img.shape[1])))
-            bottom = int(bbox.get("bottom", bbox.get(3, img.shape[0])))
-            # Clamp to image bounds
+        from PIL import Image
+        with Image.open(image_path) as source:
+            img = source.convert("RGB")
+        if bbox is not None:
+            bbox = _bbox_coordinates(bbox)
+            if bbox is None:
+                return None
+            left, top, right, bottom = map(int, bbox)
             left, top = max(0, left), max(0, top)
-            right  = min(right,  img.shape[1])
-            bottom = min(bottom, img.shape[0])
-            if right > left and bottom > top:
-                img = img[top:bottom, left:right]
-        img = cv2.resize(img, (80, 80))
-        _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        return base64.b64encode(buf).decode()
-    except Exception:
+            right, bottom = min(right, img.width), min(bottom, img.height)
+            if right <= left or bottom <= top:
+                return None
+            img = img.crop((left, top, right, bottom))
+        img = img.resize((80, 80))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=70)
+        return base64.b64encode(buf.getvalue()).decode()
+    except (ImportError, OSError, ValueError):
+        log.warning("Face thumbnail unavailable: %s", image_path)
         return None
 
 
@@ -283,9 +373,10 @@ def generate_html_sheet(detections: list, labels: np.ndarray, manifest: dict, ou
         for m in members[:12]:  # cap at 12 thumbnails per cluster
             b64 = _crop_face_b64(m.get("image_path", ""), m.get("bbox"))
             if b64:
+                timestamp = f"{m['t_start']:.1f}s" if m["t_start"] is not None else "unknown"
                 thumbs.append(
                     f'<img src="data:image/jpeg;base64,{b64}" '
-                    f'title="v={m["video_hash"][:8]} t={m["t_start"]:.1f}s" '
+                    f'title="v={m["video_hash"][:8]} t={timestamp}" '
                     f'style="width:80px;height:80px;object-fit:cover;margin:2px;border-radius:4px;">'
                 )
             else:

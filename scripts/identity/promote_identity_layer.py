@@ -1,7 +1,9 @@
 """
 GoodQ4All — Phase 5A: Person Identity Node Promotion
 =====================================================
-The ONLY script that writes to knowledge_graph.db.
+Legacy whole-identity promotion CLI. The workbench appearance-only flow reuses
+its exact-scene planner, with separate input-bound Apply/Undo transactions in
+api.utils.identity_appearance.
 
 Pre-conditions (all enforced):
   1. validate_roster.py exits 0
@@ -38,6 +40,7 @@ import sqlite3
 import subprocess
 import sys
 from collections import defaultdict
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -320,6 +323,9 @@ def promote(
     data_path: Path,
     mem_db_path: Path,
     dry_run: bool,
+    *,
+    appearance_only: bool = False,
+    projection_connection: sqlite3.Connection | None = None,
 ) -> dict:
     """Builds one exact-scene plan, then optionally applies that same plan."""
     roster_path = data_path / "family_roster.yaml"
@@ -335,14 +341,16 @@ def promote(
 
     identities = roster.get("identities", [])
     face_manifest = json.loads(face_manifest_path.read_text()) if face_manifest_path.exists() else {}
-    spk_manifest = json.loads(spk_manifest_path.read_text()) if spk_manifest_path.exists() else {}
+    spk_manifest = json.loads(spk_manifest_path.read_text()) if not appearance_only and spk_manifest_path.exists() else {}
     face_cluster_map = {c["cluster_id"]: c for c in face_manifest.get("clusters", [])}
     spk_cluster_map = {c["cluster_id"]: c for c in spk_manifest.get("clusters", [])}
 
-    with sqlite3.connect(str(mem_db_path)) as mem_conn:
-        segments = mem_conn.execute(
-            "SELECT video_hash, speaker, meta FROM segments"
-        ).fetchall()
+    segments = []
+    if not appearance_only:
+        with sqlite3.connect(str(mem_db_path)) as mem_conn:
+            segments = mem_conn.execute(
+                "SELECT video_hash, speaker, meta FROM segments"
+            ).fetchall()
 
     manifest = {
         "epoch_id": epoch_id,
@@ -354,13 +362,16 @@ def promote(
         "errors": [],
     }
 
-    with _read_only_kg_conn(kg_path) as projection_conn:
+    with (nullcontext(projection_connection) if projection_connection is not None
+          else _read_only_kg_conn(kg_path)) as projection_conn:
         frame_to_scenes, scene_name_to_ids = _scene_authority(projection_conn)
         for identity in identities:
             iid = identity["id"]
             dname = identity.get("display_name", iid)
             aliases = identity.get("aliases") or []
             face_cluster_ids = identity.get("face_cluster_ids") or []
+            if appearance_only and not face_cluster_ids:
+                continue
             spk_cluster_ids = identity.get("speaker_cluster_ids") or []
             name_keys = identity.get("name_mention_keys") or []
             log.info("Processing identity: %s (%s)", iid, dname)
@@ -448,7 +459,7 @@ def promote(
                     "evidence_face_ids": sorted(evidence["face_ids"]),
                 })
 
-            for sc_id in spk_cluster_ids:
+            for sc_id in ([] if appearance_only else spk_cluster_ids):
                 cluster = spk_cluster_map.get(sc_id, {})
                 vc_props = {
                     "cluster_id": sc_id,

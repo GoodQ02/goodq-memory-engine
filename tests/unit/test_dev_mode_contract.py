@@ -10,11 +10,11 @@ from steps.common import config_loader
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_strict_config_validation_rejects_retired_local_overlay_keys():
-    config = config_loader.load_configs({})
-    config["progressive_chunk_size"] = 300.0
+def test_strict_config_validation_rejects_unknown_local_overlay_keys():
+    config = config_loader.load_configs({}, include_local=False)
+    config["unsupported_local_overlay_key"] = 300.0
 
-    with pytest.raises(ValueError, match="progressive_chunk_size"):
+    with pytest.raises(ValueError, match="unsupported_local_overlay_key"):
         config_loader.validate_config_mapping(config)
 
 

@@ -1,91 +1,56 @@
 ---
 name: goodq4all-operator
-description: Use for GoodQ4All repo runtime audits, clean memory starts, Qdrant cleanup, ingestion validation, local fallback/audio repair, operator-console visibility, and agent-facing documentation truth maintenance.
+description: Diagnose GoodQ runtime behavior and validate ingestion, approved data cleanup, or follower releases.
 ---
 
 # GoodQ4All Operator
 
-Use this skill when operating the GoodQ4All repo locally.
+Follow applicable `AGENTS.md` and the current task's authorization. Read
+`PROJECT.md` when resuming or selecting a milestone; use the relevant row of
+`docs/architecture/REPOSITORY_MAP.md` to locate source and contracts. Read
+`docs/agent/PROJECT_ORIENTATION.md` for unfamiliar ownership or authority, not
+as a repeated preflight.
 
-## Read For The Task
+## Route the task
 
-Follow the applicable `AGENTS.md`. For unfamiliar or authority-sensitive work,
-read `docs/agent/PROJECT_ORIENTATION.md`; reuse it when already read this session.
+Paths below are relative to the repository root. Load only the matching workflow.
 
-- For runtime-state questions, read the relevant current-state section and verify
-  it against the resolved configuration and live evidence. Generated state files
-  are snapshots, not permission or proof that cleanup remains necessary.
-- For clean-memory work, read `docs/agent/workflows/CLEAN_MEMORY_START.md`.
-- For a repair, read the relevant subsystem contract and the repair workflow below.
-- For documentation-only work, inspect the affected text and its authoritative
-  source. Do not start services, query personal stores, or preload runtime runbooks.
+| Task | Owner |
+| --- | --- |
+| Absent, stale or incorrect runtime/API/UI evidence | `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` |
+| Ingestion output quality, ground truth or threshold tuning | `docs/agent/workflows/PIPELINE_TROUBLESHOOTING_FLOW.md` |
+| Approved isolated ingestion or exact-target data cleanup | `docs/agent/workflows/CLEAN_MEMORY_START.md` |
+| Dev service posture, local models or GPU recovery | `docs/agent/workflows/LOCAL_DEV_RUNTIME_MODES.md` |
+| Approved follower release/install validation | `docs/agent/workflows/PORTABLE_FOLLOWER_RELEASE_VALIDATION.md` |
+| Reconnectable SSH scene witness | `docs/agent/workflows/REMOTE_WITNESS_OVER_SSH.md` |
+| Hermes personal-memory queries | `docs/agent/workflows/HERMES_PERSONAL_MEMORY_RETRIEVAL.md` |
 
-## Operating Rules
+For ordinary documentation edits, inspect the affected text and its owner
+directly; no runtime workflow, service start or personal-store query is needed.
+Run `scripts/docs/doc_drift_lint.py` and
+`scripts/docs/doc_authority_lint.py verify` for documentation changes.
 
-- Inspect the affected surface before changing it; keep unrelated work intact.
-- Require explicit authorization covering destructive cleanup or ingestion.
-  A collection prefix, old epoch label, or historical state note never makes data
-  disposable. Resolve exact targets and preserve recovery evidence first.
-- Prefer a fresh isolated epoch and its own collections for an approved probe.
-  Verify emptiness and isolation; do not clear existing collections by default.
-- Preserve source behavior unless the task includes code repair.
-- Use current configured endpoints and the existing project environment. Probe
-  only the services relevant to the task; a successful health response alone
-  does not establish useful scene output.
+## Bound the operation
 
-## Useful Checks
+Resolve the actual configured endpoint, epoch, paths and writer owner for the
+surface under test. Use the existing project environment; `cli.print_config`
+can resolve config when needed. Keep its output local and redact credentials.
+Inspect relevant artifacts/status before model work or expensive probes.
 
-From the repository root, when relevant:
+An approved probe should use verified fresh isolated targets. Never clear a
+collection because of its prefix or an old state note. The clean-memory runbook
+owns exact-target authorization, writer handling, backup and isolation checks.
+Health responses and old populated stores do not prove a new scene succeeded.
 
-```powershell
-git status --short --branch
-conda run --no-capture-output -n goodq_core python -m cli.print_config
-```
+## Close one outcome
 
-Keep resolved configuration local and redact credentials before sharing it.
-For documentation changes, use `scripts/docs/doc_drift_lint.py`; distinguish
-pre-existing findings from findings introduced by the changed files.
+Define the observable result and its acceptance evidence, repair the affected
+boundary, then verify that caller at the appropriate scope. Fresh ingestion is
+required for current ingestion acceptance; a read-only consumer repair may use
+existing artifacts. Broader runs and promotion require their own scope coverage.
 
-## Clean Memory Starts
-
-Use the current procedure in `docs/agent/workflows/CLEAN_MEMORY_START.md` only
-when this task involves a fresh ingestion probe or explicitly approved cleanup.
-That runbook owns target selection, recovery, isolation, and scene-level evidence.
-Its historical reference is optional context, never an executable cleanup plan.
-
-## Evidence-First Runtime Repair
-
-Follow `docs/agent/workflows/EVIDENCE_FIRST_RUNTIME_REPAIR.md` when a capability
-looks absent, stale, or partially proven. The short pattern is:
-
-1. name one seam
-2. prove config/runtime/persistence/UI truth separately
-3. patch the boundary, not the symptom
-4. validate with a focused test
-5. rerun a fresh scene-first probe
-6. update current-state docs so the next agent does not chase the stale theory
-
-## Portable Follower Validation
-
-For an approved SSH follower, keep the release and witness boundaries separate:
-
-1. Verify the offline asset receipt and transfer hashes before installation.
-   For large multi-pack releases, transfer and size-check packs serially, then
-   run one durable hash verifier that persists per-pack progress and an atomic
-   receipt. A missing heartbeat or completed-artifact update is `unproven`, not
-   a reason to start a duplicate verifier.
-2. Preserve approved removal, installation, offline-suite, and restore-smoke
-   evidence; a fresh installer exit alone is not a clean-baseline proof.
-3. Launch one isolated non-promoting scene through `cli.remote_witness` on the
-   follower, then read its durable receipt after SSH reconnects.
-4. Treat `runner_finished` plus terminal audio ledger evidence as the scene
-   gate. An SSH timeout, a quiet cold model fetch, or a pending audio step is
-   not a pass.
-5. Update `docs/releases/ROADMAP.md` and the applicable workflow with verified
-   state; do not hand-edit generated current-state projections.
-6. For a remote elevated installer, follow the shared **Durable remote installer
-   validation** section in the local-network workflow. Read back the generated
-   task runner before launching it: the quoted setup path and `/S` must be one
-   line, or Session 0 can wait invisibly for an interactive installer.
-7. During NSIS payload verification or extraction, inspect the active child
-   process and its CPU/I/O. A quiet parent task is not a stall by itself.
+Keep exact checks, revision/configuration and results in the task receipt.
+Update `PROJECT.md` or the roadmap only when the checkpoint or gate changes.
+Never hand-edit generated current-state projections. Report failures and
+unverified limits; keep **UNDO ONLY - not a verification step** separate from
+verification. Do not create a parallel mission, harness or completion ledger.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprehensive code audit to find silent failures and suspicious patterns
+r"""Comprehensive code audit to find silent failures and suspicious patterns
 
 MISSION: CODE AUDIT
    _____ ____  ____  ____   ___

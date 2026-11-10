@@ -1,35 +1,91 @@
 <!doctype html>
-<html lang="en" style="background-color: #0a0a0c;">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoodQ Identity Stitching Workbench</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050c1e'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2300d2ff'%3EIS%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/stitching.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2305070b'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='24' fill='%2338bdf8'%3EIS%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./static/css/stitching.css?v=20261109-obsidian" />
+    <script>
+      (function() {
+        var theme = localStorage.getItem("goodq-theme") || "night";
+        var isDay = theme === "day" || (theme === "auto" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (isDay) {
+          var apply = function() { if (document.body) document.body.classList.add("theme-day"); };
+          if (document.body) apply();
+          else document.addEventListener("DOMContentLoaded", apply);
+        }
+      })();
+    </script>
   </head>
-  <body style="background-color: #0a0a0c;">
-    <div class="crt-screen">
+  <body>
+    <div class="crt-screen no-sfx">
       <div class="scanlines"></div>
 
-      <!-- Permanent Mutation Workbench Warning Banner -->
-      <div class="mutation-warning-banner">
-        <span class="warning-blink">⚠️ MUTATION WORKBENCH ACTIVE</span>
-        <span>— OPERATOR WRITE MODIFICATIONS WILL REBUILD LEDGER GRAPH READ-MODEL IN REAL-TIME</span>
-      </div>
+      <div class="workspace-shell">
+        <!-- Obsidian-Inspired Left Activity Ribbon -->
+        <nav class="workspace-ribbon" aria-label="Primary Workspace Views">
+          <div class="ribbon-group">
+            <a class="ribbon-btn" href="/ui/retro_console_v1/" title="Memory Explorer (Scenes, Graph &amp; Search)">
+              <span class="ribbon-icon" aria-hidden="true">◈</span>
+              <span class="ribbon-label">Explore</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=appearances" title="People &amp; Connected Scenes">
+              <span class="ribbon-icon" aria-hidden="true">◉</span>
+              <span class="ribbon-label">People</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=matches" title="Review Face &amp; Voice Matches">
+              <span class="ribbon-icon" aria-hidden="true">⬡</span>
+              <span class="ribbon-label">Matches</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=faces" title="Face Clusters">
+              <span class="ribbon-icon" aria-hidden="true">⊞</span>
+              <span class="ribbon-label">Faces</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=names" title="Spoken Name Mentions">
+              <span class="ribbon-icon" aria-hidden="true">@</span>
+              <span class="ribbon-label">Mentions</span>
+            </a>
+            <a class="ribbon-btn" href="/ui/identity_workbench/?tab=roster" title="Family Roster">
+              <span class="ribbon-icon" aria-hidden="true">◼</span>
+              <span class="ribbon-label">Roster</span>
+            </a>
+            <a class="ribbon-btn active" href="/ui/stitching_workbench/" aria-current="page" title="Speaker Stitching Workbench">
+              <span class="ribbon-icon" aria-hidden="true">≋</span>
+              <span class="ribbon-label">Voices</span>
+            </a>
+          </div>
+        </nav>
 
-      <header class="app-header">
-        <div class="header-brand">
-          <span class="header-logo">GOODQ // IDENTITY STITCHING WORKBENCH</span>
-          <span class="header-status" id="system-status">Status: CONNECTING</span>
-        </div>
-        
-        <div class="header-controls">
-          <span class="db-indicator" id="db-indicator" title="SQLite Database Path">Database: ...</span>
-          <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">&lt; RETRO EXPLORER</a>
-        </div>
-      </header>
+        <div class="workspace-main">
+          <!-- Permanent Mutation Workbench Warning Banner -->
+          <div class="mutation-warning-banner">
+            <span class="warning-blink">⚠️ MUTATION WORKBENCH ACTIVE</span>
+            <span>— OPERATOR WRITE MODIFICATIONS WILL REBUILD LEDGER GRAPH READ-MODEL IN REAL-TIME</span>
+          </div>
 
-      <main class="grid-layout">
+          <header class="app-header">
+            <div class="header-brand">
+              <span class="header-logo">GOODQ // IDENTITY STITCHING WORKBENCH</span>
+              <span class="header-status" id="system-status">Status: CONNECTING</span>
+            </div>
+            
+            <div class="header-controls">
+              <label class="collection-switcher-pill" id="collection-switcher-pill" hidden>
+                <span>SOURCE:</span>
+                <select id="collection-source-select" aria-label="Active movie collection"></select>
+              </label>
+              <span class="db-indicator" id="db-indicator" title="SQLite Database Path">Database: ...</span>
+              <a class="nav-back-link" href="/ui/identity_workbench/" title="Open Identity Curation Workbench">CURATION ›</a>
+              <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">EXPLORER ›</a>
+            </div>
+          </header>
+
+          <details class="panel speaker-reviews-drawer">
+            <summary>Possible speaker changes — review only</summary>
+            <div id="speaker-reviews" class="panel-content">Loading review evidence...</div>
+          </details>
+          <main class="grid-layout">
         <!-- Panel 1: Unstitched Patterns List -->
         <section class="panel panel-left" aria-labelledby="unstitched-header">
           <div class="panel-header" id="unstitched-header">
@@ -71,7 +127,7 @@
                     <span class="metric-val" id="selected-pattern-voiced">-</span>
                   </div>
                   <div class="card-metric">
-                    <span class="metric-label">Segments</span>
+                    <span class="metric-label">Selected turns</span>
                     <span class="metric-val" id="selected-pattern-segments">-</span>
                   </div>
                 </div>
@@ -127,6 +183,8 @@
           </div>
         </section>
       </main>
+        </div>
+      </div>
 
       <!-- Rebuild / Processing Block Overlay -->
       <div class="rebuild-overlay" id="rebuild-overlay" hidden>
@@ -185,6 +243,7 @@
       <div class="toast-container" id="toast-container"></div>
     </div>
 
-    <script src="./static/js/stitching.js?v=20260726-prerequisite-state"></script>
+    <script src="/ui/retro_console_v1/static/js/library-context.js"></script>
+    <script src="./static/js/stitching.js?v=20261011-speaker-review"></script>
   </body>
 </html>

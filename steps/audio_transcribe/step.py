@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import time
 import logging
+import shlex
 import wave
 from pathlib import Path
 
@@ -346,140 +347,20 @@ def _slice_to_wav(src_path: str, start: float, end: float, ffmpeg_path: Optional
     return None
 
 
-def _transcribe_chunk_whisper_cli(chunk_path: str, offset: float, whisper_cli: str, whisper_model: str) -> Optional[Dict[str, Any]]:
-    try:
-        out_prefix = tempfile.NamedTemporaryFile(delete=False).name
-        cmd = [
-            whisper_cli,
-            "-m",
-            whisper_model,
-            "-f",
-            chunk_path,
-            "-oj",
-            "-of",
-            out_prefix,
-            "-pp",
-        ]
-        subprocess.run(cmd, check=True)
-        json_path = out_prefix + ".json"
-        txt_path = out_prefix + ".txt"
-        transcript = None
-        segments: List[Dict[str, Any]] = []
-        if os.path.isfile(json_path):
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = _json.load(f)
-                if isinstance(data, list):
-                    iterable = data
-                elif "transcription" in data:
-                    iterable = data["transcription"]
-                elif "segments" in data:
-                    iterable = data["segments"]
-                else:
-                    iterable = []
-                
-                for seg in iterable:
-                    if "offsets" in seg:
-                        start = float(seg["offsets"].get("from", 0)) / 1000.0 + offset
-                        end = float(seg["offsets"].get("to", 0)) / 1000.0 + offset
-                    else:
-                        start = float(seg.get("start", 0.0) or 0.0) + offset
-                        end = float(seg.get("end", 0.0) or 0.0) + offset
-                    text = seg.get("text", "") or ""
-                    segments.append({"start": start, "end": end, "text": text})
-                transcript = " ".join(s.get("text", "").strip() for s in segments if s.get("text")) or None
-            except Exception as e:
-                print(f'[ERROR] JSON parsing failed: {str(e)}')
-                segments = []
-        if transcript is None and os.path.isfile(txt_path):
-            try:
-                with open(txt_path, "r", encoding="utf-8") as f:
-                    transcript = f.read().strip() or None
-            except Exception as e:
-                transcript = None
-        return {
-            "transcript": transcript,
-            "segments": segments,
-            "engine": "whisper.cpp",
-        }
-    except Exception as e:
-        print(f'[ERROR] Whisper CLI transcription failed: {type(e).__name__}: {str(e)}')
-        print(f'[ERROR] Chunk: {chunk_path}')
-        if os.path.isfile(chunk_path):
-            print(f'[ERROR] Chunk size: {os.path.getsize(chunk_path)} bytes')
-        import traceback
-        print(f'[DEBUG] Traceback: {traceback.format_exc()}')
-        return None
-    finally:
-        debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
-        for ext in (".json", ".txt", ".srt", ".tsv"):
-            try:
-                fpath = out_prefix + ext
-                if os.path.isfile(fpath):
-                    if debug_mode:
-                        print(f'[DEBUG] Keeping whisper output for inspection: {fpath}')
-                    else:
-                        os.remove(fpath)
-            except Exception as remove_err:
-                print(f"[DEBUG] Failed to clean up whisper helper file {fpath}: {remove_err}")
+def _transcribe_chunk_whisper_cli(chunk_path, offset, whisper_cli, whisper_model):
+    from steps.audio_transcribe.whisper_cpp import WhisperCppModel
+    from wsl2_audio.transcription_contract import transcribe_file
+    return transcribe_file(WhisperCppModel(whisper_cli, whisper_model), chunk_path,
+                           offset=offset, engine="whisper.cpp")
 
 
-def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any) -> Optional[Dict[str, Any]]:
+def _transcribe_chunk_fw(chunk_path: str, offset: float, model: Any, temperature: float = 0.0,
+                         *, vocabulary=None, language=None, beam_size=5) -> Optional[Dict[str, Any]]:
     if model is None:
         return None
-    try:
-        segments, info = model.transcribe(
-            chunk_path,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={
-                "threshold": 0.4,
-                "min_speech_duration_ms": 250,
-                "max_speech_duration_s": float('inf'),
-                "min_silence_duration_ms": 500,
-                "speech_pad_ms": 400
-            },
-            word_timestamps=True,
-            condition_on_previous_text=True,
-            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-            compression_ratio_threshold=2.4,
-            log_prob_threshold=-1.0,
-            no_speech_threshold=0.6
-        )
-        seg_list: List[Dict[str, Any]] = []
-        text_parts: List[str] = []
-        for seg in segments:
-            start = float(getattr(seg, "start", 0.0) or 0.0) + offset
-            end = float(getattr(seg, "end", 0.0) or 0.0) + offset
-            text = getattr(seg, "text", "") or ""
-            seg_list.append({
-                "start": start,
-                "end": end,
-                "text": text,
-                "words": [
-                    {
-                        "start": float(getattr(w, "start", 0.0) or 0.0) + offset,
-                        "end": float(getattr(w, "end", 0.0) or 0.0) + offset,
-                        "word": getattr(w, "word", "") or "",
-                        "prob": float(getattr(w, "probability", 0.0) or 0.0),
-                    }
-                    for w in (getattr(seg, "words", None) or [])
-                ],
-            })
-            if text:
-                text_parts.append(text.strip())
-        transcript = " ".join(tp for tp in text_parts if tp) or None
-        meta = {
-            "transcript": transcript,
-            "segments": seg_list,
-            "engine": "faster-whisper",
-            "language": getattr(info, "language", None),
-            "duration": float(getattr(info, "duration", 0.0) or 0.0),
-        }
-        return meta
-    except Exception as e:
-        print(f"[WARN] Whisper transcription error: {str(e)}")
-        return None
+    from wsl2_audio.transcription_contract import transcribe_file
+    return transcribe_file(model, chunk_path, offset=offset, temperature=temperature,
+                           vocabulary=vocabulary, language=language, beam_size=beam_size)
 
 
 def _windows_to_wsl_path(path: str) -> Optional[str]:
@@ -514,7 +395,7 @@ def _resolve_wsl_python(distro: str, wsl_workspace: str) -> str:
     return candidates[0]
 
 
-def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
+def _run_wsl_faster_whisper_venv(input_path: str, options: Optional[dict] = None) -> Dict[str, Any]:
     distro = (os.environ.get("GOODQ_WSL_DISTRO") or "Ubuntu-22.04").strip() or "Ubuntu-22.04"
     wsl_workspace = (os.environ.get("GOODQ_WSL_WORKSPACE") or "").strip()
     if not wsl_workspace:
@@ -564,16 +445,15 @@ def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
         if not wsl_output_path:
             raise RuntimeError(f"Could not map output path to WSL mount path: {output_json_path}")
 
-        cmd = [
-            "wsl",
-            "-d",
-            distro,
-            "--",
-            wsl_python,
-            helper_path,
-            wsl_input_path,
-            wsl_output_path,
-        ]
+        arguments = [wsl_python, helper_path, wsl_input_path, wsl_output_path,
+                     _json.dumps(options or {'temperature': 0.})]
+        environment = []
+        for name in ('HF_HUB_OFFLINE', 'TRANSFORMERS_OFFLINE', 'HF_HUB_DISABLE_TELEMETRY'):
+            if os.environ.get(name) in ('0', '1'):
+                environment.append(f'{name}={os.environ[name]}')
+        command = f"source {shlex.quote(wsl_workspace+'/setup_cuda_env.sh')} && exec "
+        command += ' '.join(shlex.quote(value) for value in ['env', *environment, *arguments])
+        cmd = ['wsl', '-d', distro, '--', 'bash', '-lc', command]
         proc = subprocess.run(
             cmd,
             capture_output=True,
@@ -581,13 +461,22 @@ def _run_wsl_faster_whisper_venv(input_path: str) -> Dict[str, Any]:
             encoding="utf-8",
             errors="replace",
         )
-        if proc.returncode != 0:
-            stderr = (proc.stderr or proc.stdout or "").strip()
-            raise RuntimeError(f"WSL faster-whisper invocation failed ({proc.returncode}): {stderr}")
         if not os.path.isfile(output_json_path):
             raise RuntimeError("WSL faster-whisper did not produce an output JSON file")
         with open(output_json_path, "r", encoding="utf-8") as fh:
-            return _json.load(fh)
+            payload = _json.load(fh)
+        if not isinstance(payload, dict):
+            raise RuntimeError('WSL transcription returned a non-object result')
+        if proc.returncode != 0:
+            payload.update(status='error', transcription_status='error',
+                transcription_error=payload.get('error') or f'WSL helper exited {proc.returncode}')
+        decoding = payload.get('transcription_decoding') or {}
+        if payload.get('status') == 'success' and (
+                decoding.get('temperature') != (options or {}).get('temperature', 0.)
+                or (decoding.get('source_regions') or {}).get('policy') != 'source_audio_v2'):
+            payload.update(status='error', transcription_status='error',
+                transcription_error='WSL helper did not confirm requested coverage and decoding policy')
+        return payload
     finally:
         try:
             if os.path.isfile(output_json_path):
@@ -652,114 +541,31 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     if not use_wsl and require_wsl_audio():
         raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but WSL audio is disabled by profile/config")
     
+    wsl_attempt = None
     if use_wsl:
-        wsl_engine = str(os.environ.get("GOODQ_WSL_TRANSCRIBE_ENGINE") or "").strip().upper()
-        if wsl_engine == "FASTER_WHISPER_VENV":
-            try:
-                logger.info("[TRANSCRIBE] Using WSL faster-whisper venv engine")
-                start_time = time.time()
-                wsl_result = _run_wsl_faster_whisper_venv(path)
-                if wsl_result.get("status") == "success":
-                    elapsed = time.time() - start_time
-                    segments_raw = wsl_result.get("segments")
-                    segments = segments_raw if isinstance(segments_raw, list) else []
-                    full_text = " ".join(
-                        str(seg.get("text", "")).strip()
-                        for seg in segments
-                        if isinstance(seg, dict) and seg.get("text")
-                    ).strip()
-                    duration = 0.0
-                    for seg in segments:
-                        if isinstance(seg, dict):
-                            try:
-                                duration = max(duration, float(seg.get("end", 0.0) or 0.0))
-                            except Exception:
-                                pass
-                    return {
-                        "transcript": full_text or None,
-                        "segments": segments,
-                        "language": wsl_result.get("language"),
-                        "transcript_meta": {
-                            "status": "ok" if full_text else "empty",
-                            "reason": "transcript_available" if full_text else "no_speech_detected",
-                            "error": None,
-                            "method": "wsl_faster_whisper_venv",
-                            "engine": wsl_result.get("engine") or "faster-whisper",
-                            "model": wsl_result.get("model"),
-                            "device": wsl_result.get("device"),
-                            "attempted_device": "wsl",
-                            "duration": duration,
-                            "processing_time": elapsed,
-                            "realtime_factor": duration / elapsed if elapsed > 0 else 0.0,
-                            "telemetry": wsl_result.get("telemetry"),
-                        },
-                    }
-                error_msg = wsl_result.get("error") or "unknown WSL faster-whisper venv failure"
-                if require_wsl_audio():
-                    raise RuntimeError(
-                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL faster-whisper venv failed: {error_msg}"
-                    )
-                logger.warning(f"[TRANSCRIBE] WSL faster-whisper venv failed: {error_msg}, falling back")
-            except Exception as e:
-                if require_wsl_audio():
-                    raise RuntimeError(
-                        f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL faster-whisper venv path failed: {e}"
-                    ) from e
-                logger.warning(f"[TRANSCRIBE] WSL faster-whisper venv error: {e}, falling back")
+        from steps.audio.audio_wsl2_bridge import (
+            audio_transcribe_wsl2, unified_transcription_options, _transcription_projection)
         try:
-            from wsl2_audio_bridge import WSL2AudioBridge
-            bridge = WSL2AudioBridge()
-            
-            if bridge.check_status():
-                logger.info(f"[TRANSCRIBE] Using WSL2 GPU acceleration")
-                start_time = time.time()
-                
-                wsl_result = bridge.process_audio(path)
-                
-                if wsl_result.get("status") == "success":
-                    elapsed = time.time() - start_time
-                    duration = wsl_result.get("duration", 0)
-                    logger.info(f"[TRANSCRIBE] WSL2 completed in {elapsed:.1f}s ({duration/elapsed:.1f}x realtime)")
-                    
-                    segments = wsl_result.get("segments", [])
-                    full_text = " ".join(seg.get("text", "") for seg in segments)
-                    
-                    return {
-                        "transcript": full_text.strip() if full_text else None,
-                        "segments": segments,
-                        "language": wsl_result.get("language"),
-                        "transcript_meta": {
-                            "status": "ok" if full_text.strip() else "empty",
-                            "reason": "transcript_available" if full_text.strip() else "no_speech_detected",
-                            "error": None,
-                            "method": "wsl2_gpu",
-                            "engine": wsl_result.get("engine") or "wsl2_audio_bridge",
-                            "model": wsl_result.get("model"),
-                            "device": wsl_result.get("device", "wsl"),
-                            "attempted_device": "wsl",
-                            "duration": duration,
-                            "processing_time": elapsed,
-                            "realtime_factor": duration / elapsed if elapsed > 0 else 0
-                        }
-                    }
-                else:
-                    error_msg = wsl_result.get("error") or "unknown WSL2 processing failure"
-                    if require_wsl_audio():
-                        raise RuntimeError(f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL2 processing failed: {error_msg}")
-                    logger.warning(f"[TRANSCRIBE] WSL2 failed: {error_msg}, falling back to Windows")
+            if str(os.environ.get('GOODQ_WSL_TRANSCRIBE_ENGINE') or '').upper() == 'FASTER_WHISPER_VENV':
+                options = {'temperature': tx_cfg.get('temperature', 0.), 'vocabulary': tx_cfg.get('vocabulary'),
+                           'language': tx_cfg.get('language'), 'beam_size': tx_cfg.get('beam_size', 5)}
+                if tx_cfg.get('model'): options['model'] = tx_cfg['model']
+                raw = _run_wsl_faster_whisper_venv(path, options)
+                wsl_result = _transcription_projection(raw, engine='wsl_faster_whisper_venv')
             else:
-                if require_wsl_audio():
-                    raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but WSL2 bridge is not ready")
-                logger.info(f"[TRANSCRIBE] WSL2 not ready, using Windows processing")
-        except ImportError as e:
+                wsl_result = audio_transcribe_wsl2(path, duration=item.get('duration'),
+                    timeout=tx_cfg.get('timeout', 3600), **unified_transcription_options(cfg))
+            if wsl_result.get('status') in ('success', 'partial'):
+                return wsl_result
+            wsl_attempt = wsl_result
+            raise RuntimeError(str(wsl_result.get('error') or 'WSL transcription failed'))
+        except Exception as exc:
             if require_wsl_audio():
-                raise RuntimeError("GOODQ_REQUIRE_WSL_AUDIO=1 but wsl2_audio_bridge is unavailable") from e
-            logger.info(f"[TRANSCRIBE] WSL2 bridge not installed, using Windows processing")
-        except Exception as e:
-            if require_wsl_audio():
-                raise RuntimeError(f"GOODQ_REQUIRE_WSL_AUDIO=1 and WSL2 path failed: {e}") from e
-            logger.warning(f"[TRANSCRIBE] WSL2 error: {e}, falling back to Windows")
-    
+                raise RuntimeError(f'GOODQ_REQUIRE_WSL_AUDIO=1 and WSL transcription failed: {exc}') from exc
+            logger.warning('[TRANSCRIBE] WSL failed; using the configured local path: %s', exc)
+            if wsl_attempt is None:
+                wsl_attempt = {'status': 'error', 'error': str(exc)}
+
     # Windows processing
     logger.info(f"[TRANSCRIBE] Using Windows processing")
     
@@ -775,20 +581,6 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     duration = _audio_duration(path)
     duration_minutes = (duration / 60.0) if duration else None
     
-    chunks = _build_chunks(item, cfg, duration, chunk_seconds)
-    if not chunks:
-        return {
-            "transcript": None,
-            "transcript_meta": {
-                "status": "no_chunks",
-                "reason": "no_audio_chunks",
-                "error": None,
-                "engine": "hybrid_whisper",
-                "model": None,
-                "device": "none",
-            },
-        }
-
     tools_cfg = ((cfg.get("config", {}) or {}).get("tools", {}) or {})
     whisper_cli = tools_cfg.get("whisper_cli")
     whisper_model_path = tools_cfg.get("whisper_ggml_model")
@@ -921,317 +713,35 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
             },
         }
 
-    full_text_parts: List[str] = []
-    chunk_reports: List[Dict[str, Any]] = []
-    flat_segments: List[Dict[str, Any]] = []
-    chunk_engine = "whisper.cpp" if whisper_cli else "faster-whisper"
-    
-    total_start = time.time()
-    total_audio_duration = 0.0
-
-    logger.info(f"[TRANSCRIBE] Processing {len(chunks)} chunks...")
-
-    for idx, chunk in enumerate(chunks):
-        start = float(chunk["start"])
-        end = float(chunk["end"])
-        speaker = chunk.get("speaker")
-        chunk_duration = end - start
-        total_audio_duration += chunk_duration
-        
-        if (idx + 1) % 10 == 0:
-            logger.info(f"[TRANSCRIBE] Progress: {idx+1}/{len(chunks)} chunks")
-        
-        tmp_chunk = _slice_to_wav(path, start, end, ffmpeg_path)
-        if not tmp_chunk:
-            chunk_reports.append({
-                "start": start,
-                "end": end,
-                "speaker": speaker,
-                "status": "error",
-                "reason": "audio_slice_failed",
-                "error": "slice_failed",
-                "engine": chunk_engine,
-            })
-            continue
-        
-        try:
-            chunk_start = time.time()
-            
-            result = None
-            if whisper_cli:
-                result = _transcribe_chunk_whisper_cli(tmp_chunk, start, whisper_cli, whisper_model_path)
-            if result is None:
-                result = _transcribe_chunk_fw(tmp_chunk, start, fw_model)
-            
-            chunk_elapsed = time.time() - chunk_start
-            
-            if result is None:
-                chunk_reports.append({
-                    "start": start,
-                    "end": end,
-                    "speaker": speaker,
-                    "status": "error",
-                    "reason": "transcription_backend_no_result",
-                    "error": "transcribe_failed",
-                    "engine": chunk_engine,
-                })
-                continue
-            
-            # Record performance
-            if device == "cuda":
-                optimizer.record_performance("transcribe_chunk", chunk_elapsed, chunk_duration)
-            
-            transcript = result.get("transcript")
-            if isinstance(transcript, str):
-                transcript = transcript.strip()
-            elif transcript is not None:
-                transcript = str(transcript).strip()
-            if transcript:
-                full_text_parts.append(transcript)
-            else:
-                transcript = None
-
-            raw_segments = result.get("segments") if isinstance(result, dict) else None
-            seg_list: List[Dict[str, Any]] = []
-            if isinstance(raw_segments, list):
-                for seg in raw_segments:
-                    if not isinstance(seg, dict):
-                        continue
-                    seg_copy = dict(seg)
-                    try:
-                        seg_copy["start"] = float(seg_copy.get("start", start) or start)
-                    except Exception as e:
-                        seg_copy["start"] = start
-                    try:
-                        seg_copy["end"] = float(seg_copy.get("end", end) or end)
-                    except Exception as e:
-                        seg_copy["end"] = end
-                    text_val = seg_copy.get("text")
-                    seg_copy["text"] = str(text_val).strip() if text_val is not None else (transcript or "")
-                    if not seg_copy["text"]:
-                        seg_copy["text"] = transcript or ""
-                    if seg_copy["text"]:
-                        seg_copy["text"] = seg_copy["text"].strip()
-                    speaker_val = seg_copy.get("speaker") or speaker
-                    if speaker_val is not None:
-                        seg_copy["speaker"] = speaker_val
-                    words = seg_copy.get("words")
-                    if isinstance(words, list):
-                        norm_words = []
-                        for w in words:
-                            if not isinstance(w, dict):
-                                continue
-                            w_copy = dict(w)
-                            try:
-                                w_copy["start"] = float(w_copy.get("start", seg_copy["start"]) or seg_copy["start"])
-                            except Exception as e:
-                                w_copy["start"] = seg_copy["start"]
-                            try:
-                                w_copy["end"] = float(w_copy.get("end", seg_copy["end"]) or seg_copy["end"])
-                            except Exception as e:
-                                w_copy["end"] = seg_copy["end"]
-                            if "word" in w_copy and w_copy["word"] is not None:
-                                w_copy["word"] = str(w_copy["word"])
-                            norm_words.append(w_copy)
-                        seg_copy["words"] = norm_words
-                    seg_list.append(seg_copy)
-                flat_segments.extend(seg_list)
-            elif transcript:
-                seg_list = [{
-                    "start": start,
-                    "end": end,
-                    "text": transcript,
-                    "speaker": speaker,
-                }]
-                flat_segments.extend(seg_list)
-
-            chunk_entry = {
-                "start": start,
-                "end": end,
-                "speaker": speaker,
-                "status": "ok" if transcript else "empty",
-                "reason": "transcript_available" if transcript else "no_speech_detected",
-                "error": None,
-                "engine": result.get("engine") or chunk_engine,
-                "text": transcript,
-                "segments": seg_list,
-            }
-            chunk_reports.append(chunk_entry)
-            
-            # Clear GPU cache periodically
-            if device == "cuda" and (idx + 1) % 20 == 0:
-                optimizer.clear_cache()
-                
-        finally:
-            debug_mode = os.environ.get('GOODQ_DEBUG_KEEP_TEMP', '').lower() == 'true'
-            try:
-                if os.path.isfile(tmp_chunk):
-                    if debug_mode:
-                        logger.debug(f'Keeping chunk for inspection: {tmp_chunk}')
-                    else:
-                        os.remove(tmp_chunk)
-            except Exception as e:
-                logger.warning(
-                    "[TRANSCRIBE] Temp chunk cleanup failed operation=%s chunk=%s exc_type=%s exc=%s",
-                    "cleanup_temp_chunk",
-                    tmp_chunk,
-                    type(e).__name__,
-                    e,
-                )
-    
-    total_elapsed = time.time() - total_start
-    
-    # Calculate overall performance
-    if total_audio_duration > 0 and total_elapsed > 0:
-        overall_realtime = total_audio_duration / total_elapsed
-        logger.info(f"[TRANSCRIBE] Completed in {total_elapsed:.1f}s ({overall_realtime:.2f}x realtime)")
-        
-        if device == "cuda":
-            optimizer.print_memory_stats()
-            suggestions = optimizer.optimize_for_next_run()
-            if suggestions.get("recommendation"):
-                logger.info(f"[TRANSCRIBE] GPU optimization: {suggestions['recommendation']}")
-            optimizer.record_performance("transcribe_full", total_elapsed, total_audio_duration)
-    
-    normalized_segments: List[Dict[str, Any]] = []
-    seen_segments = set()
-    numeric_coercion_warned = False
-    chunk_report_coercion_warned = False
-    for seg in flat_segments:
-        if not isinstance(seg, dict):
-            continue
-        try:
-            start_val = float(seg.get("start", 0.0) or 0.0)
-        except Exception as e:
-            if not numeric_coercion_warned:
-                logger.warning(
-                    "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
-                    "normalize_segment_times",
-                    "start",
-                    type(e).__name__,
-                    e,
-                )
-                numeric_coercion_warned = True
-            start_val = 0.0
-        try:
-            end_val = float(seg.get("end", start_val) or start_val)
-        except Exception as e:
-            if not numeric_coercion_warned:
-                logger.warning(
-                    "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
-                    "normalize_segment_times",
-                    "end",
-                    type(e).__name__,
-                    e,
-                )
-                numeric_coercion_warned = True
-            end_val = start_val
-        text_val = seg.get("text")
-        text_str = str(text_val).strip() if text_val is not None else ""
-        speaker_val = seg.get("speaker")
-        key = (round(start_val, 3), round(end_val, 3), text_str, str(speaker_val) if speaker_val is not None else "")
-        if key in seen_segments:
-            continue
-        seen_segments.add(key)
-        seg_obj: Dict[str, Any] = {
-            "start": start_val,
-            "end": end_val,
-            "text": text_str,
-        }
-        if speaker_val is not None:
-            seg_obj["speaker"] = speaker_val
-        words_val = seg.get("words")
-        if isinstance(words_val, list) and words_val:
-            seg_obj["words"] = words_val
-        normalized_segments.append(seg_obj)
-    if not normalized_segments:
-        for report in chunk_reports:
-            text_val = report.get("text")
-            if not text_val:
-                continue
-            try:
-                start_val = float(report.get("start") or 0.0)
-            except Exception as e:
-                if not chunk_report_coercion_warned:
-                    logger.warning(
-                        "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
-                        "normalize_chunk_report_times",
-                        "start",
-                        type(e).__name__,
-                        e,
-                    )
-                    chunk_report_coercion_warned = True
-                start_val = 0.0
-            try:
-                end_val = float(report.get("end") or start_val)
-            except Exception as e:
-                if not chunk_report_coercion_warned:
-                    logger.warning(
-                        "[TRANSCRIBE] Numeric coercion fallback applied operation=%s field=%s exc_type=%s exc=%s",
-                        "normalize_chunk_report_times",
-                        "end",
-                        type(e).__name__,
-                        e,
-                    )
-                    chunk_report_coercion_warned = True
-                end_val = start_val
-            seg_obj = {
-                "start": start_val,
-                "end": end_val,
-                "text": str(text_val).strip(),
-            }
-            speaker_val = report.get("speaker")
-            if speaker_val is not None:
-                seg_obj["speaker"] = speaker_val
-            normalized_segments.append(seg_obj)
-    normalized_segments.sort(key=lambda s: float(s.get("start") or 0.0))
-    flat_segments = normalized_segments
-
-    full_text = " ".join(part.strip() for part in full_text_parts if part)
-    chunk_errors = [c for c in chunk_reports if c.get("status") == "error"]
-    if full_text and chunk_errors:
-        status = "partial"
-        reason = "transcript_available_with_chunk_errors"
-    elif full_text:
-        status = "ok"
-        reason = "transcript_available"
-    elif all(c.get("status") == "error" for c in chunk_reports):
-        status = "error"
-        reason = "all_chunks_execution_failed"
-    elif all(c.get("status") == "empty" for c in chunk_reports):
-        status = "empty"
-        reason = "no_speech_detected"
-    elif all(c.get("status") in ("failed", "error", "empty") for c in chunk_reports):
-        status = "failed"
-        reason = "no_transcript_output"
+    from scripts.config_schema import AudioTranscriptionConfig
+    from steps.audio.audio_wsl2_bridge import _transcription_projection
+    settings = AudioTranscriptionConfig.model_validate(
+        {key: tx_cfg[key] for key in ('temperature', 'vocabulary') if key in tx_cfg})
+    started = time.time()
+    if whisper_cli:
+        from steps.audio_transcribe.whisper_cpp import WhisperCppModel
+        from wsl2_audio.transcription_contract import transcribe_file
+        model = WhisperCppModel(str(whisper_cli), str(whisper_model_path))
+        raw = transcribe_file(model, path, temperature=settings.temperature,
+            vocabulary=settings.vocabulary, language=tx_cfg.get('language'),
+            beam_size=int(tx_cfg.get('beam_size', 5)), engine='whisper.cpp')
     else:
-        status = "failed"
-        reason = "transcript_status_unresolved"
-    
-    gpu_stats = optimizer.get_memory_stats() if device == "cuda" else {}
-
-    meta = {
-        "status": status,
-        "reason": reason,
-        "error": "; ".join(str(c.get("error")) for c in chunk_errors if c.get("error")) or None,
-        "engine": "hybrid_whisper",
-        "model": model_id,
-        "chunks": chunk_reports,
-        "chunk_seconds": chunk_seconds,
-        "duration": duration,
-        "used_cli": bool(whisper_cli),
-        "device": device,
-        "attempted_device": device,
-        "device_probe": device_probe,
-        "processing_time": total_elapsed,
-        "realtime_factor": (total_audio_duration / total_elapsed) if total_elapsed > 0 else 0,
-        "gpu_memory_peak_gb": gpu_stats.get("allocated_gb"),
-        "gpu_utilization": gpu_stats.get("utilization"),
-    }
-    if flat_segments:
-        meta["segments"] = flat_segments
-        meta["segment_count"] = len(flat_segments)
-        speakers = sorted({str(seg.get("speaker")) for seg in flat_segments if seg.get("speaker")})
-        if speakers:
-            meta["speakers"] = speakers
-    return {"transcript": full_text or None, "transcript_meta": meta}
+        raw = _transcribe_chunk_fw(path, 0., fw_model, settings.temperature,
+            vocabulary=settings.vocabulary, language=tx_cfg.get('language'),
+            beam_size=int(tx_cfg.get('beam_size', 5)))
+    if raw is None:
+        raw = {'status': 'error', 'transcription_status': 'error', 'error': 'transcription_backend_no_result'}
+    raw.update(device=device, model=model_id)
+    projected = _transcription_projection(raw, engine='whisper.cpp' if whisper_cli else 'faster-whisper')
+    meta = projected['transcript_meta']
+    coverage = (meta.get('transcription_decoding') or {}).get('source_regions') or {}
+    meta.update(duration=raw.get('duration_seconds', duration), attempted_device=device,
+        device_probe=device_probe, used_cli=bool(whisper_cli), processing_time=time.time()-started,
+        chunk_seconds=30., requested_chunk_seconds=chunk_seconds,
+        chunks=[{**region, 'status': 'error' if region['outcome'] in ('error', 'not_attempted')
+                 else 'ok' if region['outcome']=='text_returned' else 'empty',
+                 'reason': region['outcome']} for region in coverage.get('regions', [])])
+    if meta['status'] == 'success': meta['status'] = 'ok' if projected['transcript'] else 'empty'
+    if wsl_attempt is not None: meta['prior_wsl_attempt'] = wsl_attempt
+    if not projected['transcript']: projected['transcript'] = None
+    return projected

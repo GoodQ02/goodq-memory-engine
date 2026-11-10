@@ -1,5 +1,5 @@
 # Authoritative Conda environment lockfile for GoodQ4All CPU-safe baseline.
-# Generated from verified active runtime environment.
+# Torch CPU wheels align with requirements-baseline-lock.txt.
 name: goodq_core
 channels:
   - pytorch
@@ -17,12 +17,12 @@ dependencies:
   - uvicorn=0.42.0
   - typer=0.24.0
   - pytest=9.0.2
-  - pytorch=2.5.1
-  - torchvision=0.20.1
-  - torchaudio=2.5.1
-  - cpuonly
   - imageio-ffmpeg=0.6.0
   - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch==2.6.0+cpu
+      - torchvision==0.21.0+cpu
+      - torchaudio==2.6.0+cpu
       - -e .
       - "goodq-mini-agent @ https://github.com/GoodQ02/goodq-mini-agent/releases/download/v0.1.1/goodq_mini_agent-0.1.1-py3-none-any.whl#sha256=0f73ea4a3ee3b934c6d77c89c2810edcd6ceab1a13a5534bb59b54afe3f4506e"
       - transformers==5.4.0

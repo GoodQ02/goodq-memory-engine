@@ -34,7 +34,7 @@ def test_gpu_enhanced_profile_selects_configured_hermes_model(monkeypatch) -> No
 
     assert models[0].model_id == "hermes-gemma4-64k:12b"
     assert models[0].priority > models[1].priority
-    assert models[0].request_options == {"think": False}
+    assert models[0].request_options == {"reasoning_effort": "none"}
 
 
 def test_gpu_enhanced_profile_uses_resolved_ollama_overlay_endpoint(monkeypatch) -> None:
@@ -82,7 +82,7 @@ def test_gpu_enhanced_profile_replaces_matching_generic_ollama_model(monkeypatch
 
     assert len(hermes_models) == 1
     assert hermes_models[0].vram_gb == 12.0
-    assert hermes_models[0].request_options == {"think": False}
+    assert hermes_models[0].request_options == {"reasoning_effort": "none"}
 
 
 def test_chat_for_hermes_model_sends_non_thinking_request_option(monkeypatch) -> None:
@@ -105,7 +105,7 @@ def test_chat_for_hermes_model_sends_non_thinking_request_option(monkeypatch) ->
 
     client.chat([{"role": "user", "content": "hello"}])
 
-    assert client.session.post.call_args.kwargs["json"]["think"] is False
+    assert client.session.post.call_args.kwargs["json"]["reasoning_effort"] == "none"
 
 
 def test_chat_rebuilds_model_options_for_failover_and_keeps_caller_kwargs(monkeypatch) -> None:

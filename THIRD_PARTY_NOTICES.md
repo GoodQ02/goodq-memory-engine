@@ -43,6 +43,19 @@ This notice is a public-facing summary, not legal advice.
 
 ## Model and Asset Downloads
 
+### VLC media player — personal installer
+
+The personal offline profile bundles an unmodified VLC 3.0.24 Windows x64
+portable runtime as a separate desktop player. It retains the upstream
+`COPYING.txt`, `AUTHORS.txt` and bundled component files. VLC is a VideoLAN
+project; no VideoLAN endorsement is implied. Source, license evidence, archive
+hashes and public-distribution limits are recorded in the
+[offline eligibility ledger](docs/releases/OFFLINE_PAYLOAD_ELIGIBILITY.md#vlc-desktop-playback-addition--2026-10-07).
+The matched VLC source archive is retained in the personal asset vault. Public
+profiles exclude this payload while full underlying-library corresponding-source
+closure and the eventual distribution method remain unverified. See
+[VideoLAN's terms](https://images.videolan.org/legal.html).
+
 Canonical model and asset references live in
 [`configs/model_registry.yaml`](configs/model_registry.yaml).
 

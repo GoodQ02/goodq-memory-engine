@@ -87,7 +87,7 @@ models:
   # Active Windows GPU chat model; served locally by the configured Ollama host.
   hermes_gemma4_64k:
     name: "Hermes-Gemma4-64K"
-    base_url: "http://127.0.0.1:31434/v1"
+    base_url: "http://127.0.0.1:11434/v1"
     model_id: "hermes-gemma4-64k:12b"
     engine: "ollama"
     category: "chat"
@@ -96,7 +96,7 @@ models:
     max_tokens: 65536
     temperature: 0.7
     request_options:
-      think: false
+      reasoning_effort: "none"
     description: "Local Hermes Gemma 4 chat model with non-thinking request mode"
 
   # Experimental: Gemma 4 Unified (Disabled by default, opt-in only)

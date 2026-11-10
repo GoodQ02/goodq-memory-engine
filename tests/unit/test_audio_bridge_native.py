@@ -32,7 +32,8 @@ def test_native_audio_runner_success():
          patch("subprocess.run", return_value=mock_proc) as mock_run, \
          patch.dict(os.environ, {}, clear=True):
         
-        result = runner.process_audio("L:/_DATA/test.wav", timeout=120)
+        result = runner.process_audio("L:/_DATA/test.wav", timeout=120,
+                                      transcription_vocabulary=["O'Neil"], transcription_temperature=0.0)
         
         assert result["status"] == "success"
         assert result["transcription"] == "Hello World"
@@ -45,6 +46,8 @@ def test_native_audio_runner_success():
         cmd = args[0]
         assert cmd[1].endswith("process_audio.py")
         assert cmd[2] == str(Path("L:/_DATA/test.wav").resolve())
+        assert json.loads(cmd[4]) == ["O'Neil"]
+        assert json.loads(cmd[5]) == 0.0
         
         # Verify that environment had device set appropriately
         env = kwargs.get("env", {})

@@ -14,27 +14,27 @@ capabilities:
     runtime_owner: cli.run_ingestion
     implementation: steps.image_ocr.step.image_ocr
     status_surface: ocr_meta
-    asset_ids: [tesseract]
+    asset_ids: [paddle_ocr_det, paddle_ocr_rec]
     content_applicability: ocr_text
     fallback_policy: none
   image_caption:
     runtime_owner: cli.run_ingestion
     implementation: steps.image_caption.step.image_caption
     status_surface: caption_meta
-    asset_ids: [blip_caption, vit_gpt2_caption]
+    asset_ids: [wevisone_vl_2b]
     content_applicability: video
     fallback_policy: none
   object_detect:
     runtime_owner: cli.run_ingestion
     implementation: steps.object_detect.step.object_detect
-    status_surface: object_meta
+    status_surface: detect_meta
     asset_ids: [opencv_nanodet, opencv_yolox]
     content_applicability: object
     fallback_policy: none
   face_embed:
     runtime_owner: cli.run_ingestion
     implementation: steps.face_embed.step.face_embed
-    status_surface: face_meta
+    status_surface: faces_meta
     asset_ids: [opencv_yunet, opencv_sface]
     content_applicability: face
     fallback_policy: none
@@ -76,21 +76,22 @@ capabilities:
   audio_music_events:
     runtime_owner: cli.run_ingestion
     implementation: steps.audio_music_events.step.audio_music_events
-    status_surface: music_meta
+    status_surface: music_events_meta
     asset_ids: []
-    content_applicability: music
+    # This worker detects transcript cues, not the acoustic presence of music.
+    content_applicability: music_event_cue
     fallback_policy: none
   audio_time_hints:
     runtime_owner: cli.run_ingestion
     implementation: steps.audio_time_hints.step.audio_time_hints
-    status_surface: time_hints
+    status_surface: time_hints_meta
     asset_ids: []
-    content_applicability: speech
+    content_applicability: time_hint
     fallback_policy: none
   audio_emotion:
-    runtime_owner: cli.run_ingestion
-    implementation: steps.audio_emotion.step.audio_emotion
-    status_surface: audio_emotion_meta
+    runtime_owner: steps.audio.audio_wsl2_bridge
+    implementation: steps.audio.audio_wsl2_bridge.audio_unified_wsl2
+    status_surface: wsl_capability_outcomes.acoustic_emotion
     asset_ids: [hubert_emotion, wav2vec2_emotion]
     content_applicability: speech
     fallback_policy: none
@@ -171,12 +172,17 @@ profiles:
   PERSONAL_AIR_GAP:
     extends: PUBLIC_GPU_ENHANCED
     capability_dispositions:
+      object_detect:
+        # Operator-approved personal policy, 2026-10-25: a YOLOX CUDA failure may
+        # retry the same model on CPU. Receipts retain the requested and
+        # effective model:device and the fallback reason.
+        fallback_policy: ["opencv_yolox:cpu"]
       audio_speaker_merge:
         disposition: runtime
         reason: personal_pyannote_overlay
       audio_wav2vec2_enrichment:
-        disposition: runtime
-        reason: preserved_host_wsl_audio
+        disposition: policy_excluded
+        reason: whole_scene_vector_retired
       audio_clap_handoff:
         disposition: runtime
         reason: preserved_host_wsl_audio

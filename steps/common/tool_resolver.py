@@ -12,7 +12,7 @@ class ToolResolver:
     @staticmethod
     def resolve_tool(name: str) -> Dict[str, Any]:
         """
-        Resolve standard tools like ffmpeg, tesseract, pdftotext, qdrant
+        Resolve standard tools like ffmpeg, pdftotext, qdrant
         """
         hints = {
             "ffmpeg": {
@@ -21,13 +21,6 @@ class ToolResolver:
                 "win": "winget install --id Gyan.FFmpeg.Essentials or download from ffmpeg.org",
                 "mac": "brew install ffmpeg",
                 "linux": "sudo apt update && sudo apt install ffmpeg (Ubuntu/Debian) or sudo pacman -S ffmpeg (Arch)",
-            },
-            "tesseract": {
-                "required_for": "OCR (Optical Character Recognition) on keyframes",
-                "severity": "warning",
-                "win": "winget install --id UB.TesseractOCR or download installer",
-                "mac": "brew install tesseract tesseract-lang",
-                "linux": "sudo apt install tesseract-ocr (Ubuntu/Debian) or sudo pacman -S tesseract (Arch)",
             },
             "pdftotext": {
                 "required_for": "PDF text parsing",
@@ -129,7 +122,6 @@ class ToolResolver:
         else:
             program_files = os.environ.get("ProgramFiles", "C:/Program Files")
             windows_fallbacks = {
-                "tesseract": [Path(program_files) / "Tesseract-OCR" / "tesseract.exe"],
                 "pdftotext": [Path(program_files) / "Git" / "mingw64" / "bin" / "pdftotext.exe"],
             }
             typical_paths = windows_fallbacks.get(name, [])

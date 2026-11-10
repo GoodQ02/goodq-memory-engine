@@ -20,6 +20,18 @@ GoodQ4All provides five specialized, local-first, read-only user interface conso
   * **Chronological Checklist Panel**: Visual timeline showing processed scenes, VAD segments, and speaker attribution states.
 * **Autopilot Zoom & Spacing**: Smart zoom coordinates separate close nodes dynamically without bloating shapes or overlapping text labels.
 
+### Transcript speaker evidence (October 23, 2026)
+
+The Transcript tab displays stored `transcript_meta.segments` in order when
+their text covers the accepted scene transcript. Speaker labels are unreviewed
+model assignments within that scene, not confirmed identities. Missing labels
+remain **Unattributed**. If turn metadata is missing, incomplete or inconsistent
+with the accepted text, the full transcript remains visible as unattributed
+dialogue. A scene's dominant speaker or speaker count never supplies a missing
+line assignment. This applies to both dataset scenes and search-result inspection.
+Synthetic transcript reading preserves that qualification; original source audio
+and video remain the evidence for review.
+
 ---
 
 ## 2. Classic Operator Console

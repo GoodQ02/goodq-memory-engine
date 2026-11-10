@@ -290,15 +290,13 @@ except Exception as e:
 
 ### If diarization fails:
 ```bash
-# Check HF token
-echo $HUGGINGFACE_TOKEN
-
-# Re-run setup
-source ~/goodq_audio/setup_cuda_env.sh
-
-# Test directly
-python3 ~/goodq_audio/check_hf_token.py
+# Offline presence only; this does not authenticate or load configuration
+python3 -c "import os; print('HUGGINGFACE_TOKEN present:', bool(os.environ.get('HUGGINGFACE_TOKEN')))"
 ```
+
+See the [HF guide](HF_CLI_LOGIN_GUIDE.md) for all aliases and source-verified precedence.
+Do not rerun setup or an unverified token helper merely to inspect presence.
+
 
 ### If GPU not used:
 ```bash

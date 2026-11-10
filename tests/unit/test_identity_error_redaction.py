@@ -135,6 +135,12 @@ def test_rebuild_face_clusters_stderr_not_in_response(
     client, tmp_path, monkeypatch
 ) -> None:
     """When build_face_clusters.py fails, stderr must not appear in HTTP response."""
+    epoch_dir = tmp_path / "epoch_test"
+    epoch_dir.mkdir()
+    monkeypatch.setattr(
+        "api.routes.identity._CFG",
+        {"paths": {"db_path": str(epoch_dir / "memory.db")}},
+    )
     identity_dir = tmp_path / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(identity_dir))

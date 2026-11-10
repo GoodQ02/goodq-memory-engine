@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from steps.video.scene_visual_embeddings import run_scene_visual_embeddings
+from scripts.ucf.ucf_ledger import UCFLedgerClient
 
 
 def _load_run_ingestion_module():
@@ -57,9 +58,16 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path, phas
     output = tmp_path / "results.json"
     workspace = tmp_path / "workspace"
     processing_root = tmp_path / "processing"
+    epoch = tmp_path / "epoch"
+    (epoch / "ucf").mkdir(parents=True)
+    ledger = UCFLedgerClient(str(epoch / "ucf/ucf_ledger.db"))
+    ledger.init_schema()
+    ledger.register_media("videohash", str(input_dir / "demo.mp4"), 1, 30, 320, 240)
+    ledger.close()
 
     cfg_template = {
-        "paths": {"processing": str(processing_root), "db_path": str(tmp_path / "memory.db")},
+        "paths": {"processing": str(processing_root), "db_path": str(tmp_path / "memory.db"),
+                  "db_dir": str(epoch)},
         "phase6": {"enabled": True},
         "knowledge_graph": {"enabled": False},
     }
@@ -147,13 +155,16 @@ def test_run_artifact_phase6_truth_propagation(monkeypatch, tmp_path: Path, phas
 
     results = json.loads(output.read_text(encoding="utf-8"))
     assert results
-    assert results[0]["scenes"][0]["qdrant_ok"] is True
+    # Final scene truth includes the visual commit reloaded after harmonization;
+    # a successful ordinary scene write cannot mask its failed vector delivery.
+    assert results[0]["scenes"][0]["qdrant_ok"] is phase6_committed
     assert results[0]["phase6_complete"] is phase6_committed
     assert results[0]["phase6_qdrant_ok"] is phase6_committed
     assert results[0]["qdrant_ok"] is phase6_committed
     assert results[0]["phase6_faiss_ok"] is True
     manifest_path = processing_root / "demo" / "video" / "scene_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["qdrant_ok"] is phase6_committed
     assert manifest["phase6_complete"] is phase6_committed
     assert manifest["phase6_status"] == ("complete" if phase6_committed else "failed")
     assert results[0]["temporal_index"]["phase6_complete"] is phase6_committed

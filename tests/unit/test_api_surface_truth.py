@@ -29,12 +29,48 @@ scenes_module = _load_route_module("scenes")
 timeline_module = _load_route_module("timeline")
 
 
+@pytest.mark.parametrize("suffix", ["", "/full"])
+@pytest.mark.parametrize("duration_fields,expected", [
+    ({"total_duration": 8801.459}, 8801.459),
+    ({"duration": 12.5}, 12.5),
+    ({"total_duration": 8801.459, "duration": 0}, 8801.459),
+    ({"total_duration": 0, "duration": 12.5}, 0),
+    ({}, 0),
+])
+def test_timeline_duration_matches_producer_not_scene_extent(
+    monkeypatch, tmp_path, suffix, duration_fields, expected,
+):
+    from api.utils.loaders import DataLoader
+
+    processing = tmp_path / "processing"
+    dataset = processing / "example"
+    dataset.mkdir(parents=True)
+    (dataset / "temporal_index.json").write_text(json.dumps({
+        **duration_fields,
+        "segments": [{"scene_id": 0, "segment_id": 0, "start": 20, "end": 30}],
+    }), encoding="utf-8")
+    loader = DataLoader(processing_root=str(processing))
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+    app = FastAPI()
+    app.include_router(timeline_module.router)
+    response = TestClient(app).get(f"/api/videos/example/timeline{suffix}")
+    assert response.status_code == 200
+    assert response.json()["duration"] == expected
+    assert response.json()["duration"] == loader.get_video_metadata("example")["duration"]
+
+
 class _FakeLoader:
     def __init__(self, temporal_index: dict):
         self._temporal_index = temporal_index
 
     def load_temporal_index(self, video_id: str):
         return self._temporal_index if video_id == "video_001" else None
+
+    def get_scene_audio_paths(self, video_id: str):
+        return {}
+
+    def get_original_video_path(self, video_id: str):
+        return None
 
 
 class _FakeSearchEngine:
@@ -386,6 +422,32 @@ def test_get_scene_route_accepts_hash_ids_and_transcript_fallback(monkeypatch: p
     payload = response.json()
     assert payload["scene_id"] == "scene_hash_abc123"
     assert payload["transcript"] == "Transcript persisted under the temporal transcript key only."
+
+
+@pytest.mark.parametrize("events", [
+    [{"label": "birthday_song", "start": 40.0, "end": 43.0,
+      "context": "Happy birthday <cue>", "confidence": 0.7}] * 8,
+    [{"label": "christmas", "context": "For Christmas?", "confidence": 0.6}],
+    ["singing"], [], None,
+])
+def test_music_event_read_routes_preserve_cues_and_absence(monkeypatch, events):
+    temporal = _sample_temporal_index()
+    if events is not None:
+        temporal["segments"][0]["music_events"] = events
+    loader = _FakeLoader(temporal)
+    monkeypatch.setattr(scenes_module, "get_data_loader", lambda: loader)
+    monkeypatch.setattr(timeline_module, "get_data_loader", lambda: loader)
+    app = FastAPI()
+    app.include_router(scenes_module.router)
+    app.include_router(timeline_module.router)
+    with TestClient(app) as client:
+        for suffix in ("/scenes", "/scenes/101", "/timeline", "/timeline/full"):
+            response = client.get("/api/videos/video_001" + suffix)
+            assert response.status_code == 200
+            payload = response.json()
+            scene = payload[0] if isinstance(payload, list) else payload.get("segments", [payload])[0]
+            assert "music_events" in scene, suffix
+            assert scene["music_events"] == events, suffix
 
 
 def test_full_timeline_surfaces_persisted_audio_truth(monkeypatch: pytest.MonkeyPatch) -> None:

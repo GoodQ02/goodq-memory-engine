@@ -11,6 +11,7 @@ import sys
 import json
 import sqlite3
 import hashlib
+import math
 import re
 import requests
 import argparse
@@ -24,6 +25,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from steps.common.config_loader import load_configs
+from steps.common.embedding_references import expand_embedding_references, frame_payload as embedding_frame_payload
+from steps.common.model_provisioner import lookup_model
 
 def load_ucf_ledger():
     import importlib.util
@@ -65,6 +68,129 @@ def make_scene_hash(video_hash: str, start: float, end: float) -> str:
         h.update(str(p).encode("utf-8"))
         h.update(b"|")
     return h.hexdigest()
+
+
+def validate_standalone_source(
+    video_hash: str, media: Dict[str, Any], frames: List[Dict[str, Any]],
+    manifest: Dict[str, Any], processing_root: Path,
+) -> Optional[str]:
+    """Bind the optional standalone representation before validation or projection.
+
+    Video keeps its existing detector contract. A standalone declaration anywhere
+    requires the explicit anchor, retained source bytes, and matching manifest.
+    """
+    payloads = [json.loads(f["payload"]) if isinstance(f.get("payload"), str)
+                else (f.get("payload") or {}) for f in frames]
+    anchors = [f for f in frames if f["worker_name"] == "standalone_source"]
+    declared = manifest.get("source_kind") not in (None, "video") or any(
+        isinstance(p, dict) and p.get("source_kind") not in (None, "video") for p in payloads)
+    if not anchors and not declared:
+        return None
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError(f"Standalone source {video_hash}: {message}")
+
+    require(len(anchors) == 1, "exactly one standalone_source anchor is required")
+    require(all(isinstance(p, dict) for p in payloads), "frame payloads must be objects")
+    anchor = anchors[0]
+    payload = payloads[frames.index(anchor)]
+    kind = payload.get("source_kind")
+    require(kind in {"image", "document", "audio"}, "invalid source_kind")
+    require(not any(f["worker_name"] == "video_scene_detect" for f in frames),
+            "standalone anchors cannot claim video scene detection")
+    require(re.fullmatch(r"[0-9a-f]{64}", video_hash) is not None,
+            "source identity must be a SHA256 hash")
+    require(payload.get("source_hash") == video_hash, "anchor source_hash mismatch")
+    require(anchor.get("model_tag") == "source_sha256", "anchor model_tag mismatch")
+    require(anchor["modality"] == {"image": "multimodal", "document": "text", "audio": "audio"}[kind],
+            "anchor modality mismatch")
+    duration = float(media.get("duration") or 0.0)
+    require(math.isfinite(duration) and (duration > 0 if kind == "audio" else duration == 0),
+            "audio requires measured duration; static sources require [0,0]")
+    scene_id = make_scene_hash(video_hash, 0.0, duration)
+    # FrameRecord stores bounds at millisecond precision; source metadata keeps
+    # the measured duration (including fractional audio samples).
+    ledger_duration = round(duration, 3)
+    require(anchor["t_start"] == 0 and anchor["t_end"] == ledger_duration,
+            "anchor bounds do not match the source duration")
+    require(payload.get("scene_id") == scene_id and payload.get("scene_index") == 0,
+            "anchor scene identity mismatch")
+    require(payload.get("start") == 0 and payload.get("end") == duration
+            and payload.get("duration") == duration, "anchor payload bounds mismatch")
+
+    folder = (Path(processing_root) / video_hash).resolve()
+    require(folder.parent == Path(processing_root).resolve() and folder.name == video_hash,
+            "retained source directory escapes its processing scope")
+    source = Path(media.get("file_path") or "").resolve()
+    require(source.parent == folder and source.stem == video_hash and source.is_file(),
+            "retained hash-named source is missing or outside its processing scope")
+    require(Path(payload.get("source_path") or "").resolve() == source,
+            "anchor retained source path mismatch")
+    digest = hashlib.sha256()
+    with source.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    require(digest.hexdigest() == video_hash, "retained source content hash mismatch")
+    raw = Path(anchor.get("raw_ref") or "").resolve()
+    require(raw.is_relative_to(folder) and raw.is_file(), "anchor raw evidence is missing or outside its source scope")
+
+    require(manifest.get("source_kind") == kind and manifest.get("video_hash") == video_hash
+            and manifest.get("video_id") == video_hash, "manifest source identity mismatch")
+    require(Path(manifest.get("source_path") or "").resolve() == source
+            and Path(manifest.get("video_path") or "").resolve() == source,
+            "manifest retained source path mismatch")
+    scenes = manifest.get("scenes", [])
+    require(isinstance(scenes, list) and len(scenes) == 1 and isinstance(scenes[0], dict),
+            "manifest must contain exactly one source scene")
+    scene = scenes[0]
+    require((scene.get("id") or scene.get("scene_id")) == scene_id
+            and scene.get("video_id") == video_hash and scene.get("source_kind") == kind,
+            "manifest scene identity mismatch")
+    require(scene.get("start") == 0 and scene.get("end") == duration
+            and scene.get("duration") == duration, "manifest scene bounds mismatch")
+    require(Path(scene.get("source_path") or "").resolve() == source,
+            "manifest scene retained source path mismatch")
+    temporal_path = folder / "temporal_index.json"
+    require(temporal_path.is_file(), "completed temporal_index.json is missing")
+    try:
+        temporal = json.loads(temporal_path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        raise ValueError(f"Standalone source {video_hash}: invalid temporal_index.json") from exc
+    require(isinstance(temporal, dict), "temporal index must be an object")
+    require(temporal.get("source_kind") == kind and temporal.get("video_hash") == video_hash
+            and temporal.get("video_id") == video_hash, "temporal source identity mismatch")
+    require(Path(temporal.get("source_path") or "").resolve() == source
+            and Path(temporal.get("video_path") or "").resolve() == source,
+            "temporal retained source path mismatch")
+    segments = temporal.get("segments", [])
+    require(isinstance(segments, list) and len(segments) == 1 and isinstance(segments[0], dict),
+            "temporal index must contain exactly one source segment")
+    segment = segments[0]
+    require(segment.get("scene_id") == scene_id and segment.get("video_id") == video_hash
+            and segment.get("source_kind") == kind, "temporal scene identity mismatch")
+    require(segment.get("start") == 0 and segment.get("end") == duration
+            and segment.get("duration") == duration, "temporal scene bounds mismatch")
+    require(Path(segment.get("source_path") or "").resolve() == source,
+            "temporal scene retained source path mismatch")
+    if kind == "document":
+        document_text = payload.get("document_text")
+        require(isinstance(document_text, str) and bool(document_text.strip())
+                and scene.get("document_text") == document_text and segment.get("document_text") == document_text,
+                "document_text must preserve the exact extracted anchor text")
+    for frame, frame_payload in zip(frames, payloads):
+        require(frame["source_artifact_id"] == scene_id and frame_payload.get("source_kind") == kind,
+                "derived frame scene/source identity mismatch")
+        require(frame["modality"] in ({"text", "multimodal"} if kind == "image"
+                else {"text"} if kind == "document" else {"text", "audio", "multimodal"}),
+                "derived frame modality does not describe the source evidence")
+        start, end = frame["t_start"], frame["t_end"]
+        require(math.isfinite(start) and math.isfinite(end) and 0 <= start <= end <= ledger_duration,
+                "derived frame lies outside the source interval")
+        if "embedding_chunks" in frame_payload:
+            require(kind == "document", "embedding chunks require a document source")
+            expand_embedding_references(frame, document_text=document_text)
+    return kind
 
 
 def validate_vector_key(key: str, backend: str) -> bool:
@@ -113,8 +239,14 @@ def normalize_qdrant_id(raw_id: str) -> str:
     return str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
 
 
-def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> int:
-    cfg = load_configs({})
+def run_validation(
+    mode: str = "offline",
+    report_dir: Optional[Path] = None,
+    *,
+    config: Optional[Dict[str, Any]] = None,
+) -> int:
+    """Validate the caller's resolved runtime, or load the CLI runtime by default."""
+    cfg = load_configs({}) if config is None else config
     configured_report_dir = cfg.get("paths", {}).get("reports_dir")
     resolved_report_dir = resolve_path(report_dir or configured_report_dir)
     if resolved_report_dir is None:
@@ -125,7 +257,9 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
         return 1
     
     epoch_id = os.path.basename(db_dir)
-    data_root = os.getenv("GOODQ_DATA_ROOT") or cfg.get('paths', {}).get('data_root')
+    data_root = cfg.get('paths', {}).get('data_root')
+    if config is None:
+        data_root = os.getenv("GOODQ_DATA_ROOT") or data_root
 
     qdrant_cfg = cfg.get("qdrant", {})
     collections_cfg = qdrant_cfg.get("collections", {})
@@ -153,6 +287,10 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
 
     qdrant_host = qdrant_cfg.get("host", "http://127.0.0.1:6333")
 
+    clip_model_tag, _clip_metadata = lookup_model("clip_vit")
+    if not clip_model_tag:
+        raise ValueError("The model registry does not resolve clip_vit")
+
     VECTOR_REGISTRY = {
         "image_embed_dino": {
             "expected_dim": dino_dim,
@@ -166,14 +304,14 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
             "allowed_modalities": {"video", "multimodal"},
             "allowed_backends": {"qdrant", "faiss"},
             "allowed_collections": {clip_collection, "clip"},
-            "allowed_model_tags": {"openai/clip-vit-large-patch14", "openai/clip-vit-base-patch16", "openai/clip-vit-base-patch32"}
+            "allowed_model_tags": {clip_model_tag, "openai/clip-vit-large-patch14", "openai/clip-vit-base-patch16", "openai/clip-vit-base-patch32"}
         },
         "scene_visual_embeddings_clip": {
             "expected_dim": clip_dim,
             "allowed_modalities": {"video"},
             "allowed_backends": {"qdrant", "faiss"},
             "allowed_collections": {clip_collection, "clip"},
-            "allowed_model_tags": {"openai/clip-vit-large-patch14"}
+            "allowed_model_tags": {clip_model_tag, "openai/clip-vit-large-patch14"}
         },
         "scene_visual_embeddings_dino": {
             "expected_dim": dino_dim,
@@ -198,6 +336,10 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
         }
     }
     
+    # Distinct producer identity prevents same-span audio/summary replacement;
+    # both logical workers use the existing text vector contract.
+    VECTOR_REGISTRY["scene_summary_embed"] = VECTOR_REGISTRY["text_embed"]
+
     # Validation Report Structure
     report = {
         "epoch_id": epoch_id,
@@ -348,6 +490,30 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
         )
         context_frames = [dict(row) for row in cur_cf.fetchall()]
         report["summary"]["total_context_frames_checked"] = len(context_frames)
+
+        processing_root = Path(cfg.get('paths', {}).get('processing', ''))
+        if not processing_root.is_absolute() and data_root:
+            processing_root = Path(data_root) / 'epochs' / epoch_id / 'processing'
+        standalone_kinds = {}
+        standalone_checked = set()
+        for vhash, media in media_sources.items():
+            source_frames = [f for f in context_frames if f["video_hash"] == vhash]
+            manifest_path = processing_root / Path(media["file_path"]).stem / 'video' / 'scene_manifest.json'
+            if not manifest_path.exists():
+                manifest_path = manifest_path.parent.parent / 'scene_manifest.json'
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+                kind = validate_standalone_source(vhash, media, source_frames, manifest, processing_root)
+                if kind:
+                    standalone_checked.add(vhash)
+                    standalone_kinds[vhash] = kind
+            except (ValueError, OSError, TypeError) as exc:
+                # The video reconciliation below retains its original handling.
+                # Standalone failures are fatal, including a missing manifest.
+                if str(exc).startswith("Standalone") or any(f["worker_name"] == "standalone_source" for f in source_frames):
+                    standalone_checked.add(vhash)
+                    report["manifest_reconciliation"]["status"] = "failed"
+                    report["manifest_reconciliation"]["errors"].append(str(exc))
         
         # 11. Media Sources Registration Gate (Phase 0.4)
         cf_video_hashes = set(cf["video_hash"] for cf in context_frames)
@@ -363,12 +529,25 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
         # Group scene detect frames by video hash for overlap checking
         scenes_by_video = {}
         for cf in context_frames:
-            if cf["worker_name"] == "video_scene_detect":
+            if cf["worker_name"] == "video_scene_detect" or (
+                cf["worker_name"] == "standalone_source" and cf["video_hash"] in standalone_kinds
+            ):
                 scenes_by_video.setdefault(cf["video_hash"], []).append(cf)
 
-        # Map each vector_key to the list/set of frame_ids that reference it
-        vector_key_to_frame_ids = {}
+        # Keep stored frames intact for hash checks; only vector gates use expanded references.
+        references_by_frame = {}
         for cf in context_frames:
+            try:
+                references_by_frame[cf["frame_id"]] = expand_embedding_references(cf)
+            except (ValueError, TypeError) as exc:
+                references_by_frame[cf["frame_id"]] = []
+                report["flatness"]["status"] = "failed"
+                report["flatness"]["errors"].append(f"Frame {cf['frame_id']}: {exc}")
+        vector_frames = [ref for refs in references_by_frame.values() for ref in refs]
+
+        # Map each vector_key to the list/set of original frame_ids that reference it.
+        vector_key_to_frame_ids = {}
+        for cf in vector_frames:
             v_key = cf.get("vector_key")
             if v_key:
                 vector_key_to_frame_ids.setdefault(v_key, set()).add(cf["frame_id"])
@@ -422,6 +601,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
             # 5. Payload hash check
             payload_str = cf["payload"]
             payload_hash = cf["payload_hash"]
+            payload_dict = None
             try:
                 payload_dict = json.loads(payload_str) if isinstance(payload_str, str) else payload_str
                 canonical_str = json.dumps(payload_dict, sort_keys=True)
@@ -441,6 +621,8 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
             # 6. Flatness check
             allowed_types = (str, int, float, bool, type(None))
             for k, val in payload_dict.items():
+                if k == "embedding_chunks" and references_by_frame[fid]:
+                    continue  # Only the helper-validated document group may be nested.
                 if not isinstance(val, allowed_types):
                     report["flatness"]["status"] = "failed"
                     report["flatness"]["errors"].append(
@@ -509,13 +691,14 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                 # manifest_reconciliation will catch the missing scene detect frames.
 
             # 12. Vector Reference Integrity Gate (Phase 0.7)
-            if cf.get("vector_key") is not None:
-                worker_name = cf["worker_name"]
-                backend = cf["vector_backend"]
-                collection = cf["vector_collection"]
-                dim = cf["vector_dim"]
-                model_tag = cf["vector_model_tag"]
-                key = cf["vector_key"]
+            for vector_ref in references_by_frame[fid]:
+                vector_payload = embedding_frame_payload(vector_ref)
+                worker_name = vector_ref["worker_name"]
+                backend = vector_ref["vector_backend"]
+                collection = vector_ref["vector_collection"]
+                dim = vector_ref["vector_dim"]
+                model_tag = vector_ref["vector_model_tag"]
+                key = vector_ref["vector_key"]
                 
                 # Check 1: Identity & Vector Registry Schema Validation
                 if worker_name not in VECTOR_REGISTRY:
@@ -532,10 +715,13 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                             f"Frame {fid}: Dimension mismatch for '{worker_name}'. Expected {reg['expected_dim']}, got {dim}"
                         )
                     # Compare modality
-                    if cf["modality"] not in reg["allowed_modalities"]:
+                    standalone_visual = standalone_kinds.get(vhash) == "image" and worker_name in {
+                        "image_embed_clip", "image_embed_dino", "scene_visual_embeddings_clip", "scene_visual_embeddings_dino"
+                    } and vector_ref["modality"] == "multimodal"
+                    if vector_ref["modality"] not in reg["allowed_modalities"] and not standalone_visual:
                         report["vector_integrity"]["status"] = "failed"
                         report["vector_integrity"]["errors"].append(
-                            f"Frame {fid}: Modality mismatch for '{worker_name}'. Expected one of {reg['allowed_modalities']}, got '{cf['modality']}'"
+                            f"Frame {fid}: Modality mismatch for '{worker_name}'. Expected one of {reg['allowed_modalities']}, got '{vector_ref['modality']}'"
                         )
                     # Compare backend
                     if backend not in reg["allowed_backends"]:
@@ -565,7 +751,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                 
                 if backend == "faiss":
                     try:
-                        p_dict = json.loads(cf["payload"]) if isinstance(cf["payload"], str) else cf["payload"]
+                        p_dict = json.loads(vector_ref["payload"]) if isinstance(vector_ref["payload"], str) else vector_ref["payload"]
                         faiss_id = p_dict.get("faiss_id")
                         if faiss_id is None:
                             report["vector_integrity"]["status"] = "failed"
@@ -615,39 +801,57 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                     p_epoch_id = p_payload.get("epoch_id")
                                     p_scene_hash = p_payload.get("scene_hash")
                                     p_ucf_frame_id = p_payload.get("ucf_frame_id")
-                                    
-                                    if p_video_hash != cf["video_hash"]:
+                                    if vhash in standalone_kinds and p_payload.get("source_kind") != standalone_kinds[vhash]:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
-                                            f"Frame {fid}: Qdrant point video_hash mismatch. Expected '{cf['video_hash']}', got '{p_video_hash}'"
+                                            f"Frame {fid}: Qdrant standalone source_kind mismatch"
                                         )
-                                    if p_scene_id != cf["source_artifact_id"]:
+                                    if "embedding_chunks" in payload_dict:
+                                        expected_span = {name: vector_payload[name] for name in (
+                                            "chunk_index", "char_start", "char_end", "text", "token_count"
+                                        )}
+                                        actual_span = p_payload.get("document_chunk")
+                                        if not isinstance(actual_span, dict) or any(
+                                            actual_span.get(name) != value or type(actual_span.get(name)) is not type(value)
+                                            for name, value in expected_span.items()
+                                        ):
+                                            report["vector_integrity"]["status"] = "failed"
+                                            report["vector_integrity"]["errors"].append(
+                                                f"Frame {fid}: Qdrant document_chunk provenance mismatch for '{key}'"
+                                            )
+                                    
+                                    if p_video_hash != vector_ref["video_hash"]:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
-                                            f"Frame {fid}: Qdrant point scene_id mismatch. Expected '{cf['source_artifact_id']}', got '{p_scene_id}'"
+                                            f"Frame {fid}: Qdrant point video_hash mismatch. Expected '{vector_ref['video_hash']}', got '{p_video_hash}'"
+                                        )
+                                    if p_scene_id != vector_ref["source_artifact_id"]:
+                                        report["vector_integrity"]["status"] = "failed"
+                                        report["vector_integrity"]["errors"].append(
+                                            f"Frame {fid}: Qdrant point scene_id mismatch. Expected '{vector_ref['source_artifact_id']}', got '{p_scene_id}'"
                                         )
                                     
                                     # Modality, worker, and tag verification
                                     if worker_name in ("image_embed_clip", "scene_visual_embeddings_clip"):
-                                        expected_modality = "video"
+                                        expected_modality = "multimodal" if standalone_kinds.get(vhash) == "image" else "video"
                                         expected_worker = worker_name
-                                        expected_tag = "openai/clip-vit-large-patch14"
+                                        expected_tag = vector_ref["vector_model_tag"]
                                     elif worker_name in ("image_embed_dino", "scene_visual_embeddings_dino"):
-                                        expected_modality = "video"
+                                        expected_modality = "multimodal" if standalone_kinds.get(vhash) == "image" else "video"
                                         expected_worker = worker_name
                                         expected_tag = "facebook/dinov2-large"
                                     elif worker_name == "audio_embed_clap":
                                         expected_modality = "audio"
                                         expected_worker = "audio_embed_clap"
                                         expected_tag = "laion/clap-htsat-unfused"
-                                    elif worker_name == "text_embed":
+                                    elif worker_name in ("text_embed", "scene_summary_embed"):
                                         expected_modality = "text"
-                                        expected_worker = "text_embed"
-                                        expected_tag = cf.get("vector_model_tag", "sentence-transformers/all-MiniLM-L6-v2")
-                                    else:
-                                        expected_modality = cf["modality"]
                                         expected_worker = worker_name
-                                        expected_tag = cf.get("vector_model_tag", "")
+                                        expected_tag = vector_ref.get("vector_model_tag", "sentence-transformers/all-MiniLM-L6-v2")
+                                    else:
+                                        expected_modality = vector_ref["modality"]
+                                        expected_worker = worker_name
+                                        expected_tag = vector_ref.get("vector_model_tag", "")
                                         
                                     is_modality_match = (p_modality == expected_modality) or (
                                         p_modality == worker_name.split("_")[-1]
@@ -660,7 +864,27 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                             f"Frame {fid}: Qdrant point modality mismatch. Expected '{expected_modality}', got '{p_modality}'"
                                         )
                                         
-                                    is_worker_match = (p_worker_name == expected_worker) or (
+                                    # A resumed historical summary may retain its
+                                    # old UCF row after the same Qdrant point is
+                                    # written by the distinct summary producer.
+                                    legacy_summary_worker = (
+                                        expected_worker == "text_embed"
+                                        and p_worker_name == "scene_summary_embed"
+                                        and isinstance(vector_payload, dict)
+                                        and (
+                                            vector_payload.get("embedding_source")
+                                            or vector_payload.get("origin_modality")
+                                        ) == "scene_summary"
+                                        and isinstance(vector_payload.get("embedding_id"), str)
+                                        and bool(vector_payload["embedding_id"].strip())
+                                        and normalize_qdrant_id(vector_payload["embedding_id"]) == normalized_key
+                                        and points[0].get("id") == normalized_key
+                                        and p_payload.get("embedding_source") == "scene_summary"
+                                        and p_scene_hash == key
+                                        and p_video_hash == vector_ref["video_hash"]
+                                        and p_scene_id == vector_ref["source_artifact_id"]
+                                    )
+                                    is_worker_match = (p_worker_name == expected_worker) or legacy_summary_worker or (
                                         expected_worker == "scene_visual_embeddings_clip" and p_worker_name == "image_embed_clip"
                                     ) or (
                                         expected_worker == "scene_visual_embeddings_dino" and p_worker_name == "image_embed_dino"
@@ -677,19 +901,19 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                             f"Frame {fid}: Qdrant point vector_model_tag mismatch. Expected '{expected_tag}', got '{p_vector_model_tag}'"
                                         )
                                         
-                                    if p_epoch_id and p_epoch_id != cf["epoch_id"]:
+                                    if p_epoch_id and p_epoch_id != vector_ref["epoch_id"]:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
-                                            f"Frame {fid}: Qdrant point epoch_id mismatch. Expected '{cf['epoch_id']}', got '{p_epoch_id}'"
+                                            f"Frame {fid}: Qdrant point epoch_id mismatch. Expected '{vector_ref['epoch_id']}', got '{p_epoch_id}'"
                                         )
                                         
-                                    if p_scene_hash and p_scene_hash != cf["vector_key"]:
+                                    if p_scene_hash and p_scene_hash != vector_ref["vector_key"]:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
-                                            f"Frame {fid}: Qdrant point scene_hash mismatch. Expected '{cf['vector_key']}', got '{p_scene_hash}'"
+                                            f"Frame {fid}: Qdrant point scene_hash mismatch. Expected '{vector_ref['vector_key']}', got '{p_scene_hash}'"
                                         )
                                         
-                                    allowed_fids = vector_key_to_frame_ids.get(cf["vector_key"], {cf["frame_id"]})
+                                    allowed_fids = vector_key_to_frame_ids.get(vector_ref["vector_key"], {vector_ref["frame_id"]})
                                     if p_ucf_frame_id is not None and int(p_ucf_frame_id) not in allowed_fids:
                                         report["vector_integrity"]["status"] = "failed"
                                         report["vector_integrity"]["errors"].append(
@@ -730,7 +954,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                         elif worker_name == "audio_embed_clap":
                             faiss_index_path_str = audio_index_path
                             sidecar_db_path_str = clap_map_db
-                        elif worker_name == "text_embed":
+                        elif worker_name in ("text_embed", "scene_summary_embed"):
                             faiss_index_path_str = text_index_path
                             sidecar_db_path_str = memory_db_path
                         else:
@@ -750,7 +974,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                         else:
                             try:
                                 try:
-                                    p_dict = json.loads(cf["payload"]) if isinstance(cf["payload"], str) else cf["payload"]
+                                    p_dict = json.loads(vector_ref["payload"]) if isinstance(vector_ref["payload"], str) else vector_ref["payload"]
                                     faiss_id = int(p_dict.get("faiss_id"))
                                 except Exception:
                                     faiss_id = None
@@ -764,7 +988,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                         table_name = "dino_id_map"
                                     elif worker_name == "audio_embed_clap":
                                         table_name = "clap_id_map"
-                                    elif worker_name == "text_embed":
+                                    elif worker_name in ("text_embed", "scene_summary_embed"):
                                         table_name = "embeddings"
                                     else:
                                         sidecar_conn.close()
@@ -778,7 +1002,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                         if "video_hash" in columns:
                                             cursor = sidecar_conn.execute(
                                                 f"SELECT * FROM {table_name} WHERE video_hash = ? AND faiss_id = ?",
-                                                (cf["video_hash"], faiss_id)
+                                                (vector_ref["video_hash"], faiss_id)
                                             )
                                         else:
                                             cursor = sidecar_conn.execute(
@@ -804,10 +1028,10 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                             report["vector_integrity"]["errors"].append(
                                                 f"Frame {fid}: FAISS ID {faiss_id} hash mismatch. Expected '{key}', got '{db_hash}'"
                                             )
-                                        if Path(db_source_path).name.startswith("scene_") and Path(db_source_path).stem != cf["source_artifact_id"]:
+                                        if Path(db_source_path).name.startswith("scene_") and Path(db_source_path).stem != vector_ref["source_artifact_id"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS ID {faiss_id} source_path stem '{Path(db_source_path).stem}' does not match scene ID '{cf['source_artifact_id']}'"
+                                                f"Frame {fid}: FAISS ID {faiss_id} source_path stem '{Path(db_source_path).stem}' does not match scene ID '{vector_ref['source_artifact_id']}'"
                                             )
                                             
                                         # Strict checks on identity columns
@@ -819,42 +1043,42 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                                         db_modality = row["modality"] if "modality" in row_keys else None
                                         db_ucf_frame_id = row["ucf_frame_id"] if "ucf_frame_id" in row_keys else None
                                         
-                                        if db_epoch_id and db_epoch_id != cf["epoch_id"]:
+                                        if db_epoch_id and db_epoch_id != vector_ref["epoch_id"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar epoch_id mismatch. Expected '{cf['epoch_id']}', got '{db_epoch_id}'"
+                                                f"Frame {fid}: FAISS sidecar epoch_id mismatch. Expected '{vector_ref['epoch_id']}', got '{db_epoch_id}'"
                                             )
-                                        if db_video_hash and db_video_hash != cf["video_hash"]:
+                                        if db_video_hash and db_video_hash != vector_ref["video_hash"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar video_hash mismatch. Expected '{cf['video_hash']}', got '{db_video_hash}'"
+                                                f"Frame {fid}: FAISS sidecar video_hash mismatch. Expected '{vector_ref['video_hash']}', got '{db_video_hash}'"
                                             )
-                                        if db_scene_id and db_scene_id != cf["source_artifact_id"]:
+                                        if db_scene_id and db_scene_id != vector_ref["source_artifact_id"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar scene_id mismatch. Expected '{cf['source_artifact_id']}', got '{db_scene_id}'"
+                                                f"Frame {fid}: FAISS sidecar scene_id mismatch. Expected '{vector_ref['source_artifact_id']}', got '{db_scene_id}'"
                                             )
-                                        is_faiss_worker_match = (db_worker_name == cf["worker_name"]) or (
-                                            cf["worker_name"] == "scene_visual_embeddings_clip" and db_worker_name == "image_embed_clip"
+                                        is_faiss_worker_match = (db_worker_name == vector_ref["worker_name"]) or (
+                                            vector_ref["worker_name"] == "scene_visual_embeddings_clip" and db_worker_name == "image_embed_clip"
                                         ) or (
-                                            cf["worker_name"] == "scene_visual_embeddings_dino" and db_worker_name == "image_embed_dino"
+                                            vector_ref["worker_name"] == "scene_visual_embeddings_dino" and db_worker_name == "image_embed_dino"
                                         )
                                         if db_worker_name and not is_faiss_worker_match:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar worker_name mismatch. Expected '{cf['worker_name']}', got '{db_worker_name}'"
+                                                f"Frame {fid}: FAISS sidecar worker_name mismatch. Expected '{vector_ref['worker_name']}', got '{db_worker_name}'"
                                             )
-                                        if db_vector_model_tag and db_vector_model_tag != cf["vector_model_tag"]:
+                                        if db_vector_model_tag and db_vector_model_tag != vector_ref["vector_model_tag"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar vector_model_tag mismatch. Expected '{cf['vector_model_tag']}', got '{db_vector_model_tag}'"
+                                                f"Frame {fid}: FAISS sidecar vector_model_tag mismatch. Expected '{vector_ref['vector_model_tag']}', got '{db_vector_model_tag}'"
                                             )
-                                        if db_modality and db_modality != cf["modality"]:
+                                        if db_modality and db_modality != vector_ref["modality"]:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
-                                                f"Frame {fid}: FAISS sidecar modality mismatch. Expected '{cf['modality']}', got '{db_modality}'"
+                                                f"Frame {fid}: FAISS sidecar modality mismatch. Expected '{vector_ref['modality']}', got '{db_modality}'"
                                             )
-                                        allowed_fids = vector_key_to_frame_ids.get(cf["vector_key"], {cf["frame_id"]})
+                                        allowed_fids = vector_key_to_frame_ids.get(vector_ref["vector_key"], {vector_ref["frame_id"]})
                                         if db_ucf_frame_id is not None and int(db_ucf_frame_id) not in allowed_fids:
                                             report["vector_integrity"]["status"] = "failed"
                                             report["vector_integrity"]["errors"].append(
@@ -924,6 +1148,8 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
             processing_root = Path(data_root) / 'epochs' / epoch_id / 'processing'
             
         for vhash, media in media_sources.items():
+            if vhash in standalone_checked:
+                continue
             file_path = Path(media["file_path"])
             video_stem = file_path.stem
             
@@ -1013,7 +1239,9 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
         speaker_turns_by_video_local = {}
         for cf in context_frames:
             vh = cf["video_hash"]
-            if cf["worker_name"] == "video_scene_detect":
+            if cf["worker_name"] == "video_scene_detect" or (
+                cf["worker_name"] == "standalone_source" and vh in standalone_kinds
+            ):
                 scenes_by_video_local.setdefault(vh, []).append(cf)
             elif cf["worker_name"] == "audio_transcribe":
                 transcripts_by_video_local.setdefault(vh, []).append(cf)
@@ -1255,7 +1483,7 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
             # 1. Qdrant Scoped Orphans
             for collection in {clip_collection, dino_collection, audio_collection, text_collection}:
                 expected_qdrant_keys = set(
-                    normalize_qdrant_id(cf["vector_key"]) for cf in context_frames
+                    normalize_qdrant_id(cf["vector_key"]) for cf in vector_frames
                     if cf["vector_key"] is not None
                     and cf["vector_collection"] == collection
                 )
@@ -1326,11 +1554,13 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                 sidecar_db_path = resolve_path(map_db_cfg)
                 
                 expected_faiss_ids = set()
-                for cf in context_frames:
+                for cf in vector_frames:
                     is_match = cf["worker_name"] == worker_name or (
                         worker_name == "image_embed_clip" and cf["worker_name"] == "scene_visual_embeddings_clip"
                     ) or (
                         worker_name == "image_embed_dino" and cf["worker_name"] == "scene_visual_embeddings_dino"
+                    ) or (
+                        worker_name == "text_embed" and cf["worker_name"] == "scene_summary_embed"
                     )
                     if is_match and cf["vector_key"] is not None:
                         try:
@@ -1338,7 +1568,10 @@ def run_validation(mode: str = "offline", report_dir: Optional[Path] = None) -> 
                             faiss_id = p_dict.get("faiss_id")
                             if faiss_id is None:
                                 from steps.common.memory import to_faiss_id
-                                faiss_id = to_faiss_id(cf["vector_key"])
+                                # Summary Qdrant keys are normalized UUIDs; FAISS
+                                # retains the original embedding identity.
+                                embedding_id = p_dict.get("embedding_id") if worker_name == "text_embed" else None
+                                faiss_id = to_faiss_id(embedding_id or cf["vector_key"])
                             if faiss_id is not None:
                                 expected_faiss_ids.add(int(faiss_id))
                         except Exception:

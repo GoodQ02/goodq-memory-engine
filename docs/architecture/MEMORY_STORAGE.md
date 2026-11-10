@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-07-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-03 -->
 
 # Memory & Storage Architecture
 
@@ -19,6 +19,34 @@ GoodQ4All uses a layered memory architecture:
   from active memory under isolation
 
 This document describes the current storage contract, not historical storage experiments.
+
+### UCF occurrence identity
+
+`context_frames` distinguishes occurrences with the unique key
+`(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id)`.
+The empty occurrence ID retains legacy timestamp-upsert behavior. Recording-audio
+transcripts use source/scene/native-utterance identity; speaker turns use the
+source/scene/turn ordinal in the retained ordered projection. Two channels or
+turns with identical rounded display times therefore remain separate. Replaying
+that same projection updates the existing frame and returns its actual frame ID.
+The raw evidence, exact source samples where available and projection hash remain
+the evidence authority; an occurrence ID is not a speaker identity claim.
+
+The ledger initializer migrates the former timestamp-only key transactionally,
+using a consistent SQLite backup before create/copy/drop/rename. Frame IDs,
+payloads, statuses, timestamps, audit references, indexes/triggers and the
+autoincrement high-water mark are preserved. Existing recording rows receive
+IDs from their retained native utterance IDs or turn ordinals; missing required
+identity fails visibly and rolls back. Previously overwritten events cannot be
+recovered by schema migration alone: replay of the verified retained projection
+is required. Other producers retain the empty ID and their prior semantics.
+
+This migration is qualified in disposable candidate data only. Live migration
+and coordinated writer deployment remain separate approvals; old writer SQL
+cannot write the revised uniqueness key. Promotion remains human-gated and
+epoch/source-scoped. **UNDO ONLY — not a verification step:** after stopping all
+writers, restore the consistent pre-migration database backup together with the
+compatible writer revision; do not run an old writer against the migrated store.
 
 ---
 
@@ -149,6 +177,71 @@ FAISS commits must use explicit stable IDs. New HNSW indexes are wrapped in
 position-based `add`. A legacy non-IDMap FAISS file is historical evidence, not
 a valid target for new strict FAISS parity writes.
 
+### Standalone document passage embeddings
+
+Long standalone documents use overlapping passages bounded by the active text
+encoder's token window. Exact Unicode character offsets, passage text and token
+counts refer to the retained extracted document text. Passage IDs include the
+source/scene identity and span position; repeated text at different positions
+does not share a vector identity. PDF text extraction uses content-stream order
+rather than preserving horizontal column spacing. This does not establish OCR or
+arbitrary table-layout fidelity.
+
+The document remains one static scene with `[0,0]` time bounds. Its existing
+`text_embed` UCF frame owns a validated `embedding_chunks` payload, with total
+text length/hash and token budget. Each entry binds one Qdrant/FAISS identity.
+Validation requires exact full-text coverage, consistent overlaps, unique
+identities, bounded token counts and the retained source anchor. All vector
+references participate in promotion, materialization, synchronization, strict
+retrieval and retirement. Partial embedding failure cannot publish completed
+document memory. Existing scalar records remain supported; no database schema
+migration or historical re-indexing occurs automatically.
+
+Search returns a matching passage only when its text and offsets match the
+persisted full document. The inspector shows that passage separately from the
+complete text and original-file link. A similarity result is supporting source
+material, not a claim that an unsupported premise in the query is true.
+
+The search response may also include `document_context_span`, derived from that
+same persisted full text only after the ranked anchor has been validated. It
+retains at most 1,024 Unicode characters on either side and at most 4,096 total;
+the per-side allowance shrinks equally for longer anchors. Outer bounds move
+inward to whitespace without removing anchor text. Anchors of 4,096 characters
+or more, whole-document anchors, and invalid anchors receive no extra context.
+The inspector validates exact source and anchor offsets again and labels this
+plain text **Surrounding document context**. It remains separate from
+`matched_document_span`; adjacent evidence is not presented as a reranked match
+or a generated answer. Both blocks refresh with the query and selection.
+
+For retained standalone document chunks, search selects evidence within each
+already-ranked source by combining short-window semantic similarity and BM25
+with equal reciprocal-rank fusion. It uses the existing loaded query encoder;
+there is no additional model or persistent index. Request-wide limits are 32
+candidate chunks and 192 windows, each at most 96 tokens with 48-token overlap.
+The output remains an original stored chunk with its exact offsets; ranking
+windows are not synthesized evidence. Source IDs, order, scores and metadata
+are unchanged by this within-source selector, and exact-phrase passage selection
+takes precedence. Document results do not receive video/audio completeness
+bonuses or penalties during source fusion; those modality-specific adjustments
+remain applicable to video/audio results.
+
+The selector may retain one additional stored chunk whose best existing window
+covers strictly more distinct query terms than the primary winner. Comparison
+uses case-folded non-stopwords and a limited terminal-s normalization, not a
+general language stemmer. It adds no encoder calls and leaves the primary winner
+unchanged. The API exposes `lexical_document_span` only when its text and Unicode
+offsets exactly match the same full document, it is at most 4,096 characters, and
+it is not wholly contained in the already displayed primary/context range.
+The inspector repeats those checks and labels plain text **Additional lexical
+passage**. This is separate query-term evidence, not a generated answer or a
+replacement for the semantic/BM25 anchor.
+
+Candidate truncation and ranking failures are visible in `text_passages`
+diagnostics through both text search routes and the Retro console. Failure keeps
+the original retrieval. This bounded selector can miss evidence below its
+candidate limit or split across adjacent chunks; it does not claim complete
+question answering or combine passages into an answer.
+
 ---
 
 ## Artifact Storage
@@ -172,6 +265,45 @@ ${GOODQ_DATA_ROOT}/GoodQ_Data/epochs/<epoch>/output/scene_ingest_results.json
 These files are durable evidence in the memory system, not just debug
 byproducts. Their presence does not by itself make their contents active or
 promoted memory.
+
+### Standalone source bundles
+
+Standalone image, document and audio intake uses the same artifact, UCF and
+promotion lifecycle. Its processing directory and retained filename are bound
+to the SHA256 of the original source bytes:
+
+```text
+<configured processing>/<source_sha256>/
+├── <source_sha256>.<original extension>
+├── raw_result.json
+├── video/scene_manifest.json
+└── temporal_index.json
+```
+
+One `standalone_source` UCF anchor identifies the source scene; it does not
+claim video scene detection. The scene ID uses the existing scene hash over
+source SHA256 and bounds. Image and document bounds are the point `[0,0]`;
+audio bounds are `[0, measured duration]`. Existing UCF modalities remain
+unchanged: image anchors use `multimodal`, documents use `text`, and audio
+uses `audio`. Derived image text remains `text` and visual vectors use
+`multimodal`. An optional flat `source_kind` identifies these new records.
+
+Standalone validation and promotion both bind the anchor, canonical scene ID,
+manifest, retained source path and bytes. Promotion adds `source_kind` to
+existing scene metadata and KG media properties; KG media type identifies the
+actual source kind. The existing structural source/scene relationship vocabulary
+and lifecycle scope keys remain compatible. Document extraction is preserved as
+`document_text` with `document_meta` parser provenance, and indexed under FTS
+`content_type=document_text`; it is not relabeled OCR or speech. Static sources
+do not create speech segment rows. Images retain detailed visual outputs in the
+scene keyframe; audio retains measured transcript segments and worker evidence.
+
+These are additive metadata and FTS content values, not new SQL columns, UCF
+enums or a schema migration. Missing `source_kind` keeps the legacy video
+interpretation. Older artifacts and rows are unchanged. All vector types retain
+the same staging, explicit promotion, outbox and terminal-state visibility gates.
+Supersede/reject retires active projections without deleting retained source
+artifacts. Standalone artifact presence alone never authorizes active retrieval.
 
 ---
 
@@ -203,6 +335,49 @@ and UCF commit succeeded while durable Qdrant status delivery is still pending.
 
 Default active retrieval admits only promoted evidence. Explicit raw audit
 queries may inspect other UCF lifecycle states without making them active.
+
+### Exact-scene retirement
+
+`supersede_ucf_frames` retains its epoch/video operation. The optional
+`scene_id` selects one canonical scene within that exact epoch and video;
+unknown, ambiguous or mismatched selectors fail before confirmation. The
+scene manifest and UCF anchor must agree on source identity, bounds and aliases.
+
+Scene retirement records versioned exact frame/vector evidence in the existing
+immutable `ucf_status_transitions` audit and enqueues
+`scene_retirement:<scene_id>` in the existing delivery outbox. No SQL schema
+change is required. The committed ledger exclusion is authoritative even if
+delivery to SQLite, KG or Qdrant is interrupted. Active readers must consult it
+before serving retained artifacts, cached identity matches or summaries.
+Cleanup preserves neighboring scenes and their supported shared records;
+whole-video summaries containing removed evidence are invalidated. Source
+files remain retained, and original-source playback remains available while
+neighboring scenes survive.
+
+Retry pending retirement through the same confirmed `supersede_ucf_frames`
+request with the same three scope fields. It reuses immutable evidence rather
+than creating a second retirement. `reconcile_ucf_qdrant` remains a promotion
+delivery operation, not the retirement recovery command. Same-epoch producer
+replay and promotion cannot restore retired scene aliases. This exclusion does
+not transfer into a new corpus epoch. Retirement is a memory visibility action,
+not deletion of original media or proof that every byte of derived data is gone.
+
+The supported `cli.retrieve` FAISS projection checks exact embedding membership
+in the configured epoch ledger before returning a result. A promoted scene does
+not authorize an unrelated staged embedding. Scores remain attached to stable
+FAISS IDs, and exact persisted scene IDs supply video/time provenance. A missing
+configured ledger or mapping database is a failure, not a successful empty query.
+Legacy stores without an epoch configuration or UCF provenance retain their
+existing frame-link lookup behavior.
+
+Scene-summary embeddings use the logical UCF producer `scene_summary_embed`;
+frame and transcript text embeddings retain `text_embed`. Distinct producer
+identities prevent equal scene spans from replacing each other's UCF records.
+Historical summary records remain readable. A resumed old summary may match the
+new worker tag only with matching original point identity and summary provenance;
+ordinary transcript worker mismatches remain invalid. No ledger schema migration is needed.
+FAISS IDs derive from the original embedding identity, which may differ from a
+normalized Qdrant point key. Promotion preserves existing source metadata.
 
 ---
 

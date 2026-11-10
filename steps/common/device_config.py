@@ -66,8 +66,8 @@ class DeviceConfig:
             torch.cuda.empty_cache()
         elif self.device_kind == "mps":
             try:
-                import torch.mps
-                torch.mps.empty_cache()
+                from torch import mps
+                mps.empty_cache()
             except (ImportError, AttributeError):
                 pass
 

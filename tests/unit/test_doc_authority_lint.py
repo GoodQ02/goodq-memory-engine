@@ -43,6 +43,22 @@ def test_metadata_check_skips_gitignored_local_markdown(tmp_path: Path) -> None:
     assert lint.check_metadata(tmp_path) == []
 
 
+def test_verify_does_not_inherit_ancestor_repository_ignores(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _write(tmp_path / ".gitignore", "exported/\n")
+    exported = tmp_path / "exported"
+    _write(exported / "README.md", "# Exported docs\n[missing](docs/missing.md)\n")
+    monkeypatch.setattr(lint, "REPO_ROOT", exported)
+
+    assert lint.main(["verify"]) == 1
+
+    output = capsys.readouterr().out
+    assert "[DOC_METADATA] README.md:" in output
+    assert "[BROKEN_LINK] README.md: docs/missing.md" in output
+
+
 def test_metadata_check_rejects_invalid_duplicate_values_and_dates(tmp_path: Path) -> None:
     _write(
         tmp_path / "docs" / "bad.md",

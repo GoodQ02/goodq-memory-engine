@@ -2,11 +2,78 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import json
+import subprocess
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUMMARY_JS_PATH = REPO_ROOT / "ui" / "summary_console" / "static" / "js" / "summary.js"
 SUMMARY_JS = SUMMARY_JS_PATH.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("kind", ["image", "document", "audio"])
+def test_standalone_profile_preserves_kind_and_does_not_offer_video_summary(kind):
+    source = "\n".join(_function_source(name) for name in (
+        "loadVideoProfile", "setupRegenListener", "renderPlaylistGrid", "getFrameEndpoint",
+    ))
+    harness = r'''
+const input = JSON.parse(require("fs").readFileSync(0, "utf8"));
+class Element {
+  constructor() { this.children=[]; this.hidden=false; this.style={}; this.listeners={}; }
+  set innerHTML(v) { this.html=v; this.children=[]; }
+  get innerHTML() { return this.html || ""; }
+  appendChild(v) { this.children.push(v); }
+  addEventListener(k,v) { this.listeners[k]=v; }
+  setAttribute(k,v) { this[k]=v; }
+}
+const elements = new Map();
+const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,new Element()); return elements.get(id); },
+  createElement() { return new Element(); } };
+const state = {llmSummarizationEnabled:true}; let pollInterval=null;
+const requests=[]; let confirmations=0;
+const window={confirm() { confirmations++; return false; }};
+const showToast=message => { throw new Error(message); };
+const resumeExistingSummaryJobStatus=()=>{};
+const stopSummaryPolling=()=>{};
+const formatTimecode=n=>String(n);
+const fetch=async path=>{ requests.push(path); return {ok:true,json:async()=>({source_kind:input.kind,duration:0,total_scenes:1,
+  segments:[{scene_id:"scene-1234567890",source_kind:input.kind,start:0,end:0,
+    representative_frame:input.kind==="image"?"/api/media/video/source/source":null,
+    representative_frame_endpoint:input.kind==="image"?"/api/media/video/source/source":null,
+    document_text:input.kind==="document"?"Family <script>notes</script>":null}]})}; };
+eval(input.source);
+(async()=>{
+  setupRegenListener();
+  await loadVideoProfile("source","Memory",input.kind);
+  await document.getElementById("regen-summary-btn").listeners.click();
+  const grid=document.getElementById("playlist-grid");
+  process.stdout.write(JSON.stringify({requests,confirmations,
+    badge:document.getElementById("profile-type").textContent,
+    summaryHidden:document.getElementById("narrative-summary-box").hidden,
+    regenHidden:document.getElementById("regen-summary-btn").hidden,
+    scenes:state.currentPlaylistScenes,card:grid.children[0],
+    span:document.getElementById("profile-span").textContent}));
+})().catch(e=>{process.stderr.write(e.stack);process.exitCode=1;});
+'''
+    result = subprocess.run(["node", "-e", harness], cwd=REPO_ROOT, capture_output=True,
+                            text=True, input=json.dumps({"kind": kind, "source": source}), timeout=20)
+    assert result.returncode == 0, result.stderr
+    observed = json.loads(result.stdout)
+    assert observed["badge"] == kind.upper()
+    assert observed["summaryHidden"] and observed["regenHidden"]
+    assert not any("/api/summary/video/" in path for path in observed["requests"])
+    assert observed["confirmations"] == 0
+    assert observed["scenes"][0]["source_kind"] == kind
+    if kind in {"image", "document"}:
+        assert observed["span"] == "Static source"
+    if kind == "image":
+        assert "/api/media/video/source/source" in json.dumps(observed["card"])
+        assert "/frame/source" not in json.dumps(observed["card"])
+    if kind == "document":
+        assert observed["scenes"][0]["document_text"] == "Family <script>notes</script>"
+        assert "No dialogue transcript" not in json.dumps(observed["card"])
 
 
 def _function_source(name: str) -> str:

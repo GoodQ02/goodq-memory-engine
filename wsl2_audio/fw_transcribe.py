@@ -34,14 +34,14 @@ def _build_error_payload(
 
 
 def main(argv: List[str]) -> int:
-    if len(argv) != 3:
-        print("usage: python fw_transcribe.py <input_wav> <output_json>", file=sys.stderr)
+    if len(argv) not in (3, 4):
+        print("usage: python fw_transcribe.py <input_wav> <output_json> [options_json]", file=sys.stderr)
         return 1
 
     input_wav = argv[1]
     output_json = argv[2]
 
-    model_size = os.environ.get("GOODQ_FW_MODEL_SIZE", "tiny").strip() or "tiny"
+    model_size = os.environ.get("GOODQ_FW_MODEL_SIZE", "medium").strip() or "medium"
     compute_type = os.environ.get("GOODQ_FW_COMPUTE_TYPE", "float16").strip() or "float16"
     device = "cuda"
 
@@ -63,32 +63,18 @@ def main(argv: List[str]) -> int:
 
     try:
         from faster_whisper import WhisperModel  # type: ignore
-
-        model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        segments_iter, info = model.transcribe(input_wav)
-
-        segments = []
-        for seg in segments_iter:
-            text = (getattr(seg, "text", "") or "").strip()
-            segments.append(
-                {
-                    "start": float(getattr(seg, "start", 0.0) or 0.0),
-                    "end": float(getattr(seg, "end", 0.0) or 0.0),
-                    "text": text,
-                }
-            )
-
-        payload = {
-            "status": "success",
-            "engine": "faster-whisper",
-            "model": model_size,
-            "device": str(getattr(model, "device", device) or device),
-            "language": getattr(info, "language", None),
-            "segments": segments,
-            "telemetry": telemetry,
-        }
+        try:
+            from .transcription_contract import transcribe_file
+        except ImportError:
+            from transcription_contract import transcribe_file
+        options = json.loads(argv[3]) if len(argv) == 4 else {}
+        model_size = str(options.pop('model', None) or model_size)
+        model = WhisperModel(model_size, device=device, compute_type=compute_type,
+                             local_files_only=os.environ.get('HF_HUB_OFFLINE') == '1')
+        payload = transcribe_file(model, input_wav, **options)
+        payload.update(model=model_size, device=str(getattr(model, 'device', device) or device), telemetry=telemetry)
         _write_json(output_json, payload)
-        return 0
+        return 0 if payload['status'] == 'success' else 1
     except Exception as e:
         payload = _build_error_payload(
             model_size=model_size,

@@ -1,6 +1,27 @@
 from __future__ import annotations
 
 
+def test_ambiguous_date_preserves_segment_offset_and_four_digit_dates():
+    from steps.audio_time_hints.step import audio_time_hints
+
+    result = audio_time_hints({
+        "transcript": "The tape says 12/25/87, and December 16, 2002.",
+        "transcript_meta": {"segments": [{"start": 4.5, "text": "The tape says 12/25/87."}]},
+    }, {})
+    assert result["time_hints"]["explicit_dates"] == ["2002-12-16"]
+    assert result["time_hints"]["ambiguous_dates"] == ["12/25/87"]
+    assert result["time_hints"]["first_seen_ts"]["12/25/87"] == 4.5
+
+
+def test_invalid_short_year_date_is_not_retained_as_a_valid_candidate():
+    from steps.audio_time_hints.step import audio_time_hints
+
+    result = audio_time_hints({"transcript": "The value is 2/30/87."}, {})
+    assert result["time_hints"]["explicit_dates"] == []
+    assert result["time_hints"]["ambiguous_dates"] == []
+    assert result["time_hints_meta"]["status"] == "none"
+
+
 def test_audio_time_hints_does_not_treat_music_march_as_calendar_month() -> None:
     from steps.audio_time_hints.step import audio_time_hints
 

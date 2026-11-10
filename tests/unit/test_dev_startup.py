@@ -47,9 +47,12 @@ if ROLE == "api":
             status = int(override.read_text()) if override.is_file() else (503 if mode == "api_unhealthy" else 200)
             with (root / "http-paths.txt").open("a") as stream:
                 print(self.path, file=stream)
+            body = b'{"status":"ok"}'
             self.send_response(status)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(b'{"status":"ok"}')
+            self.wfile.write(body)
         def log_message(self, *args):
             pass
     port = 0 if mode == "api_fallback" else int(os.environ["GOODQ_API_PORT"])
@@ -765,6 +768,23 @@ def test_stop_current_discovers_owner_and_waits_for_verified_drain(launch, newer
     assert result["ChildStarts"] == ["api", "watchdog"]
 
 
+def _restore_discovery_receipt(held: Path, receipt: Path, timeout: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout
+    while held.exists():
+        try:
+            if receipt.exists():
+                held.unlink(missing_ok=True)
+            else:
+                held.rename(receipt)
+            return
+        except FileExistsError:
+            continue
+        except PermissionError as exc:
+            if exc.errno != errno.EACCES or exc.winerror not in (None, 5, 32, 33) or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.025)
+
+
 @pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
 @pytest.mark.parametrize("fault_action", ["CheckRunning", "StopCurrent"])
 def test_control_discovery_retries_receipt_replaced_after_existence_check(launch, shell, fault_action):
@@ -789,8 +809,9 @@ def test_control_discovery_retries_receipt_replaced_after_existence_check(launch
                     try:
                         time.sleep(0.2)
                     finally:
-                        # Only restore the fixture's hidden receipt; keep old run evidence.
-                        held.replace(receipt)
+                        # Restore only when the live supervisor has not already republished,
+                        # retrying transient Windows sharing locks on hosted runners.
+                        _restore_discovery_receipt(held, receipt)
                 if action == "CheckRunning":
                     _check_running(sandbox, controller)
                 else:
@@ -1300,3 +1321,31 @@ def test_new_worker_wait_rejects_stale_receipt_and_accepts_reused_pid(tmp_path, 
             return None
 
     assert _wait_for_new_worker(path, LiveProcess(), old, timeout=1) == new
+
+
+def test_restore_discovery_receipt_handles_republished_and_locked_targets(tmp_path, monkeypatch):
+    folder = tmp_path / "goodq-startup-fixture"
+    folder.mkdir()
+    receipt = folder / "supervisor.json"
+    held = folder / "supervisor.json.discovery-held"
+    held.write_text('{"cycle": 1, "state": "monitoring"}', encoding="utf-8")
+    real_rename = Path.rename
+    attempts = []
+
+    def flaky_rename(path, target):
+        if path == held and not attempts:
+            attempts.append(path)
+            raise PermissionError(errno.EACCES, "Access is denied", str(path), 5, str(target))
+        return real_rename(path, target)
+
+    monkeypatch.setattr(Path, "rename", flaky_rename)
+    _restore_discovery_receipt(held, receipt, timeout=1.0)
+    assert not held.exists()
+    assert json.loads(receipt.read_text(encoding="utf-8"))["cycle"] == 1
+
+    # When the live supervisor has already republished a newer receipt, keep it.
+    receipt.write_text('{"cycle": 4, "state": "stopping"}', encoding="utf-8")
+    held.write_text('{"cycle": 1, "state": "monitoring"}', encoding="utf-8")
+    _restore_discovery_receipt(held, receipt, timeout=1.0)
+    assert not held.exists()
+    assert json.loads(receipt.read_text(encoding="utf-8")) == {"cycle": 4, "state": "stopping"}

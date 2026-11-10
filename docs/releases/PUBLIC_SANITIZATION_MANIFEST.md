@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `e33c4109089fe6471942b588ae5164bd981a9ad7` (`dev`).
-- Public parent: `fbb89c10793245c2a1d433ba6a2db8e251b2bc90` (`main`).
+- Private development source: `915c79f801422140a584f8067a99aaad66956897` (`dev`).
+- Public parent: `9d87e440f1f8900bba3ccf81a82d7193d9c77866` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -171,3 +171,13 @@ Mirrors pinned private commit `e33c4109` onto `GoodQ02/goodq-memory-engine` `mai
 - **UI & Quality-of-Life Upgrades**: Deepened Obsidian Night Mode and Daylight Studio theme synchronization across Memory Explorer, Identity Curation Workbench, Speaker Stitching Workbench, Summary Console, Justification UI, and Operator Console; combined multi-recording library federation with unavailable-source disclosure; `People -> Scenes -> Watch` navigation; cross-movie face/voice match review with `Correct / Incorrect / Unsure` decisions, `"Who is this instead?"` rejected-pairing reassignment, and alias-tolerant frozen-comparison guards; producer and API `<ref>`/`<box>` grounding-markup stripping; config-driven `EntityExtractor` person terms; corpus-neutral search/grounding repairs; lossless audio phrase grouping and LF-pinned worker digests; and Pydantic `ConfigDict` migration (resolving the previously noted class-based configuration warning) plus unused `steps/tts/` retirement.
 - **Public Showcase Media**: Four UI screenshots (`samples/assets/ui_*.png` and `retro_console_preview.png`) were generated from an isolated synthetic public-domain NASA Apollo 11 harness and re-encoded without metadata chunks. No personal media, family names, corpus databases, or workstation receipts are included.
 - **Parity & Privacy Gates**: Product code in `api/`, `cli/`, `common/`, `configs/`, `envs/`, `lib/`, `pipelines/`, `retrieval/`, `steps/`, `ui/`, and `wsl2_audio/` matches `e33c4109` byte for byte. Documentation drift, authority, dependency drift, banned-token, installer semantic contract, deep personal-term/path privacy scan, and focused unit/UI suites pass prior to publication.
+
+### Hosted Windows startup-test follow-up
+
+Hosted runs on `9d87e440` passed `doc-drift-lint` and `codeql` and 53/54 Windows
+startup checks, exposing two hosted-runner timing/sharing races: `held.replace(receipt)`
+colliding with concurrent `supervisor.json` handles or overwriting a freshly
+republished heartbeat receipt during discovery fault injection, and a two-second
+`Invoke-WebRequest` readiness probe budget under cold `powershell.exe` `Add-Type`
+compilation jitter. `start_goodq_dev.ps1` and `tests/unit/test_dev_startup.py`
+now match private `915c79f8` byte for byte; all 68 local startup/caller checks pass.

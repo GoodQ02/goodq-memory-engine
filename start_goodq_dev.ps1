@@ -393,7 +393,8 @@ function Get-GoodQApiReadiness($Child) {
         return @{Ready=$false; Detail='Owned API has not bound the exact loopback endpoint.'}
     }
     try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ApiPort/" -TimeoutSec 2 -MaximumRedirection 0 -ErrorAction Stop
+        # Allow cold Windows PowerShell/.NET HTTP jitter while staying below CheckRunning's 8s budget.
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ApiPort/" -TimeoutSec 6 -MaximumRedirection 0 -ErrorAction Stop
     } catch {
         return @{Ready=$false; Detail=$_.Exception.Message}
     }

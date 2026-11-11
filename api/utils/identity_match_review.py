@@ -58,7 +58,11 @@ def build(cfg, conn, review):
             raise appearance.AppearanceConflict("A completed review must account for every saved face.")
     elif review.get("completed_review") or review.get("reuse_confirmed_faces"):
         raise appearance.AppearanceConflict("Reusable faces require explicit Correct review decisions.")
-    people = {p["id"]: p["display_name"] for p in report["people"]}
+    try:
+        merged_people = matching.merged_report_people(cfg, report)
+    except ValueError as exc:
+        raise appearance.AppearanceConflict(str(exc)) from exc
+    people = {p["id"]: p["display_name"] for p in merged_people}
     # A correction names the right saved person for a face marked Incorrect.
     # The rejected candidate never receives the face; the decision stays Incorrect.
     corrections = review.get("corrections") or {}
@@ -97,15 +101,20 @@ def build(cfg, conn, review):
         if source.get("kind") == "reviewed_faces":
             if Path(source["epoch_root"]).resolve() not in reviewed_source_roots(cfg.get("identity_matching") or {}):
                 raise appearance.AppearanceConflict("The reviewed reference source is no longer configured.")
-            _, current = read_reviewed_faces(Path(source["epoch_root"]), people)
+            frozen_people = {p["id"]: p["display_name"] for p in report["people"]}
+            _, current = read_reviewed_faces(Path(source["epoch_root"]), frozen_people)
             if current != source:
                 raise appearance.AppearanceConflict("Reviewed references changed. Review fresh reference evidence first.")
             continue
         pair = (str(Path(source["epoch_root"]).resolve()), str(Path(source["identity_path"]).resolve()))
         if pair not in configured:
             raise appearance.AppearanceConflict("The reference source is no longer configured.")
-        changed = any(file_digest(Path(pair[1]) / name) != source[key]
-                      for name, key in (("family_roster.yaml", "roster_sha256"), ("face_clusters.json", "groups_sha256")))
+        cluster_file = Path(pair[1]) / "face_clusters.json"
+        current_groups_sha = file_digest(cluster_file) if cluster_file.is_file() else None
+        changed = (
+            file_digest(Path(pair[1]) / "family_roster.yaml") != source["roster_sha256"]
+            or current_groups_sha != source.get("groups_sha256")
+        )
         if changed and not _same_reference_facts(cfg, report, source, pair):
             raise appearance.AppearanceConflict("Reference names or labels changed. Review fresh reference evidence first.")
     retired = retired_identity_scene_ids(root / "ucf/ucf_ledger.db")

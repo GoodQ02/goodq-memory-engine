@@ -252,11 +252,18 @@ def verify_recognizer(profile):
     expected_vad = (Path(faster_whisper.vad.__file__).parent/'assets'/'silero_vad_v6.onnx').resolve()
     if vad_path != expected_vad or _sha_file(vad_path) != vad_spec['sha256']:
         raise ValueError('Speech activity asset differs from the pinned package asset')
-    if profile.get('device') != 'cpu' or profile.get('compute_type') != 'int8':
-        raise ValueError('This candidate profile supports explicit CPU/int8 only; no automatic device fallback')
+    device, compute_type = profile.get('device'), profile.get('compute_type')
+    valid_device = ((device == 'cpu' and compute_type == 'int8')
+                    or (device == 'cuda' and compute_type in ('float16', 'int8_float16', 'float32', 'int8')))
+    if not valid_device:
+        raise ValueError('Unsupported recognizer device/compute_type; no automatic device fallback')
+    if device == 'cuda':
+        import ctranslate2
+        if ctranslate2.get_cuda_device_count() < 1:
+            raise ValueError('CUDA recognizer profile requested but CUDA runtime is unavailable; no automatic device fallback')
     models = [{key: item[key] for key in ('id', 'revision', 'sha256')} for item in (spec, vad_spec)]
-    runtime = {'python': platform.python_version(), 'packages': expected, 'device': 'cpu',
-               'compute_type': 'int8', 'cpu_threads': 4, 'model_loading': 'local_files_only'}
+    runtime = {'python': platform.python_version(), 'packages': expected, 'device': device,
+               'compute_type': compute_type, 'cpu_threads': 4, 'model_loading': 'local_files_only'}
     return {'models': models, 'runtime': runtime, 'model_path': str(model_dir)}
 
 
@@ -269,7 +276,9 @@ class FasterWhisperRecognizer:
         verified = verified or verify_recognizer(profile)
         self.models, self.runtime = verified['models'], verified['runtime']
         model_dir = verified['model_path']
-        self.model = WhisperModel(str(model_dir), device='cpu', compute_type='int8', cpu_threads=4,
+        device = self.runtime.get('device', 'cpu')
+        compute_type = self.runtime.get('compute_type', 'int8')
+        self.model = WhisperModel(str(model_dir), device=device, compute_type=compute_type, cpu_threads=4,
                                   num_workers=1, local_files_only=True)
 
     def observe(self, samples, sample_rate, context, language):
@@ -278,6 +287,9 @@ class FasterWhisperRecognizer:
 
     def close(self):
         self.model = None
+        if self.runtime.get('device') == 'cuda':
+            import gc
+            gc.collect()
 
 
 def load_recognizer(profile, verified=None):

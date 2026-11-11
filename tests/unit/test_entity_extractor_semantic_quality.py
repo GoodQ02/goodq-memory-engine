@@ -403,3 +403,158 @@ def test_entity_extractor_ignores_hedged_caption_place_clauses_while_preserving_
     }
     assert "Bathroom" in unhedged_locations
 
+
+def test_entity_extractor_loads_roster_and_vocabulary_names_and_frame_persistence_forwards_config(tmp_path):
+    import yaml
+    from cli.run_ingestion import _persist_frame_semantic_entities
+    from scripts.config_schema import UserConfig
+
+    user_model = UserConfig(
+        name="Operator",
+        nickname="Op",
+        pronouns="they/them",
+        personality_traits="calm",
+        values="clarity",
+        background="local",
+        music_style="ambient",
+        role_nursing="none",
+        nursing_philosophy="care",
+        role_personal="family",
+        family_names=["Rowan"],
+    )
+    assert user_model.model_dump()["family_names"] == ["Rowan"]
+
+    roster_dir = tmp_path / "identity"
+    roster_dir.mkdir()
+    (roster_dir / "family_roster.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "identities": [
+                    {
+                        "id": "person_one",
+                        "display_name": "Clara Soto",
+                        "aliases": ["Clare", "Bo"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = {
+        "user": user_model.model_dump(),
+        "audio": {"transcribe": {"vocabulary": ["Mateo"]}},
+        "identity_matching": {"reference_sources": [{"identity_path": str(roster_dir)}]},
+    }
+
+    extracted = extract_entities_from_scene(
+        scene_data={
+            "audio": {
+                "transcript": "Rowan, Mateo, Clare, and Clara Soto wave to Bo in a bo pattern."
+            }
+        },
+        scene_id="scene_cfg_names",
+        video_id="video_cfg",
+        config=cfg,
+    )
+    people = {e["name"] for e in extracted["entities"] if e["entity_type"] == "person"}
+    assert {"Rowan", "Mateo", "Clare", "Clara Soto", "Bo"} <= people
+
+    noise_only = extract_entities_from_scene(
+        scene_data={"audio": {"transcript": "a bo fragment in lowercase noise"}},
+        scene_id="scene_noise",
+        video_id="video_cfg",
+        config=cfg,
+    )
+    assert {e["name"] for e in noise_only["entities"] if e["entity_type"] == "person"} == set()
+
+    frame_item = {"caption": "Clara Soto stands beside Mateo in the kitchen.", "timestamp": 5.0}
+    _persist_frame_semantic_entities(frame_item, scene_id="scene_frame", video_id="video_cfg", config=cfg)
+    persisted_names = {d["label"].lower() for d in frame_item.get("entity_details", [])}
+    assert "clara soto" in persisted_names
+    assert "mateo" in persisted_names
+
+
+def test_entity_extractor_ignores_rejected_and_runaway_transcript_phrases():
+    raw_tx = (
+        "Avery is mentioned in a rejected low-confidence segment.\n"
+        "Casey, Casey, Casey, Casey, Casey, Casey, Casey, Casey\n"
+        "Art is waving by the porch."
+    )
+    scene_data = {
+        "audio": {
+            "transcript": raw_tx,
+            "transcript_meta": {
+                "transcription_context": {"words": ["Art", "Avery", "Casey"]},
+                "transcription_quality": {
+                    "region_results": [
+                        {
+                            "accepted_segment_count": 3,
+                            "confidence_override": {
+                                "segments": [
+                                    {
+                                        "segment_index": 0,
+                                        "text": "Avery is mentioned in a rejected low-confidence segment.",
+                                        "decision": "reject",
+                                    }
+                                ]
+                            },
+                        }
+                    ]
+                },
+                "phrase_observations": [
+                    {
+                        "source_segment_index": 0,
+                        "text": "Avery is mentioned in a rejected low-confidence segment.",
+                    },
+                    {
+                        "source_segment_index": 1,
+                        "text": "Casey, Casey, Casey, Casey, Casey, Casey, Casey, Casey",
+                        "reason": "paired_native_timestamps_unavailable",
+                    },
+                    {
+                        "source_segment_index": 2,
+                        "text": "Art is waving by the porch.",
+                    },
+                ],
+            },
+        }
+    }
+
+    result = extract_entities_from_scene(
+        scene_data=scene_data,
+        scene_id="scene_governed_audio",
+        video_id="video_governed",
+        config={"family_names": ["art", "avery", "casey"]},
+    )
+    people = {e["name"] for e in result["entities"] if e["entity_type"] == "person"}
+    assert people == {"Art"}
+    assert scene_data["audio"]["transcript"] == raw_tx
+
+
+def test_entity_extractor_rejects_false_person_tokens_and_person_concept_tags():
+    result = extract_entities_from_scene(
+        scene_data={
+            "audio": {
+                "ner_entities": [
+                    {"name": "Kiss", "type": "PERSON"},
+                    {"name": "Lion", "type": "PER"},
+                    {"name": "Mayor", "type": "PERSON"},
+                    {"name": "Mayor Dinkins", "type": "PERSON"},
+                    {"name": "Clara Reed", "type": "PERSON"},
+                ],
+                "tags": ["Clara Reed", "Santa Claus", "Holiday"],
+            }
+        },
+        scene_id="scene_clean_ner",
+        video_id="vid_clean_ner",
+        config={"family_names": ["Clara Reed"]},
+    )
+    emap = _entity_map(result)
+    assert ("Mayor Dinkins", "person") in emap
+    assert ("Clara Reed", "person") in emap
+    assert ("Holiday", "concept") in emap
+    for noisy_person in ("Kiss", "Lion", "Mayor"):
+        assert (noisy_person, "person") not in emap
+    assert ("Clara Reed", "concept") not in emap
+    assert ("Santa Claus", "concept") not in emap

@@ -28,3 +28,22 @@ def test_canonicalize_taxonomy_rejects_placeholder_entity_labels():
     canonicalize_taxonomy(item)
 
     assert item["entities"] == ["Jerry", "George"]
+
+
+def test_canonicalize_taxonomy_blocks_person_and_santa_from_tags_but_keeps_entities():
+    item = {
+        "tags": ["Clara Reed", "Santa Claus", "Santa", "Christmas Tree", "Chicago"],
+        "entities": ["Clara Reed", "Santa Claus"],
+        "ner_entities": [
+            {"name": "Clara Reed", "type": "PERSON"},
+            {"name": "Sam Vance", "type": "PER"},
+            {"name": "Chicago", "type": "LOCATION"},
+        ],
+    }
+
+    canonicalize_taxonomy(item)
+
+    assert item["tags"] == ["Christmas Tree", "Chicago"]
+    assert "Clara Reed" in item["entities"]
+    assert "Sam Vance" in item["entities"]
+    assert "Santa Claus" in item["entities"]

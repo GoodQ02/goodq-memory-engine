@@ -125,8 +125,113 @@ def test_context_overlap_is_retained_outside_core_and_primary_exclusions_survive
 
 @pytest.mark.parametrize('policy', [{'id': 'other', 'max_duration_seconds': 3600},
                                   {'id': 'bounded_recording_v1', 'max_duration_seconds': 99999},
-                                  {'id': 'bounded_recording_v1', 'max_duration_seconds': True}])
+                                  {'id': 'bounded_recording_v1', 'max_duration_seconds': True},
+                                  {'id': 'bounded_recording_v2', 'max_duration_seconds': 28801}])
 def test_unqualified_resource_policy_is_rejected_before_reads(tmp_path, policy):
     r = recording(tmp_path, np.ones(10), 10)
     with pytest.raises(ValueError, match='policy'):
         RecordingObservers({'enrichment': {'device': 'cpu', 'recording_policy': policy}}, {'source': r['source']}, r)
+
+
+def test_over_60_minute_recording_policy_v2_streams_bounded_reads_and_caps_batches(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    import torch
+    from wsl2_audio import enrichment_models, process_audio
+
+    # 2-hour recording (7200s) at test sample rate 10 Hz -> 72,000 samples
+    count, rate = 72000, 10
+    r = recording(tmp_path, np.ones(count) * .1, rate)
+    calls = []
+    original = enrichment_models.read_channel
+
+    def bounded(rec, span, channel):
+        calls.append(span.end - span.start)
+        assert span.end - span.start <= 32 * rate
+        return original(rec, span, channel)
+
+    monkeypatch.setattr(enrichment_models, 'read_channel', bounded)
+    profile = {'enrichment': {
+        'device': 'cpu',
+        'recording_policy': {'id': 'bounded_recording_v2', 'max_duration_seconds': 28800},
+        'models': {'speaker_activity': {'id': 'fixture-pyannote', 'path': str(tmp_path)}},
+    }}
+    observer = RecordingObservers(profile, {'source': r['source']}, r)
+    assert observer.duration == 7200 and observer.long_recording
+    assert max(calls) <= 32 * rate
+
+    class FakePipeline:
+        segmentation_batch_size = 32
+        embedding_batch_size = 32
+        device_used = None
+
+        def to(self, dev):
+            self.device_used = str(dev)
+            return self
+
+    fake_pipeline = FakePipeline()
+    monkeypatch.setitem(sys.modules, 'pyannote.audio', SimpleNamespace(
+        Pipeline=SimpleNamespace(from_pretrained=lambda path: fake_pipeline)))
+
+    class Annotation:
+        def itertracks(self, **kwargs):
+            return iter([])
+
+    def fake_diarize(pipeline, audio, *, overlap_evidence, observe_empty):
+        overlap_evidence.update(status='ok', intervals=[])
+        return Annotation(), {'status': 'ok', 'flags': []}
+
+    monkeypatch.setattr(process_audio, '_diarize_with_review', fake_diarize)
+    res = observer.observe('speaker_activity', {})
+    assert res['status'] == 'ok'
+    assert fake_pipeline.segmentation_batch_size == 16
+    assert fake_pipeline.embedding_batch_size == 16
+    assert res['channels']['0']['continuity']['segmentation_batch_size'] == 16
+    assert res['channels']['0']['continuity']['embedding_batch_size'] == 16
+
+
+def test_cuda_enrichment_fails_hard_without_gpu_and_places_models_on_cuda_when_available(tmp_path, monkeypatch):
+    import torch
+
+    r = recording(tmp_path, np.ones(1600) * .1, 1600)
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
+    with pytest.raises(ValueError, match='no automatic device fallback'):
+        RecordingObservers({'enrichment': {'device': 'cuda'}}, {'source': r['source']}, r)
+
+    emptied = []
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(torch.cuda, 'empty_cache', lambda: emptied.append(True))
+    observer = RecordingObservers({
+        'enrichment': {'device': 'cuda', 'models': {'vocal_delivery': {'id': 'emo', 'path': 'fixture'}}}},
+        {'source': r['source']}, r)
+    assert observer.device == 'cuda'
+
+    from transformers import Wav2Vec2FeatureExtractor
+    from wsl2_audio import process_audio
+    from types import SimpleNamespace
+
+    seen_devices = []
+
+    class FakeEmoModel:
+        config = SimpleNamespace(id2label={0: 'neutral', 1: 'happy'})
+
+        def to(self, dev):
+            seen_devices.append(('model', str(dev)))
+            return self
+
+        def __call__(self, **kwargs):
+            return SimpleNamespace(logits=torch.tensor([[.2, .8]]))
+
+    class FakeInputs(dict):
+        def to(self, dev):
+            seen_devices.append(('inputs', str(dev)))
+            return self
+
+    monkeypatch.setattr(process_audio, '_load_trained_wav2vec', lambda *a, **kw: (FakeEmoModel(), {'strict': True}))
+    monkeypatch.setattr(Wav2Vec2FeatureExtractor, 'from_pretrained',
+                        lambda *a, **kw: lambda *args, **kwargs: FakeInputs(input_values=torch.ones((1, 1600))))
+    out = observer.vocal_delivery([{'id': 'u1', 'channel': 0, 'span': {'start': 0, 'end': 1600}}])
+    assert out['results'][0]['label'] == 'happy'
+    assert ('model', 'cuda') in seen_devices
+    assert ('inputs', 'cuda') in seen_devices
+    assert emptied

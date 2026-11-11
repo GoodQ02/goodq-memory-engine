@@ -53,6 +53,7 @@ def test_old_evidence_keeps_original_ids_and_unknown_identity_methods_fail():
 
 @pytest.mark.parametrize('autocrlf', ['true', 'false'])
 def test_git_checkout_preserves_recording_worker_fingerprint(tmp_path, monkeypatch, autocrlf):
+    import os
     import subprocess
     repo = Path(__file__).resolve().parents[2]
     expected = engine._worker_digest()
@@ -61,12 +62,18 @@ def test_git_checkout_preserves_recording_worker_fingerprint(tmp_path, monkeypat
     ).decode().split('\0')
     names = [name for name in names if name]
     assert names
+    env = dict(os.environ, GIT_INDEX_FILE=str(tmp_path/'temp.index'))
+    subprocess.run(
+        ['git', '-C', str(repo), '-c', 'core.autocrlf='+autocrlf, 'add', '--', *names],
+        check=True, capture_output=True, env=env,
+    )
+    checkout_dir = tmp_path/'checkout'
     subprocess.run(
         ['git', '-C', str(repo), '-c', 'core.autocrlf='+autocrlf,
-         'checkout-index', '--prefix='+tmp_path.as_posix()+'/', '--', *names],
-        check=True, capture_output=True,
+         'checkout-index', '--prefix='+checkout_dir.as_posix()+'/', '--', *names],
+        check=True, capture_output=True, env=env,
     )
-    monkeypatch.setattr(engine, '__file__', str(tmp_path/'wsl2_audio/recording_engine.py'))
+    monkeypatch.setattr(engine, '__file__', str(checkout_dir/'wsl2_audio/recording_engine.py'))
     assert engine._worker_digest() == expected
 
 
@@ -459,3 +466,72 @@ def test_optional_staging_error_retains_other_evidence_through_prepare(tmp_path,
     assert all(evidence['stages'][name]['status']=='ok'
                for name in ('speaker_activity','phrase_activity','acoustic_events'))
     assert not select_inputs(evidence,'voice_sample') and not select_inputs(evidence,'vocal_delivery')
+
+
+def test_warm_model_staging_skips_mounted_rereads_consolidates_findmnt_and_detects_source_mutation(
+    tmp_path, native_job, monkeypatch
+):
+    root, output, plan, calls, worker = native_job
+    model_dir = tmp_path / 'multi-file-model'
+    model_dir.mkdir()
+    files = {}
+    for idx in range(5):
+        name = f'part-{idx}.bin'
+        part = model_dir / name
+        part.write_bytes(f'pinned-bytes-{idx}'.encode())
+        files[name] = _sha_file(part)
+    prof_path = Path(plan['profile'])
+    p = json.loads(prof_path.read_text())
+    p['recognizer'] = {
+        'id': 'fixture-multi', 'revision': 'fixture',
+        'path': str(model_dir), 'files': files, 'sha256': scratch._digest(files),
+    }
+    _atomic_json(p, prof_path)
+    plan['profile_sha256'] = _sha_file(prof_path)
+
+    findmnt_calls = []
+    def tracked_findmnt(cmd, *args, **kwargs):
+        findmnt_calls.append(cmd)
+        return '9p\n'
+    monkeypatch.setattr(scratch.subprocess, 'check_output', tracked_findmnt)
+
+    scratch.execute(plan)
+    assert len(findmnt_calls) <= 2
+
+    source_reads = []
+    original_sha = scratch._sha_file
+    resolved_parts = {p.resolve() for p in model_dir.iterdir()}
+    def counted_sha(path):
+        if Path(path).resolve() in resolved_parts:
+            source_reads.append(Path(path).name)
+        return original_sha(path)
+    monkeypatch.setattr(scratch, '_sha_file', counted_sha)
+
+    second_out = tmp_path / 'windows-job-2'
+    second_out.mkdir()
+    second_plan = dict(plan, job_key='b' * 64, output=str(second_out))
+    scratch.execute(second_plan)
+    assert source_reads == []
+
+    (model_dir / 'part-0.bin').write_bytes(b'mutated-source-model-bytes-longer')
+    third_out = tmp_path / 'windows-job-3'
+    third_out.mkdir()
+    third_plan = dict(plan, job_key='c' * 64, output=str(third_out))
+    with pytest.raises(ValueError, match='Pinned model asset changed'):
+        scratch.execute(third_plan)
+
+
+def test_verify_export_resolves_each_root_once(native_job, monkeypatch):
+    root, output, plan, calls, worker = native_job
+    scratch.execute(plan)
+    request = json.loads(Path(plan['request']).read_text())
+    root_counts = {Path(output): 0, Path(request['processing_root']): 0}
+    original = Path.resolve
+    def counted(path, *args, **kwargs):
+        if path in root_counts:
+            root_counts[path] += 1
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, 'resolve', counted)
+    scratch.verify_export(output, request['processing_root'], plan)
+    assert root_counts[Path(output)] == 1
+    assert root_counts[Path(request['processing_root'])] == 1

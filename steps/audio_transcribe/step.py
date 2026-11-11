@@ -547,10 +547,15 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
             audio_transcribe_wsl2, unified_transcription_options, _transcription_projection)
         try:
             if str(os.environ.get('GOODQ_WSL_TRANSCRIBE_ENGINE') or '').upper() == 'FASTER_WHISPER_VENV':
-                options = {'temperature': tx_cfg.get('temperature', 0.), 'vocabulary': tx_cfg.get('vocabulary'),
+                from steps.audio.audio_wsl2_bridge import _apply_post_filter_vocabulary_context
+                tx_mode = tx_cfg.get('vocabulary_mode', 'guarded_hotwords')
+                options = {'temperature': tx_cfg.get('temperature', 0.),
+                           'vocabulary': None if tx_mode == 'post_filter_only' else tx_cfg.get('vocabulary'),
                            'language': tx_cfg.get('language'), 'beam_size': tx_cfg.get('beam_size', 5)}
                 if tx_cfg.get('model'): options['model'] = tx_cfg['model']
                 raw = _run_wsl_faster_whisper_venv(path, options)
+                if tx_mode == 'post_filter_only' and tx_cfg.get('vocabulary') is not None and isinstance(raw, dict):
+                    raw = _apply_post_filter_vocabulary_context(raw, tx_cfg.get('vocabulary'))
                 wsl_result = _transcription_projection(raw, engine='wsl_faster_whisper_venv')
             else:
                 wsl_result = audio_transcribe_wsl2(path, duration=item.get('duration'),
@@ -598,12 +603,12 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
     # 1. CPU baseline: medium takes ~507s vs ~184s for small on these CPUs,
     #    and transcript quality is nearly identical for memory/search.
     # 2. GPU on laptops (6 GB RTX 3060/4050): medium (1.5 GB) competes for
-    #    VRAM with other pipeline models.  On GS-32, the CUDA path with
-    #    medium caused WhisperModel() to hang for 1600+ seconds due to
+    #    VRAM with other pipeline models.  On 6 GB laptop GPUs, the CUDA path
+    #    with medium caused WhisperModel() to hang for 1600+ seconds due to
     #    symlink resolution and HF hub metadata issues on Windows.
     #    small (0.5 GB) loads reliably in ~2s on the same hardware.
     #
-    # Desktop-class machines (>=20 CPUs, e.g. GOOD-CUBE with 28 threads)
+    # Desktop-class machines (>=20 CPUs, e.g. 28-thread workstations)
     # keep medium on both CPU and GPU.
     import multiprocessing
     _logical_cpus = multiprocessing.cpu_count()
@@ -714,23 +719,26 @@ def _audio_transcribe_impl(item: Dict[str, Any], cfg: Dict[str, Any], model_ctx_
         }
 
     from scripts.config_schema import AudioTranscriptionConfig
-    from steps.audio.audio_wsl2_bridge import _transcription_projection
+    from steps.audio.audio_wsl2_bridge import _apply_post_filter_vocabulary_context, _transcription_projection
     settings = AudioTranscriptionConfig.model_validate(
-        {key: tx_cfg[key] for key in ('temperature', 'vocabulary') if key in tx_cfg})
+        {key: tx_cfg[key] for key in ('temperature', 'vocabulary', 'vocabulary_mode') if key in tx_cfg})
+    decode_vocab = None if settings.vocabulary_mode == 'post_filter_only' else settings.vocabulary
     started = time.time()
     if whisper_cli:
         from steps.audio_transcribe.whisper_cpp import WhisperCppModel
         from wsl2_audio.transcription_contract import transcribe_file
         model = WhisperCppModel(str(whisper_cli), str(whisper_model_path))
         raw = transcribe_file(model, path, temperature=settings.temperature,
-            vocabulary=settings.vocabulary, language=tx_cfg.get('language'),
+            vocabulary=decode_vocab, language=tx_cfg.get('language'),
             beam_size=int(tx_cfg.get('beam_size', 5)), engine='whisper.cpp')
     else:
         raw = _transcribe_chunk_fw(path, 0., fw_model, settings.temperature,
-            vocabulary=settings.vocabulary, language=tx_cfg.get('language'),
+            vocabulary=decode_vocab, language=tx_cfg.get('language'),
             beam_size=int(tx_cfg.get('beam_size', 5)))
     if raw is None:
         raw = {'status': 'error', 'transcription_status': 'error', 'error': 'transcription_backend_no_result'}
+    if settings.vocabulary_mode == 'post_filter_only' and settings.vocabulary is not None:
+        raw = _apply_post_filter_vocabulary_context(raw, settings.vocabulary)
     raw.update(device=device, model=model_id)
     projected = _transcription_projection(raw, engine='whisper.cpp' if whisper_cli else 'faster-whisper')
     meta = projected['transcript_meta']

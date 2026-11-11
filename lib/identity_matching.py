@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 import re
 import sqlite3
+import uuid
 
 import yaml
 
@@ -139,6 +140,10 @@ def read_reviewed_faces(epoch, people):
     with sqlite3.connect(kg.as_uri() + "?mode=ro", uri=True) as conn:
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='identity_appearance_receipts' AND type='table'").fetchone():
             return [], None
+        kg_people = {
+            name: (json.loads(raw or "{}") if raw else {}).get("display_name")
+            for name, raw in conn.execute("SELECT name, properties FROM nodes WHERE node_type='Person'")
+        }
         for (raw,) in conn.execute("SELECT receipt FROM identity_appearance_receipts ORDER BY rowid"):
             receipt = json.loads(raw)
             if receipt["status"] != "applied" or not receipt.get("reference_faces"):
@@ -157,9 +162,21 @@ def read_reviewed_faces(epoch, people):
                                           .get(spec["evidence_id"]) == spec["person_id"])
                 else:
                     admitted_by_review = state == "correct" and spec["evidence_id"] in review["accepted_ids"]
+                pid, display_name = spec.get("person_id"), spec.get("display_name")
+                if pid in people:
+                    person_ok = people.get(pid) == display_name
+                else:
+                    person_ok = (
+                        spec.get("assignment") == "human_corrected"
+                        and isinstance(pid, str) and bool(pid)
+                        and isinstance(display_name, str) and bool(display_name)
+                        and kg_people.get(pid) == display_name
+                    )
+                    if person_ok:
+                        people[pid] = display_name
                 if (not admitted_by_review
                         or spec["report_id"] != review["report_id"] or spec["report_sha256"] != review["report_sha256"]
-                        or people.get(spec["person_id"]) != spec["display_name"]):
+                        or not person_ok):
                     raise ValueError("Reviewed reference conflicts with its named person or Correct decision")
                 fid = spec["target_face_id"]
                 if fid in admitted and admitted[fid] != spec:
@@ -213,13 +230,19 @@ def load_reference_catalog(options):
         identity = Path(source["identity_path"]).resolve(strict=True)
         kg_path = epoch / "knowledge_graph.db"
         from lib.identity_resolver import retired_identity_scene_ids
-        retired = retired_identity_scene_ids(kg_path)
+        retired = retired_identity_scene_ids(epoch / "ucf/ucf_ledger.db")
         roster_path, cluster_path = identity / "family_roster.yaml", identity / "face_clusters.json"
         roster = yaml.safe_load(roster_path.read_text(encoding="utf-8")) or {}
-        clusters = read_json(cluster_path)
-        if clusters.get("epoch_id") != epoch.name:
-            raise ValueError("Reference labels belong to a different epoch")
-        group_map = {c["cluster_id"]: c for c in clusters["clusters"]}
+        has_group_refs = any(person.get("face_cluster_ids") for person in roster.get("identities", []))
+        if cluster_path.is_file() or has_group_refs:
+            clusters = read_json(cluster_path)
+            if clusters.get("epoch_id") != epoch.name:
+                raise ValueError("Reference labels belong to a different epoch")
+            group_map = {c["cluster_id"]: c for c in clusters["clusters"]}
+            groups_sha256 = file_digest(cluster_path)
+        else:
+            group_map = {}
+            groups_sha256 = None
         provenance = load_face_ucf_provenance(epoch / "ucf/ucf_ledger.db")
         required = {int(group_map[group_id]["face_ids"][0].split("_", 1)[0])
                     for person in roster.get("identities", []) for group_id in person.get("face_cluster_ids", [])}
@@ -308,7 +331,7 @@ def load_reference_catalog(options):
                                "embedding": unit(props["embedding"]),
                                "media": voice_clip(scene, signature, epoch / "processing")})
         sources.append({"epoch_root": str(epoch), "identity_path": str(identity),
-                        "roster_sha256": file_digest(roster_path), "groups_sha256": file_digest(cluster_path),
+                        "roster_sha256": file_digest(roster_path), "groups_sha256": groups_sha256,
                         "results_path": str(results_path), "results_sha256": file_digest(results_path),
                         "voice_mappings_sha256": file_digest(mappings_path) if mappings_path.is_file() else None})
     if not sources:
@@ -423,3 +446,78 @@ def write_video_matches(cfg, frozen, video):
     report["content_sha256"] = digest(report)
     _write_once(report_root(cfg) / "reports" / f"{report_id}.json", report)
     return {k: report[k] for k in ("id", "status", "applied", "summary", "references_sha256", "content_sha256")}
+
+
+def refresh_epoch_matches(cfg):
+    """Re-compare saved epoch observations against the latest configured reference catalog.
+
+    Writes append-only comparison receipts without mutating prior reports or
+    re-running media inference. Refuses when an appearance review is already
+    applied to the epoch so competing reports cannot diverge from saved links.
+    """
+    options = cfg.get("identity_matching") or {}
+    if not options.get("enabled"):
+        raise ValueError("Identity matching is not enabled for this epoch")
+    epoch = Path(cfg["paths"]["db_path"]).resolve().parent
+    out_dir = Path(cfg["paths"].get("output_directory") or (epoch / "output"))
+    results_path = out_dir / "scene_ingest_results.json"
+    if not results_path.is_file():
+        raise FileNotFoundError("Completed scene_ingest_results.json is unavailable for this epoch")
+    raw_results = read_json(results_path)
+    videos = raw_results if isinstance(raw_results, list) else (raw_results.get("videos") or raw_results.get("results") or [])
+    if not isinstance(videos, list) or not videos:
+        raise ValueError("No ingested video entries found in scene_ingest_results.json")
+
+    kg_path = Path(cfg["paths"].get("knowledge_graph_db") or (epoch / "knowledge_graph.db"))
+    if kg_path.is_file():
+        with sqlite3.connect(kg_path.as_uri() + "?mode=ro", uri=True) as conn:
+            has_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='identity_appearance_receipts' AND type='table'"
+            ).fetchone()
+            if has_table:
+                for (raw,) in conn.execute("SELECT receipt FROM identity_appearance_receipts ORDER BY rowid"):
+                    receipt = json.loads(raw)
+                    if receipt.get("status") == "applied" and receipt.get("epoch_id") == epoch.name:
+                        raise ValueError(
+                            "An appearance review is already applied for this movie. "
+                            "Undo that review before refreshing prior-film comparisons."
+                        )
+
+    catalog = load_reference_catalog(options)
+    catalog_sha256 = digest(catalog)
+    reports_dir = report_root(cfg) / "reports"
+    existing_by_video: dict[str, dict] = {}
+    if reports_dir.is_dir():
+        for rpath in sorted(reports_dir.glob("*.json")):
+            rep = read_json(rpath)
+            if rep.get("epoch_id") == epoch.name and rep.get("references_sha256") == catalog_sha256:
+                existing_by_video[str(rep.get("video_hash") or "")] = rep
+
+    target_hashes = [str(v.get("video_hash") or "") for v in videos]
+    if target_hashes and all(vhash in existing_by_video for vhash in target_hashes):
+        matched_ids = [existing_by_video[vhash]["id"] for vhash in target_hashes]
+        return {
+            "refreshed": False,
+            "mutated": False,
+            "reports": matched_ids,
+            "latest_report_id": matched_ids[-1],
+            "references_sha256": catalog_sha256,
+            "people_count": len(catalog["people"]),
+            "face_reference_count": len(catalog["faces"]),
+            "message": "Saved comparison already includes all latest prior-film references.",
+        }
+
+    run_id = f"refresh_{uuid.uuid4().hex[:12]}"
+    frozen = prepare_matching(cfg, run_id)
+    summaries = [write_video_matches(cfg, frozen, video) for video in videos]
+    return {
+        "refreshed": True,
+        "mutated": True,
+        "run_id": run_id,
+        "reports": [item["id"] for item in summaries],
+        "latest_report_id": summaries[-1]["id"],
+        "references_sha256": frozen["catalog_sha256"],
+        "people_count": len(catalog["people"]),
+        "face_reference_count": len(catalog["faces"]),
+        "summaries": summaries,
+    }

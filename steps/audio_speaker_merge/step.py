@@ -56,6 +56,14 @@ def _word_turns(segment, diar):
             prev["end"] = end
             prev["text"] += " " + row["text"]
             prev["words"].append(word)
+        elif (not timed and prev and prev["timing_scope"] == "containing_segment"
+              and prev["speaker"] == speaker
+              and prev["start"] == row["start"] and prev["end"] == row["end"]):
+            if prev["text"] and row["text"]:
+                prev["text"] += " " + row["text"]
+            elif row["text"]:
+                prev["text"] = row["text"]
+            prev["words"].append(word)
         else:
             turns.append(row)
     return turns

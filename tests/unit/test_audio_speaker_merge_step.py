@@ -108,3 +108,37 @@ def test_audio_speaker_merge_falls_back_to_word_timestamps():
     assert result["transcript_meta"]["segment_count"] == 1
     assert result['speaker_transcript'][0]['attribution_status']=='unreviewed'
     assert result["transcript_meta"]["speakers"] == ["SPEAKER_02"]
+
+
+def test_untimed_containing_segment_words_coalesce_into_single_turn():
+    item = {
+        "segments": [
+            {
+                "start": 1.0,
+                "end": 3.0,
+                "text": "Look over there Casey",
+                "words": [
+                    {"start": None, "end": None, "text": "Look", "timing_status": "containing_segment"},
+                    {"start": None, "end": None, "text": "over", "timing_status": "containing_segment"},
+                    {"start": None, "end": None, "text": "there", "timing_status": "containing_segment"},
+                    {"start": None, "end": None, "text": "Casey", "timing_status": "containing_segment"},
+                ],
+            }
+        ],
+        "diarization": [
+            {"start": 0.5, "end": 3.5, "speaker": "SPEAKER_00"},
+        ],
+        "transcript_meta": {"status": "success"},
+    }
+
+    result = audio_speaker_merge(item, {})
+
+    assert len(result["speaker_transcript"]) == 1
+    turn = result["speaker_transcript"][0]
+    assert turn["text"] == "Look over there Casey"
+    assert (turn["start"], turn["end"]) == (1.0, 3.0)
+    assert turn["timing_scope"] == "containing_segment"
+    assert len(turn["words"]) == 4
+    assert turn["speaker"] is None
+    assert turn["attribution_status"] == "unresolved"
+    assert turn["attribution_reason"] == "timing_unavailable"

@@ -388,3 +388,43 @@ def test_scene_and_timeline_api_keep_review_evidence_and_bound_media(tmp_path,mo
     loader.active=True
     (root/projection['voice_reviews'][0]['relative_path']).write_bytes(b'altered')
     assert client.get(url).status_code==409
+
+
+def test_voice_signature_encoder_supports_explicit_cuda_without_silent_fallback(tmp_path, monkeypatch):
+    import numpy as np
+    import torch
+    from wsl2_audio import speaker_signature
+    from wsl2_audio.scene_consumers import _Encoder, publish_scene_audio
+
+    evidence = recording()
+    pcm = decoded(tmp_path, evidence)
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
+    with pytest.raises(ValueError, match='no automatic device fallback'):
+        publish_scene_audio(evidence, [{'scene_id': 's', 'start': 0., 'end': 2.}], pcm, tmp_path / 'fail', device='cuda')
+
+    loaded = []
+    emptied = []
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(torch.cuda, 'empty_cache', lambda: emptied.append(True))
+
+    class FakeECAPA:
+        def encode_batch(self, batch):
+            loaded.append(('batch_called', tuple(batch.shape)))
+            vec = torch.zeros((1, 1, speaker_signature.DIMENSION), dtype=torch.float32)
+            vec[0, 0, 0] = 3.0
+            vec[0, 0, 1] = 4.0
+            return vec
+
+    def fake_load(device, savedir):
+        loaded.append(('load', device))
+        return FakeECAPA()
+
+    monkeypatch.setattr(speaker_signature, 'load_encoder', fake_load)
+    monkeypatch.setattr(torch.Tensor, 'to', lambda self, *args, **kwargs: (loaded.append(('tensor_to', args[0])), self)[1])
+    enc = _Encoder(tmp_path / 'enc', device='cuda')
+    vec = enc([np.ones(16000, dtype=np.float32)], 16000)
+    enc.close()
+    assert ('load', 'cuda') in loaded
+    assert ('tensor_to', 'cuda') in loaded
+    assert len(vec) == speaker_signature.DIMENSION
+    assert emptied

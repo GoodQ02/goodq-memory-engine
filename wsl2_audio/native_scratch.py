@@ -33,12 +33,12 @@ def _digest(value):
     return hashlib.sha256(_json_bytes(value)).hexdigest()
 
 
-def _inside(root, relative):
+def _inside(root, relative, *, root_resolved=False):
     name = PurePosixPath(relative)
     if (not relative or name.is_absolute() or '..' in name.parts or ':' in relative
             or '\\' in relative):
         raise ValueError('Unsafe scratch/export relative path')
-    root = Path(root).resolve()
+    root = root if root_resolved and isinstance(root, Path) else Path(root).resolve()
     target = root.joinpath(*name.parts)
     resolved = target.resolve()
     if resolved == root or not resolved.is_relative_to(root):
@@ -46,7 +46,12 @@ def _inside(root, relative):
     return target
 
 
-def _copy(source, destination, expected, *, replace=False):
+def _stat_signature(path):
+    st = path.stat()
+    return [st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino]
+
+
+def _copy(source, destination, expected, *, replace=False, mismatch_message=None):
     source, destination = Path(source), Path(destination)
     if destination.exists():
         if _sha_file(destination) == expected:
@@ -56,14 +61,27 @@ def _copy(source, destination, expected, *, replace=False):
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.partial')
     try:
+        before_stat = _stat_signature(source)
+        digest = hashlib.sha256()
         with source.open('rb') as src, temporary.open('xb') as dst:
-            shutil.copyfileobj(src, dst, length=8*1024*1024)
+            while chunk := src.read(8*1024*1024):
+                digest.update(chunk)
+                dst.write(chunk)
             dst.flush()
             os.fsync(dst.fileno())
-        if _sha_file(temporary) != expected or _sha_file(source) != expected:
+        if digest.hexdigest() != expected:
+            if mismatch_message:
+                raise ValueError(mismatch_message)
             raise ValueError('Source changed during verified staging/export')
+        after_stat = _stat_signature(source)
+        if after_stat != before_stat and _sha_file(source) != expected:
+            raise ValueError('Source changed during verified staging/export')
+        if replace and _sha_file(temporary) != expected:
+            raise ValueError('Temporary copy failed verification before replacement')
         os.replace(temporary, destination)
         if _sha_file(destination) != expected:
+            if not replace:
+                destination.unlink(missing_ok=True)
             raise ValueError('Published copy failed verification')
     finally:
         temporary.unlink(missing_ok=True)
@@ -111,7 +129,18 @@ def _root(location, deadline=None):
     return path
 
 
-def _model(root, spec):
+def _filesystem_for(path, fs_cache):
+    parent = str(path.resolve(strict=True).parent)
+    if parent not in fs_cache:
+        fs_cache[parent] = subprocess.check_output(
+            ['findmnt', '-n', '-T', parent, '-o', 'FSTYPE'], text=True
+        ).strip()
+    return fs_cache[parent]
+
+
+def _model(root, spec, *, fs_cache=None):
+    fs_cache = {} if fs_cache is None else fs_cache
+    resolved_root = Path(root).resolve()
     source = Path(spec['path']).resolve(strict=True)
     files = spec.get('files')
     if files is None:
@@ -124,39 +153,72 @@ def _model(root, spec):
             if relative.is_absolute() or '..' in relative.parts or ':' in name or '\\' in name or not name:
                 raise ValueError('Unsafe model manifest path')
         sources = {name: source.joinpath(*PurePosixPath(name).parts) for name in files}
-    for name, expected in files.items():
-        if _sha_file(sources[name]) != expected:
-            raise ValueError('Pinned model asset changed: '+str(sources[name]))
-    filesystems = {subprocess.check_output(['findmnt', '-n', '-T', str(p.resolve()), '-o', 'FSTYPE'], text=True).strip() for p in sources.values()}
+    filesystems = {_filesystem_for(p, fs_cache) for p in sources.values()}
     if filesystems <= {'ext4', 'ext3', 'ext2', 'xfs', 'btrfs'}:
+        for name, expected in files.items():
+            if _sha_file(sources[name]) != expected:
+                raise ValueError('Pinned model asset changed: '+str(sources[name]))
         return str(source)
-    destination = _inside(root, 'models/'+_digest(files))
+    digest = _digest(files)
+    destination = _inside(resolved_root, 'models/'+digest, root_resolved=True)
+    resolved_dest = destination.resolve()
+    meta_path = _inside(resolved_root, 'model-meta/'+digest+'.json', root_resolved=True)
+    source_stats = {name: _stat_signature(sources[name]) for name in files}
+    staged_paths = {}
+    all_staged = True
     for name, expected in files.items():
-        _copy(sources[name], _inside(destination, name), expected)
+        staged = _inside(resolved_dest, name, root_resolved=True)
+        staged_paths[name] = staged
+        if staged.exists():
+            if _sha_file(staged) != expected:
+                raise ValueError('Retained staged/exported bytes changed: '+str(staged))
+        else:
+            all_staged = False
+    expected_meta = {'schema': SCHEMA, 'files': files, 'source_stats': source_stats}
+    if all_staged and meta_path.is_file():
+        try:
+            saved_meta = json.loads(meta_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            saved_meta = None
+        if saved_meta == expected_meta:
+            return str(destination if spec.get('files') is not None else destination/'asset')
+    for name, expected in files.items():
+        staged = staged_paths[name]
+        if staged.exists():
+            if _sha_file(sources[name]) != expected:
+                raise ValueError('Pinned model asset changed: '+str(sources[name]))
+        else:
+            _copy(sources[name], staged, expected,
+                  mismatch_message='Pinned model asset changed: '+str(sources[name]))
+    refreshed_stats = {name: _stat_signature(sources[name]) for name in files}
+    _atomic_json({'schema': SCHEMA, 'files': files, 'source_stats': refreshed_stats}, meta_path)
     return str(destination if spec.get('files') is not None else destination/'asset')
 
 
 def _stage(plan, root, job, deadline):
+    resolved_root = Path(root).resolve()
     original = Path(plan['worker_root']).resolve(strict=True)
     code_files = list(original.glob('wsl2_audio/*.py'))
     code_files += [original/name for name in ('steps/__init__.py', 'steps/common/__init__.py',
                                              'steps/common/profile_config.py', 'steps/common/tool_paths.py')]
     hashes = {p.relative_to(original).as_posix(): _sha_file(p) for p in code_files}
-    code = _inside(root, 'code/'+_digest(hashes))
+    code = _inside(resolved_root, 'code/'+_digest(hashes), root_resolved=True)
+    resolved_code = code.resolve()
     profile = json.loads(Path(plan['profile']).read_text(encoding='utf-8-sig'))
     request = json.loads(Path(plan['request']).read_text(encoding='utf-8'))
     if _sha_file(Path(plan['profile'])) != plan['profile_sha256'] or _sha_file(Path(plan['request'])) != plan['request_sha256']:
         raise ValueError('Recording request/profile changed before staging')
     staging_errors = {}
-    with _lock(root/'cache.lock', _remaining(deadline)):
+    fs_cache = {}
+    with _lock(resolved_root/'cache.lock', _remaining(deadline)):
         for relative, expected in hashes.items():
-            _copy(original/relative, _inside(code, relative), expected)
+            _copy(original/relative, _inside(resolved_code, relative, root_resolved=True), expected)
         for name in ('recognizer', 'speech_activity_model'):
-            profile[name]['path'] = _model(root, profile[name])
+            profile[name]['path'] = _model(resolved_root, profile[name], fs_cache=fs_cache)
         for name, spec in profile.get('enrichment', {}).get('models', {}).items():
             _remaining(deadline)
             try:
-                spec['path'] = _model(root, spec)
+                spec['path'] = _model(resolved_root, spec, fs_cache=fs_cache)
             except TimeoutError:
                 raise
             except (OSError, ValueError) as exc:
@@ -167,7 +229,7 @@ def _stage(plan, root, job, deadline):
         ecapa = None
         if plan.get('ecapa_model_dir'):
             from wsl2_audio.speaker_signature import FILES
-            ecapa = _model(root, {'path': plan['ecapa_model_dir'], 'files': FILES})
+            ecapa = _model(resolved_root, {'path': plan['ecapa_model_dir'], 'files': FILES}, fs_cache=fs_cache)
     source = Path(request['source_path']).resolve(strict=True)
     if _sha_file(source) != request['source_sha256']:
         raise ValueError('Recording input changed before native decode')
@@ -206,10 +268,12 @@ def _run_worker(plan, job, code, ecapa, deadline):
         raise RuntimeError(f'Native recording worker failed ({result}); retained {job}')
 
 
-def verify_export(output, processing_root, plan):
+def verify_export(output, processing_root, plan, *, verify_hashes=True):
     """Also called by Windows before accepting a durable recording handle."""
     output = Path(output)
-    receipt = json.loads((output/'native-export.json').read_text(encoding='utf-8'))
+    resolved_output = output.resolve()
+    resolved_processing = Path(processing_root).resolve()
+    receipt = json.loads((resolved_output/'native-export.json').read_text(encoding='utf-8'))
     for key in ('job_key', 'request_sha256', 'profile_sha256', 'worker_sha256'):
         if receipt.get(key) != plan[key]:
             raise ValueError('Native export binding mismatch: '+key)
@@ -219,8 +283,8 @@ def verify_export(output, processing_root, plan):
         prefix, relative = name.split('/', 1)
         if prefix not in ('output', 'processing'):
             raise ValueError('Unknown export file scope')
-        target = _inside(output if prefix == 'output' else processing_root, relative)
-        if _sha_file(target) != expected:
+        target = _inside(resolved_output if prefix == 'output' else resolved_processing, relative, root_resolved=True)
+        if verify_hashes and _sha_file(target) != expected:
             raise ValueError('Native export bytes changed: '+name)
     return receipt
 
@@ -229,9 +293,10 @@ def _export(plan, job, deadline):
     from wsl2_audio.evidence_contract import validate_evidence
     from wsl2_audio.scene_projection import validate_scene_audio
     from wsl2_audio.scene_consumers import validate_review
-    output = Path(plan['output'])
+    resolved_output = Path(plan['output']).resolve()
     request = json.loads(Path(plan['request']).read_text())
-    processing = Path(request['processing_root'])
+    resolved_processing = Path(request['processing_root']).resolve()
+    resolved_job_processing = (job/'processing').resolve()
     evidence_path = job/'output/evidence.json'
     evidence = validate_evidence(json.loads(evidence_path.read_text()))
     if evidence['provenance']['worker_sha256'] != plan['worker_sha256'] or evidence['source']['sha256'] != request['source_sha256']:
@@ -248,22 +313,23 @@ def _export(plan, job, deadline):
             _remaining(deadline)
             validate_review(review, projection['source'], root=job/'processing')
             relative = review['relative_path']
-            _copy(_inside(job/'processing', relative), _inside(processing, relative), review['sha256'])
+            _copy(_inside(resolved_job_processing, relative, root_resolved=True),
+                  _inside(resolved_processing, relative, root_resolved=True), review['sha256'])
             files['processing/'+relative] = review['sha256']
     for name in ('evidence.json', 'scene_audio.json'):
         files['output/'+name] = _sha_file(job/'output'/name)
-    _copy(evidence_path, _inside(output, 'evidence.json'), files['output/evidence.json'], replace=True)
+    _copy(evidence_path, _inside(resolved_output, 'evidence.json', root_resolved=True), files['output/evidence.json'], replace=True)
     files['output/native-staging.json'] = _sha_file(job/'staging.json')
-    _copy(job/'staging.json', _inside(output, 'native-staging.json'),
+    _copy(job/'staging.json', _inside(resolved_output, 'native-staging.json', root_resolved=True),
           files['output/native-staging.json'], replace=True)
     receipt = {'schema': SCHEMA, **{k: plan[k] for k in ('job_key', 'request_sha256', 'profile_sha256', 'worker_sha256')}, 'files': files}
     # Scene output is the publication point. No handle is accepted until all
     # referenced bytes and this receipt are verified by the Windows caller.
-    _atomic_json(receipt, _inside(output, 'native-export.json'))
+    _atomic_json(receipt, _inside(resolved_output, 'native-export.json', root_resolved=True))
     _remaining(deadline)
-    _copy(scenes_path, _inside(output, 'scene_audio.json'), files['output/scene_audio.json'], replace=True)
-    _copy(job/'worker.log', _inside(output, 'native-worker.log'), _sha_file(job/'worker.log'), replace=True)
-    verify_export(output, processing, plan)
+    _copy(scenes_path, _inside(resolved_output, 'scene_audio.json', root_resolved=True), files['output/scene_audio.json'], replace=True)
+    _copy(job/'worker.log', _inside(resolved_output, 'native-worker.log', root_resolved=True), _sha_file(job/'worker.log'), replace=True)
+    verify_export(resolved_output, resolved_processing, plan, verify_hashes=False)
 
 
 def execute(plan, *, finalize=False, deadline=None):

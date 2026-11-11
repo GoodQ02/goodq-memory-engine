@@ -6,7 +6,7 @@
     <title>GoodQ Identity Curation Workbench</title>
     <meta name="description" content="GoodQ4All identity curation tool — label face clusters, confirm speaker hypotheses, and build the family roster." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2305070b'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2338bdf8'%3EIC%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/identity.css?v=20261109-obsidian" />
+    <link rel="stylesheet" href="./static/css/identity.css?v=20261111-crossfilm" />
     <script>
       (function() {
         var theme = localStorage.getItem("goodq-theme") || "night";
@@ -112,8 +112,12 @@
 
             <section id="panel-matches" class="tab-panel match-workspace" role="tabpanel" aria-labelledby="tab-matches" hidden>
               <div class="match-heading"><div><h1>Review face matches</h1>
-                <p>Is the displayed person correct? Choose Correct, Incorrect or Unsure. Your decisions stay in a draft until you preview and apply them.</p></div>
-                <button class="toolbar-btn" id="reload-matches">Reload comparisons</button></div>
+                <p>Confirm saved matches, group similar unmatched faces into visual clusters, add new people inline, or scan a face across your other films. Decisions stay in a draft until you preview and apply them.</p></div>
+                <div class="match-heading-actions">
+                  <button class="toolbar-btn secondary" id="open-face-clusters-tab" type="button">Face Clusters tab</button>
+                  <button class="toolbar-btn secondary" id="refresh-prior-matches" type="button" title="Re-compare this movie's saved faces against the latest confirmed people from earlier films">Refresh from prior films</button>
+                  <button class="toolbar-btn" id="reload-matches" type="button">Reload comparisons</button>
+                </div></div>
               <p id="matches-status" role="status" aria-live="polite">Loading saved comparisons…</p>
               <div class="match-review-bar">
                 <p id="match-review-status" role="status" aria-live="polite">No review decisions yet.</p>
@@ -124,16 +128,18 @@
                 <p>Your earlier Correct selections have been carried forward. If you finished the whole batch, preserve the remaining faces as reviewed, not accepted. The old controls did not distinguish wrong from uncertain.</p>
                 <button class="toolbar-btn" id="complete-legacy-review">Carry forward my completed batch</button>
               </div>
-              <label class="match-reuse"><input type="checkbox" id="reuse-confirmed-faces" checked> Reuse Correct faces as reference examples for future movies after Apply.</label>
+              <label class="match-reuse"><input type="checkbox" id="reuse-confirmed-faces" checked> Reuse Correct and reassigned faces as reference examples for future movies after Apply.</label>
               <section id="face-match-preview" class="match-preview" aria-label="Selected face preview" hidden></section>
               <div id="face-match-history"></div>
               <div class="match-filters">
                 <label>Movie <select id="matches-report"></select></label>
                 <label>Evidence <select id="matches-kind"><option value="face">Faces</option><option value="voice">Voices</option></select></label>
+                <label>Layout <select id="matches-layout"><option value="cards">Individual observations</option><option value="clusters">Visual clusters (group similar faces)</option></select></label>
                 <label>Person <select id="matches-person"><option value="">Everyone</option></select></label>
                 <label>Result <select id="matches-result"><option value="">All results</option><option value="proposed">Proposed</option><option value="ambiguous">Uncertain</option><option value="no_match">Below match threshold</option><option value="no_reference">No compatible reference</option></select></label>
                 <label>Your review <select id="matches-review"><option value="">All decisions</option><option value="correct">Correct</option><option value="incorrect">Incorrect</option><option value="unsure">Unsure</option><option value="not_accepted">Earlier review: not accepted</option><option value="unreviewed">Not reviewed</option></select></label>
               </div>
+              <div id="matches-cluster-callout" class="match-cluster-callout" hidden></div>
               <p id="matches-summary" class="match-summary"></p>
               <p class="match-explanation">Scores measure similarity, not the probability that a name is correct. An unidentified voice match means possible recurrence; you still need to name the speaker.</p>
               <div id="matches-list" class="match-list"></div>
@@ -320,21 +326,24 @@
           <div class="focus-panel-header">
             <div class="focus-meta" id="focus-meta"></div>
             <div class="focus-form">
-              <label>NAME</label>
+              <label for="focus-name-input">NAME</label>
               <div class="typeahead-wrapper">
-                <input type="text" id="focus-name-input" class="focus-input" placeholder="Type a name..." autocomplete="off">
+                <input type="text" id="focus-name-input" class="focus-input" placeholder="Type a name (existing or new)..." autocomplete="off">
                 <ul id="focus-typeahead-list" class="typeahead-list" hidden></ul>
               </div>
               <label for="focus-operator-note">OPERATOR NOTE</label>
               <textarea id="focus-operator-note" class="focus-note-input" rows="2" placeholder="Why this label is supported by the visible evidence..."></textarea>
+              <label class="focus-roster-link-toggle"><input type="checkbox" id="focus-link-roster" checked> Also save &amp; link cluster in Family Roster</label>
             </div>
             <div class="focus-controls">
-              <button class="toolbar-btn" id="focus-prev">PREV</button>
-              <button class="toolbar-btn" id="focus-next">NEXT</button>
-              <button class="toolbar-btn secondary" id="focus-close">CLOSE</button>
+              <button class="toolbar-btn" id="focus-scan-films" type="button">SCAN OTHER FILMS</button>
+              <button class="toolbar-btn" id="focus-prev" type="button">PREV</button>
+              <button class="toolbar-btn" id="focus-next" type="button">NEXT</button>
+              <button class="toolbar-btn secondary" id="focus-close" type="button">CLOSE</button>
             </div>
           </div>
           <div id="focus-operation-failure" class="operation-failure" role="alert" hidden></div>
+          <section id="focus-cross-film" class="cross-film-panel" aria-label="Cross-film face scan results" hidden></section>
           <p class="member-review-note">Each crop shows the saved target detection. The outline locates it in the source frame. Review all members before using a group label as an identity. Multiple groups can belong to the same person.</p>
           <div class="focus-grid" id="focus-grid"></div>
         </div>
@@ -361,7 +370,7 @@
     </div>
 
     <script src="/ui/retro_console_v1/static/js/library-context.js?v=1"></script>
-    <script src="./static/js/identity.js?v=20261027-library"></script>
-    <script src="./static/js/matches.js?v=20261027-library"></script>
+    <script src="./static/js/identity.js?v=20261111-refresh"></script>
+    <script src="./static/js/matches.js?v=20261111-refresh"></script>
   </body>
 </html>

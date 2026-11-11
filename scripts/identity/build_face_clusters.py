@@ -141,10 +141,10 @@ def _face_authorities(rows: list, face_count: int) -> dict:
     return result
 
 
-def _face_image(epoch_dir: Path, raw_path: Path, rows: list) -> tuple[Path, float | None]:
+def _face_image(epoch_dir: Path, raw_path: Path, rows: list, *, manifest_cache: dict | None = None) -> tuple[Path, float | None]:
     """Resolve the image actually embedded, rather than a different scene sample."""
     from lib.face_observation import resolve_sampled_face
-    sampled = resolve_sampled_face(epoch_dir, raw_path, rows)
+    sampled = resolve_sampled_face(epoch_dir, raw_path, rows, manifest_cache=manifest_cache)
     if sampled is not None:
         return sampled
     source_ids = {row["source_artifact_id"] for row in rows}
@@ -160,7 +160,12 @@ def _face_image(epoch_dir: Path, raw_path: Path, rows: list) -> tuple[Path, floa
         image = raw_path.with_name(raw_path.name.replace("_raw_faces.json", ".jpg"))
         timestamp = next((row["t_start"] for row in rows if row["payload"].get("face_index", 0) == 0), None)
     else:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_cache is None:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        else:
+            if manifest_path not in manifest_cache:
+                manifest_cache[manifest_path] = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = manifest_cache[manifest_path]
         declared_hash = manifest.get("video_hash", manifest.get("video_id"))
         if declared_hash and declared_hash not in hashes:
             raise ValueError("Face manifest video identity mismatch")
@@ -213,6 +218,7 @@ def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
     """Join each raw detection to its exact promoted authority and source image."""
     processing_dir = (epoch_dir / "processing").resolve()
     detections = []
+    manifest_cache: dict[Path, dict] = {}
     for raw_ref, rows in sorted(provenance.items()):
         fname = Path(raw_ref).resolve()
         if not fname.is_relative_to(processing_dir):
@@ -221,7 +227,7 @@ def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
         if not isinstance(faces, list):
             raise ValueError("Face raw artifact must be a list")
         authorities = _face_authorities(rows, len(faces))
-        image, timestamp = _face_image(epoch_dir, fname, rows)
+        image, timestamp = _face_image(epoch_dir, fname, rows, manifest_cache=manifest_cache)
         for face_idx, prov in sorted(authorities.items()):
             face = faces[face_idx]
             payload = prov["payload"]

@@ -36,6 +36,8 @@ def audio_fixture():
 
 def test_same_time_channels_survive_production_logging_and_replay(tmp_path):
     source, scene, audio = audio_fixture()
+    assert len(audio['segments']) == 1
+    assert 'unreconciled_channel_alternatives' in audio['segments'][0]
     root = tmp_path/'epoch'; (root/'ucf').mkdir(parents=True)
     db_path = root/'ucf/ucf_ledger.db'
     client = UCFLedgerClient(str(db_path)); client.init_schema()
@@ -148,3 +150,101 @@ def test_migration_failure_after_drop_restores_table_and_indexes(tmp_path):
     assert client.conn.execute("SELECT name FROM sqlite_master WHERE name IN ('custom_scene_index','retain_audit') ORDER BY name").fetchall()==[('custom_scene_index',),('retain_audit',)]
     assert 'occurrence_id' not in {r[1] for r in client.conn.execute('PRAGMA table_info(context_frames)')}
     client.close()
+
+
+def test_wsl_unified_same_span_segments_survive_logging_replay_and_reconciliation(tmp_path, monkeypatch):
+    source = 'a' * 64
+    from scripts.ucf.validate_ucf_epoch import make_scene_hash, run_validation
+
+    scene_start, scene_end = 0.0, 30.0
+    scene_id = make_scene_hash(source, scene_start, scene_end)
+    scene = {'scene_id': scene_id, 'start': scene_start, 'end': scene_end, 'index': 0}
+
+    epoch_dir = tmp_path / 'epochs' / 'epoch_test_same_span'
+    (epoch_dir / 'ucf').mkdir(parents=True)
+    proc_video_dir = epoch_dir / 'processing' / 'sample_clip'
+    audio_dir = proc_video_dir / 'audio'
+    video_dir = proc_video_dir / 'video'
+    audio_dir.mkdir(parents=True)
+    video_dir.mkdir(parents=True)
+
+    segments = [
+        {'start': 10.0, 'end': 14.0, 'text': 'first', 'speaker': 'SPEAKER_00', 'timing_scope': 'containing_segment'},
+        {'start': 11.2, 'end': 11.8, 'text': 'interjection', 'speaker': 'SPEAKER_01', 'timing_scope': 'word'},
+        {'start': 10.0, 'end': 14.0, 'text': 'continuation', 'speaker': 'SPEAKER_00', 'timing_scope': 'containing_segment'},
+        {'start': 10.0, 'end': 14.0, 'text': 'closing', 'speaker': None, 'timing_scope': 'containing_segment'},
+    ]
+    speaker_turns = [
+        {'start': 10.0, 'end': 14.0, 'speaker': 'SPEAKER_00'},
+        {'start': 10.0, 'end': 14.0, 'speaker': 'SPEAKER_01'},
+    ]
+    (audio_dir / f'{scene_id}_raw_transcript.json').write_text(json.dumps(segments), encoding='utf-8')
+    (audio_dir / f'{scene_id}_raw_diarization.json').write_text(json.dumps(speaker_turns), encoding='utf-8')
+    (video_dir / 'scene_manifest.json').write_text(
+        json.dumps({'scenes': [{'index': 0, 'start': scene_start, 'end': scene_end, 'scene_id': scene_id}]}),
+        encoding='utf-8',
+    )
+
+    db_path = epoch_dir / 'ucf' / 'ucf_ledger.db'
+    client = UCFLedgerClient(str(db_path))
+    client.init_schema()
+    source_file = tmp_path / 'sample_clip.mp4'
+    source_file.write_bytes(b'placeholder')
+    client.register_media(source, str(source_file), 30.0, 29.97, 720, 480)
+    raw_manifest = str((video_dir / 'scene_manifest.json').resolve())
+    client.log_frame(
+        video_hash=source,
+        epoch_id=epoch_dir.name,
+        run_id='run_same_span',
+        t_start=scene_start,
+        t_end=scene_end,
+        modality='video',
+        worker_name='video_scene_detect',
+        model_tag='pyscenedetect',
+        confidence=1.0,
+        source_artifact_id=scene_id,
+        raw_ref=raw_manifest,
+        payload={'scene_index': 0, 'duration': 30.0},
+        promotion_status='staged',
+    )
+    client.close()
+
+    cfg_dict = {
+        'paths': {
+            'data_root': str(tmp_path),
+            'db_dir': str(epoch_dir),
+            'db_path': str(epoch_dir / 'memory.db'),
+            'processing': str(epoch_dir / 'processing'),
+            'reports_dir': str(tmp_path / 'reports'),
+        },
+        'run': {'id': 'run_same_span'},
+    }
+    cfg_path = tmp_path / 'config.json'
+    cfg_path.write_text(json.dumps(cfg_dict), encoding='utf-8')
+    monkeypatch.setenv('GOODQ_RUN_ID', 'run_same_span')
+
+    item = {
+        'transcript': 'first interjection continuation closing',
+        'language': 'en',
+        'segments': segments,
+        'speaker_segments': speaker_turns,
+    }
+    for _ in range(2):
+        _log_audio_to_ucf_ledger(cfg_path, source, scene_id, scene, audio_dir, item, strict=True)
+
+    with sqlite3.connect(db_path) as db:
+        db.row_factory = sqlite3.Row
+        tx_rows = [dict(r) for r in db.execute("SELECT * FROM context_frames WHERE worker_name='audio_transcribe' ORDER BY frame_id")]
+        sp_rows = [dict(r) for r in db.execute("SELECT * FROM context_frames WHERE worker_name='speaker_merge' ORDER BY frame_id")]
+
+    assert len(tx_rows) == 4
+    assert len({r['occurrence_id'] for r in tx_rows}) == 4
+    assert all(r['occurrence_id'] for r in tx_rows)
+    assert [json.loads(r['payload'])['segment_index'] for r in tx_rows] == [0, 1, 2, 3]
+    assert len(sp_rows) == 2
+    assert len({r['occurrence_id'] for r in sp_rows}) == 2
+
+    rc = run_validation(mode='offline', report_dir=tmp_path / 'reports', config=cfg_dict)
+    report = json.loads((tmp_path / 'reports' / 'ucf_validation_report.json').read_text(encoding='utf-8'))
+    assert rc == 0, report
+    assert report['raw_reconciliation']['status'] == 'passed', report['raw_reconciliation']

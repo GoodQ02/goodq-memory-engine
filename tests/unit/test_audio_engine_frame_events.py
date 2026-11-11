@@ -112,3 +112,67 @@ def test_bad_model_output_fails_visibly_instead_of_reporting_no_events(bad):
                           16000,16000,0,'a'*64)
     assert result['status']=='partial' and not result['assessed_spans']
     assert result['failures'] and not result['events']
+
+
+def test_v2_consensus_rejects_boundary_window_false_positive_and_preserves_v1_and_speech_support():
+    from wsl2_audio.frame_events import (
+        ANALYSIS_POLICY,
+        ANALYSIS_POLICY_V2,
+        METHOD,
+        METHOD_V2,
+        observe_frames,
+    )
+
+    class BoundaryDisagreementSession:
+        def __init__(self):
+            self.window_index = 0
+
+        def run(self, names, inputs):
+            idx = self.window_index
+            self.window_index += 1
+            scores = np.zeros((1, 250, 447), dtype=np.float32)
+            scores[0, :125, 1] = .8
+            if idx == 1:  # [2.5s, 7.5s]: centered window sees speech only (0.37 < 0.5)
+                scores[0, 93:110, 0] = .37
+            elif idx == 2:  # [5.0s, 10.0s]: boundary-cut false positive at 6.24-6.88s + real laugh at 9.2-10.0s
+                scores[0, 31:45, 0] = .66
+                scores[0, 105:125, 0] = .75
+            elif idx == 3:  # [7.5s, 12.0s]: confirms real laugh at 9.2-11.2s
+                scores[0, 42:93, 0] = .82
+            return [scores]
+
+    audio = lambda span: np.ones(span.end - span.start, dtype=np.float32) * .1
+    v1 = observe_frames(BoundaryDisagreementSession(), labels(), audio, 16000, 192000, 0, 'a' * 64)
+    v2 = observe_frames(BoundaryDisagreementSession(), labels(), audio, 16000, 192000, 0, 'a' * 64,
+                        policy=ANALYSIS_POLICY_V2)
+    assert v1['method'] == METHOD and v1['analysis_policy'] == ANALYSIS_POLICY
+    assert v2['method'] == METHOD_V2 and v2['analysis_policy'] == ANALYSIS_POLICY_V2
+    assert len(v1['events']) == 2
+    assert v1['events'][0]['span'] == {'start': 99840, 'end': 108800}
+    assert len(v2['events']) == 1
+    assert v2['events'][0]['span'] == {'start': 147200, 'end': 179520}
+    assert v2['speech_intervals'] == v1['speech_intervals']
+
+    evidence, observations = inputs()
+    acoustic = observations['acoustic_events']
+    acoustic.pop('phrases', None)
+    acoustic.update(method=METHOD_V2, analysis_policy=dict(ANALYSIS_POLICY_V2), threshold=.5,
+                    events=[], speech_intervals=[{'span': {'start': 2000, 'end': 18000}, 'channel': 0}])
+    attached = attach_observations(evidence, observations)
+    assert select_inputs(attached, 'vocal_delivery') == attached['utterances']
+    assert select_inputs(attached, 'voice_sample') == attached['utterances']
+
+
+def test_v2_partial_window_failure_keeps_single_assessed_events():
+    from wsl2_audio.frame_events import ANALYSIS_POLICY_V2, observe_frames
+
+    class Partial(Session):
+        def run(self, *args):
+            if self.calls:
+                raise RuntimeError('injected failure')
+            return super().run(*args)
+
+    result = observe_frames(Partial(), labels(), lambda span: np.ones(span.end - span.start, dtype=np.float32),
+                            16000, 192000, 0, 'a' * 64, policy=ANALYSIS_POLICY_V2)
+    assert result['status'] == 'partial' and result['events'] and result['failures']
+    assert result['assessed_spans'] == [{'start': 0, 'end': 80000}]

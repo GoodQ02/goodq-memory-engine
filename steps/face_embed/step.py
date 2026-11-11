@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 PRIMARY_ENGINE = "opencv-yunet-sface"
 FALLBACK_ENGINE = "face_recognition"
 _PRIMARY_MODELS = ("opencv_yunet", "opencv_sface")
+_YUNET_SFACE_CACHE: Dict[tuple[str, str, int, int], tuple[Any, Any]] = {}
 
 
 class PrimaryFaceEngineUnavailable(RuntimeError):
@@ -67,12 +68,24 @@ def _opencv_yunet_sface_embed(path: str) -> List[Dict[str, Any]]:
     height, width = image.shape[:2]
     if not width or not height:
         raise PrimaryFaceEngineUnavailable("OpenCV decoded an empty source image")
+    cache_key = (
+        str(detector_path),
+        str(recognizer_path),
+        id(cv2.FaceDetectorYN.create),
+        id(cv2.FaceRecognizerSF.create),
+    )
+    cached = _YUNET_SFACE_CACHE.get(cache_key)
     try:
-        detector = cv2.FaceDetectorYN.create(str(detector_path), "", (width, height))
-        recognizer = cv2.FaceRecognizerSF.create(str(recognizer_path), "")
+        if cached is None:
+            detector = cv2.FaceDetectorYN.create(str(detector_path), "", (width, height))
+            recognizer = cv2.FaceRecognizerSF.create(str(recognizer_path), "")
+            _YUNET_SFACE_CACHE[cache_key] = (detector, recognizer)
+        else:
+            detector, recognizer = cached
         detector.setInputSize((width, height))
         _count, detections = detector.detect(image)
     except Exception as exc:
+        _YUNET_SFACE_CACHE.pop(cache_key, None)
         raise PrimaryFaceEngineUnavailable(f"YuNet/SFace initialization failed: {exc}") from exc
     if detections is None:
         return []

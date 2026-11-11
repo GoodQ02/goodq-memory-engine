@@ -51,6 +51,9 @@
     focusOperationFailure: document.getElementById("focus-operation-failure"),
     operationStatus: document.getElementById("operation-status"),
     focusGrid: document.getElementById("focus-grid"),
+    focusLinkRoster: document.getElementById("focus-link-roster"),
+    focusScanFilms: document.getElementById("focus-scan-films"),
+    focusCrossFilm: document.getElementById("focus-cross-film"),
     focusPrev: document.getElementById("focus-prev"),
     focusNext: document.getElementById("focus-next"),
     focusClose: document.getElementById("focus-close"),
@@ -244,6 +247,7 @@
       ? `${state.actions.voice_review.count} saved voice patterns available. Patterns are anonymous evidence, not confirmed people.`
       : note("voice_review");
     ui.voiceReviewLink.hidden = !actionReady("voice_review");
+    if (!state.faceClusters.length) renderFaceGrid();
   }
 
   async function checkStatus() {
@@ -339,6 +343,19 @@
     });
 
     if (!clusters.length) {
+      if (total === 0 && actionReady("face_prepare")) {
+        const obsCount = state.actions.face_prepare?.count || 0;
+        ui.facesGrid.innerHTML = `
+          <div class="empty-card">
+            <span class="pulse-icon">⬡</span>
+            <p>${obsCount ? `${obsCount} saved face observations in this movie are ready to group.` : "Saved face observations are ready to group."}</p>
+            <p class="hint">Build visual face clusters so you can name each recurring or new person once instead of frame-by-frame.</p>
+            <button type="button" class="toolbar-btn primary-cta" id="empty-build-clusters-btn">BUILD VISUAL FACE CLUSTERS</button>
+          </div>`;
+        const buildBtn = document.getElementById("empty-build-clusters-btn");
+        if (buildBtn) buildBtn.addEventListener("click", rerunFaceClustering);
+        return;
+      }
       const allLabeledMsg = (state.faceFilter === "UNLABELED" && total > 0 && labeledCount === total)
         ? `All ${total} face clusters are labeled (${labeledCount} / ${total}). Select ALL or LABELED above to inspect or edit them.`
         : "No clusters found matching filter.";
@@ -355,6 +372,8 @@
       // We need original idx for the API call
       const idx = state.faceClusters.indexOf(cluster);
       const labeled = cluster.label && cluster.label !== "null";
+      const ownerIdx = labeled ? faceClusterOwner(cluster.cluster_id) : -1;
+      const showLinkBtn = Boolean(labeled && ownerIdx === -1 && actionReady("family_facts"));
       const card = document.createElement("div");
       card.className = `cluster-card${labeled ? " labeled" : ""}`;
       card.dataset.idx = idx;
@@ -370,6 +389,9 @@
 
       const stripThumbs = members.slice(1, 5).map(member =>
         `<div class="member-preview">${targetFaceHtml(member)}</div>`).join("");
+      const rosterLinkControl = showLinkBtn
+        ? `<button class="toolbar-btn secondary cluster-roster-link-btn" type="button">SAVE &amp; LINK IN ROSTER +</button>`
+        : "";
 
       card.innerHTML = `
         <div class="cluster-card-header">
@@ -384,6 +406,7 @@
         </div>
         <div class="cluster-thumbnails-strip">${stripThumbs}</div>
         <button class="toolbar-btn review-members" type="button">VIEW ALL ${cluster.face_count || 0} SAVED MEMBERS</button>
+        ${rosterLinkControl}
         <div class="cluster-card-footer">
           <span class="cluster-stat">Faces: <strong>${cluster.face_count ?? "—"}</strong></span>
           <div class="typeahead-wrapper inline">
@@ -393,9 +416,18 @@
         </div>`;
 
       card.addEventListener("click", (e) => {
-        if (e.target.closest(".typeahead-wrapper") || e.target.tagName === 'INPUT') return;
+        if (e.target.closest?.(".typeahead-wrapper") || e.target.closest?.(".cluster-roster-link-btn") || e.target.tagName === 'INPUT') return;
         openFocusPanel(idx);
       });
+      if (showLinkBtn) {
+        const linkBtn = card.querySelector(".cluster-roster-link-btn");
+        if (linkBtn) {
+          linkBtn.addEventListener("click", (ev) => {
+            ev.stopPropagation?.();
+            syncClusterToRoster(cluster.cluster_id, cluster.label);
+          });
+        }
+      }
       setupTypeahead(card.querySelector(".card-name-input"), card.querySelector(".typeahead-list"), idx);
 
       ui.facesGrid.appendChild(card);
@@ -470,9 +502,119 @@
 
     if (ui.focusNameInput) ui.focusNameInput.value = (cluster.label && cluster.label !== "null") ? cluster.label : "";
     if (ui.focusOperatorNote) ui.focusOperatorNote.value = cluster.operator_note || "";
+    if (ui.focusCrossFilm) {
+      ui.focusCrossFilm.hidden = true;
+      ui.focusCrossFilm.innerHTML = "";
+    }
     setOperationFailure("");
     if (ui.focusPanel) {
       if (!ui.focusPanel.open) ui.focusPanel.showModal();
+    }
+  }
+
+  function isImeComposing(e) {
+    return Boolean(e && (e.isComposing || e.keyCode === 229));
+  }
+
+  function crossFilmHitHtml(hit, badgeText, missed) {
+    const boxAttr = Array.isArray(hit.bbox) && hit.bbox.length === 4
+      ? hit.bbox.map(n => Number(n) || 0).join(",")
+      : "";
+    const url = window.GoodQLibrary?.url(hit.media_url) || hit.media_url;
+    return `<div class="cross-film-hit${missed ? " missed" : ""}">
+      <figure class="match-media compact">
+        <div class="match-crop compact" data-bbox="${escHtml(boxAttr)}">
+          <img src="${escHtml(url)}" alt="${escHtml(badgeText)}" loading="lazy" />
+        </div>
+        <figcaption>${memberTime(hit.timestamp)} · Sim ${Number(hit.similarity || 0).toFixed(3)}</figcaption>
+      </figure>
+      <span class="cross-film-badge${missed ? " missed" : ""}">${escHtml(badgeText)}</span>
+    </div>`;
+  }
+
+  function wireCrossFilmCrops(containerEl) {
+    if (!containerEl || typeof containerEl.querySelectorAll !== "function") return;
+    containerEl.querySelectorAll(".match-crop.compact[data-bbox] img").forEach(img => {
+      const crop = img.parentElement;
+      const raw = crop ? crop.getAttribute("data-bbox") : "";
+      const parts = raw ? raw.split(",").map(Number) : [];
+      const applyCrop = () => {
+        if (parts.length !== 4 || !parts.every(Number.isFinite)) return;
+        const [x1, y1, x2, y2] = parts;
+        const width = x2 - x1, height = y2 - y1;
+        if (width <= 0 || height <= 0 || !img.naturalWidth || !img.naturalHeight) return;
+        const scale = 92 / Math.max(width, height);
+        img.style.width = `${img.naturalWidth * scale}px`;
+        img.style.height = `${img.naturalHeight * scale}px`;
+        img.style.left = `${(112 - width * scale) / 2 - x1 * scale}px`;
+        img.style.top = `${(106 - height * scale) / 2 - y1 * scale}px`;
+      };
+      if (img.complete && img.naturalWidth) applyCrop();
+      else img.addEventListener("load", applyCrop);
+    });
+  }
+
+  function renderCrossFilmHtml(data) {
+    const sameHits = (data.current_movie && data.current_movie.matches) || [];
+    const otherMovies = data.other_movies || [];
+    const moviesWithHits = otherMovies.filter(m => m.matches && m.matches.length > 0);
+    let html = `<div class="cross-film-header">
+      <strong>Cross-film &amp; same-movie face analysis</strong>
+      <span class="match-state">Min similarity ${Number(data.min_similarity || 0.5).toFixed(2)} · ${data.query_embedding_count || 1} reference vector(s)</span>
+      <button type="button" class="toolbar-btn secondary cross-film-close-btn">Hide scan</button>
+    </div>`;
+    if (sameHits.length) {
+      html += `<div class="cross-film-section">
+        <p class="cross-film-subtitle">Other shots in this movie (${escHtml(data.current_movie.video_name)}): ${sameHits.length} matching observation(s) across ${data.current_movie.scene_count} scene(s).</p>
+        <div class="cross-film-strip">${sameHits.slice(0, 10).map(hit => {
+          const badge = hit.missed
+            ? "Unlabeled in this film"
+            : `Labeled: ${(hit.existing_names || []).join(", ") || hit.cluster_label || "cluster"}`;
+          return crossFilmHitHtml(hit, badge, hit.missed);
+        }).join("")}</div>
+      </div>`;
+    }
+    if (!otherMovies.length) {
+      html += `<p class="match-secondary">No other movies are configured in reference_sources / reviewed_face_sources yet.</p>`;
+      return html;
+    }
+    if (!moviesWithHits.length) {
+      html += `<p class="match-secondary">Scanned ${otherMovies.length} other film(s) (${escHtml(otherMovies.map(m => m.video_name).join(", "))}) — no appearances above ${Number(data.min_similarity || 0.5).toFixed(2)} similarity.</p>`;
+      return html;
+    }
+    moviesWithHits.forEach(movie => {
+      const missedNote = movie.missed_unlabeled_count
+        ? ` · ${movie.missed_unlabeled_count} unlabeled / missed appearance(s) spotted!`
+        : " · all matches already labeled";
+      html += `<div class="cross-film-movie-block">
+        <p class="cross-film-movie-title">Also spotted in ${escHtml(movie.video_name)}: ${movie.total_matches} appearance(s) across ${movie.scene_count} scene(s)${escHtml(missedNote)}</p>
+        <div class="cross-film-strip">${movie.matches.map(hit => {
+          const badge = hit.missed
+            ? "Unlabeled in that film"
+            : `Labeled: ${(hit.existing_names || []).join(", ") || hit.cluster_label || "cluster"}`;
+          return crossFilmHitHtml(hit, badge, hit.missed);
+        }).join("")}</div>
+      </div>`;
+    });
+    return html;
+  }
+
+  async function runCrossFilmScan(queryString, containerEl) {
+    if (!containerEl) return;
+    containerEl.hidden = false;
+    containerEl.innerHTML = `<p class="match-secondary">Scanning face embeddings across this movie and your other films…</p>`;
+    try {
+      const data = await apiCall(`/api/identity/cross-film-scan?${queryString}`);
+      containerEl.innerHTML = renderCrossFilmHtml(data);
+      wireCrossFilmCrops(containerEl);
+      if (typeof containerEl.querySelector === "function") {
+        const closeBtn = containerEl.querySelector(".cross-film-close-btn");
+        if (closeBtn && typeof closeBtn.addEventListener === "function") {
+          closeBtn.addEventListener("click", () => { containerEl.hidden = true; });
+        }
+      }
+    } catch (err) {
+      containerEl.innerHTML = `<p class="match-error">Cross-film scan unavailable: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -483,6 +625,11 @@
   if(ui.focusClose) ui.focusClose.addEventListener("click", closeFocusPanel);
   if(ui.focusPrev) ui.focusPrev.addEventListener("click", () => openFocusPanel(currentFocusIdx - 1));
   if(ui.focusNext) ui.focusNext.addEventListener("click", () => openFocusPanel(currentFocusIdx + 1));
+  if(ui.focusScanFilms) ui.focusScanFilms.addEventListener("click", () => {
+    const cluster = state.faceClusters[currentFocusIdx];
+    if (!cluster) return;
+    runCrossFilmScan(`cluster_id=${encodeURIComponent(cluster.cluster_id)}&min_similarity=0.50`, ui.focusCrossFilm);
+  });
 
   if(ui.focusPanel) ui.focusPanel.addEventListener("cancel", () => closeFocusPanel());
 
@@ -533,7 +680,7 @@
           activeIndex = (activeIndex - 1 + items.length) % items.length;
           updateActive(items);
         }
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
         e.preventDefault();
         let selectedValue = inputEl.value.trim();
         if (activeIndex >= 0 && items[activeIndex]) {
@@ -577,9 +724,86 @@
     }
   }
 
+  function slugifyIdentityId(displayName) {
+    const base = String(displayName || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "person";
+    const used = new Set(state.roster.map(item => item.id));
+    if (!used.has(base)) return base;
+    let suffix = 2;
+    while (used.has(`${base}_${suffix}`)) suffix += 1;
+    return `${base}_${suffix}`;
+  }
+
+  async function syncClusterToRoster(clusterId, displayName) {
+    const trimmed = String(displayName || "").trim();
+    if (!trimmed || !clusterId || !actionReady("family_facts")) return false;
+    const currentOwner = faceClusterOwner(clusterId);
+    const targetIdx = state.roster.findIndex(
+      item => (item.display_name || "").toLowerCase() === trimmed.toLowerCase()
+    );
+    if (currentOwner !== -1 && currentOwner !== targetIdx) {
+      toast(`Cluster ${clusterId} is already linked to ${state.roster[currentOwner].display_name} in Family Roster.`, "warn");
+      return false;
+    }
+    let candidate;
+    let isNew = false;
+    if (targetIdx === -1) {
+      isNew = true;
+      candidate = {
+        id: slugifyIdentityId(trimmed),
+        display_name: trimmed,
+        aliases: [],
+        face_cluster_ids: [clusterId],
+        speaker_cluster_ids: [],
+        name_mention_keys: [trimmed],
+        role: "",
+        notes: "Created from Face Clusters; edit full profile in Family Roster.",
+        confirmed: false,
+      };
+    } else {
+      const existing = state.roster[targetIdx];
+      const existingClusters = existing.face_cluster_ids || [];
+      if (existingClusters.includes(clusterId)) return true;
+      candidate = {
+        ...existing,
+        face_cluster_ids: [...existingClusters, clusterId],
+      };
+    }
+    try {
+      const saved = await confirmedIdentityRequest(
+        "/api/identity/roster/save",
+        { identity: candidate },
+        isNew
+          ? `Create new roster person "${trimmed}" and link ${clusterId}? You can fill out their full profile later in Family Roster.`
+          : `Link face cluster ${clusterId} to "${candidate.display_name}" in Family Roster?`
+      );
+      if (!saved) return false;
+      if (isNew) state.roster.push(candidate);
+      else state.roster[targetIdx] = candidate;
+      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
+      updateRosterIdentityLabels();
+      if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
+      renderRosterSidebar();
+      renderFaceGrid();
+      toast(isNew ? `Added "${trimmed}" to Family Roster with ${clusterId}` : `Linked ${clusterId} to ${candidate.display_name}`);
+      return true;
+    } catch (err) {
+      const msg = `Roster sync failed: ${err.message}`;
+      setOperationFailure(msg);
+      toast(msg, "error");
+      return false;
+    }
+  }
+
   async function applyLabel(idx, label) {
     if (idx < 0 || idx >= state.faceClusters.length) return;
     const cluster = state.faceClusters[idx];
+    const shouldLinkRoster = Boolean(
+      ui.focusPanel && ui.focusPanel.open && ui.focusLinkRoster && ui.focusLinkRoster.checked === true && actionReady("family_facts")
+    );
     const operatorNote = ui.focusPanel && ui.focusPanel.open
       ? ui.focusOperatorNote.value.trim()
       : window.prompt(`Why is "${label}" supported for ${cluster.cluster_id}?`, cluster.operator_note || "");
@@ -605,6 +829,9 @@
          closeFocusPanel();
       }
       toast(`Cluster ${cluster.cluster_id} labeled → ${label}`);
+      if (shouldLinkRoster) {
+        await syncClusterToRoster(cluster.cluster_id, label);
+      }
     } catch (e) {
       const message = `Label request failed: ${e.message}`;
       setOperationFailure(message);
@@ -1006,6 +1233,15 @@
           </div>
         </div>
 
+        <div class="form-section">
+          <div class="form-section-title">CROSS-FILM FACE DISCOVERY</div>
+          <p class="hint">Scan this person's linked face clusters or saved references across this movie and prior films to catch brief or unlabeled appearances.</p>
+          <div style="margin-top:8px">
+            <button class="toolbar-btn" type="button" id="scan-person-films-${idx}">SCAN ACROSS OTHER FILMS</button>
+          </div>
+          <div id="person-cross-film-${idx}" class="cross-film-panel inline-roster-scan" hidden></div>
+        </div>
+
         <div class="form-actions">
           <button class="toolbar-btn" id="save-identity-${idx}">SAVE CHANGES ▶</button>
           <button class="toolbar-btn danger" id="delete-identity-${idx}" style="border-color:var(--error-color);color:var(--error-color)">REMOVE IDENTITY</button>
@@ -1102,6 +1338,12 @@
     // Save
     document.getElementById(`save-identity-${idx}`).addEventListener("click", () => saveIdentity(idx));
 
+    // Cross-film scan for this roster person
+    document.getElementById(`scan-person-films-${idx}`).addEventListener("click", () => {
+      const panel = document.getElementById(`person-cross-film-${idx}`);
+      runCrossFilmScan(`person_id=${encodeURIComponent(identity.id)}&min_similarity=0.50`, panel);
+    });
+
     // Delete
     document.getElementById(`delete-identity-${idx}`).addEventListener("click", () => {
       if (confirm(`Remove "${state.roster[idx].display_name}" from the roster?`)) {
@@ -1176,7 +1418,20 @@
   // Roster event wires
   ui.loadRosterBtn.addEventListener("click", loadRoster);
   ui.addIdentityBtn.addEventListener("click", addIdentity);
-  ui.newIdentityInput.addEventListener("keydown", e => { if (e.key === "Enter") addIdentity(); });
+  ui.newIdentityInput.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) addIdentity(); });
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("goodq:roster-updated", ev => {
+      const added = ev && ev.detail && ev.detail.identity;
+      if (!added || !added.id) return;
+      const existingIdx = state.roster.findIndex(item => item.id === added.id);
+      if (existingIdx === -1) state.roster.push(added);
+      else state.roster[existingIdx] = added;
+      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
+      updateRosterIdentityLabels();
+      if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
+      renderRosterSidebar();
+    });
+  }
 
   // ── Validate Roster ──────────────────────────────────────────────────────
   async function validateRoster() {

@@ -80,12 +80,70 @@ def test_pcm_proven_phrase_reconciles_after_parent_failure_through_consumers(tmp
 
 @pytest.mark.parametrize('differing_tail,veto', [(True,False),(False,True)])
 def test_phrase_proof_never_relaxes_pcm_limits_or_other_channel_veto(tmp_path, ffmpeg, monkeypatch, differing_tail, veto):
-    result, _, _ = stereo_caller(tmp_path,ffmpeg,monkeypatch,differing_tail=differing_tail,veto=veto)
+    result, consumed, _ = stereo_caller(tmp_path,ffmpeg,monkeypatch,differing_tail=differing_tail,veto=veto)
     tails = [u for u in result['utterances'] if u['text']=='All done.']
     assert len(tails) == (2 if differing_tail else 1)
     assert all(u not in select_inputs(result,'voice_sample') for u in tails)
+    assert consumed['transcript'].count('All done.') == 1
     if veto:
         assert 'sound_event_crying' in tails[0]['eligibility']['voice_sample']['reasons']
+
+
+def test_unreconciled_stereo_duplicate_deduplicates_consumer_transcript_only(tmp_path, ffmpeg, monkeypatch):
+    from api.utils.audio_evidence import public_audio_evidence
+    from steps.audio.recording_ingestion import analyze_text
+    from steps.common.context_analyzer_llm import _recording_scene_meta
+    from wsl2_audio.eligibility import POLICY, assess_eligibility
+    from wsl2_audio.scene_projection import legacy_audio, project_audio
+
+    result, consumed, _ = stereo_caller(tmp_path, ffmpeg, monkeypatch, differing_tail=True)
+    tails = [u for u in result['utterances'] if u['text'] == 'All done.']
+    assert len(tails) == 2
+    assert consumed['transcript'].count('All done.') == 1
+    tail_segments = [s for s in consumed['segments'] if s['text'] == 'All done.']
+    assert len(tail_segments) == 1
+    assert tail_segments[0]['speaker'] is None
+    assert tail_segments[0]['speaker_status'] == 'unresolved'
+    assert [a['channel'] for a in tail_segments[0]['unreconciled_channel_alternatives']] == [0, 1]
+    assert consumed['transcript_meta']['channel_deduplication']['groups'][0]['channels'] == [0, 1]
+
+    projection = consumed['audio_evidence']
+    assert len([u for u in public_audio_evidence('video', projection)['utterances'] if u['text'] == 'All done.']) == 2
+    analyzed = analyze_text('sentiment', lambda item, _cfg: {'sentiment': item['transcript'], 'sentiment_meta': {}},
+                            {'audio_evidence': projection, 'transcript': 'All done. All done.'}, {})
+    assert analyzed['sentiment'].count('All done.') == 1
+    assert _recording_scene_meta({'audio_evidence': projection})['transcript'].count('All done.') == 1
+
+    from tests.unit.test_audio_engine_consumers import recording
+    base = recording()
+    base['source']['channels'] = 2
+    u0 = deepcopy(base['utterances'][0])
+    u0.update(id='u0', text='All done.', channel=0, span={'start': 2000, 'end': 6000},
+              words=[{'text': 'All', 'span': {'start': 2000, 'end': 4000}, 'timing': 'supported'},
+                     {'text': 'done.', 'span': {'start': 4000, 'end': 6000}, 'timing': 'supported'}])
+    u1 = deepcopy(u0)
+    u1.update(id='u1', channel=1, span={'start': 10000, 'end': 14000},
+              words=[{'text': 'All', 'span': {'start': 10000, 'end': 12000}, 'timing': 'supported'},
+                     {'text': 'done.', 'span': {'start': 12000, 'end': 14000}, 'timing': 'supported'}])
+    sequential = dict(base, utterances=[u0, u1])
+    for u in sequential['utterances']:
+        u['eligibility'] = assess_eligibility(u, sequential, POLICY)
+    seq_legacy = legacy_audio(project_audio(sequential, [{'scene_id': 's', 'start': 0., 'end': 2.}])['s'])
+    assert seq_legacy['transcript'] == 'All done. All done.'
+    assert 'channel_deduplication' not in seq_legacy['transcript_meta']
+
+    u1_overlap = deepcopy(u0)
+    u1_overlap.update(id='u1_overlap', channel=1)
+    u1_repeat = deepcopy(u0)
+    u1_repeat.update(id='u1_repeat', channel=1, span={'start': 3000, 'end': 7000},
+                     words=[{'text': 'All', 'span': {'start': 3000, 'end': 5000}, 'timing': 'supported'},
+                            {'text': 'done.', 'span': {'start': 5000, 'end': 7000}, 'timing': 'supported'}])
+    ambiguous = dict(base, utterances=[u0, u1_overlap, u1_repeat])
+    for u in ambiguous['utterances']:
+        u['eligibility'] = assess_eligibility(u, ambiguous, POLICY)
+    amb_legacy = legacy_audio(project_audio(ambiguous, [{'scene_id': 's', 'start': 0., 'end': 2.}])['s'])
+    assert amb_legacy['transcript'].count('All done.') == 3
+    assert 'channel_deduplication' not in amb_legacy['transcript_meta']
 
 
 @pytest.mark.parametrize('mutation', ['drop_record','drop_member','word','proof','score','original_overlap','channel'])

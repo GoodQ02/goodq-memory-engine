@@ -1409,6 +1409,7 @@ def _persist_frame_semantic_entities(
     *,
     scene_id: str,
     video_id: str,
+    config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Derive safe, non-object vision semantics from the already-materialized frame payload.
@@ -1429,7 +1430,7 @@ def _persist_frame_semantic_entities(
             scene_data=scene_data,
             scene_id=scene_id,
             video_id=video_id,
-            config={},
+            config=config if isinstance(config, dict) else {},
         )
     except Exception as e:
         logger.warning(
@@ -3237,6 +3238,12 @@ def _prepare_segmentation_shadow_audio_overlay(
     }
     if not _segmentation_shadow_audio_overlay_enabled(cfg):
         return result
+    from steps.audio.recording_ingestion import selected as recording_engine_selected
+    if recording_engine_selected(cfg):
+        return {
+            **result,
+            'reason': 'recording_engine_owns_canonical_scene_audio',
+        }
     if not isinstance(shadow_result, dict):
         return result
     if shadow_result.get('status') != 'complete':
@@ -3406,6 +3413,7 @@ def _run_segmentation_shadow_pipeline(
     processing_dir: Path,
     cfg: Dict[str, Any],
     audio_runtime_contract: Optional[Dict[str, Any]] = None,
+    recording_audio: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     activation = _resolve_segmentation_activation(cfg)
     result: Dict[str, Any] = {
@@ -3434,7 +3442,10 @@ def _run_segmentation_shadow_pipeline(
     skip_phases: List[str] = []
     if isinstance(audio_runtime_contract, dict):
         selected_backend = str(audio_runtime_contract.get('selected') or '').strip().lower()
-        if selected_backend != 'wsl':
+        if selected_backend == 'recording':
+            if recording_audio is None:
+                skip_phases.extend(['phase4', 'phase6'])
+        elif selected_backend != 'wsl':
             skip_phases.extend(['phase4', 'phase6'])
 
     try:
@@ -3446,6 +3457,7 @@ def _run_segmentation_shadow_pipeline(
             str(video_path),
             str(shadow_root),
             skip_phases=skip_phases,
+            **({'recording_audio': recording_audio} if recording_audio is not None else {}),
         )
         phase_results = shadow_run.get('phase_results') if isinstance(shadow_run, dict) else {}
         phase3_result = phase_results.get('phase3') if isinstance(phase_results, dict) else {}
@@ -4353,6 +4365,48 @@ def _report_step_failure(observer, step, *, error, metadata) -> None:
         logger.exception("Observer notification failed while preserving the worker exception")
 
 
+def _record_prelaunch_step_error(
+    cfg_json: Optional[Path],
+    step_name: str,
+    payload: Any,
+    duration_ms: float,
+    error_msg: str,
+    *,
+    reason: str,
+) -> None:
+    if cfg_json is None or not cfg_json.exists():
+        return
+    try:
+        raw_cfg = json.loads(cfg_json.read_text(encoding="utf-8"))
+        if not isinstance(raw_cfg, dict):
+            return
+        if not ((raw_cfg.get("paths") or {}).get("log_dir")):
+            return
+        if isinstance(payload, dict) and isinstance(payload.get("_batch_items"), list):
+            for sub_item in payload["_batch_items"]:
+                log_step_run(
+                    raw_cfg,
+                    step_name,
+                    sub_item if isinstance(sub_item, dict) else {},
+                    duration_ms,
+                    "error",
+                    error_msg,
+                    extra={"reason": reason, "pre_launch": True},
+                )
+        else:
+            log_step_run(
+                raw_cfg,
+                step_name,
+                payload if isinstance(payload, dict) else {},
+                duration_ms,
+                "error",
+                error_msg,
+                extra={"reason": reason, "pre_launch": True},
+            )
+    except Exception as exc:
+        logger.debug("Pre-launch step ledger write skipped for %s: %s", step_name, exc)
+
+
 def _run_step(
     env_name: str,
     step_name: str,
@@ -4365,6 +4419,7 @@ def _run_step(
     _step_env_overrides: Optional[Dict[str, Optional[str]]] = None,
     _native_retry_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
+    prelaunch_start_ts = time.perf_counter()
     work_env = _base_env(cfg_json)
     
     # VRAM preflight allocation check
@@ -4412,7 +4467,7 @@ def _run_step(
                 pid=parent_pid,
                 reservation_id=reservation_id,
                 command=cmd_str,
-                timeout_seconds=180.0,
+                timeout_seconds=300.0,
                 env=policy_env,
                 conda_env=env_name,
             )
@@ -4424,9 +4479,16 @@ def _run_step(
             raise
         if not vram_reserved:
             if gpu_required:
-                raise RuntimeError(
-                    f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                err_msg = f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                _record_prelaunch_step_error(
+                    cfg_json,
+                    step_name,
+                    payload,
+                    (time.perf_counter() - prelaunch_start_ts) * 1000.0,
+                    err_msg,
+                    reason="vram_allocation_failed",
                 )
+                raise RuntimeError(err_msg)
             else:
                 logger.warning(
                     f"VRAM allocation limits breached for step '{step_name}'. Falling back to CPU."
@@ -4854,6 +4916,60 @@ def _run_step(
             raise release_error
 
 
+_DEFAULT_RUN_STEP = _run_step
+
+
+def _run_step_batch(
+    env_name: str,
+    step_name: str,
+    payloads: List[Dict[str, Any]],
+    cfg_json: Path,
+) -> List[Tuple[str, Dict[str, Any], Optional[str]]]:
+    """Run multiple independent sample items in one worker subprocess unless _run_step is monkeypatched."""
+    if not payloads:
+        return []
+    if _run_step is not _DEFAULT_RUN_STEP or len(payloads) == 1:
+        single_results: List[Tuple[str, Dict[str, Any], Optional[str]]] = []
+        for p in payloads:
+            try:
+                out = _run_step(env_name, step_name, p, cfg_json)
+                single_results.append(("ok", out if isinstance(out, dict) else {}, None))
+            except WorkerResultError as w_exc:
+                w_out = getattr(w_exc, "outputs", None)
+                single_results.append(("error", w_out if isinstance(w_out, dict) else {}, str(w_exc)))
+            except Exception as exc:
+                single_results.append(("error", {}, str(exc)))
+        return single_results
+
+    first = payloads[0]
+    batch_payload: Dict[str, Any] = {
+        "_batch_items": payloads,
+        "video_id": first.get("video_id") or first.get("video_hash"),
+        "video_hash": first.get("video_hash"),
+        "scene_id": first.get("scene_id"),
+        "scene_index": first.get("scene_index"),
+    }
+    try:
+        batch_out = _run_step(env_name, step_name, batch_payload, cfg_json)
+    except Exception as exc:
+        return [("error", {}, str(exc)) for _ in payloads]
+
+    batch_list = batch_out.get("_batch_results") if isinstance(batch_out, dict) else None
+    if not isinstance(batch_list, list) or len(batch_list) != len(payloads):
+        return [("error", {}, f"{step_name} returned malformed _batch_results") for _ in payloads]
+
+    unpacked: List[Tuple[str, Dict[str, Any], Optional[str]]] = []
+    for entry in batch_list:
+        if isinstance(entry, dict):
+            st = str(entry.get("status") or "ok")
+            outs = entry.get("outputs") if isinstance(entry.get("outputs"), dict) else {}
+            err = str(entry["errors"]) if entry.get("errors") is not None else None
+            unpacked.append((st, outs, err))
+        else:
+            unpacked.append(("error", {}, f"malformed batch entry: {entry!r}"))
+    return unpacked
+
+
 def _make_async_step_envelope(
     step_name: str,
     status: str,
@@ -4964,15 +5080,22 @@ async def _run_step_async(
                 pid=parent_pid,
                 reservation_id=reservation_id,
                 command=cmd_str,
-                timeout_seconds=180.0,
+                timeout_seconds=300.0,
                 env=policy_env,
                 conda_env=env_name,
             )
             if not vram_reserved:
                 if gpu_required:
-                    raise RuntimeError(
-                        f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                    err_msg = f"VRAM allocation failed for GPU-required step '{step_name}'. Bounds breached."
+                    _record_prelaunch_step_error(
+                        cfg_json,
+                        step_name,
+                        payload,
+                        (time.perf_counter() - start_ts) * 1000.0,
+                        err_msg,
+                        reason="vram_allocation_failed",
                     )
+                    raise RuntimeError(err_msg)
                 else:
                     logger.warning(
                         f"VRAM allocation limits breached for step '{step_name}'. Falling back to CPU."
@@ -5449,6 +5572,66 @@ async def _run_step_async(
         )
 
 
+_DEFAULT_RUN_STEP_ASYNC = _run_step_async
+
+
+async def _run_step_batch_async(
+    env_name: str,
+    step_name: str,
+    payloads: List[Dict[str, Any]],
+    cfg_json: Path,
+) -> List[Dict[str, Any]]:
+    """Run multiple independent sample items in one async worker subprocess unless _run_step_async is monkeypatched."""
+    if not payloads:
+        return []
+    if _run_step_async is not _DEFAULT_RUN_STEP_ASYNC or len(payloads) == 1:
+        return [await _run_step_async(env_name, step_name, p, cfg_json) for p in payloads]
+
+    first = payloads[0]
+    batch_payload: Dict[str, Any] = {
+        "_batch_items": payloads,
+        "video_id": first.get("video_id") or first.get("video_hash"),
+        "video_hash": first.get("video_hash"),
+        "scene_id": first.get("scene_id"),
+        "scene_index": first.get("scene_index"),
+    }
+    envelope = await _run_step_async(env_name, step_name, batch_payload, cfg_json)
+    outputs = (envelope.get("outputs") or {}) if isinstance(envelope, dict) else {}
+    batch_list = outputs.get("_batch_results") if isinstance(outputs, dict) else None
+    if (
+        isinstance(envelope, dict)
+        and envelope.get("status") == "ok"
+        and isinstance(batch_list, list)
+        and len(batch_list) == len(payloads)
+    ):
+        per_dur = float(envelope.get("duration_seconds") or 0.0) / max(1, len(payloads))
+        retries = int(envelope.get("retry_count") or 0)
+        return [
+            _make_async_step_envelope(
+                step_name=step_name,
+                status=str((entry or {}).get("status") or "ok") if isinstance(entry, dict) else "error",
+                outputs=(entry.get("outputs") if isinstance(entry, dict) and isinstance(entry.get("outputs"), dict) else {}),
+                errors=(str(entry["errors"]) if isinstance(entry, dict) and entry.get("errors") is not None else None),
+                started_at=envelope.get("started_at"),
+                finished_at=envelope.get("finished_at"),
+                duration_seconds=per_dur,
+                retry_count=retries,
+            )
+            for entry in batch_list
+        ]
+
+    err_str = (envelope.get("errors") if isinstance(envelope, dict) else str(envelope)) or f"{step_name} batch worker failed"
+    return [
+        _make_async_step_envelope(
+            step_name=step_name,
+            status="error",
+            outputs={},
+            errors=str(err_str),
+        )
+        for _ in payloads
+    ]
+
+
 
 def _log_skipped_steps(
     cfg: Dict[str, Any],
@@ -5676,6 +5859,115 @@ def _extract_audio_chunk(
     return outfile
 
 
+def _filter_vhs_ocr_regions(
+    ocr_text: Optional[str],
+    ocr_meta: Dict[str, Any],
+    time_hints: Any,
+    sample_ts: float,
+) -> Tuple[Optional[str], Dict[str, Any], Any]:
+    """Filter low-confidence VHS grain and isolated CJK recognizer artifacts at scene aggregation."""
+    regions = ocr_meta.get("accepted_regions")
+    if not isinstance(regions, list) or not regions:
+        return ocr_text, ocr_meta, time_hints
+    if not all(
+        isinstance(r, dict)
+        and r.get("confidence_kind") == "recognizer_sequence_score"
+        and isinstance(r.get("confidence"), (int, float))
+        and not isinstance(r.get("confidence"), bool)
+        for r in regions
+    ):
+        return ocr_text, ocr_meta, time_hints
+
+    date_ev_raw = ocr_meta.get("date_evidence") if isinstance(ocr_meta.get("date_evidence"), list) else []
+    date_region_indices = {
+        int(ev["region_index"])
+        for ev in date_ev_raw
+        if isinstance(ev, dict) and isinstance(ev.get("region_index"), int)
+    }
+
+    kept_pairs: List[Tuple[int, Dict[str, Any]]] = []
+    filtered_out: List[Dict[str, Any]] = []
+    for idx, reg in enumerate(regions):
+        text = str(reg.get("text") or "").strip()
+        conf = float(reg["confidence"])
+        cjk_chars = sum(
+            1
+            for ch in text
+            if ("\u4e00" <= ch <= "\u9fff")
+            or ("\u3400" <= ch <= "\u4dbf")
+            or ("\u3040" <= ch <= "\u30ff")
+            or ("\uac00" <= ch <= "\ud7af")
+        )
+        latin_alnum = sum(1 for ch in text if ch.isalnum()) - cjk_chars
+        keep = (
+            (idx in date_region_indices and conf >= 0.45)
+            or (latin_alnum >= 3 and conf >= 0.50)
+            or (latin_alnum == 2 and cjk_chars == 0 and conf >= 0.65)
+            or (latin_alnum == 1 and cjk_chars == 0 and conf >= 0.85)
+            or (cjk_chars >= 2 and conf >= 0.75)
+            or (cjk_chars == 1 and conf >= 0.90)
+        )
+        if keep:
+            kept_pairs.append((idx, reg))
+        else:
+            filtered_out.append(reg)
+
+    if not filtered_out:
+        return ocr_text, ocr_meta, time_hints
+
+    old_to_new = {old_idx: new_idx for new_idx, (old_idx, _) in enumerate(kept_pairs)}
+    kept_regions = [reg for _, reg in kept_pairs]
+    new_meta = dict(ocr_meta)
+    new_meta["accepted_regions"] = kept_regions
+    new_meta["filtered_noise_regions"] = filtered_out
+
+    kept_dates: List[Dict[str, Any]] = []
+    for ev in date_ev_raw:
+        if isinstance(ev, dict) and ev.get("region_index") in old_to_new:
+            ev_copy = dict(ev)
+            ev_copy["region_index"] = old_to_new[ev["region_index"]]
+            kept_dates.append(ev_copy)
+    if "date_evidence" in new_meta or kept_dates:
+        new_meta["date_evidence"] = kept_dates
+
+    new_time_hints = time_hints
+    if len(kept_dates) != len(date_ev_raw):
+        if kept_dates:
+            explicit_dates = list(dict.fromkeys(str(ev["normalized_date"]) for ev in kept_dates if ev.get("normalized_date")))
+            years = list(dict.fromkeys(str(ev["normalized_date"])[:4] for ev in kept_dates if ev.get("normalized_date")))
+            first_seen: Dict[str, float] = {}
+            old_first = time_hints.get("first_seen_ts", {}) if isinstance(time_hints, dict) else {}
+            for key in [*explicit_dates, *years]:
+                first_seen[key] = float(old_first.get(key, sample_ts))
+            new_time_hints = {
+                "explicit_dates": explicit_dates,
+                "years": years,
+                "decades": [],
+                "seasons": [],
+                "holidays": [],
+                "relative": [],
+                "first_seen_ts": first_seen,
+            }
+        else:
+            new_time_hints = None
+
+    if kept_regions:
+        new_text = "\n".join(
+            str(r.get("text") or "").strip()
+            for r in kept_regions
+            if str(r.get("text") or "").strip()
+        )
+        new_meta["accepted_text"] = new_text
+        new_meta["text_length"] = len(new_text)
+        return new_text or None, new_meta, new_time_hints
+
+    new_meta["status"] = "no_text"
+    new_meta["reason"] = "empty_ocr_text"
+    new_meta["accepted_text"] = None
+    new_meta["text_length"] = 0
+    return None, new_meta, None
+
+
 def _aggregate_ocr_sample_results(
     sample_records: List[Dict[str, Any]],
     midpoint_timestamp: float,
@@ -5724,6 +6016,12 @@ def _aggregate_ocr_sample_results(
         ocr_text_raw = outputs.get("ocr_text")
         ocr_text = ocr_text_raw.strip() if isinstance(ocr_text_raw, str) and ocr_text_raw.strip() else None
         meta_status = str(ocr_meta.get("status") or ("error" if rec.get("error") else "unknown")).strip().lower()
+        sample_time_hints = outputs.get("time_hints")
+        if ocr_text and meta_status == "ok":
+            ocr_text, ocr_meta, sample_time_hints = _filter_vhs_ocr_regions(
+                ocr_text, ocr_meta, sample_time_hints, ts
+            )
+            meta_status = str(ocr_meta.get("status") or meta_status).strip().lower()
         meta_reason = str(ocr_meta.get("reason") or ("ocr_sample_error" if rec.get("error") else meta_status)).strip()
         sample_err = rec.get("error") or ocr_meta.get("fallback_error") or ocr_meta.get("error")
 
@@ -5753,7 +6051,7 @@ def _aggregate_ocr_sample_results(
                 "source_path": src_path,
                 "ocr_text": ocr_text,
                 "ocr_meta": ocr_meta,
-                "time_hints": outputs.get("time_hints"),
+                "time_hints": sample_time_hints,
             }
             observations.append(obs_entry)
             for line in ocr_text.splitlines():
@@ -5761,10 +6059,10 @@ def _aggregate_ocr_sample_results(
                 if clean_line and clean_line not in seen_lines:
                     seen_lines.add(clean_line)
                     deduped_lines.append(clean_line)
-            if isinstance(outputs.get("time_hints"), dict) and any(outputs["time_hints"].values()):
+            if isinstance(sample_time_hints, dict) and any(sample_time_hints.values()):
                 if merged_time_hints is None:
                     merged_time_hints = {}
-                for hint_kind, hint_values in outputs["time_hints"].items():
+                for hint_kind, hint_values in sample_time_hints.items():
                     if isinstance(hint_values, list):
                         retained = merged_time_hints.setdefault(hint_kind, [])
                         for value in hint_values:
@@ -6233,25 +6531,12 @@ def _process_frame(
         return sampled_frames[timestamp]
 
     ocr_sample_records: List[Dict[str, Any]] = []
+    ocr_batch_meta: List[Tuple[int, float, bool, Path]] = []
+    ocr_batch_payloads: List[Dict[str, Any]] = []
     for ocr_idx, ocr_ts in enumerate(sample_timestamps):
         is_mid = (ocr_ts == frame_timestamp)
         try:
             sampled_ocr_path = sample_frame(ocr_ts, ocr_idx)
-            ocr_out = _run_step(
-                'goodq_ocr',
-                'image_ocr',
-                {**item, 'source_path': str(sampled_ocr_path), 'timestamp': ocr_ts, 'is_midpoint_sample': is_mid},
-                cfg_json,
-            )
-            ocr_sample_records.append({
-                'sample_index': ocr_idx,
-                'timestamp': ocr_ts,
-                'is_midpoint_sample': is_mid,
-                'source_path': str(sampled_ocr_path),
-                'status': 'ok',
-                'outputs': ocr_out if isinstance(ocr_out, dict) else {},
-                'error': None,
-            })
         except Exception as ocr_exc:
             ocr_sample_records.append({
                 'sample_index': ocr_idx,
@@ -6262,6 +6547,26 @@ def _process_frame(
                 'outputs': {'ocr_text': None, 'ocr_meta': {'status': 'error', 'reason': 'ocr_sample_error', 'error': str(ocr_exc), 'sample_timestamp': ocr_ts, 'is_midpoint_sample': is_mid}},
                 'error': str(ocr_exc),
             })
+            continue
+        ocr_batch_meta.append((ocr_idx, ocr_ts, is_mid, sampled_ocr_path))
+        ocr_batch_payloads.append({**item, 'source_path': str(sampled_ocr_path), 'timestamp': ocr_ts, 'is_midpoint_sample': is_mid})
+    if ocr_batch_payloads:
+        for (ocr_idx, ocr_ts, is_mid, sampled_ocr_path), (b_status, ocr_out, b_err) in zip(
+            ocr_batch_meta,
+            _run_step_batch('goodq_ocr', 'image_ocr', ocr_batch_payloads, cfg_json),
+        ):
+            if b_status == 'error' and not ocr_out:
+                ocr_out = {'ocr_text': None, 'ocr_meta': {'status': 'error', 'reason': 'ocr_sample_error', 'error': str(b_err or 'ocr failed'), 'sample_timestamp': ocr_ts, 'is_midpoint_sample': is_mid}}
+            ocr_sample_records.append({
+                'sample_index': ocr_idx,
+                'timestamp': ocr_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': str(sampled_ocr_path),
+                'status': b_status,
+                'outputs': ocr_out,
+                'error': b_err,
+            })
+    ocr_sample_records.sort(key=lambda record: record['sample_index'])
     item.update(_aggregate_ocr_sample_results(ocr_sample_records, frame_timestamp))
 
     caption_sample_records: List[Dict[str, Any]] = []
@@ -6302,25 +6607,12 @@ def _process_frame(
     item.update(_aggregate_caption_sample_results(caption_sample_records, frame_timestamp))
 
     object_sample_records: List[Dict[str, Any]] = []
+    obj_batch_meta: List[Tuple[int, float, bool, Path]] = []
+    obj_batch_payloads: List[Dict[str, Any]] = []
     for obj_idx, obj_ts in enumerate(sample_timestamps):
         is_mid = (obj_ts == frame_timestamp)
         try:
             sampled_obj_path = sample_frame(obj_ts, obj_idx)
-            obj_out = _run_step(
-                'goodq_object_detect',
-                'object_detect',
-                {**item, 'source_path': str(sampled_obj_path), 'timestamp': obj_ts, 'is_midpoint_sample': is_mid},
-                cfg_json,
-            )
-            object_sample_records.append({
-                'sample_index': obj_idx,
-                'timestamp': obj_ts,
-                'is_midpoint_sample': is_mid,
-                'source_path': str(sampled_obj_path),
-                'status': 'ok',
-                'outputs': obj_out if isinstance(obj_out, dict) else {},
-                'error': None,
-            })
         except Exception as obj_exc:
             object_sample_records.append({
                 'sample_index': obj_idx,
@@ -6331,6 +6623,26 @@ def _process_frame(
                 'outputs': {'objects': [], 'detect_meta': {'status': 'error', 'reason': 'object_detect_sample_error', 'error': str(obj_exc), 'sample_timestamp': obj_ts, 'is_midpoint_sample': is_mid}},
                 'error': str(obj_exc),
             })
+            continue
+        obj_batch_meta.append((obj_idx, obj_ts, is_mid, sampled_obj_path))
+        obj_batch_payloads.append({**item, 'source_path': str(sampled_obj_path), 'timestamp': obj_ts, 'is_midpoint_sample': is_mid})
+    if obj_batch_payloads:
+        for (obj_idx, obj_ts, is_mid, sampled_obj_path), (b_status, obj_out, b_err) in zip(
+            obj_batch_meta,
+            _run_step_batch('goodq_object_detect', 'object_detect', obj_batch_payloads, cfg_json),
+        ):
+            if b_status == 'error' and not obj_out:
+                obj_out = {'objects': [], 'detect_meta': {'status': 'error', 'reason': 'object_detect_sample_error', 'error': str(b_err or 'object_detect failed'), 'sample_timestamp': obj_ts, 'is_midpoint_sample': is_mid}}
+            object_sample_records.append({
+                'sample_index': obj_idx,
+                'timestamp': obj_ts,
+                'is_midpoint_sample': is_mid,
+                'source_path': str(sampled_obj_path),
+                'status': b_status,
+                'outputs': obj_out,
+                'error': b_err,
+            })
+    object_sample_records.sort(key=lambda record: record['sample_index'])
     item.update(_aggregate_object_detect_sample_results(object_sample_records, frame_timestamp))
 
     merge('goodq_face_embed', 'face_embed')
@@ -6338,10 +6650,15 @@ def _process_frame(
     merge('goodq_image_caption', 'image_embed_clip')
     merge('goodq_core', 'tagger')
     canonicalize_taxonomy(item)
+    try:
+        frame_entity_cfg = json.loads(cfg_json.read_text(encoding='utf-8')) if cfg_json.is_file() else {}
+    except Exception:
+        frame_entity_cfg = {}
     _persist_frame_semantic_entities(
         item,
         scene_id=scene_id,
         video_id=video_hash,
+        config=frame_entity_cfg,
     )
 
     frame_text_parts: List[str] = []
@@ -6476,16 +6793,19 @@ def _log_audio_to_ucf_ledger(
         scene_start = scene.get('start', 0.0)
 
         recording_projection = item.get('audio_evidence')
+        ucf_tx_rows = item.get('segments', [])
         if recording_projection is not None:
+            from steps.audio.recording_ingestion import ucf_transcript_segments
             from wsl2_audio.scene_projection import validate_scene_audio
             validate_scene_audio(recording_projection)
             expected_scene = {'scene_id': scene_id, 'start': float(scene['start']), 'end': float(scene['end'])}
             if recording_projection['scene'] != expected_scene or recording_projection['source']['sha256'] != video_hash:
                 raise ValueError('UCF recording source/scene binding mismatch')
+            ucf_tx_rows = ucf_transcript_segments(recording_projection)
             raw_recording = audio_artifact_dir / f'{scene_id}_recording_audio.json'
             atomic_write_json(raw_recording, recording_projection)
             # Canonical source evidence survives an optional scene-WAV extraction failure.
-            atomic_write_json(audio_artifact_dir / f'{scene_id}_raw_transcript.json', item.get('segments', []))
+            atomic_write_json(audio_artifact_dir / f'{scene_id}_raw_transcript.json', ucf_tx_rows)
             atomic_write_json(audio_artifact_dir / f'{scene_id}_raw_diarization.json', item.get('speaker_segments', []))
             client.log_frame(video_hash=video_hash, epoch_id=epoch_id, run_id=run_id,
                 t_start=scene['start'], t_end=scene['end'], modality='audio',
@@ -6503,10 +6823,10 @@ def _log_audio_to_ucf_ledger(
                     **({'source_kind': item['source_kind']} if item.get('source_kind') else {})}, promotion_status='staged')
 
         # 1. Transcripts logging
-        if item.get('segments') or item.get('transcript'):
+        if ucf_tx_rows or item.get('transcript'):
             raw_ref_path = audio_artifact_dir / f"{scene_id}_raw_transcript.json"
             raw_ref_str = str(raw_ref_path.resolve())
-            for i, segment in enumerate(item.get('segments', [])):
+            for i, segment in enumerate(ucf_tx_rows):
                 start_time = segment.get('start', 0.0)
                 end_time = segment.get('end', 0.0)
                 if recording_projection is not None or start_time < (scene_start - 0.01):
@@ -6545,7 +6865,13 @@ def _log_audio_to_ucf_ledger(
                     t_end=t_end,
                     modality='text',
                     worker_name='audio_transcribe',
-                    occurrence_id=ucf_module.audio_occurrence_id(video_hash, scene_id, 'audio_transcribe', payload) if recording_projection is not None else '',
+                    occurrence_id=ucf_module.audio_occurrence_id(
+                        video_hash,
+                        scene_id,
+                        'audio_transcribe',
+                        payload,
+                        recording_required=recording_projection is not None,
+                    ) if scene_id else '',
                     model_tag='recording_audio_v1' if recording_projection is not None else 'faster_whisper',
                     confidence=0.0 if recording_projection is not None else 1.0,
                     source_artifact_id=scene_id,
@@ -6590,7 +6916,13 @@ def _log_audio_to_ucf_ledger(
                     t_end=t_end,
                     modality='audio',
                     worker_name='speaker_merge',
-                    occurrence_id=ucf_module.audio_occurrence_id(video_hash, scene_id, 'speaker_merge', payload) if recording_projection is not None else '',
+                    occurrence_id=ucf_module.audio_occurrence_id(
+                        video_hash,
+                        scene_id,
+                        'speaker_merge',
+                        payload,
+                        recording_required=recording_projection is not None,
+                    ) if scene_id else '',
                     model_tag='recording_audio_v1' if recording_projection is not None else 'pyannote',
                     confidence=0.0 if recording_projection is not None else 1.0,
                     source_artifact_id=scene_id,
@@ -7979,7 +8311,12 @@ def _process_audio(
             atomic_write_json(audio_artifact_dir / 'transcript.json', transcript_json)
             logger.info(f"[AUDIO] Wrote transcript.json with {len(item.get('segments', []))} segments")
             # Save raw un-flattened transcript
-            atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_transcript.json", item.get('segments', []))
+            if item.get('audio_evidence') is not None:
+                from steps.audio.recording_ingestion import ucf_transcript_segments
+                raw_tx_segments = ucf_transcript_segments(item['audio_evidence'])
+            else:
+                raw_tx_segments = item.get('segments', [])
+            atomic_write_json(audio_artifact_dir / f"{scene_id}_raw_transcript.json", raw_tx_segments)
 
         # Write diarization.json
         if item.get('speaker_segments'):
@@ -8139,24 +8476,37 @@ async def _process_frame_async(
         observations, errors, warnings = [], [], []
         midpoint_output = {}
         t_start = time.perf_counter()
+        sampled_batch: List[Tuple[float, Path, Dict[str, Any]]] = []
         for sample_index, timestamp in enumerate(sample_timestamps):
             try:
                 sampled_path = await sample_frame(timestamp, sample_index)
-                result = await _run_step_async('goodq_face_embed', 'face_embed',
-                    {**item, 'source_path': str(sampled_path), 'timestamp': timestamp}, cfg_json)
-                if result.get('status') != 'ok':
-                    raise RuntimeError(result.get('errors') or 'face worker failed')
-                outputs = result.get('outputs', {})
-                face_status = outputs.get('faces_meta', {}).get('status')
-                if face_status not in {'ok', 'degraded'}:
-                    raise RuntimeError(f"face computation failed: {outputs.get('faces_meta')}")
-                if face_status == 'degraded':
-                    warnings.append({'timestamp': timestamp, 'faces_meta': outputs['faces_meta']})
-                observations.append({**outputs, 'source_path': str(sampled_path), 'timestamp': timestamp})
-                if timestamp == frame_timestamp:
-                    midpoint_output = outputs
+                sampled_batch.append(
+                    (timestamp, sampled_path, {**item, 'source_path': str(sampled_path), 'timestamp': timestamp})
+                )
             except Exception as exc:
                 errors.append(f'face sample at {timestamp:.3f}s: {exc}')
+        if sampled_batch:
+            batch_results = await _run_step_batch_async(
+                'goodq_face_embed',
+                'face_embed',
+                [entry[2] for entry in sampled_batch],
+                cfg_json,
+            )
+            for (timestamp, sampled_path, _), result in zip(sampled_batch, batch_results):
+                try:
+                    if result.get('status') != 'ok':
+                        raise RuntimeError(result.get('errors') or 'face worker failed')
+                    outputs = result.get('outputs', {})
+                    face_status = outputs.get('faces_meta', {}).get('status')
+                    if face_status not in {'ok', 'degraded'}:
+                        raise RuntimeError(f"face computation failed: {outputs.get('faces_meta')}")
+                    if face_status == 'degraded':
+                        warnings.append({'timestamp': timestamp, 'faces_meta': outputs['faces_meta']})
+                    observations.append({**outputs, 'source_path': str(sampled_path), 'timestamp': timestamp})
+                    if timestamp == frame_timestamp:
+                        midpoint_output = outputs
+                except Exception as exc:
+                    errors.append(f'face sample at {timestamp:.3f}s: {exc}')
         step_timings['face_embed'] = time.perf_counter() - t_start
         return {'status': 'ok', 'outputs': {**midpoint_output, 'face_observations': observations,
                                           'face_sampling_errors': errors,
@@ -8179,6 +8529,8 @@ async def _process_frame_async(
                 },
             )
         sample_records: List[Dict[str, Any]] = []
+        ocr_batch_meta: List[Tuple[int, float, bool, Path]] = []
+        ocr_batch_payloads: List[Dict[str, Any]] = []
         step_log_cfg: Optional[Dict[str, Any]] = None
         t_start = time.perf_counter()
         for sample_index, timestamp in enumerate(sample_timestamps):
@@ -8221,26 +8573,32 @@ async def _process_frame_async(
                 })
                 continue
 
-            result = await _run_step_async(
-                'goodq_ocr',
-                'image_ocr',
-                {
-                    **item,
-                    'source_path': str(sampled_path),
-                    'timestamp': timestamp,
-                    'is_midpoint_sample': is_midpoint,
-                },
-                cfg_json,
-            )
-            sample_records.append({
-                'sample_index': sample_index,
+            ocr_batch_meta.append((sample_index, timestamp, is_midpoint, sampled_path))
+            ocr_batch_payloads.append({
+                **item,
+                'source_path': str(sampled_path),
                 'timestamp': timestamp,
                 'is_midpoint_sample': is_midpoint,
-                'source_path': str(sampled_path),
-                'status': result.get('status') if isinstance(result, dict) else 'error',
-                'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
-                'error': result.get('errors') if isinstance(result, dict) else str(result),
             })
+
+        if ocr_batch_payloads:
+            batch_results = await _run_step_batch_async(
+                'goodq_ocr',
+                'image_ocr',
+                ocr_batch_payloads,
+                cfg_json,
+            )
+            for (sample_index, timestamp, is_midpoint, sampled_path), result in zip(ocr_batch_meta, batch_results):
+                sample_records.append({
+                    'sample_index': sample_index,
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                    'source_path': str(sampled_path),
+                    'status': result.get('status') if isinstance(result, dict) else 'error',
+                    'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
+                    'error': result.get('errors') if isinstance(result, dict) else str(result),
+                })
+        sample_records.sort(key=lambda record: record['sample_index'])
         step_timings['image_ocr'] = time.perf_counter() - t_start
         return {'status': 'ok', 'outputs': _aggregate_ocr_sample_results(sample_records, frame_timestamp)}
 
@@ -8348,6 +8706,8 @@ async def _process_frame_async(
                 },
             )
         sample_records: List[Dict[str, Any]] = []
+        obj_batch_meta: List[Tuple[int, float, bool, Path]] = []
+        obj_batch_payloads: List[Dict[str, Any]] = []
         step_log_cfg: Optional[Dict[str, Any]] = None
         t_start = time.perf_counter()
         for sample_index, timestamp in enumerate(sample_timestamps):
@@ -8390,26 +8750,32 @@ async def _process_frame_async(
                 })
                 continue
 
-            result = await _run_step_async(
-                'goodq_object_detect',
-                'object_detect',
-                {
-                    **item,
-                    'source_path': str(sampled_path),
-                    'timestamp': timestamp,
-                    'is_midpoint_sample': is_midpoint,
-                },
-                cfg_json,
-            )
-            sample_records.append({
-                'sample_index': sample_index,
+            obj_batch_meta.append((sample_index, timestamp, is_midpoint, sampled_path))
+            obj_batch_payloads.append({
+                **item,
+                'source_path': str(sampled_path),
                 'timestamp': timestamp,
                 'is_midpoint_sample': is_midpoint,
-                'source_path': str(sampled_path),
-                'status': result.get('status') if isinstance(result, dict) else 'error',
-                'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
-                'error': result.get('errors') if isinstance(result, dict) else str(result),
             })
+
+        if obj_batch_payloads:
+            batch_results = await _run_step_batch_async(
+                'goodq_object_detect',
+                'object_detect',
+                obj_batch_payloads,
+                cfg_json,
+            )
+            for (sample_index, timestamp, is_midpoint, sampled_path), result in zip(obj_batch_meta, batch_results):
+                sample_records.append({
+                    'sample_index': sample_index,
+                    'timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                    'source_path': str(sampled_path),
+                    'status': result.get('status') if isinstance(result, dict) else 'error',
+                    'outputs': (result.get('outputs') or {}) if isinstance(result, dict) else {},
+                    'error': result.get('errors') if isinstance(result, dict) else str(result),
+                })
+        sample_records.sort(key=lambda record: record['sample_index'])
         step_timings['object_detect'] = time.perf_counter() - t_start
         return {'status': 'ok', 'outputs': _aggregate_object_detect_sample_results(sample_records, frame_timestamp)}
 
@@ -8455,6 +8821,12 @@ async def _process_frame_async(
             step_errors.append(tagger_res.get("errors") or "tagger error")
             
     canonicalize_taxonomy(item)
+    try:
+        frame_entity_cfg = await asyncio.to_thread(
+            lambda: json.loads(cfg_json.read_text(encoding='utf-8')) if cfg_json.is_file() else {}
+        )
+    except Exception:
+        frame_entity_cfg = {}
     
     async with db_write_lock:
         await asyncio.to_thread(
@@ -8462,6 +8834,7 @@ async def _process_frame_async(
             item,
             scene_id=scene_id,
             video_id=video_hash,
+            config=frame_entity_cfg,
         )
 
 
@@ -9073,7 +9446,12 @@ async def _process_audio_async(
             }
             await asyncio.to_thread(atomic_write_json, audio_artifact_dir / 'transcript.json', transcript_json)
             # Save raw un-flattened transcript
-            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_transcript.json", item.get('segments', []))
+            if item.get('audio_evidence') is not None:
+                from steps.audio.recording_ingestion import ucf_transcript_segments
+                raw_tx_segments = ucf_transcript_segments(item['audio_evidence'])
+            else:
+                raw_tx_segments = item.get('segments', [])
+            await asyncio.to_thread(atomic_write_json, audio_artifact_dir / f"{scene_id}_raw_transcript.json", raw_tx_segments)
 
         if item.get('speaker_segments'):
             diarization_json = {
@@ -9915,6 +10293,7 @@ def run_with_config(
             processing_dir,
             cfg,
             audio_runtime_contract=audio_runtime_contract,
+            recording_audio=recording_audio,
         )
         segmentation_shadow_overlay = _prepare_segmentation_shadow_audio_overlay(
             cfg,

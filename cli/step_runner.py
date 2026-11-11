@@ -553,41 +553,74 @@ def main() -> None:
     
     # Measure and log duration
     from steps.common.step_logger import log_step_run
-    start_ns = time.perf_counter_ns()
     _emit_subprocess_env_fingerprint(args.step)
-    try:
-        res = run_step(args.step, item, cfg)
-    except Exception as exc:
-        duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
-        log_step_run(cfg, args.step, item, duration_ms, "error", str(exc))
-        raise
-    else:
-        duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
-        log_status, log_error, extra = _derive_step_log_outcome(args.step, res, verbose=args.verbose)
-        log_step_run(cfg, args.step, item, duration_ms, log_status, log_error, extra=extra)
- 
-        # CRITICAL: Save step results to memory database for context enrichment
-        try:
-            _save_memory_context(args.step, item, res, cfg)
-        except Exception as save_exc:
-            import logging
-            logging.warning(f"Failed to save context for step {args.step}: {save_exc}")
-        
-        # Clear GPU cache after step if configured
-        if gpu_manager is not None:
+    if isinstance(item, dict) and isinstance(item.get("_batch_items"), list):
+        batch_results: List[Dict[str, Any]] = []
+        for sub_item in item["_batch_items"]:
+            sub_dict = sub_item if isinstance(sub_item, dict) else {}
+            sub_start_ns = time.perf_counter_ns()
             try:
-                gpu_cfg = cfg.get('gpu', {})
-                if gpu_cfg.get('clear_cache_after_step', True):
-                    gpu_manager.clear_cache()
-                    
-                # Log final memory stats
-                if gpu_cfg.get('log_memory_stats', True):
-                    stats = gpu_manager.get_memory_stats()
-                    if stats.get('cuda_available'):
-                        import logging
-                        logging.info(f"[{args.step}] Final GPU Memory: {stats['allocated_gb']}/{stats['total_gb']} GB ({stats['utilization_pct']}%)")
-            except Exception as e:
-                pass
+                sub_res = run_step(args.step, sub_dict, cfg)
+            except Exception as exc:
+                duration_ms = (time.perf_counter_ns() - sub_start_ns) / 1_000_000.0
+                log_step_run(cfg, args.step, sub_dict, duration_ms, "error", str(exc))
+                batch_results.append({"status": "error", "outputs": {}, "errors": str(exc)})
+            else:
+                duration_ms = (time.perf_counter_ns() - sub_start_ns) / 1_000_000.0
+                log_status, log_error, extra = _derive_step_log_outcome(args.step, sub_res, verbose=args.verbose)
+                log_step_run(cfg, args.step, sub_dict, duration_ms, log_status, log_error, extra=extra)
+                try:
+                    _save_memory_context(args.step, sub_dict, sub_res, cfg)
+                except Exception as save_exc:
+                    import logging
+                    logging.warning(f"Failed to save context for step {args.step}: {save_exc}")
+                sub_status = "ok"
+                if log_status == "error" or (isinstance(sub_res, dict) and "_error" in sub_res):
+                    sub_status = "error"
+                    log_error = str((sub_res or {}).get("_error", log_error))
+                elif log_status == "skipped":
+                    sub_status = "skipped"
+                batch_results.append({
+                    "status": sub_status,
+                    "outputs": sub_res if isinstance(sub_res, dict) else {},
+                    "errors": log_error,
+                })
+        res = {"_batch_results": batch_results}
+    else:
+        start_ns = time.perf_counter_ns()
+        try:
+            res = run_step(args.step, item, cfg)
+        except Exception as exc:
+            duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
+            log_step_run(cfg, args.step, item, duration_ms, "error", str(exc))
+            raise
+        else:
+            duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
+            log_status, log_error, extra = _derive_step_log_outcome(args.step, res, verbose=args.verbose)
+            log_step_run(cfg, args.step, item, duration_ms, log_status, log_error, extra=extra)
+
+            # CRITICAL: Save step results to memory database for context enrichment
+            try:
+                _save_memory_context(args.step, item, res, cfg)
+            except Exception as save_exc:
+                import logging
+                logging.warning(f"Failed to save context for step {args.step}: {save_exc}")
+
+    # Clear GPU cache after step if configured
+    if gpu_manager is not None:
+        try:
+            gpu_cfg = cfg.get('gpu', {})
+            if gpu_cfg.get('clear_cache_after_step', True):
+                gpu_manager.clear_cache()
+
+            # Log final memory stats
+            if gpu_cfg.get('log_memory_stats', True):
+                stats = gpu_manager.get_memory_stats()
+                if stats.get('cuda_available'):
+                    import logging
+                    logging.info(f"[{args.step}] Final GPU Memory: {stats['allocated_gb']}/{stats['total_gb']} GB ({stats['utilization_pct']}%)")
+        except Exception as e:
+            pass
 
     out = json.dumps(res, ensure_ascii=False)
     if args.out_path:

@@ -144,7 +144,8 @@ class PhasedSegmentationEngine:
         self,
         video_path: str,
         output_base_dir: str,
-        skip_phases: Optional[List[str]] = None
+        skip_phases: Optional[List[str]] = None,
+        recording_audio: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute the complete 6-phase segmentation pipeline
@@ -320,6 +321,7 @@ class PhasedSegmentationEngine:
                 video_path,
                 dirs['base'],
                 self._phase4_runtime_cfg(),
+                **({'recording_audio': recording_audio} if recording_audio is not None else {}),
             )
             
             self.phase_results['phase4'] = audio_results

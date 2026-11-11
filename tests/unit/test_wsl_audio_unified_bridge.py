@@ -411,3 +411,72 @@ def test_retired_worker_cannot_hide_a_still_emitted_vector(monkeypatch):
     assert result["embeddings"] == [.1, .2]
     assert result["wsl_capability_outcomes"]["wav2vec2"]["status"] == "error"
     assert result["wsl_capability_outcomes"]["wav2vec2"]["reason"] == "retired_status_with_embedding"
+
+
+@pytest.mark.parametrize("emotion_error,expected_status", [
+    ("speech_selection_unavailable", "not_applicable"),
+    ("model_crash", "error"),
+])
+def test_completed_no_speakers_closes_speech_selection_emotion_and_voice_signatures(
+    monkeypatch, emotion_error, expected_status
+):
+    from steps.audio import audio_wsl2_bridge
+    from cli import run_ingestion
+
+    raw = {
+        "status": "success",
+        "transcription": "distant crowd noise",
+        "transcription_status": "success",
+        "diarization_status": "completed_no_speakers",
+        "diarization_note": "completed_no_speakers",
+        "diarization": [],
+        "speakers": [],
+        "speaker_count": 0,
+        "emotion_status": "error",
+        "emotion_error": emotion_error,
+        "emotion": None,
+        "emotion_scores": {},
+        "speaker_voice_signatures": [],
+        "speaker_voice_signature_meta": {
+            "status": "skipped",
+            "reason": "diarization_unavailable",
+            "emitted": 0,
+        },
+        "embeddings_status": "retired",
+    }
+
+    class Bridge:
+        def process_audio(self, *args, **kwargs):
+            return copy.deepcopy(raw)
+
+    monkeypatch.setattr(audio_wsl2_bridge, "WSL2AudioBridge", Bridge)
+    result = audio_wsl2_bridge.audio_unified_wsl2("crowd.wav", duration=8.0)
+
+    emo_outcome = result["wsl_capability_outcomes"]["acoustic_emotion"]
+    assert emo_outcome["status"] == expected_status
+    if expected_status == "not_applicable":
+        assert emo_outcome["reason"] == "no_diarized_speakers"
+        assert emo_outcome["raw_status"] == "error"
+        assert result["emotion_error"] is None
+        assert result["emotion_note"] == "no_diarized_speakers"
+    else:
+        assert emo_outcome["error"] == "model_crash"
+        assert result["emotion_error"] == "model_crash"
+
+    sig_meta = result["speaker_voice_signature_meta"]
+    assert sig_meta["status"] == "not_applicable"
+    assert sig_meta["reason"] == "completed_no_speakers"
+
+    rows = []
+    monkeypatch.setattr(
+        run_ingestion,
+        "log_step_run",
+        lambda cfg, step, item, duration, status, error, extra: rows.append(
+            {"step": step, "status": status, "error": error, "extra": extra}
+        ),
+    )
+    run_ingestion._log_wsl_capability_outcomes(
+        cfg={}, item={}, duration_ms=0, outcomes=result["wsl_capability_outcomes"]
+    )
+    emo_row = next(r for r in rows if r["step"] == "audio_emotion")
+    assert emo_row["status"] == expected_status

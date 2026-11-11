@@ -100,16 +100,22 @@ def test_bridge_aliases_share_the_same_evidence(surface, job, monkeypatch):
     assert methods[surface]('unused.wav', recording_audio=handle, scene_id='scene')['audio_evidence']==projection
 
 
-@pytest.mark.parametrize('mode', ['shadow', 'authoritative'])
-def test_selected_chunk_modes_rejected_before_runtime_probe(mode, monkeypatch):
+@pytest.mark.parametrize('mode', ['off', 'shadow', 'authoritative'])
+def test_selected_segmented_modes_resolve_recording_contract_without_chunk_fallback(mode, monkeypatch):
     from cli.run_ingestion import _resolve_audio_runtime_contract
-    cfg={'audio':{'recording_engine':{'enabled':True,'profile':'profile','python':'python','source_revision':'revision'}},
-         'segmentation':{'activation':mode}}
-    with pytest.raises(ValueError, match='chunk audio modes are unsupported'):
-        _resolve_audio_runtime_contract(cfg)
-    cfg['segmentation']['activation']='off'
-    monkeypatch.setenv('GOODQ_SEGMENTATION_MODE',mode)
-    with pytest.raises(ValueError, match='chunk audio modes are unsupported'):
+    cfg = {'audio': {'recording_engine': {'enabled': True, 'profile': 'profile', 'python': 'python', 'source_revision': 'revision'}},
+           'segmentation': {'activation': mode}}
+    contract = _resolve_audio_runtime_contract(cfg)
+    assert contract['selected'] == 'recording'
+    monkeypatch.setenv('GOODQ_SEGMENTATION_MODE', mode)
+    assert _resolve_audio_runtime_contract(cfg)['selected'] == 'recording'
+
+
+def test_selected_unknown_segmentation_mode_rejected():
+    from cli.run_ingestion import _resolve_audio_runtime_contract
+    cfg = {'audio': {'recording_engine': {'enabled': True, 'profile': 'profile', 'python': 'python', 'source_revision': 'revision'}},
+           'segmentation': {'activation': 'invented'}}
+    with pytest.raises(ValueError, match='segmentation'):
         _resolve_audio_runtime_contract(cfg)
 
 
@@ -117,6 +123,115 @@ def test_phase4_cannot_bypass_recording_selection():
     from steps.audio.segmentation.phase4_audio_processor import Phase4AudioProcessor
     with pytest.raises(ValueError, match='chunk recognition'):
         Phase4AudioProcessor({'audio':{'recording_engine':{'enabled':True}}})
+
+
+def test_phase4_and_shadow_pipeline_consume_shared_recording_evidence_without_chunk_asr(tmp_path, monkeypatch):
+    from cli import run_ingestion as runner
+    from steps.audio.segmentation import orchestrator as seg_orch
+    from steps.audio.segmentation import phase4_audio_processor as phase4_mod
+    from wsl2_audio.recording_audio import _atomic_json
+
+    evidence = recording()
+    video = tmp_path / 'clip.mp4'
+    video.write_bytes(b'fixture video bytes')
+    evidence['source']['sha256'] = _sha_file(video)
+    evidence['provenance'].update(run_id='run', epoch_id='epoch')
+
+    job_dir = tmp_path / 'recording-job'
+    job_dir.mkdir()
+    _atomic_json(evidence, job_dir / 'evidence.json')
+    canonical_scenes = [{'scene_id': 's0', 'start': 0.0, 'end': 2.0}]
+    projected = project_audio(evidence, canonical_scenes)
+    scene_audio_path = job_dir / 'scene_audio.json'
+    _atomic_json({k: legacy_audio(v) for k, v in projected.items()}, scene_audio_path)
+    handle = {
+        'path': str(scene_audio_path), 'sha256': _sha_file(scene_audio_path),
+        'processing_root': str(tmp_path / 'processing'), 'source_sha256': evidence['source']['sha256'],
+        'run_id': 'run', 'epoch_id': 'epoch',
+    }
+
+    monkeypatch.setattr(phase4_mod, 'transcribe_and_diarize_wsl2',
+                        lambda *a, **kw: pytest.fail('Chunk ASR invoked when recording_engine is selected'))
+    monkeypatch.setattr(seg_orch, 'normalize_media', lambda src, dst, _cfg: Path(dst).write_bytes(b'RIFF'))
+    monkeypatch.setattr(seg_orch, 'extract_metadata', lambda _src: {'duration': 2.0, 'fps': 30.0})
+    monkeypatch.setattr(seg_orch, 'segment_with_webrtc_vad',
+                        lambda _wav, _cfg: [{'id': 'seg_0', 'start': 0.0, 'end': 2.0, 'vad_speech': True}])
+    def fake_phase3(_seg, _wav, audio_dir, _cfg):
+        manifest = Path(audio_dir) / 'segmentation.json'
+        chunks = [{'id': 'chunk_0', 'start': 0.0, 'end': 2.0, 'duration': 2.0, 'vad_speech': True}]
+        manifest.write_text(json.dumps({'segments': chunks, 'chunks': chunks}))
+        return {'chunks': chunks, 'manifest_path': str(manifest)}
+    monkeypatch.setattr(seg_orch, 'run_phase3_chunk_builder', fake_phase3)
+
+    profile = tmp_path / 'profile.json'
+    profile.write_text('{}')
+    cfg = {
+        'audio': {'recording_engine': {'enabled': True, 'profile': str(profile), 'python': 'fixture', 'source_revision': 'rev'}},
+        'segmentation': {'enabled': True, 'activation': 'shadow', 'phase2': {'enabled': False}, 'phase5': {'enabled': False}},
+        'run': {'id': 'run', 'epoch_id': 'epoch'},
+    }
+    shadow = runner._run_segmentation_shadow_pipeline(
+        video, tmp_path / 'proc', cfg,
+        audio_runtime_contract={'selected': 'recording'}, recording_audio=handle,
+    )
+    assert shadow['status'] == 'complete'
+    enhanced = json.loads(Path(shadow['phase4_manifest_path']).read_text())
+    assert enhanced['segments'][0]['transcript'] == 'Yay Joe'
+    assert enhanced['segments'][0]['audio_evidence']['recording_id'] == projected['s0']['recording_id']
+
+    cfg['segmentation']['shadow_audio_overlay'] = True
+    overlay = runner._prepare_segmentation_shadow_audio_overlay(cfg, shadow)
+    assert overlay['enabled'] is False
+    assert overlay['reason'] == 'recording_engine_owns_canonical_scene_audio'
+
+
+def test_authoritative_segmentation_prepares_one_recording_job_for_phase5_scenes(tmp_path, monkeypatch):
+    from tests.unit.test_progressive_ingestion_caller import _runner_fixture
+    from cli import run_ingestion as runner
+    from scripts import wsl2_audio_bridge as transport
+
+    run, _scenes, _, checkpoint = _runner_fixture(tmp_path, monkeypatch)
+    reuse_manifest = checkpoint.parent / 'video' / 'scene_manifest.json'
+    if reuse_manifest.exists():
+        reuse_manifest.unlink()
+    profile = tmp_path / 'profile.json'
+    profile.write_text('{}')
+    monkeypatch.setenv('GOODQ_SEGMENTATION_MODE', 'authoritative')
+    monkeypatch.setenv('GOODQ_SEGMENTATION_BACKEND', 'seg_p5')
+    monkeypatch.setattr(
+        runner, '_run_segmentation_authoritative_scene_backend',
+        lambda *a, **kw: {
+            'scenes': [{'index': 0, 'start': 0.0, 'end': 1.2, 'duration': 1.2, 'confidence': 0.9},
+                       {'index': 1, 'start': 1.2, 'end': 2.0, 'duration': 0.8, 'confidence': 0.9}],
+            'meta': {'status': 'ok', 'engine': 'segmentation_phase5', 'scene_count': 2},
+        },
+    )
+    actual_contract = runner._resolve_audio_runtime_contract
+    def choose(cfg):
+        cfg['segmentation'] = {'enabled': True, 'activation': 'authoritative'}
+        cfg['audio'] = {'recording_engine': {'enabled': True, 'profile': str(profile), 'python': 'fixture', 'source_revision': 'test'}}
+        return actual_contract(cfg)
+    monkeypatch.setattr(runner, '_resolve_audio_runtime_contract', choose)
+    jobs = []
+    def worker(req, prof, root, options):
+        request = json.loads(req.read_text())
+        jobs.append(request)
+        evidence = recording()
+        evidence['source']['sha256'] = _sha_file(Path(request['source_path']))
+        evidence['provenance'].update(run_id=request['run_id'], epoch_id=request['epoch_id'])
+        (root / 'scene_audio.json').write_text(json.dumps({
+            k: legacy_audio(v) for k, v in project_audio(evidence, request['scenes']).items()
+        }))
+    monkeypatch.setattr(transport, 'run_recording_request', worker)
+    async def audio(_cfg, _ffmpeg, _video, scene, _dir, _artifacts, _hash, scene_id, *args, **kwargs):
+        handle = kwargs['recording_audio']
+        return {'path': str(tmp_path / 'audio.wav'), 'data': shared.scene_result(handle, scene_id, scene)}
+    monkeypatch.setattr(runner, '_process_audio_async', audio)
+    result = run()
+    assert len(jobs) == 1
+    assert [(s['start'], s['end']) for s in jobs[0]['scenes']] == [(0.0, 1.2), (1.2, 2.0)]
+    assert result['orchestration']['scene_backend_effective'] == 'segmentation_phase5'
+    assert result['audio_backend_effective'] == 'recording'
 
 
 @pytest.mark.parametrize('terms',[None,['Kathi']])

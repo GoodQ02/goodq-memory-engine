@@ -86,10 +86,10 @@ def attach_observations(evidence: dict, observations: dict) -> dict:
         regions = [row for row in activity.get('regions', []) if _hit(row, span, clock, channel)]
         labels = sorted({row['speaker'] for row in active})
         second = [row for row in overlap.get('single_activity', []) if _hit(row, span, clock, channel)]
-        from wsl2_audio.frame_events import METHOD, THRESHOLD
+        from wsl2_audio.frame_events import SUPPORTED_POLICIES, THRESHOLD
         speech_frames = [row for row in acoustic.get('speech_intervals', []) if _hit(row, span, clock, channel)]
         acoustic_coverage = _support(regions, speech_frames, clock, span)
-        acoustic_supported = (acoustic.get('method') == METHOD and acoustic.get('threshold') == THRESHOLD
+        acoustic_supported = (acoustic.get('method') in SUPPORTED_POLICIES and acoustic.get('threshold') == THRESHOLD
                               and acoustic_coverage >= POLICY['min_speech_coverage'])
         u['acoustic_support'] = {'method': acoustic.get('method'), 'threshold': acoustic.get('threshold'),
                                  'ordinary_speech_coverage': acoustic_coverage,

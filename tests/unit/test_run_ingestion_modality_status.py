@@ -529,3 +529,121 @@ def test_object_sample_absence_does_not_hide_failed_inference(failed_sample):
         assert result["detect_meta"]["status"] == "not_applicable"
         assert result["detect_meta"]["reason"] == "no_detected_object"
         assert result["detect_meta"]["accepted_sample_count"] == 0
+
+
+def test_aggregate_ocr_filters_vhs_cjk_grain_while_retaining_signage_and_dates():
+    run_ingestion = _load_run_ingestion_module()
+    base_id = {
+        "engine": "paddleocr-3.7-onnxruntime-cuda",
+        "model_revision": "rec_v6",
+        "detector_revision": "det_v6",
+        "config_sha256": "cfg123",
+    }
+
+    # Pure VHS foliage noise scene -> converts cleanly to status='no_text', reason='empty_ocr_text'
+    pure_noise_records = [
+        {
+            "sample_index": 0,
+            "timestamp": 1.0,
+            "is_midpoint_sample": True,
+            "source_path": "f0.jpg",
+            "status": "ok",
+            "outputs": {
+                "ocr_text": "雨\n::",
+                "ocr_meta": {
+                    **base_id,
+                    "status": "ok",
+                    "raw_result": {"rec_texts": ["雨", "::"], "rec_scores": [0.2049, 0.15]},
+                    "accepted_regions": [
+                        {"text": "雨", "bbox": [1, 1, 10, 10], "confidence": 0.2049, "confidence_kind": "recognizer_sequence_score"},
+                        {"text": "::", "bbox": [2, 2, 12, 12], "confidence": 0.15, "confidence_kind": "recognizer_sequence_score"},
+                    ],
+                },
+            },
+        }
+    ]
+    noise_agg = run_ingestion._aggregate_ocr_sample_results(pure_noise_records, midpoint_timestamp=1.0)
+    assert noise_agg["ocr_text"] is None
+    assert noise_agg["ocr_meta"]["status"] == "no_text"
+    assert noise_agg["ocr_meta"]["reason"] == "empty_ocr_text"
+    assert len(noise_agg["ocr_meta"]["samples"][0]["ocr_meta"]["filtered_noise_regions"]) == 2
+    assert noise_agg["ocr_meta"]["samples"][0]["ocr_meta"]["raw_result"]["rec_texts"] == ["雨", "::"]
+
+    # Mixed sample: index 0 is VHS CJK grain, index 1 is real signage, index 2 is camcorder date
+    mixed_records = [
+        {
+            "sample_index": 0,
+            "timestamp": 2.0,
+            "is_midpoint_sample": True,
+            "source_path": "f1.jpg",
+            "status": "ok",
+            "outputs": {
+                "ocr_text": "国\nMERRY CHRISTMAS\nDEC 25 1994",
+                "time_hints": {"explicit_dates": ["1994-12-25"], "years": ["1994"], "first_seen_ts": {"1994-12-25": 2.0, "1994": 2.0}},
+                "ocr_meta": {
+                    **base_id,
+                    "status": "ok",
+                    "accepted_regions": [
+                        {"text": "国", "bbox": [0, 0, 8, 8], "confidence": 0.38, "confidence_kind": "recognizer_sequence_score"},
+                        {"text": "MERRY CHRISTMAS", "bbox": [10, 10, 90, 30], "confidence": 0.91, "confidence_kind": "recognizer_sequence_score"},
+                        {"text": "DEC 25 1994", "bbox": [50, 80, 95, 95], "confidence": 0.62, "confidence_kind": "recognizer_sequence_score"},
+                    ],
+                    "date_evidence": [
+                        {"region_index": 2, "raw_text": "DEC 25 1994", "normalized_date": "1994-12-25"}
+                    ],
+                },
+            },
+        }
+    ]
+    mixed_agg = run_ingestion._aggregate_ocr_sample_results(mixed_records, midpoint_timestamp=2.0)
+    assert mixed_agg["ocr_text"] == "MERRY CHRISTMAS\nDEC 25 1994"
+    obs_meta = mixed_agg["ocr_meta"]["observations"][0]
+    assert [r["text"] for r in obs_meta["accepted_regions"]] == ["MERRY CHRISTMAS", "DEC 25 1994"]
+    assert obs_meta["date_evidence"] == [{"region_index": 1, "raw_text": "DEC 25 1994", "normalized_date": "1994-12-25"}]
+    assert mixed_agg["time_hints"]["explicit_dates"] == ["1994-12-25"]
+
+
+def test_step_runner_batch_items_emits_per_sample_step_runs_and_isolates_errors(monkeypatch, tmp_path):
+    import json as _json
+    import sys as _sys
+    from cli import step_runner
+
+    log_dir = tmp_path / "logs"
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text(_json.dumps({"paths": {"log_dir": str(log_dir)}}), encoding="utf-8")
+
+    batch_items = [
+        {"video_id": "v1", "scene_id": "sc_0", "scene_index": 0, "source_path": f"frame_{i}.jpg", "timestamp": float(i), "is_midpoint_sample": (i == 2)}
+        for i in range(5)
+    ]
+    in_path = tmp_path / "batch_in.json"
+    out_path = tmp_path / "batch_out.json"
+    in_path.write_text(_json.dumps({"_batch_items": batch_items}), encoding="utf-8")
+
+    def fake_run_step(step_name, item, _cfg):
+        assert step_name == "object_detect"
+        if item["timestamp"] == 3.0:
+            raise RuntimeError("corrupt sample decode")
+        objs = [{"label": "person", "score": 0.9}] if item["timestamp"] == 1.0 else []
+        return {"objects": objs, "detect_meta": {"status": "ok", "model": "yolox_s", "device": "cuda"}}
+
+    monkeypatch.setattr(step_runner, "run_step", fake_run_step)
+    monkeypatch.setattr(step_runner, "_save_memory_context", lambda *_a, **_k: None)
+    monkeypatch.setattr("common.gpu_manager.initialize_gpu_for_step", lambda **_k: None)
+    monkeypatch.setattr(
+        _sys,
+        "argv",
+        ["step_runner.py", "--step", "object_detect", "--in", str(in_path), "--out", str(out_path), "--cfg", str(cfg_path)],
+    )
+    step_runner.main()
+
+    out_data = _json.loads(out_path.read_text(encoding="utf-8"))
+    results = out_data["_batch_results"]
+    assert len(results) == 5
+    assert [r["status"] for r in results] == ["ok", "ok", "ok", "error", "ok"]
+    assert "corrupt sample decode" in results[3]["errors"]
+    assert results[1]["outputs"]["objects"] == [{"label": "person", "score": 0.9}]
+
+    step_runs = [_json.loads(line) for line in (log_dir / "step_runs.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(step_runs) == 5
+    assert [r["status"] for r in step_runs] == ["not_applicable", "ok", "not_applicable", "error", "not_applicable"]

@@ -221,6 +221,74 @@ class VRAMAllocator:
         self.env = dict(env) if isinstance(env, dict) else None
         self.conda_env = conda_env
         self.cfg = cfg
+        self._waiter_ctx = threading.local()
+        self._logged_waiter_rejections: set[Tuple[str, str]] = set()
+        self._logged_waiter_lock = threading.Lock()
+
+    def _waiters_path(self) -> Path:
+        return REGISTRY_PATH.with_name("vram_waiters.json")
+
+    def _read_waiters_locked(self, now: float, registry: Dict[str, Any]) -> Dict[str, Any]:
+        path = self._waiters_path()
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except Exception:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        max_idle = min(float(self.stale_timeout_sec), 30.0)
+        cleaned: Dict[str, Any] = {}
+        for key, entry in raw.items():
+            if not isinstance(entry, dict) or key in registry:
+                continue
+            try:
+                w_pid = int(entry.get("pid", 0))
+                updated_at = float(entry.get("updated_at", 0.0))
+                enqueued_at = float(entry.get("enqueued_at", updated_at))
+                req_mb = int(entry.get("req_mb", 0))
+            except (TypeError, ValueError):
+                continue
+            if req_mb <= 0 or (now - updated_at) > max_idle:
+                continue
+            try:
+                if not pid_exists(w_pid):
+                    continue
+            except Exception:
+                pass
+            cleaned[str(key)] = {
+                "pid": w_pid,
+                "step_name": str(entry.get("step_name") or ""),
+                "req_mb": req_mb,
+                "enqueued_at": enqueued_at,
+                "updated_at": updated_at,
+            }
+        return cleaned
+
+    def _write_waiters_locked(self, waiters: Dict[str, Any]) -> None:
+        path = self._waiters_path()
+        try:
+            if not waiters:
+                path.unlink(missing_ok=True)
+                return
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+            tmp.write_text(json.dumps(waiters, indent=2), encoding="utf-8")
+            os.replace(tmp, path)
+        except Exception as exc:
+            logger.debug("Waiter queue persistence skipped for %s: %s", path, exc)
+
+    def _remove_waiter(self, waiter_key: str) -> None:
+        try:
+            with FileLock():
+                registry = self._read_registry()
+                waiters = self._read_waiters_locked(time.time(), registry)
+                if waiter_key in waiters:
+                    waiters.pop(waiter_key, None)
+                    self._write_waiters_locked(waiters)
+        except Exception as exc:
+            logger.debug("Waiter queue cleanup skipped for %s: %s", waiter_key, exc)
 
     def _read_registry(self) -> Dict[str, Any]:
         from steps.common.atomic_io import read_text_during_atomic_replace
@@ -280,11 +348,23 @@ class VRAMAllocator:
                 pass
 
             # Check timestamp timeout
-            updated_at = claim.get("updated_at", 0.0)
-            is_timed_out = (now - updated_at) > self.stale_timeout_sec
+            updated_at = float(claim.get("updated_at") or 0.0)
+            age_sec = now - updated_at
+            is_timed_out = age_sec > self.stale_timeout_sec
 
             if is_active and not is_timed_out:
                 cleaned[pid_str] = claim
+            elif (
+                not is_active
+                and not is_timed_out
+                and str(pid_str) != str(pid)
+                and 0.0 <= age_sec < 15.0
+            ):
+                # Child worker exited normally moments before parent launcher's
+                # finally: release(reservation_id) acquired FileLock.
+                logger.debug(
+                    f"Reclaimed completed worker VRAM claim '{pid_str}' for exited PID {pid}"
+                )
             else:
                 logger.warning(
                     f"Purging stale VRAM claim for PID {pid} (active={is_active}, timed_out={is_timed_out})"
@@ -331,32 +411,109 @@ class VRAMAllocator:
                 return True
 
             req_mb = int(total_vram * fraction)
+            now = time.time()
 
             # Sum up VRAM reserved by active pipeline processes
             claimed_by_pipeline = sum(claim.get("claimed_vram_mb", 0) for claim in registry.values())
+            pipeline_budget = total_vram * self.budget_fraction
+            physical_limit = total_vram * 0.95
+
+            waiter_ctx = getattr(getattr(self, "_waiter_ctx", None), "current", None)
+            waiter_key = waiter_ctx[0] if isinstance(waiter_ctx, tuple) and len(waiter_ctx) == 2 else None
+            enqueued_at = float(waiter_ctx[1]) if isinstance(waiter_ctx, tuple) and len(waiter_ctx) == 2 else now
+            waiters = self._read_waiters_locked(now, registry)
+            if waiter_key and waiter_key in waiters:
+                enqueued_at = float(waiters[waiter_key].get("enqueued_at", enqueued_at))
+
+            def _reject_and_enqueue() -> bool:
+                if waiter_key:
+                    waiters[waiter_key] = {
+                        "pid": pid,
+                        "step_name": step_name,
+                        "req_mb": req_mb,
+                        "enqueued_at": enqueued_at,
+                        "updated_at": now,
+                    }
+                self._write_registry(registry)
+                self._write_waiters_locked(waiters)
+                return False
+
+            def _log_waiter_rejection(kind: str, level_first: int, msg: str, *args: Any) -> None:
+                if not waiter_key:
+                    logger.log(level_first, msg, *args)
+                    return
+                seen_lock = getattr(self, "_logged_waiter_lock", None)
+                seen = getattr(self, "_logged_waiter_rejections", None)
+                first_time = True
+                if seen is not None:
+                    token = (waiter_key, kind)
+                    if seen_lock is not None:
+                        with seen_lock:
+                            first_time = token not in seen
+                            seen.add(token)
+                    else:
+                        first_time = token not in seen
+                        seen.add(token)
+                logger.log(level_first if first_time else logging.DEBUG, msg, *args)
 
             # 1. Total pipeline claims must not exceed budget fraction
-            pipeline_budget = total_vram * self.budget_fraction
             if claimed_by_pipeline + req_mb > pipeline_budget:
-                logger.warning(
-                    f"VRAM allocation rejected for '{step_name}': pipeline claims ({claimed_by_pipeline} MB) + "
-                    f"request ({req_mb} MB) exceeds pipeline budget ({pipeline_budget:.0f} MB)"
+                _log_waiter_rejection(
+                    "pipeline_budget",
+                    logging.WARNING,
+                    "VRAM allocation rejected for '%s': pipeline claims (%s MB) + "
+                    "request (%s MB) exceeds pipeline budget (%.0f MB)",
+                    step_name,
+                    claimed_by_pipeline,
+                    req_mb,
+                    pipeline_budget,
                 )
-                self._write_registry(registry)
-                return False
+                return _reject_and_enqueue()
 
             # 2. Total physical VRAM usage must not exceed 95%
-            physical_limit = total_vram * 0.95
             if used_vram + req_mb > physical_limit:
-                logger.warning(
-                    f"VRAM allocation rejected for '{step_name}': physical used ({used_vram} MB) + "
-                    f"request ({req_mb} MB) exceeds physical limit ({physical_limit:.0f} MB)"
+                _log_waiter_rejection(
+                    "physical_limit",
+                    logging.WARNING,
+                    "VRAM allocation rejected for '%s': physical used (%s MB) + "
+                    "request (%s MB) exceeds physical limit (%.0f MB)",
+                    step_name,
+                    used_vram,
+                    req_mb,
+                    physical_limit,
                 )
-                self._write_registry(registry)
-                return False
+                return _reject_and_enqueue()
+
+            # 3. FIFO head-of-line fairness with work-conserving backfill:
+            # prevent smaller steps from starving an older satisfiable waiter unless
+            # both the oldest waiter and this request fit simultaneously.
+            older_waiters = [
+                w
+                for wk, w in waiters.items()
+                if wk != waiter_key
+                and float(w.get("enqueued_at", now)) < enqueued_at
+                and int(w.get("req_mb", 0)) <= pipeline_budget
+                and int(w.get("req_mb", 0)) <= physical_limit
+            ]
+            if older_waiters:
+                oldest = min(older_waiters, key=lambda w: float(w.get("enqueued_at", now)))
+                oldest_req_mb = int(oldest.get("req_mb", 0))
+                if (
+                    claimed_by_pipeline + oldest_req_mb + req_mb > pipeline_budget
+                    or used_vram + oldest_req_mb + req_mb > physical_limit
+                ):
+                    _log_waiter_rejection(
+                        "fifo_deferral",
+                        logging.INFO,
+                        "VRAM allocation deferred for '%s' (%s MB) behind older waiter '%s' (%s MB)",
+                        step_name,
+                        req_mb,
+                        oldest.get("step_name"),
+                        oldest_req_mb,
+                    )
+                    return _reject_and_enqueue()
 
             # Grant reservation
-            now = time.time()
             claim_key = reservation_id or str(pid)
             if claim_key in registry:
                 raise RuntimeError(f"VRAM reservation already exists: {claim_key}")
@@ -369,6 +526,9 @@ class VRAMAllocator:
                 "updated_at": now,
             }
             self._write_registry(registry)
+            if waiter_key and waiter_key in waiters:
+                waiters.pop(waiter_key, None)
+                self._write_waiters_locked(waiters)
             logger.info(f"Reserved {req_mb} MB VRAM for step '{step_name}' on PID {pid}")
 
             # Start background heartbeat daemon for this reservation
@@ -439,24 +599,43 @@ class VRAMAllocator:
     ) -> bool:
         """Wait until VRAM is available and reserve it, or timeout."""
         start_time = time.time()
-        while time.time() - start_time < timeout_seconds:
-            if cancel_event is not None and cancel_event.is_set():
-                return False
-            if self.reserve(
-                step_name,
-                pid,
-                command,
-                reservation_id=reservation_id,
-                env=env,
-                conda_env=conda_env,
-                cfg=cfg,
-            ):
+        waiter_key = reservation_id or f"waiter:{pid}:{threading.get_ident()}:{start_time:.6f}"
+        if not hasattr(self, "_waiter_ctx"):
+            self._waiter_ctx = threading.local()
+        admitted = False
+        self._waiter_ctx.current = (waiter_key, start_time)
+        try:
+            while time.time() - start_time < timeout_seconds:
                 if cancel_event is not None and cancel_event.is_set():
-                    self.release(reservation_id or pid)
                     return False
-                return True
-            if cancel_event is None:
-                time.sleep(1.0)
-            elif cancel_event.wait(1.0):
-                return False
-        return False
+                if self.reserve(
+                    step_name,
+                    pid,
+                    command,
+                    reservation_id=reservation_id,
+                    env=env,
+                    conda_env=conda_env,
+                    cfg=cfg,
+                ):
+                    if cancel_event is not None and cancel_event.is_set():
+                        self.release(reservation_id or pid)
+                        return False
+                    admitted = True
+                    return True
+                if cancel_event is None:
+                    time.sleep(0.5)
+                elif cancel_event.wait(0.5):
+                    return False
+            return False
+        finally:
+            self._waiter_ctx.current = None
+            seen_lock = getattr(self, "_logged_waiter_lock", None)
+            seen = getattr(self, "_logged_waiter_rejections", None)
+            if seen is not None:
+                if seen_lock is not None:
+                    with seen_lock:
+                        seen.difference_update({tok for tok in seen if tok[0] == waiter_key})
+                else:
+                    seen.difference_update({tok for tok in seen if tok[0] == waiter_key})
+            if not admitted:
+                self._remove_waiter(waiter_key)

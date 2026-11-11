@@ -71,6 +71,7 @@ from api.utils.identity_read_projection import (
 )
 from api.utils.identity_readiness import artifact_readiness, identity_readiness_projection
 from api.utils import identity_appearance
+from api.utils import identity_cross_film
 from api.utils import identity_match_review
 from api.utils import identity_matching as matching_projection
 from steps.common.config_loader import load_configs
@@ -284,6 +285,59 @@ def list_identity_matches():
     return _read_matching(matching_projection.list_reports)
 
 
+class MatchRefreshRequest(BaseModel):
+    confirmation_token: Optional[str] = None
+
+
+@router.post("/matches/refresh")
+def refresh_identity_matches(req: MatchRefreshRequest):
+    from lib.identity_matching import refresh_epoch_matches, report_root
+
+    start = time.monotonic()
+    epoch_id = str(_CFG.get("epoch_id") or "")
+    args = {"epoch_id": epoch_id}
+    authority = MiniAgentClient(profile="safe")
+    operation = "identity.refresh_matches"
+    result, code = authority.authorize_action(
+        prompt="Confirm refreshing saved comparisons against latest prior-film references",
+        mode="ops",
+        tool_name=operation,
+        tool_args=args,
+        confirm=bool(req.confirmation_token),
+        confirmation_token=req.confirmation_token or "",
+    )
+    if code != 0:
+        return JSONResponse(status_code=403, content=result)
+    outcome = None
+    try:
+        outcome = refresh_epoch_matches(_CFG)
+        return outcome
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc) or "Completed ingestion results are unavailable") from exc
+    except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+        log.exception("Identity match refresh refused")
+        raise HTTPException(409, str(exc) or "Saved comparison refresh could not be completed") from exc
+    finally:
+        targets = []
+        try:
+            targets = [str(report_root(_CFG))]
+        except Exception:
+            targets = []
+        authority.record_external_execution_outcome(
+            operation=operation,
+            arguments=args,
+            request_id=result.get("request_id", ""),
+            mode="ops",
+            status="succeeded" if outcome else "failed",
+            return_code=0 if outcome else 1,
+            duration_ms=int((time.monotonic() - start) * 1000),
+            side_effect_report={
+                "mutated": bool(outcome and outcome.get("mutated")),
+                "targets": targets,
+            },
+        )
+
+
 @router.get("/matches/{report_id}")
 def get_identity_matches(report_id: str):
     return _read_matching(matching_projection.public_report, report_id)
@@ -292,6 +346,58 @@ def get_identity_matches(report_id: str):
 @router.get("/matches/{report_id}/media/{evidence_id}")
 def get_identity_match_media(report_id: str, evidence_id: str):
     path, media_type = _read_matching(matching_projection.media_file, report_id, evidence_id)
+    return FileResponse(path, media_type=media_type)
+
+
+@router.get("/matches/{report_id}/visual-groups")
+def get_identity_match_visual_groups(
+    report_id: str,
+    min_similarity: float = Query(0.58, ge=0.30, le=0.95),
+) -> dict:
+    try:
+        return identity_cross_film.visual_groups_for_report(
+            _CFG, report_id, min_similarity=min_similarity
+        )
+    except FileNotFoundError:
+        raise HTTPException(404, "Saved comparison evidence is unavailable")
+    except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+        log.exception("Visual face grouping failed")
+        raise HTTPException(409, str(exc) or "Visual grouping is unavailable for this comparison") from exc
+
+
+@router.get("/cross-film-scan")
+def scan_identity_face_across_films(
+    report_id: Optional[str] = Query(None, pattern=r"^[0-9a-f]{64}$"),
+    evidence_id: Optional[str] = Query(None, pattern=r"^[0-9a-f]{64}$"),
+    cluster_id: Optional[str] = Query(None, min_length=1, max_length=256),
+    person_id: Optional[str] = Query(None, min_length=1, max_length=256),
+    min_similarity: float = Query(0.50, ge=0.25, le=0.95),
+    limit_per_movie: int = Query(12, ge=1, le=50),
+) -> dict:
+    try:
+        return identity_cross_film.scan_face_across_films(
+            _CFG,
+            report_id=report_id,
+            evidence_id=evidence_id,
+            cluster_id=cluster_id,
+            person_id=person_id,
+            min_similarity=min_similarity,
+            limit_per_movie=limit_per_movie,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc) or "Saved face evidence is unavailable") from exc
+    except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise HTTPException(409, str(exc) or "Cross-film face scan could not read saved evidence") from exc
+
+
+@router.get("/cross-film-media/{epoch_id}/{detection_id}")
+def get_cross_film_face_media(epoch_id: str, detection_id: str):
+    try:
+        path, media_type = identity_cross_film.cross_film_media_file(_CFG, epoch_id, detection_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc) or "Cross-film face image is unavailable") from exc
+    except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise HTTPException(409, str(exc) or "Cross-film face image is invalid") from exc
     return FileResponse(path, media_type=media_type)
 
 

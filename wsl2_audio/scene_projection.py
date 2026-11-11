@@ -164,19 +164,89 @@ def project_audio(evidence: dict, scenes: list[dict]) -> dict[str, dict]:
     return output
 
 
+def _conservative_segment_confidence(members):
+    from wsl2_audio.channel_reconciliation import _confidence
+    raw = {}
+    for key, combine in (('avg_logprob', min), ('no_speech_probability', max)):
+        value = _confidence(members, key, combine)
+        if value is not None:
+            raw[key] = value
+    warnings = []
+    for member in members:
+        for reason in member['eligibility']['transcript']['reasons']:
+            if reason not in warnings:
+                warnings.append(reason)
+    return {'status': 'uncalibrated_model_score' if raw else 'unavailable',
+            'basis': 'native_decoder_block', 'raw': raw,
+            'recognition_accuracy': 'unqualified', 'warnings': warnings}
+
+
+def _transcript_segments(projection, offset):
+    """Deduplicate co-occurring matching cross-channel text in linear consumer views only."""
+    from wsl2_audio.channel_reconciliation import _matching_occurrence
+    eligible = [u for u in projection['utterances']
+                if u['eligibility']['transcript']['status'] == 'eligible']
+    segments, dedup_groups, consumed = [], [], set()
+    for index, first in enumerate(eligible):
+        if index in consumed:
+            continue
+        members = [first]
+        channels = set(first.get('source_channels', [first['channel']]))
+        if first.get('resolution') != 'conflicting_hypotheses':
+            for j in range(index + 1, len(eligible)):
+                other = eligible[j]
+                if j in consumed or other.get('resolution') == 'conflicting_hypotheses':
+                    continue
+                other_channels = set(other.get('source_channels', [other['channel']]))
+                if channels & other_channels:
+                    continue
+                if all(_matching_occurrence(member, other, projection['utterances']) for member in members):
+                    members.append(other)
+                    channels |= other_channels
+                    consumed.add(j)
+        if len(members) == 1:
+            u = first
+            segments.append({'id': u['id'], 'text': u['text'],
+                'start': u['display_span']['start'] - offset, 'end': u['display_span']['end'] - offset,
+                'speaker': u['track_id'], 'speaker_status': u['speaker']['status'],
+                'source_span': deepcopy(u['span']), 'owner_scene_id': u['owner_scene_id'],
+                'confidence': deepcopy(u['confidence']), 'timing_scope': 'scene_display_only'})
+            continue
+        members.sort(key=lambda u: (min(u.get('source_channels', [u['channel']])), u['channel'], u['id']))
+        rep = members[0]
+        track_ids = {u['track_id'] for u in members if u.get('track_id')}
+        same_speaker = len(track_ids) == 1 and all(u.get('track_id') for u in members)
+        speaker = rep['track_id'] if same_speaker else None
+        speaker_status = rep['speaker']['status'] if same_speaker else 'unresolved'
+        union_span = {'start': min(u['span']['start'] for u in members),
+                      'end': max(u['span']['end'] for u in members)}
+        alternatives = [{'id': u['id'], 'channel': u['channel'],
+                         'source_channels': list(u.get('source_channels', [u['channel']])),
+                         'span': deepcopy(u['span']), 'track_id': u['track_id'],
+                         'owner_scene_id': u['owner_scene_id']} for u in members]
+        segments.append({'id': rep['id'], 'text': rep['text'],
+            'start': min(u['display_span']['start'] for u in members) - offset,
+            'end': max(u['display_span']['end'] for u in members) - offset,
+            'speaker': speaker, 'speaker_status': speaker_status,
+            'source_span': union_span, 'owner_scene_id': rep['owner_scene_id'],
+            'confidence': _conservative_segment_confidence(members),
+            'timing_scope': 'scene_display_only',
+            'unreconciled_channel_alternatives': alternatives})
+        dedup_groups.append({'representative_id': rep['id'],
+            'member_ids': [u['id'] for u in members],
+            'channels': sorted(channels), 'span': deepcopy(union_span),
+            'reason': 'cooccurring_matching_surface_unreconciled_channels'})
+    if dedup_groups:
+        segments.sort(key=lambda row: (row['start'], row['end'],
+            row['source_span']['start'], row['source_span']['end'], row['id']))
+    return segments, dedup_groups
+
+
 def legacy_audio(projection):
     """Compatibility fields use clipped scene seconds; full playback/eligibility stays versioned."""
     projection = validate_scene_audio(projection)
     offset = projection['scene']['start']
-    segments = []
-    for u in projection['utterances']:
-        if u['eligibility']['transcript']['status'] != 'eligible':
-            continue
-        segments.append({'id': u['id'], 'text': u['text'],
-            'start': u['display_span']['start']-offset, 'end': u['display_span']['end']-offset,
-            'speaker': u['track_id'], 'speaker_status': u['speaker']['status'],
-            'source_span': deepcopy(u['span']), 'owner_scene_id': u['owner_scene_id'],
-            'confidence': deepcopy(u['confidence']), 'timing_scope': 'scene_display_only'})
+    segments, dedup_groups = _transcript_segments(projection, offset)
     text = ' '.join(row['text'] for row in segments)
     tracks = [{'speaker': row['track_id'], 'start': row['display_span']['start']-offset,
                'end': row['display_span']['end']-offset, 'identity_claim': False} for row in projection['speaker_tracks']]
@@ -193,6 +263,8 @@ def legacy_audio(projection):
         'speaker_transcript': deepcopy(segments), 'transcript_meta': {'engine': 'recording_audio_v1',
             'status': 'ok' if text else 'unresolved' if projection['utterances'] else 'empty',
             'segments': deepcopy(segments), 'recognition_accuracy': 'unqualified', 'time_basis': 'scene_relative_display',
+            **({'channel_deduplication': {'method': 'matching_occurrence_disjoint_channels_v1',
+                'groups': dedup_groups}} if dedup_groups else {}),
             **({'transcription_context': deepcopy(projection['provenance']['transcription_context'])}
                if projection['provenance'].get('transcription_context') else {})},
         'transcript_outcome': outcome, 'transcript_outcome_reason': reason,

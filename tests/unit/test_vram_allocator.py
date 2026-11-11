@@ -38,14 +38,15 @@ def clean_registry(tmp_path, monkeypatch):
             monkeypatch.setattr(mod, "LOCK_PATH", mock_lock)
 
     # Remove registry and lock files if they exist before/after test
-    for path in [mock_reg, mock_lock]:
+    mock_waiters = mock_dir / "vram_waiters.json"
+    for path in [mock_reg, mock_lock, mock_waiters]:
         if path.exists():
             try:
                 path.unlink()
             except OSError:
                 pass
     yield
-    for path in [mock_reg, mock_lock]:
+    for path in [mock_reg, mock_lock, mock_waiters]:
         if path.exists():
             try:
                 path.unlink()
@@ -674,3 +675,179 @@ def test_emotion_classify_cpu_parent_cuda_worker_reserves_vram_and_confirmed_cpu
         conda_env="goodq_core",
     )
     assert allocator._read_registry()["emo-unknown-probe"]["claimed_vram_mb"] == 2000
+
+
+def test_wait_and_reserve_fifo_blocks_leapfrog_but_allows_backfill(monkeypatch, simulated_gpu):
+    import threading
+
+    allocator = VRAMAllocator(budget_fraction=0.90)
+    monkeypatch.delenv("GOODQ_IMAGE_CAPTION_FORCE_CPU", raising=False)
+    monkeypatch.setattr(allocator, "query_gpu_memory", lambda: (10000, 1000))
+    monkeypatch.setattr(allocator, "start_heartbeat_daemon", lambda *a: None)
+    monkeypatch.setattr("common.vram_allocator.pid_exists", lambda pid: True)
+
+    # Claim 5,500 MB of 9,000 MB budget (3,500 MB free) using steps that do not
+    # probe host-local model snapshots on CPU-only CI runners.
+    assert allocator.reserve("audio_diarize", 901, reservation_id="hold-diarize")
+    assert allocator.reserve("audio_embed_clap", 902, reservation_id="hold-clap")
+    assert sum(c["claimed_vram_mb"] for c in allocator._read_registry().values()) == 5500
+
+    caption_result = []
+    cancel = threading.Event()
+
+    def wait_for_caption():
+        granted = allocator.wait_and_reserve(
+            "image_caption",
+            903,
+            reservation_id="waiter-caption",
+            timeout_seconds=3.0,
+            cancel_event=cancel,
+        )
+        caption_result.append(granted)
+
+    def current_waiters():
+        wpath = allocator._waiters_path()
+        return json.loads(wpath.read_text(encoding="utf-8")) if wpath.exists() else {}
+
+    t = threading.Thread(target=wait_for_caption, daemon=True)
+    t.start()
+    try:
+        deadline = time.monotonic() + 2.0
+        while "waiter-caption" not in current_waiters() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert "waiter-caption" in current_waiters()
+
+        # Newer 2,500 MB audio_transcribe would fit alone (5,500 + 2,500 <= 9,000),
+        # but must NOT leapfrog older 4,000 MB waiter (5,500 + 4,000 + 2,500 > 9,000).
+        assert not allocator.reserve("audio_transcribe", 904, reservation_id="leapfrog-tx")
+
+        # Release 3,500 MB so claimed drops to 2,000 MB. While waiter-caption is between
+        # 0.5s poll ticks, a small 1,500 MB text_embed CAN backfill (2,000 + 4,000 + 1,500 <= 9,000),
+        # while 2,500 MB audio_transcribe still cannot leapfrog (3,500 + 4,000 + 2,500 > 9,000).
+        allocator.release("hold-diarize")
+        assert allocator.reserve("text_embed", 905, reservation_id="backfill-text")
+        assert not allocator.reserve("audio_transcribe", 904, reservation_id="leapfrog-tx-2")
+
+        t.join(timeout=3.0)
+        assert caption_result == [True]
+        assert current_waiters() == {}
+        assert "waiter-caption" in allocator._read_registry()
+    finally:
+        cancel.set()
+        t.join(timeout=3.0)
+
+
+def test_run_step_gpu_required_vram_denial_logs_prelaunch_step_run(monkeypatch, tmp_path):
+    monkeypatch.setenv("GOODQ_TEST_VRAM_ALLOCATOR", "1")
+    monkeypatch.setenv("GOODQ_HOST_PROFILE", "GPU_ENHANCED")
+    monkeypatch.setenv("GOODQ_REQUIRE_GPU", "1")
+    monkeypatch.delenv("GOODQ_NO_AUTO_GPU", raising=False)
+
+    log_dir = tmp_path / "logs"
+    cfg_json = tmp_path / "config.json"
+    cfg_json.write_text(json.dumps({"paths": {"log_dir": str(log_dir)}}), encoding="utf-8")
+
+    with patch("common.vram_allocator.VRAMAllocator.wait_and_reserve", return_value=False):
+        from cli.run_ingestion import _run_step
+
+        monkeypatch.setattr("cli.run_ingestion.resolve_conda", lambda: "conda")
+        monkeypatch.setattr("cli.run_ingestion.shutil.which", lambda _: "conda")
+
+        with pytest.raises(RuntimeError, match="VRAM allocation failed"):
+            _run_step(
+                env_name="goodq_image_caption",
+                step_name="image_caption",
+                payload={
+                    "source_path": str(tmp_path / "scene_0001.jpg"),
+                    "video_id": "test_video",
+                    "scene_id": "scene_0001",
+                },
+                cfg_json=cfg_json,
+            )
+
+    step_runs_path = log_dir / "step_runs.jsonl"
+    assert step_runs_path.exists()
+    rows = [json.loads(line) for line in step_runs_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) == 1
+    assert rows[0]["step"] == "image_caption"
+    assert rows[0]["status"] == "error"
+    assert rows[0]["extra"] == {"reason": "vram_allocation_failed", "pre_launch": True}
+
+
+def test_clean_stale_claims_suppresses_warning_for_fresh_launcher_handoff_exit_only(caplog):
+    import logging
+
+    allocator = VRAMAllocator(stale_timeout_sec=300.0)
+    now = time.time()
+    registry = {
+        "image_caption:fresh-exit": {
+            "pid": 4101,
+            "step_name": "image_caption",
+            "start_time": now - 2.0,
+            "command": "",
+            "claimed_vram_mb": 4000,
+            "updated_at": now - 0.5,
+        },
+        "image_caption:old-orphan": {
+            "pid": 4102,
+            "step_name": "image_caption",
+            "start_time": now - 40.0,
+            "command": "",
+            "claimed_vram_mb": 4000,
+            "updated_at": now - 25.0,
+        },
+    }
+    with patch("common.vram_allocator.pid_exists", return_value=False):
+        with caplog.at_level(logging.DEBUG, logger="common.vram_allocator"):
+            cleaned = allocator.clean_stale_claims(registry)
+
+    assert cleaned == {}
+    warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    debugs = [r.message for r in caplog.records if r.levelno == logging.DEBUG]
+    assert any("4102" in m and "Purging stale VRAM claim" in m for m in warnings)
+    assert not any("4101" in m for m in warnings)
+    assert any("4101" in m and "Reclaimed completed worker VRAM claim" in m for m in debugs)
+
+
+def test_wait_and_reserve_deduplicates_poll_rejection_warnings(monkeypatch, simulated_gpu, caplog):
+    import logging
+
+    allocator = VRAMAllocator(budget_fraction=0.50)
+    monkeypatch.setattr(allocator, "query_gpu_memory", lambda: (10000, 1000))
+    monkeypatch.setattr("common.vram_allocator.pid_exists", lambda pid: True)
+    assert allocator.reserve("audio_diarize", 5101, reservation_id="hold-diarize")
+
+    # Speed up sleep inside wait_and_reserve so multiple poll cycles run quickly
+    clock = [1000.0]
+
+    def fake_time():
+        return clock[0]
+
+    def fake_sleep(dt):
+        clock[0] += float(dt)
+
+    monkeypatch.setattr("common.vram_allocator.time.time", fake_time)
+    monkeypatch.setattr("common.vram_allocator.time.sleep", fake_sleep)
+
+    with caplog.at_level(logging.DEBUG, logger="common.vram_allocator"):
+        granted = allocator.wait_and_reserve(
+            "audio_transcribe",
+            5102,
+            reservation_id="waiter-tx",
+            timeout_seconds=2.0,
+        )
+
+    assert granted is False
+    warnings = [
+        r.message
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "VRAM allocation rejected for 'audio_transcribe'" in r.message
+    ]
+    debugs = [
+        r.message
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "VRAM allocation rejected for 'audio_transcribe'" in r.message
+    ]
+    assert len(warnings) == 1
+    assert len(debugs) >= 2
+    assert allocator._logged_waiter_rejections == set()

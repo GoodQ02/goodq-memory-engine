@@ -30,8 +30,12 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
     ("GET", "/api/identity/appearances/saved"): "passive_read",
     ("GET", "/api/identity/matches"): "passive_read",
     ("POST", "/api/identity/matches/preview"): "passive_read",
+    ("POST", "/api/identity/matches/refresh"): "curated_mutation",
     ("GET", "/api/identity/matches/{report_id}"): "passive_read",
     ("GET", "/api/identity/matches/{report_id}/media/{evidence_id}"): "passive_read",
+    ("GET", "/api/identity/matches/{report_id}/visual-groups"): "passive_read",
+    ("GET", "/api/identity/cross-film-scan"): "passive_read",
+    ("GET", "/api/identity/cross-film-media/{epoch_id}/{detection_id}"): "passive_read",
     ("POST", "/api/identity/appearances/apply"): "curated_mutation",
     ("POST", "/api/identity/appearances/undo"): "curated_mutation",
     ("GET", "/"): "passive_read",
@@ -131,10 +135,10 @@ EXPECTED_ROUTE_EFFECTS: dict[tuple[str, str], str] = {
 }
 
 EXPECTED_COUNTS = {
-    "passive_read": 60,
+    "passive_read": 63,
     "request_staging": 1,
     "automatic_mutation": 10,
-    "curated_mutation": 10,
+    "curated_mutation": 11,
     "process_execution": 11,
 }
 
@@ -205,6 +209,8 @@ def _sample_path(template: str) -> str:
         "request_id": "ingest_20260712T000000Z_12345678",
         "report_id": "report_001",
         "evidence_id": "evidence_001",
+        "epoch_id": "epoch_001",
+        "detection_id": "1_0",
         "job_id": "job_" + "0" * 32,
     }
 
@@ -822,7 +828,7 @@ def test_openapi_projects_every_effect_and_preserves_ingest_schema() -> None:
             if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}:
                 operations.append(operation)
 
-    assert len(operations) == 90
+    assert len(operations) == 94
     assert all(operation.get("x-goodq-effect") in EXPECTED_COUNTS for operation in operations)
 
     submit_operation = schema["paths"]["/api/ingest/submit"]["post"]

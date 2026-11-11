@@ -223,7 +223,12 @@ def persist_result(cfg: dict, item: dict) -> None:
         artifact_dir = root / ("audio" if kind == "audio" else "video")
         artifact_dir.mkdir(parents=True, exist_ok=True)
         if kind == "audio":
-            atomic_write_json(artifact_dir / f"{scene_id}_raw_transcript.json", item.get("segments", []))
+            if item.get("audio_evidence") is not None:
+                from steps.audio.recording_ingestion import ucf_transcript_segments
+                raw_tx_rows = ucf_transcript_segments(item["audio_evidence"])
+            else:
+                raw_tx_rows = item.get("segments", [])
+            atomic_write_json(artifact_dir / f"{scene_id}_raw_transcript.json", raw_tx_rows)
             atomic_write_json(artifact_dir / f"{scene_id}_raw_diarization.json", item.get("speaker_segments", []))
             _log_audio_to_ucf_ledger(cfg_path, source_hash, scene_id, scene, artifact_dir, item, strict=True)
         elif kind == "image":

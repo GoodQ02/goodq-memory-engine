@@ -1,13 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_MANIFEST -->
-<!-- DOC_LAST_VERIFIED: 2026-11-09 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-11 -->
 
 # Public release sanitization manifest
 
 ## Source and authority
 
-- Private development source: `915c79f801422140a584f8067a99aaad66956897` (`dev`).
-- Public parent: `23608419762309368206d5545a542d88fae0f3ff` (`main`).
+- Private development source: `5c9709b3bd2952a89adcd04e68851efcfa8a22cf` (`dev`).
+- Public parent: `50df353e87279f487d51e4522c7aca716383b35c` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -191,3 +191,11 @@ that `scripts/internal/verify_entity_quality.py` remains excluded while private
 `dev` retains direct unit tests. The complete CI-profile unit suite in the
 isolated public checkout passed 7,102 tests plus seven subtests with zero
 failures before publication.
+
+## Audio consensus, UCF stereo preservation, and cross-film identity curation - 2026-11-11
+
+Mirrors pinned private commit `5c9709b3` onto `GoodQ02/goodq-memory-engine` `main` (parent `50df353e`):
+- **Audio Engine & Transcription Sanitization**: Defaults `audio.transcribe.vocabulary_mode` to `"off"` so configured person-name hints never seed Whisper decoder prompt-echo hallucinations on non-speech hums; adds bridge-level prompt-echo, decoder-loop, and stock-boilerplate filtering (`bridge_prompt_echo_filter_v1`); preserves stereo channel layout in UCF scene audio extraction (`-ac 2`) while downmixing mono exclusively at Whisper's 16 kHz staging boundary; and fixes Qdrant point-ID deterministic UUIDv5 collision safety for multi-chunk transcripts plus occurrence-aware `context_frames` schema migration (`scripts/ucf/ucf_ledger.py`).
+- **Semantic Entity & Tag Hygiene**: Splits fused roster names in NER output, excludes person names from topic/concept tags, strips noisy single-token false `PERSON` tags, and wires video-epoch `EntityExtractor` directly to `scene_ingest_results.json`.
+- **Cross-Film Identity Curation Workbench**: Adds visual DBSCAN face clustering (`Layout: Visual clusters`) on Match Review (`lib/identity_matching.py`, `ui/identity_workbench/`), sticky `Who is this instead?` reassignment with inline `+ New person...` roster creation (`POST /api/identity/roster`), retrospective cross-film face scanning (`POST /api/identity/roster/{id}/scan-films`) across configured sibling witnesses, and `<1s` prior-film match refresh (`POST /api/identity/matches/refresh` / `Refresh from prior films`) so downstream epochs pick up newly confirmed prior-film faces without re-ingestion.
+- **Parity & Privacy Gates**: Product code in `agents/`, `api/`, `cli/`, `common/`, `configs/`, `envs/`, `lib/`, `pipelines/`, `retrieval/`, `steps/`, `ui/`, and `wsl2_audio/` matches `5c9709b3` byte for byte (apart from the declared anonymous operator preference template — whose `path_meta` `source` values now use valid `"developer_seed"` enum entries so fresh-checkout `MiniAgentClient` policy validation passes — and `epoch_public_example` docstring). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, personal-term/path privacy scan, and 531 focused unit/agent checks pass before publication.

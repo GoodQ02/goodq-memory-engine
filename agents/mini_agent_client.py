@@ -126,6 +126,7 @@ READ_ONLY_ALLOW_ON_AGENT_FAILURE = {
 MUTATING_DENY_ON_AGENT_FAILURE = {
     "identity.apply_appearances",
     "identity.undo_appearances",
+    "identity.refresh_matches",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -161,6 +162,7 @@ MUTATING_DENY_ON_AGENT_FAILURE = {
 LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
     "identity.apply_appearances",
     "identity.undo_appearances",
+    "identity.refresh_matches",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -190,6 +192,7 @@ LOCAL_CONFIRMATION_REQUIRED_TOOLS = {
 LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
     "identity.apply_appearances",
     "identity.undo_appearances",
+    "identity.refresh_matches",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -209,6 +212,7 @@ LOCAL_AUTHORIZATION_ONLY_ACTIONS = {
 LOCAL_NATIVE_VALIDATION_BYPASS_TOOLS = {
     "identity.apply_appearances",
     "identity.undo_appearances",
+    "identity.refresh_matches",
     "clean_memory.apply",
     "create_summary_collection",
     "delete_summary_collection",
@@ -699,6 +703,20 @@ def _validate_identity_appearance_scope(tool_args: Any) -> List[str]:
 # roster edits. Their tokens bind the epoch, destination store and reviewed plan.
 for _appearance_action in ("identity.apply_appearances", "identity.undo_appearances"):
     AUTHORIZATION_SCOPE_VALIDATORS[_appearance_action] = _validate_identity_appearance_scope
+
+
+def _validate_identity_refresh_matches_scope(tool_args: Any) -> List[str]:
+    if not isinstance(tool_args, dict):
+        return ["scope must be a JSON object"]
+    if set(tool_args) != {"epoch_id"}:
+        return ["refresh_matches scope requires epoch_id"]
+    epoch_id = tool_args.get("epoch_id")
+    if not isinstance(epoch_id, str) or not epoch_id.strip():
+        return ["epoch_id must be a non-empty string"]
+    return []
+
+
+AUTHORIZATION_SCOPE_VALIDATORS["identity.refresh_matches"] = _validate_identity_refresh_matches_scope
 
 
 def _expected_summary_collection_audit_target(
@@ -4079,6 +4097,7 @@ class MiniAgentClient:
 
             with conn_mem:
                 now_str = datetime.utcnow().isoformat()
+                seen_segment_prov: Dict[str, List[int]] = {}
                 for scene_id, s_frames in frames_by_scene.items():
                     scene_fids = [f["frame_id"] for f in s_frames]
 
@@ -4212,6 +4231,8 @@ class MiniAgentClient:
                             )
 
                     segments_list = []
+                    segments_from_ucf = False
+                    segments_from_temporal_index = False
                     if standalone_kind:
                         # A temporal source bundle is not a speech segment.
                         # Preserve only measured transcript segments for audio.
@@ -4222,8 +4243,10 @@ class MiniAgentClient:
                         segments_list = manifest_scene["audio"]["speaker_transcript"]
                     elif isinstance(temporal_index.get("segments"), list):
                         segments_list = [seg for seg in temporal_index["segments"] if str(seg.get("scene_id")) == str(scene_id)]
+                        segments_from_temporal_index = bool(segments_list)
                     
                     if not segments_list:
+                        segments_from_ucf = True
                         for f in s_frames:
                             if f["worker_name"] == "audio_transcribe" and f["payload"]:
                                 p = f["payload"]
@@ -4234,11 +4257,38 @@ class MiniAgentClient:
                                     "text": p.get("transcript") or p.get("text")
                                 })
 
+                    scene_duration = max(0.0, end - start)
+                    max_raw_seg_end = max(
+                        (
+                            float(s.get("end", 0.0))
+                            for s in segments_list
+                            if isinstance(s, dict) and isinstance(s.get("end"), (int, float))
+                        ),
+                        default=0.0,
+                    )
+                    # Scene-extracted audio transcripts use scene-relative [0, duration]
+                    # coordinates, whereas UCF frames and temporal_index spans use video coordinates.
+                    scene_relative_segments = (
+                        not segments_from_ucf
+                        and not segments_from_temporal_index
+                        and start > 0.0
+                        and max_raw_seg_end <= scene_duration + 0.05
+                    )
+
                     for seg in segments_list:
                         if not isinstance(seg, dict):
                             continue
-                        seg_start = float(seg.get("start", start))
-                        seg_end = float(seg.get("end", end))
+                        raw_seg_start = float(seg.get("start", 0.0 if scene_relative_segments else start))
+                        raw_seg_end = float(seg.get("end", scene_duration if scene_relative_segments else end))
+                        is_rel = scene_relative_segments or (not segments_from_ucf and start > 0.0 and raw_seg_end <= start)
+                        if is_rel:
+                            seg_start = start + max(0.0, raw_seg_start)
+                            seg_end = min(end, start + raw_seg_end) if raw_seg_end <= scene_duration + 5.0 else (start + raw_seg_end)
+                            if seg_end <= seg_start:
+                                seg_end = start + max(raw_seg_end, raw_seg_start)
+                        else:
+                            seg_start = raw_seg_start
+                            seg_end = raw_seg_end
                         speaker = seg.get("speaker") or "unknown"
                         seg_id = _make_id("segment", [video_hash, f"{seg_start:.3f}", f"{seg_end:.3f}", speaker])
                         
@@ -4247,17 +4297,29 @@ class MiniAgentClient:
                             if f["t_start"] < seg_end and f["t_end"] > seg_start:
                                 seg_fids.append(f["frame_id"])
                         if not seg_fids:
-                            seg_fids = scene_fids
+                            seg_fids = [
+                                f["frame_id"]
+                                for f in s_frames
+                                if abs(f["t_start"] - start) <= 1e-3 and abs(f["t_end"] - end) <= 1e-3
+                            ] or scene_fids
+
+                        prior_fids = seen_segment_prov.get(seg_id, [])
+                        combined_seg_fids = list(dict.fromkeys([*prior_fids, *seg_fids]))
+                        seen_segment_prov[seg_id] = combined_seg_fids
 
                         seg_meta = {k: v for k, v in seg.items() if k not in ("start", "end")}
-                        seg_meta["ucf_provenance"] = seg_fids
+                        if is_rel:
+                            seg_meta["scene_relative_start"] = raw_seg_start
+                            seg_meta["scene_relative_end"] = raw_seg_end
+                        seg_meta["ucf_provenance"] = combined_seg_fids
                         seg_meta_json = json.dumps(seg_meta, ensure_ascii=False)
 
+                        if not prior_fids:
+                            segments_count += 1
                         conn_mem.execute(
                             "INSERT OR REPLACE INTO segments(id, video_hash, start, end, speaker, meta, created_at) VALUES (?,?,?,?,?,?,?)",
                             (seg_id, video_hash, seg_start, seg_end, speaker, seg_meta_json, now_str)
                         )
-                        segments_count += 1
 
                         for fid in seg_fids:
                             conn_mem.execute(
@@ -4339,9 +4401,23 @@ class MiniAgentClient:
                 
                 cursor_seg = conn_mem_read.execute("SELECT id, start, end, speaker, meta FROM segments WHERE video_hash = ?", (video_hash,))
                 segments_rows = cursor_seg.fetchall()
+                overlap_rows = conn_mem_read.execute(
+                    "SELECT links.child_hash, links.parent_hash FROM links "
+                    "JOIN segments ON segments.id = links.child_hash "
+                    "WHERE segments.video_hash = ? AND links.relation = 'overlaps'",
+                    (video_hash,),
+                ).fetchall()
                 conn_mem_read.close()
 
+                seg_to_scenes: Dict[str, List[str]] = {}
+                for child_seg_id, parent_sc_id in overlap_rows:
+                    sc_list = seg_to_scenes.setdefault(child_seg_id, [])
+                    if parent_sc_id not in sc_list:
+                        sc_list.append(parent_sc_id)
+
                 scene_node_ids = {}
+                scene_media_ids = {}
+                evidence_node_ids: Dict[Any, Any] = {}
                 for sid, s_start, s_end, s_meta_str in scenes_rows:
                     s_meta = json.loads(s_meta_str) if s_meta_str else {}
                     prov = s_meta.get("ucf_provenance", promoted_frame_ids)
@@ -4359,6 +4435,7 @@ class MiniAgentClient:
                         timestamp_end=s_end,
                         properties=media_properties
                     )
+                    scene_media_ids[sid] = media_id
                     
                     sc_node_id = kg.add_node("scene", sid, {"ucf_provenance": prov})
                     scene_node_ids[sid] = sc_node_id
@@ -4377,8 +4454,11 @@ class MiniAgentClient:
                         kg_edges_count += speaker_counts["edges_added"]
 
                     for fid in prov:
-                        ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
-                        kg_nodes_count += 1
+                        ev_node_id = evidence_node_ids.get(fid)
+                        if ev_node_id is None:
+                            ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
+                            evidence_node_ids[fid] = ev_node_id
+                            kg_nodes_count += 1
                         kg.add_edge(sc_node_id, ev_node_id, "scene_supported_by_ucf_frame", weight=1.0, properties={"ucf_provenance": [fid]})
                         kg_edges_count += 1
 
@@ -4386,36 +4466,29 @@ class MiniAgentClient:
                     seg_meta = json.loads(seg_meta_str) if seg_meta_str else {}
                     prov = seg_meta.get("ucf_provenance", promoted_frame_ids)
                     
-                    conn_mem_read = sqlite3.connect(str(db_path))
-                    cursor_link = conn_mem_read.execute(
-                        "SELECT parent_hash FROM links WHERE child_hash = ? AND relation = 'overlaps' LIMIT 1",
-                        (seg_id,)
-                    )
-                    link_row = cursor_link.fetchone()
-                    conn_mem_read.close()
-                    sc_id = link_row[0] if link_row else None
-                    
                     seg_node_id = kg.add_node("segment", seg_id, {"start": seg_start, "end": seg_end, "ucf_provenance": prov})
                     kg_nodes_count += 1
                     
-                    media_id = None
-                    if sc_id:
-                        cur_media = kg.conn.execute("SELECT id FROM media_nodes WHERE scene_id = ? AND media_path = ?", (sc_id, file_path or "unknown.mp4"))
-                        media_row = cur_media.fetchone()
-                        if media_row:
-                            media_id = media_row[0]
-                    
-                    if media_id:
-                        kg.link_node_to_media(seg_node_id, media_id, confidence=1.0)
-                        
-                    if sc_id and sc_id in scene_node_ids:
-                        sc_node_id = scene_node_ids[sc_id]
-                        kg.add_edge(sc_node_id, seg_node_id, "scene_has_segment", weight=1.0, properties={"ucf_provenance": prov})
-                        kg_edges_count += 1
+                    for sc_id in seg_to_scenes.get(seg_id, []):
+                        media_id = scene_media_ids.get(sc_id)
+                        if media_id is None:
+                            cur_media = kg.conn.execute("SELECT id FROM media_nodes WHERE scene_id = ? AND media_path = ?", (sc_id, file_path or "unknown.mp4"))
+                            media_row = cur_media.fetchone()
+                            if media_row:
+                                media_id = media_row[0]
+                        if media_id:
+                            kg.link_node_to_media(seg_node_id, media_id, confidence=1.0)
+                        if sc_id in scene_node_ids:
+                            sc_node_id = scene_node_ids[sc_id]
+                            kg.add_edge(sc_node_id, seg_node_id, "scene_has_segment", weight=1.0, properties={"ucf_provenance": prov})
+                            kg_edges_count += 1
 
                     for fid in prov:
-                        ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
-                        kg_nodes_count += 1
+                        ev_node_id = evidence_node_ids.get(fid)
+                        if ev_node_id is None:
+                            ev_node_id = kg.add_node("evidence", f"ucf_frame_{fid}", {"ucf_provenance": [fid]})
+                            evidence_node_ids[fid] = ev_node_id
+                            kg_nodes_count += 1
                         kg.add_edge(seg_node_id, ev_node_id, "segment_supported_by_ucf_frame", weight=1.0, properties={"ucf_provenance": [fid]})
                         kg_edges_count += 1
 

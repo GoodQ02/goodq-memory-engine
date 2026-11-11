@@ -207,3 +207,71 @@ def test_short_resampled_speech_activity_uses_integer_source_boundaries(monkeypa
     result = recognition.recognize_window(Model([]), array('d', [.001]*101), 44100,
                                           SampleSpan(44100, 44201), language='en')
     assert result['speech_activity']['spans'] == [{'start': 44100, 'end': 44201}]
+
+
+def _recognizer_profile_fixture(tmp_path, monkeypatch, *, device='cpu', compute_type='int8'):
+    import hashlib
+    import faster_whisper.vad
+    from wsl2_audio.recording_audio import _json_bytes, _sha_file
+
+    model_dir = tmp_path / 'whisper'
+    model_dir.mkdir()
+    files = {}
+    for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json'):
+        target = model_dir / name
+        target.write_bytes(name.encode('utf-8'))
+        files[name] = _sha_file(target)
+    from pathlib import Path
+    vad_path = (Path(faster_whisper.vad.__file__).parent / 'assets' / 'silero_vad_v6.onnx').resolve()
+    monkeypatch.setattr(recognition, 'version', lambda pkg: {
+        'faster-whisper': '1.2.1', 'ctranslate2': '4.8.4', 'numpy': '2.2.6', 'scipy': '1.15.3'}[pkg])
+    return {
+        'device': device,
+        'compute_type': compute_type,
+        'runtime_packages': {'faster-whisper': '1.2.1', 'ctranslate2': '4.8.4', 'numpy': '2.2.6', 'scipy': '1.15.3'},
+        'recognizer': {'id': 'fixture-whisper', 'revision': 'rev1', 'path': str(model_dir),
+                       'files': files, 'sha256': hashlib.sha256(_json_bytes(files)).hexdigest()},
+        'speech_activity_model': {'id': 'silero-vad', 'revision': 'v6', 'path': str(vad_path),
+                                  'sha256': _sha_file(vad_path)},
+    }
+
+
+@pytest.mark.parametrize('compute_type', ['float16', 'int8_float16', 'float32', 'int8'])
+def test_explicit_cuda_recognizer_verifies_and_loads_without_cpu_fallback(tmp_path, monkeypatch, compute_type):
+    import sys
+    import ctranslate2
+    monkeypatch.setattr(ctranslate2, 'get_cuda_device_count', lambda: 1)
+    profile = _recognizer_profile_fixture(tmp_path, monkeypatch, device='cuda', compute_type=compute_type)
+    verified = recognition.verify_recognizer(profile)
+    assert verified['runtime']['device'] == 'cuda'
+    assert verified['runtime']['compute_type'] == compute_type
+    loaded_kwargs = {}
+
+    def fake_whisper(path, **kwargs):
+        loaded_kwargs.update(kwargs)
+        return Model([segment()])
+
+    monkeypatch.setitem(sys.modules, 'faster_whisper', SimpleNamespace(WhisperModel=fake_whisper))
+    adapter = recognition.FasterWhisperRecognizer(profile, verified)
+    assert loaded_kwargs['device'] == 'cuda'
+    assert loaded_kwargs['compute_type'] == compute_type
+    assert loaded_kwargs['local_files_only'] is True
+    adapter.close()
+    assert adapter.model is None
+
+
+def test_cuda_recognizer_fails_hard_when_cuda_runtime_unavailable(tmp_path, monkeypatch):
+    import ctranslate2
+    monkeypatch.setattr(ctranslate2, 'get_cuda_device_count', lambda: 0)
+    profile = _recognizer_profile_fixture(tmp_path, monkeypatch, device='cuda', compute_type='float16')
+    with pytest.raises(ValueError, match='no automatic device fallback'):
+        recognition.verify_recognizer(profile)
+
+
+@pytest.mark.parametrize('device,compute_type', [('cpu', 'float16'), ('mps', 'float16'), ('cuda', 'bf99')])
+def test_unsupported_recognizer_device_or_compute_type_rejected(tmp_path, monkeypatch, device, compute_type):
+    import ctranslate2
+    monkeypatch.setattr(ctranslate2, 'get_cuda_device_count', lambda: 1)
+    profile = _recognizer_profile_fixture(tmp_path, monkeypatch, device=device, compute_type=compute_type)
+    with pytest.raises(ValueError, match='no automatic device fallback'):
+        recognition.verify_recognizer(profile)

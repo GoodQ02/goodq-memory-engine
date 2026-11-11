@@ -265,3 +265,148 @@ def test_tagger_preserves_repeated_compound_person_name_with_recurrence(monkeypa
     assert "George Costanza" in result["entities"]
     assert "George" not in [entry["name"] for entry in result["ner_entities"]]
     assert result["ner_entities"][0]["name"] == "George Costanza"
+
+
+def test_tagger_excludes_rejected_and_runaway_phrases_while_keeping_valid_dialogue(monkeypatch):
+    import copy
+
+    raw_transcript = (
+        "Alpha Beta Gamma\n"
+        "Casey, Avery, Casey, Avery, Casey, Avery\n"
+        "George visits Vermont."
+    )
+    item = {
+        "transcript": raw_transcript,
+        "transcript_meta": {
+            "transcription_context": {"words": ["Casey", "Avery"]},
+            "transcription_quality": {
+                "region_results": [
+                    {
+                        "accepted_segment_count": 3,
+                        "confidence_override": {
+                            "segments": [
+                                {"segment_index": 0, "text": "Alpha Beta Gamma", "decision": "reject"},
+                                {
+                                    "segment_index": 1,
+                                    "text": "Casey, Avery, Casey, Avery, Casey, Avery",
+                                    "decision": "accept",
+                                },
+                                {"segment_index": 2, "text": "George visits Vermont.", "decision": "accept"},
+                            ]
+                        },
+                    }
+                ]
+            },
+            "phrase_observations": [
+                {"source_segment_index": 0, "text": "Alpha Beta Gamma", "status": "unavailable"},
+                {
+                    "source_segment_index": 1,
+                    "text": "Casey, Avery, Casey, Avery, Casey, Avery",
+                    "reason": "paired_native_timestamps_unavailable",
+                },
+                {"source_segment_index": 2, "text": "George visits Vermont.", "status": "aligned"},
+            ],
+        },
+        "speaker_transcript": [
+            {"speaker": "SPEAKER_00", "text": "Casey, Avery, Casey, Avery, Casey, Avery"},
+            {"speaker": "SPEAKER_01", "text": "George visits Vermont."},
+        ],
+    }
+    snapshot = copy.deepcopy(item["transcript_meta"])
+
+    gathered = tagger_step._gather_text(item)
+    assert gathered == "George visits Vermont."
+
+    monkeypatch.setattr(
+        tagger_step,
+        "_extract_entities_transformers",
+        lambda text, _cfg: (
+            ["George", "Vermont"] if "George" in text else [],
+            [
+                {"name": "George", "type": "PERSON", "source_step": "tagger", "source_modality": "text"},
+                {"name": "Vermont", "type": "LOCATION", "source_step": "tagger", "source_modality": "text"},
+            ],
+        ),
+    )
+
+    result = tagger_step.tagger(item, {})
+    assert set(result["entities"]) == {"George", "Vermont"}
+    for noisy in ("Alpha", "Beta", "Gamma", "Casey", "Avery"):
+        assert noisy not in result["entities"]
+    assert item["transcript"] == raw_transcript
+    assert item["transcript_meta"] == snapshot
+
+
+def test_fallback_entities_respects_line_breaks_contractions_and_duplicate_tokens():
+    ocr_and_caption = "Coin Operated\nThe image shows an arcade machine."
+    assert tagger_step._fallback_entities(ocr_and_caption) == ["Coin Operated"]
+
+    assert tagger_step._fallback_entities("There's Jackie Kennedy waving.") == ["Jackie Kennedy"]
+    assert tagger_step._fallback_entities("Hello Casey It's ready now.") == ["Casey"]
+    assert tagger_step._fallback_entities("Look at Casey Casey over there.") == ["Casey"]
+    assert not tagger_step._is_meaningful_entity_label(
+        "North South Central Regional Council", trusted=False
+    )
+
+
+def test_tagger_splits_fused_roster_names_excludes_person_tags_and_rejects_false_per(monkeypatch, tmp_path):
+    roster_file = tmp_path / "family_roster.yaml"
+    roster_file.write_text(
+        "identities:\n"
+        "  - id: clara_reed\n"
+        "    display_name: Clara Reed\n"
+        "    aliases: [Clara]\n"
+        "  - id: eleanor\n"
+        "    display_name: Eleanor\n"
+        "  - id: sam\n"
+        "    display_name: Sam Vance\n"
+        "    aliases: [Sam]\n"
+        "  - id: marco\n"
+        "    display_name: Marco\n"
+        "  - id: marcus\n"
+        "    display_name: Marcus\n",
+        encoding="utf-8",
+    )
+    cfg = {"identity_search": {"roster_path": str(roster_file)}}
+
+    class _FakePipe:
+        def __call__(self, _text):
+            return [
+                {"word": "Clara Reed Eleanor", "entity_group": "PER"},
+                {"word": "Sam Eleanor", "entity_group": "PER"},
+                {"word": "Marco Marcus", "entity_group": "PER"},
+                {"word": "Santa Claus", "entity_group": "PER"},
+                {"word": "Chicago", "entity_group": "LOC"},
+                {"word": "Kiss", "entity_group": "PER"},
+                {"word": "Sit", "entity_group": "PER"},
+                {"word": "Happy", "entity_group": "PER"},
+                {"word": "Lion", "entity_group": "PER"},
+                {"word": "Mayor", "entity_group": "PER"},
+            ]
+
+    monkeypatch.setattr(tagger_step, "_get_ner_pipeline", lambda *_a, **_k: _FakePipe())
+
+    item = {
+        "transcript": (
+            "Clara Reed Eleanor smiled. Sam Eleanor waved to Marco Marcus. "
+            "Give Santa a hug! Wow Santa Claus is in Chicago. Kiss. Sit. Happy. Lion. Mayor."
+        ),
+    }
+    res = tagger_step.tagger(item, cfg)
+
+    ner_by_name = {e["name"]: e["type"] for e in res["ner_entities"]}
+    assert ner_by_name["Clara Reed"] == "PERSON"
+    assert ner_by_name["Eleanor"] == "PERSON"
+    assert ner_by_name["Sam"] == "PERSON"
+    assert ner_by_name["Marco"] == "PERSON"
+    assert ner_by_name["Marcus"] == "PERSON"
+    assert ner_by_name["Chicago"] == "LOCATION"
+
+    for bad in ("Clara Reed Eleanor", "Sam Eleanor", "Marco Marcus", "Give Santa", "Wow Santa", "Kiss", "Sit", "Happy", "Lion", "Mayor"):
+        assert bad not in ner_by_name
+        assert bad not in res["entities"]
+        assert bad not in res["tags"]
+
+    for person_name in ("Clara Reed", "Sam Vance", "Santa Claus", "Santa", "Eleanor"):
+        assert person_name not in res["tags"]
+    assert "Chicago" in res["tags"]

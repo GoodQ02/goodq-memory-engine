@@ -28,12 +28,12 @@
     "path_meta": {
       "communication.verbosity": {
         "updated_at": "2026-03-01T00:00:00Z",
-        "source": "example_default",
+        "source": "developer_seed",
         "confidence": 1.0
       },
       "engineering.preferred_verification_profile": {
         "updated_at": "2026-03-01T00:00:00Z",
-        "source": "example_default",
+        "source": "developer_seed",
         "confidence": 0.9
       }
     }

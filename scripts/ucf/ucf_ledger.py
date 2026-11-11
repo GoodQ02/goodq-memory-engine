@@ -15,21 +15,29 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 from steps.common.ucf_retirement import _read_scene_retirements, assert_scene_write_allowed
 
 
-def audio_occurrence_id(video_hash, scene_id, worker_name, payload):
-    """Identity within a retained recording projection, independent of display rounding."""
+def audio_occurrence_id(video_hash, scene_id, worker_name, payload, *, recording_required=False):
+    """Identity within an audio scene or recording projection, independent of display rounding."""
     if worker_name == 'audio_transcribe':
-        key = payload.get('utterance_id')
-        if not isinstance(key, str) or not key.strip():
-            raise ValueError('Recording transcript occurrence requires its native utterance ID')
+        if recording_required or 'utterance_id' in payload or payload.get('confidence_basis') == 'uncalibrated_model_score':
+            key = payload.get('utterance_id')
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError('Recording transcript occurrence requires its native utterance ID')
+            prefix = 'recording_occurrence_v1'
+        else:
+            key = payload.get('segment_index')
+            if type(key) is not int or key < 0:
+                raise ValueError('Recording transcript occurrence requires its native utterance ID')
+            prefix = 'segment_occurrence_v1'
     elif worker_name == 'speaker_merge':
         key = payload.get('turn_index')
         if type(key) is not int or key < 0:
             raise ValueError('Recording speaker occurrence requires its retained turn index')
+        prefix = 'recording_occurrence_v1'
     else:
         raise ValueError('Unsupported recording occurrence producer')
     if not scene_id:
         raise ValueError('Recording occurrence requires a source scene')
-    value = ['recording_occurrence_v1', video_hash, scene_id, worker_name, key]
+    value = [prefix, video_hash, scene_id, worker_name, key]
     return hashlib.sha256(json.dumps(value, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -279,7 +287,7 @@ class UCFLedgerClient:
             self.conn.execute(f'INSERT INTO context_frames_occurrences ({quoted}) SELECT {quoted} FROM context_frames')
             rows = self.conn.execute("SELECT frame_id,video_hash,source_artifact_id,worker_name,payload FROM context_frames WHERE model_tag='recording_audio_v1' AND worker_name IN ('audio_transcribe','speaker_merge')").fetchall()
             for frame, video, scene, worker, payload in rows:
-                occurrence = audio_occurrence_id(video, scene, worker, json.loads(payload))
+                occurrence = audio_occurrence_id(video, scene, worker, json.loads(payload), recording_required=True)
                 self.conn.execute('UPDATE context_frames_occurrences SET occurrence_id=? WHERE frame_id=?', (occurrence, frame))
             self.conn.execute('DROP TABLE context_frames')
             self.conn.execute('ALTER TABLE context_frames_occurrences RENAME TO context_frames')

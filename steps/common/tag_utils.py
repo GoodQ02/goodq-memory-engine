@@ -149,14 +149,31 @@ def canonicalize_taxonomy(item: dict[str, Any]) -> None:
     if isinstance(entities_value, Sequence) and not isinstance(entities_value, (str, bytes)):
         entities_sources.append(entities_value)
 
+    person_tag_exclusions: set[str] = {"santa", "santa claus", "saint nick", "st nick", "st. nick"}
     ner_entities = item.get('ner_entities')
     if isinstance(ner_entities, Sequence) and not isinstance(ner_entities, (str, bytes)):
         entity_labels = []
         for entity in ner_entities:
             if isinstance(entity, dict):
-                entity_labels.append(entity.get('name') or entity.get('text'))
+                e_name = entity.get('name') or entity.get('text')
+                entity_labels.append(e_name)
+                e_type = str(entity.get('type') or '').strip().upper()
+                if e_type in {'PERSON', 'PER', 'CHARACTER'}:
+                    norm_e = normalize_tag_token(e_name)
+                    if norm_e:
+                        person_tag_exclusions.add(norm_e.casefold())
         if entity_labels:
             entities_sources.append(entity_labels)
+
+    entity_details = item.get('entity_details')
+    if isinstance(entity_details, Sequence) and not isinstance(entity_details, (str, bytes)):
+        for detail in entity_details:
+            if isinstance(detail, dict):
+                d_type = str(detail.get('type') or '').strip().upper()
+                if d_type in {'PERSON', 'PER', 'CHARACTER'}:
+                    norm_d = normalize_tag_token(detail.get('label') or detail.get('name'))
+                    if norm_d:
+                        person_tag_exclusions.add(norm_d.casefold())
 
     objs = item.get('objects')
     if isinstance(objs, Sequence):
@@ -208,11 +225,15 @@ def canonicalize_taxonomy(item: dict[str, Any]) -> None:
                     else:
                         entities_sources.append(tokens)
 
-    canonical_tags = merge_tag_sources(
-        *tags_sources,
-        validator=is_valid_tag_token,
-        normalizer=normalize_tag_token,
-    )
+    canonical_tags = [
+        tag
+        for tag in merge_tag_sources(
+            *tags_sources,
+            validator=is_valid_tag_token,
+            normalizer=normalize_tag_token,
+        )
+        if tag.casefold() not in person_tag_exclusions
+    ]
     canonical_entities = merge_tag_sources(
         *entities_sources,
         validator=is_valid_entity_token,
@@ -228,3 +249,120 @@ def canonicalize_taxonomy(item: dict[str, Any]) -> None:
         item['vocabulary'] = vocab
     else:
         item.pop('vocabulary', None)
+
+
+def is_runaway_decoder_phrase(
+    phrase_text: str,
+    *,
+    vocab_words: Optional[set[str]] = None,
+    untimed_native: bool = False,
+) -> bool:
+    """Detect Whisper single-temperature repetition loops and hotword-list echoes."""
+    if not isinstance(phrase_text, str) or not phrase_text.strip():
+        return False
+    from collections import Counter
+
+    words = [w.strip("'").casefold() for w in re.findall(r"[A-Za-z0-9']+", phrase_text) if w.strip("'")]
+    if len(words) >= 8:
+        counts = Counter(words)
+        top1 = counts.most_common(1)[0][1]
+        if top1 >= 6 and (top1 / len(words)) >= 0.45:
+            return True
+        if len(words) >= 10:
+            top2 = sum(c for _, c in counts.most_common(2))
+            if top2 >= 8 and (top2 / len(words)) >= 0.70:
+                return True
+        if len(words) >= 16:
+            top4 = sum(c for _, c in counts.most_common(4))
+            if (top4 / len(words)) >= 0.80:
+                return True
+    if vocab_words and len(words) >= 4:
+        in_vocab = sum(1 for w in words if w in vocab_words)
+        if (in_vocab / len(words)) >= 0.85 and (untimed_native or "," in phrase_text or len(words) >= 6):
+            return True
+    return False
+
+
+def reliable_transcript_for_entities(item: dict[str, Any]) -> str:
+    """Return transcript text excluding rejected low-confidence segments and decoder loops."""
+    if not isinstance(item, dict):
+        return ""
+    raw_tx = item.get("transcript") or item.get("transcription") or ""
+    if isinstance(raw_tx, dict):
+        raw_tx = raw_tx.get("text") or ""
+    if not isinstance(raw_tx, str) or not raw_tx.strip():
+        return ""
+
+    tmeta = item.get("transcript_meta")
+    if not isinstance(tmeta, dict):
+        kept_lines = [
+            line.strip()
+            for line in raw_tx.splitlines()
+            if line.strip() and not is_runaway_decoder_phrase(line)
+        ]
+        return "\n".join(kept_lines)
+
+    rejected_indices: set[int] = set()
+    rejected_texts: set[str] = set()
+    tq = tmeta.get("transcription_quality")
+    if isinstance(tq, dict):
+        region_offset = 0
+        for rr in tq.get("region_results") or []:
+            if not isinstance(rr, dict):
+                continue
+            co = rr.get("confidence_override")
+            if isinstance(co, dict):
+                for seg in co.get("segments") or []:
+                    if not isinstance(seg, dict):
+                        continue
+                    if str(seg.get("decision") or "").lower() == "reject":
+                        seg_idx = seg.get("segment_index")
+                        if type(seg_idx) is int and seg_idx >= 0:
+                            rejected_indices.add(region_offset + seg_idx)
+                        seg_text = str(seg.get("text") or "").strip()
+                        if seg_text:
+                            rejected_texts.add(re.sub(r"\s+", " ", seg_text).casefold())
+            acc = rr.get("accepted_segment_count")
+            if type(acc) is int and acc > 0:
+                region_offset += acc
+
+    vocab_words: set[str] = set()
+    tctx = tmeta.get("transcription_context")
+    if isinstance(tctx, dict):
+        for w in tctx.get("words") or []:
+            for sub in re.findall(r"[A-Za-z0-9']+", str(w or "")):
+                cleaned = sub.strip("'").casefold()
+                if cleaned:
+                    vocab_words.add(cleaned)
+
+    phrase_obs = tmeta.get("phrase_observations")
+    if isinstance(phrase_obs, list) and phrase_obs:
+        kept_phrases: List[str] = []
+        for obs in phrase_obs:
+            if not isinstance(obs, dict):
+                continue
+            p_text = str(obs.get("text") or "").strip()
+            if not p_text:
+                continue
+            src_idx = obs.get("source_segment_index")
+            if type(src_idx) is int and src_idx in rejected_indices:
+                continue
+            if re.sub(r"\s+", " ", p_text).casefold() in rejected_texts:
+                continue
+            untimed_native = (
+                obs.get("reason") == "paired_native_timestamps_unavailable"
+                or obs.get("status") == "unavailable"
+            )
+            if is_runaway_decoder_phrase(p_text, vocab_words=vocab_words, untimed_native=untimed_native):
+                continue
+            kept_phrases.append(p_text)
+        return "\n".join(kept_phrases)
+
+    kept_lines = [
+        line.strip()
+        for line in raw_tx.splitlines()
+        if line.strip()
+        and re.sub(r"\s+", " ", line.strip()).casefold() not in rejected_texts
+        and not is_runaway_decoder_phrase(line, vocab_words=vocab_words)
+    ]
+    return "\n".join(kept_lines)

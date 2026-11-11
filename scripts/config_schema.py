@@ -3,7 +3,7 @@ GoodQ4All Canonical Configuration Schema
 Pydantic v2 validation layer for the unified config.yaml
 """
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 from typing import Optional, Dict, List, Any, Literal
 
 
@@ -21,6 +21,14 @@ class UserConfig(BaseModel):
     role_nursing: str
     nursing_philosophy: str
     role_personal: str
+    family_names: Optional[List[str]] = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_optional_family_names(self, handler):
+        data = handler(self)
+        if isinstance(data, dict) and data.get("family_names") is None:
+            data.pop("family_names", None)
+        return data
 
 
 class ModelConfig(BaseModel):
@@ -514,6 +522,7 @@ class IdentityMatchingConfig(BaseModel):
 class AudioTranscriptionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     vocabulary: Optional[List[str]] = Field(default=None, max_length=32)
+    vocabulary_mode: Literal["guarded_hotwords", "post_filter_only"] = "guarded_hotwords"
     # A single explicit temperature; never inherit Whisper's sampling schedule.
     temperature: float = Field(default=0.0, ge=0, le=1, allow_inf_nan=False, strict=True)
 

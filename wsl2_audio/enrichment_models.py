@@ -30,7 +30,9 @@ def _runs(mask):
 
 
 class RecordingObservers:
-    """Bounded CPU candidate; existing runner owns process resource admission."""
+    """Bounded CPU/CUDA candidate; existing runner owns process resource admission."""
+
+    BOUNDED_POLICY_LIMITS = {'bounded_recording_v1': 3600, 'bounded_recording_v2': 28800}
 
     def __init__(self, profile, evidence, recording):
         self.profile, self.evidence, self.recording = profile, evidence, recording
@@ -41,16 +43,24 @@ class RecordingObservers:
         policy = self.settings.get('recording_policy')
         maximum = 300
         if policy is not None:
-            if (not isinstance(policy, dict) or set(policy) != {'id', 'max_duration_seconds'}
-                    or policy['id'] != 'bounded_recording_v1'
+            limit = self.BOUNDED_POLICY_LIMITS.get(policy.get('id')) if isinstance(policy, dict) else None
+            if (limit is None or set(policy) != {'id', 'max_duration_seconds'}
                     or type(policy['max_duration_seconds']) is not int
-                    or not 300 < policy['max_duration_seconds'] <= 3600):
+                    or not 300 < policy['max_duration_seconds'] <= limit):
                 raise ValueError('Invalid bounded recording policy')
             maximum = policy['max_duration_seconds']
-        if self.settings['device'] != 'cpu' or not 0 < self.duration <= maximum:
+        device = self.settings.get('device')
+        if device not in ('cpu', 'cuda'):
+            raise ValueError('Unsupported enrichment device; explicit cpu or cuda required with no automatic device fallback')
+        if device == 'cuda':
+            import torch
+            if not torch.cuda.is_available():
+                raise ValueError('CUDA enrichment profile requested but CUDA is unavailable; no automatic device fallback')
+        if not 0 < self.duration <= maximum:
             if policy is not None:
-                raise ValueError('Recording exceeds the explicit CPU recording budget')
-            raise ValueError('Initial enrichment candidate requires explicit CPU and at most 300 seconds')
+                raise ValueError(f'Recording exceeds the explicit {device.upper()} recording budget')
+            raise ValueError(f'Initial enrichment candidate requires explicit {device.upper()} and at most 300 seconds')
+        self.device = device
         self.full = SampleSpan(0, self.count)
         self.long_recording = self.duration > 300
         if self.long_recording:
@@ -81,8 +91,9 @@ class RecordingObservers:
         if not spec:
             raise ValueError('No pinned model configured for '+name)
         if name == 'acoustic_events':
-            from wsl2_audio.frame_events import ANALYSIS_POLICY, METHOD
-            if spec.get('backend') != METHOD or spec.get('analysis_policy') != ANALYSIS_POLICY:
+            from wsl2_audio.frame_events import SUPPORTED_POLICIES
+            expected_policy = SUPPORTED_POLICIES.get(spec.get('backend'))
+            if expected_policy is None or spec.get('analysis_policy') != expected_policy:
                 raise ValueError('Frame-event analysis policy differs from the pinned candidate configuration')
         if name == 'phrase_activity':
             if _sha_file(Path(spec['path'])) != spec['sha256']:
@@ -145,14 +156,21 @@ class RecordingObservers:
                   'acoustic_events': ('events', 'speech_intervals'), 'phrase_activity': ('regions',)}[name]
         result.update({field: [] for field in fields})
         if name == 'acoustic_events':
-            from wsl2_audio.frame_events import METHOD, THRESHOLD, ANALYSIS_POLICY
-            result.update(method=METHOD, threshold=THRESHOLD, analysis_policy=dict(ANALYSIS_POLICY))
+            from wsl2_audio.frame_events import ANALYSIS_POLICY, METHOD, SUPPORTED_POLICIES, THRESHOLD
+            backend = spec.get('backend') if spec else METHOD
+            policy_value = SUPPORTED_POLICIES.get(backend, ANALYSIS_POLICY)
+            result.update(method=backend, threshold=THRESHOLD, analysis_policy=dict(policy_value))
+        device_name = getattr(self, 'device', 'cpu')
         model = extractor = None
         try:
             if not self.silent:
                 if name == 'speaker_activity':
                     from pyannote.audio import Pipeline
-                    model = Pipeline.from_pretrained(spec['path']).to(torch.device('cpu'))
+                    model = Pipeline.from_pretrained(spec['path']).to(torch.device(device_name))
+                    if getattr(self, 'long_recording', False) and self.duration > 3600:
+                        for batch_attr in ('segmentation_batch_size', 'embedding_batch_size'):
+                            if isinstance(getattr(model, batch_attr, None), int) and getattr(model, batch_attr) > 16:
+                                setattr(model, batch_attr, 16)
                 elif name == 'overlap':
                     from transformers import AutoModelForAudioFrameClassification, AutoProcessor
                     model, info = AutoModelForAudioFrameClassification.from_pretrained(spec['path'], local_files_only=True,
@@ -160,12 +178,13 @@ class RecordingObservers:
                     self._strict(info)
                     if model.config.model_type != 'nemotron3_diarization':
                         raise ValueError('Wrong additional activity architecture')
+                    model = model.to(torch.device(device_name))
                     model.eval()
                     extractor = AutoProcessor.from_pretrained(spec['path'], local_files_only=True, trust_remote_code=False)
                 elif name == 'acoustic_events':
                     import onnxruntime as ort
-                    from wsl2_audio.frame_events import METHOD
-                    if spec.get('backend') != METHOD:
+                    from wsl2_audio.frame_events import SUPPORTED_POLICIES
+                    if spec.get('backend') not in SUPPORTED_POLICIES or spec.get('analysis_policy') != SUPPORTED_POLICIES[spec['backend']]:
                         raise ValueError('Unsupported recording acoustic backend; no automatic fallback')
                     options = ort.SessionOptions()
                     options.intra_op_num_threads, options.inter_op_num_threads = 4, 1
@@ -202,6 +221,8 @@ class RecordingObservers:
             return result
         finally:
             del model, extractor
+            if device_name == 'cuda' and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     @staticmethod
     def _strict(info):
@@ -280,6 +301,7 @@ class RecordingObservers:
                     local = object.__new__(RecordingObservers)
                     local.rate, local.count = self.rate, context.end-context.start
                     local.duration, local.full = local.count/self.rate, SampleSpan(0, local.count)
+                    local.device = getattr(self, 'device', 'cpu')
                     local._audio = lambda ch: self._audio(ch, context)
                     row = getattr(local, '_'+name)(channel, model, extractor, {})
                     _atomic_json({'identity': identity, 'observation': row,
@@ -317,8 +339,9 @@ class RecordingObservers:
 
     def _overlap(self, channel, model, extractor, prior):
         import torch
+        device_name = getattr(self, 'device', 'cpu')
         audio = self._audio(channel)
-        inputs = extractor(audio, sampling_rate=16000).to('cpu', dtype=torch.float32)
+        inputs = extractor(audio, sampling_rate=16000).to(device_name, dtype=torch.float32)
         with torch.inference_mode():
             logits = model(**inputs).logits
         if logits.ndim != 3 or logits.shape[0] != 1 or logits.shape[-1] < 2 or not torch.isfinite(logits).all():
@@ -366,17 +389,22 @@ class RecordingObservers:
 
     def _acoustic_events(self, channel, model, extractor, prior):
         from wsl2_audio.frame_events import observe_frames
+        spec = self.spec('acoustic_events') if hasattr(self, 'settings') else None
         reader = (lambda span: read_channel(self.recording, span, channel)) if getattr(self, 'long_recording', False) else (
             lambda span: self.signal[channel][span.start:span.end])
         return observe_frames(model, extractor, reader,
-                              self.rate, self.count, channel, self.evidence['source']['sha256'])
+                              self.rate, self.count, channel, self.evidence['source']['sha256'],
+                              policy=spec.get('analysis_policy') if spec else None)
 
     def vocal_delivery(self, utterances):
         import torch
         from transformers import Wav2Vec2FeatureExtractor
         from wsl2_audio.process_audio import _load_trained_wav2vec
+        device_name = getattr(self, 'device', 'cpu')
         spec = self.spec('vocal_delivery')
         model, loading = _load_trained_wav2vec(spec['path'], cache_dir=None, is_offline=True, emotion=True)
+        if device_name != 'cpu' and callable(getattr(model, 'to', None)):
+            model = model.to(torch.device(device_name))
         extractor = Wav2Vec2FeatureExtractor.from_pretrained(spec['path'], local_files_only=True)
         results, errors = [], []
         try:
@@ -384,6 +412,9 @@ class RecordingObservers:
                 try:
                     audio = self._audio(u['channel'], SampleSpan(**u['span']))
                     inputs = extractor(audio, sampling_rate=16000, return_tensors='pt', padding=True)
+                    if device_name != 'cpu':
+                        inputs = (inputs.to(device_name) if callable(getattr(inputs, 'to', None)) else
+                                  {k: v.to(device_name) if hasattr(v, 'to') else v for k, v in inputs.items()})
                     with torch.inference_mode():
                         logits = model(**inputs).logits[0]
                     if not torch.isfinite(logits).all():
@@ -403,3 +434,5 @@ class RecordingObservers:
             return {"results": results, "errors": errors}
         finally:
             del model, extractor
+            if device_name == 'cuda' and torch.cuda.is_available():
+                torch.cuda.empty_cache()

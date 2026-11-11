@@ -1085,6 +1085,12 @@ class WatchdogProcessor:
                         })["transcription"]
                         if verified.get("transcript_outcome") == "no_speech":
                             return
+                    if (status == "skipped" and not has_text
+                            and isinstance(meta.get("prompt_echo_filter"), dict)
+                            and int(meta["prompt_echo_filter"].get("filtered_segment_count") or 0) > 0
+                            and outcome.get("reason") in {"speech_detected_without_words", "vocabulary_prompt_echo_filtered"}
+                            and result.get("transcript_outcome") in {"no_intelligible_speech", "low_confidence"}):
+                        return
                 elif "wsl_capability_outcomes" not in result and has_text:
                     # Older unified bridges emitted text without component receipts.
                     return

@@ -220,6 +220,37 @@ def test_actual_api_returns_read_only_matches_and_bound_media(comparison, monkey
     assert client.post("/api/identity/matches/" + result["id"]).status_code in (403, 405)
 
 
+def test_reference_loader_excludes_retired_scenes_from_ucf_ledger(reference_source):
+    import hashlib
+    epoch = Path(reference_source["epoch_root"])
+    ucf_db = epoch / "ucf/ucf_ledger.db"
+    with sqlite3.connect(ucf_db) as conn:
+        vh, t_start, t_end, sid = conn.execute(
+            "SELECT video_hash, t_start, t_end, source_artifact_id FROM context_frames LIMIT 1"
+        ).fetchone()
+        frame_ids = [r[0] for r in conn.execute("SELECT frame_id FROM context_frames WHERE source_artifact_id=?", (sid,))]
+        expected_sid = hashlib.sha256(f"scene{vh}|{t_start:.3f}|{t_end:.3f}|".encode()).hexdigest()
+        aliases = sorted({sid, expected_sid})
+        evidence = {
+            "kind": "scene_retirement",
+            "version": 1,
+            "video_hash": vh,
+            "epoch_id": epoch.name,
+            "scene_id": expected_sid,
+            "aliases": aliases,
+            "frame_ids": frame_ids,
+            "start": float(t_start),
+            "end": float(t_end),
+            "vectors": [],
+        }
+        conn.execute(
+            "INSERT INTO ucf_status_transitions(frame_ids,video_hash,epoch_id,old_status,new_status,tool_name,reason,scope,evidence,transitioned_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (json.dumps(frame_ids), vh, epoch.name, "promoted", "retired", "retire_scene", "test", f"scene_retirement:{expected_sid}", json.dumps(evidence), "2026-11-10T00:00:00Z"),
+        )
+    catalog = matching.load_reference_catalog({"reference_sources": [reference_source]})
+    assert catalog["faces"] == []
+
+
 def test_canonical_ingestion_freezes_then_records_proposals():
     # The real end-to-end witness exercises this same production caller. This
     # guard prevents a future refactor from leaving the feature as an ad hoc CLI.

@@ -8,10 +8,15 @@ from wsl2_audio.source_clock import SampleSpan
 
 
 METHOD = 'efficientsed_frames_v1'
+METHOD_V2 = 'efficientsed_frames_v2'
 THRESHOLD = .5
 ANALYSIS_POLICY = {'id': METHOD, 'threshold': THRESHOLD, 'context_seconds': 5,
                    'hop_seconds': 2.5, 'model_input_seconds': 10, 'frame_rate_hz': 25,
                    'smoothing': 'none'}
+ANALYSIS_POLICY_V2 = {'id': METHOD_V2, 'threshold': THRESHOLD, 'context_seconds': 5,
+                      'hop_seconds': 2.5, 'model_input_seconds': 10, 'frame_rate_hz': 25,
+                      'smoothing': 'none', 'window_aggregation': 'all_covering_windows'}
+SUPPORTED_POLICIES = {METHOD: ANALYSIS_POLICY, METHOD_V2: ANALYSIS_POLICY_V2}
 EVENT_LABELS = dict(NON_SPEECH_LABELS, **{'Male singing': 'singing', 'Female singing': 'singing',
                                        'Cheering': 'cheering'})
 SPEECH_LABELS = ('Speech', 'Male speech, man speaking', 'Female speech, woman speaking',
@@ -55,19 +60,48 @@ def _runs(values, frames):
             for a, b in np.flatnonzero(np.diff(np.r_[False, values, False])).reshape(-1, 2)]
 
 
-def observe_frames(session, labels, audio_for_span, rate, count, channel, source_hash):
+def _consensus_spans(assessed_event_windows, raw_label):
+    points = set()
+    per_window = []
+    for w_span, w_events in assessed_event_windows:
+        positives = [r['span'] for r in w_events if r['raw_label'] == raw_label]
+        points.update((w_span['start'], w_span['end']))
+        for pos in positives:
+            points.update((pos['start'], pos['end']))
+        per_window.append((w_span, positives))
+    ordered = sorted(points)
+    accepted = []
+    for a, b in zip(ordered, ordered[1:]):
+        covering = [positives for w_span, positives in per_window
+                    if w_span['start'] <= a and b <= w_span['end']]
+        if covering and all(any(p['start'] <= a and b <= p['end'] for p in positives)
+                            for positives in covering):
+            accepted.append({'start': a, 'end': b})
+    return _union(accepted)
+
+
+def observe_frames(session, labels, audio_for_span, rate, count, channel, source_hash, *, policy=None):
     """Read original source samples, independently of ASR and phrase boundaries."""
     import numpy as np
     from wsl2_audio.model_cache import redact_sensitive_info
     from wsl2_audio.recognition import _model_audio
 
+    if policy is None:
+        active_policy = dict(ANALYSIS_POLICY)
+    else:
+        method_id = policy.get('id') if isinstance(policy, dict) else None
+        expected_policy = SUPPORTED_POLICIES.get(method_id)
+        if expected_policy is None or policy != expected_policy:
+            raise ValueError('Unsupported frame-event analysis policy')
+        active_policy = dict(expected_policy)
+    method = active_policy['id']
     if len(labels) != 447 or len(set(labels)) != 447 or not all(isinstance(s, str) for s in labels):
         raise ValueError('Invalid frame-event class map')
     speech_indices = [i for i, label in enumerate(labels) if label in SPEECH_LABELS]
     if not speech_indices:
         raise ValueError('Frame-event model has no ordinary-speech classes')
     retained = [i for i, label in enumerate(labels) if label in EVENT_LABELS or label in SPEECH_LABELS]
-    observations, assessed, failures, positive, raw_events = [], [], [], [], []
+    observations, assessed, failures, positive, raw_events, assessed_event_windows = [], [], [], [], [], []
     for span in windows(count, rate):
         row = {'span': vars(span), 'channel': channel}
         window_positive, window_events = [], []
@@ -109,6 +143,7 @@ def observe_frames(session, labels, audio_for_span, rate, count, channel, source
                            padded_input_sha256=hashlib.sha256(padded.tobytes()).hexdigest(),
                            frame_scores=scores[:, retained].tolist())
             assessed.append(vars(span))
+            assessed_event_windows.append((vars(span), window_events))
             positive.extend(window_positive)
             raw_events.extend(window_events)
         except Exception as exc:
@@ -117,13 +152,16 @@ def observe_frames(session, labels, audio_for_span, rate, count, channel, source
         observations.append(row)
     events = []
     for label in sorted({r['raw_label'] for r in raw_events}):
-        for span in _union([r['span'] for r in raw_events if r['raw_label'] == label]):
-            events.append({'id': hashlib.sha256(_json_bytes([source_hash, channel, METHOD, label, span])).hexdigest(),
+        spans = (_consensus_spans(assessed_event_windows, label)
+                 if active_policy.get('window_aggregation') == 'all_covering_windows'
+                 else _union([r['span'] for r in raw_events if r['raw_label'] == label]))
+        for span in spans:
+            events.append({'id': hashlib.sha256(_json_bytes([source_hash, channel, method, label, span])).hexdigest(),
                 'span': span, 'channel': channel, 'label': EVENT_LABELS[label], 'raw_label': label,
                 'status': 'observed', 'scope': 'recording_frames', 'boundary_precision': '40ms_model_frame',
                 'review_status': 'unreviewed'})
-    return {'status': 'partial' if failures else 'ok', 'method': METHOD, 'threshold': THRESHOLD,
-            'analysis_policy': dict(ANALYSIS_POLICY),
+    return {'status': 'partial' if failures else 'ok', 'method': method, 'threshold': THRESHOLD,
+            'analysis_policy': active_policy,
             'frame_rate_hz': 25, 'score_kind': 'uncalibrated_audioset_sigmoid',
             'assessed_spans': _union(assessed), 'windows': observations, 'events': events,
             'speech_intervals': [{'span': span, 'channel': channel} for span in _union(positive)],

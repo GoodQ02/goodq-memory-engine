@@ -239,7 +239,7 @@ def test_tagger_governed_loading(tmp_path, monkeypatch):
     
     assert "Alice" in res["entities"]
     assert res["tagger_meta"]["status"] == "ok"
-    assert res["ner_entities"][0]["type"] == "PER"
+    assert res["ner_entities"][0]["type"] == "PERSON"
     assert len(pipeline_calls) == 1
     assert pipeline_calls[0] == ("token-classification", model, tokenizer, "simple")
     assert tokenizer_calls == [(str(snapshots_dir.absolute()), True)]

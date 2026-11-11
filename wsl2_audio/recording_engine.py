@@ -383,7 +383,9 @@ def main(argv=None):
         key = result['source'].get('decode_checkpoint_key')
         recording = (_load_checkpoint(Path(args[2])/'decode'/('decode-'+key)/'recording.json',
                      key, result['source']['sha256']) if key else None)
-        projections = publish_scene_audio(result, request['scenes'], recording, request['processing_root'])
+        enrichment_device = (profile.get('enrichment') or {}).get('device') or profile.get('device') or 'cpu'
+        projections = publish_scene_audio(result, request['scenes'], recording, request['processing_root'],
+                                          device=enrichment_device)
         _atomic_json({ident: legacy_audio(value) for ident, value in projections.items()},
                      Path(args[2])/'scene_audio.json')
     print(json.dumps({'status': result['status'], 'utterances': len(result['utterances']),

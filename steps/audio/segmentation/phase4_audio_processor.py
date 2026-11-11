@@ -39,17 +39,37 @@ class Phase4AudioProcessor:
     and leverage existing, validated audio pipeline infrastructure.
     """
     
-    def __init__(self, cfg: Dict[str, Any]):
+    def __init__(self, cfg: Dict[str, Any], *, recording_audio: Optional[Dict[str, Any]] = None):
         """
         Initialize processor with configuration
 
         Args:
             cfg: Full GoodQ config dict
+            recording_audio: Optional prepared whole-recording handle when recording_engine is enabled
         """
         self.cfg = cfg
-        from steps.audio.recording_ingestion import selected
+        self.recording_audio = None
+        self.recording_evidence = None
+        from steps.audio.recording_ingestion import load as load_recording_handle, selected
         if selected(cfg):
-            raise ValueError('Recording engine does not support Phase 4 chunk recognition; use canonical scene projections')
+            if recording_audio is None:
+                raise ValueError(
+                    'Recording engine does not support Phase 4 chunk recognition; provide a prepared recording_audio handle'
+                )
+            load_recording_handle(recording_audio)
+            evidence_path = Path(recording_audio['path']).parent / 'evidence.json'
+            if not evidence_path.is_file():
+                raise ValueError('Recording handle is missing recording-level evidence.json for Phase 4 projection')
+            from wsl2_audio.evidence_contract import validate_evidence
+            evidence = validate_evidence(json.loads(evidence_path.read_text(encoding='utf-8')))
+            if (
+                evidence['source']['sha256'] != recording_audio['source_sha256']
+                or evidence['provenance'].get('run_id') != recording_audio['run_id']
+                or evidence['provenance'].get('epoch_id') != recording_audio['epoch_id']
+            ):
+                raise ValueError('Recording evidence.json binding mismatch for Phase 4 projection')
+            self.recording_audio = dict(recording_audio)
+            self.recording_evidence = evidence
         self.audio_cfg = cfg.get("audio", {})
         self.transcribe_cfg = self.audio_cfg.get("transcribe", {})
         self.diarize_cfg = self.audio_cfg.get("diarize", {})
@@ -92,7 +112,67 @@ class Phase4AudioProcessor:
         if not segments:
             logger.warning("[PHASE 4] No segments to process")
             return segmentation_manifest
-        
+
+        if self.recording_evidence is not None:
+            from wsl2_audio.scene_projection import legacy_audio, project_audio
+
+            scene_specs = [
+                {'scene_id': str(seg['id']), 'start': float(seg['start']), 'end': float(seg['end'])}
+                for seg in segments
+                if isinstance(seg, dict) and float(seg.get('end', 0.0)) > float(seg.get('start', 0.0))
+            ]
+            projections = project_audio(self.recording_evidence, scene_specs) if scene_specs else {}
+            processed_segments = []
+            for segment in segments:
+                seg_id = str(segment['id'])
+                enhanced = segment.copy()
+                proj = projections.get(seg_id)
+                if proj is not None:
+                    audio = legacy_audio(proj)
+                    seg_start = float(segment['start'])
+                    transcript_segments = [
+                        {
+                            **row,
+                            'start': seg_start + float(row['start']),
+                            'end': seg_start + float(row['end']),
+                            'words': [],
+                        }
+                        for row in audio['segments']
+                    ]
+                    diarization = [
+                        {
+                            'speaker': row['speaker'],
+                            'start': seg_start + float(row['start']),
+                            'end': seg_start + float(row['end']),
+                            'duration': max(0.0, float(row['end']) - float(row['start'])),
+                            'identity_claim': False,
+                        }
+                        for row in audio['speaker_segments']
+                    ]
+                    enhanced.update(
+                        audio_evidence=proj,
+                        transcript=audio['transcript'],
+                        transcript_segments=transcript_segments,
+                        language=None,
+                        diarization=diarization,
+                        speaker_count=audio['speaker_count'],
+                        speakers=self._extract_speaker_stats(diarization),
+                        merged_transcript=self._merge_transcript_speakers(transcript_segments, diarization),
+                        audio_backend_effective='recording',
+                    )
+                processed_segments.append(enhanced)
+            enhanced_manifest = segmentation_manifest.copy()
+            enhanced_manifest['segments'] = processed_segments
+            enhanced_manifest['chunks'] = processed_segments
+            enhanced_manifest['phase4_complete'] = True
+            enhanced_manifest['processed_segment_count'] = len(processed_segments)
+            enhanced_manifest['audio_backend_effective'] = 'recording'
+            manifest_path = output_dir / "metadata" / "segmentation_enhanced.json"
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(manifest_path, 'w', encoding='utf-8') as f:
+                json.dump(enhanced_manifest, f, indent=2)
+            return enhanced_manifest
+
         logger.info(f"[PHASE 4] Processing {len(segments)} audio segments")
         logger.info(f"[PHASE 4] Using {self.max_workers} parallel workers")
         
@@ -299,7 +379,9 @@ def process_segmented_audio(
     segmentation_manifest_path: str,
     video_path: str,
     output_dir: str,
-    cfg: Dict[str, Any]
+    cfg: Dict[str, Any],
+    *,
+    recording_audio: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Main entry point for Phase 4 processing
@@ -309,6 +391,7 @@ def process_segmented_audio(
         video_path: Original video path
         output_dir: Output directory for results
         cfg: Full GoodQ configuration
+        recording_audio: Optional prepared whole-recording handle
         
     Returns:
         Enhanced segmentation manifest with audio processing
@@ -320,7 +403,7 @@ def process_segmented_audio(
         manifest = json.load(f)
     
     # Initialize processor
-    processor = Phase4AudioProcessor(cfg)
+    processor = Phase4AudioProcessor(cfg, recording_audio=recording_audio)
     
     # Process all segments
     enhanced = processor.process_segments(

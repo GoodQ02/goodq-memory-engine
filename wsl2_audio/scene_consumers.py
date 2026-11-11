@@ -95,24 +95,40 @@ def validate_review(review, source, *, root=None):
 
 
 class _Encoder:
-    def __init__(self, scratch):
-        self.scratch, self.model = scratch, None
+    def __init__(self, scratch, device='cpu'):
+        if device not in ('cpu', 'cuda'):
+            raise ValueError('Unsupported voice signature device; no automatic device fallback')
+        if device == 'cuda':
+            import torch
+            if not torch.cuda.is_available():
+                raise ValueError('CUDA voice signature requested but CUDA is unavailable; no automatic device fallback')
+        self.scratch, self.device, self.model = scratch, device, None
 
     def __call__(self, pieces, rate):
         import numpy as np
         import torch
         import torchaudio
         if self.model is None:
-            self.model = speaker_signature.load_encoder('cpu', str(self.scratch))
+            self.model = speaker_signature.load_encoder(self.device, str(self.scratch))
         tensors = [torch.from_numpy(np.asarray(piece, dtype=np.float32)).unsqueeze(0) for piece in pieces]
         if rate != 16000:
             tensors = [torchaudio.functional.resample(t, rate, 16000) for t in tensors]
+        batch = torch.cat(tensors, dim=-1)
+        if self.device != 'cpu':
+            batch = batch.to(self.device)
         with torch.inference_mode():
-            values = self.model.encode_batch(torch.cat(tensors, dim=-1)).flatten().detach().cpu().numpy()
+            values = self.model.encode_batch(batch).flatten().detach().cpu().numpy()
         norm = float(np.linalg.norm(values))
         if values.size != speaker_signature.DIMENSION or not np.isfinite(values).all() or norm <= 1e-8:
             raise ValueError('Invalid ECAPA speaker embedding')
         return (values / norm).astype(np.float32).tolist()
+
+    def close(self):
+        self.model = None
+        if self.device == 'cuda':
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def validate_signature(signature):
@@ -136,7 +152,7 @@ def validate_signature(signature):
     return signature
 
 
-def publish_scene_audio(evidence, scenes, recording, processing_root, *, embed=None):
+def publish_scene_audio(evidence, scenes, recording, processing_root, *, embed=None, device='cpu'):
     """Retain full-span playback and only owner-scene qualified voice signatures."""
     projections = project_audio(evidence, scenes)
     root = Path(processing_root).resolve()
@@ -174,42 +190,46 @@ def publish_scene_audio(evidence, scenes, recording, processing_root, *, embed=N
         validate_review(review, source, root=root)
         reviews[unit['id']] = review
     signatures, failures = {}, []
-    encoder = embed or _Encoder(root / relative_root / 'encoder')
+    encoder = embed or _Encoder(root / relative_root / 'encoder', device=device)
     diagnostics = {}
-    for group in select_voice_groups(evidence, owners, diagnostics=diagnostics):
-        contribution = _digest([source, speaker_signature.metadata(), group])
-        path = root / relative_root / (contribution + '.json')
-        try:
-            if path.exists():
-                signature = json.loads(path.read_text(encoding='utf-8'))
-                if _digest({k: v for k, v in signature.items() if k != 'content_sha256'}) != signature.get('content_sha256'):
-                    raise ValueError('Voice contribution cache changed')
-            else:
-                pieces = [read_channel(recording, SampleSpan(**span), group['channel']) for span in group['spans']]
-                vector = encoder(pieces, source['sample_rate'])
-                if (len(vector) != speaker_signature.DIMENSION or any(not math.isfinite(v) for v in vector)
-                        or not math.isclose(sum(v*v for v in vector), 1., rel_tol=1e-4, abs_tol=1e-4)):
-                    raise ValueError('Invalid normalized ECAPA contribution')
-                signature = {**speaker_signature.metadata(), 'embedding_dim': len(vector), 'embedding': vector,
-                    'speaker': first['recording_id'] + ':' + group['speaker'],
-                    'contribution_id': contribution, 'owner_scene_id': group['scene_id'],
-                    'voiced_seconds': group['voiced_samples']/source['sample_rate'],
-                    'segment_count': len(group['spans']), 'utterance_ids': group['utterance_ids'],
-                    'source': deepcopy(source), 'review_evidence': [reviews[u] for u in group['utterance_ids']],
-                    # Never reinterpret full recording spans as old scene seconds.
-                    'selected_segments': [], 'admission_policy': 'recording_speech_v1',
-                    'identity_claim': False}
-                signature['content_sha256'] = _digest(signature)
-                _write_once(path, _json_bytes(signature))
-            validate_signature(signature)
-            if signature['contribution_id'] != contribution or signature['owner_scene_id'] != group['scene_id']:
-                raise ValueError('Voice contribution owner mismatch')
-            for review in signature['review_evidence']:
-                validate_review(review, source, root=root)
-            signatures.setdefault(group['scene_id'], []).append(signature)
-        except (ImportError, OSError, RuntimeError, ValueError) as exc:
-            failures.append({'scene_id': group['scene_id'], 'contribution_id': contribution,
-                             'status': 'error', 'reason': type(exc).__name__ + ': ' + str(exc)})
+    try:
+        for group in select_voice_groups(evidence, owners, diagnostics=diagnostics):
+            contribution = _digest([source, speaker_signature.metadata(), group])
+            path = root / relative_root / (contribution + '.json')
+            try:
+                if path.exists():
+                    signature = json.loads(path.read_text(encoding='utf-8'))
+                    if _digest({k: v for k, v in signature.items() if k != 'content_sha256'}) != signature.get('content_sha256'):
+                        raise ValueError('Voice contribution cache changed')
+                else:
+                    pieces = [read_channel(recording, SampleSpan(**span), group['channel']) for span in group['spans']]
+                    vector = encoder(pieces, source['sample_rate'])
+                    if (len(vector) != speaker_signature.DIMENSION or any(not math.isfinite(v) for v in vector)
+                            or not math.isclose(sum(v*v for v in vector), 1., rel_tol=1e-4, abs_tol=1e-4)):
+                        raise ValueError('Invalid normalized ECAPA contribution')
+                    signature = {**speaker_signature.metadata(), 'embedding_dim': len(vector), 'embedding': vector,
+                        'speaker': first['recording_id'] + ':' + group['speaker'],
+                        'contribution_id': contribution, 'owner_scene_id': group['scene_id'],
+                        'voiced_seconds': group['voiced_samples']/source['sample_rate'],
+                        'segment_count': len(group['spans']), 'utterance_ids': group['utterance_ids'],
+                        'source': deepcopy(source), 'review_evidence': [reviews[u] for u in group['utterance_ids']],
+                        # Never reinterpret full recording spans as old scene seconds.
+                        'selected_segments': [], 'admission_policy': 'recording_speech_v1',
+                        'identity_claim': False}
+                    signature['content_sha256'] = _digest(signature)
+                    _write_once(path, _json_bytes(signature))
+                validate_signature(signature)
+                if signature['contribution_id'] != contribution or signature['owner_scene_id'] != group['scene_id']:
+                    raise ValueError('Voice contribution owner mismatch')
+                for review in signature['review_evidence']:
+                    validate_review(review, source, root=root)
+                signatures.setdefault(group['scene_id'], []).append(signature)
+            except (ImportError, OSError, RuntimeError, ValueError) as exc:
+                failures.append({'scene_id': group['scene_id'], 'contribution_id': contribution,
+                                 'status': 'error', 'reason': type(exc).__name__ + ': ' + str(exc)})
+    finally:
+        if embed is None and callable(getattr(encoder, 'close', None)):
+            encoder.close()
     for scene_id, projection in projections.items():
         projection['voice_selection'] = {**diagnostics,
             'units': [row for row in diagnostics['units'] if row['owner_scene_id'] == scene_id],

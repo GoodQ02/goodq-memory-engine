@@ -70,6 +70,46 @@ class ExtractedEntity:
         return asdict(self)
 
 
+_ROSTER_NAME_CACHE: Dict[str, tuple[int, frozenset[str]]] = {}
+
+
+def _load_roster_names_cached(raw_path: Any) -> Set[str]:
+    if not isinstance(raw_path, (str, Path)) or not str(raw_path).strip():
+        return set()
+    try:
+        candidate = Path(str(raw_path).strip())
+        if candidate.suffix.lower() not in {".yaml", ".yml"}:
+            candidate = candidate / "family_roster.yaml"
+        if not candidate.is_file():
+            return set()
+        resolved = str(candidate.resolve())
+        mtime_ns = candidate.stat().st_mtime_ns
+        cached = _ROSTER_NAME_CACHE.get(resolved)
+        if cached is not None and cached[0] == mtime_ns:
+            return set(cached[1])
+        import yaml
+        payload = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+        names: Set[str] = set()
+        identities = payload.get("identities") if isinstance(payload, dict) else None
+        if isinstance(identities, list):
+            for entry in identities:
+                if not isinstance(entry, dict):
+                    continue
+                display = str(entry.get("display_name") or "").strip().lower()
+                if display:
+                    names.add(display)
+                aliases = entry.get("aliases")
+                if isinstance(aliases, (list, tuple, set)):
+                    for alias in aliases:
+                        alias_val = str(alias or "").strip().lower()
+                        if alias_val:
+                            names.add(alias_val)
+        _ROSTER_NAME_CACHE[resolved] = (mtime_ns, frozenset(names))
+        return names
+    except Exception:
+        return set()
+
+
 class EntityExtractor:
     """
     Extracts entities from processed scene data across all modalities
@@ -99,6 +139,12 @@ class EntityExtractor:
             'you', 'i', 'me', 'my', 'your', 'he', 'she', 'it', 'they',
             'emotion', 'sentiment', 'man', 'woman', 'person',
             'hose', 'mathias',  # Add specific false positives as found
+            'kiss', 'sit', 'happy', 'gaming', 'yay', 'whoa', 'wow',
+        }
+        self._non_person_single_tokens = {
+            'lion', 'tiger', 'bear', 'puppy', 'kitty', 'bunny',
+            'mayor', 'doctor', 'nurse', 'teacher', 'coach',
+            'baby', 'child', 'kids', 'boys', 'girls', 'lady',
         }
         self._contraction_parts = {"'m", "'re", "'s", "'ll", "'ve", "'d", "n't"}
         self._typed_entity_type_map = {
@@ -128,14 +174,31 @@ class EntityExtractor:
             "grandpa", "grandfather",
             "aunt", "uncle",
         }
-        configured = self.config.get("family_names")
-        if configured is None and isinstance(self.config.get("user"), dict):
-            configured = self.config["user"].get("family_names")
-        if isinstance(configured, (list, tuple, set)):
-            for item in configured:
-                val = str(item or "").strip().lower()
-                if val:
-                    defaults.add(val)
+        candidate_lists: List[Any] = [self.config.get("family_names")]
+        user_cfg = self.config.get("user")
+        if isinstance(user_cfg, dict):
+            candidate_lists.append(user_cfg.get("family_names"))
+        audio_cfg = self.config.get("audio")
+        if isinstance(audio_cfg, dict):
+            transcribe_cfg = audio_cfg.get("transcribe")
+            if isinstance(transcribe_cfg, dict):
+                candidate_lists.append(transcribe_cfg.get("vocabulary"))
+        for configured in candidate_lists:
+            if isinstance(configured, (list, tuple, set)):
+                for item in configured:
+                    val = str(item or "").strip().lower()
+                    if val:
+                        defaults.add(val)
+        id_search = self.config.get("identity_search")
+        if isinstance(id_search, dict):
+            defaults.update(_load_roster_names_cached(id_search.get("roster_path")))
+        id_matching = self.config.get("identity_matching")
+        if isinstance(id_matching, dict):
+            ref_sources = id_matching.get("reference_sources")
+            if isinstance(ref_sources, list):
+                for source in ref_sources:
+                    if isinstance(source, dict):
+                        defaults.update(_load_roster_names_cached(source.get("identity_path")))
         return defaults
     
     def extract_from_scene(
@@ -270,9 +333,10 @@ class EntityExtractor:
         entities = []
         
         # From Whisper transcription - check both 'transcript' (WSL2 output) and 'transcription' (legacy)
-        transcript_text = scene_data.get("transcript") or scene_data.get("transcription", "")
-        if isinstance(transcript_text, dict):
-            transcript_text = transcript_text.get("text", "")
+        audio_source = scene_data.get("audio") if isinstance(scene_data.get("audio"), dict) else scene_data
+        from steps.common.tag_utils import reliable_transcript_for_entities
+
+        transcript_text = reliable_transcript_for_entities(audio_source)
         
         if transcript_text and isinstance(transcript_text, str) and transcript_text.strip():
             entities.extend(self._extract_names_from_text(
@@ -392,6 +456,8 @@ class EntityExtractor:
                 }
                 if normalized_name in object_labels:
                     continue
+                if self._is_family_name(tag_name) or normalized_name in {"santa", "santa claus"}:
+                    continue
                 if detail_sources and detail_sources.issubset({"object"}):
                     continue
 
@@ -417,6 +483,8 @@ class EntityExtractor:
                     continue
                 normalized_tag = self._normalize_name(tag)
                 if normalized_tag in object_labels:
+                    continue
+                if self._is_family_name(tag) or normalized_tag in {"santa", "santa claus"}:
                     continue
                 entity_type = "location" if self._is_scene_place_tag(tag, set()) else "concept"
                 entities.append(ExtractedEntity(
@@ -582,8 +650,9 @@ class EntityExtractor:
         
         # Check for family names
         for name in self.family_names:
-            if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text_lower):
-                if not self._is_valid_entity_candidate(name):
+            matches = list(re.finditer(rf"(?<!\w){re.escape(name)}(?!\w)", text_lower))
+            if matches:
+                if not any(self._is_valid_entity_candidate(text[m.start():m.end()]) for m in matches):
                     continue
                     
                 entities.append(ExtractedEntity(
@@ -831,7 +900,12 @@ class EntityExtractor:
     def _is_meaningful_person_name(self, value: Any) -> bool:
         if not self._is_valid_entity_candidate(value):
             return False
-        return not self._is_synthetic_entity_name(value)
+        if self._is_synthetic_entity_name(value):
+            return False
+        lowered = str(value).strip().lower()
+        if lowered in self._non_person_single_tokens and not self._is_family_name(value):
+            return False
+        return True
 
     def _entity_key(self, value: Any) -> str:
         if not isinstance(value, str):

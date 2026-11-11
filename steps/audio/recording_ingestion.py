@@ -36,12 +36,12 @@ def settings(cfg):
             raise ValueError(f'Recording engine requires {key}')
     if result['transport'] == 'wsl' and not all(result.get(k) for k in ('distro', 'user')):
         raise ValueError('Recording WSL transport requires an explicit distro and user')
-    # Phase 4's independent chunk recognizer is not a recording-evidence consumer.
-    # Never silently enter it (including environment-selected variants).
+    # Segmented modes must consume shared recording evidence rather than chunk ASR;
+    # reject unknown activation strings up front.
     mode = str((cfg.get('segmentation') or {}).get('activation') or 'off').lower()
     env_mode = os.environ.get('GOODQ_SEGMENTATION_MODE', '').lower()
-    if mode != 'off' or env_mode in ('shadow', 'authoritative'):
-        raise ValueError('Recording engine requires segmentation.activation=off; chunk audio modes are unsupported')
+    if mode not in ('off', 'shadow', 'authoritative') or env_mode not in ('', 'off', 'shadow', 'authoritative'):
+        raise ValueError('Unsupported segmentation activation mode for recording engine')
     return result
 
 
@@ -171,6 +171,19 @@ def load(handle, scene_id=None):
                 validate_review(review, projection['source'], root=root)
         result[ident] = projection
     return result
+
+
+def ucf_transcript_segments(projection):
+    """Per-utterance eligible transcript occurrences before linear consumer deduplication."""
+    projection = validate_scene_audio(projection)
+    offset = projection['scene']['start']
+    return [{'id': u['id'], 'text': u['text'],
+        'start': u['display_span']['start'] - offset, 'end': u['display_span']['end'] - offset,
+        'speaker': u['track_id'], 'speaker_status': u['speaker']['status'],
+        'source_span': deepcopy(u['span']), 'owner_scene_id': u['owner_scene_id'],
+        'confidence': deepcopy(u['confidence']), 'timing_scope': 'scene_display_only'}
+        for u in projection['utterances']
+        if u['eligibility']['transcript']['status'] == 'eligible']
 
 
 def scene_result(handle, scene_id, scene=None):

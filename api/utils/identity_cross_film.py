@@ -19,7 +19,7 @@ import yaml
 
 from api.utils import identity_matching as matching_projection
 from api.utils.identity_read_projection import identity_data_path
-from lib.identity_matching import read_json, report_root, reviewed_source_roots, unit
+from lib.identity_matching import epoch_attested_identity_dir, read_json, report_root, reviewed_source_roots, unit
 from lib.identity_resolver import retired_identity_scene_ids
 from scripts.identity.build_face_clusters import (
     _bbox_coordinates,
@@ -67,10 +67,20 @@ def _configured_identity_paths_by_epoch(cfg: dict[str, Any]) -> dict[str, Path]:
         ident_root = Path(source["identity_path"]).resolve()
         if ident_root.is_dir():
             mapping[epoch_root.name] = ident_root
+    for root in sorted(reviewed_source_roots(cfg.get("identity_matching") or {})):
+        resolved = Path(root).resolve()
+        if resolved.name not in mapping and resolved.is_dir():
+            att_dir = epoch_attested_identity_dir(resolved)
+            if att_dir is not None:
+                mapping[resolved.name] = att_dir
     return mapping
 
 
-def _load_epoch_detections(epoch_root: Path) -> tuple[list[dict[str, Any]], dict[int, str]]:
+def _load_epoch_detections(
+    epoch_root: Path,
+    *,
+    manifest_cache: dict | None = None,
+) -> tuple[list[dict[str, Any]], dict[int, str]]:
     ucf_db = epoch_root / "ucf" / "ucf_ledger.db"
     if not ucf_db.is_file():
         return [], {}
@@ -93,7 +103,7 @@ def _load_epoch_detections(epoch_root: Path) -> tuple[list[dict[str, Any]], dict
         for rows in filtered.values()
         for row in rows
     }
-    detections = collect_face_detections(epoch_root, filtered)
+    detections = collect_face_detections(epoch_root, filtered, manifest_cache=manifest_cache)
     if len(_EPOCH_DETECTION_CACHE) >= 16:
         _EPOCH_DETECTION_CACHE.clear()
     _EPOCH_DETECTION_CACHE[cache_key] = (detections, frame_scenes)
@@ -433,7 +443,37 @@ def _resolve_query_embeddings(
                                     excluded.add((active_epoch.name, det["detection_id"]))
                                     query_vectors.append((str(det.get("engine") or ""), unit(det["embedding"])))
 
-        # Also include saved reference embeddings from the active epoch's comparison report if present.
+        # Also include saved reference embeddings from configured prior identity folders and reports.
+        allowed_roots = _allowed_epoch_roots(cfg)
+        for ep_name, ident_dir in sorted(identity_dirs.items()):
+            if ep_name == active_epoch.name or ep_name not in allowed_roots:
+                continue
+            prior_roster_file = ident_dir / "family_roster.yaml"
+            prior_clusters_file = ident_dir / "face_clusters.json"
+            if not prior_roster_file.is_file() or not prior_clusters_file.is_file():
+                continue
+            try:
+                prior_roster = yaml.safe_load(prior_roster_file.read_text(encoding="utf-8")) or {}
+                prior_entry = next((i for i in prior_roster.get("identities") or [] if i.get("id") == person_id), None)
+                if prior_entry is None or not prior_entry.get("face_cluster_ids"):
+                    continue
+                display_name = display_name or prior_entry.get("display_name")
+                prior_manifest = read_json(prior_clusters_file)
+                if prior_manifest.get("epoch_id") != ep_name:
+                    continue
+                prior_dets, _ = _load_epoch_detections(allowed_roots[ep_name])
+                prior_det_by_id = {d["detection_id"]: d for d in prior_dets}
+                by_cid = {c["cluster_id"]: c for c in prior_manifest.get("clusters") or []}
+                for cid in prior_entry.get("face_cluster_ids") or []:
+                    rep_ids = (by_cid.get(cid) or {}).get("face_ids") or []
+                    if rep_ids:
+                        det = prior_det_by_id.get(str(rep_ids[0]))
+                        if det is not None and (ep_name, det["detection_id"]) not in excluded:
+                            excluded.add((ep_name, det["detection_id"]))
+                            query_vectors.append((str(det.get("engine") or ""), unit(det["embedding"])))
+            except (OSError, ValueError, UnicodeError, yaml.YAMLError, json.JSONDecodeError):
+                continue
+
         reports_dir = report_root(cfg) / "reports"
         if reports_dir.is_dir():
             for rpath in sorted(reports_dir.glob("*.json")):

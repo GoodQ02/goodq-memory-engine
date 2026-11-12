@@ -11,8 +11,8 @@ from pathlib import Path
 
 from api.utils import identity_appearance as appearance
 from api.utils import identity_matching as matching
-from lib.identity_matching import (file_digest, digest, load_reference_catalog, read_reviewed_faces,
-                                   reviewed_source_roots)
+from lib.identity_matching import (file_digest, digest, load_reference_catalog, read_attested_cluster_faces,
+                                   read_reviewed_faces, reviewed_source_roots)
 from lib.identity_resolver import retired_identity_scene_ids
 from scripts.identity.build_face_clusters import collect_face_detections, load_face_ucf_provenance
 
@@ -105,6 +105,14 @@ def build(cfg, conn, review):
             _, current = read_reviewed_faces(Path(source["epoch_root"]), frozen_people)
             if current != source:
                 raise appearance.AppearanceConflict("Reviewed references changed. Review fresh reference evidence first.")
+            continue
+        if source.get("kind") == "attested_cluster_faces":
+            if Path(source["epoch_root"]).resolve() not in reviewed_source_roots(cfg.get("identity_matching") or {}):
+                raise appearance.AppearanceConflict("The reviewed reference source is no longer configured.")
+            frozen_people = {p["id"]: p["display_name"] for p in report["people"]}
+            _, current = read_attested_cluster_faces(Path(source["epoch_root"]), frozen_people)
+            if current is None or current.get("faces_sha256") != source.get("faces_sha256"):
+                raise appearance.AppearanceConflict("Cluster reference labels changed. Review fresh reference evidence first.")
             continue
         pair = (str(Path(source["epoch_root"]).resolve()), str(Path(source["identity_path"]).resolve()))
         if pair not in configured:

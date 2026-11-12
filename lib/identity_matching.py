@@ -122,6 +122,163 @@ def reviewed_source_roots(options):
         Path(p).resolve() for p in options.get("reviewed_face_sources", [])}
 
 
+def epoch_attested_identity_dir(epoch_root):
+    """Resolve a sibling identity folder only when its face_clusters.json attests epoch_root."""
+    epoch = Path(epoch_root).resolve()
+    candidates = [
+        epoch / "identity",
+        epoch.parent.parent.parent / "identity",
+        epoch.parent.parent / "GoodQ_Data" / "identity",
+        epoch.parent.parent / "identity",
+        epoch.parent / "identity",
+    ]
+    seen = set()
+    for cand in candidates:
+        try:
+            resolved = cand.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_dir():
+            continue
+        seen.add(resolved)
+        clusters_file = resolved / "face_clusters.json"
+        if not clusters_file.is_file():
+            continue
+        try:
+            payload = read_json(clusters_file)
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and str(payload.get("epoch_id") or "").strip() == epoch.name:
+            return resolved
+    return None
+
+
+def read_attested_cluster_faces(epoch, people):
+    """Materialize roster-linked face cluster representatives from an epoch-attested identity folder."""
+    from lib.identity_resolver import retired_identity_scene_ids
+    from scripts.identity.build_face_clusters import collect_face_detections, load_face_ucf_provenance
+
+    epoch = Path(epoch).resolve(strict=True)
+    ident_dir = epoch_attested_identity_dir(epoch)
+    if ident_dir is None:
+        return [], None
+    roster_path = ident_dir / "family_roster.yaml"
+    cluster_path = ident_dir / "face_clusters.json"
+    if not roster_path.is_file() or not cluster_path.is_file():
+        return [], None
+    roster = yaml.safe_load(roster_path.read_text(encoding="utf-8")) or {}
+    identities = roster.get("identities") if isinstance(roster, dict) else []
+    if not isinstance(identities, list) or not any(
+        isinstance(p, dict) and p.get("face_cluster_ids") for p in identities
+    ):
+        return [], None
+    clusters = read_json(cluster_path)
+    if not isinstance(clusters, dict) or clusters.get("epoch_id") != epoch.name:
+        return [], None
+    group_map = {
+        c["cluster_id"]: c
+        for c in (clusters.get("clusters") or [])
+        if isinstance(c, dict) and c.get("cluster_id")
+    }
+    ucf_db = epoch / "ucf" / "ucf_ledger.db"
+    if not ucf_db.is_file():
+        return [], None
+    retired = retired_identity_scene_ids(ucf_db)
+    provenance = load_face_ucf_provenance(ucf_db)
+    retired_frames = {
+        r["frame_id"]
+        for rows in provenance.values()
+        for r in rows
+        if r["source_artifact_id"] in retired
+    }
+    required = {
+        int(str(group_map[gid]["face_ids"][0]).split("_", 1)[0])
+        for p in identities
+        if isinstance(p, dict)
+        for gid in (p.get("face_cluster_ids") or [])
+        if gid in group_map and (group_map[gid].get("face_ids") or [])
+    }
+    if not required:
+        return [], None
+    filtered_prov = {
+        path: [r for r in rows if r["source_artifact_id"] not in retired]
+        for path, rows in provenance.items()
+        if any(r["frame_id"] in required for r in rows)
+    }
+    filtered_prov = {path: rows for path, rows in filtered_prov.items() if rows}
+    detections = {d["detection_id"]: d for d in collect_face_detections(epoch, filtered_prov)} if filtered_prov else {}
+
+    owners = {}
+    source_people = {}
+    faces = []
+    face_specs = []
+    for person in identities:
+        if not isinstance(person, dict) or not person.get("face_cluster_ids"):
+            continue
+        pid = person.get("id")
+        name = person.get("display_name")
+        if not isinstance(pid, str) or not pid or not isinstance(name, str) or not name:
+            raise ValueError("Reference people need stable IDs and display names")
+        if pid in source_people or (pid in people and people[pid] != name):
+            raise ValueError("Conflicting reference person identity")
+        for group_id in person.get("face_cluster_ids") or []:
+            group = group_map.get(group_id)
+            if group is None:
+                continue
+            if group_id in owners or not isinstance(group.get("label"), str) or not group["label"].strip():
+                raise ValueError("Face group ownership or label conflicts with the roster")
+            owners[group_id] = pid
+            rep_fid = str((group.get("face_ids") or [""])[0])
+            if not rep_fid:
+                continue
+            if rep_fid not in detections:
+                if int(rep_fid.split("_", 1)[0]) in retired_frames:
+                    continue
+                raise ValueError("The labeled reference has no promoted source observation")
+            people[pid] = source_people[pid] = name
+            detection = detections[rep_fid]
+            media = _media(
+                detection["image_path"],
+                epoch / "processing",
+                kind="image",
+                bbox=detection["bbox"],
+                timestamp=detection["t_start"],
+            )
+            ref_id = digest([epoch.name, "attested_cluster", group_id, detection["detection_id"]])
+            faces.append({
+                "id": ref_id,
+                "person_id": pid,
+                "display_name": name,
+                "epoch_id": epoch.name,
+                "group_id": group_id,
+                "observation_id": detection["detection_id"],
+                "video_hash": detection["video_hash"],
+                "video_name": Path(detection["image_path"]).relative_to(epoch / "processing").parts[0],
+                "space": detection["engine"],
+                "embedding": unit(detection["embedding"]),
+                "media": media,
+            })
+            face_specs.append({
+                "id": ref_id,
+                "person_id": pid,
+                "display_name": name,
+                "group_id": group_id,
+                "observation_id": detection["detection_id"],
+                "embedding_sha256": digest(detection["embedding"]),
+                "media_sha256": media["sha256"],
+                "bbox": media["bbox"],
+                "timestamp": media["timestamp"],
+            })
+    if not faces:
+        return [], None
+    return faces, {
+        "kind": "attested_cluster_faces",
+        "epoch_root": str(epoch),
+        "identity_path": str(ident_dir),
+        "faces_sha256": digest(face_specs),
+    }
+
+
 def read_reviewed_faces(epoch, people):
     """Materialize only applied, explicitly reusable Correct faces from saved evidence.
 
@@ -336,7 +493,13 @@ def load_reference_catalog(options):
                         "voice_mappings_sha256": file_digest(mappings_path) if mappings_path.is_file() else None})
     if not sources:
         raise ValueError("Enable identity matching with at least one reviewed reference source")
+    ref_epoch_roots = {Path(s["epoch_root"]).resolve(strict=True) for s in options.get("reference_sources", [])}
     for epoch in sorted(reviewed_source_roots(options)):
+        if epoch not in ref_epoch_roots:
+            cluster_faces, cluster_source = read_attested_cluster_faces(epoch, people)
+            if cluster_source:
+                faces.extend(cluster_faces)
+                sources.append(cluster_source)
         reviewed, source = read_reviewed_faces(epoch, people)
         if source:
             faces.extend(reviewed)

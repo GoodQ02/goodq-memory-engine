@@ -375,6 +375,21 @@ async function run() {
     return true;
   };
   global.fetch = async (url, options) => {
+    if (!options || !options.method || options.method === 'GET') {
+      if (url === '/api/identity/face-clusters') {
+        return response(200, {
+          clusters: [
+            { ...workbench.state.faceClusters[0] },
+            { ...workbench.state.faceClusters[1] },
+            {
+              ...workbench.state.faceClusters[2],
+              suggested_matches: [{ person_id: 'clara', display_name: 'Clarissa', similarity: 0.59, above_threshold: false }],
+            },
+          ],
+        });
+      }
+      throw new Error('Unexpected GET ' + url);
+    }
     const body = JSON.parse(options.body);
     postCalls.push({ url, body });
     if (!body.confirmation_token) {
@@ -392,6 +407,8 @@ async function run() {
   assert.deepEqual(rosterSave.body.identity.aliases, ['Clara']);
   assert.equal(rosterSave.body.identity.role, 'Sister');
   assert.deepEqual(rosterSave.body.identity.face_cluster_ids, ['fc_clara']);
+  // Same-movie live refresh updates remaining unlabeled clusters with newly saved person hints!
+  assert.equal(workbench.state.faceClusters[2].suggested_matches[0].person_id, 'clara');
 
   // Near-duplicate typo "Elenna" triggers typo-guard confirm and resolves to canonical "Elena" ("elena").
   confirmPrompts.length = 0;

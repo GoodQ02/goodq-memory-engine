@@ -267,6 +267,7 @@ def project_face_cluster_images(
         return projected
     manifest_cache: dict = {}
     for cluster in clusters:
+        cluster["suggested_matches"] = []
         face_ids = cluster.get("face_ids")
         if not isinstance(face_ids, list) or not face_ids:
             continue
@@ -279,7 +280,7 @@ def project_face_cluster_images(
         cluster["members"] = members
         cluster["members_available"] = sum(m["evidence_status"] == "available" for m in members)
         cluster["members_unavailable"] = len(members) - cluster["members_available"]
-    _attach_cluster_suggestions(clusters, epoch_root, cfg)
+    _attach_cluster_suggestions(clusters, epoch_root, cfg, manifest_cache=manifest_cache)
     return projected
 
 
@@ -413,13 +414,31 @@ def known_people_projection(
                             )
 
     try:
-        from lib.identity_matching import reviewed_source_roots
+        from lib.identity_matching import epoch_attested_identity_dir, reviewed_source_roots
 
         source_roots = sorted(reviewed_source_roots(dict(options)))
     except Exception:
+        epoch_attested_identity_dir = None  # type: ignore[assignment]
         source_roots = []
 
     for root in source_roots:
+        if epoch_attested_identity_dir is not None:
+            att_dir = epoch_attested_identity_dir(Path(root))
+            if att_dir is not None and (att_dir / "family_roster.yaml").is_file():
+                try:
+                    att_loaded = yaml.safe_load((att_dir / "family_roster.yaml").read_text(encoding="utf-8")) or {}
+                    att_identities = att_loaded.get("identities") if isinstance(att_loaded, dict) else []
+                    for person in att_identities or []:
+                        if isinstance(person, dict):
+                            _register(
+                                person.get("id"),
+                                person.get("display_name") or person.get("name"),
+                                aliases=person.get("aliases"),
+                                role=person.get("role"),
+                                in_active_roster=False,
+                            )
+                except (OSError, UnicodeError, yaml.YAMLError):
+                    pass
         kg_path = Path(root) / "knowledge_graph.db"
         if not kg_path.is_file():
             continue
@@ -542,46 +561,61 @@ def _collect_reference_face_vectors(
     }
     try:
         from api.utils.identity_cross_film import _load_epoch_detections, _read_epoch_kg_metadata
-        from lib.identity_matching import reviewed_source_roots
+        from lib.identity_matching import epoch_attested_identity_dir, reviewed_source_roots
 
-        if not had_report_refs:
-            for source in options.get("reference_sources") or []:
-                if not isinstance(source, Mapping):
+        candidate_cluster_pairs: list[tuple[Path, Path]] = []
+        seen_pairs: set[tuple[Path, Path]] = set()
+        for source in options.get("reference_sources") or []:
+            if not isinstance(source, Mapping):
+                continue
+            src_epoch = Path(str(source.get("epoch_root") or "")).resolve()
+            src_ident = Path(str(source.get("identity_path") or "")).resolve()
+            if src_epoch != active_epoch_root.resolve() and (src_epoch, src_ident) not in seen_pairs:
+                seen_pairs.add((src_epoch, src_ident))
+                candidate_cluster_pairs.append((src_epoch, src_ident))
+
+        for other_root in sorted(reviewed_source_roots(options)):
+            resolved_epoch = Path(other_root).resolve()
+            if resolved_epoch == active_epoch_root.resolve() or not resolved_epoch.is_dir():
+                continue
+            att_ident = epoch_attested_identity_dir(resolved_epoch)
+            if att_ident is not None and (resolved_epoch, att_ident) not in seen_pairs:
+                seen_pairs.add((resolved_epoch, att_ident))
+                candidate_cluster_pairs.append((resolved_epoch, att_ident))
+
+        for src_epoch, src_ident in candidate_cluster_pairs:
+            roster_file = src_ident / "family_roster.yaml"
+            clusters_file = src_ident / "face_clusters.json"
+            if not src_epoch.is_dir() or not roster_file.is_file() or not clusters_file.is_file():
+                continue
+            roster_doc = yaml.safe_load(roster_file.read_text(encoding="utf-8")) or {}
+            clusters_doc = json.loads(clusters_file.read_text(encoding="utf-8"))
+            if clusters_doc.get("epoch_id") != src_epoch.name:
+                continue
+            group_map = {
+                str(c.get("cluster_id")): c
+                for c in (clusters_doc.get("clusters") or [])
+                if isinstance(c, dict) and c.get("cluster_id")
+            }
+            src_dets, _ = _load_epoch_detections(src_epoch)
+            src_det_by_id = {d["detection_id"]: d for d in src_dets}
+            for person in (roster_doc.get("identities") if isinstance(roster_doc, dict) else []) or []:
+                if not isinstance(person, dict):
                     continue
-                src_epoch = Path(str(source.get("epoch_root") or "")).resolve()
-                src_ident = Path(str(source.get("identity_path") or "")).resolve()
-                roster_file = src_ident / "family_roster.yaml"
-                clusters_file = src_ident / "face_clusters.json"
-                if not src_epoch.is_dir() or not roster_file.is_file() or not clusters_file.is_file():
-                    continue
-                roster_doc = yaml.safe_load(roster_file.read_text(encoding="utf-8")) or {}
-                clusters_doc = json.loads(clusters_file.read_text(encoding="utf-8"))
-                if clusters_doc.get("epoch_id") != src_epoch.name:
-                    continue
-                group_map = {
-                    str(c.get("cluster_id")): c
-                    for c in (clusters_doc.get("clusters") or [])
-                    if isinstance(c, dict) and c.get("cluster_id")
-                }
-                src_dets, _ = _load_epoch_detections(src_epoch)
-                src_det_by_id = {d["detection_id"]: d for d in src_dets}
-                for person in (roster_doc.get("identities") if isinstance(roster_doc, dict) else []) or []:
-                    if not isinstance(person, dict):
-                        continue
-                    pid, name = person.get("id"), person.get("display_name")
-                    for group_id in person.get("face_cluster_ids") or []:
-                        group = group_map.get(str(group_id))
-                        face_ids = (group or {}).get("face_ids") or []
-                        det = src_det_by_id.get(str(face_ids[0])) if face_ids else None
-                        if det is not None:
-                            _add_ref(
-                                pid,
-                                name,
-                                det.get("engine"),
-                                det.get("embedding"),
-                                source="prior_films",
-                                origin_key=f"{src_epoch.name}:{det['detection_id']}",
-                            )
+                pid, name = person.get("id"), person.get("display_name")
+                for group_id in person.get("face_cluster_ids") or []:
+                    group = group_map.get(str(group_id))
+                    face_ids = (group or {}).get("face_ids") or []
+                    det = src_det_by_id.get(str(face_ids[0])) if face_ids else None
+                    if det is not None:
+                        _add_ref(
+                            pid,
+                            name,
+                            det.get("engine"),
+                            det.get("embedding"),
+                            source="prior_films",
+                            origin_key=f"{src_epoch.name}:{det['detection_id']}",
+                        )
 
         for other_root in sorted(reviewed_source_roots(options)):
             resolved = Path(other_root).resolve()
@@ -644,18 +678,34 @@ def _collect_reference_face_vectors(
     return refs, threshold
 
 
+def _has_any_suggestion_source(cfg: Mapping[str, Any], epoch_root: Path) -> bool:
+    matching_cfg = cfg.get("identity_matching")
+    if isinstance(matching_cfg, Mapping) and (
+        matching_cfg.get("reference_sources") or matching_cfg.get("reviewed_face_sources")
+    ):
+        return True
+    reports_dir = epoch_root / "identity_matching" / "reports"
+    if reports_dir.is_dir() and any(reports_dir.glob("*.json")):
+        return True
+    if (identity_data_path(cfg) / "family_roster.yaml").is_file():
+        return True
+    return False
+
+
 def _attach_cluster_suggestions(
     clusters: list[dict[str, Any]],
     epoch_root: Path,
     cfg: Mapping[str, Any],
+    *,
+    manifest_cache: dict | None = None,
 ) -> None:
     """Attach read-only top similarity suggestions from saved people onto each face cluster."""
-    if not clusters:
+    if not clusters or not _has_any_suggestion_source(cfg, epoch_root):
         return
     try:
         from api.utils.identity_cross_film import _load_epoch_detections
 
-        active_dets, _ = _load_epoch_detections(epoch_root)
+        active_dets, _ = _load_epoch_detections(epoch_root, manifest_cache=manifest_cache)
     except Exception:
         return
     if not active_dets:

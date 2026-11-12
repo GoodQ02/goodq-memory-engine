@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `1d52c44ac50c1fce45ebefa1bfad21c84c3fc369` (`dev`).
-- Public parent: `811fcc075ea598696413829392528ca21e0fee81` (`main`).
+- Private development source: `e9cd221ed84fb3e72a78b5f6d5d114f1030e0bf2` (`dev`).
+- Public parent: `4ca9f8b716b88a7cb074b062e4ada81874e74c6f` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -206,3 +206,4 @@ Mirrors pinned private commit `1d52c44a` onto `GoodQ02/goodq-memory-engine` `mai
 - **Saved-People Face Cluster Curation & SFace Hints**: Adds read-only `known_people_projection` (`GET /api/identity/roster`) and advisory SFace similarity suggestions (`>= 0.38` cosine floor on `GET /api/identity/face-clusters`), native `<select>` saved-people pickers (`Suggested from saved faces`, `Saved family & prior films`, `+ Add new person...`), clickable `Closest saved` hint chips, explicit `SAVE` / `UPDATE`, `SAVE LABEL`, and `SAVE & NEXT` buttons, single-confirmation label + roster sync, canonical ID/alias/role preservation, and a Levenshtein near-duplicate typo guard (`api/routes/identity.py`, `api/utils/identity_read_projection.py`, `ui/identity_workbench/`).
 - **Progressive-Window Ollama Failover VRAM Unload**: Tracks `attempted_models` in `LLMClient.chat` (`lib/llm_client.py`) and unloads every attempted Ollama `(base_url, model_id)` pair in `CrossModalHarmonizer._unload_ollama_model_if_used` (`steps/video/cross_modal_harmonizer.py`) so primary Ollama weights do not remain resident during failover windows.
 - **Architecture Contracts & Parity Gates**: Syncs `IDENTITY_STITCHING_CONTRACT.md`, `INGEST_ORCHESTRATION_CONTRACT.md`, `REPOSITORY_MAP.md` (preserving public-only exclusions), and focused unit tests (`test_identity_cross_film.py`, `test_identity_workbench_behavior.py`, `test_scene_context_fallback_boundary.py`). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, unconfigured-template truth checks, personal-term/path privacy inspection (`0` hits), and focused unit checks pass before publication.
+- **Attested Prior-Film Cluster Carry-Forward & Single-Read Manifest Cache (`e9cd221e`)**: Carries attested Phase 1 Face Cluster curation (`epoch_attested_identity_dir` + `read_attested_cluster_faces` in `lib/identity_matching.py`) forward across `reviewed_face_sources` into downstream `known_people`, `suggested_matches`, `cross-film-scan`, and `POST /api/identity/matches/refresh`; refreshes same-movie `suggested_matches` immediately after saving a cluster label (`ui/identity_workbench/static/js/identity.js`); and threads a request-scoped `manifest_cache` with a zero-source fast path so `GET /api/identity/face-clusters` reads `scene_manifest.json` once per request (`api/utils/identity_read_projection.py`, `api/utils/identity_cross_film.py`, `scripts/identity/build_face_clusters.py`). All 9 changed source/test/contract files match private `e9cd221e` byte for byte.

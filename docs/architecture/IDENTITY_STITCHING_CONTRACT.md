@@ -111,8 +111,11 @@ source roots, with a content hash check. No comparison endpoint applies a name.
 Future reviewed examples are admitted through the existing curated authorities;
 reusing predictions as confirmed examples is prohibited.
 
-Configured `reviewed_face_sources` allow confirmed face observations from multiple
-prior reviewed epochs to carry forward alongside curated roster representatives.
+Configured `reviewed_face_sources` allow both applied appearance-review face
+observations (`reviewed_faces`) and roster-linked face cluster representatives from
+epoch-attested sibling identity folders (`attested_cluster_faces`) across multiple
+prior films to carry forward alongside `reference_sources` into `known_people`,
+advisory cluster suggestions, cross-film scans, and match refreshes.
 When operator curation advances in an earlier epoch after a later video has already
 been ingested, governed `POST /api/identity/matches/refresh` (`refresh_epoch_matches`)
 rebuilds that unapplied epoch's reference snapshot and comparison report against the

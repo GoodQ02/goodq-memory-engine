@@ -1272,6 +1272,23 @@
     return fromIdx + 1 < total ? fromIdx + 1 : -1;
   }
 
+  async function refreshClusterSuggestionsQuietly() {
+    try {
+      const fresh = await apiCall("/api/identity/face-clusters");
+      if (!fresh || !Array.isArray(fresh.clusters)) return;
+      const byId = new Map(fresh.clusters.map(c => [c.cluster_id, c]));
+      state.faceClusters.forEach(cluster => {
+        const updated = byId.get(cluster.cluster_id);
+        if (updated && Array.isArray(updated.suggested_matches)) {
+          cluster.suggested_matches = updated.suggested_matches;
+        }
+      });
+      rebuildKnownPeopleState();
+    } catch (_) {
+      // Advisory hint refresh is best-effort; never fail a completed label save.
+    }
+  }
+
   async function applyLabel(idx, label, opts) {
     const options = opts || {};
     if (idx < 0 || idx >= state.faceClusters.length) return false;
@@ -1312,6 +1329,9 @@
           alreadyConfirmed: true,
           preferredPerson: resolved.person,
         });
+      }
+      if (rosterSynced) {
+        await refreshClusterSuggestionsQuietly();
       }
       renderFaceGrid();
       updateRosterIdentityLabels();

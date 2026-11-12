@@ -11,7 +11,7 @@ a human labels it in family_roster.yaml.
 
 Usage:
     conda run -n goodq_core python scripts/identity/build_face_clusters.py \\
-        --epoch-id epoch_public_example \\
+        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
         [--eps 0.4] \\
         [--min-samples 2] \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
@@ -214,11 +214,12 @@ def _bbox_coordinates(bbox) -> tuple | None:
     return tuple(bbox)
 
 
-def collect_face_detections(epoch_dir: Path, provenance: dict) -> list:
+def collect_face_detections(epoch_dir: Path, provenance: dict, *, manifest_cache: dict | None = None) -> list:
     """Join each raw detection to its exact promoted authority and source image."""
     processing_dir = (epoch_dir / "processing").resolve()
     detections = []
-    manifest_cache: dict[Path, dict] = {}
+    if manifest_cache is None:
+        manifest_cache = {}
     for raw_ref, rows in sorted(provenance.items()):
         fname = Path(raw_ref).resolve()
         if not fname.is_relative_to(processing_dir):

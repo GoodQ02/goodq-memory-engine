@@ -626,3 +626,158 @@ def test_roster_known_people_and_cluster_suggested_matches_populate_from_prior_f
     assert top_match["person_id"] == "stable-family-id"
     assert top_match["similarity"] >= 0.99
     assert top_match["above_threshold"] is True
+
+
+def test_reviewed_face_source_cluster_labels_flow_into_downstream_roster_suggestions_scan_and_refresh(
+    two_movie_workbench, tmp_path, monkeypatch
+):
+    import api.routes.identity as identity_routes
+
+    client = two_movie_workbench["client"]
+    cfg_base = two_movie_workbench["cfg"]
+
+    # Create Movie 3 in the exact witness directory layout (<witness>/data/epochs/<epoch_id> + <witness>/identity)
+    # and label a brand-new person ("Uncle Martin") in Movie 3's Face Clusters + Family Roster WITHOUT running Match Review.
+    martin_vec = [0.0] * 128
+    martin_vec[7] = 1.0
+    m3_witness = tmp_path / "witness-m3"
+    m3 = _make_movie_epoch(m3_witness / "data", "epoch-witness-m3", "03. 1989.mp4", [martin_vec])
+    m3_ident = m3_witness / "identity"
+    m3_ident.mkdir(parents=True)
+    m3_fid = m3["provenance"][0][1][0]
+    (m3_ident / "face_clusters.json").write_text(
+        json.dumps(
+            {
+                "epoch_id": m3["epoch"].name,
+                "clusters": [
+                    {
+                        "cluster_id": "fc_m3_martin",
+                        "label": "Uncle Martin",
+                        "face_count": 1,
+                        "face_ids": [f"{m3_fid}_0"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (m3_ident / "family_roster.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "identities": [
+                    {
+                        "id": "uncle_martin",
+                        "display_name": "Uncle Martin",
+                        "aliases": ["Marty"],
+                        "role": "Uncle",
+                        "face_cluster_ids": ["fc_m3_martin"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # Create Movie 4 (already ingested BEFORE Movie 3 was curated!) with Movie 3 listed in reviewed_face_sources.
+    m4_witness = tmp_path / "witness-m4"
+    m4 = _make_movie_epoch(m4_witness / "data", "epoch-witness-m4", "04. 1991.mp4", [martin_vec])
+    m4_out = m4["epoch"] / "output"
+    m4_out.mkdir(parents=True)
+    (m4_out / "scene_ingest_results.json").write_text(
+        json.dumps(
+            [
+                {
+                    "video_hash": m4["video_hash"],
+                    "video_path": "04. 1991.mp4",
+                    "video_name": "04. 1991.mp4",
+                    "scenes": m4["scenes"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    m4_ident = m4_witness / "identity"
+    m4_ident.mkdir(parents=True)
+    m4_fid = m4["provenance"][0][1][0]
+    (m4_ident / "face_clusters.json").write_text(
+        json.dumps(
+            {
+                "epoch_id": m4["epoch"].name,
+                "clusters": [
+                    {
+                        "cluster_id": "fc_m4_000",
+                        "label": None,
+                        "face_count": 1,
+                        "face_ids": [f"{m4_fid}_0"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg_m4 = {
+        "epoch_id": m4["epoch"].name,
+        "paths": {
+            "db_path": str(m4["epoch"] / "memory.db"),
+            "knowledge_graph_db": str(m4["kg"]),
+            "output_directory": str(m4_out),
+        },
+        "identity_search": {
+            "roster_path": str(m4_ident / "family_roster.yaml"),
+            "kg_db_path": str(m4["kg"]),
+        },
+        "identity_matching": {
+            "enabled": True,
+            "reference_sources": cfg_base["identity_matching"]["reference_sources"],
+            "reviewed_face_sources": [str(m3["epoch"])],
+        },
+    }
+    monkeypatch.setattr(identity_routes, "_CFG", cfg_m4)
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(m4_ident))
+
+    # 1. GET /api/identity/roster on Movie 4 immediately includes Uncle Martin (with alias + role) in known_people!
+    roster_data = client.get("/api/identity/roster").json()
+    known = {p["id"]: p for p in roster_data["known_people"]}
+    assert "uncle_martin" in known
+    assert known["uncle_martin"]["display_name"] == "Uncle Martin"
+    assert known["uncle_martin"]["aliases"] == ["Marty"]
+    assert known["uncle_martin"]["role"] == "Uncle"
+
+    # 2. GET /api/identity/face-clusters on Movie 4 immediately attaches ★ Uncle Martin to fc_m4_000!
+    fc_data = client.get("/api/identity/face-clusters").json()
+    sug = fc_data["clusters"][0]["suggested_matches"]
+    assert sug and sug[0]["person_id"] == "uncle_martin"
+    assert sug[0]["similarity"] >= 0.99
+
+    # 3. GET /api/identity/cross-film-scan recognizes Movie 3's cluster as labeled_cluster_only (NOT missed)!
+    scan_data = client.get("/api/identity/cross-film-scan?cluster_id=fc_m4_000&min_similarity=0.50").json()
+    assert scan_data["other_movies"][0]["epoch_id"] == m3["epoch"].name
+    assert scan_data["other_movies"][0]["missed_unlabeled_count"] == 0
+    m3_hit = scan_data["other_movies"][0]["matches"][0]
+    assert m3_hit["curation_status"] == "labeled_cluster_only"
+    assert m3_hit["cluster_label"] == "Uncle Martin"
+
+    # 4. POST /api/identity/matches/refresh on Movie 4 incorporates Movie 3's attested_cluster_faces
+    #    and allows Match Review preview!
+    tok = client.post("/api/identity/matches/refresh", json={}).json()["result"]["confirmation_token"]
+    refreshed = client.post("/api/identity/matches/refresh", json={"confirmation_token": tok})
+    assert refreshed.status_code == 200, refreshed.text
+    rbody = refreshed.json()
+    assert rbody["refreshed"] is True
+    rep = client.get(f"/api/identity/matches/{rbody['latest_report_id']}").json()
+    assert rep["records"][0]["status"] == "proposed"
+    assert rep["records"][0]["candidates"][0]["person_id"] == "uncle_martin"
+
+    prev = client.post(
+        "/api/identity/matches/preview",
+        json={
+            "report_id": rep["id"],
+            "report_sha256": rep["content_sha256"],
+            "accepted_ids": [rep["records"][0]["id"]],
+            "decisions": {rep["records"][0]["id"]: "correct"},
+            "completed_review": True,
+            "reuse_confirmed_faces": True,
+        },
+    )
+    assert prev.status_code == 200, prev.text
+    assert prev.json()["summary"]["observations"] == 1

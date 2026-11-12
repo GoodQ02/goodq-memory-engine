@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `5c9709b3bd2952a89adcd04e68851efcfa8a22cf` (`dev`).
-- Public parent: `50df353e87279f487d51e4522c7aca716383b35c` (`main`).
+- Private development source: `1d52c44ac50c1fce45ebefa1bfad21c84c3fc369` (`dev`).
+- Public parent: `811fcc075ea598696413829392528ca21e0fee81` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -199,3 +199,10 @@ Mirrors pinned private commit `5c9709b3` onto `GoodQ02/goodq-memory-engine` `mai
 - **Semantic Entity & Tag Hygiene**: Splits fused roster names in NER output, excludes person names from topic/concept tags, strips noisy single-token false `PERSON` tags, and wires video-epoch `EntityExtractor` directly to `scene_ingest_results.json`.
 - **Cross-Film Identity Curation Workbench**: Adds visual DBSCAN face clustering (`Layout: Visual clusters`) on Match Review (`lib/identity_matching.py`, `ui/identity_workbench/`), sticky `Who is this instead?` reassignment with inline `+ New person...` roster creation (`POST /api/identity/roster`), retrospective cross-film face scanning (`POST /api/identity/roster/{id}/scan-films`) across configured sibling witnesses, and `<1s` prior-film match refresh (`POST /api/identity/matches/refresh` / `Refresh from prior films`) so downstream epochs pick up newly confirmed prior-film faces without re-ingestion.
 - **Parity & Privacy Gates**: Product code in `agents/`, `api/`, `cli/`, `common/`, `configs/`, `envs/`, `lib/`, `pipelines/`, `retrieval/`, `steps/`, `ui/`, and `wsl2_audio/` matches `5c9709b3` byte for byte (apart from the declared anonymous operator preference template — whose `path_meta` `source` values now use valid `"developer_seed"` enum entries so fresh-checkout `MiniAgentClient` policy validation passes — and `epoch_public_example` docstring). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, personal-term/path privacy scan, and 531 focused unit/agent checks pass before publication.
+
+## Saved-people cluster picker, SFace hints, and Ollama failover VRAM unload - 2026-11-11
+
+Mirrors pinned private commit `1d52c44a` onto `GoodQ02/goodq-memory-engine` `main` (parent `811fcc07`):
+- **Saved-People Face Cluster Curation & SFace Hints**: Adds read-only `known_people_projection` (`GET /api/identity/roster`) and advisory SFace similarity suggestions (`>= 0.38` cosine floor on `GET /api/identity/face-clusters`), native `<select>` saved-people pickers (`Suggested from saved faces`, `Saved family & prior films`, `+ Add new person...`), clickable `Closest saved` hint chips, explicit `SAVE` / `UPDATE`, `SAVE LABEL`, and `SAVE & NEXT` buttons, single-confirmation label + roster sync, canonical ID/alias/role preservation, and a Levenshtein near-duplicate typo guard (`api/routes/identity.py`, `api/utils/identity_read_projection.py`, `ui/identity_workbench/`).
+- **Progressive-Window Ollama Failover VRAM Unload**: Tracks `attempted_models` in `LLMClient.chat` (`lib/llm_client.py`) and unloads every attempted Ollama `(base_url, model_id)` pair in `CrossModalHarmonizer._unload_ollama_model_if_used` (`steps/video/cross_modal_harmonizer.py`) so primary Ollama weights do not remain resident during failover windows.
+- **Architecture Contracts & Parity Gates**: Syncs `IDENTITY_STITCHING_CONTRACT.md`, `INGEST_ORCHESTRATION_CONTRACT.md`, `REPOSITORY_MAP.md` (preserving public-only exclusions), and focused unit tests (`test_identity_cross_film.py`, `test_identity_workbench_behavior.py`, `test_scene_context_fallback_boundary.py`). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, unconfigured-template truth checks, personal-term/path privacy inspection (`0` hits), and focused unit checks pass before publication.

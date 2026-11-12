@@ -552,3 +552,77 @@ def test_refresh_matches_picks_up_newly_confirmed_prior_film_faces_without_reing
     assert noop["mutated"] is False
     assert noop["latest_report_id"] == body["latest_report_id"]
 
+
+def test_roster_known_people_and_cluster_suggested_matches_populate_from_prior_films(
+    two_movie_workbench, tmp_path, monkeypatch
+):
+    import api.routes.identity as identity_routes
+
+    client = two_movie_workbench["client"]
+    active_ident_dir = two_movie_workbench["active_ident_dir"]
+    cfg2 = two_movie_workbench["cfg"]
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(active_ident_dir))
+
+    # Before Movie 2 has a local family_roster.yaml, GET /api/identity/roster stays non-creating
+    # and still populates known_people from Movie 1's reference_sources.
+    roster_file = active_ident_dir / "family_roster.yaml"
+    assert not roster_file.exists()
+    roster_resp = client.get("/api/identity/roster")
+    assert roster_resp.status_code == 200
+    roster_data = roster_resp.json()
+    assert roster_data["identities"] == []
+    assert not roster_file.exists()
+    known_by_id = {p["id"]: p for p in roster_data["known_people"]}
+    assert "stable-family-id" in known_by_id
+    assert known_by_id["stable-family-id"]["in_active_roster"] is False
+
+    # Build a clean epoch containing Movie 1's saved reference face and verify
+    # GET /api/identity/face-clusters attaches suggested_matches from reference_sources.
+    ref_vec = list(controlled_faces()[0]["encoding"])
+    movie_suggest = _make_movie_epoch(tmp_path, "epoch-movie-suggest", "03. 1989.mp4", [ref_vec])
+    suggest_ident_dir = tmp_path / "suggest-identity"
+    suggest_ident_dir.mkdir()
+    first_fid = movie_suggest["provenance"][0][1][0]
+    (suggest_ident_dir / "face_clusters.json").write_text(
+        json.dumps(
+            {
+                "epoch_id": movie_suggest["epoch"].name,
+                "clusters": [
+                    {
+                        "cluster_id": "fc_ref_000",
+                        "label": None,
+                        "face_count": 1,
+                        "face_ids": [f"{first_fid}_0"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg_suggest = {
+        "epoch_id": movie_suggest["epoch"].name,
+        "paths": {
+            "db_path": str(movie_suggest["epoch"] / "memory.db"),
+            "knowledge_graph_db": str(movie_suggest["kg"]),
+        },
+        "identity_search": {
+            "roster_path": str(suggest_ident_dir / "family_roster.yaml"),
+            "kg_db_path": str(movie_suggest["kg"]),
+        },
+        "identity_matching": {
+            "enabled": True,
+            "reference_sources": cfg2["identity_matching"]["reference_sources"],
+        },
+    }
+    monkeypatch.setattr(identity_routes, "_CFG", cfg_suggest)
+    monkeypatch.setenv("GOODQ_IDENTITY_PATH", str(suggest_ident_dir))
+
+    clusters_resp = client.get("/api/identity/face-clusters")
+    assert clusters_resp.status_code == 200
+    clusters = clusters_resp.json()["clusters"]
+    suggested_clusters = [c for c in clusters if c.get("suggested_matches")]
+    assert suggested_clusters, "Expected cluster to carry suggested_matches from Movie 1 references"
+    top_match = suggested_clusters[0]["suggested_matches"][0]
+    assert top_match["person_id"] == "stable-family-id"
+    assert top_match["similarity"] >= 0.99
+    assert top_match["above_threshold"] is True

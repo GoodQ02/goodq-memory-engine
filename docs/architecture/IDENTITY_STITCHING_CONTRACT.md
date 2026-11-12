@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-10-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-11 -->
 
 # Identity Stitching Contract
 
@@ -110,6 +110,23 @@ playback. Media paths are resolved only from a validated receipt within configur
 source roots, with a content hash check. No comparison endpoint applies a name.
 Future reviewed examples are admitted through the existing curated authorities;
 reusing predictions as confirmed examples is prohibited.
+
+Configured `reviewed_face_sources` allow confirmed face observations from multiple
+prior reviewed epochs to carry forward alongside curated roster representatives.
+When operator curation advances in an earlier epoch after a later video has already
+been ingested, governed `POST /api/identity/matches/refresh` (`refresh_epoch_matches`)
+rebuilds that unapplied epoch's reference snapshot and comparison report against the
+updated curated sources without re-ingesting media; already-applied reports cannot
+be overwritten unless first undone.
+
+Passive read-only curation helpers (`GET /api/identity/cross-film-scan`,
+`GET /api/identity/cross-film-media/{epoch_id}/{detection_id}`, `known_people` on
+`GET /api/identity/roster`, and advisory `suggested_matches` on
+`GET /api/identity/face-clusters`) open source stores in read-only mode (`?mode=ro`),
+honor UCF scene retirement, and never write graph edges or promote identity claims.
+Sub-threshold cluster suggestions (`cosine >= 0.38` for `opencv-yunet-sface`, marked
+`above_threshold: false` below the active policy cutoff) are operator labeling hints
+only, never automatic proposals or graph assertions.
 
 ### 1. Voice -> Pattern
 
@@ -366,5 +383,8 @@ Current runtime implementation lives in:
 - `wsl2_audio/process_audio.py`
 - `lib/kg_realtime_integration.py`
 - `lib/identity_ledger.py`
+- `lib/identity_matching.py`
+- `api/utils/identity_cross_film.py`
+- `api/utils/identity_read_projection.py`
 
 This document describes the current contract those runtime surfaces are expected to preserve.

@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active Python paths: **449**
+Indexed active Python paths: **450**
 
 ## Repository root
 
@@ -63,6 +63,7 @@ Indexed active Python paths: **449**
 - `api/utils/audio_evidence.py`
 - `api/utils/desktop_player.py`
 - `api/utils/identity_appearance.py`
+- `api/utils/identity_cross_film.py`
 - `api/utils/identity_evidence_pack.py`
 - `api/utils/identity_match_review.py`
 - `api/utils/identity_matching.py`

@@ -2286,39 +2286,59 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
 
 
 def _unload_ollama_model_if_used(client: Any) -> bool:
-    """Release Ollama model VRAM before subsequent progressive window GPU steps run."""
-    model = getattr(client, "last_model_used", None)
+    """Release all attempted Ollama models from VRAM before subsequent window GPU steps run."""
     session = getattr(client, "session", None)
-    if model is None or session is None or getattr(model, "backend", None) != "ollama":
+    if session is None:
         return False
-    endpoint = str(getattr(model, "endpoint", "") or "").rstrip("/")
-    base_url = endpoint[:-3] if endpoint.endswith("/v1") else endpoint
-    model_id = str(getattr(model, "model_id", "") or "").strip()
-    if not base_url or not model_id:
+    candidates: List[Any] = list(getattr(client, "attempted_models", None) or [])
+    last_used = getattr(client, "last_model_used", None)
+    if last_used is not None:
+        candidates.append(last_used)
+
+    targets: List[tuple[str, str]] = []
+    seen_targets: set[tuple[str, str]] = set()
+    for model in candidates:
+        if getattr(model, "backend", None) != "ollama":
+            continue
+        endpoint = str(getattr(model, "endpoint", "") or "").rstrip("/")
+        base_url = endpoint[:-3] if endpoint.endswith("/v1") else endpoint
+        model_id = str(getattr(model, "model_id", "") or "").strip()
+        if not base_url or not model_id:
+            continue
+        key = (base_url, model_id)
+        if key not in seen_targets:
+            seen_targets.add(key)
+            targets.append(key)
+
+    if not targets:
         return False
-    try:
-        response = session.post(
-            f"{base_url}/api/generate",
-            json={"model": model_id, "keep_alive": 0},
-            timeout=5,
-        )
-        status_code = getattr(response, "status_code", None)
-        if isinstance(status_code, int) and not (200 <= status_code < 300):
-            detail = str(getattr(response, "text", "") or "").strip()[:200]
-            logger.warning(
-                "[HARMONIZER] Failed to unload Ollama model %s from VRAM (HTTP %s)%s",
-                model_id,
-                status_code,
-                f": {detail}" if detail else "",
+
+    all_unloaded = True
+    for base_url, model_id in targets:
+        try:
+            response = session.post(
+                f"{base_url}/api/generate",
+                json={"model": model_id, "keep_alive": 0},
+                timeout=5,
             )
-            return False
-        if hasattr(response, "raise_for_status"):
-            response.raise_for_status()
-        logger.info("[HARMONIZER] Unloaded Ollama model %s from VRAM", model_id)
-        return True
-    except Exception as exc:
-        logger.warning("[HARMONIZER] Failed to unload Ollama model %s from VRAM: %s", model_id, exc)
-        return False
+            status_code = getattr(response, "status_code", None)
+            if isinstance(status_code, int) and not (200 <= status_code < 300):
+                detail = str(getattr(response, "text", "") or "").strip()[:200]
+                logger.warning(
+                    "[HARMONIZER] Failed to unload Ollama model %s from VRAM (HTTP %s)%s",
+                    model_id,
+                    status_code,
+                    f": {detail}" if detail else "",
+                )
+                all_unloaded = False
+                continue
+            if hasattr(response, "raise_for_status"):
+                response.raise_for_status()
+            logger.info("[HARMONIZER] Unloaded Ollama model %s from VRAM", model_id)
+        except Exception as exc:
+            logger.warning("[HARMONIZER] Failed to unload Ollama model %s from VRAM: %s", model_id, exc)
+            all_unloaded = False
+    return all_unloaded
 
 
 

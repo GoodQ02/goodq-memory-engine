@@ -11,9 +11,11 @@
     speakerClusters: [],   // from /api/identity/speaker-clusters
     nameMentions: {},      // from /api/identity/name-mentions
     roster: [],            // from /api/identity/roster (family_roster.yaml)
+    apiKnownPeople: [],    // canonical people from active roster + configured prior films
+    knownPeople: [],       // merged deduplicated saved people for dropdowns & typo guard
 
     // Derived / working sets
-    knownIdentityLabels: new Set(),  // display_names from roster
+    knownIdentityLabels: new Set(),  // display_names from roster & prior films
     activeFaceModal: null,           // cluster being labeled
     activeRosterIdx: -1,             // selected roster entry index
     nameSortDir: -1,                 // -1 = desc, +1 = asc
@@ -45,6 +47,8 @@
     // Focus Panel
     focusPanel: document.getElementById("focus-panel"),
     focusMeta: document.getElementById("focus-meta"),
+    focusSuggestions: document.getElementById("focus-suggestions"),
+    focusPersonSelect: document.getElementById("focus-person-select"),
     focusNameInput: document.getElementById("focus-name-input"),
     focusOperatorNote: document.getElementById("focus-operator-note"),
     focusTypeaheadList: document.getElementById("focus-typeahead-list"),
@@ -52,6 +56,8 @@
     operationStatus: document.getElementById("operation-status"),
     focusGrid: document.getElementById("focus-grid"),
     focusLinkRoster: document.getElementById("focus-link-roster"),
+    focusSave: document.getElementById("focus-save"),
+    focusSaveNext: document.getElementById("focus-save-next"),
     focusScanFilms: document.getElementById("focus-scan-films"),
     focusCrossFilm: document.getElementById("focus-cross-film"),
     focusPrev: document.getElementById("focus-prev"),
@@ -152,7 +158,7 @@
     ui.focusOperationFailure.hidden = !message;
   }
 
-  async function confirmedIdentityRequest(endpoint, payload, confirmationCopy) {
+  async function confirmedIdentityRequest(endpoint, payload, confirmationCopy, alreadyConfirmed = false) {
     let confirmationToken = null;
     try {
       await apiCall(endpoint, {
@@ -163,7 +169,7 @@
     } catch (error) {
       confirmationToken = error.payload && error.payload.result && error.payload.result.confirmation_token;
       if (error.status !== 403 || !confirmationToken) throw error;
-      if (!window.confirm(confirmationCopy)) {
+      if (!alreadyConfirmed && !window.confirm(confirmationCopy)) {
         setOperationStatus("Operation cancelled; no change was made.");
         return null;
       }
@@ -278,6 +284,7 @@
     try {
       const data = await apiCall("/api/identity/face-clusters");
       state.faceClusters = data.clusters || [];
+      rebuildKnownPeopleState();
       ui.facesNote.textContent = `${state.faceClusters.length} clusters loaded.`;
       ui.badgeFaces.textContent = state.faceClusters.length;
       renderFaceGrid();
@@ -303,6 +310,7 @@
       );
       if (!data) return;
       state.faceClusters = data.clusters || [];
+      rebuildKnownPeopleState();
       ui.badgeFaces.textContent = state.faceClusters.length;
       ui.facesNote.textContent = `${state.faceClusters.length} clusters (eps=${eps}).`;
       renderFaceGrid();
@@ -316,6 +324,48 @@
       ui.rerunFacesBtn.textContent = "PREPARE FACE CANDIDATES";
       ui.rerunFacesBtn.disabled = !actionReady("face_prepare");
     }
+  }
+
+  function extractPersonIdFromSelectValue(rawValue) {
+    const text = String(rawValue || "");
+    if (text.startsWith("person:")) return text.slice(7);
+    if (text.startsWith("sug:")) return text.slice(4);
+    return "";
+  }
+
+  function personPickerOptionsHtml(cluster) {
+    const suggestions = Array.isArray(cluster && cluster.suggested_matches) ? cluster.suggested_matches : [];
+    const known = state.knownPeople || [];
+    let html = `<option value="">Choose saved person…</option>`;
+    if (suggestions.length) {
+      html += `<optgroup label="Suggested from saved faces">`;
+      suggestions.forEach(s => {
+        const simText = Number.isFinite(Number(s.similarity)) ? ` · ${Number(s.similarity).toFixed(2)}` : "";
+        html += `<option value="sug:${escHtml(s.person_id)}">★ ${escHtml(s.display_name)}${simText}</option>`;
+      });
+      html += `</optgroup>`;
+    }
+    if (known.length) {
+      html += `<optgroup label="Saved family &amp; prior films">`;
+      known.forEach(p => {
+        const suffix = p.in_active_roster ? "" : " (prior film)";
+        html += `<option value="person:${escHtml(p.id)}">${escHtml(p.display_name)}${suffix}</option>`;
+      });
+      html += `</optgroup>`;
+    }
+    html += `<option value="__new__">+ Add new person…</option>`;
+    return html;
+  }
+
+  function clusterSuggestionsHtml(cluster) {
+    const suggestions = Array.isArray(cluster && cluster.suggested_matches) ? cluster.suggested_matches : [];
+    if (!suggestions.length) return "";
+    const chips = suggestions.slice(0, 2).map(s => {
+      const sim = Number.isFinite(Number(s.similarity)) ? Number(s.similarity).toFixed(2) : "";
+      const strongClass = s.above_threshold ? " strong" : "";
+      return `<button type="button" class="cluster-suggestion-chip${strongClass}" data-suggest-id="${escHtml(s.person_id)}" data-suggest-name="${escHtml(s.display_name)}" title="Select saved person ${escHtml(s.display_name)}">★ ${escHtml(s.display_name)}${sim ? ` (${sim})` : ""}</button>`;
+    }).join("");
+    return `<div class="cluster-suggestion-bar"><span class="cluster-suggestion-prefix">Closest saved:</span>${chips}</div>`;
   }
 
   function renderFaceGrid() {
@@ -371,9 +421,13 @@
     clusters.forEach((cluster, loopIdx) => {
       // We need original idx for the API call
       const idx = state.faceClusters.indexOf(cluster);
-      const labeled = cluster.label && cluster.label !== "null";
+      const labeled = Boolean(cluster.label && cluster.label !== "null");
       const ownerIdx = labeled ? faceClusterOwner(cluster.cluster_id) : -1;
       const showLinkBtn = Boolean(labeled && ownerIdx === -1 && actionReady("family_facts"));
+      const matchedKnown = labeled ? resolveKnownPerson(cluster.label) : null;
+      const hasSuggestions = Array.isArray(cluster.suggested_matches) && cluster.suggested_matches.length > 0;
+      const hasKnownPeople = state.knownPeople.length > 0 || hasSuggestions;
+      const showCustomInput = !hasKnownPeople || (labeled && !matchedKnown);
       const card = document.createElement("div");
       card.className = `cluster-card${labeled ? " labeled" : ""}`;
       card.dataset.idx = idx;
@@ -392,6 +446,9 @@
       const rosterLinkControl = showLinkBtn
         ? `<button class="toolbar-btn secondary cluster-roster-link-btn" type="button">SAVE &amp; LINK IN ROSTER +</button>`
         : "";
+      const rosterLinkedBadge = ownerIdx !== -1
+        ? `<span class="cluster-roster-linked-badge" title="Linked in Family Roster">ROSTER ✓</span>`
+        : "";
 
       card.innerHTML = `
         <div class="cluster-card-header">
@@ -408,15 +465,128 @@
         <button class="toolbar-btn review-members" type="button">VIEW ALL ${cluster.face_count || 0} SAVED MEMBERS</button>
         ${rosterLinkControl}
         <div class="cluster-card-footer">
-          <span class="cluster-stat">Faces: <strong>${cluster.face_count ?? "—"}</strong></span>
-          <div class="typeahead-wrapper inline">
-            <input type="text" class="card-name-input" data-idx="${idx}" placeholder="Name..." value="${labeled ? escHtml(cluster.label) : ""}">
-            <ul class="typeahead-list" hidden></ul>
+          <div class="cluster-footer-meta">
+            <span class="cluster-stat">Faces: <strong>${cluster.face_count ?? "—"}</strong></span>
+            ${rosterLinkedBadge}
+          </div>
+          ${clusterSuggestionsHtml(cluster)}
+          <div class="cluster-label-controls">
+            ${hasKnownPeople ? `<select class="card-person-select" aria-label="Choose saved person for ${escHtml(cluster.cluster_id)}">${personPickerOptionsHtml(cluster)}</select>` : ""}
+            <div class="typeahead-wrapper inline"${showCustomInput ? "" : " hidden"}>
+              <input type="text" class="card-name-input" data-idx="${idx}" placeholder="Type new person name..." autocomplete="off" spellcheck="false" enterkeyhint="done" value="${labeled ? escHtml(cluster.label) : ""}">
+              <ul class="typeahead-list" hidden></ul>
+            </div>
+            <button type="button" class="toolbar-btn card-save-btn">${labeled ? "UPDATE" : "SAVE"}</button>
           </div>
         </div>`;
 
+      const personSelect = hasKnownPeople ? card.querySelector(".card-person-select") : null;
+      const typeaheadWrap = card.querySelector(".typeahead-wrapper");
+      const nameInput = card.querySelector(".card-name-input");
+      const saveBtn = card.querySelector(".card-save-btn");
+
+      if (personSelect) {
+        if (matchedKnown) {
+          personSelect.value = `person:${matchedKnown.id}`;
+        } else if (labeled) {
+          personSelect.value = "__new__";
+        } else {
+          personSelect.value = "";
+        }
+        personSelect.addEventListener("change", (ev) => {
+          ev.stopPropagation?.();
+          const val = personSelect.value;
+          const pid = extractPersonIdFromSelectValue(val);
+          if (pid) {
+            const p = state.knownPeople.find(item => item.id === pid);
+            if (p && nameInput) {
+              nameInput.value = p.display_name;
+              nameInput.dataset.personId = p.id;
+            }
+            if (typeaheadWrap) typeaheadWrap.hidden = true;
+          } else if (val === "__new__") {
+            if (typeaheadWrap) typeaheadWrap.hidden = false;
+            if (nameInput) {
+              if (matchedKnown) nameInput.value = "";
+              nameInput.dataset.personId = "";
+              nameInput.focus?.();
+            }
+          } else {
+            if (typeaheadWrap) typeaheadWrap.hidden = true;
+            if (nameInput) nameInput.dataset.personId = "";
+          }
+        });
+      }
+
+      if (typeof card.querySelectorAll === "function") {
+        card.querySelectorAll(".cluster-suggestion-chip").forEach(chip => {
+          chip.addEventListener("click", (ev) => {
+            ev.stopPropagation?.();
+            const pid = chip.dataset.suggestId || "";
+            const pname = chip.dataset.suggestName || "";
+            if (personSelect && pid) {
+              personSelect.value = `person:${pid}`;
+            }
+            if (typeaheadWrap && hasKnownPeople) typeaheadWrap.hidden = true;
+            if (nameInput) {
+              nameInput.value = pname;
+              nameInput.dataset.personId = pid;
+            }
+            saveBtn?.focus?.();
+          });
+        });
+      }
+
+      if (saveBtn) {
+        saveBtn.addEventListener("click", async (ev) => {
+          ev.stopPropagation?.();
+          let chosenName = "";
+          let preferredPersonId = "";
+          if (personSelect) {
+            const pid = extractPersonIdFromSelectValue(personSelect.value);
+            if (pid) {
+              const found = state.knownPeople.find(item => item.id === pid);
+              if (found) {
+                chosenName = found.display_name;
+                preferredPersonId = found.id;
+              }
+            } else if (personSelect.value === "__new__") {
+              chosenName = (nameInput?.value || "").trim();
+              preferredPersonId = nameInput?.dataset?.personId || "";
+            } else {
+              chosenName = (nameInput?.value || "").trim();
+              if (!chosenName) {
+                toast("Select a saved person from the dropdown (or choose + Add new person…), then click SAVE.", "warn");
+                personSelect.focus?.();
+                return;
+              }
+            }
+          } else {
+            chosenName = (nameInput?.value || "").trim();
+            preferredPersonId = nameInput?.dataset?.personId || "";
+          }
+          if (!chosenName) {
+            if (typeaheadWrap) typeaheadWrap.hidden = false;
+            nameInput?.focus?.();
+            toast("Enter the new person's name first, then click SAVE.", "warn");
+            return;
+          }
+          await applyLabel(idx, chosenName, { preferredPersonId });
+        });
+      }
+
       card.addEventListener("click", (e) => {
-        if (e.target.closest?.(".typeahead-wrapper") || e.target.closest?.(".cluster-roster-link-btn") || e.target.tagName === 'INPUT') return;
+        const tag = e.target && e.target.tagName;
+        if (
+          e.target.closest?.(".cluster-card-footer") ||
+          e.target.closest?.(".typeahead-wrapper") ||
+          e.target.closest?.(".cluster-roster-link-btn") ||
+          tag === "INPUT" ||
+          tag === "SELECT" ||
+          tag === "OPTION"
+        ) {
+          return;
+        }
         openFocusPanel(idx);
       });
       if (showLinkBtn) {
@@ -428,7 +598,7 @@
           });
         }
       }
-      setupTypeahead(card.querySelector(".card-name-input"), card.querySelector(".typeahead-list"), idx);
+      setupTypeahead(nameInput, card.querySelector(".typeahead-list"), idx);
 
       ui.facesGrid.appendChild(card);
     });
@@ -500,7 +670,25 @@
       : '<p>Exact member evidence is unavailable. Historical source frames below are context only.</p>' +
         faceUrls(cluster).map(src => `<img src="${escHtml(src)}" alt="Historical source frame, target unverified" loading="lazy">`).join("");
 
-    if (ui.focusNameInput) ui.focusNameInput.value = (cluster.label && cluster.label !== "null") ? cluster.label : "";
+    const savedLabel = (cluster.label && cluster.label !== "null") ? cluster.label : "";
+    const matchedKnown = savedLabel ? resolveKnownPerson(savedLabel) : null;
+    if (ui.focusPersonSelect) {
+      ui.focusPersonSelect.innerHTML = personPickerOptionsHtml(cluster);
+      ui.focusPersonSelect.value = matchedKnown
+        ? `person:${matchedKnown.id}`
+        : (savedLabel ? "__new__" : "");
+    }
+    if (ui.focusSuggestions) {
+      const sugHtml = clusterSuggestionsHtml(cluster);
+      ui.focusSuggestions.hidden = !sugHtml;
+      ui.focusSuggestions.innerHTML = sugHtml;
+    }
+    if (ui.focusNameInput) {
+      ui.focusNameInput.value = savedLabel;
+      if (ui.focusNameInput.dataset) {
+        ui.focusNameInput.dataset.personId = matchedKnown ? matchedKnown.id : "";
+      }
+    }
     if (ui.focusOperatorNote) ui.focusOperatorNote.value = cluster.operator_note || "";
     if (ui.focusCrossFilm) {
       ui.focusCrossFilm.hidden = true;
@@ -622,6 +810,82 @@
     if (ui.focusPanel && ui.focusPanel.open) ui.focusPanel.close();
   }
 
+  async function saveFromFocusPanel(advanceNext = false) {
+    if (currentFocusIdx < 0 || currentFocusIdx >= state.faceClusters.length) return;
+    let chosenName = (ui.focusNameInput?.value || "").trim();
+    let preferredPersonId = ui.focusNameInput?.dataset?.personId || "";
+    if (!chosenName && ui.focusPersonSelect) {
+      const pid = extractPersonIdFromSelectValue(ui.focusPersonSelect.value);
+      if (pid) {
+        const p = state.knownPeople.find(item => item.id === pid);
+        if (p) {
+          chosenName = p.display_name;
+          preferredPersonId = p.id;
+          if (ui.focusNameInput) ui.focusNameInput.value = chosenName;
+        }
+      }
+    }
+    if (!chosenName) {
+      setOperationFailure("Select a saved person from the dropdown or enter a display name before saving.");
+      toast("Select a saved person or type a display name first.", "warn");
+      ui.focusNameInput?.focus?.();
+      return;
+    }
+    await applyLabel(currentFocusIdx, chosenName, { preferredPersonId, advanceNext });
+  }
+
+  if (ui.focusPersonSelect) {
+    ui.focusPersonSelect.addEventListener("change", () => {
+      const val = ui.focusPersonSelect.value;
+      const pid = extractPersonIdFromSelectValue(val);
+      if (pid) {
+        const p = state.knownPeople.find(item => item.id === pid);
+        if (p && ui.focusNameInput) {
+          ui.focusNameInput.value = p.display_name;
+          if (ui.focusNameInput.dataset) ui.focusNameInput.dataset.personId = p.id;
+        }
+      } else if (val === "__new__") {
+        if (ui.focusNameInput) {
+          ui.focusNameInput.value = "";
+          if (ui.focusNameInput.dataset) ui.focusNameInput.dataset.personId = "";
+          ui.focusNameInput.focus?.();
+        }
+      } else if (ui.focusNameInput && ui.focusNameInput.dataset) {
+        ui.focusNameInput.dataset.personId = "";
+      }
+    });
+  }
+
+  if (ui.focusSuggestions) {
+    ui.focusSuggestions.addEventListener("click", (ev) => {
+      const chip = ev.target && ev.target.closest ? ev.target.closest(".cluster-suggestion-chip") : null;
+      if (!chip) return;
+      const pid = chip.dataset.suggestId || "";
+      const pname = chip.dataset.suggestName || "";
+      if (ui.focusPersonSelect && pid) ui.focusPersonSelect.value = `person:${pid}`;
+      if (ui.focusNameInput) {
+        ui.focusNameInput.value = pname;
+        if (ui.focusNameInput.dataset) ui.focusNameInput.dataset.personId = pid;
+      }
+      ui.focusSave?.focus?.();
+    });
+  }
+
+  if (ui.focusNameInput) {
+    ui.focusNameInput.addEventListener("input", () => {
+      const typed = (ui.focusNameInput.value || "").trim();
+      const matched = typed ? resolveKnownPerson(typed) : null;
+      if (ui.focusNameInput.dataset) {
+        ui.focusNameInput.dataset.personId = matched ? matched.id : "";
+      }
+      if (ui.focusPersonSelect) {
+        ui.focusPersonSelect.value = matched ? `person:${matched.id}` : (typed ? "__new__" : "");
+      }
+    });
+  }
+
+  if(ui.focusSave) ui.focusSave.addEventListener("click", () => saveFromFocusPanel(false));
+  if(ui.focusSaveNext) ui.focusSaveNext.addEventListener("click", () => saveFromFocusPanel(true));
   if(ui.focusClose) ui.focusClose.addEventListener("click", closeFocusPanel);
   if(ui.focusPrev) ui.focusPrev.addEventListener("click", () => openFocusPanel(currentFocusIdx - 1));
   if(ui.focusNext) ui.focusNext.addEventListener("click", () => openFocusPanel(currentFocusIdx + 1));
@@ -724,43 +988,240 @@
     }
   }
 
+  function normalizePersonKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function levenshteinDistance(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i += 1) {
+      let prevDiag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const temp = prev[j];
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, prevDiag + cost);
+        prevDiag = temp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  function rebuildKnownPeopleState() {
+    const byId = new Map();
+    const idByName = new Map();
+    const upsert = (raw, inActive) => {
+      if (!raw || typeof raw !== "object") return;
+      const pid = String(raw.id || "").trim();
+      const name = String(raw.display_name || raw.name || "").trim();
+      if (!pid || !name) return;
+      const aliases = Array.isArray(raw.aliases)
+        ? raw.aliases.map(a => String(a || "").trim()).filter(Boolean)
+        : [];
+      const role = String(raw.role || "").trim();
+      const existingId = byId.has(pid) ? pid : idByName.get(name.toLowerCase());
+      if (existingId && byId.has(existingId)) {
+        const entry = byId.get(existingId);
+        const seenAlias = new Set([entry.display_name.toLowerCase(), ...entry.aliases.map(a => a.toLowerCase())]);
+        aliases.forEach(a => {
+          if (!seenAlias.has(a.toLowerCase())) {
+            seenAlias.add(a.toLowerCase());
+            entry.aliases.push(a);
+          }
+          if (!idByName.has(a.toLowerCase())) idByName.set(a.toLowerCase(), existingId);
+        });
+        if (!entry.role && role) entry.role = role;
+        if (inActive) {
+          entry.in_active_roster = true;
+          entry.source = "active_roster";
+        }
+        return;
+      }
+      const record = {
+        id: pid,
+        display_name: name,
+        aliases: [...aliases],
+        role,
+        in_active_roster: Boolean(inActive),
+        source: inActive ? "active_roster" : (raw.source || "prior_films"),
+      };
+      byId.set(pid, record);
+      idByName.set(name.toLowerCase(), pid);
+      aliases.forEach(a => {
+        if (!idByName.has(a.toLowerCase())) idByName.set(a.toLowerCase(), pid);
+      });
+    };
+
+    (state.roster || []).forEach(person => upsert(person, true));
+    (state.apiKnownPeople || []).forEach(person => upsert(person, Boolean(person && person.in_active_roster && state.roster.some(r => r.id === person.id))));
+    (state.faceClusters || []).forEach(cluster => {
+      ((cluster && cluster.suggested_matches) || []).forEach(sug => {
+        if (sug && sug.person_id && sug.display_name) {
+          upsert(
+            { id: sug.person_id, display_name: sug.display_name, source: "suggested_match" },
+            state.roster.some(r => r.id === sug.person_id)
+          );
+        }
+      });
+    });
+
+    state.knownPeople = Array.from(byId.values()).sort((a, b) =>
+      a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "base" })
+    );
+    const labelSet = new Set();
+    state.knownPeople.forEach(p => labelSet.add(p.display_name));
+    (state.faceClusters || []).forEach(c => {
+      if (c && c.label && c.label !== "null") labelSet.add(c.label);
+    });
+    state.knownIdentityLabels = labelSet;
+    if (typeof window !== "undefined") {
+      window.GoodQIdentityPeople = {
+        getKnownPeople: () => [...state.knownPeople],
+        resolvePerson: resolveKnownPerson,
+        findNearDuplicate: findNearDuplicatePerson,
+      };
+    }
+  }
+
+  function resolveKnownPerson(rawName, preferredPersonId = "") {
+    const pid = String(preferredPersonId || "").trim();
+    if (pid) {
+      const byPid = (state.knownPeople || []).find(p => p.id === pid)
+        || (state.roster || []).find(p => p.id === pid);
+      if (byPid) return byPid;
+    }
+    const norm = normalizePersonKey(rawName);
+    if (!norm) return null;
+    for (const pool of [state.roster || [], state.knownPeople || []]) {
+      for (const person of pool) {
+        if (!person) continue;
+        if (normalizePersonKey(person.display_name) === norm) return person;
+        if (Array.isArray(person.aliases) && person.aliases.some(a => normalizePersonKey(a) === norm)) {
+          return person;
+        }
+      }
+    }
+    return null;
+  }
+
+  function findNearDuplicatePerson(rawName) {
+    const norm = normalizePersonKey(rawName);
+    if (!norm || norm.length < 3) return null;
+    let bestPerson = null;
+    let bestDist = Infinity;
+    for (const person of state.knownPeople || []) {
+      const candidates = [person.display_name, ...(person.aliases || [])];
+      for (const cand of candidates) {
+        const cNorm = normalizePersonKey(cand);
+        if (!cNorm || cNorm === norm) continue;
+        const minLen = Math.min(norm.length, cNorm.length);
+        const maxAllowed = minLen >= 6 ? 2 : (minLen >= 3 ? 1 : 0);
+        if (maxAllowed === 0 || Math.abs(norm.length - cNorm.length) > maxAllowed) continue;
+        const dist = levenshteinDistance(norm, cNorm);
+        if (dist <= maxAllowed && dist < bestDist) {
+          bestDist = dist;
+          bestPerson = person;
+        }
+      }
+    }
+    return bestPerson;
+  }
+
+  function confirmOrResolvePersonChoice(rawName, preferredPersonId = "") {
+    const trimmed = String(rawName || "").trim();
+    if (!trimmed) return { person: null, displayName: "" };
+    const exact = resolveKnownPerson(trimmed, preferredPersonId);
+    if (exact) {
+      return { person: exact, displayName: exact.display_name };
+    }
+    const near = findNearDuplicatePerson(trimmed);
+    if (near && typeof window !== "undefined" && typeof window.confirm === "function") {
+      const useExisting = window.confirm(
+        `"${trimmed}" looks very close to already-saved person "${near.display_name}".\n\n` +
+        `Click OK to use "${near.display_name}" (prevents duplicate entries), or Cancel to create "${trimmed}" as a separate new person.`
+      );
+      if (useExisting) {
+        return { person: near, displayName: near.display_name };
+      }
+    }
+    return { person: null, displayName: trimmed };
+  }
+
   function slugifyIdentityId(displayName) {
     const base = String(displayName || "")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "") || "person";
-    const used = new Set(state.roster.map(item => item.id));
+    const used = new Set([
+      ...(state.roster || []).map(item => item.id),
+      ...(state.knownPeople || []).map(item => item.id),
+    ]);
     if (!used.has(base)) return base;
     let suffix = 2;
     while (used.has(`${base}_${suffix}`)) suffix += 1;
     return `${base}_${suffix}`;
   }
 
-  async function syncClusterToRoster(clusterId, displayName) {
+  async function syncClusterToRoster(clusterId, displayName, opts) {
+    const options = opts || {};
     const trimmed = String(displayName || "").trim();
     if (!trimmed || !clusterId || !actionReady("family_facts")) return false;
+    const alreadyConfirmed = Boolean(options.alreadyConfirmed);
+    const known = options.preferredPerson || resolveKnownPerson(trimmed, options.preferredPersonId || "");
+    const canonicalName = known ? known.display_name : trimmed;
     const currentOwner = faceClusterOwner(clusterId);
-    const targetIdx = state.roster.findIndex(
-      item => (item.display_name || "").toLowerCase() === trimmed.toLowerCase()
+    const targetIdx = state.roster.findIndex(item =>
+      (known && item.id === known.id) ||
+      normalizePersonKey(item.display_name) === normalizePersonKey(canonicalName) ||
+      (Array.isArray(item.aliases) && item.aliases.some(a => normalizePersonKey(a) === normalizePersonKey(canonicalName)))
     );
     if (currentOwner !== -1 && currentOwner !== targetIdx) {
-      toast(`Cluster ${clusterId} is already linked to ${state.roster[currentOwner].display_name} in Family Roster.`, "warn");
-      return false;
+      if (!alreadyConfirmed) {
+        toast(`Cluster ${clusterId} is already linked to ${state.roster[currentOwner].display_name} in Family Roster.`, "warn");
+        return false;
+      }
+      const prevOwner = state.roster[currentOwner];
+      const detachedOwner = {
+        ...prevOwner,
+        face_cluster_ids: (prevOwner.face_cluster_ids || []).filter(cid => cid !== clusterId),
+      };
+      const detached = await confirmedIdentityRequest(
+        "/api/identity/roster/save",
+        { identity: detachedOwner },
+        `Move ${clusterId} away from "${prevOwner.display_name}"?`,
+        true
+      );
+      if (!detached) return false;
+      state.roster[currentOwner] = detachedOwner;
     }
     let candidate;
     let isNew = false;
     if (targetIdx === -1) {
       isNew = true;
+      const canonicalId = (known && known.id && !state.roster.some(r => r.id === known.id))
+        ? known.id
+        : slugifyIdentityId(canonicalName);
+      const carryAliases = known && Array.isArray(known.aliases) ? [...known.aliases] : [];
+      const mentionKeys = Array.from(new Set([canonicalName, ...carryAliases]));
       candidate = {
-        id: slugifyIdentityId(trimmed),
-        display_name: trimmed,
-        aliases: [],
+        id: canonicalId,
+        display_name: canonicalName,
+        aliases: carryAliases,
         face_cluster_ids: [clusterId],
         speaker_cluster_ids: [],
-        name_mention_keys: [trimmed],
-        role: "",
-        notes: "Created from Face Clusters; edit full profile in Family Roster.",
+        name_mention_keys: mentionKeys,
+        role: (known && known.role) ? known.role : "",
+        notes: known
+          ? "Linked from saved family profile; edit full profile in Family Roster."
+          : "Created from Face Clusters; edit full profile in Family Roster.",
         confirmed: false,
       };
     } else {
@@ -777,18 +1238,20 @@
         "/api/identity/roster/save",
         { identity: candidate },
         isNew
-          ? `Create new roster person "${trimmed}" and link ${clusterId}? You can fill out their full profile later in Family Roster.`
-          : `Link face cluster ${clusterId} to "${candidate.display_name}" in Family Roster?`
+          ? `Create roster entry "${canonicalName}" and link ${clusterId}? You can fill out their full profile later in Family Roster.`
+          : `Link face cluster ${clusterId} to "${candidate.display_name}" in Family Roster?`,
+        alreadyConfirmed
       );
       if (!saved) return false;
       if (isNew) state.roster.push(candidate);
       else state.roster[targetIdx] = candidate;
-      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
-      updateRosterIdentityLabels();
+      rebuildKnownPeopleState();
       if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
       renderRosterSidebar();
       renderFaceGrid();
-      toast(isNew ? `Added "${trimmed}" to Family Roster with ${clusterId}` : `Linked ${clusterId} to ${candidate.display_name}`);
+      if (!alreadyConfirmed) {
+        toast(isNew ? `Added "${canonicalName}" to Family Roster with ${clusterId}` : `Linked ${clusterId} to ${candidate.display_name}`);
+      }
       return true;
     } catch (err) {
       const msg = `Roster sync failed: ${err.message}`;
@@ -798,44 +1261,80 @@
     }
   }
 
-  async function applyLabel(idx, label) {
-    if (idx < 0 || idx >= state.faceClusters.length) return;
+  function nextFocusClusterIndex(fromIdx) {
+    const total = state.faceClusters.length;
+    if (total <= 1) return -1;
+    for (let offset = 1; offset < total; offset += 1) {
+      const candIdx = (fromIdx + offset) % total;
+      const c = state.faceClusters[candIdx];
+      if (c && (!c.label || c.label === "null")) return candIdx;
+    }
+    return fromIdx + 1 < total ? fromIdx + 1 : -1;
+  }
+
+  async function applyLabel(idx, label, opts) {
+    const options = opts || {};
+    if (idx < 0 || idx >= state.faceClusters.length) return false;
     const cluster = state.faceClusters[idx];
-    const shouldLinkRoster = Boolean(
-      ui.focusPanel && ui.focusPanel.open && ui.focusLinkRoster && ui.focusLinkRoster.checked === true && actionReady("family_facts")
-    );
-    const operatorNote = ui.focusPanel && ui.focusPanel.open
-      ? ui.focusOperatorNote.value.trim()
-      : window.prompt(`Why is "${label}" supported for ${cluster.cluster_id}?`, cluster.operator_note || "");
-    if (operatorNote === null) return;
+    const resolved = confirmOrResolvePersonChoice(label, options.preferredPersonId || "");
+    const finalLabel = resolved.displayName;
+    if (!finalLabel) return false;
+
+    const inFocus = Boolean(ui.focusPanel && ui.focusPanel.open);
+    const shouldLinkRoster = inFocus
+      ? Boolean(ui.focusLinkRoster && ui.focusLinkRoster.checked === true && actionReady("family_facts"))
+      : Boolean(actionReady("family_facts"));
+    const operatorNote = inFocus
+      ? (ui.focusOperatorNote ? ui.focusOperatorNote.value.trim() : "")
+      : (cluster.operator_note || "");
+
+    const confirmCopy = shouldLinkRoster
+      ? `Save label "${finalLabel}" on ${cluster.cluster_id} and link in Family Roster?`
+      : `Apply label "${finalLabel}" to ${cluster.cluster_id}? The scoped confirmation is single-use.`;
 
     try {
       const result = await confirmedIdentityRequest(
         "/api/identity/face-clusters/label",
         {
           cluster_id: cluster.cluster_id,
-          label,
+          label: finalLabel,
           operator_note: operatorNote,
         },
-        `Apply label "${label}" to ${cluster.cluster_id}? The scoped confirmation is single-use.`
+        confirmCopy
       );
-      if (!result) return;
-      cluster.label = label;
+      if (!result) return false;
+      cluster.label = finalLabel;
       cluster.operator_note = operatorNote;
-      state.knownIdentityLabels.add(label);
+      rebuildKnownPeopleState();
+      let rosterSynced = false;
+      if (shouldLinkRoster) {
+        rosterSynced = await syncClusterToRoster(cluster.cluster_id, finalLabel, {
+          alreadyConfirmed: true,
+          preferredPerson: resolved.person,
+        });
+      }
       renderFaceGrid();
       updateRosterIdentityLabels();
-      if (ui.focusPanel && ui.focusPanel.open) {
-         closeFocusPanel();
+      if (inFocus) {
+        if (options.advanceNext) {
+          const nextIdx = nextFocusClusterIndex(idx);
+          if (nextIdx !== -1) openFocusPanel(nextIdx);
+          else closeFocusPanel();
+        } else {
+          closeFocusPanel();
+        }
       }
-      toast(`Cluster ${cluster.cluster_id} labeled → ${label}`);
-      if (shouldLinkRoster) {
-        await syncClusterToRoster(cluster.cluster_id, label);
-      }
+      toast(
+        rosterSynced
+          ? `Saved ${cluster.cluster_id} → ${finalLabel} (linked in Family Roster)`
+          : `Cluster ${cluster.cluster_id} labeled → ${finalLabel}`
+      );
+      return true;
     } catch (e) {
       const message = `Label request failed: ${e.message}`;
       setOperationFailure(message);
       toast(message, "error");
+      return false;
     }
   }
 
@@ -1021,26 +1520,35 @@
   }
 
   function addNameToRoster(term, btn) {
-    // Add as a new pending identity in the roster
+    const resolved = confirmOrResolvePersonChoice(term);
+    const canonicalName = resolved.displayName || term;
+    const known = resolved.person;
     const exists = state.roster.some(
-      id => id.display_name.toLowerCase() === term.toLowerCase()
+      id => (known && id.id === known.id) || normalizePersonKey(id.display_name) === normalizePersonKey(canonicalName)
     );
     if (!exists) {
+      const canonicalId = (known && known.id && !state.roster.some(r => r.id === known.id))
+        ? known.id
+        : slugifyIdentityId(canonicalName);
+      const aliases = known && Array.isArray(known.aliases) ? [...known.aliases] : [];
+      const mentionKeys = Array.from(new Set([canonicalName, term, ...aliases].filter(Boolean)));
       state.roster.push({
-        id: term.toLowerCase().replace(/\s+/g, "_"),
-        display_name: term,
-        aliases: [],
+        id: canonicalId,
+        display_name: canonicalName,
+        aliases,
         face_cluster_ids: [],
         speaker_cluster_ids: [],
-        name_mention_keys: [term],
-        role: "",
+        name_mention_keys: mentionKeys,
+        role: (known && known.role) ? known.role : "",
         notes: "",
         confirmed: false,
       });
-      state.knownIdentityLabels.add(term);
+      rebuildKnownPeopleState();
+      if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
       renderRosterSidebar();
       renderNamesTable();
-      toast(`"${term}" added to roster — complete their profile in Phase 4`);
+      if (state.faceClusters.length) renderFaceGrid();
+      toast(`"${canonicalName}" added to roster — complete their profile in Phase 4`);
     }
     btn.textContent = "IN ROSTER ✓";
     btn.classList.add("added");
@@ -1060,10 +1568,17 @@
     try {
       const data = await apiCall("/api/identity/roster");
       state.roster = data.identities || [];
-      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
+      state.apiKnownPeople = Array.isArray(data.known_people) ? data.known_people : [];
+      rebuildKnownPeopleState();
       ui.badgeRoster.textContent = state.roster.length;
       renderRosterSidebar();
-      toast(`Roster loaded: ${state.roster.length} identities`);
+      if (state.faceClusters.length) renderFaceGrid();
+      const priorExtra = Math.max(0, state.knownPeople.length - state.roster.length);
+      toast(
+        priorExtra > 0
+          ? `Roster loaded: ${state.roster.length} active (${state.knownPeople.length} saved people ready)`
+          : `Roster loaded: ${state.roster.length} identities`
+      );
     } catch (e) {
       toast(`Failed to load roster: ${e.message}`, "error");
     }
@@ -1349,8 +1864,10 @@
       if (confirm(`Remove "${state.roster[idx].display_name}" from the roster?`)) {
         state.roster.splice(idx, 1);
         state.activeRosterIdx = -1;
-        state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
+        rebuildKnownPeopleState();
+        if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
         renderRosterSidebar();
+        if (state.faceClusters.length) renderFaceGrid();
         ui.rosterDetail.innerHTML = `<div class="roster-no-selection"><span class="pulse-icon">◼</span><p>IDENTITY REMOVED</p></div>`;
       }
     });
@@ -1371,8 +1888,9 @@
         `Save roster identity "${identity.display_name}"? The scoped confirmation is single-use.`
       );
       if (!result) return;
-      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
+      rebuildKnownPeopleState();
       renderRosterSidebar();
+      if (state.faceClusters.length) renderFaceGrid();
       toast(`Saved: ${identity.display_name}`);
     } catch (e) {
       const message = `Save failed: ${e.message}`;
@@ -1382,37 +1900,41 @@
   }
 
   function addIdentity() {
-    const name = ui.newIdentityInput.value.trim();
-    if (!name) return;
-    const id = name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-    if (state.roster.some(i => i.display_name.toLowerCase() === name.toLowerCase())) {
+    const rawName = ui.newIdentityInput.value.trim();
+    if (!rawName) return;
+    const resolved = confirmOrResolvePersonChoice(rawName);
+    const name = resolved.displayName || rawName;
+    const known = resolved.person;
+    if (state.roster.some(i => (known && i.id === known.id) || normalizePersonKey(i.display_name) === normalizePersonKey(name))) {
       toast(`"${name}" already in roster`, "warn");
       return;
     }
+    const id = (known && known.id && !state.roster.some(r => r.id === known.id))
+      ? known.id
+      : slugifyIdentityId(name);
+    const aliases = known && Array.isArray(known.aliases) ? [...known.aliases] : [];
     state.roster.push({
       id,
       display_name: name,
-      aliases: [],
+      aliases,
       face_cluster_ids: [],
       speaker_cluster_ids: [],
-      name_mention_keys: [],
-      role: "",
+      name_mention_keys: Array.from(new Set([name, ...aliases])),
+      role: (known && known.role) ? known.role : "",
       notes: "",
       confirmed: false,
     });
-    state.knownIdentityLabels.add(name);
+    rebuildKnownPeopleState();
     ui.badgeRoster.textContent = state.roster.length;
     renderRosterSidebar();
+    if (state.faceClusters.length) renderFaceGrid();
     selectRosterIdentity(state.roster.length - 1);
     ui.newIdentityInput.value = "";
     toast(`"${name}" added to roster`);
   }
 
   function updateRosterIdentityLabels() {
-    // Called when face clusters are labeled — keep datalist current
-    state.faceClusters.forEach(c => {
-      if (c.label) state.knownIdentityLabels.add(c.label);
-    });
+    rebuildKnownPeopleState();
   }
 
   // Roster event wires
@@ -1426,10 +1948,10 @@
       const existingIdx = state.roster.findIndex(item => item.id === added.id);
       if (existingIdx === -1) state.roster.push(added);
       else state.roster[existingIdx] = added;
-      state.knownIdentityLabels = new Set(state.roster.map(id => id.display_name));
-      updateRosterIdentityLabels();
+      rebuildKnownPeopleState();
       if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
       renderRosterSidebar();
+      if (state.faceClusters.length) renderFaceGrid();
     });
   }
 

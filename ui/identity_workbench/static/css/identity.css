@@ -2364,3 +2364,226 @@ body.theme-day .match-workspace .match-apply:hover:not(:disabled) {
   border-color: #0369a1;
   color: #ffffff;
 }
+
+/* ── Saved-People Picker, Suggestion Chips & Explicit Save Controls ─────── */
+.typeahead-wrapper[hidden],
+.typeahead-list[hidden],
+.focus-suggestions[hidden] {
+  display: none !important;
+}
+
+.cluster-card {
+  overflow: visible;
+}
+
+.cluster-card-header {
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.cluster-card-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 10px 12px 12px;
+  gap: 8px;
+  border-top: 1px solid var(--border-faint);
+  cursor: default;
+}
+
+.cluster-footer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cluster-roster-linked-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background-color: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--border-accent);
+}
+
+.cluster-suggestion-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cluster-suggestion-prefix {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.cluster-suggestion-chip {
+  appearance: none;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-dim);
+  background-color: var(--bg-panel);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.cluster-suggestion-chip.strong {
+  border-color: var(--border-accent);
+  background-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.cluster-suggestion-chip:hover {
+  border-color: var(--accent);
+  background-color: var(--bg-hover);
+}
+
+.cluster-suggestion-chip:focus-visible,
+.card-person-select:focus-visible,
+.focus-person-select:focus-visible,
+.card-save-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cluster-label-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-person-select,
+.focus-person-select {
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+body.theme-day .card-person-select,
+body.theme-day .focus-person-select {
+  color-scheme: light;
+}
+
+.card-person-select {
+  flex: 1 1 155px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.focus-person-select {
+  min-height: 36px;
+  min-width: 230px;
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+.cluster-label-controls .typeahead-wrapper.inline {
+  flex: 1 1 150px;
+  width: auto;
+  min-width: 130px;
+}
+
+.cluster-card-footer .card-name-input {
+  height: 32px;
+  padding: 0 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.cluster-card-footer .typeahead-list {
+  top: auto;
+  bottom: calc(100% + 2px);
+  border-top: 1px solid var(--border-dim);
+  border-radius: 6px;
+}
+
+.toolbar-btn.card-save-btn {
+  min-height: 32px;
+  padding-inline: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  background-color: var(--accent);
+  color: #04111d;
+  border-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.toolbar-btn.card-save-btn:hover:not(:disabled) {
+  background-color: #7dd3fc;
+  border-color: #7dd3fc;
+  color: #04111d;
+}
+
+body.theme-day .toolbar-btn.card-save-btn {
+  color: #ffffff;
+}
+
+body.theme-day .toolbar-btn.card-save-btn:hover:not(:disabled) {
+  background-color: #0369a1;
+  border-color: #0369a1;
+  color: #ffffff;
+}
+
+.focus-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.focus-suggestions {
+  margin-top: 2px;
+}
+
+.focus-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.focus-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.focus-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.focus-input {
+  height: 36px;
+  border-radius: 6px;
+  width: 240px;
+}
+
+.focus-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

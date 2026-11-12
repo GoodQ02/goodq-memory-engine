@@ -6,7 +6,7 @@
     <title>GoodQ Identity Curation Workbench</title>
     <meta name="description" content="GoodQ4All identity curation tool — label face clusters, confirm speaker hypotheses, and build the family roster." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2305070b'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='18' fill='%2338bdf8'%3EIC%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./static/css/identity.css?v=20261111-crossfilm" />
+    <link rel="stylesheet" href="./static/css/identity.css?v=20261111-peoplepicker" />
     <script>
       (function() {
         var theme = localStorage.getItem("goodq-theme") || "night";
@@ -324,18 +324,34 @@
       <dialog id="focus-panel" class="focus-panel">
         <div class="focus-panel-content">
           <div class="focus-panel-header">
-            <div class="focus-meta" id="focus-meta"></div>
+            <div class="focus-meta-col">
+              <div class="focus-meta" id="focus-meta"></div>
+              <div id="focus-suggestions" class="focus-suggestions" hidden></div>
+            </div>
             <div class="focus-form">
-              <label for="focus-name-input">NAME</label>
-              <div class="typeahead-wrapper">
-                <input type="text" id="focus-name-input" class="focus-input" placeholder="Type a name (existing or new)..." autocomplete="off">
-                <ul id="focus-typeahead-list" class="typeahead-list" hidden></ul>
+              <div class="focus-field-group">
+                <label for="focus-person-select">SAVED PERSON</label>
+                <select id="focus-person-select" class="focus-person-select">
+                  <option value="">Choose saved person…</option>
+                  <option value="__new__">+ Add new person (type name)</option>
+                </select>
               </div>
-              <label for="focus-operator-note">OPERATOR NOTE</label>
-              <textarea id="focus-operator-note" class="focus-note-input" rows="2" placeholder="Why this label is supported by the visible evidence..."></textarea>
-              <label class="focus-roster-link-toggle"><input type="checkbox" id="focus-link-roster" checked> Also save &amp; link cluster in Family Roster</label>
+              <div class="focus-field-group">
+                <label for="focus-name-input">DISPLAY NAME</label>
+                <div class="typeahead-wrapper">
+                  <input type="text" id="focus-name-input" class="focus-input" placeholder="Select saved or type new name..." autocomplete="off" spellcheck="false" enterkeyhint="done">
+                  <ul id="focus-typeahead-list" class="typeahead-list" hidden></ul>
+                </div>
+              </div>
+              <div class="focus-field-group">
+                <label for="focus-operator-note">OPERATOR NOTE (OPTIONAL)</label>
+                <textarea id="focus-operator-note" class="focus-note-input" rows="2" placeholder="Optional note on visible evidence..."></textarea>
+              </div>
+              <label class="focus-roster-link-toggle"><input type="checkbox" id="focus-link-roster" checked> Also save &amp; link in Family Roster</label>
             </div>
             <div class="focus-controls">
+              <button class="toolbar-btn primary-cta" id="focus-save" type="button">SAVE LABEL</button>
+              <button class="toolbar-btn" id="focus-save-next" type="button" title="Save label and open next unlabeled cluster">SAVE &amp; NEXT</button>
               <button class="toolbar-btn" id="focus-scan-films" type="button">SCAN OTHER FILMS</button>
               <button class="toolbar-btn" id="focus-prev" type="button">PREV</button>
               <button class="toolbar-btn" id="focus-next" type="button">NEXT</button>
@@ -370,7 +386,7 @@
     </div>
 
     <script src="/ui/retro_console_v1/static/js/library-context.js?v=1"></script>
-    <script src="./static/js/identity.js?v=20261111-refresh"></script>
-    <script src="./static/js/matches.js?v=20261111-refresh"></script>
+    <script src="./static/js/identity.js?v=20261111-peoplepicker"></script>
+    <script src="./static/js/matches.js?v=20261111-peoplepicker"></script>
   </body>
 </html>

@@ -67,6 +67,7 @@ from api.utils.action_jobs import (
 from api.utils.identity_read_projection import (
     epoch_authority_projection,
     identity_data_path,
+    known_people_projection,
     project_face_cluster_images,
 )
 from api.utils.identity_readiness import artifact_readiness, identity_readiness_projection
@@ -1733,12 +1734,13 @@ async def get_name_mentions() -> dict:
 
 @router.get("/roster")
 async def get_roster() -> dict:
-    """Reads family_roster.yaml and returns as JSON."""
+    """Reads family_roster.yaml and returns as JSON, enriched with canonical known_people."""
     roster_path = _identity_data_path() / "family_roster.yaml"
     authority = _identity_epoch_authority()
     if not roster_path.exists():
         return {
             "identities": [],
+            "known_people": known_people_projection(_CFG, []),
             "message": "family_roster.yaml not found. Use the UI to create it.",
             "epoch_authority": authority,
         }
@@ -1746,8 +1748,10 @@ async def get_roster() -> dict:
         import yaml
         with open(roster_path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
+        identities = data.get("identities", [])
         return {
-            "identities": data.get("identities", []),
+            "identities": identities,
+            "known_people": known_people_projection(_CFG, identities),
             "epoch_authority": authority,
         }
     except ImportError:

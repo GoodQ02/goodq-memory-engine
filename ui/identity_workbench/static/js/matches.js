@@ -198,13 +198,60 @@
     }
   }
 
+  function normalizeMatchPersonKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function matchLevenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const prev = Array.from({length: b.length + 1}, (_, j) => j);
+    for (let i = 1; i <= a.length; i += 1) {
+      let prevDiag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const temp = prev[j];
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, prevDiag + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prevDiag = temp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  function findLocalNearDuplicate(rawName) {
+    const norm = normalizeMatchPersonKey(rawName);
+    if (!norm || norm.length < 3) return null;
+    let best = null;
+    let bestDist = Infinity;
+    for (const p of (report?.people || [])) {
+      const cNorm = normalizeMatchPersonKey(p.display_name);
+      if (!cNorm || cNorm === norm) continue;
+      const minLen = Math.min(norm.length, cNorm.length);
+      const maxAllowed = minLen >= 6 ? 2 : 1;
+      if (Math.abs(norm.length - cNorm.length) > maxAllowed) continue;
+      const dist = matchLevenshtein(norm, cNorm);
+      if (dist <= maxAllowed && dist < bestDist) {
+        bestDist = dist;
+        best = p;
+      }
+    }
+    return best;
+  }
+
   function slugifyPersonId(displayName) {
     const base = String(displayName || "")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "") || "person";
-    const existingIds = new Set((report?.people || []).map(p => p.id));
+    const bridgePeople = (typeof window !== "undefined" && window.GoodQIdentityPeople && typeof window.GoodQIdentityPeople.getKnownPeople === "function")
+      ? window.GoodQIdentityPeople.getKnownPeople()
+      : [];
+    const existingIds = new Set([
+      ...(report?.people || []).map(p => p.id),
+      ...bridgePeople.map(p => p.id),
+    ]);
     if (!existingIds.has(base)) return base;
     let suffix = 2;
     while (existingIds.has(`${base}_${suffix}`)) suffix += 1;
@@ -214,28 +261,57 @@
   async function createRosterPersonInline(displayName, roleText) {
     const trimmed = String(displayName || "").trim();
     if (!trimmed) throw new Error("Enter a display name for the new person.");
-    const existing = (report?.people || []).find(p => p.display_name.toLowerCase() === trimmed.toLowerCase());
+    const existing = (report?.people || []).find(
+      p => normalizeMatchPersonKey(p.display_name) === normalizeMatchPersonKey(trimmed)
+    );
     if (existing) return existing;
 
-    const newId = slugifyPersonId(trimmed);
+    const bridge = (typeof window !== "undefined" && window.GoodQIdentityPeople) ? window.GoodQIdentityPeople : null;
+    let known = bridge && typeof bridge.resolvePerson === "function" ? bridge.resolvePerson(trimmed) : null;
+    if (!known) {
+      const near = (bridge && typeof bridge.findNearDuplicate === "function" ? bridge.findNearDuplicate(trimmed) : null)
+        || findLocalNearDuplicate(trimmed);
+      if (near && typeof window !== "undefined" && typeof window.confirm === "function") {
+        const useNear = window.confirm(
+          `"${trimmed}" looks very close to already-saved person "${near.display_name}".\n\n` +
+          `Click OK to use "${near.display_name}" (prevents duplicate entries), or Cancel to create "${trimmed}" as a separate new person.`
+        );
+        if (useNear) {
+          const alreadyListed = (report?.people || []).find(p => p.id === near.id || normalizeMatchPersonKey(p.display_name) === normalizeMatchPersonKey(near.display_name));
+          if (alreadyListed) return alreadyListed;
+          known = near;
+        }
+      }
+    }
+
+    const canonicalName = known ? known.display_name : trimmed;
+    const alreadyInReport = (report?.people || []).find(
+      p => (known && p.id === known.id) || normalizeMatchPersonKey(p.display_name) === normalizeMatchPersonKey(canonicalName)
+    );
+    if (alreadyInReport) return alreadyInReport;
+
+    const newId = (known && known.id && !(report?.people || []).some(p => p.id === known.id))
+      ? known.id
+      : slugifyPersonId(canonicalName);
+    const aliases = known && Array.isArray(known.aliases) ? [...known.aliases] : [];
     const identity = {
       id: newId,
-      display_name: trimmed,
-      aliases: [],
+      display_name: canonicalName,
+      aliases,
       face_cluster_ids: [],
       speaker_cluster_ids: [],
-      name_mention_keys: [trimmed],
-      role: String(roleText || "").trim(),
+      name_mention_keys: Array.from(new Set([canonicalName, ...aliases])),
+      role: String(roleText || "").trim() || (known && known.role ? known.role : ""),
       notes: "Added inline from Match Review; edit full profile in Family Roster.",
       confirmed: false,
     };
     const saved = await confirmedRequest(
       "/api/identity/roster/save",
       {identity},
-      `Add "${trimmed}" to this movie's Family Roster? You can fill in aliases and relationships later in the Family Roster tab.`
+      `Add "${canonicalName}" to this movie's Family Roster? You can fill in aliases and relationships later in the Family Roster tab.`
     );
     if (!saved) return null;
-    const entry = {id: newId, display_name: trimmed};
+    const entry = {id: newId, display_name: canonicalName};
     report.people.push(entry);
     refreshPersonFilterOptions();
     try {

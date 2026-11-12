@@ -173,9 +173,10 @@ class LLMClient:
         self.health_status: Dict[str, HealthStatus] = {}
         self.last_health_check: Optional[datetime] = None
         
-        # Track last used model
+        # Track last used model and all attempted models (for deterministic VRAM unload on failover)
         self.last_model_used: Optional[ModelConfig] = None
         self.last_provider_used: Optional[str] = None
+        self.attempted_models: List[ModelConfig] = []
         
         # Session for connection pooling
         self.session = requests.Session()
@@ -492,6 +493,14 @@ class LLMClient:
                     **kwargs,
                 }
                 
+                if not any(
+                    m.backend == model.backend
+                    and m.endpoint == model.endpoint
+                    and m.model_id == model.model_id
+                    for m in self.attempted_models
+                ):
+                    self.attempted_models.append(model)
+
                 response = self.session.post(
                     f"{model.endpoint}/chat/completions",
                     json=payload,

@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-09-06 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-11 -->
 
 # Ingest Orchestration Contract
 
@@ -143,6 +143,12 @@ It owns:
 - env-isolated execution
 - config handoff into step callables
 - structured result emission
+- optional per-scene `_batch_items` -> `_batch_results` execution with per-sample
+  `step_runs.jsonl` receipts and exception isolation (`_run_step_batch` /
+  `_run_step_batch_async` in `cli/run_ingestion.py`), paired with FIFO head-of-line
+  GPU waiter fairness (`vram_waiters.json` in `common/vram_allocator.py`) and
+  deterministic unload of all `attempted_models` Ollama endpoints at progressive
+  Phase 6b boundaries (`lib/llm_client.py`, `steps/video/cross_modal_harmonizer.py`)
 
 It does not own:
 

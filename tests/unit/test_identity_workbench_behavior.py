@@ -319,3 +319,104 @@ run().catch(error=>{console.error(error.stack||error);process.exitCode=1;});
                             env={**os.environ, "IDENTITY_JS": str(IDENTITY_JS)},
                             capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_saved_people_picker_canonical_ids_typo_guard_and_single_confirm_save() -> None:
+    harness = HARNESS.split("async function run() {")[0].replace(
+        "init, renderRosterDetail };",
+        "init, renderRosterDetail, loadRoster, renderFaceGrid, applyLabel, openFocusPanel, saveFromFocusPanel };",
+    ) + r"""
+async function run() {
+  const assert = require('node:assert/strict');
+  workbench.state.actions = {
+    family_facts: { ready: true },
+    face_review: { ready: true },
+  };
+  global.fetch = async (url) => {
+    if (url === '/api/identity/roster') {
+      return response(200, {
+        identities: [],
+        known_people: [
+          { id: 'clara', display_name: 'Clarissa', aliases: ['Clara'], role: 'Sister', in_active_roster: false },
+          { id: 'elena', display_name: 'Elena', aliases: [], role: 'Mother', in_active_roster: false },
+        ],
+      });
+    }
+    throw new Error('Unexpected URL ' + url);
+  };
+  await workbench.loadRoster();
+  assert.equal(workbench.state.roster.length, 0);
+  assert.equal(workbench.state.knownPeople.length, 2);
+
+  workbench.state.faceClusters = [
+    {
+      cluster_id: 'fc_clara',
+      face_count: 4,
+      members: [],
+      suggested_matches: [{ person_id: 'clara', display_name: 'Clarissa', similarity: 0.67, above_threshold: true }],
+    },
+    { cluster_id: 'fc_elena', face_count: 3, members: [] },
+    { cluster_id: 'fc_unlabeled', face_count: 2, members: [] },
+  ];
+  workbench.renderFaceGrid();
+  const cardHtml = workbench.ui.facesGrid.children[0].innerHTML;
+  assert.match(cardHtml, /class="card-person-select"/);
+  assert.match(cardHtml, /Suggested from saved faces/);
+  assert.match(cardHtml, /★ Clarissa/);
+  assert.match(cardHtml, /Saved family &amp; prior films/);
+  assert.match(cardHtml, /class="toolbar-btn card-save-btn">SAVE</);
+
+  // Labeling via alias "Clara" resolves canonical id "clara" + display_name "Clarissa"
+  // and completes BOTH label save + roster link with a SINGLE window.confirm prompt.
+  const confirmPrompts = [];
+  const postCalls = [];
+  global.window.confirm = (msg) => {
+    confirmPrompts.push(msg);
+    return true;
+  };
+  global.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    postCalls.push({ url, body });
+    if (!body.confirmation_token) {
+      return response(403, { result: { confirmation_token: 'tok-' + postCalls.length } });
+    }
+    return response(200, { status: 'saved' });
+  };
+  const savedClara = await workbench.applyLabel(0, 'Clara');
+  assert.equal(savedClara, true);
+  assert.equal(confirmPrompts.length, 1, 'Expected single confirmation covering label + roster link');
+  const rosterSave = postCalls.find(c => c.url === '/api/identity/roster/save' && c.body.confirmation_token);
+  assert.ok(rosterSave, 'Expected roster save after label save');
+  assert.equal(rosterSave.body.identity.id, 'clara');
+  assert.equal(rosterSave.body.identity.display_name, 'Clarissa');
+  assert.deepEqual(rosterSave.body.identity.aliases, ['Clara']);
+  assert.equal(rosterSave.body.identity.role, 'Sister');
+  assert.deepEqual(rosterSave.body.identity.face_cluster_ids, ['fc_clara']);
+
+  // Near-duplicate typo "Elenna" triggers typo-guard confirm and resolves to canonical "Elena" ("elena").
+  confirmPrompts.length = 0;
+  postCalls.length = 0;
+  workbench.openFocusPanel(1);
+  workbench.ui.focusLinkRoster.checked = true;
+  workbench.ui.focusNameInput.value = 'Elenna';
+  await workbench.saveFromFocusPanel(true);
+  assert.equal(confirmPrompts.length, 2, 'Expected 1 typo-guard prompt + 1 save confirmation');
+  assert.match(confirmPrompts[0], /looks very close to already-saved person "Elena"/);
+  const elenaRosterSave = postCalls.find(c => c.url === '/api/identity/roster/save' && c.body.confirmation_token);
+  assert.equal(elenaRosterSave.body.identity.id, 'elena');
+  assert.equal(elenaRosterSave.body.identity.display_name, 'Elena');
+  // Focus panel with advanceNext=true moves straight to the remaining unlabeled cluster (index 2).
+  assert.equal(workbench.ui.focusPanel.open, true);
+  assert.match(workbench.ui.focusMeta.textContent, /fc_unlabeled/);
+}
+run().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
+"""
+    result = subprocess.run(
+        ["node", "-e", harness],
+        cwd=REPO_ROOT,
+        env={**os.environ, "IDENTITY_JS": str(IDENTITY_JS)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout

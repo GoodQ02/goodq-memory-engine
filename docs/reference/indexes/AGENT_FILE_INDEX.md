@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1368**
+Indexed active tracked paths: **1370**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -109,6 +109,7 @@ Indexed active tracked paths: **1368**
 | `/api/utils/audio_evidence.py` | API | API or local control-plane implementation. |
 | `/api/utils/desktop_player.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_appearance.py` | API | API or local control-plane implementation. |
+| `/api/utils/identity_cross_film.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_evidence_pack.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_match_review.py` | API | API or local control-plane implementation. |
 | `/api/utils/identity_matching.py` | API | API or local control-plane implementation. |
@@ -1041,6 +1042,7 @@ Indexed active tracked paths: **1368**
 | `/tests/unit/test_hybrid_search_scope.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_action_readiness.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_appearance_flow.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_identity_cross_film.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_epoch_authority.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_error_redaction.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_identity_evidence_pack.py` | Verification | Test, fixture, or verification asset. |

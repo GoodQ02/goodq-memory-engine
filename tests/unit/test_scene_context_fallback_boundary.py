@@ -232,3 +232,84 @@ def test_harmonizer_fallback_keeps_dialogue_presence_in_persisted_context(
     assert logged["status"] == "degraded"
     assert logged["extra"]["reason"] == "scene_context_fallback"
     assert logged["extra"]["result_meta"]["scene_context_meta"] == meta
+
+
+def test_unload_ollama_model_if_used_unloads_all_attempted_ollama_models_on_failover(monkeypatch):
+    from lib import llm_client
+    from steps.video import cross_modal_harmonizer as harmonizer
+
+    unload_calls = []
+    chat_calls = []
+
+    class DummySession:
+        def __init__(self):
+            self.headers = {}
+            self.trust_env = True
+
+        def get(self, _url, **_kwargs):
+            return types.SimpleNamespace(status_code=200)
+
+        def post(self, url, **kwargs):
+            if url.endswith("/api/generate"):
+                unload_calls.append({"url": url, "json": kwargs.get("json")})
+                return types.SimpleNamespace(status_code=200, raise_for_status=lambda: None)
+            payload = kwargs.get("json") or {}
+            chat_calls.append(payload.get("model"))
+            if payload.get("model") == "qwen2.5:14b":
+                raise llm_client.requests.Timeout("primary ollama timed out after loading")
+            return types.SimpleNamespace(
+                status_code=200,
+                json=lambda: {"choices": [{"message": {"content": "{}"}}]},
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(llm_client.requests, "Session", DummySession)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda *_: None)
+
+    models = [
+        llm_client.ModelConfig(
+            name="Primary-14B",
+            base_url="http://127.0.0.1",
+            port=11434,
+            model_id="qwen2.5:14b",
+            backend="ollama",
+            vram_gb=9.5,
+            tokens_per_sec=80,
+            context_length=16384,
+            capabilities=["chat"],
+            priority=200,
+        ),
+        llm_client.ModelConfig(
+            name="Fallback-3B",
+            base_url="http://127.0.0.1",
+            port=11434,
+            model_id="llama3.2:latest",
+            backend="ollama",
+            vram_gb=2.0,
+            tokens_per_sec=120,
+            context_length=16384,
+            capabilities=["chat"],
+            priority=90,
+        ),
+    ]
+    client = llm_client.LLMClient(
+        models=models,
+        health_check_interval=60,
+        max_retries=2,
+        timeout=10,
+        cache_ttl=300,
+        enable_health_checks=False,
+        allow_auto_activation=False,
+        allow_environment_proxies=False,
+    )
+    client.chat(messages=[{"role": "user", "content": "hi"}])
+
+    assert chat_calls == ["qwen2.5:14b", "llama3.2:latest"]
+    assert client.last_model_used.model_id == "llama3.2:latest"
+    assert harmonizer._unload_ollama_model_if_used(client) is True
+    assert unload_calls == [
+        {"url": "http://127.0.0.1:11434/api/generate", "json": {"model": "qwen2.5:14b", "keep_alive": 0}},
+        {"url": "http://127.0.0.1:11434/api/generate", "json": {"model": "llama3.2:latest", "keep_alive": 0}},
+    ]

@@ -6,8 +6,8 @@
 
 ## Source and authority
 
-- Private development source: `c4d2b28f1263d19cb200274a2ca0bda83bec9739` (`dev`).
-- Public parent: `d471a200e614819a2172cccdd084fcefdefdb692` (`main`).
+- Private development source: `e6c972e49eb0ed2a1af34b964bb176293fae785c` (`dev`).
+- Public parent: `188314c5a334fff959f6676a5bfe26abe33d6ed4` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -215,3 +215,21 @@ Mirrors pinned private commit `c4d2b28f` onto `GoodQ02/goodq-memory-engine` `mai
 - **Unified ASR-Restriction & Runaway-Decoder Loop Consumer Gate**: Filters per-phrase repetition loops, `< 8`-word residual loop-tail fragments (`>= 80%` overlap with dropped loop tokens), and multi-segment concatenated `< 8`-word repetition loops in `steps/common/tag_utils.py`, short-circuits `reliable_transcript_for_entities` when `is_scene_transcript_restricted(item)` is `True`, and gates `sentiment`, `emotion_classify`, `tagger`, `scene_summarizer`, and `audio_transcript` `text_embed` uniformly on unrestricted reliable speech while preserving multimodal `ocr_text` / `caption` fallbacks and `1:1` UCF `audio_transcribe` raw-receipt reconciliation (`cli/run_ingestion.py`).
 - **UCF Ledger, Identity Projection & Windows Supervisor Startup Hardening**: Hardens UCF promotion transaction atomicity, Qdrant outbox reconciliation, and retrieval bridge pagination/filtering (`lib/kg_realtime_integration.py`, `retrieval/`, `steps/common/`); refines Identity Workbench cluster/match projections, dark-theme contrast, and operator/summary console Escape/navigation handling (`api/utils/identity_*.py`, `ui/`); and hardens `start_goodq_dev.ps1` against recycled Windows PIDs (`HasExited` / `StartTime` guards) and cold-process `Write-GoodQReceiptText` Attempt-1 `Add-Type` JIT compilation stalls (`tests/unit/test_dev_startup.py`).
 - **Parity & Privacy Gates**: All 78 changed/added product, UI, walkthrough, and unit/integration test files (including the six `tests/unit/test_audit_*_repairs.py` suites) match private `c4d2b28f` byte for byte, with public-only exclusions and docstring/link sanitizations preserved (`VISION_PIPELINE.md`, `build_face_clusters.py`, `promote_identity_layer.py`, `PROJECT.md`, `ROADMAP.md`, and omitted private checkpoint docs). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, PNG metadata checks, deep personal-term/secret/path privacy inspection (`0` hits), and focused public-checkout unit suites pass prior to publication.
+
+### Hosted Windows receipt and action-job read follow-up
+
+Hosted run `43889472129` on `188314c5` passed `doc-drift-lint` and `codeql` and
+62/63 Windows startup checks, exposing the reader counterpart of the earlier receipt
+publication race: `Read-GoodQReceiptText` retried only `IOException` codes and could
+exhaust its one-second budget on a stalled first attempt. It now also retries
+`UnauthorizedAccessException` (`win32=5`) during concurrent replacement, requires at least
+one post-sleep retry before enforcing the budget, and emits structured diagnostics, while the
+discovery fault fixture restores its held receipt in-process after the first attempt (`6` new
+reader regressions across both shells). Private hosted run `43902523453` (`69/69` startup
+checks green) also surfaced a Windows `os.replace` sharing-violation race in
+`ActionJobLedger.load` and `_records_unlocked` (`api/utils/action_jobs.py`), now routed
+through `read_text_during_atomic_replace` matching `PassiveActionJobReader` (`3` new unit
+regressions in `tests/unit/test_action_jobs.py`). Private `e6c972e4` passed hosted
+`ci` (`43912546915`: `69` startup + `7,242` unit = `7,311 passed, 0 skipped, 0 failed`) and
+`doc-drift-lint` (`43912546702`). All four changed source/test files match private
+`e6c972e4` byte for byte.

@@ -586,7 +586,7 @@ def test_supervisor_receipt_reader_contention_is_bounded_and_visible(launch, per
     def exercise(sandbox, process):
         initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
         path, = sandbox.glob("goodq-startup-*/supervisor.json")
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 15
         while True:
             try:
                 reader = path.open("rb")
@@ -602,7 +602,7 @@ def test_supervisor_receipt_reader_contention_is_bounded_and_visible(launch, per
             if permanent:
                 # Normal publication and its terminal-failure receipt each have
                 # a bounded retry. Neither may hang supervision indefinitely.
-                process.wait(timeout=8)
+                process.wait(timeout=15)
             else:
                 time.sleep(0.15)
         if not permanent:
@@ -675,12 +675,36 @@ function Test-Path {
     if ($exists -and $LiteralPath.EndsWith('\supervisor.json') -and
         $LiteralPath -notlike '*goodq-startup-stale*' -and -not $script:discoveryHidden) {
         # Reproduce the observed ReplaceFile absence after a successful probe.
-        # The Python caller restores this fixture receipt within the read budget.
-        [IO.File]::Move($LiteralPath, $LiteralPath + '.discovery-held')
+        # Start-Sleep restores the held receipt after Attempt 1 of Read-GoodQReceiptText
+        # observes the missing file, avoiding cross-process IPC starvation on 2-vCPU CI VMs.
+        $script:heldDiscoveryPath = $LiteralPath + '.discovery-held'
+        $script:targetDiscoveryPath = $LiteralPath
+        [IO.File]::Move($LiteralPath, $script:heldDiscoveryPath)
         [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'discovery-hidden.txt'), $LiteralPath)
         $script:discoveryHidden = $true
     }
     return $exists
+}
+function Start-Sleep {
+    [CmdletBinding()]param([int]$Milliseconds, [double]$Seconds)
+    Microsoft.PowerShell.Utility\Start-Sleep @PSBoundParameters
+    if ($script:heldDiscoveryPath -and [IO.File]::Exists($script:heldDiscoveryPath)) {
+        $deadline = [DateTime]::UtcNow.AddSeconds(2)
+        while ([IO.File]::Exists($script:heldDiscoveryPath)) {
+            try {
+                if ([IO.File]::Exists($script:targetDiscoveryPath)) {
+                    [IO.File]::Delete($script:heldDiscoveryPath)
+                } else {
+                    [IO.File]::Move($script:heldDiscoveryPath, $script:targetDiscoveryPath)
+                }
+                break
+            } catch [IO.IOException], [UnauthorizedAccessException] {
+                if ([DateTime]::UtcNow -ge $deadline) { throw }
+                [Threading.Thread]::Sleep(25)
+            }
+        }
+        $script:heldDiscoveryPath = $null
+    }
 }
 '''
     harness.write_text(
@@ -805,25 +829,24 @@ def test_control_discovery_retries_receipt_replaced_after_existence_check(launch
                 if action == fault_action:
                     _wait_for_file(marker, controller, seconds=CONTROL_TIMEOUT_SECONDS)
                     assert Path(marker.read_text(encoding="utf-8-sig")) == receipt
-                    held = receipt.with_name(receipt.name + ".discovery-held")
-                    try:
-                        time.sleep(0.2)
-                    finally:
-                        # Restore only when the live supervisor has not already republished,
-                        # retrying transient Windows sharing locks on hosted runners.
-                        _restore_discovery_receipt(held, receipt)
-                if action == "CheckRunning":
-                    _check_running(sandbox, controller)
-                else:
-                    _wait_for_file(sandbox / "drain-requested.json", controller,
-                                   seconds=CONTROL_TIMEOUT_SECONDS)
-                    assert controller.poll() is None, "Discovery bypassed the active-work drain"
-                    assert not (sandbox / "work-completed.json").exists()
-                    (sandbox / "release-work").touch()
-                    assert controller.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0, (
-                        sandbox / "stop-current.log").read_text(errors="replace")
-                    terminal = json.loads(receipt.read_text(encoding="utf-8-sig"))
-                    assert terminal["state"] == "stopped" and terminal["drain_verified"] is True
+                try:
+                    if action == "CheckRunning":
+                        _check_running(sandbox, controller)
+                    else:
+                        _wait_for_file(sandbox / "drain-requested.json", controller,
+                                       seconds=CONTROL_TIMEOUT_SECONDS)
+                        assert controller.poll() is None, "Discovery bypassed the active-work drain"
+                        assert not (sandbox / "work-completed.json").exists()
+                        (sandbox / "release-work").touch()
+                        assert controller.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0, (
+                            sandbox / "stop-current.log").read_text(errors="replace")
+                        terminal = json.loads(receipt.read_text(encoding="utf-8-sig"))
+                        assert terminal["state"] == "stopped" and terminal["drain_verified"] is True
+                finally:
+                    if action == fault_action:
+                        _restore_discovery_receipt(
+                            receipt.with_name(receipt.name + ".discovery-held"), receipt
+                        )
         assert not list(sandbox.glob("goodq-startup-*/*.discovery-held"))
 
     result = launch("active_work", supervise=exercise, max_restarts=2, drain_timeout=12)
@@ -1555,5 +1578,176 @@ def test_write_goodq_receipt_text_throws_without_retry_on_non_retryable_win32_er
         f"Receipt replacement failed without retry (win32={result['error_win32']}, "
         f"hresult={result['error_hresult']}, attempt=1, elapsed_ms="
     )
+
+
+def _run_read_goodq_receipt_text_scenario(tmp_path: Path, shell: str, mode: str) -> dict:
+    harness = tmp_path / f"read-receipt-{mode}-{shell.replace('.', '_')}.ps1"
+    output_json = tmp_path / f"read-result-{mode}-{shell.replace('.', '_')}.json"
+    harness.write_text(
+        r'''param(
+    [string]$LauncherPath,
+    [string]$WorkDir,
+    [string]$Mode,
+    [string]$ResultPath
+)
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($LauncherPath, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors -and $parseErrors.Count -gt 0) {
+    throw "Failed to parse launcher AST: $($parseErrors[0].Message)"
+}
+$fnAst = $ast.Find({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Read-GoodQReceiptText'
+}, $true)
+if ($null -eq $fnAst) {
+    throw 'Read-GoodQReceiptText definition not found in start_goodq_dev.ps1'
+}
+. ([ScriptBlock]::Create($fnAst.Extent.Text))
+
+$origWriteWarning = Get-Command Write-Warning -CommandType Cmdlet
+$origStartSleep = Get-Command Start-Sleep -CommandType Cmdlet
+$script:warnings = New-Object System.Collections.Generic.List[string]
+$script:sleepCount = 0
+
+if ($Mode -eq 'non_retryable') {
+    $targetPath = Join-Path (Join-Path $WorkDir 'missing-parent-dir') 'supervisor.json'
+} elseif ($Mode -eq 'stalled_unauthorized_recover') {
+    $targetPath = Join-Path $WorkDir 'supervisor.json'
+    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+} else {
+    $targetPath = Join-Path $WorkDir 'supervisor.json'
+}
+
+function Write-Warning {
+    param([Parameter(Position = 0, Mandatory = $true)][string]$Message)
+    $script:warnings.Add($Message)
+    & $origWriteWarning $Message
+    if ($Message -like 'Receipt read temporarily blocked*') {
+        # Deterministically stall Attempt 1 past the 1.0s read budget.
+        & $origStartSleep -Milliseconds 1100
+        if ($Mode -eq 'stalled_unauthorized_recover') {
+            Remove-Item -LiteralPath $targetPath -Force
+            [IO.File]::WriteAllText($targetPath, '{"cycle":2,"state":"monitoring"}', [Text.UTF8Encoding]::new($false))
+        }
+    }
+}
+
+function Start-Sleep {
+    param([int]$Milliseconds = 0)
+    $script:sleepCount++
+    & $origStartSleep -Milliseconds $Milliseconds
+}
+
+$threw = $false
+$errorText = $null
+$errorWin32 = $null
+$errorHResult = $null
+$readContent = $null
+try {
+    $readContent = Read-GoodQReceiptText $targetPath
+} catch {
+    $threw = $true
+    $base = $_.Exception.GetBaseException()
+    $errorText = $base.Message
+    $errorWin32 = $base.HResult -band 0xffff
+    $errorHResult = ('0x{0:X8}' -f ([int64]$base.HResult -band 0xffffffffL))
+}
+
+$result = [ordered]@{
+    mode = $Mode
+    edition = [string]$PSVersionTable.PSEdition
+    threw = $threw
+    error_text = $errorText
+    error_win32 = $errorWin32
+    error_hresult = $errorHResult
+    sleep_count = $script:sleepCount
+    warnings = @($script:warnings)
+    read_content = $readContent
+} | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText($ResultPath, $result, [Text.UTF8Encoding]::new($false))
+''',
+        encoding="utf-8-sig",
+    )
+    work_dir = tmp_path / f"read-work-{mode}-{shell.replace('.', '_')}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    if shell.lower().startswith("powershell"):
+        env = {k: v for k, v in os.environ.items() if k.casefold() != "psmodulepath"}
+        env["PSMODULEPATH"] = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/Modules")
+    completed = subprocess.run(
+        [
+            shell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(harness),
+            "-LauncherPath",
+            str(REPO_ROOT / "start_goodq_dev.ps1"),
+            "-WorkDir",
+            str(work_dir),
+            "-Mode",
+            mode,
+            "-ResultPath",
+            str(output_json),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=CONTROL_TIMEOUT_SECONDS,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    assert completed.returncode == 0, f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+    return json.loads(output_json.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_read_goodq_receipt_text_recovers_from_unauthorized_access_when_attempt_one_stalls(
+    tmp_path: Path, shell: str
+) -> None:
+    result = _run_read_goodq_receipt_text_scenario(tmp_path, shell, "stalled_unauthorized_recover")
+    assert result["threw"] is False
+    assert result["sleep_count"] == 1
+    assert result["warnings"] == [
+        "Receipt read temporarily blocked (win32=5); retrying for at most one second."
+    ]
+    assert json.loads(result["read_content"]) == {"cycle": 2, "state": "monitoring"}
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_read_goodq_receipt_text_exhausts_after_stalled_attempt_one_when_permanently_missing(
+    tmp_path: Path, shell: str
+) -> None:
+    result = _run_read_goodq_receipt_text_scenario(tmp_path, shell, "stalled_missing")
+    assert result["threw"] is True
+    assert result["error_win32"] == 2
+    assert result["error_hresult"] == "0x80070002"
+    assert result["sleep_count"] == 1
+    assert len(result["warnings"]) == 2
+    assert result["warnings"][0] == (
+        "Receipt read temporarily blocked (win32=2); retrying for at most one second."
+    )
+    assert result["warnings"][1].startswith(
+        "Receipt read retry budget exhausted (win32=2, hresult=0x80070002, attempts=2, elapsed_ms="
+    )
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_read_goodq_receipt_text_throws_without_retry_on_non_retryable_win32_error(
+    tmp_path: Path, shell: str
+) -> None:
+    result = _run_read_goodq_receipt_text_scenario(tmp_path, shell, "non_retryable")
+    assert result["threw"] is True
+    assert result["error_win32"] not in (2, 5, 32, 33)
+    assert result["sleep_count"] == 0
+    assert len(result["warnings"]) == 1
+    assert result["warnings"][0].startswith(
+        f"Receipt read failed without retry (win32={result['error_win32']}, "
+        f"hresult={result['error_hresult']}, attempt=1, elapsed_ms="
+    )
+
 
 

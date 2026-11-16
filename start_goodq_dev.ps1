@@ -34,13 +34,31 @@ function Get-GoodQUtcTicks($Value) {
 }
 function Read-GoodQReceiptText([string]$Path) {
     $timer = [Diagnostics.Stopwatch]::StartNew()
+    $warned = $false
+    $attempt = 0
     while ($true) {
+        $attempt++
         try { return [IO.File]::ReadAllText($Path) }
-        catch [IO.IOException] {
-            $code = $_.Exception.GetBaseException().HResult -band 0xffff
-            # A receipt can disappear between existence checks and opening it.
-            # Persistent absence still fails within the existing read budget.
-            if ($code -notin @(2, 32, 33) -or $timer.Elapsed.TotalSeconds -ge 1) { throw }
+        catch [IO.IOException], [UnauthorizedAccessException] {
+            $baseEx = $_.Exception.GetBaseException()
+            $hresultHex = ('0x{0:X8}' -f ([int64]$baseEx.HResult -band 0xffffffffL))
+            $code = $baseEx.HResult -band 0xffff
+            $elapsedMs = [int][Math]::Round($timer.Elapsed.TotalMilliseconds)
+            # A receipt can disappear or briefly deny access during ReplaceFile/rename
+            # between existence checks and opening it. Persistent absence still fails
+            # within the existing one-second read budget after at least one retry.
+            if ($code -notin @(2, 5, 32, 33)) {
+                Write-Warning "Receipt read failed without retry (win32=$code, hresult=$hresultHex, attempt=$attempt, elapsed_ms=$elapsedMs)."
+                throw
+            }
+            if (-not $warned) {
+                Write-Warning "Receipt read temporarily blocked (win32=$code); retrying for at most one second."
+                $warned = $true
+            }
+            if ($attempt -ge 2 -and $timer.Elapsed.TotalSeconds -ge 1) {
+                Write-Warning "Receipt read retry budget exhausted (win32=$code, hresult=$hresultHex, attempts=$attempt, elapsed_ms=$elapsedMs)."
+                throw
+            }
             Start-Sleep -Milliseconds 50
         }
     }

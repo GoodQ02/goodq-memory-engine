@@ -1677,3 +1677,40 @@ def test_atomic_replace_failure_leaves_prior_record_readable(tmp_path, monkeypat
         )
 
     assert ledger.load(before["job_id"]) == before
+
+
+@pytest.mark.parametrize("surface", ["load", "list_records"])
+def test_ledger_reads_retry_transient_replace_sharing_violation(tmp_path, monkeypatch, surface):
+    """A concurrent os.replace must not surface PermissionError to ledger readers.
+
+    Hosted CI run 43902523453 observed ``ActionJobLedger.load`` raising
+    ``PermissionError`` while a second confirm thread republished the record.
+    """
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    record = ledger.create_pending(
+        operation="video_summary.generate",
+        scope={"video_hash": "a" * 32},
+        owner_instance="api-1",
+    )
+    monkeypatch.setattr(atomic_io, "os", type("_NtOs", (), {"name": "nt"})())
+    calls = {"count": 0}
+
+    def flaky_read(path, *, encoding):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise PermissionError(13, "Permission denied", str(path))
+        return path.read_text(encoding=encoding)
+
+    monkeypatch.setattr(atomic_io, "_read_text_with_windows_share_delete", flaky_read)
+    if surface == "load":
+        loaded = ledger.load(record["job_id"])
+        assert loaded["job_id"] == record["job_id"]
+    else:
+        loaded = ledger.list_records()
+        assert [item["job_id"] for item in loaded] == [record["job_id"]]
+    assert calls["count"] == 2
+
+
+def test_ledger_load_missing_record_returns_none_through_retry_helper(tmp_path):
+    ledger = ActionJobLedger(tmp_path / "jobs")
+    assert ledger.load("job_" + "b" * 32) is None

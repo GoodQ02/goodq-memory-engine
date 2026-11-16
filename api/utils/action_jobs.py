@@ -785,7 +785,9 @@ class ActionJobLedger:
         for path in self.root_dir.glob("job_*.json"):
             if not JOB_ID_RE.fullmatch(path.stem):
                 continue
-            loaded = json.loads(path.read_text(encoding="utf-8"))
+            # Concurrent writers publish via os.replace; read with share-delete
+            # and bounded retry exactly like PassiveActionJobReader.
+            loaded = json.loads(read_text_during_atomic_replace(path, encoding="utf-8"))
             if not isinstance(loaded, dict):
                 raise ValueError(f"Action job record is not a JSON object: {path.name}")
             records.append(loaded)
@@ -793,9 +795,11 @@ class ActionJobLedger:
 
     def load(self, job_id: str) -> dict[str, Any] | None:
         path = self.record_path(job_id)
-        if not path.exists():
+        try:
+            serialized = read_text_during_atomic_replace(path, encoding="utf-8")
+        except FileNotFoundError:
             return None
-        loaded = json.loads(path.read_text(encoding="utf-8"))
+        loaded = json.loads(serialized)
         if not isinstance(loaded, dict):
             raise ValueError(f"Action job record is not a JSON object: {job_id}")
         return loaded

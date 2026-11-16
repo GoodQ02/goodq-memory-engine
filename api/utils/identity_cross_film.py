@@ -30,7 +30,6 @@ from scripts.identity.build_face_clusters import (
 _EPOCH_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _DETECTION_ID_RE = re.compile(r"^([0-9]+)_([0-9]+)$")
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
-_EPOCH_DETECTION_CACHE: dict[tuple[Any, ...], tuple[list[dict[str, Any]], dict[int, str]]] = {}
 
 
 def _active_epoch_root(cfg: dict[str, Any]) -> Path:
@@ -85,11 +84,9 @@ def _load_epoch_detections(
     if not ucf_db.is_file():
         return [], {}
     retired = retired_identity_scene_ids(ucf_db)
-    stat = ucf_db.stat()
-    cache_key = (str(epoch_root.resolve()), stat.st_mtime_ns, stat.st_size, tuple(sorted(retired)))
-    cached = _EPOCH_DETECTION_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    # Revalidate authority and raw artifacts for every request. Main-file stats
+    # do not observe committed WAL changes, nor changes to referenced artifacts.
+    # collect_face_detections still shares manifest reads within this request.
     provenance = load_face_ucf_provenance(ucf_db)
     filtered = {
         raw_path: [row for row in rows if row["source_artifact_id"] not in retired]
@@ -104,9 +101,6 @@ def _load_epoch_detections(
         for row in rows
     }
     detections = collect_face_detections(epoch_root, filtered, manifest_cache=manifest_cache)
-    if len(_EPOCH_DETECTION_CACHE) >= 16:
-        _EPOCH_DETECTION_CACHE.clear()
-    _EPOCH_DETECTION_CACHE[cache_key] = (detections, frame_scenes)
     return detections, frame_scenes
 
 
@@ -159,9 +153,17 @@ def _read_epoch_kg_metadata(epoch_root: Path) -> dict[str, Any]:
             pname = str(pprops.get("display_name") or pid)
             person_by_node_id[int(row["id"])] = (pid, pname)
             meta["person_names"][pid] = pname
+        retired = retired_identity_scene_ids(epoch_root / "ucf" / "ucf_ledger.db")
         for row in conn.execute(
-            "SELECT source_id, properties FROM edges WHERE edge_type='person_appears_in_scene'"
+            """
+            SELECT e.source_id, e.properties, s.name AS scene_name
+            FROM edges e
+            LEFT JOIN nodes s ON s.id = e.target_id
+            WHERE e.edge_type='person_appears_in_scene'
+            """
         ):
+            if row["scene_name"] and str(row["scene_name"]) in retired:
+                continue
             owner = person_by_node_id.get(int(row["source_id"]))
             if owner is None:
                 continue
@@ -474,9 +476,34 @@ def _resolve_query_embeddings(
             except (OSError, ValueError, UnicodeError, yaml.YAMLError, json.JSONDecodeError):
                 continue
 
+        for ep_name, ep_root in sorted(allowed_roots.items()):
+            if ep_name == active_epoch.name:
+                continue
+            try:
+                other_meta = _read_epoch_kg_metadata(ep_root)
+                if person_id in other_meta["person_names"] and not display_name:
+                    display_name = other_meta["person_names"][person_id]
+                linked_fids = sorted(other_meta["person_faces"].get(person_id, set()))
+                if not linked_fids:
+                    continue
+                other_dets, _ = _load_epoch_detections(ep_root)
+                other_det_by_id = {d["detection_id"]: d for d in other_dets}
+                for fid in linked_fids:
+                    det = other_det_by_id.get(str(fid))
+                    if det is not None and (ep_name, det["detection_id"]) not in excluded:
+                        excluded.add((ep_name, det["detection_id"]))
+                        query_vectors.append((str(det.get("engine") or ""), unit(det["embedding"])))
+            except (OSError, ValueError, sqlite3.Error, json.JSONDecodeError):
+                continue
+
         reports_dir = report_root(cfg) / "reports"
         if reports_dir.is_dir():
-            for rpath in sorted(reports_dir.glob("*.json")):
+            live_epoch_state: dict[str, tuple[set[str], dict[str, set[str]]]] = {}
+            seen_report_keys: set[str] = set()
+            for rpath in sorted(
+                reports_dir.glob("*.json"),
+                key=lambda path: (-path.stat().st_mtime_ns, path.stem),
+            ):
                 try:
                     rep = matching_projection.read_report(cfg, rpath.stem)
                 except (OSError, ValueError, KeyError):
@@ -485,13 +512,34 @@ def _resolve_query_embeddings(
                     if p.get("id") == person_id and not display_name:
                         display_name = p.get("display_name")
                 for ref in rep.get("references") or []:
-                    if ref.get("person_id") == person_id and ref.get("media", {}).get("kind") == "image" and ref.get("embedding"):
-                        obs_id = str(ref.get("observation_id") or "")
-                        ref_epoch = str(ref.get("epoch_id") or "")
-                        if obs_id and ref_epoch:
-                            excluded.add((ref_epoch, obs_id))
-                        query_vectors.append((str(ref.get("space") or ""), unit(ref["embedding"])))
-                break
+                    if (
+                        ref.get("person_id") != person_id
+                        or ref.get("media", {}).get("kind") != "image"
+                        or not ref.get("embedding")
+                    ):
+                        continue
+                    obs_id = str(ref.get("observation_id") or "")
+                    ref_epoch = str(ref.get("epoch_id") or "")
+                    dedup_key = f"{ref_epoch}:{obs_id or ref.get('id')}"
+                    if dedup_key in seen_report_keys or (obs_id and ref_epoch and (ref_epoch, obs_id) in excluded):
+                        continue
+                    if ref_epoch and ref_epoch in allowed_roots:
+                        if ref_epoch not in live_epoch_state:
+                            ep_dets, _ = _load_epoch_detections(allowed_roots[ref_epoch])
+                            ep_meta = _read_epoch_kg_metadata(allowed_roots[ref_epoch])
+                            live_epoch_state[ref_epoch] = (
+                                {d["detection_id"] for d in ep_dets},
+                                ep_meta["person_faces"],
+                            )
+                        live_det_ids, live_person_faces = live_epoch_state[ref_epoch]
+                        if obs_id and obs_id not in live_det_ids:
+                            continue
+                        if "review" in ref and obs_id not in live_person_faces.get(person_id, set()):
+                            continue
+                    seen_report_keys.add(dedup_key)
+                    if obs_id and ref_epoch:
+                        excluded.add((ref_epoch, obs_id))
+                    query_vectors.append((str(ref.get("space") or ""), unit(ref["embedding"])))
 
         if not query_vectors:
             raise ValueError(

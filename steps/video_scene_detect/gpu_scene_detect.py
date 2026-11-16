@@ -49,6 +49,7 @@ def detect_scenes_gpu(
     scene_cuts = []
     prev_frame = None
     frame_idx = 0
+    batch_start_idx = 0
     frames_buffer = []
     
     while True:
@@ -65,10 +66,12 @@ def detect_scenes_gpu(
         
         # Convert to grayscale and normalize
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if not frames_buffer:
+            batch_start_idx = frame_idx
         frames_buffer.append(gray)
         
         # Process batch when full
-        if len(frames_buffer) >= batch_size or frame_idx == total_frames - 1:
+        if len(frames_buffer) >= batch_size or (total_frames > 0 and frame_idx == total_frames - 1):
             if frames_buffer:
                 # Convert to torch tensors
                 frames_tensor = torch.stack([
@@ -92,15 +95,14 @@ def detect_scenes_gpu(
                 # Single GPU-to-CPU sync per batch
                 diffs = diffs_tensor.cpu().tolist()
                 
-                for i in range(len(diffs)):
-                    diff = diffs[i]
-                    
+                for i, diff in enumerate(diffs):
+                    cut_frame = batch_start_idx + i
                     # Check for scene cut
-                    if diff > threshold:
+                    if cut_frame > 0 and diff > threshold:
                         # Enforce minimum scene length
-                        if not scene_cuts or (frame_idx - len(frames_buffer) + i - scene_cuts[-1]) >= min_scene_frames:
-                            scene_cuts.append(frame_idx - len(frames_buffer) + i)
-                            print(f"[SCENE-GPU] Scene cut at frame {frame_idx - len(frames_buffer) + i} (diff={diff:.1f})")
+                        if not scene_cuts or (cut_frame - scene_cuts[-1]) >= min_scene_frames:
+                            scene_cuts.append(cut_frame)
+                            print(f"[SCENE-GPU] Scene cut at frame {cut_frame} (diff={diff:.1f})")
             
             # Update prev_frame to last frame in batch
             if frames_buffer:
@@ -110,16 +112,43 @@ def detect_scenes_gpu(
         frame_idx += 1
         
         # Progress update every 5 seconds
-        if frame_idx % int(fps * 5) == 0:
+        progress_step = max(1, int(fps * 5))
+        if total_frames > 0 and frame_idx % progress_step == 0:
             progress = (frame_idx / total_frames) * 100
             print(f"[SCENE-GPU] Progress: {progress:.1f}% ({frame_idx}/{total_frames} frames)")
     
+    if frames_buffer:
+        frames_tensor = torch.stack([
+            torch.from_numpy(f).float() / 255.0
+            for f in frames_buffer
+        ]).to(device)
+        if prev_frame is not None:
+            prev_tensor = torch.from_numpy(prev_frame).float().to(device) / 255.0
+            combined = torch.cat([prev_tensor.unsqueeze(0), frames_tensor], dim=0)
+            diffs_tensor = torch.mean(torch.abs(combined[1:] - combined[:-1]), dim=(1, 2)) * 100.0
+        elif len(frames_tensor) > 1:
+            diffs_tensor = torch.mean(torch.abs(frames_tensor[1:] - frames_tensor[:-1]), dim=(1, 2)) * 100.0
+            diffs_tensor = torch.cat([torch.tensor([0.0], device=device), diffs_tensor])
+        else:
+            diffs_tensor = torch.tensor([0.0], device=device)
+        for i, diff in enumerate(diffs_tensor.cpu().tolist()):
+            cut_frame = batch_start_idx + i
+            if cut_frame > 0 and diff > threshold:
+                if not scene_cuts or (cut_frame - scene_cuts[-1]) >= min_scene_frames:
+                    scene_cuts.append(cut_frame)
+                    print(f"[SCENE-GPU] Scene cut at frame {cut_frame} (diff={diff:.1f})")
+        frames_buffer.clear()
+    
     cap.release()
+    
+    effective_total_frames = frame_idx if frame_idx > 0 else total_frames
+    if effective_total_frames > 0 and fps > 0:
+        duration = effective_total_frames / fps
     
     # Convert frame indices to time-based scenes
     scenes = []
     scene_starts = [0] + scene_cuts
-    scene_ends = scene_cuts + [total_frames]
+    scene_ends = scene_cuts + [effective_total_frames]
     
     for idx, (start_frame, end_frame) in enumerate(zip(scene_starts, scene_ends)):
         start_sec = start_frame / fps if fps > 0 else 0
@@ -209,16 +238,21 @@ def detect_scenes_gpu_advanced(
         prev_hist = current_hist
         frame_idx += 1
         
-        if frame_idx % int(fps * 5) == 0:
+        progress_step = max(1, int(fps * 5))
+        if total_frames > 0 and frame_idx % progress_step == 0:
             progress = (frame_idx / total_frames) * 100
             print(f"[SCENE-GPU-ADV] Progress: {progress:.1f}%")
     
     cap.release()
     
+    effective_total_frames = frame_idx if frame_idx > 0 else total_frames
+    if effective_total_frames > 0 and fps > 0:
+        duration = effective_total_frames / fps
+    
     # Convert to time-based scenes
     scenes = []
     scene_starts = [0] + scene_cuts
-    scene_ends = scene_cuts + [total_frames]
+    scene_ends = scene_cuts + [effective_total_frames]
     
     for idx, (start_frame, end_frame) in enumerate(zip(scene_starts, scene_ends)):
         start_sec = start_frame / fps if fps > 0 else 0

@@ -283,8 +283,55 @@ def is_runaway_decoder_phrase(
     return False
 
 
+def _extract_loop_words(text: str) -> List[str]:
+    return [w.strip("'").casefold() for w in re.findall(r"[A-Za-z0-9']+", text) if w.strip("'")]
+
+
+def _filter_runaway_phrases(
+    entries: List[tuple[str, bool]],
+    *,
+    vocab_words: Optional[set[str]] = None,
+) -> List[str]:
+    """Filter per-phrase decoder loops, residual loop-tail fragments, and cross-segment loops."""
+    from collections import Counter
+
+    surviving: List[str] = []
+    dropped_loop_tokens: set[str] = set()
+    for raw_text, untimed_native in entries:
+        text = str(raw_text or "").strip()
+        if not text:
+            continue
+        if is_runaway_decoder_phrase(text, vocab_words=vocab_words, untimed_native=untimed_native):
+            words = _extract_loop_words(text)
+            if words:
+                counts = Counter(words)
+                for tok, cnt in counts.items():
+                    if cnt >= 4 or (cnt / len(words)) >= 0.35:
+                        dropped_loop_tokens.add(tok)
+            continue
+        surviving.append(text)
+
+    if dropped_loop_tokens and surviving:
+        pruned: List[str] = []
+        for s_text in surviving:
+            s_words = _extract_loop_words(s_text)
+            if (
+                s_words
+                and len(s_words) < 8
+                and (sum(1 for w in s_words if w in dropped_loop_tokens) / len(s_words)) >= 0.80
+            ):
+                continue
+            pruned.append(s_text)
+        surviving = pruned
+
+    if len(surviving) >= 2 and is_runaway_decoder_phrase("\n".join(surviving), vocab_words=vocab_words):
+        return []
+
+    return surviving
+
+
 def reliable_transcript_for_entities(item: dict[str, Any]) -> str:
-    """Return transcript text excluding rejected low-confidence segments and decoder loops."""
+    """Return transcript text excluding restricted ASR scenes, rejected segments, and decoder loops."""
     if not isinstance(item, dict):
         return ""
     raw_tx = item.get("transcript") or item.get("transcription") or ""
@@ -295,12 +342,15 @@ def reliable_transcript_for_entities(item: dict[str, Any]) -> str:
 
     tmeta = item.get("transcript_meta")
     if not isinstance(tmeta, dict):
-        kept_lines = [
-            line.strip()
-            for line in raw_tx.splitlines()
-            if line.strip() and not is_runaway_decoder_phrase(line)
-        ]
+        kept_lines = _filter_runaway_phrases(
+            [(line.strip(), False) for line in raw_tx.splitlines() if line.strip()]
+        )
         return "\n".join(kept_lines)
+
+    from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+
+    if is_scene_transcript_restricted(item):
+        return ""
 
     rejected_indices: set[int] = set()
     rejected_texts: set[str] = set()
@@ -337,7 +387,7 @@ def reliable_transcript_for_entities(item: dict[str, Any]) -> str:
 
     phrase_obs = tmeta.get("phrase_observations")
     if isinstance(phrase_obs, list) and phrase_obs:
-        kept_phrases: List[str] = []
+        candidate_phrases: List[tuple[str, bool]] = []
         for obs in phrase_obs:
             if not isinstance(obs, dict):
                 continue
@@ -353,16 +403,14 @@ def reliable_transcript_for_entities(item: dict[str, Any]) -> str:
                 obs.get("reason") == "paired_native_timestamps_unavailable"
                 or obs.get("status") == "unavailable"
             )
-            if is_runaway_decoder_phrase(p_text, vocab_words=vocab_words, untimed_native=untimed_native):
-                continue
-            kept_phrases.append(p_text)
+            candidate_phrases.append((p_text, untimed_native))
+        kept_phrases = _filter_runaway_phrases(candidate_phrases, vocab_words=vocab_words or None)
         return "\n".join(kept_phrases)
 
-    kept_lines = [
-        line.strip()
+    candidate_lines = [
+        (line.strip(), False)
         for line in raw_tx.splitlines()
-        if line.strip()
-        and re.sub(r"\s+", " ", line.strip()).casefold() not in rejected_texts
-        and not is_runaway_decoder_phrase(line, vocab_words=vocab_words)
+        if line.strip() and re.sub(r"\s+", " ", line.strip()).casefold() not in rejected_texts
     ]
+    kept_lines = _filter_runaway_phrases(candidate_lines, vocab_words=vocab_words or None)
     return "\n".join(kept_lines)

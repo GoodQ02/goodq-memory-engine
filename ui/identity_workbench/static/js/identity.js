@@ -1880,23 +1880,39 @@
     });
 
     // Delete
-    document.getElementById(`delete-identity-${idx}`).addEventListener("click", () => {
-      if (confirm(`Remove "${state.roster[idx].display_name}" from the roster?`)) {
-        state.roster.splice(idx, 1);
-        state.activeRosterIdx = -1;
-        rebuildKnownPeopleState();
-        if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
-        renderRosterSidebar();
-        if (state.faceClusters.length) renderFaceGrid();
-        ui.rosterDetail.innerHTML = `<div class="roster-no-selection"><span class="pulse-icon">◼</span><p>IDENTITY REMOVED</p></div>`;
-      }
-    });
+    document.getElementById(`delete-identity-${idx}`).addEventListener("click", () => deleteIdentity(idx));
   }
 
   function faceClusterOwner(clusterId) {
     return state.roster.findIndex(identity =>
       (identity.face_cluster_ids || []).includes(clusterId)
     );
+  }
+
+  async function deleteIdentity(idx) {
+    const identity = state.roster[idx];
+    if (!identity) return;
+    try {
+      const result = await confirmedIdentityRequest(
+        "/api/identity/roster/save",
+        { identity: { id: identity.id, display_name: identity.display_name }, delete: true },
+        `Remove "${identity.display_name}" from the saved roster? The scoped confirmation is single-use.`
+      );
+      if (!result) return;
+      const currentIdx = state.roster.findIndex(item => item.id === identity.id);
+      if (currentIdx !== -1) state.roster.splice(currentIdx, 1);
+      state.activeRosterIdx = -1;
+      rebuildKnownPeopleState();
+      if (ui.badgeRoster) ui.badgeRoster.textContent = state.roster.length;
+      renderRosterSidebar();
+      if (state.faceClusters.length) renderFaceGrid();
+      ui.rosterDetail.innerHTML = `<div class="roster-no-selection"><span class="pulse-icon">◼</span><p>IDENTITY REMOVED</p></div>`;
+      toast(`Removed: ${identity.display_name}`);
+    } catch (e) {
+      const message = `Remove failed: ${e.message}`;
+      setOperationFailure(message);
+      toast(message, "error");
+    }
   }
 
   async function saveIdentity(idx) {

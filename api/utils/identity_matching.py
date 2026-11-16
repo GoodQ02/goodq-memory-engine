@@ -5,7 +5,15 @@ import re
 
 import yaml
 
-from lib.identity_matching import SCHEMA, digest, file_digest, read_json, report_root, reviewed_source_roots
+from lib.identity_matching import (
+    SCHEMA,
+    digest,
+    epoch_attested_identity_dir,
+    file_digest,
+    read_json,
+    report_root,
+    reviewed_source_roots,
+)
 
 
 def active_roster_path(cfg):
@@ -21,7 +29,38 @@ def active_roster_path(cfg):
 
 def merged_report_people(cfg, report):
     """Combine frozen reference people with active-epoch roster entries (read-only)."""
-    people = [dict(person) for person in report["people"]]
+    matching_cfg = cfg.get("identity_matching") or {}
+    ref_sources = matching_cfg.get("reference_sources") or []
+    live_ref_rosters = [
+        Path(str(s["identity_path"])) / "family_roster.yaml"
+        for s in ref_sources
+        if isinstance(s, dict)
+        and s.get("identity_path")
+        and (Path(str(s["identity_path"])) / "family_roster.yaml").is_file()
+    ]
+    if live_ref_rosters:
+        live_source_ids = {
+            str(r.get("person_id"))
+            for r in (report.get("references") or [])
+            if isinstance(r, dict) and r.get("person_id")
+        }
+        for rfile in live_ref_rosters:
+            doc = yaml.safe_load(rfile.read_text(encoding="utf-8")) or {}
+            if isinstance(doc, dict):
+                for p in doc.get("identities") or []:
+                    if isinstance(p, dict) and p.get("id"):
+                        live_source_ids.add(str(p["id"]))
+        for root in reviewed_source_roots(matching_cfg):
+            att = epoch_attested_identity_dir(root)
+            if att is not None and (att / "family_roster.yaml").is_file():
+                doc = yaml.safe_load((att / "family_roster.yaml").read_text(encoding="utf-8")) or {}
+                if isinstance(doc, dict):
+                    for p in doc.get("identities") or []:
+                        if isinstance(p, dict) and p.get("id"):
+                            live_source_ids.add(str(p["id"]))
+        people = [dict(person) for person in report["people"] if person["id"] in live_source_ids]
+    else:
+        people = [dict(person) for person in report["people"]]
     by_id = {person["id"]: person["display_name"] for person in people}
     roster_path = active_roster_path(cfg)
     if not roster_path or not roster_path.is_file():

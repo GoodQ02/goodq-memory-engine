@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_VIDEO = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v"}
 SUPPORTED_AUDIO = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".wma"}
 SUPPORTED_IMAGE = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
-SUPPORTED_DOCUMENT = {".pdf", ".txt", ".md", ".doc", ".docx"}
+SUPPORTED_DOCUMENT = {".pdf", ".txt", ".md", ".docx"}
 SUPPORTED_INGEST_EXTENSIONS = (
     SUPPORTED_VIDEO | SUPPORTED_AUDIO | SUPPORTED_IMAGE | SUPPORTED_DOCUMENT
 )

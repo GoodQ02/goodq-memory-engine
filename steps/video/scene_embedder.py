@@ -16,6 +16,38 @@ _MODELS = {
     "clip": {"model": None, "processor": None, "device": "cpu"},
     "dino": {"model": None, "processor": None, "device": "cpu"}
 }
+_LOADED_BY_EMBEDDER = {
+    "clip": False,
+    "dino": False,
+}
+
+
+def unload_model(model_type: Optional[str] = None, *, only_if_loaded_by_embedder: bool = False) -> bool:
+    """Release cached Phase 6 model(s) from GPU memory between sequential modalities."""
+    import gc
+
+    targets = [model_type] if model_type in _MODELS else (list(_MODELS.keys()) if model_type is None else [])
+    released = False
+    for key in targets:
+        if only_if_loaded_by_embedder and not _LOADED_BY_EMBEDDER.get(key, False):
+            continue
+        state = _MODELS.get(key)
+        if isinstance(state, dict) and (state.get("model") is not None or state.get("processor") is not None):
+            state["model"] = None
+            state["processor"] = None
+            released = True
+        _LOADED_BY_EMBEDDER[key] = False
+
+    if released:
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+    return released
 
 
 def _resolve_model_device(step_name: str) -> str:
@@ -108,11 +140,13 @@ def _load_clip_model():
             "processor": processor,
             "device": device
         })
+        _LOADED_BY_EMBEDDER["clip"] = True
         
         logger.info(f"[OK] CLIP model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load CLIP model: {e}")
         _MODELS["clip"].update({"model": None, "processor": None, "device": "cpu"})
+        _LOADED_BY_EMBEDDER["clip"] = False
 
 
 def _load_dino_model():
@@ -147,11 +181,13 @@ def _load_dino_model():
             "processor": processor,
             "device": device
         })
+        _LOADED_BY_EMBEDDER["dino"] = True
         
         logger.info(f"[OK] DINO model ({provision_result.repo_id}) loaded on {device} from {model_id} (revision: {provision_result.revision})")
     except Exception as e:
         logger.error(f"[FAIL] Failed to load DINO model: {e}")
         _MODELS["dino"].update({"model": None, "processor": None, "device": "cpu"})
+        _LOADED_BY_EMBEDDER["dino"] = False
 
 
 def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.ndarray | Dict[str, Any]]:
@@ -181,7 +217,7 @@ def embed_frames_clip(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
     
     # Resolve expected projection dimension (default to 768 for Large, 512 for Base)
     dim = getattr(model.config, "projection_dim", 768)
-    amp_enabled = (device == "cuda") and (os.getenv("GOODQ_CLIP_DISABLE_AMP", "").strip() != "1")
+    amp_enabled = str(device).startswith("cuda") and (os.getenv("GOODQ_CLIP_DISABLE_AMP", "").strip() != "1")
     autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.float16) if amp_enabled else nullcontext()
     
     embeddings = []
@@ -325,7 +361,7 @@ def embed_frames_dino(frame_paths: List[str], batch_size: int = 8) -> List[np.nd
     
     # Resolve expected hidden_size (default to 1024 for Large, 768 for Base)
     dim = getattr(model.config, "hidden_size", 1024)
-    amp_enabled = (device == "cuda") and (os.getenv("GOODQ_DINO_DISABLE_AMP", "").strip() != "1")
+    amp_enabled = str(device).startswith("cuda") and (os.getenv("GOODQ_DINO_DISABLE_AMP", "").strip() != "1")
     autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.float16) if amp_enabled else nullcontext()
     
     embeddings = []

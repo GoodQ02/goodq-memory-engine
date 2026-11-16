@@ -727,6 +727,96 @@ async def list_collections():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _validate_collection_scene_refs_belong_to_reader(cfg: dict, scene_refs: list[dict]) -> None:
+    """Reject collection scene_refs belonging to foreign saved-library sources or inactive epochs."""
+    if not scene_refs:
+        return
+    import sqlite3
+
+    foreign_videos: dict[str, str] = {}
+    ui_cfg = cfg.get("ui") if isinstance(cfg, dict) else None
+    if isinstance(ui_cfg, dict):
+        for source in ui_cfg.get("library_sources") or []:
+            if not isinstance(source, dict):
+                continue
+            source_id = str(source.get("id") or "").strip()
+            if not source_id or source_id == "local":
+                continue
+            source_name = str(source.get("name") or source_id)
+            for vid in source.get("video_ids") or []:
+                if isinstance(vid, str) and vid.strip():
+                    foreign_videos[vid.strip()] = source_name
+            single_vid = source.get("video_id")
+            if isinstance(single_vid, str) and single_vid.strip():
+                foreign_videos[single_vid.strip()] = source_name
+
+    paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    loader = _data_loader
+    data_root_raw = paths_cfg.get("data_root")
+    if loader is None and isinstance(data_root_raw, str) and data_root_raw.strip():
+        candidate_root = Path(data_root_raw)
+        if (candidate_root / "GoodQ_Data").is_dir():
+            try:
+                loader = DataLoader(data_root=candidate_root)
+            except Exception:
+                loader = None
+
+    known_local_videos: set[str] = set()
+    if loader is not None:
+        try:
+            for item in loader.list_processed_videos():
+                if isinstance(item, dict) and item.get("video_id"):
+                    known_local_videos.add(str(item["video_id"]))
+        except Exception:
+            pass
+
+    db_path_raw = paths_cfg.get("db_path")
+    if isinstance(db_path_raw, str) and db_path_raw.strip():
+        mem_db = Path(db_path_raw)
+        if mem_db.is_file() and mem_db.stat().st_size > 0:
+            try:
+                with sqlite3.connect(str(mem_db)) as conn:
+                    for table in ("scenes", "videos"):
+                        try:
+                            rows = conn.execute(f"SELECT DISTINCT video_id FROM {table}").fetchall()
+                            for (row_vid,) in rows:
+                                if isinstance(row_vid, str) and row_vid.strip():
+                                    known_local_videos.add(row_vid.strip())
+                        except sqlite3.Error:
+                            continue
+            except sqlite3.Error:
+                pass
+
+    for ref in scene_refs:
+        if not isinstance(ref, dict):
+            continue
+        vid = str(ref.get("video_id") or "").strip()
+        if not vid:
+            continue
+        if vid in foreign_videos:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Scene reference '{vid}' belongs to saved collection "
+                    f"'{foreign_videos[vid]}' and cannot be stored in this reader's epoch"
+                ),
+            )
+        if loader is not None:
+            has_local_dir = (loader.processing_dir / vid).is_dir() or (loader.completed_dir / vid).is_dir()
+            if has_local_dir and not loader.is_search_result_active(
+                {"video_id": vid, "scene_id": ref.get("scene_id")}
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Scene reference '{vid}' is retired or not promoted in this reader's epoch",
+                )
+        if known_local_videos and vid not in known_local_videos:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Scene reference '{vid}' does not belong to this reader's active collection",
+            )
+
+
 @router.post("/collections", response_model=dict)
 async def create_collection(body: dict = Body(...)):
     """Prepare or confirm one exact governed collection create."""
@@ -748,6 +838,10 @@ async def create_collection(body: dict = Body(...)):
     except Exception:
         logger.error("Summary collection configuration could not be loaded")
         raise HTTPException(status_code=503, detail="Collection authorization unavailable")
+    _validate_collection_scene_refs_belong_to_reader(
+        cfg,
+        payload["normalized"].get("scene_refs") or [],
+    )
 
     if action == "prepare":
         action_id = f"action_{uuid.uuid4().hex}"

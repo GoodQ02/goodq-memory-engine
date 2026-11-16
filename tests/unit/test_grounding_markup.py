@@ -18,7 +18,18 @@ SAVED_MOVIE_TWO = ("They are holding up <ref>two balloons</ref><box><190><36><37
     (SAVED_MOVIE_TWO, "They are holding up two balloons near the couch."),
     ("<ref>A dark brown wall</ref><box>(5,0),(1000,1000)</box> with no visible people.",
      "A dark brown wall with no visible people."),
+    ("<ref>A parked bicycle</ref><box>[[120, 340, 560, 780]]</box> beside a fence.",
+     "A parked bicycle beside a fence."),
+    ("<ref>A street sign</ref><quad>[[10, 20], [30, 20], [30, 40], [10, 40]]</quad> on the corner.",
+     "A street sign on the corner."),
+    ("<ref>A white car</ref><box><155><295>", "A white car"),
+    ("<ref>A parked bicycle</ref><box>[[120, 340", "A parked bicycle"),
+    ("A wooden porch<box", "A wooden porch"),
+    ("A wooden porch</ref", "A wooden porch"),
+    ("<ref>A white car</ref><box><155><295><712><620></bo", "A white car"),
+    ("<ref>A wooden porch</re", "A wooden porch"),
     ("Plain caption with a <b>tag</b> and 3 < 4 > 2.", "Plain caption with a <b>tag</b> and 3 < 4 > 2."),
+    ("A <boxcar> and <reference> note.", "A <boxcar> and <reference> note."),
 ])
 def test_strip_keeps_described_phrase_and_drops_coordinates(raw, expected):
     assert strip_grounding_markup(raw) == expected
@@ -27,9 +38,13 @@ def test_strip_keeps_described_phrase_and_drops_coordinates(raw, expected):
 
 def test_json_strip_preserves_document_and_other_fields():
     document = {"caption": SAVED_MOVIE_ONE, "summary": "Visual: " + SAVED_MOVIE_TWO, "score": 0.125,
+                "bracket_box": "<ref>chair</ref><box>[[12, 34, 56, 78]]</box> indoors",
+                "truncated_box": "<ref>table</ref><box><155><295",
                 "quote": 'He said "<ref>" is a word', "nested": [{"visual_caption": SAVED_MOVIE_TWO}]}
     cleaned = json.loads(strip_grounding_markup_json(json.dumps(document).encode()))
     assert cleaned["caption"] == "A white car is parked on a street surrounded by trees."
+    assert cleaned["bracket_box"] == "chair indoors"
+    assert cleaned["truncated_box"] == "table"
     assert cleaned["nested"][0]["visual_caption"].startswith("They are holding up two balloons ")
     assert cleaned["score"] == 0.125 and set(cleaned) == set(document)
     unchanged = json.dumps({"caption": "no markup"}).encode()

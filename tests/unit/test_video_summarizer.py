@@ -195,7 +195,13 @@ def test_target_prompt_and_provenance_share_exact_scene_summary_selection(
     ) as post:
         result = video_summarizer.run_step(_cfg(db_path), TARGET_HASH)
 
-    prompt = post.call_args.kwargs["json"]["messages"][1]["content"]
+    assert len(post.call_args_list) == 2
+    prompt = post.call_args_list[0].kwargs["json"]["messages"][1]["content"]
+    assert post.call_args_list[1].args[-1] == "http://127.0.0.1:11434/api/generate"
+    assert post.call_args_list[1].kwargs["json"] == {
+        "model": "test-fallback-model",
+        "keep_alive": 0,
+    }
     assert "TARGET SUMMARY TEXT" in prompt
     assert "CROSS VIDEO TEXT" not in prompt
     assert "MISSING SCENE ID TEXT" not in prompt
@@ -239,7 +245,13 @@ def test_provenance_contains_only_records_included_by_prompt_cap(
     ) as post:
         result = video_summarizer.run_step(_cfg(db_path), TARGET_HASH)
 
-    prompt = post.call_args.kwargs["json"]["messages"][1]["content"]
+    assert len(post.call_args_list) == 2
+    prompt = post.call_args_list[0].kwargs["json"]["messages"][1]["content"]
+    assert post.call_args_list[1].args[-1] == "http://127.0.0.1:11434/api/generate"
+    assert post.call_args_list[1].kwargs["json"] == {
+        "model": "test-fallback-model",
+        "keep_alive": 0,
+    }
     assert "TARGET_MARKER_20" in prompt
     assert "TARGET_MARKER_21" not in prompt
     assert [
@@ -289,7 +301,13 @@ def test_llm_helper_filters_supplied_records_by_canonical_target_scene_ids(
         )
 
     assert summary == "MODEL SUMMARY"
-    prompt = post.call_args.kwargs["json"]["messages"][1]["content"]
+    assert len(post.call_args_list) == 2
+    prompt = post.call_args_list[0].kwargs["json"]["messages"][1]["content"]
+    assert post.call_args_list[1].args[-1] == "http://127.0.0.1:11434/api/generate"
+    assert post.call_args_list[1].kwargs["json"] == {
+        "model": "test-fallback-model",
+        "keep_alive": 0,
+    }
     assert "SUPPLIED TARGET TEXT" in prompt
     assert "SUPPLIED CROSS VIDEO TEXT" not in prompt
     assert "SUPPLIED MISSING SCENE ID TEXT" not in prompt

@@ -1867,14 +1867,15 @@ async def get_identity_scene_context(
 
 class RosterSaveRequest(BaseModel):
     identity: dict
+    delete: bool = False
     confirmation_token: Optional[str] = Field(None)
 
 
 @router.post("/roster/save")
 async def save_roster_identity(req: RosterSaveRequest) -> dict:
     """
-    Upserts a single identity into family_roster.yaml by id.
-    Creates the file if it doesn't exist.
+    Upserts or deletes a single identity in family_roster.yaml by id.
+    Creates the file if it doesn't exist when saving.
     """
     import time
     _start = time.time()
@@ -1883,11 +1884,18 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
     except ImportError:
         raise HTTPException(status_code=500, detail="PyYAML not installed.")
 
+    _identity_id = str(req.identity.get("id") or "").strip()
+    if not _identity_id:
+        raise HTTPException(status_code=400, detail="identity_id_required")
+
     _authority = MiniAgentClient(profile="safe")
-    _identity_id = req.identity.get("id", "")
-    _tool_args = {"identity_id": str(_identity_id), "content_sha256": _identity_edit_digest(req)}
+    _tool_args = {"identity_id": _identity_id, "content_sha256": _identity_edit_digest(req)}
     _result, _code = _authority.authorize_action(
-        prompt="Confirm identity mutation: save roster identity",
+        prompt=(
+            "Confirm identity mutation: remove roster identity"
+            if req.delete
+            else "Confirm identity mutation: save roster identity"
+        ),
         mode="ops",
         tool_name="identity.save_roster",
         tool_args=_tool_args,
@@ -1898,6 +1906,7 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
         return JSONResponse(status_code=403, content=_result)
 
     roster_path = _data_path() / "family_roster.yaml"
+    mutated = True
     with FileLock(str(roster_path) + ".lock", timeout=10):
         if roster_path.exists():
             with open(roster_path, encoding="utf-8") as f:
@@ -1906,59 +1915,87 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
             data = {}
 
         identities: list = data.get("identities") or []
-        identity_id = req.identity.get("id", "")
-        requested_clusters = {
-            str(cluster_id)
-            for cluster_id in (req.identity.get("face_cluster_ids") or [])
-            if cluster_id
-        }
-        conflicting_owners: dict[str, str] = {}
-        for existing in identities:
-            existing_id = str(existing.get("id") or "")
-            if existing_id == str(identity_id):
-                continue
-            for cluster_id in existing.get("face_cluster_ids") or []:
-                cluster_key = str(cluster_id)
-                if cluster_key in requested_clusters:
-                    conflicting_owners[cluster_key] = existing_id
-        if conflicting_owners:
-            ordered_clusters = sorted(conflicting_owners)
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "face_cluster_already_owned",
-                    "cluster_ids": ordered_clusters,
-                    "owner_ids": sorted(
-                        {conflicting_owners[cluster] for cluster in ordered_clusters}
-                    ),
-                },
+        identity_id = _identity_id
+        if req.delete:
+            previous_entry = next(
+                (i for i in identities if str(i.get("id") or "") == identity_id),
+                None,
             )
-        previous = next((i for i in identities if i.get("id") == identity_id), {})
-        _check_assignment_changes(previous, req.identity)
-        found = False
-        for i, existing in enumerate(identities):
-            if existing.get("id") == identity_id:
-                identities[i] = req.identity
-                found = True
-                break
-        if not found:
-            identities.append(req.identity)
-
-        data["identities"] = identities
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
-                tmp_path = tmp.name
-                yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
-            os.replace(tmp_path, roster_path)
-        except Exception as e:
-            if tmp_path and os.path.exists(tmp_path):
+            if previous_entry is None:
+                mutated = False
+            else:
+                _check_assignment_changes(previous_entry, {})
+                identities = [
+                    i for i in identities if str(i.get("id") or "") != identity_id
+                ]
+                data["identities"] = identities
+                tmp_path = None
                 try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-            log.error("save_roster failed: %s", e)
-            raise HTTPException(status_code=500, detail="roster_save_failed")
+                    with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
+                        tmp_path = tmp.name
+                        yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                    os.replace(tmp_path, roster_path)
+                except Exception as e:
+                    if tmp_path and os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+                    log.error("save_roster delete failed: %s", e)
+                    raise HTTPException(status_code=500, detail="roster_save_failed")
+        else:
+            requested_clusters = {
+                str(cluster_id)
+                for cluster_id in (req.identity.get("face_cluster_ids") or [])
+                if cluster_id
+            }
+            conflicting_owners: dict[str, str] = {}
+            for existing in identities:
+                existing_id = str(existing.get("id") or "")
+                if existing_id == str(identity_id):
+                    continue
+                for cluster_id in existing.get("face_cluster_ids") or []:
+                    cluster_key = str(cluster_id)
+                    if cluster_key in requested_clusters:
+                        conflicting_owners[cluster_key] = existing_id
+            if conflicting_owners:
+                ordered_clusters = sorted(conflicting_owners)
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "face_cluster_already_owned",
+                        "cluster_ids": ordered_clusters,
+                        "owner_ids": sorted(
+                            {conflicting_owners[cluster] for cluster in ordered_clusters}
+                        ),
+                    },
+                )
+            previous = next((i for i in identities if i.get("id") == identity_id), {})
+            _check_assignment_changes(previous, req.identity)
+            found = False
+            for i, existing in enumerate(identities):
+                if existing.get("id") == identity_id:
+                    identities[i] = req.identity
+                    found = True
+                    break
+            if not found:
+                identities.append(req.identity)
+
+            data["identities"] = identities
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile("w", dir=roster_path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
+                    tmp_path = tmp.name
+                    yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                os.replace(tmp_path, roster_path)
+            except Exception as e:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+                log.error("save_roster failed: %s", e)
+                raise HTTPException(status_code=500, detail="roster_save_failed")
 
     _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
     _authority.record_external_execution_outcome(
@@ -1969,8 +2006,10 @@ async def save_roster_identity(req: RosterSaveRequest) -> dict:
         status="succeeded",
         return_code=0,
         duration_ms=int((time.time() - _start) * 1000),
-        side_effect_report={"mutated": True, "targets": [str(roster_path)]},
+        side_effect_report={"mutated": mutated, "targets": [str(roster_path)]},
     )
+    if req.delete:
+        return {"ok": True, "id": identity_id, "deleted": mutated}
     return {"ok": True, "id": identity_id}
 
 
@@ -2132,9 +2171,46 @@ async def export_roster(req: RosterExportRequest) -> dict:
 
     roster_path = _data_path() / "family_roster.yaml"
     with FileLock(str(roster_path) + ".lock", timeout=10):
+        seen_ids: set[str] = set()
+        cluster_owners: dict[str, set[str]] = {}
+        for entry in req.identities:
+            if not isinstance(entry, dict):
+                raise HTTPException(status_code=400, detail="identity_entry_invalid")
+            entry_id = str(entry.get("id") or "").strip()
+            if not entry_id:
+                raise HTTPException(status_code=400, detail="identity_id_required")
+            if entry_id in seen_ids:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "duplicate_identity_id",
+                        "identity_id": entry_id,
+                    },
+                )
+            seen_ids.add(entry_id)
+            for cluster_id in entry.get("face_cluster_ids") or []:
+                cluster_key = str(cluster_id or "").strip()
+                if cluster_key:
+                    cluster_owners.setdefault(cluster_key, set()).add(entry_id)
+
+        conflicting_clusters = sorted(
+            cid for cid, owners in cluster_owners.items() if len(owners) > 1
+        )
+        if conflicting_clusters:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "face_cluster_already_owned",
+                    "cluster_ids": conflicting_clusters,
+                    "owner_ids": sorted(
+                        {oid for cid in conflicting_clusters for oid in cluster_owners[cid]}
+                    ),
+                },
+            )
+
         existing = yaml.safe_load(roster_path.read_text(encoding="utf-8")) if roster_path.exists() else {}
         previous = {i.get("id"): i for i in (existing or {}).get("identities", [])}
-        proposed = {i.get("id"): i for i in req.identities}
+        proposed = {str(i.get("id")).strip(): i for i in req.identities}
         for identity_id in previous.keys() | proposed.keys():
             _check_assignment_changes(previous.get(identity_id, {}), proposed.get(identity_id, {}))
         data = {"identities": req.identities}

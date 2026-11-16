@@ -10,6 +10,8 @@ import requests
 import json
 import re
 
+from lib.grounding_markup import strip_grounding_markup
+
 if TYPE_CHECKING:
     from lib.llm_client import LLMClient
 
@@ -54,10 +56,144 @@ _SETTING_HINTS = (
     "bathroom",
     "restaurant",
     "store",
+    "porch",
+    "backyard",
+    "yard",
+    "garden",
+    "patio",
+    "deck",
+    "street",
+    "park",
     "couch",
     "table",
     "floor",
     "room",
+)
+_INDOOR_SETTING_CUES = (
+    "living room",
+    "kitchen",
+    "dining room",
+    "bedroom",
+    "bathroom",
+    "hallway",
+    "couch",
+    "indoors",
+    "indoor",
+    "inside",
+)
+_OUTDOOR_SETTING_CUES = (
+    "porch",
+    "backyard",
+    "front yard",
+    "yard",
+    "garden",
+    "patio",
+    "deck",
+    "street",
+    "sidewalk",
+    "driveway",
+    "park",
+    "parking lot",
+    "beach",
+    "lawn",
+    "outdoors",
+    "outdoor",
+    "outside",
+)
+_NUMBER_WORD_VALUES = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
+_PERSON_COUNT_NOUNS = (
+    r"(?:people|persons|individuals|speakers|voices|men|women|adults|participants|children|kids|boys|girls)"
+)
+_PERSON_COUNT_CLAIM_RE = re.compile(
+    rf"\b(?P<count>one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+(?:[a-z]+\s+){{0,2}}{_PERSON_COUNT_NOUNS}\b",
+    re.IGNORECASE,
+)
+_RESTRICTED_TRANSCRIPT_OUTCOMES = {
+    "error",
+    "unavailable",
+    "withheld_recognition_uncertainty",
+    "vocabulary_prompt_echo_filtered",
+    "invalid_worker_result",
+}
+_SPEECH_FRAMING_PREFIX_RE = re.compile(
+    r"^(?:(?:the|a|an)\s+)?(?:speaker|person|man|woman|someone|somebody|they|he|she|narrator|voice)\s+"
+    r"(?:says?|said|mentions?|mentioned|states?|stated|notes?|noted|tells?|told|asks?|asked|claims?|claimed|explains?|explained)"
+    r"(?:\s+that)?\s+",
+    re.IGNORECASE,
+)
+_CONTRACTION_NEGATION_RE = re.compile(
+    r"\b(?:isn['\u2019]?t|aren['\u2019]?t|wasn['\u2019]?t|weren['\u2019]?t|don['\u2019]?t|doesn['\u2019]?t|"
+    r"didn['\u2019]?t|haven['\u2019]?t|hasn['\u2019]?t|hadn['\u2019]?t|won['\u2019]?t|wouldn['\u2019]?t|"
+    r"can['\u2019]?t|cannot|couldn['\u2019]?t|shouldn['\u2019]?t|ain['\u2019]?t|mustn['\u2019]?t)\b",
+    re.IGNORECASE,
+)
+_NEGATION_WORD_RE = re.compile(
+    r"\b(?:not|never|no|none|nobody|nothing|neither|nor|without)\b",
+    re.IGNORECASE,
+)
+_PROPOSITION_STOPWORDS = {
+    "a", "an", "the", "and", "or", "but", "if", "so", "as", "at", "by", "for", "from",
+    "in", "into", "of", "on", "to", "up", "with", "about", "over", "after", "before",
+    "is", "am", "are", "was", "were", "be", "been", "being",
+    "do", "does", "did", "have", "has", "had", "will", "would", "can", "could", "should", "shall", "may", "might",
+    "i", "me", "my", "we", "us", "our", "you", "your", "he", "him", "his", "she", "her", "it", "its", "they", "them", "their",
+    "this", "that", "these", "those", "there", "here",
+    "not", "never", "no", "none", "nobody", "nothing", "neither", "nor", "without",
+    "speaker", "person", "someone", "somebody", "say", "says", "said", "mention", "mentions", "mentioned",
+    "state", "states", "stated", "tell", "tells", "told", "claim", "claims", "claimed",
+}
+_IRREGULAR_ACTION_VERBS = {
+    "hit": "hit", "hits": "hit",
+    "told": "tell", "tells": "tell", "tell": "tell",
+    "gave": "give", "gives": "give", "give": "give",
+    "took": "take", "takes": "take", "take": "take",
+    "saw": "see", "sees": "see", "see": "see",
+    "sent": "send", "sends": "send", "send": "send",
+    "paid": "pay", "pays": "pay", "pay": "pay",
+    "fed": "feed", "feeds": "feed", "feed": "feed",
+    "led": "lead", "leads": "lead", "lead": "lead",
+    "held": "hold", "holds": "hold", "hold": "hold",
+    "caught": "catch", "catches": "catch", "catch": "catch",
+    "taught": "teach", "teaches": "teach", "teach": "teach",
+    "bought": "buy", "buys": "buy", "buy": "buy",
+    "brought": "bring", "brings": "bring", "bring": "bring",
+    "threw": "throw", "throws": "throw", "throw": "throw",
+    "struck": "strike", "strikes": "strike", "strike": "strike",
+    "bit": "bite", "bites": "bite", "bite": "bite",
+    "beat": "beat", "beats": "beat",
+    "drove": "drive", "drives": "drive", "drive": "drive",
+    "left": "leave", "leaves": "leave", "leave": "leave",
+    "shot": "shoot", "shoots": "shoot", "shoot": "shoot",
+    "won": "win", "wins": "win", "win": "win",
+}
+_NON_ACTION_SVO_VERBS = {
+    "is", "am", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did",
+    "and", "or", "with", "near", "beside", "meet", "met", "meets", "marry", "married", "marries",
+}
+_ACTIVE_SVO_RE = re.compile(
+    r"(?P<subj>(?:[A-Z][\w'-]*(?:\s+[A-Z0-9][\w'-]*)*)|(?:(?:[Tt]he|[Aa]n?)\s+[a-z]{3,}))\s+"
+    r"(?:(?:also|just|already|still|almost|nearly|then|always|often)\s+)?"
+    r"(?P<verb>[a-z]{2,})\s+"
+    r"(?:(?P<mid>(?:the|a|an|his|her|their|my|your)\s+[a-z]{2,}\s+to)\s+|(?P<prep>at|on|for|after|into|from|to)\s+)?"
+    r"(?P<obj>(?:[A-Z][\w'-]*(?:\s+[A-Z0-9][\w'-]*)*)|(?:(?:[Tt]he|[Aa]n?)\s+[a-z]{3,}))"
+)
+_PASSIVE_BY_RE = re.compile(
+    r"\b(?:was|were|is|are|been|being|get|gets|got)\s+[a-z]+\s+by\b",
+    re.IGNORECASE,
 )
 _STRUCTURAL_SETTING_HINTS = {"table", "room"}
 _STRUCTURAL_CONTEXT_TAGS = {"conversation", "indoor conversation", "waiting", "low-signal scene", "spoken monologue"}
@@ -569,6 +705,46 @@ def _transcription_text_is_restricted(scene_meta: Dict[str, Any]) -> bool:
     return False
 
 
+def is_scene_transcript_restricted(scene_meta: Optional[Dict[str, Any]]) -> bool:
+    """Return True when scene/audio metadata marks ASR recognition as restricted or failed."""
+    if not isinstance(scene_meta, dict):
+        return False
+    audio_meta = scene_meta.get("audio") if isinstance(scene_meta.get("audio"), dict) else {}
+    for outcome in (scene_meta.get("transcript_outcome"), audio_meta.get("transcript_outcome")):
+        if isinstance(outcome, str) and outcome.strip().lower() in _RESTRICTED_TRANSCRIPT_OUTCOMES:
+            return True
+    transcript_meta = (
+        scene_meta.get("transcript_meta")
+        if isinstance(scene_meta.get("transcript_meta"), dict)
+        else audio_meta.get("transcript_meta")
+        if isinstance(audio_meta.get("transcript_meta"), dict)
+        else {}
+    )
+    meta_status = str(transcript_meta.get("status") or "").strip().lower()
+    if meta_status in _RESTRICTED_TRANSCRIPT_OUTCOMES:
+        return True
+
+    audio_evidence = scene_meta.get("audio_evidence")
+    if audio_evidence is None:
+        audio_evidence = audio_meta.get("audio_evidence")
+    coverage = (
+        scene_meta.get("transcription_coverage")
+        or audio_meta.get("transcription_coverage")
+        or ((transcript_meta.get("transcription_decoding") or {}).get("source_regions")
+            if isinstance(transcript_meta.get("transcription_decoding"), dict)
+            else None)
+    )
+    transcript = scene_meta.get("transcript")
+    if transcript is None:
+        transcript = audio_meta.get("transcript")
+    view = {
+        "transcript": transcript,
+        "audio_evidence": audio_evidence,
+        "transcription_coverage": coverage,
+    }
+    return _transcription_text_is_restricted(view)
+
+
 def _transcription_evidence_details(scene_meta: Dict[str, Any]) -> Dict[str, Any]:
     if scene_meta.get('audio_evidence') is not None:
         projection = scene_meta['audio_evidence']
@@ -658,7 +834,8 @@ def _scene_context_failure_fallback_payload(
 
     transcript = str(scene_meta.get("transcript") or "").strip()
     transcript_word_count = len(re.findall(r"\b\w+\b", transcript))
-    caption = str(scene_meta.get("caption") or "").strip()
+    caption = strip_grounding_markup(str(scene_meta.get("caption") or "")).strip()
+    distinct_captions = _collect_distinct_captions(scene_meta)
     objects = scene_meta.get("objects", [])
     object_labels = _select_scene_object_labels(objects, limit=10)
 
@@ -673,7 +850,7 @@ def _scene_context_failure_fallback_payload(
         return observed_fallback(normalized or _minimal_scene_context_payload())
 
     topic_hints = _extract_transcript_topic_hints(transcript)
-    setting_hint = _derive_setting_hint(caption, object_labels)
+    setting_hint = _derive_setting_hint(caption, object_labels, distinct_captions=distinct_captions)
     emotion_label = None
     emotions = scene_meta.get("emotions")
     if isinstance(emotions, list):
@@ -766,17 +943,337 @@ def _contains_supported_role_in_transcript(term: str, transcript: str) -> bool:
     return any(re.search(rf"\b{re.escape(variant)}\b", transcript_lower) for variant in variants)
 
 
-def _derive_setting_hint(caption: str, tags: List[str]) -> Optional[str]:
+def _collect_distinct_captions(scene_meta: Dict[str, Any]) -> List[str]:
+    captions: List[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: Any) -> None:
+        if not isinstance(raw, str):
+            return
+        cleaned = strip_grounding_markup(raw).strip()
+        if not cleaned or _caption_is_low_signal(cleaned):
+            return
+        key = cleaned.casefold()
+        if key not in seen:
+            seen.add(key)
+            captions.append(cleaned)
+
+    _add(scene_meta.get("caption"))
+    for raw_list in (
+        scene_meta.get("distinct_captions"),
+        ((scene_meta.get("keyframe") or {}).get("caption_meta") or {}).get("distinct_captions")
+        if isinstance(scene_meta.get("keyframe"), dict)
+        else None,
+    ):
+        if isinstance(raw_list, list):
+            for item in raw_list:
+                _add(item)
+    for obs_list in (
+        scene_meta.get("caption_observations"),
+        (scene_meta.get("keyframe") or {}).get("caption_observations")
+        if isinstance(scene_meta.get("keyframe"), dict)
+        else None,
+    ):
+        if isinstance(obs_list, list):
+            for obs in obs_list:
+                if isinstance(obs, dict):
+                    _add(obs.get("caption"))
+    return captions
+
+
+def _has_non_hedged_cue(text: str, cues: tuple[str, ...]) -> bool:
     from steps.video.entity_extractor import is_hedged_mention
 
-    lowered_caption = str(caption or "").casefold()
-    for hint in _SETTING_HINTS:
-        if hint == "room":
+    lowered = str(text or "").casefold()
+    if not lowered:
+        return False
+    for cue in cues:
+        for match in re.finditer(rf"\b{re.escape(cue)}\b", lowered):
+            if not is_hedged_mention(lowered, match.start()):
+                return True
+    return False
+
+
+def _has_conflicting_indoor_outdoor_captions(captions: List[str]) -> bool:
+    if len(captions) < 2:
+        return False
+    has_indoor = any(_has_non_hedged_cue(cap, _INDOOR_SETTING_CUES) for cap in captions)
+    has_outdoor = any(_has_non_hedged_cue(cap, _OUTDOOR_SETTING_CUES) for cap in captions)
+    return has_indoor and has_outdoor
+
+
+def _collapses_conflicting_settings(text: Optional[str], *, has_conflicting_settings: bool) -> bool:
+    if not has_conflicting_settings or not isinstance(text, str) or not text.strip():
+        return False
+    claims_indoor = _has_non_hedged_cue(text, _INDOOR_SETTING_CUES)
+    claims_outdoor = _has_non_hedged_cue(text, _OUTDOOR_SETTING_CUES)
+    return claims_indoor != claims_outdoor
+
+
+def _parse_count_token(token: str) -> Optional[int]:
+    lowered = str(token or "").strip().casefold()
+    if lowered in _NUMBER_WORD_VALUES:
+        return _NUMBER_WORD_VALUES[lowered]
+    if lowered.isdigit():
+        return int(lowered)
+    return None
+
+
+def _extract_person_counts(text: str) -> List[int]:
+    counts: List[int] = []
+    for match in _PERSON_COUNT_CLAIM_RE.finditer(str(text or "")):
+        parsed = _parse_count_token(match.group("count"))
+        if parsed is not None:
+            counts.append(parsed)
+    return counts
+
+
+def _max_supported_person_count(
+    scene_meta: Dict[str, Any],
+    *,
+    captions: List[str],
+    transcript: str,
+) -> int:
+    face_count = max(0, int(scene_meta.get("face_count") or 0))
+    explicit_obj_count = scene_meta.get("visible_person_object_count")
+    if explicit_obj_count is not None:
+        obj_person_count = max(0, int(explicit_obj_count or 0))
+    else:
+        objects = scene_meta.get("objects")
+        per_frame: Dict[Any, int] = {}
+        if isinstance(objects, list):
+            for obj in objects:
+                if isinstance(obj, dict):
+                    lbl = str(obj.get("label") or obj.get("name") or obj.get("class") or "").strip().casefold()
+                    if lbl == "person":
+                        key = obj.get("sample_index")
+                        if key is None:
+                            key = obj.get("source_path") or obj.get("timestamp") or "default"
+                        per_frame[key] = per_frame.get(key, 0) + 1
+                elif isinstance(obj, str) and obj.strip().casefold() == "person":
+                    per_frame["default"] = per_frame.get("default", 0) + 1
+        obj_person_count = max(per_frame.values(), default=0)
+
+    explicit_text_counts: List[int] = []
+    for cap in captions:
+        explicit_text_counts.extend(_extract_person_counts(cap))
+    if transcript:
+        explicit_text_counts.extend(_extract_person_counts(transcript))
+
+    visual_and_text_max = max([face_count, obj_person_count, *explicit_text_counts], default=0)
+    if transcript and visual_and_text_max < 1:
+        return 1
+    return visual_and_text_max
+
+
+def _contains_ungrounded_person_count(
+    text: Optional[str],
+    *,
+    scene_meta: Dict[str, Any],
+    captions: List[str],
+    transcript: str,
+) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    claimed_counts = _extract_person_counts(text)
+    if not claimed_counts:
+        return False
+    max_supported = _max_supported_person_count(
+        scene_meta,
+        captions=captions,
+        transcript=transcript,
+    )
+    return any(claimed > max_supported for claimed in claimed_counts)
+
+
+def _clause_is_negated(text: str) -> bool:
+    cleaned = re.sub(r"^\s*no\s*,\s*", "", str(text or "").strip(), flags=re.IGNORECASE)
+    if not cleaned:
+        return False
+    return bool(_CONTRACTION_NEGATION_RE.search(cleaned) or _NEGATION_WORD_RE.search(cleaned))
+
+
+def _proposition_stems(text: str) -> set[str]:
+    normalized = _CONTRACTION_NEGATION_RE.sub(" ", str(text or ""))
+    tokens = re.findall(r"[a-zA-Z0-9]+", normalized.casefold())
+    stems: set[str] = set()
+    for token in tokens:
+        if not token or token in _PROPOSITION_STOPWORDS or token in _LOW_VALUE_TOPIC_TOKENS:
             continue
-        # A hedged caption guess ("possibly a living room") is not a setting.
-        if any(not is_hedged_mention(lowered_caption, match.start())
-               for match in re.finditer(re.escape(hint), lowered_caption)):
-            return hint
+        if token.isdigit():
+            stems.add(token)
+        elif len(token) <= 3:
+            stems.add(token)
+        else:
+            stems.add(token[:4])
+    return stems
+
+
+def _normalize_svo_arg(raw: str) -> str:
+    cleaned = re.sub(r"^(?:the|a|an)\s+", "", str(raw or "").strip(), flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", cleaned).strip().casefold()
+
+
+def _normalize_svo_verb(raw: str) -> Optional[str]:
+    verb = str(raw or "").strip().casefold()
+    if not verb or verb in _NON_ACTION_SVO_VERBS:
+        return None
+    if verb in _IRREGULAR_ACTION_VERBS:
+        return _IRREGULAR_ACTION_VERBS[verb]
+    if verb.endswith("ied") and len(verb) > 4:
+        base = verb[:-3] + "y"
+    elif verb.endswith("ing") and len(verb) > 5:
+        base = verb[:-3]
+    elif verb.endswith("ed") and len(verb) > 3:
+        base = verb[:-2]
+    elif verb.endswith("es") and len(verb) > 4 and verb[:-2].endswith(("sh", "ch", "x", "s", "z")):
+        base = verb[:-2]
+    elif verb.endswith("s") and len(verb) > 3 and not verb.endswith("ss"):
+        base = verb[:-1]
+    else:
+        base = verb
+    if len(base) >= 3 and base[-1] == base[-2] and base[-1] not in {"l", "s", "z", "f"}:
+        base = base[:-1]
+    if base.endswith("e") and len(base) > 3:
+        base = base[:-1]
+    return base or None
+
+
+def _extract_active_svo_triples(text: str) -> set[tuple[str, str, str]]:
+    triples: set[tuple[str, str, str]] = set()
+    for sentence in re.split(r"[.!?;]+", str(text or "")):
+        clause = _SPEECH_FRAMING_PREFIX_RE.sub("", sentence.strip()).strip()
+        if not clause or _PASSIVE_BY_RE.search(clause):
+            continue
+        for match in _ACTIVE_SVO_RE.finditer(clause):
+            subj = _normalize_svo_arg(match.group("subj"))
+            obj = _normalize_svo_arg(match.group("obj"))
+            verb = _normalize_svo_verb(match.group("verb"))
+            if not subj or not obj or not verb or subj == obj:
+                continue
+            if subj in _PROPOSITION_STOPWORDS or obj in _PROPOSITION_STOPWORDS:
+                continue
+            triples.add((subj, verb, obj))
+    return triples
+
+
+def _is_neutral_topic_framing(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped or stripped.startswith('Transcript: "'):
+        return True
+    if stripped in {"Minimal visual or dialogue content.", "Spoken or dialogue evidence present."}:
+        return True
+    if re.fullmatch(r"(?:[A-Za-z ]+\s+)?(?:conversation|monologue|discussion)(?:\s+about\s+[^.!?]+)?\.?", stripped, flags=re.IGNORECASE):
+        return True
+    if re.fullmatch(
+        r"(?:(?:the\s+)?(?:speakers?|people|persons?|man|woman|he|she|they)\s+)?(?:mentions?|(?:talks?|speaks?)\s+about|discusses?)\s+(?!.*\b(?:is|are|was|were|did|does|do|has|have|had|will|would|can|could)\b)[^.!?]+\.?",
+        stripped,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+def _has_transcript_polarity_or_role_conflict(text: Optional[str], transcript: str) -> bool:
+    if not isinstance(text, str) or not text.strip() or not isinstance(transcript, str) or not transcript.strip():
+        return False
+    cleaned_text = text.strip()
+
+    # 1. Active SVO actor-patient role reversal check
+    claim_triples = _extract_active_svo_triples(cleaned_text)
+    if claim_triples:
+        transcript_triples = _extract_active_svo_triples(transcript)
+        for subj, verb, obj in claim_triples:
+            if (obj, verb, subj) in transcript_triples and (subj, verb, obj) not in transcript_triples:
+                return True
+
+    if _is_neutral_topic_framing(cleaned_text):
+        return False
+
+    # 2. Clause-level negation / polarity parity check
+    prop = _SPEECH_FRAMING_PREFIX_RE.sub("", cleaned_text).strip()
+    prop_stems = _proposition_stems(prop)
+    if not prop_stems:
+        return False
+    has_speech_framing = prop != cleaned_text
+    if len(prop_stems) < 2 and not has_speech_framing:
+        return False
+
+    clauses = [
+        part.strip()
+        for part in re.split(
+            r"[.!?;]+|\s*,\s*(?=(?:but|and|or|so|yet|while|although|though|until|unless)\b)|\b(?:but|although|though|while|whereas|however|until|unless)\b",
+            transcript,
+            flags=re.IGNORECASE,
+        )
+        if part and part.strip()
+    ]
+    if not clauses:
+        return False
+
+    best_clause = ""
+    best_overlap = 0
+    for clause in clauses:
+        overlap = len(prop_stems & _proposition_stems(clause))
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_clause = clause
+
+    min_required = 1 if (len(prop_stems) == 1 and has_speech_framing) else 2
+    if best_overlap < min_required or (best_overlap / max(1, len(prop_stems))) < 0.5:
+        return False
+
+    claim_negated = _clause_is_negated(cleaned_text) or _clause_is_negated(prop)
+    clause_negated = _clause_is_negated(best_clause)
+    return claim_negated != clause_negated
+
+
+def _select_verbatim_transcript_quote(value: Optional[str], transcript: str) -> str:
+    candidates = [
+        part.strip()
+        for part in re.findall(r"[^.!?]+(?:[.!?]+|$)", str(transcript or ""))
+        if part.strip() and len(part.split()) <= 80
+    ]
+    if not candidates:
+        return "Spoken or dialogue evidence present."
+    stems = _content_token_stems(str(value or "")) or _proposition_stems(str(value or ""))
+    if stems:
+        quote = max(
+            candidates,
+            key=lambda part: len(stems & (_content_token_stems(part) or _proposition_stems(part))),
+            default="",
+        )
+        if quote and (stems & (_content_token_stems(quote) or _proposition_stems(quote))):
+            return f'Transcript: "{quote}"'
+    return f'Transcript: "{candidates[0]}"'
+
+
+def _derive_setting_hint(
+    caption: str,
+    tags: List[str],
+    *,
+    distinct_captions: Optional[List[str]] = None,
+) -> Optional[str]:
+    from steps.video.entity_extractor import is_hedged_mention
+
+    if distinct_captions and _has_conflicting_indoor_outdoor_captions(distinct_captions):
+        return None
+
+    candidate_captions = [str(caption or "")]
+    if distinct_captions:
+        for extra in distinct_captions:
+            if extra and extra not in candidate_captions:
+                candidate_captions.append(extra)
+
+    for raw_cap in candidate_captions:
+        lowered_caption = raw_cap.casefold()
+        for hint in _SETTING_HINTS:
+            if hint == "room":
+                continue
+            # A hedged caption guess ("possibly a living room") is not a setting.
+            if any(not is_hedged_mention(lowered_caption, match.start())
+                   for match in re.finditer(rf"\b{re.escape(hint)}\b", lowered_caption)):
+                return hint
     for tag in tags:
         normalized = str(tag).strip().casefold()
         if normalized in _SETTING_HINTS and normalized != "room":
@@ -1083,10 +1580,31 @@ def _rewrite_key_moment(
     setting_hint: Optional[str],
     topic_hint: Optional[str],
     detector_only_labels: Optional[List[str]] = None,
+    scene_meta: Optional[Dict[str, Any]] = None,
+    captions: Optional[List[str]] = None,
+    has_conflicting_settings: bool = False,
 ) -> Optional[str]:
     normalized = value.strip() if isinstance(value, str) else value
     if not isinstance(normalized, str) or not normalized.strip():
         return normalized
+    if transcript and _has_transcript_polarity_or_role_conflict(normalized, transcript):
+        return _select_verbatim_transcript_quote(normalized, transcript)
+    if (
+        (scene_meta is not None and _contains_ungrounded_person_count(
+            normalized,
+            scene_meta=scene_meta,
+            captions=captions or [],
+            transcript=transcript,
+        ))
+        or _collapses_conflicting_settings(normalized, has_conflicting_settings=has_conflicting_settings)
+    ):
+        if topic_hint:
+            return f"They mention {topic_hint}."
+        if setting_hint:
+            return f"{setting_hint.capitalize()} conversation."
+        if transcript:
+            return _select_verbatim_transcript_quote(normalized, transcript)
+        return None
     if detector_only_labels and any(
         _text_contains_phrase(normalized.casefold(), label) for label in detector_only_labels
     ):
@@ -1198,11 +1716,18 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
     # Other modalities remain available to this normalizer; the original audio
     # evidence remains in the prompt and Inspector with its source coordinates.
     transcript = "" if recognition_restricted else str(scene_meta.get("transcript") or "").strip()
-    caption = str(scene_meta.get("caption") or "").strip()
-    visible_text_values = _prompt_evidence_values(
-        scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
-        limit=4,
-    )
+    caption = strip_grounding_markup(str(scene_meta.get("caption") or "")).strip()
+    distinct_captions = _collect_distinct_captions(scene_meta)
+    has_conflicting_settings = _has_conflicting_indoor_outdoor_captions(distinct_captions)
+    captions_blob_text = " ".join(distinct_captions) if distinct_captions else caption
+    visible_text_values = [
+        strip_grounding_markup(val)
+        for val in _prompt_evidence_values(
+            scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
+            limit=4,
+        )
+        if strip_grounding_markup(val).strip()
+    ]
     if recognition_restricted or _transcription_has_supported_absence(scene_meta):
         # Withhold spoken claims from warned recognition or supported absence.
         # Copy independent observations with their modality instead of treating lexical similarity
@@ -1242,7 +1767,7 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
     non_detector_evidence_blob = " ".join(
         [
             transcript,
-            caption,
+            captions_blob_text,
             " ".join(visible_text_values),
             " ".join(music_event_values),
             " ".join(time_hint_values),
@@ -1332,11 +1857,11 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         filtered_tags = [tag for tag in filtered_tags if tag.casefold() not in _GENERIC_CONTEXT_TAGS]
 
     filtered_tags = filtered_tags[:5]
-    setting_hint = _derive_setting_hint(caption, filtered_tags)
+    setting_hint = _derive_setting_hint(caption, filtered_tags, distinct_captions=distinct_captions)
 
     transcript_stems = _content_token_stems(transcript)
     caption_specific_stems = (
-        _content_token_stems(caption)
+        _content_token_stems(captions_blob_text)
         - _content_token_stems(" ".join(_SETTING_HINTS))
         - _content_token_stems(" ".join(_LOW_VALUE_VISIBLE_TAGS))
     )
@@ -1355,6 +1880,17 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
             normalized_text,
             flags=re.IGNORECASE,
         ):
+            return False
+        if _has_transcript_polarity_or_role_conflict(normalized_text, transcript):
+            return False
+        if _contains_ungrounded_person_count(
+            normalized_text,
+            scene_meta=scene_meta,
+            captions=distinct_captions,
+            transcript=transcript,
+        ):
+            return False
+        if _collapses_conflicting_settings(normalized_text, has_conflicting_settings=has_conflicting_settings):
             return False
         if _contains_unsupported_role_text(normalized_text, transcript):
             return False
@@ -1386,13 +1922,22 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         normalized_text = str(text or "").strip()
         if not normalized_text or topic_hint is not None or transcript_stems:
             return False
-        if _caption_is_low_signal(caption) or not caption_specific_stems:
+        if (not distinct_captions and _caption_is_low_signal(caption)) or not caption_specific_stems:
             return False
         if normalized_text == "Minimal visual or dialogue content." or re.fullmatch(
             r"(?:[A-Za-z ]+ )?conversation\.?",
             normalized_text,
             flags=re.IGNORECASE,
         ):
+            return False
+        if _contains_ungrounded_person_count(
+            normalized_text,
+            scene_meta=scene_meta,
+            captions=distinct_captions,
+            transcript=transcript,
+        ):
+            return False
+        if _collapses_conflicting_settings(normalized_text, has_conflicting_settings=has_conflicting_settings):
             return False
         if _contains_unsupported_role_text(normalized_text, transcript):
             return False
@@ -1409,7 +1954,7 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
             return False
         if _has_excess_ungrounded_content(
             normalized_text,
-            evidence_blob=caption,
+            evidence_blob=captions_blob_text,
             topic_hint=None,
             setting_hint=setting_hint,
         ):
@@ -1423,6 +1968,15 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
     )
     force_summary_rewrite = _contains_unsupported_role_text(raw_summary or "", transcript)
     if _contains_unsupported_activity_text(raw_summary or "", transcript):
+        force_summary_rewrite = True
+    if _contains_ungrounded_person_count(
+        raw_summary,
+        scene_meta=scene_meta,
+        captions=distinct_captions,
+        transcript=transcript,
+    ):
+        force_summary_rewrite = True
+    if _collapses_conflicting_settings(raw_summary, has_conflicting_settings=has_conflicting_settings):
         force_summary_rewrite = True
     if _contains_detector_only_label(raw_summary):
         force_summary_rewrite = True
@@ -1447,6 +2001,15 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
     )
     force_activity_rewrite = _contains_unsupported_role_text(raw_activity or "", transcript)
     if _contains_unsupported_activity_text(raw_activity or "", transcript):
+        force_activity_rewrite = True
+    if _contains_ungrounded_person_count(
+        raw_activity,
+        scene_meta=scene_meta,
+        captions=distinct_captions,
+        transcript=transcript,
+    ):
+        force_activity_rewrite = True
+    if _collapses_conflicting_settings(raw_activity, has_conflicting_settings=has_conflicting_settings):
         force_activity_rewrite = True
     if _contains_detector_only_label(raw_activity):
         force_activity_rewrite = True
@@ -1477,6 +2040,9 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
                 setting_hint=setting_hint,
                 topic_hint=topic_hint,
                 detector_only_labels=detector_only_labels,
+                scene_meta=scene_meta,
+                captions=distinct_captions,
+                has_conflicting_settings=has_conflicting_settings,
             )
         if not rewritten:
             continue
@@ -1555,7 +2121,7 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
     ):
         for moment in key_moments:
             if _is_transcript_grounded_without_topic(moment):
-                promoted_moment = moment if moment.endswith((".", "!", "?")) else f"{moment}."
+                promoted_moment = moment if moment.endswith((".", "!", "?", '"')) else f"{moment}."
                 narrative_summary = promoted_moment
                 if (
                     activity_description == "Minimal visual or dialogue content."
@@ -1691,6 +2257,8 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
         def attribute_excerpt(value):
             if not isinstance(value, str) or not value.strip():
                 return value
+            if value.startswith('Transcript: "'):
+                return value
             match = re.search(r"(?<!\w)" + re.escape(value.strip()) + r"(?!\w)", transcript, re.IGNORECASE)
             if match:
                 return f'Transcript: "{match.group(0)}"'
@@ -1716,6 +2284,31 @@ def _normalize_scene_context_payload(raw_context: Dict[str, Any], scene_meta: Di
                     "qualification": "unverified_model_transcript", "establishes_visible_presence": False,
                 }
         sanitized["key_moments"] = list(dict.fromkeys(attribute_excerpt(value) for value in sanitized["key_moments"]))
+
+    if transcript and not recognition_restricted:
+        for key, raw_candidate in (
+            ("narrative_summary", raw_summary),
+            ("activity_description", raw_activity),
+        ):
+            current_val = sanitized.get(key)
+            if not (isinstance(current_val, str) and current_val.startswith('Transcript: "')):
+                if _has_transcript_polarity_or_role_conflict(current_val, transcript) or _has_transcript_polarity_or_role_conflict(raw_candidate, transcript):
+                    sanitized[key] = _select_verbatim_transcript_quote(raw_candidate or current_val, transcript)
+            if isinstance(sanitized.get(key), str) and sanitized[key].startswith('Transcript: "'):
+                sanitized["claim_provenance"][key] = {
+                    "source": "scene_context_evidence",
+                    "depends_on": ["transcribe"],
+                    "qualification": "unverified_model_transcript",
+                    "establishes_visible_presence": False,
+                }
+        repaired_moments: List[str] = []
+        for moment in sanitized.get("key_moments") or []:
+            if isinstance(moment, str) and not moment.startswith('Transcript: "') and _has_transcript_polarity_or_role_conflict(moment, transcript):
+                repaired_moments.append(_select_verbatim_transcript_quote(moment, transcript))
+            else:
+                repaired_moments.append(moment)
+        sanitized["key_moments"] = list(dict.fromkeys(repaired_moments))
+
     sanitized = _qualify_scene_audio_result(sanitized, scene_meta)
     has_signal = any(
         sanitized[key]
@@ -1738,17 +2331,25 @@ def _build_scene_context_prompts(scene_meta: Dict[str, Any]) -> tuple[str, str]:
     index = scene_meta.get("index", 0)
     start = float(scene_meta.get("start", 0.0) or 0.0)
     end = float(scene_meta.get("end", 0.0) or 0.0)
-    caption = str(scene_meta.get("caption") or "").strip()
+    caption = strip_grounding_markup(str(scene_meta.get("caption") or "")).strip()
+    distinct_captions = _collect_distinct_captions(scene_meta)
     transcript = str(scene_meta.get("transcript") or "").strip()
-    visible_text_values = _prompt_evidence_values(
-        scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
-        limit=4,
-    )
+    visible_text_values = [
+        strip_grounding_markup(val)
+        for val in _prompt_evidence_values(
+            scene_meta.get("ocr_text") or scene_meta.get("visible_text"),
+            limit=4,
+        )
+        if strip_grounding_markup(val).strip()
+    ]
     music_event_values = _prompt_evidence_values(scene_meta.get("music_events"), limit=8)
     time_hint_values = _prompt_evidence_values(scene_meta.get("time_hints"), limit=8)
     metadata_time_hint_values = _prompt_evidence_values(scene_meta.get("metadata_time_hints"), limit=8)
     objects = scene_meta.get("objects", [])
     face_count = int(scene_meta.get("face_count", 0) or 0)
+    visible_person_object_count = int(scene_meta.get("visible_person_object_count", 0) or 0)
+    visible_people_values = _prompt_evidence_values(scene_meta.get("visible_people"), limit=6)
+    mentioned_people_values = _prompt_evidence_values(scene_meta.get("mentioned_people"), limit=8)
     emotions = scene_meta.get("emotions", [])
     speakers = scene_meta.get("speakers", [])
 
@@ -1827,6 +2428,20 @@ def _build_scene_context_prompts(scene_meta: Dict[str, Any]) -> tuple[str, str]:
             "attribution_status", "attribution_reason", "overlap_intervals", "timing_scope"), 48),
     }, ensure_ascii=False)
     speakers_str = _speaker_prompt_summary(speakers)
+    sampled_captions_line = (
+        f"\n- Sampled frame captions across scene: {' | '.join(distinct_captions)}"
+        if len(distinct_captions) > 1
+        else ""
+    )
+    max_single_frame_people = max(face_count, visible_person_object_count)
+    people_evidence_lines = f"\n- Max visible people in a single frame: {max_single_frame_people}"
+    if visible_people_values:
+        people_evidence_lines += f"\n- Visible people (on-camera): {', '.join(visible_people_values)}"
+    if mentioned_people_values:
+        people_evidence_lines += (
+            f"\n- Dialogue-mentioned people (spoken names only, not proof of presence): "
+            f"{', '.join(mentioned_people_values)}"
+        )
 
     system_prompt = (
         "You are a conservative video scene analyst. Produce dry operator-note style JSON grounded only "
@@ -1850,12 +2465,12 @@ SCENE:
 - Scene {index}: {start:.1f}s - {end:.1f}s
 
 EVIDENCE:
-- Visible caption: {caption or "No visual description"}
+- Visible caption: {caption or "No visual description"}{sampled_captions_line}
 - Visible objects: {objects_str}
 - Visible text: {visible_text_str}
 - Audio/music events: {music_events_str}
 - Time hints: {time_hints_str}
-- Face count: {face_count}
+- Face count: {face_count}{people_evidence_lines}
 - Transcript excerpt: {transcript_excerpt}
 - Transcript topic hints: {topic_hints_str}
 - Speaker evidence: {speakers_str}
@@ -1875,6 +2490,8 @@ OUTPUT RULES:
 - Sound-event times are approximate candidates; speaker labels and identities are unreviewed unless explicitly stated otherwise.
 - Spelling hints are recognizer configuration, not observations or evidence of identity.
 - Overlapping voices with unresolved attribution are group evidence. Preserve their words without assigning them, their vocal emotion or a voice identity to an individual. Speaker candidates are not confirmed people.
+- Never sum diarization speaker tracks, face counts, and spoken name mentions into a total person or speaker headcount. Diarization tracks can split one speaker or capture off-camera voices, and spoken names do not establish presence. Never state a numeric person or speaker count higher than corroborated single-frame visual or explicit transcript evidence.
+- When sampled frame captions show both indoor and outdoor settings across a camera cut, do not collapse the entire scene into solely indoors or solely outdoors.
 - Evidence priority is transcript with its stated quality limits first, objects second, caption last.
 - Topic hints are incomplete literal excerpts, not mandatory topics or additional evidence. Preserve a supported model-selected topic even when no hint matches it.
 - Do not invent family, friendship, marriage, employment, or other social roles.
@@ -1927,7 +2544,8 @@ def analyze_scene_context_llm(
     scene_meta = _recording_scene_meta(scene_meta)
     try:
         transcript = str(scene_meta.get("transcript") or "").strip()
-        caption = str(scene_meta.get("caption") or "").strip()
+        caption = strip_grounding_markup(str(scene_meta.get("caption") or "")).strip()
+        distinct_captions = _collect_distinct_captions(scene_meta)
         scene_objects = scene_meta.get("objects", [])
         if not isinstance(scene_objects, list):
             scene_objects = []
@@ -1936,7 +2554,7 @@ def analyze_scene_context_llm(
         speaker_count = len(scene_meta.get("speakers") or [])
         stage_monologue_visual = _has_stage_monologue_visual_cue(caption, scene_objects)
         topic_hints = _extract_transcript_topic_hints(transcript)
-        weak_visual_signal = face_count <= 0 and not scene_objects and _caption_is_low_signal(caption)
+        weak_visual_signal = face_count <= 0 and not scene_objects and not distinct_captions and _caption_is_low_signal(caption)
         # Legacy flat emotion estimates do not change the narrative shortcut;
         # they still receive the same scene-mood qualification below.
         has_audio_analysis = any(scene_meta.get(key) for key in _AUDIO_ANALYSIS_CHANNELS)

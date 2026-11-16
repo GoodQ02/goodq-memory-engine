@@ -57,6 +57,41 @@ CUDA_MANDATORY_PATTERNS = [
     re.compile(r"\bcpu[- ]only\b.{0,30}\b(not supported|unsupported)\b", re.IGNORECASE),
 ]
 
+UI_MOUNT_PATTERN = re.compile(
+    r'app\.mount\(\s*["\'](/ui/[a-z0-9_-]+)["\'][\s\S]{0,200}?html\s*=\s*True',
+    re.IGNORECASE,
+)
+UI_BLANKET_NO_MUTATION_PATTERN = re.compile(
+    r"without offering any (?:database-mutation|control-mutating)",
+    re.IGNORECASE,
+)
+
+
+def check_ui_walkthrough_drift(repo_root: Path) -> list[tuple[Path, str]]:
+    """Ensure active UI walkthrough covers all mounted HTML UI consoles and mutation boundaries."""
+    api_main = repo_root / "api" / "main.py"
+    walkthrough = repo_root / "docs" / "guides" / "ui" / "USER_INTERFACE_WALKTHROUGH.md"
+    if not api_main.is_file() or not walkthrough.is_file():
+        return []
+    try:
+        main_text = api_main.read_text(encoding="utf-8", errors="replace")
+        walkthrough_text = walkthrough.read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        return [(walkthrough, f"unable to read UI walkthrough or api/main.py: {exc}")]
+
+    violations: list[tuple[Path, str]] = []
+    mounted_routes = sorted(set(UI_MOUNT_PATTERN.findall(main_text)))
+    for route in mounted_routes:
+        if route not in walkthrough_text:
+            violations.append(
+                (walkthrough, f"mounted UI console '{route}' from api/main.py is missing from walkthrough")
+            )
+    if UI_BLANKET_NO_MUTATION_PATTERN.search(walkthrough_text):
+        violations.append(
+            (walkthrough, "walkthrough claims blanket zero-mutation across all UI consoles")
+        )
+    return violations
+
 
 def is_under(path: Path, parent: Path) -> bool:
     try:
@@ -85,8 +120,8 @@ def sanitize_console(text: str) -> str:
     return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
 
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parents[2]
+def main(repo_root: Path | None = None) -> int:
+    repo_root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
     archive_root = repo_root / "docs" / "archive"
     gpu_guides_root = repo_root / "docs" / "guides" / "gpu"
     allowed_legacy_docs = set(ALLOWED_LEGACY_DOCS)
@@ -225,6 +260,10 @@ def main() -> int:
     for path, detail in snapshot_authority_violations:
         print(f"[SNAPSHOT_AUTHORITY] {path}: {sanitize_console(detail)}")
 
+    ui_walkthrough_violations = check_ui_walkthrough_drift(repo_root)
+    for path, detail in ui_walkthrough_violations:
+        print(f"[UI_WALKTHROUGH] {path}: {sanitize_console(detail)}")
+
     print(
         f"doc_drift_lint summary: files_scanned={len(targets)} "
         f"active_l_path_violations={len(l_path_violations)} "
@@ -235,7 +274,8 @@ def main() -> int:
         f"archive_literal_lines={archive_literal_line_count} "
         f"archive_banner_violations={len(archive_banner_violations)} "
         f"corrupt_char_violations={len(corrupt_char_violations)} "
-        f"snapshot_authority_violations={len(snapshot_authority_violations)}"
+        f"snapshot_authority_violations={len(snapshot_authority_violations)} "
+        f"ui_walkthrough_violations={len(ui_walkthrough_violations)}"
     )
 
     return 1 if (
@@ -246,6 +286,7 @@ def main() -> int:
         or archive_banner_violations
         or corrupt_char_violations
         or snapshot_authority_violations
+        or ui_walkthrough_violations
     ) else 0
 
 

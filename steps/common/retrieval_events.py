@@ -82,7 +82,7 @@ def normalize_retrieval_context(raw: Optional[str]) -> str:
 
     if s in KNOWN_RETRIEVAL_CONTEXTS:
         return s
-    if re.match(r"^(human|system|agent)\\.[a-z0-9_.-]+$", s):
+    if re.match(r"^(human|system|agent)\.[a-z0-9_.-]+$", s):
         return s
     return "unknown"
 

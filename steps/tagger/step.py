@@ -256,8 +256,13 @@ def _speaker_transcript_text(item: Dict[str, Any]) -> str:
     speaker_transcript = item.get("speaker_transcript")
     if not isinstance(speaker_transcript, list):
         return ""
-    vocab_words: set[str] = set()
     tmeta = item.get("transcript_meta")
+    if isinstance(tmeta, dict):
+        from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+
+        if is_scene_transcript_restricted(item):
+            return ""
+    vocab_words: set[str] = set()
     if isinstance(tmeta, dict):
         tctx = tmeta.get("transcription_context")
         if isinstance(tctx, dict):
@@ -265,16 +270,23 @@ def _speaker_transcript_text(item: Dict[str, Any]) -> str:
                 for sub in re.findall(r"[A-Za-z0-9']+", str(w or "")):
                     if sub.strip("'"):
                         vocab_words.add(sub.strip("'").casefold())
-    parts: List[str] = []
+    candidates: List[Tuple[str, bool]] = []
     for segment in speaker_transcript:
         if not isinstance(segment, dict):
             continue
         text = segment.get("text")
         if isinstance(text, str) and text.strip():
-            stripped = text.strip()
-            if is_runaway_decoder_phrase(stripped, vocab_words=vocab_words or None):
-                continue
-            parts.append(stripped)
+            candidates.append((text.strip(), False))
+    try:
+        from steps.common.tag_utils import _filter_runaway_phrases
+
+        parts = _filter_runaway_phrases(candidates, vocab_words=vocab_words or None)
+    except Exception:
+        parts = [
+            txt
+            for txt, _ in candidates
+            if not is_runaway_decoder_phrase(txt, vocab_words=vocab_words or None)
+        ]
     return "\n".join(parts)
 
 
@@ -282,14 +294,26 @@ def _gather_text(item: Dict[str, Any]) -> str:
     texts: List[str] = []
     seen: set[str] = set()
     tmeta = item.get("transcript_meta")
+    has_tmeta = isinstance(tmeta, dict)
     has_governed_phrases = (
-        isinstance(tmeta, dict)
+        has_tmeta
         and isinstance(tmeta.get("phrase_observations"), list)
         and bool(tmeta.get("phrase_observations"))
     )
+    transcript_withheld = False
+    if has_tmeta:
+        from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+
+        transcript_withheld = is_scene_transcript_restricted(item)
     for k in ("document_text", "transcript", "ocr_text", "caption"):
         if k == "transcript":
-            v = reliable_transcript_for_entities(item) if isinstance(tmeta, dict) else item.get(k)
+            if has_tmeta:
+                v = "" if transcript_withheld else reliable_transcript_for_entities(item)
+                raw_tx = item.get("transcript")
+                if isinstance(raw_tx, str) and raw_tx.strip() and not v:
+                    transcript_withheld = True
+            else:
+                v = item.get(k)
         else:
             v = item.get(k)
         if isinstance(v, str) and v.strip():
@@ -297,7 +321,7 @@ def _gather_text(item: Dict[str, Any]) -> str:
             if text not in seen:
                 seen.add(text)
                 texts.append(text)
-    speaker_text = "" if has_governed_phrases else _speaker_transcript_text(item)
+    speaker_text = "" if (has_governed_phrases or transcript_withheld) else _speaker_transcript_text(item)
     if speaker_text:
         normalized_speaker = re.sub(r"\s+", " ", speaker_text).strip().casefold()
         covered = False

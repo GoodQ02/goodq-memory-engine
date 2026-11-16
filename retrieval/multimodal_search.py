@@ -1307,10 +1307,89 @@ class MultimodalSearchEngine:
             return []
 
         results = []
+        from api.utils.loaders import scene_is_retired
         from steps.common.transcript_binding import fts_provenance
+        from steps.common.ucf_retirement import _read_scene_retirements
+
+        db_file = Path(self.db_path).resolve()
+        ledger_path = db_file.parent / "ucf" / "ucf_ledger.db"
+        has_ledger = ledger_path.is_file()
+        epoch_id = db_file.parent.name
+        ledger_conn = (
+            sqlite_read_authority.open_sqlite_read_connection(ledger_path)
+            if has_ledger
+            else None
+        )
+        ucf_cache: Dict[str, Tuple[bool, set, set, List[Tuple[float, float]], List[dict]]] = {}
+
+        def _ucf_fts_allowed(payload: Dict[str, Any]) -> bool:
+            if ledger_conn is None:
+                return True
+            vh = str(payload.get("video_hash") or payload.get("video_id") or "")
+            if not vh:
+                return False
+            cached = ucf_cache.get(vh)
+            if cached is None:
+                all_rows = ledger_conn.execute(
+                    "SELECT frame_id, source_artifact_id, t_start, t_end, promotion_status, worker_name "
+                    "FROM context_frames WHERE video_hash = ? AND epoch_id = ?",
+                    (vh, epoch_id),
+                ).fetchall()
+                non_binding_rows = [
+                    r for r in all_rows if r[5] != "transcript_outcome_binding_candidate"
+                ]
+                has_stage_frames = bool(non_binding_rows)
+                rows = [r for r in non_binding_rows if r[4] == "promoted"]
+                promoted_fids = {int(r[0]) for r in rows if r[0] is not None}
+                promoted_sids = {str(r[1]) for r in rows if r[1] is not None and str(r[1])}
+                promoted_bounds = [
+                    (float(r[2]), float(r[3]))
+                    for r in rows
+                    if isinstance(r[2], (int, float))
+                    and not isinstance(r[2], bool)
+                    and isinstance(r[3], (int, float))
+                    and not isinstance(r[3], bool)
+                ]
+                retired = _read_scene_retirements(ledger_conn, video_hash=vh, epoch_id=epoch_id)
+                all_terminal = bool(all_rows) and all(
+                    r[4] in {"rejected", "superseded"} for r in all_rows
+                )
+                cached = (
+                    has_stage_frames or all_terminal,
+                    promoted_fids,
+                    promoted_sids,
+                    promoted_bounds,
+                    retired,
+                )
+                ucf_cache[vh] = cached
+            has_stage_frames, promoted_fids, promoted_sids, promoted_bounds, retired = cached
+            if scene_is_retired(payload, retired):
+                return False
+            meta_obj = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+            source_kind = str(payload.get("source_kind") or meta_obj.get("source_kind") or "video")
+            if not has_stage_frames:
+                return source_kind == "video"
+            if not promoted_fids:
+                return False
+            meta_obj = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+            prov = meta_obj.get("ucf_provenance")
+            if isinstance(prov, list) and prov:
+                return any(isinstance(fid, int) and not isinstance(fid, bool) and fid in promoted_fids for fid in prov)
+            sid = str(payload.get("scene_id") or "")
+            if sid and sid in promoted_sids:
+                return True
+            start, end = payload.get("start"), payload.get("end")
+            if isinstance(start, (int, float)) and isinstance(end, (int, float)) and promoted_bounds:
+                return any(
+                    start - 0.001 <= b_start <= b_end <= end + 0.001
+                    for b_start, b_end in promoted_bounds
+                )
+            return not promoted_sids and not promoted_bounds
 
         def accept(result):
             payload = result['payload']
+            if not _ucf_fts_allowed(payload):
+                return False
             payload.update(fts_provenance(payload, self.config))
             if _predicate is None or _predicate(payload):
                 results.append(result)
@@ -1318,7 +1397,7 @@ class MultimodalSearchEngine:
 
         # Stream scoped matches until enough eligible rows are found. Applying
         # LIMIT before the predicate could hide a valid later source/run.
-        scan_limit = -1 if _predicate is not None else top_k
+        scan_limit = -1 if (_predicate is not None or has_ledger) else top_k
         conn = sqlite_read_authority.open_sqlite_read_connection(self.db_path)
         try:
             is_fts = self._is_fts5_available(conn)
@@ -1432,6 +1511,8 @@ class MultimodalSearchEngine:
             logger.error(f"FTS search encountered error: {e}")
         finally:
             conn.close()
+            if ledger_conn is not None:
+                ledger_conn.close()
 
         return results
 

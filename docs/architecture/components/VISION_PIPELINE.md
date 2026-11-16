@@ -1,6 +1,6 @@
 <!-- DOC_BADGE: CANONICAL -->
 <!-- DOC_STATUS: AUTHORITATIVE -->
-<!-- DOC_LAST_VERIFIED: 2026-05-27 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-15 -->
 
 # Vision Processing Pipeline
 
@@ -146,8 +146,10 @@ Those persisted outputs are then consumed by:
 - `detect_meta`
 
 **Behavior**
-- object inventory is retained as structural scene evidence
-- object labels may also support conservative place inference in the semantic layer
+- runs the sealed OpenCV Zoo YOLOX ONNX asset (`opencv_yolox`, `object_detection_yolox_2022nov.onnx`, `opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98`) via ONNX Runtime (`engine="onnxruntime"`) in `envs/object_detect/.venv` (`goodq_object_detect`)
+- verifies active `CUDAExecutionProvider` initialization when GPU execution is selected; a CUDA session or inference failure retries the same `opencv_yolox` model on CPU and records `fallback_from` / `fallback_reason`
+- selects the sealed OpenCV Zoo NanoDet ONNX asset (`opencv_nanodet`, `object_detection_nanodet_2022nov.onnx`, `engine="opencv-dnn"`) only when the optional `opencv_yolox` pack is not installed; a corrupt or hash-invalid `opencv_yolox` asset fails visibly as `unavailable` rather than silently downgrading to NanoDet (see [OBJECT_DETECTION_POLICY.md](../../reference/OBJECT_DETECTION_POLICY.md))
+- emits 80-class COCO `bbox` / `label` / `score` dictionaries across 5 sampled scene frames (`0.00`, `0.25`, `0.50`, `0.75`, `end - 50 ms`) and supports conservative place inference in the semantic layer
 
 ### 4. `face_embed`
 
@@ -159,8 +161,9 @@ Those persisted outputs are then consumed by:
 - `faces_meta`
 
 **Behavior**
-- face nodes are structural inputs to the identity ladder
-- a detected face is not automatically a person identity
+- runs the sealed OpenCV Zoo YuNet face detector (`opencv_yunet`, `face_detection_yunet_2023mar.onnx`) paired with the sealed SFace recognizer (`opencv_sface`, `face_recognition_sface_2021dec.onnx`, `opencv_zoo-47534e27c9851bb1128ccc0102f1145e27f23f98`) in `goodq_face_embed`, producing 128-dimensional `opencv-yunet-sface` embeddings across the 5 sampled scene frames
+- degrades to `face_recognition` (`status="degraded"`, `fallback_used=True`) only when the primary sealed YuNet/SFace engine cannot be initialized; per-frame decode, detection, or alignment/feature errors fail that sample (`status="error"`, `engine="opencv-yunet-sface"`) so incompatible embedding spaces are never mixed within a run
+- face nodes are structural inputs to the identity ladder; a detected face is not automatically a person identity
 
 ### 5. `image_embed_dino`
 
@@ -193,7 +196,7 @@ Those persisted outputs are then consumed by:
 - `clip_meta`
 
 **Behavior**
-- CLIP is operational using **`openai/clip-vit-large-patch14`** (producing **768-dimensional** vectors)
+- CLIP is operational using **`laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K`** (`84c9828e63dc9a9351d1fe637c346d4c1c4db341`, producing **768-dimensional** vectors)
 - processes frame paths in a single flattened batch under `torch.inference_mode()` and mixed-precision Autocast
 - direct CLIP writes to the configured CLIP FAISS index and `clip_id_map`
 - direct CLIP requires explicit-ID FAISS support; legacy non-IDMap indexes fail visibly instead of falling back to position-based writes

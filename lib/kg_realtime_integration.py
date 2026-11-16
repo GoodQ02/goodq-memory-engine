@@ -5,7 +5,7 @@ import math
 import hashlib
 from wsl2_audio import speaker_signature
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 import re
 
 from lib.knowledge_graph import KnowledgeGraph
@@ -249,6 +249,45 @@ def _speaker_transcript_excerpt(
     return compact[:limit] if compact else None
 
 
+def _merge_numeric_intervals(intervals: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    if not intervals:
+        return []
+    merged: List[Tuple[float, float]] = []
+    for start, end in sorted(intervals, key=lambda item: (item[0], item[1])):
+        if end <= start:
+            continue
+        if merged and start <= merged[-1][1] + 1e-9:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _subtract_numeric_intervals(
+    intervals: List[Tuple[float, float]],
+    exclusions: List[Tuple[float, float]],
+) -> List[Tuple[float, float]]:
+    if not intervals or not exclusions:
+        return list(intervals)
+    remaining = list(intervals)
+    for ex_start, ex_end in exclusions:
+        if ex_end <= ex_start:
+            continue
+        next_remaining: List[Tuple[float, float]] = []
+        for cur_start, cur_end in remaining:
+            if ex_end <= cur_start + 1e-9 or ex_start >= cur_end - 1e-9:
+                next_remaining.append((cur_start, cur_end))
+                continue
+            if ex_start > cur_start + 1e-9:
+                next_remaining.append((cur_start, min(cur_end, ex_start)))
+            if ex_end < cur_end - 1e-9:
+                next_remaining.append((max(cur_start, ex_end), cur_end))
+        remaining = next_remaining
+        if not remaining:
+            break
+    return [(s, e) for s, e in remaining if e - s > 1e-9]
+
+
 def _speaker_duration_share(scene_data: Dict[str, Any], speaker_label: str) -> float:
     if not isinstance(speaker_label, str) or not speaker_label.strip():
         return 0.0
@@ -256,8 +295,9 @@ def _speaker_duration_share(scene_data: Dict[str, Any], speaker_label: str) -> f
     if not isinstance(segments, list):
         return 0.0
     target = normalize_entity_name(speaker_label)
-    speaker_seconds = 0.0
-    total_seconds = 0.0
+    by_speaker: Dict[str, List[Tuple[float, float]]] = {}
+    unattributed_direct: List[Tuple[float, float]] = []
+    unattributed_fallback: List[Tuple[float, float]] = []
     for segment in segments:
         if not isinstance(segment, dict):
             continue
@@ -269,16 +309,42 @@ def _speaker_duration_share(scene_data: Dict[str, Any], speaker_label: str) -> f
             end_val = float(segment.get("end") or start_val)
         except Exception:
             end_val = start_val
-        duration_val = max(0.0, end_val - start_val)
-        if duration_val <= 0.0:
+        if not (math.isfinite(start_val) and math.isfinite(end_val)) or end_val <= start_val:
             continue
-        total_seconds += duration_val
         seg_speaker = normalize_entity_name(str(segment.get("speaker") or ""))
-        if seg_speaker == target:
-            speaker_seconds += duration_val
+        if seg_speaker:
+            by_speaker.setdefault(seg_speaker, []).append((start_val, end_val))
+        else:
+            scope = str(segment.get("timing_scope") or "").strip().lower()
+            reason = str(segment.get("attribution_reason") or "").strip().lower()
+            if scope in {"containing_segment", "segment"} or reason != "overlapping_speakers":
+                unattributed_fallback.append((start_val, end_val))
+            else:
+                unattributed_direct.append((start_val, end_val))
+
+    merged_by_speaker = {
+        spk: _merge_numeric_intervals(spans)
+        for spk, spans in by_speaker.items()
+    }
+    attributed_union = _merge_numeric_intervals(
+        [span for spans in merged_by_speaker.values() for span in spans]
+    )
+    direct_unattributed = _merge_numeric_intervals(unattributed_direct)
+    fallback_unattributed = _subtract_numeric_intervals(
+        _merge_numeric_intervals(unattributed_fallback),
+        _merge_numeric_intervals([*attributed_union, *direct_unattributed]),
+    )
+    unattributed_seconds = sum(e - s for s, e in direct_unattributed) + sum(
+        e - s for s, e in fallback_unattributed
+    )
+    speaker_durations = {
+        spk: sum(e - s for s, e in spans)
+        for spk, spans in merged_by_speaker.items()
+    }
+    total_seconds = sum(speaker_durations.values()) + unattributed_seconds
     if total_seconds <= 1e-8:
         return 0.0
-    return speaker_seconds / total_seconds
+    return speaker_durations.get(target, 0.0) / total_seconds
 
 
 def _speaker_name_alignment_excerpt(

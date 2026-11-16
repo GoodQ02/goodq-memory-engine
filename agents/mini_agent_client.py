@@ -899,6 +899,7 @@ class MiniAgentClient:
         self.profile = profile.lower() if profile else "safe"
         if self.profile not in ("safe", "offline", "unrestricted"):
             self.profile = "safe"
+        self._explicit_config = config is not None
         self.config = config or load_configs({})
         
         # Retrieve execution mode config setting: 'in_process' or 'subprocess'
@@ -2232,6 +2233,8 @@ class MiniAgentClient:
             
         if isinstance(tool_result, dict) and tool_result.get("status") in {
             "promotion_committed_sync_pending",
+            "superseded_committed_sync_pending",
+            "rejected_committed_sync_pending",
             "qdrant_sync_pending",
         }:
             status = "error"
@@ -2359,6 +2362,21 @@ class MiniAgentClient:
         return ucf_db_dir / 'ucf_ledger.db'
 
     @staticmethod
+    def _qdrant_http_request(method: str, host: str, url: str, **kwargs: Any) -> Any:
+        import requests
+        from steps.common.qdrant_client import build_qdrant_session
+
+        verb = method.lower()
+        fn = getattr(requests, verb, None)
+        if fn is not None and getattr(fn, "__module__", "") != "requests.api":
+            return fn(url, **kwargs)
+        session = build_qdrant_session(host)
+        try:
+            return session.request(method.upper(), url, **kwargs)
+        finally:
+            session.close()
+
+    @staticmethod
     def _ensure_qdrant_sync_outbox(conn: Any) -> None:
         conn.execute(
             """
@@ -2371,6 +2389,7 @@ class MiniAgentClient:
                 delivery_state TEXT NOT NULL,
                 attempt_count INTEGER NOT NULL DEFAULT 0,
                 last_error TEXT,
+                payload_json TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
@@ -2378,6 +2397,16 @@ class MiniAgentClient:
             )
             """
         )
+        cols = {
+            r[1]
+            for r in conn.execute(
+                "PRAGMA table_info('ucf_qdrant_sync_outbox')"
+            ).fetchall()
+        }
+        if "payload_json" not in cols:
+            conn.execute(
+                "ALTER TABLE ucf_qdrant_sync_outbox ADD COLUMN payload_json TEXT"
+            )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_uqso_pending_scope "
             "ON ucf_qdrant_sync_outbox(delivery_state, epoch_id, video_hash)"
@@ -2451,6 +2480,26 @@ class MiniAgentClient:
         try:
             conn.execute("BEGIN IMMEDIATE")
             self._ensure_qdrant_sync_outbox(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ucf_status_transitions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frame_ids TEXT,
+                    video_hash TEXT,
+                    epoch_id TEXT,
+                    old_status TEXT NOT NULL,
+                    new_status TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    reason TEXT,
+                    scope TEXT,
+                    evidence TEXT,
+                    transitioned_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ust_scope ON ucf_status_transitions(video_hash, epoch_id)"
+            )
             row = conn.execute(
                 "SELECT id FROM ucf_qdrant_sync_outbox "
                 "WHERE operation = 'promotion' AND video_hash = ? AND epoch_id = ? "
@@ -2495,6 +2544,26 @@ class MiniAgentClient:
         try:
             conn.execute("BEGIN IMMEDIATE")
             self._ensure_qdrant_sync_outbox(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ucf_status_transitions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frame_ids TEXT,
+                    video_hash TEXT,
+                    epoch_id TEXT,
+                    old_status TEXT NOT NULL,
+                    new_status TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    reason TEXT,
+                    scope TEXT,
+                    evidence TEXT,
+                    transitioned_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ust_scope ON ucf_status_transitions(video_hash, epoch_id)"
+            )
             now = datetime.utcnow().isoformat() + "Z"
             conn.execute(
                 "UPDATE ucf_qdrant_sync_outbox SET delivery_state = 'cancelled', "
@@ -2557,6 +2626,7 @@ class MiniAgentClient:
         collections_attempted = sorted(qdrant_updates)
         points_attempted = sum(len(ids) for ids in qdrant_updates.values())
         points_verified = 0
+        wrong_scope_skipped = 0
         failed_collections: List[str] = []
         qdrant_host = self.config.get("qdrant", {}).get(
             "host", "http://127.0.0.1:6333"
@@ -2593,7 +2663,9 @@ class MiniAgentClient:
         for collection, point_ids in qdrant_updates.items():
             try:
                 if expected_video_hash is not None and expected_epoch_id is not None:
-                    preflight_response = requests.post(
+                    preflight_response = self._qdrant_http_request(
+                        "POST",
+                        qdrant_host,
                         f"{qdrant_host}/collections/{collection}/points",
                         json={
                             "ids": point_ids,
@@ -2611,31 +2683,50 @@ class MiniAgentClient:
                     }
                     if set(preflight_returned) != {
                         str(point_id) for point_id in point_ids
-                    } or any(
-                        not _point_matches_expected_scope(point, collection)
-                        or (point.get("payload") or {}).get(
+                    }:
+                        failed_collections.append(collection)
+                        continue
+                    in_scope_point_ids = [
+                        point_id
+                        for point_id in point_ids
+                        if _point_matches_expected_scope(
+                            preflight_returned[str(point_id)], collection
+                        )
+                    ]
+                    wrong_scope_skipped += len(point_ids) - len(in_scope_point_ids)
+                    if not in_scope_point_ids:
+                        continue
+                    if any(
+                        (preflight_returned[str(point_id)].get("payload") or {}).get(
                             "ucf_promotion_status"
                         )
                         not in allowed_source_statuses
-                        for point in preflight_returned.values()
+                        for point_id in in_scope_point_ids
                     ):
                         failed_collections.append(collection)
                         continue
-                update_response = requests.post(
+                    target_point_ids = in_scope_point_ids
+                else:
+                    target_point_ids = point_ids
+                update_response = self._qdrant_http_request(
+                    "POST",
+                    qdrant_host,
                     f"{qdrant_host}/collections/{collection}/points/payload?wait=true",
                     json={
                         "payload": {"ucf_promotion_status": status_val},
-                        "points": point_ids,
+                        "points": target_point_ids,
                     },
                     timeout=10,
                 )
                 if update_response.status_code != 200:
                     failed_collections.append(collection)
                     continue
-                verify_response = requests.post(
+                verify_response = self._qdrant_http_request(
+                    "POST",
+                    qdrant_host,
                     f"{qdrant_host}/collections/{collection}/points",
                     json={
-                        "ids": point_ids,
+                        "ids": target_point_ids,
                         "with_payload": True,
                         "with_vector": False,
                     },
@@ -2646,7 +2737,7 @@ class MiniAgentClient:
                     continue
                 points = verify_response.json().get("result", [])
                 returned = {str(point.get("id")): point for point in points}
-                if set(returned) != {str(point_id) for point_id in point_ids}:
+                if set(returned) != {str(point_id) for point_id in target_point_ids}:
                     failed_collections.append(collection)
                     continue
                 if any(
@@ -2657,7 +2748,7 @@ class MiniAgentClient:
                 ):
                     failed_collections.append(collection)
                     continue
-                points_verified += len(point_ids)
+                points_verified += len(target_point_ids)
             except Exception as exc:
                 logger.warning(
                     "Failed to sync and verify UCF status in Qdrant collection %s: %s",
@@ -2668,10 +2759,15 @@ class MiniAgentClient:
 
         return {
             "attempted": attempted,
-            "status": "warning" if failed_collections else ("ok" if attempted else "skipped"),
+            "status": (
+                "warning"
+                if (failed_collections or wrong_scope_skipped)
+                else ("ok" if attempted else "skipped")
+            ),
             "collections_attempted": collections_attempted,
             "points_attempted": points_attempted,
             "points_verified": points_verified,
+            "wrong_scope_skipped": wrong_scope_skipped,
             "failed_collections": sorted(set(failed_collections)),
         }
 
@@ -2719,7 +2815,7 @@ class MiniAgentClient:
         }
 
         try:
-            response = requests.get(f"{qdrant_host}/collections", timeout=5)
+            response = self._qdrant_http_request("GET", qdrant_host, f"{qdrant_host}/collections", timeout=5)
             if response.status_code != 200:
                 return {
                     "status": "error",
@@ -2815,7 +2911,9 @@ class MiniAgentClient:
                     }
                     if offset is not None:
                         preflight_body["offset"] = offset
-                    preflight_response = requests.post(
+                    preflight_response = self._qdrant_http_request(
+                        "POST",
+                        qdrant_host,
                         f"{qdrant_host}/collections/{collection}/points/scroll",
                         json=preflight_body,
                         timeout=10,
@@ -2869,7 +2967,9 @@ class MiniAgentClient:
                         }
                     ]
                 }
-                update_response = requests.post(
+                update_response = self._qdrant_http_request(
+                    "POST",
+                    qdrant_host,
                     f"{qdrant_host}/collections/{collection}/points/payload?wait=true",
                     json={
                         "payload": {"ucf_promotion_status": status_val},
@@ -2893,7 +2993,9 @@ class MiniAgentClient:
                     }
                     if offset is not None:
                         scroll_body["offset"] = offset
-                    verify_response = requests.post(
+                    verify_response = self._qdrant_http_request(
+                        "POST",
+                        qdrant_host,
                         f"{qdrant_host}/collections/{collection}/points/scroll",
                         json=scroll_body,
                         timeout=10,
@@ -3122,7 +3224,7 @@ class MiniAgentClient:
                 
                 url = f"{qdrant_host}/collections/{collection}/points/delete"
                 try:
-                    requests.post(url, json={"points": [normalized_key]}, timeout=5)
+                    self._qdrant_http_request("POST", qdrant_host, url, json={"points": [normalized_key]}, timeout=5)
                 except Exception as e:
                     logger.warning(f"Failed to delete Qdrant point {normalized_key} during rollback: {e}")
 
@@ -3269,7 +3371,7 @@ class MiniAgentClient:
                             
                             url = f"{qdrant_host}/collections/{collection}/points/payload"
                             try:
-                                requests.post(url, json={
+                                self._qdrant_http_request("POST", qdrant_host, url, json={
                                     "payload": {"ucf_frame_id": fid},
                                     "points": [normalized_key]
                                 }, timeout=5)
@@ -3457,7 +3559,9 @@ class MiniAgentClient:
             normalized_key = str(uuid.uuid5(GOODQ_POINT_ID_NAMESPACE, s))
             
         try:
-            resp = requests.post(
+            resp = self._qdrant_http_request(
+                "POST",
+                qdrant_host,
                 f"{qdrant_host}/collections/{collection}/points",
                 json={"ids": [normalized_key], "with_vector": True, "with_payload": False},
                 timeout=5
@@ -3476,13 +3580,14 @@ class MiniAgentClient:
                                   epoch_id: str, scene_id: str) -> str:
         """Resolve the exact promoted summary evidence without regenerating text."""
         import math
-        import requests
 
         collection, key = frame["vector_collection"], frame["vector_key"]
         if not collection or not key:
             raise ValueError("Scene summary has no referenced Qdrant point")
         host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333").rstrip("/")
-        response = requests.post(
+        response = self._qdrant_http_request(
+            "POST",
+            host,
             f"{host}/collections/{collection}/points",
             json={"ids": [key], "with_vector": False, "with_payload": True}, timeout=5,
         )
@@ -3532,15 +3637,357 @@ class MiniAgentClient:
                 rows.append((row_id, content))
         return rows
 
-    def _dematerialize_active_views(self, video_hash: str) -> None:
+    def _resolve_active_epoch_id(self) -> Optional[str]:
+        """Return the configured active epoch identifier when bound in self.config."""
+        if not isinstance(self.config, dict):
+            return None
+        for direct in (
+            self.config.get("epoch_id"),
+            (self.config.get("ucf") or {}).get("epoch_id") if isinstance(self.config.get("ucf"), dict) else None,
+            (self.config.get("runtime") or {}).get("epoch_id") if isinstance(self.config.get("runtime"), dict) else None,
+        ):
+            if isinstance(direct, str) and direct.strip():
+                return direct.strip()
+        paths = self.config.get("paths")
+        if isinstance(paths, dict):
+            db_dir = paths.get("db_dir")
+            if isinstance(db_dir, str) and db_dir.strip():
+                candidate = Path(db_dir).expanduser()
+                name = candidate.name
+                if name and (name.startswith("epoch_") or candidate.parent.name == "epochs"):
+                    return name
+        return None
+
+    def _resolve_scoped_view_paths(self) -> Tuple[Optional[Path], Optional[Path]]:
+        """Resolve memory.db and knowledge_graph.db without escaping a monkeypatched local UCF ledger."""
+        from lib.kg_realtime_integration import _resolve_graph_db_path
+
+        paths_cfg = self.config.get("paths", {}) if isinstance(self.config, dict) else {}
+        cfg_db_raw = paths_cfg.get("db_path")
+        cfg_kg_raw = _resolve_graph_db_path(self.config)
+        cfg_db_path = Path(cfg_db_raw) if cfg_db_raw else None
+        cfg_kg_path = Path(cfg_kg_raw) if cfg_kg_raw else None
+        if self._explicit_config:
+            return cfg_db_path, cfg_kg_path
+        try:
+            ucf_db_path = self._get_ucf_db_path()
+            cfg_db_dir = Path(paths_cfg["db_dir"]).resolve() if paths_cfg.get("db_dir") else None
+            if ucf_db_path:
+                resolved_ucf = Path(ucf_db_path).resolve()
+                local_root = resolved_ucf.parent.parent if resolved_ucf.parent.name == "ucf" else resolved_ucf.parent
+                if cfg_db_dir is None or (
+                    not resolved_ucf.is_relative_to(cfg_db_dir)
+                    and not cfg_db_dir.is_relative_to(local_root)
+                ):
+                    return local_root / "memory.db", local_root / "knowledge_graph.db"
+        except Exception as exc:
+            logger.debug("Scoped view path resolution fell back to configured paths: %s", exc)
+        return cfg_db_path, cfg_kg_path
+
+    @staticmethod
+    def _is_scene_asr_restricted_for_promotion(
+        manifest_scene: Optional[Dict[str, Any]],
+        merged_meta: Dict[str, Any],
+        s_frames: List[Dict[str, Any]],
+        transcript_text: Optional[str] = None,
+    ) -> bool:
+        """Return True when scene ASR text must be withheld from FTS indexing."""
+        restricted_outcomes = {
+            "low_confidence",
+            "runtime_failure",
+            "unclassified",
+            "error",
+            "unavailable",
+            "unresolved",
+            "restricted",
+            "withheld",
+        }
+        containers: List[Dict[str, Any]] = []
+        if isinstance(manifest_scene, dict):
+            containers.append(manifest_scene)
+            if isinstance(manifest_scene.get("audio"), dict):
+                containers.append(manifest_scene["audio"])
+        if isinstance(merged_meta, dict):
+            containers.append(merged_meta)
+            if isinstance(merged_meta.get("audio"), dict):
+                containers.append(merged_meta["audio"])
+        for container in containers:
+            if bool(container.get("asr_restricted")) or bool(container.get("transcript_restricted")):
+                return True
+            unc = container.get("asr_uncertainty")
+            if isinstance(unc, dict) and bool(unc.get("uncertain") or unc.get("restricted")):
+                return True
+            outcome = str(container.get("transcript_outcome") or "").strip().lower()
+            if outcome in restricted_outcomes:
+                return True
+            for ev_key in ("transcription_evidence", "scene_context_epistemic"):
+                ev = container.get(ev_key)
+                if isinstance(ev, dict) and ev.get("text_status") == "withheld_recognition_uncertainty":
+                    return True
+        try:
+            from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+
+            if isinstance(manifest_scene, dict):
+                cand = {**manifest_scene, "transcript": transcript_text} if transcript_text else manifest_scene
+                if is_scene_transcript_restricted(cand):
+                    return True
+            if isinstance(merged_meta, dict):
+                cand_meta = {**merged_meta, "transcript": transcript_text} if transcript_text else merged_meta
+                if is_scene_transcript_restricted(cand_meta):
+                    return True
+        except Exception as exc:
+            logger.debug("ASR restriction check failed closed during promotion: %s", exc)
+            return True
+
+        for f in s_frames:
+            if f.get("worker_name") == "recording_audio" and f.get("raw_ref"):
+                raw_path = Path(str(f["raw_ref"]))
+                if raw_path.is_file():
+                    try:
+                        from wsl2_audio.scene_projection import validate_scene_audio
+
+                        proj = validate_scene_audio(json.loads(raw_path.read_text(encoding="utf-8")))
+                        utterances = proj.get("utterances") or []
+                        if utterances and not any(
+                            (u.get("eligibility") or {}).get("transcript", {}).get("status") == "eligible"
+                            for u in utterances
+                        ):
+                            return True
+                        rec_status = str((proj.get("stages") or {}).get("recognition", {}).get("status") or "").lower()
+                        if not utterances and rec_status in {"error", "unavailable"}:
+                            return True
+                    except Exception as exc:
+                        logger.debug("Recording audio restriction check failed closed: %s", exc)
+                        return True
+            elif f.get("worker_name") == "audio_transcribe" and isinstance(f.get("payload"), dict):
+                p = f["payload"]
+                if bool(p.get("asr_restricted")) or bool(p.get("transcript_restricted")):
+                    return True
+                status_val = str(p.get("transcript_outcome") or p.get("text_status") or p.get("eligibility_status") or "").strip().lower()
+                if status_val in restricted_outcomes or status_val == "withheld_recognition_uncertainty" or status_val == "ineligible":
+                    return True
+        return False
+
+    @staticmethod
+    def _deduplicate_ucf_transcript_frames(
+        scene_id: str,
+        start: float,
+        end: float,
+        manifest_scene: Optional[Dict[str, Any]],
+        s_frames: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Build linear segments from UCF audio_transcribe frames with cross-channel deduplication."""
+        import copy as _copy
+        import re as _re
+        from wsl2_audio.scene_projection import _transcript_segments, validate_scene_audio
+
+        tx_frames = [
+            f for f in s_frames
+            if f.get("worker_name") == "audio_transcribe" and isinstance(f.get("payload"), dict)
+        ]
+        if not tx_frames:
+            return []
+
+        # 1. Prefer verified recording_audio scene projection when retained on disk or manifest.
+        projection_candidate = None
+        if isinstance(manifest_scene, dict):
+            aud = manifest_scene.get("audio")
+            if isinstance(aud, dict) and isinstance(aud.get("audio_evidence"), dict):
+                projection_candidate = aud["audio_evidence"]
+        if projection_candidate is None:
+            for f in s_frames:
+                if f.get("worker_name") == "recording_audio" and f.get("raw_ref"):
+                    raw_path = Path(str(f["raw_ref"]))
+                    if raw_path.is_file():
+                        try:
+                            loaded = json.loads(raw_path.read_text(encoding="utf-8"))
+                            expected_sha = (f.get("payload") or {}).get("audio_evidence_sha256")
+                            if not expected_sha or loaded.get("content_sha256") == expected_sha:
+                                projection_candidate = loaded
+                                break
+                        except Exception:
+                            projection_candidate = None
+
+        if isinstance(projection_candidate, dict):
+            try:
+                validated_proj = _copy.deepcopy(validate_scene_audio(projection_candidate))
+                promoted_utt_ids = {
+                    str(f["payload"]["utterance_id"])
+                    for f in tx_frames
+                    if f["payload"].get("utterance_id")
+                }
+                if promoted_utt_ids:
+                    validated_proj["utterances"] = [
+                        u for u in validated_proj.get("utterances", [])
+                        if str(u.get("id")) in promoted_utt_ids
+                    ]
+                dedup_segs, _ = _transcript_segments(validated_proj, offset=0.0)
+                return [
+                    {
+                        **seg,
+                        "speaker": seg.get("speaker") or "unknown",
+                    }
+                    for seg in dedup_segs
+                ]
+            except Exception as exc:
+                logger.debug("Falling back to synthetic UCF utterance deduplication for %s: %s", scene_id, exc)
+
+        # 2. Construct synthetic utterances from raw audio_transcribe UCF frames and deduplicate via wsl2_audio.
+        synthetic_utterances: List[Dict[str, Any]] = []
+        for idx, f in enumerate(tx_frames):
+            p = f["payload"]
+            raw_text = p.get("transcript") if p.get("transcript") is not None else p.get("text")
+            if raw_text is None:
+                continue
+            text_str = str(raw_text)
+            if not text_str.strip():
+                continue
+
+            eligibility_status = str(
+                ((p.get("eligibility") or {}).get("transcript") or {}).get("status")
+                if isinstance(p.get("eligibility"), dict)
+                else (p.get("eligibility_status") or "eligible")
+            ).strip().lower()
+            if eligibility_status != "eligible":
+                continue
+
+            utt_id = str(p.get("utterance_id") or p.get("id") or f"ucf_utt_{f['frame_id']}")
+            speaker_raw = p.get("speaker") or p.get("speaker_id") or p.get("track_id")
+            speaker_str = str(speaker_raw).strip() if speaker_raw is not None else ""
+
+            if isinstance(p.get("channel"), int):
+                channel = int(p["channel"])
+            elif (
+                isinstance(p.get("source_channels"), list)
+                and p["source_channels"]
+                and isinstance(p["source_channels"][0], int)
+            ):
+                channel = int(p["source_channels"][0])
+            else:
+                ch_match = _re.search(r"(?:^|:|_)c(\d+)(?::|$|_)", f"{speaker_str} {utt_id}")
+                if ch_match:
+                    channel = int(ch_match.group(1))
+                elif (
+                    p.get("utterance_id")
+                    or f.get("model_tag") == "recording_audio_v1"
+                    or p.get("timing_scope") == "scene_display_only"
+                ):
+                    channel = idx
+                else:
+                    channel = 0
+
+            src_channels = (
+                [int(c) for c in p["source_channels"] if isinstance(c, int)]
+                if isinstance(p.get("source_channels"), list) and p.get("source_channels")
+                else [channel]
+            )
+
+            t0 = float(f.get("t_start", start) or 0.0)
+            t1 = float(f.get("t_end", end) or t0)
+            if (
+                isinstance(p.get("span"), dict)
+                and isinstance(p["span"].get("start"), int)
+                and isinstance(p["span"].get("end"), int)
+                and p["span"]["end"] > p["span"]["start"]
+            ):
+                sample_span = {"start": int(p["span"]["start"]), "end": int(p["span"]["end"])}
+            elif (
+                isinstance(p.get("source_sample_start"), int)
+                and isinstance(p.get("source_sample_end"), int)
+                and p["source_sample_end"] > p["source_sample_start"]
+            ):
+                sample_span = {
+                    "start": int(p["source_sample_start"]),
+                    "end": int(p["source_sample_end"]),
+                }
+            else:
+                s_samp = max(0, int(round(t0 * 16000)))
+                e_samp = max(s_samp + 1, int(round(t1 * 16000)))
+                sample_span = {"start": s_samp, "end": e_samp}
+
+            raw_lang = p.get("language")
+            if isinstance(raw_lang, dict):
+                lang_dict = dict(raw_lang)
+            else:
+                lang_code = str(raw_lang or "en").strip() or "en"
+                lang_dict = {"configured": lang_code, "value": lang_code}
+
+            track_id = speaker_str if speaker_str and speaker_str.lower() != "unknown" else None
+            quality: Dict[str, Any] = {}
+            if isinstance(p.get("quality"), dict):
+                quality.update(p["quality"])
+            if isinstance(p.get("avg_logprob"), (int, float)):
+                quality.setdefault("avg_logprob", float(p["avg_logprob"]))
+            if isinstance(p.get("no_speech_probability"), (int, float)):
+                quality.setdefault("no_speech_probability", float(p["no_speech_probability"]))
+
+            synthetic_utterances.append(
+                {
+                    "id": utt_id,
+                    "channel": channel,
+                    "source_channels": src_channels,
+                    "text": text_str,
+                    "language": lang_dict,
+                    "words": list(p["words"]) if isinstance(p.get("words"), list) else [],
+                    "span": sample_span,
+                    "display_span": {"start": t0, "end": t1},
+                    "track_id": track_id,
+                    "speaker": {
+                        "id": track_id,
+                        "status": str(
+                            p.get("speaker_status")
+                            or ("assigned" if track_id else "unresolved")
+                        ),
+                    },
+                    "owner_scene_id": str(p.get("owner_scene_id") or scene_id),
+                    "quality": quality,
+                    "confidence": (
+                        dict(p["confidence"])
+                        if isinstance(p.get("confidence"), dict)
+                        else {
+                            "status": "unavailable",
+                            "basis": "native_decoder_block",
+                            "raw": {},
+                            "recognition_accuracy": "unqualified",
+                            "warnings": [],
+                        }
+                    ),
+                    "eligibility": {
+                        "transcript": {"status": "eligible", "reasons": []},
+                    },
+                    **({"resolution": p["resolution"]} if p.get("resolution") else {}),
+                }
+            )
+
+        if not synthetic_utterances:
+            return []
+
+        dedup_segs, _ = _transcript_segments({"utterances": synthetic_utterances}, offset=0.0)
+        return [
+            {
+                **seg,
+                "speaker": seg.get("speaker") or "unknown",
+            }
+            for seg in dedup_segs
+        ]
+
+    def _dematerialize_active_views(
+        self,
+        video_hash: str,
+        *,
+        retired_frame_ids: Optional[set[int]] = None,
+        raise_on_error: bool = False,
+    ) -> None:
         import sqlite3
         import json
         from pathlib import Path
         from lib.kg_realtime_integration import _resolve_graph_db_path
         from lib.knowledge_graph import KnowledgeGraph
 
-        # Fetch file_path from media_sources in ucf_ledger.db
+        # Fetch file_path and frame_ids from ucf_ledger.db
         file_path = None
+        ledger_video_frame_ids: set[int] = set(retired_frame_ids or ())
+        has_surviving_promoted_video_frames = False
         ucf_db_path = self._get_ucf_db_path()
         if ucf_db_path and Path(ucf_db_path).exists():
             try:
@@ -3549,105 +3996,183 @@ class MiniAgentClient:
                 row = cursor.fetchone()
                 if row:
                     file_path = row[0]
+                f_cursor = conn_ucf.execute(
+                    "SELECT frame_id FROM context_frames WHERE video_hash = ? AND promotion_status <> 'promoted'",
+                    (video_hash,),
+                )
+                ledger_video_frame_ids.update(int(r[0]) for r in f_cursor.fetchall() if r[0] is not None)
+                has_surviving_promoted_video_frames = bool(
+                    conn_ucf.execute(
+                        "SELECT 1 FROM context_frames WHERE video_hash = ? AND promotion_status = 'promoted' LIMIT 1",
+                        (video_hash,),
+                    ).fetchone()
+                )
                 conn_ucf.close()
             except Exception:
-                pass
+                if raise_on_error:
+                    raise
+        if retired_frame_ids is not None and has_surviving_promoted_video_frames:
+            # Another epoch of the same video_hash remains promoted; keep active views bound to that promoted epoch.
+            return
 
         scene_ids = []
         seg_ids = []
-        # 1. Dematerialize memory.db
-        db_path = self.config.get("paths", {}).get("db_path")
+        scoped_db_path, scoped_graph_db_path = self._resolve_scoped_view_paths()
+        # 1. Dematerialize memory.db (support-aware for shared content-hash embeddings & artifact links)
+        db_path = str(scoped_db_path) if scoped_db_path is not None else None
         if db_path and Path(db_path).exists():
             try:
                 conn = sqlite3.connect(str(db_path))
-                with conn:
-                    # Fetch scenes in this video to clean up links and embeddings
-                    cursor = conn.execute("SELECT id FROM scenes WHERE video_hash = ?", (video_hash,))
-                    scene_ids = [r[0] for r in cursor.fetchall()]
-                    
-                    # Fetch segments in this video
-                    cursor = conn.execute("SELECT id FROM segments WHERE video_hash = ?", (video_hash,))
-                    seg_ids = [r[0] for r in cursor.fetchall()]
-                    
-                    # Collect frame_hash and audio_hash from scene metadata if possible
-                    frame_hashes = set()
-                    audio_hashes = set()
-                    for sid in scene_ids:
-                        cursor = conn.execute("SELECT meta FROM scenes WHERE id = ?", (sid,))
-                        row = cursor.fetchone()
-                        if row and row[0]:
-                            try:
-                                meta = json.loads(row[0])
-                                k_hash = meta.get("keyframe", {}).get("hash")
-                                if k_hash:
-                                    frame_hashes.add(k_hash)
-                                a_hash = meta.get("audio", {}).get("hash")
-                                if a_hash:
-                                    audio_hashes.add(a_hash)
-                            except Exception:
-                                pass
-                                
-                    # Ensure ucf_provenance_mapping table exists
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS ucf_provenance_mapping (
-                            record_type TEXT,
-                            record_id TEXT,
-                            ucf_frame_id INTEGER,
-                            PRIMARY KEY (record_type, record_id, ucf_frame_id)
-                        )
-                    """)
+                try:
+                    with conn:
+                        cursor = conn.execute("SELECT id FROM scenes WHERE video_hash = ?", (video_hash,))
+                        scene_ids = [r[0] for r in cursor.fetchall()]
 
-                    # Fetch embedding hashes before deleting them
-                    emb_hashes = []
-                    if scene_ids:
-                        placeholders = ",".join("?" for _ in scene_ids)
-                        cursor = conn.execute(f"SELECT hash FROM embeddings WHERE scene_id IN ({placeholders})", tuple(scene_ids))
-                        emb_hashes = [r[0] for r in cursor.fetchall()]
+                        cursor = conn.execute("SELECT id FROM segments WHERE video_hash = ?", (video_hash,))
+                        seg_ids = [r[0] for r in cursor.fetchall()]
 
-                    # Delete from scenes, scene_text_fts, segments, embeddings
-                    summaries = self._summary_rows(conn, category="scene_summary", identity_field="scene_id", identities=set(scene_ids))
-                    summaries += self._summary_rows(conn, category="video_summary", identity_field="video_hash", identities={video_hash})
-                    for summary_id, _ in summaries:
-                        conn.execute("DELETE FROM summaries WHERE id=?", (summary_id,))
-                        conn.execute("DELETE FROM ucf_provenance_mapping WHERE record_type='summary' AND record_id=?", (str(summary_id),))
-                    conn.execute("DELETE FROM scenes WHERE video_hash = ?", (video_hash,))
-                    conn.execute("DELETE FROM scene_text_fts WHERE video_hash = ?", (video_hash,))
-                    conn.execute("DELETE FROM segments WHERE video_hash = ?", (video_hash,))
-                    
-                    if scene_ids:
-                        placeholders = ",".join("?" for _ in scene_ids)
-                        conn.execute(f"DELETE FROM embeddings WHERE scene_id IN ({placeholders})", tuple(scene_ids))
+                        frame_hashes = set()
+                        audio_hashes = set()
+                        for sid in scene_ids:
+                            cursor = conn.execute("SELECT meta FROM scenes WHERE id = ?", (sid,))
+                            row = cursor.fetchone()
+                            if row and row[0]:
+                                try:
+                                    meta = json.loads(row[0])
+                                    k_hash = meta.get("keyframe", {}).get("hash")
+                                    if k_hash:
+                                        frame_hashes.add(k_hash)
+                                    a_hash = meta.get("audio", {}).get("hash")
+                                    if a_hash:
+                                        audio_hashes.add(a_hash)
+                                except Exception:
+                                    pass
 
-                    # Clean up ucf_provenance_mapping
-                    if scene_ids:
-                        placeholders = ",".join("?" for _ in scene_ids)
-                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'scene' AND record_id IN ({placeholders})", tuple(scene_ids))
-                    if seg_ids:
-                        placeholders = ",".join("?" for _ in seg_ids)
-                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'segment' AND record_id IN ({placeholders})", tuple(seg_ids))
-                    if emb_hashes:
-                        placeholders = ",".join("?" for _ in emb_hashes)
-                        conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'embedding' AND record_id IN ({placeholders})", tuple(emb_hashes))
-                        
-                    # Delete from links
-                    conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (video_hash, video_hash))
-                    
-                    for sid in scene_ids:
-                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sid, sid))
-                    for sgid in seg_ids:
-                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sgid, sgid))
-                    for fh in frame_hashes:
-                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (fh, fh))
-                    for ah in audio_hashes:
-                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (ah, ah))
-                        
-                conn.close()
+                        conn.execute("""
+                            CREATE TABLE IF NOT EXISTS ucf_provenance_mapping (
+                                record_type TEXT,
+                                record_id TEXT,
+                                ucf_frame_id INTEGER,
+                                PRIMARY KEY (record_type, record_id, ucf_frame_id)
+                            )
+                        """)
+
+                        local_retired_fids = set(ledger_video_frame_ids)
+                        if scene_ids:
+                            placeholders_sc = ",".join("?" for _ in scene_ids)
+                            local_retired_fids.update(
+                                int(r[0])
+                                for r in conn.execute(
+                                    f"SELECT ucf_frame_id FROM ucf_provenance_mapping WHERE record_type = 'scene' AND record_id IN ({placeholders_sc})",
+                                    tuple(scene_ids),
+                                ).fetchall()
+                                if r[0] is not None
+                            )
+
+                        emb_hashes = []
+                        if scene_ids:
+                            placeholders = ",".join("?" for _ in scene_ids)
+                            cursor = conn.execute(
+                                f"SELECT DISTINCT hash FROM embeddings WHERE scene_id IN ({placeholders})",
+                                tuple(scene_ids),
+                            )
+                            emb_hashes = [r[0] for r in cursor.fetchall()]
+
+                        summaries = self._summary_rows(conn, category="scene_summary", identity_field="scene_id", identities=set(scene_ids))
+                        summaries += self._summary_rows(conn, category="video_summary", identity_field="video_hash", identities={video_hash})
+                        for summary_id, _ in summaries:
+                            conn.execute("DELETE FROM summaries WHERE id=?", (summary_id,))
+                            conn.execute("DELETE FROM ucf_provenance_mapping WHERE record_type='summary' AND record_id=?", (str(summary_id),))
+                        conn.execute("DELETE FROM scenes WHERE video_hash = ?", (video_hash,))
+                        conn.execute("DELETE FROM scene_text_fts WHERE video_hash = ?", (video_hash,))
+                        conn.execute("DELETE FROM segments WHERE video_hash = ?", (video_hash,))
+
+                        # Support-aware embedding cleanup: remap shared content-hash embeddings to surviving scene owners.
+                        for emb_hash in emb_hashes:
+                            all_support = {
+                                int(r[0])
+                                for r in conn.execute(
+                                    "SELECT ucf_frame_id FROM ucf_provenance_mapping WHERE record_type = 'embedding' AND record_id = ?",
+                                    (emb_hash,),
+                                ).fetchall()
+                                if r[0] is not None
+                            }
+                            surviving_support = all_support - local_retired_fids
+                            owner_row = None
+                            if surviving_support:
+                                marks = ",".join("?" for _ in surviving_support)
+                                owner_row = conn.execute(
+                                    "SELECT scenes.id FROM scenes "
+                                    "JOIN ucf_provenance_mapping p ON p.record_type = 'scene' AND p.record_id = scenes.id "
+                                    f"WHERE p.ucf_frame_id IN ({marks}) AND scenes.video_hash <> ? "
+                                    "ORDER BY scenes.id LIMIT 1",
+                                    (*surviving_support, video_hash),
+                                ).fetchone()
+                            if owner_row:
+                                conn.execute(
+                                    "UPDATE embeddings SET scene_id = ?, ucf_provenance = ? WHERE hash = ?",
+                                    (owner_row[0], json.dumps(sorted(surviving_support)), emb_hash),
+                                )
+                                if local_retired_fids:
+                                    r_marks = ",".join("?" for _ in local_retired_fids)
+                                    conn.execute(
+                                        f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'embedding' AND record_id = ? AND ucf_frame_id IN ({r_marks})",
+                                        (emb_hash, *local_retired_fids),
+                                    )
+                            else:
+                                if scene_ids:
+                                    placeholders = ",".join("?" for _ in scene_ids)
+                                    conn.execute(
+                                        f"DELETE FROM embeddings WHERE hash = ? AND scene_id IN ({placeholders})",
+                                        (emb_hash, *scene_ids),
+                                    )
+                                conn.execute(
+                                    "DELETE FROM ucf_provenance_mapping WHERE record_type = 'embedding' AND record_id = ?",
+                                    (emb_hash,),
+                                )
+
+                        if scene_ids:
+                            placeholders = ",".join("?" for _ in scene_ids)
+                            conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'scene' AND record_id IN ({placeholders})", tuple(scene_ids))
+                        if seg_ids:
+                            placeholders = ",".join("?" for _ in seg_ids)
+                            conn.execute(f"DELETE FROM ucf_provenance_mapping WHERE record_type = 'segment' AND record_id IN ({placeholders})", tuple(seg_ids))
+                        if local_retired_fids:
+                            r_marks = ",".join("?" for _ in local_retired_fids)
+                            conn.execute(
+                                f"DELETE FROM ucf_provenance_mapping WHERE ucf_frame_id IN ({r_marks})",
+                                tuple(local_retired_fids),
+                            )
+
+                        conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (video_hash, video_hash))
+                        for sid in scene_ids:
+                            conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sid, sid))
+                        for sgid in seg_ids:
+                            conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (sgid, sgid))
+                        for fh in frame_hashes:
+                            surviving_fh = conn.execute(
+                                "SELECT 1 FROM links JOIN scenes ON scenes.id = links.parent_hash WHERE links.child_hash = ? LIMIT 1",
+                                (fh,),
+                            ).fetchone()
+                            if not surviving_fh:
+                                conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (fh, fh))
+                        for ah in audio_hashes:
+                            surviving_ah = conn.execute(
+                                "SELECT 1 FROM links JOIN scenes ON scenes.id = links.parent_hash WHERE links.child_hash = ? LIMIT 1",
+                                (ah,),
+                            ).fetchone()
+                            if not surviving_ah:
+                                conn.execute("DELETE FROM links WHERE parent_hash = ? OR child_hash = ?", (ah, ah))
+                finally:
+                    conn.close()
                 logger.info(f"Dematerialized memory.db records for video_hash: {video_hash}")
             except Exception as e:
                 logger.warning(f"Failed to dematerialize memory.db for video_hash {video_hash}: {e}")
+                if raise_on_error:
+                    raise
                 
         # 2. Dematerialize knowledge_graph.db
-        graph_db_path = _resolve_graph_db_path(self.config)
+        graph_db_path = str(scoped_graph_db_path) if scoped_graph_db_path is not None else None
         if graph_db_path and Path(graph_db_path).exists():
             try:
                 with KnowledgeGraph(str(graph_db_path)) as kg:
@@ -3803,6 +4328,8 @@ class MiniAgentClient:
                         logger.info(f"Dematerialized knowledge_graph.db records for video_hash: {video_hash}")
             except Exception as e:
                 logger.warning(f"Failed to dematerialize knowledge_graph.db for video_hash {video_hash}: {e}")
+                if raise_on_error:
+                    raise
 
     def _execute_promote_ucf_to_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Promotes context frames from 'validated' to 'promoted' and materializes active views."""
@@ -3872,8 +4399,9 @@ class MiniAgentClient:
         kg_nodes_count = 0
         kg_edges_count = 0
 
-        db_path = self.config.get("paths", {}).get("db_path")
-        graph_db_path = _resolve_graph_db_path(self.config)
+        scoped_db_path, scoped_graph_db_path = self._resolve_scoped_view_paths()
+        db_path = str(scoped_db_path) if scoped_db_path is not None else None
+        graph_db_path = str(scoped_graph_db_path) if scoped_graph_db_path is not None else None
         scene_manifest_path = Path()
         temporal_index_path = Path()
         active_view_write_started = False
@@ -4161,6 +4689,8 @@ class MiniAgentClient:
                             (scene_id, fid)
                         )
 
+                    from lib.grounding_markup import strip_grounding_markup
+
                     ocr_text = None
                     transcript_text = None
                     if manifest_scene:
@@ -4172,6 +4702,16 @@ class MiniAgentClient:
                             ocr_text = f["payload"].get("ocr_text")
                         if not transcript_text and f["worker_name"] == "audio_transcribe":
                             transcript_text = f["payload"].get("transcript") or f["payload"].get("text")
+
+                    if ocr_text is not None:
+                        ocr_text = str(strip_grounding_markup(str(ocr_text))).strip() or None
+                    if transcript_text is not None:
+                        if self._is_scene_asr_restricted_for_promotion(
+                            manifest_scene, merged_meta, s_frames, transcript_text=str(transcript_text)
+                        ):
+                            transcript_text = None
+                        else:
+                            transcript_text = str(strip_grounding_markup(str(transcript_text))).strip() or None
 
                     conn_mem.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (scene_id,))
                     if ocr_text:
@@ -4247,15 +4787,13 @@ class MiniAgentClient:
                     
                     if not segments_list:
                         segments_from_ucf = True
-                        for f in s_frames:
-                            if f["worker_name"] == "audio_transcribe" and f["payload"]:
-                                p = f["payload"]
-                                segments_list.append({
-                                    "start": f["t_start"],
-                                    "end": f["t_end"],
-                                    "speaker": p.get("speaker") or p.get("speaker_id") or "unknown",
-                                    "text": p.get("transcript") or p.get("text")
-                                })
+                        segments_list = self._deduplicate_ucf_transcript_frames(
+                            scene_id=scene_id,
+                            start=start,
+                            end=end,
+                            manifest_scene=manifest_scene,
+                            s_frames=s_frames,
+                        )
 
                     scene_duration = max(0.0, end - start)
                     max_raw_seg_end = max(
@@ -4437,7 +4975,26 @@ class MiniAgentClient:
                     )
                     scene_media_ids[sid] = media_id
                     
-                    sc_node_id = kg.add_node("scene", sid, {"ucf_provenance": prov})
+                    m_scene_for_kg = manifest_scenes.get(sid) if isinstance(manifest_scenes, dict) else None
+                    review_dict = None
+                    if isinstance(m_scene_for_kg, dict):
+                        if isinstance(m_scene_for_kg.get("speaker_change_review"), dict):
+                            review_dict = m_scene_for_kg["speaker_change_review"]
+                        elif isinstance((m_scene_for_kg.get("audio") or {}).get("speaker_change_review"), dict):
+                            review_dict = m_scene_for_kg["audio"]["speaker_change_review"]
+                    if review_dict is None and isinstance(s_meta, dict):
+                        if isinstance(s_meta.get("speaker_change_review"), dict):
+                            review_dict = s_meta["speaker_change_review"]
+                        elif isinstance((s_meta.get("audio") or {}).get("speaker_change_review"), dict):
+                            review_dict = s_meta["audio"]["speaker_change_review"]
+                    scene_node_props: Dict[str, Any] = {
+                        "ucf_provenance": prov,
+                        "scene_id": sid,
+                        "video_id": video_hash,
+                    }
+                    if isinstance(review_dict, dict):
+                        scene_node_props["speaker_change_review"] = review_dict
+                    sc_node_id = kg.add_node("scene", sid, scene_node_props)
                     scene_node_ids[sid] = sc_node_id
                     kg_nodes_count += 1
                     
@@ -4601,41 +5158,659 @@ class MiniAgentClient:
             res["warnings"] = ["qdrant_payload_sync_failed"]
         return res
 
+    def _capture_lifecycle_scope_evidence(
+        self,
+        conn: Any,
+        *,
+        operation: str,
+        target_status: str,
+        video_hash: str,
+        epoch_id: str,
+        scope_frames: List[Dict[str, Any]],
+        all_transitioning_frame_ids: set[int],
+    ) -> Dict[str, Any]:
+        import sqlite3
+        from scripts.ucf.ucf_ledger import _read_scene_retirements
+
+        scoped_db_path, _ = self._resolve_scoped_view_paths()
+        frame_ids = sorted(int(f["frame_id"]) for f in scope_frames if f.get("frame_id") is not None)
+        aliases_set: set[str] = set()
+        for f in scope_frames:
+            if isinstance(f.get("source_artifact_id"), str) and f["source_artifact_id"].strip():
+                aliases_set.add(f["source_artifact_id"].strip())
+            p = frame_payload(f)
+            if isinstance(p, dict) and isinstance(p.get("scene_id"), str) and p["scene_id"].strip():
+                aliases_set.add(p["scene_id"].strip())
+
+        mem_has_scenes = False
+        mem_frame_scene_map: Dict[Tuple[str, int], List[str]] = {}
+        if scoped_db_path is not None and scoped_db_path.is_file():
+            try:
+                with sqlite3.connect(f"{scoped_db_path.resolve().as_uri()}?mode=ro", uri=True) as mem_conn:
+                    for (sid,) in mem_conn.execute("SELECT id FROM scenes WHERE video_hash = ?", (video_hash,)).fetchall():
+                        if isinstance(sid, str) and sid.strip():
+                            aliases_set.add(sid.strip())
+                            mem_has_scenes = True
+                    has_prov = mem_conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ucf_provenance_mapping'"
+                    ).fetchone()
+                    if has_prov:
+                        for vh_row, sid_row, fid_row in mem_conn.execute(
+                            "SELECT s.video_hash, s.id, p.ucf_frame_id "
+                            "FROM scenes s JOIN ucf_provenance_mapping p "
+                            "ON p.record_type='scene' AND p.record_id=s.id"
+                        ).fetchall():
+                            if vh_row and sid_row and fid_row is not None:
+                                mem_frame_scene_map.setdefault((str(vh_row), int(fid_row)), []).append(str(sid_row))
+            except Exception as exc:
+                logger.debug("Optional memory.db scene-alias inspection skipped during scope capture: %s", exc)
+
+        has_qdrant_evidence = False
+        vectors: List[Dict[str, Any]] = []
+        seen_vector_keys: set[Tuple[Any, Any, Any]] = set()
+        prev_rf = conn.row_factory
+        conn.row_factory = sqlite3.Row
+        try:
+            for frame in scope_frames:
+                if (
+                    str(frame.get("vector_backend") or "").strip().lower() == "qdrant"
+                    or bool(frame.get("vector_collection"))
+                ):
+                    has_qdrant_evidence = True
+                for ref in expand_embedding_references(frame):
+                    v_key = ref.get("vector_key")
+                    v_col = ref.get("vector_collection")
+                    v_backend = ref.get("vector_backend")
+                    if str(v_backend or "").strip().lower() == "qdrant" or bool(v_col):
+                        has_qdrant_evidence = True
+                    if not v_key or not v_backend:
+                        continue
+                    dedup_key = (str(v_key), v_col, str(v_backend))
+                    if dedup_key in seen_vector_keys:
+                        continue
+                    seen_vector_keys.add(dedup_key)
+
+                    shared_with: List[Dict[str, Any]] = []
+                    reconstructible_survivor = False
+                    for other_row in conn.execute(
+                        "SELECT * FROM context_frames WHERE vector_collection IS ? AND vector_backend = ? "
+                        "AND promotion_status = 'promoted' ORDER BY frame_id",
+                        (v_col, v_backend),
+                    ).fetchall():
+                        other = dict(other_row)
+                        if int(other["frame_id"]) in all_transitioning_frame_ids:
+                            continue
+                        retired_for_other = _read_scene_retirements(
+                            conn, video_hash=other["video_hash"], epoch_id=other["epoch_id"]
+                        )
+                        if any(
+                            int(other["frame_id"]) in r["frame_ids"]
+                            or other.get("source_artifact_id") in r["aliases"]
+                            for r in retired_for_other
+                        ):
+                            continue
+                        if not any(
+                            r.get("vector_key") == v_key for r in expand_embedding_references(other)
+                        ):
+                            continue
+                        if (
+                            other.get("worker_name") in {"image_embed_clip", "image_embed_dino", "audio_embed_clap"}
+                            and scoped_db_path is not None
+                            and scoped_db_path.is_file()
+                        ):
+                            reconstructible_survivor = True
+                        shared_with.append(
+                            {
+                                "frame_id": int(other["frame_id"]),
+                                "video_hash": other["video_hash"],
+                                "epoch_id": other["epoch_id"],
+                                "source_artifact_id": other.get("source_artifact_id"),
+                            }
+                        )
+                        for mapped_sid in mem_frame_scene_map.get(
+                            (str(other["video_hash"]), int(other["frame_id"])), []
+                        ):
+                            if mapped_sid != other.get("source_artifact_id"):
+                                shared_with.append(
+                                    {
+                                        "frame_id": int(other["frame_id"]),
+                                        "video_hash": other["video_hash"],
+                                        "epoch_id": other["epoch_id"],
+                                        "source_artifact_id": mapped_sid,
+                                    }
+                                )
+                    vectors.append(
+                        {
+                            "key": str(v_key),
+                            "collection": v_col,
+                            "backend": str(v_backend),
+                            "shared": bool(shared_with and reconstructible_survivor),
+                            "shared_with": shared_with if reconstructible_survivor else [],
+                        }
+                    )
+        finally:
+            conn.row_factory = prev_rf
+
+        return {
+            "kind": "whole_video_lifecycle",
+            "version": 1,
+            "operation": operation,
+            "target_status": target_status,
+            "video_hash": video_hash,
+            "epoch_id": epoch_id,
+            "aliases": sorted(aliases_set),
+            "frame_ids": frame_ids,
+            "vectors": vectors,
+            "has_qdrant_evidence": has_qdrant_evidence,
+            "had_materialized_scenes": mem_has_scenes,
+        }
+
+    def _deliver_single_lifecycle_outbox(
+        self,
+        *,
+        outbox_id: int,
+        operation: str,
+        target_status: str,
+        video_hash: str,
+        epoch_id: str,
+        payload_json_str: Optional[str],
+    ) -> Dict[str, Any]:
+        import sqlite3
+
+        ucf_db_path = self._get_ucf_db_path()
+        evidence: Dict[str, Any] = {}
+        if payload_json_str:
+            try:
+                parsed = json.loads(payload_json_str)
+                if isinstance(parsed, dict):
+                    evidence = parsed
+            except Exception:
+                evidence = {}
+        if not evidence:
+            with sqlite3.connect(str(ucf_db_path)) as conn:
+                rows = _ucf_frame_rows(
+                    conn.execute(
+                        "SELECT * FROM context_frames WHERE video_hash = ? AND epoch_id = ? AND promotion_status = ?",
+                        (video_hash, epoch_id, target_status),
+                    )
+                )
+                evidence = self._capture_lifecycle_scope_evidence(
+                    conn,
+                    operation=operation,
+                    target_status=target_status,
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    scope_frames=rows,
+                    all_transitioning_frame_ids={int(r["frame_id"]) for r in rows if r.get("frame_id") is not None},
+                )
+
+        view_error: Optional[str] = None
+        try:
+            if any(v.get("shared") for v in evidence.get("vectors", [])):
+                self._remap_shared_scene_vectors(evidence)
+            self._dematerialize_active_views(
+                video_hash=video_hash,
+                retired_frame_ids=set(int(fid) for fid in (evidence.get("frame_ids") or [])),
+                raise_on_error=True,
+            )
+        except Exception as exc:
+            view_error = str(exc)
+
+        if view_error is not None:
+            qdrant_sync = {
+                "attempted": False,
+                "status": "warning",
+                "collections_attempted": [],
+                "points_attempted": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            }
+            scope_sync = {
+                "status": "warning",
+                "reason": "view_dematerialization_failed",
+                "collections_swept": [],
+                "points_updated": 0,
+                "points_verified": 0,
+                "failed_collections": [],
+            }
+            delivered = False
+            failure_summary: Optional[Dict[str, Any]] = {"view_error": view_error}
+        else:
+            vectors_list = evidence.get("vectors") or []
+            non_shared_refs = [
+                (v["key"], v["collection"], v["backend"])
+                for v in vectors_list
+                if not v.get("shared")
+            ]
+            shared_vectors = [v for v in vectors_list if v.get("shared")]
+            qdrant_sync = self._sync_ucf_status_to_qdrant(
+                non_shared_refs,
+                target_status,
+                expected_video_hash=video_hash,
+                expected_epoch_id=epoch_id,
+            )
+            scope_sync = self._sync_qdrant_by_scope(
+                epoch_id=epoch_id or "",
+                status_val=target_status,
+                video_hash=video_hash,
+                excluded_vectors=shared_vectors or None,
+            )
+            row_attempted = int(qdrant_sync.get("points_attempted", 0) or 0)
+            row_verified = int(qdrant_sync.get("points_verified", 0) or 0)
+            wrong_scope_skipped = int(qdrant_sync.get("wrong_scope_skipped", 0) or 0)
+            row_ok = (
+                not qdrant_sync.get("failed_collections")
+                and (
+                    (
+                        qdrant_sync.get("status") in {"ok", "skipped"}
+                        and (
+                            "points_verified" not in qdrant_sync
+                            or row_verified == row_attempted
+                        )
+                    )
+                    or (
+                        qdrant_sync.get("status") == "warning"
+                        and wrong_scope_skipped > 0
+                        and row_verified + wrong_scope_skipped == row_attempted
+                    )
+                )
+            )
+
+            scope_failed_cols = bool(scope_sync.get("failed_collections"))
+            scope_status = scope_sync.get("status")
+            scope_reason = scope_sync.get("reason")
+            scope_ok = (
+                not scope_failed_cols
+                and (
+                    scope_status in {"ok", "skipped"}
+                    or (
+                        scope_status == "warning"
+                        and scope_reason == "no_scoped_points_verified"
+                    )
+                    or (
+                        scope_reason == "no_epoch_collections"
+                        and not evidence.get("has_qdrant_evidence")
+                    )
+                )
+            )
+
+            delivered = bool(row_ok and scope_ok)
+            failure_summary = None
+            if not delivered:
+                failure_summary = {
+                    "row_status": qdrant_sync.get("status", "error"),
+                    "row_points_attempted": row_attempted,
+                    "row_points_verified": row_verified,
+                    "row_failed_collections": qdrant_sync.get("failed_collections", []),
+                    "scope_status": scope_sync.get("status", "error"),
+                    "scope_reason": scope_sync.get("reason"),
+                    "scope_points_verified": scope_sync.get("points_verified", 0),
+                    "scope_failed_collections": scope_sync.get("failed_collections", []),
+                }
+
+        now = datetime.utcnow().isoformat() + "Z"
+        with sqlite3.connect(str(ucf_db_path)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._ensure_qdrant_sync_outbox(conn)
+            conn.execute(
+                "UPDATE ucf_qdrant_sync_outbox SET delivery_state = ?, "
+                "attempt_count = attempt_count + 1, last_error = ?, updated_at = ?, "
+                "completed_at = ? WHERE id = ?",
+                (
+                    "complete" if delivered else "pending",
+                    None if delivered else json.dumps(failure_summary or {}, sort_keys=True),
+                    now,
+                    now if delivered else None,
+                    outbox_id,
+                ),
+            )
+            out_row = conn.execute(
+                "SELECT delivery_state, attempt_count, last_error FROM ucf_qdrant_sync_outbox WHERE id = ?",
+                (outbox_id,),
+            ).fetchone()
+            conn.commit()
+
+        return {
+            "status": "complete" if delivered else "pending",
+            "qdrant_sync": qdrant_sync,
+            "scope_sync": scope_sync,
+            "outbox": {
+                "delivery_state": str(out_row[0]) if out_row else ("complete" if delivered else "pending"),
+                "attempt_count": int(out_row[1]) if out_row else 1,
+                **({"last_error": out_row[2]} if out_row and out_row[2] else {}),
+            },
+            **({"error": view_error} if view_error else {}),
+        }
+
+    def _transition_and_deliver_lifecycle(
+        self,
+        *,
+        operation: str,
+        old_statuses: Tuple[str, ...],
+        target_status: str,
+        video_hash: Optional[str],
+        epoch_id: Optional[str],
+        reason: Optional[str] = None,
+    ) -> Tuple[int, Dict[str, Any]]:
+        import sqlite3
+
+        ucf_db_path = self._get_ucf_db_path()
+        ucf_module = _load_ucf_ledger()
+        UCFLedgerClient = ucf_module.UCFLedgerClient
+        if not Path(ucf_db_path).is_file():
+            ledger_init = UCFLedgerClient(str(ucf_db_path))
+            ledger_init.init_schema()
+            ledger_init.close()
+
+        placeholders = ",".join("?" for _ in old_statuses)
+        where = f"promotion_status IN ({placeholders})"
+        where_params: List[Any] = list(old_statuses)
+        scope_parts: List[str] = []
+        if video_hash:
+            where += " AND video_hash = ?"
+            where_params.append(video_hash)
+            scope_parts.append(f"video_hash={video_hash}")
+        if epoch_id:
+            where += " AND epoch_id = ?"
+            where_params.append(epoch_id)
+            scope_parts.append(f"epoch_id={epoch_id}")
+        scope_str = ",".join(scope_parts) if scope_parts else None
+
+        transitioned_count = 0
+        conn = sqlite3.connect(str(ucf_db_path))
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._ensure_qdrant_sync_outbox(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ucf_status_transitions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frame_ids TEXT,
+                    video_hash TEXT,
+                    epoch_id TEXT,
+                    old_status TEXT NOT NULL,
+                    new_status TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    reason TEXT,
+                    scope TEXT,
+                    evidence TEXT,
+                    transitioned_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ust_scope ON ucf_status_transitions(video_hash, epoch_id)"
+            )
+            frames_to_sync = _ucf_frame_rows(
+                conn.execute(
+                    f"SELECT * FROM context_frames WHERE {where} ORDER BY frame_id",
+                    tuple(where_params),
+                )
+            )
+            if frames_to_sync:
+                all_fids = {int(f["frame_id"]) for f in frames_to_sync if f.get("frame_id") is not None}
+                scopes_map: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+                for f in frames_to_sync:
+                    scopes_map.setdefault(
+                        (str(f["video_hash"]), str(f["epoch_id"])), []
+                    ).append(f)
+
+                evidences_by_scope = {
+                    (vh, ep): self._capture_lifecycle_scope_evidence(
+                        conn,
+                        operation=operation,
+                        target_status=target_status,
+                        video_hash=vh,
+                        epoch_id=ep,
+                        scope_frames=s_frames,
+                        all_transitioning_frame_ids=all_fids,
+                    )
+                    for (vh, ep), s_frames in scopes_map.items()
+                }
+
+                upd = conn.execute(
+                    f"UPDATE context_frames SET promotion_status = ? WHERE {where}",
+                    (target_status, *where_params),
+                )
+                if upd.rowcount != len(frames_to_sync):
+                    raise RuntimeError("lifecycle transition row count changed inside transaction")
+                transitioned_count = upd.rowcount
+
+                frame_ids_by_status: Dict[str, List[int]] = {}
+                for f in frames_to_sync:
+                    frame_ids_by_status.setdefault(str(f["promotion_status"]), []).append(int(f["frame_id"]))
+                for old_st, exact_fids in frame_ids_by_status.items():
+                    UCFLedgerClient.insert_status_transition(
+                        conn,
+                        old_status=old_st,
+                        new_status=target_status,
+                        tool_name=operation,
+                        video_hash=video_hash,
+                        epoch_id=epoch_id,
+                        reason=reason,
+                        scope=scope_str,
+                        evidence={"affected_count": len(exact_fids)},
+                        frame_ids=exact_fids,
+                    )
+
+                now = datetime.utcnow().isoformat() + "Z"
+                for (vh, ep), ev_dict in evidences_by_scope.items():
+                    conn.execute(
+                        "UPDATE ucf_qdrant_sync_outbox SET delivery_state = 'cancelled', "
+                        "last_error = ?, updated_at = ?, completed_at = ? "
+                        "WHERE operation = 'promotion' AND video_hash = ? AND epoch_id = ? "
+                        "AND target_status = 'promoted' AND delivery_state = 'pending'",
+                        (
+                            json.dumps({"reason": f"promotion_scope_{target_status}"}, sort_keys=True),
+                            now,
+                            now,
+                            vh,
+                            ep,
+                        ),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO ucf_qdrant_sync_outbox
+                            (operation, video_hash, epoch_id, target_status, delivery_state,
+                             attempt_count, last_error, payload_json, created_at, updated_at, completed_at)
+                        VALUES (?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, NULL)
+                        ON CONFLICT(operation, video_hash, epoch_id, target_status) DO UPDATE SET
+                            delivery_state = 'pending',
+                            attempt_count = 0,
+                            last_error = NULL,
+                            payload_json = excluded.payload_json,
+                            updated_at = excluded.updated_at,
+                            completed_at = NULL
+                        """,
+                        (operation, vh, ep, target_status, json.dumps(ev_dict, sort_keys=True), now, now),
+                    )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        # Fetch all pending outbox rows matching this operation + scope (including retries of interrupted runs)
+        outbox_query = (
+            "SELECT id, video_hash, epoch_id, payload_json FROM ucf_qdrant_sync_outbox "
+            "WHERE operation = ? AND target_status = ? AND delivery_state = 'pending'"
+        )
+        outbox_params: List[Any] = [operation, target_status]
+        if video_hash:
+            outbox_query += " AND video_hash = ?"
+            outbox_params.append(video_hash)
+        if epoch_id:
+            outbox_query += " AND epoch_id = ?"
+            outbox_params.append(epoch_id)
+        outbox_query += " ORDER BY id"
+
+        with sqlite3.connect(str(ucf_db_path)) as conn:
+            self._ensure_qdrant_sync_outbox(conn)
+            pending_rows = conn.execute(outbox_query, tuple(outbox_params)).fetchall()
+
+        if not pending_rows:
+            return transitioned_count, {
+                "status": "complete",
+                "qdrant_sync": {
+                    "attempted": False,
+                    "status": "skipped",
+                    "collections_attempted": [],
+                    "points_attempted": 0,
+                    "points_verified": 0,
+                    "failed_collections": [],
+                },
+                "scope_sync": {
+                    "status": "skipped",
+                    "reason": "no_lifecycle_transition",
+                    "collections_swept": [],
+                    "points_updated": 0,
+                    "points_verified": 0,
+                    "failed_collections": [],
+                },
+                "outbox": None,
+            }
+
+        last_result: Dict[str, Any] = {}
+        any_pending = False
+        first_error: Optional[str] = None
+        for ob_id, ob_vh, ob_ep, ob_payload in pending_rows:
+            res = self._deliver_single_lifecycle_outbox(
+                outbox_id=int(ob_id),
+                operation=operation,
+                target_status=target_status,
+                video_hash=str(ob_vh),
+                epoch_id=str(ob_ep),
+                payload_json_str=ob_payload,
+            )
+            last_result = res
+            if res.get("status") != "complete":
+                any_pending = True
+                if first_error is None and res.get("error"):
+                    first_error = str(res["error"])
+
+        combined = dict(last_result)
+        combined["status"] = "pending" if any_pending else "complete"
+        if first_error and "error" not in combined:
+            combined["error"] = first_error
+        return transitioned_count, combined
+
     def _execute_reconcile_ucf_qdrant(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Retry only a durable, exact-scope promotion projection obligation."""
+        """Retry durable, exact-scope Qdrant/view projection obligations (promotion, supersession, rejection, or scene retirement)."""
+        import sqlite3
+        from scripts.ucf.ucf_ledger import _read_scene_retirements
+
         video_hash = args["video_hash"]
         epoch_id = args["epoch_id"]
         outbox = self._read_promotion_qdrant_outbox(
             video_hash=video_hash, epoch_id=epoch_id
         )
-        if outbox is None or outbox["delivery_state"] != "pending":
+        if outbox is not None and outbox["delivery_state"] == "pending":
+            delivery = self._deliver_pending_promotion_qdrant_sync(
+                video_hash=video_hash, epoch_id=epoch_id
+            )
+            if delivery.get("status") == "complete":
+                return {
+                    "status": "qdrant_sync_reconciled",
+                    "qdrant_sync": delivery["qdrant_sync"],
+                    "scope_sync": delivery["scope_sync"],
+                    "outbox": delivery["outbox"],
+                }
+            if delivery.get("status") == "cancelled":
+                return {
+                    "status": "blocked",
+                    "reason": "qdrant_sync_not_pending",
+                    "message": "The promotion projection was cancelled because the scope is no longer pending delivery.",
+                }
+            return {
+                "status": "qdrant_sync_pending",
+                "qdrant_sync": delivery.get("qdrant_sync", {}),
+                "scope_sync": delivery.get("scope_sync", {}),
+                "outbox": delivery.get("outbox"),
+                "warnings": ["qdrant_payload_sync_failed"],
+            }
+
+        ucf_db_path = self._get_ucf_db_path()
+        pending_other: List[Tuple[int, str, str, Optional[str]]] = []
+        if ucf_db_path and Path(ucf_db_path).is_file():
+            with sqlite3.connect(str(ucf_db_path)) as conn:
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ucf_qdrant_sync_outbox'"
+                ).fetchone()
+                if exists:
+                    cols = {r[1] for r in conn.execute("PRAGMA table_info('ucf_qdrant_sync_outbox')").fetchall()}
+                    payload_col = "payload_json" if "payload_json" in cols else "NULL"
+                    pending_other = [
+                        (int(r[0]), str(r[1]), str(r[2]), r[3])
+                        for r in conn.execute(
+                            f"SELECT id, operation, target_status, {payload_col} "
+                            "FROM ucf_qdrant_sync_outbox "
+                            "WHERE video_hash = ? AND epoch_id = ? AND delivery_state = 'pending' "
+                            "AND operation <> 'promotion' ORDER BY id",
+                            (video_hash, epoch_id),
+                        ).fetchall()
+                    ]
+
+        if not pending_other:
             return {
                 "status": "blocked",
                 "reason": "qdrant_sync_not_pending",
                 "message": "No pending promotion Qdrant synchronization exists for this scope.",
             }
 
-        delivery = self._deliver_pending_promotion_qdrant_sync(
-            video_hash=video_hash, epoch_id=epoch_id
-        )
-        if delivery.get("status") == "complete":
+        last_qdrant_sync: Dict[str, Any] = {}
+        last_scope_sync: Dict[str, Any] = {}
+        last_outbox: Dict[str, Any] = {}
+        any_pending = False
+
+        for ob_id, op_name, target_st, ob_payload in pending_other:
+            if op_name in {"supersede_ucf_frames", "reject_ucf_frames"}:
+                res = self._deliver_single_lifecycle_outbox(
+                    outbox_id=ob_id,
+                    operation=op_name,
+                    target_status=target_st,
+                    video_hash=video_hash,
+                    epoch_id=epoch_id,
+                    payload_json_str=ob_payload,
+                )
+                last_qdrant_sync = res.get("qdrant_sync", {})
+                last_scope_sync = res.get("scope_sync", {})
+                last_outbox = {
+                    "delivery_state": (res.get("outbox") or {}).get("delivery_state", res.get("status")),
+                    "attempt_count": int((res.get("outbox") or {}).get("attempt_count", 1)),
+                }
+                if res.get("status") != "complete":
+                    any_pending = True
+            elif op_name.startswith("scene_retirement:"):
+                sid = op_name.split(":", 1)[1]
+                sc_res = self._execute_scene_retirement(
+                    {"video_hash": video_hash, "epoch_id": epoch_id, "scene_id": sid}
+                )
+                with sqlite3.connect(str(ucf_db_path)) as conn:
+                    ob_row = conn.execute(
+                        "SELECT delivery_state, attempt_count FROM ucf_qdrant_sync_outbox WHERE id = ?",
+                        (ob_id,),
+                    ).fetchone()
+                state_str = str(ob_row[0]) if ob_row else ("complete" if sc_res.get("status") == "superseded_complete" else "pending")
+                att_cnt = int(ob_row[1]) if ob_row else 1
+                last_qdrant_sync = {"status": "ok" if state_str == "complete" else "warning"}
+                last_scope_sync = {"status": "ok" if state_str == "complete" else "warning"}
+                last_outbox = {"delivery_state": state_str, "attempt_count": att_cnt}
+                if state_str != "complete":
+                    any_pending = True
+
+        if not any_pending:
             return {
                 "status": "qdrant_sync_reconciled",
-                "qdrant_sync": delivery["qdrant_sync"],
-                "scope_sync": delivery["scope_sync"],
-                "outbox": delivery["outbox"],
-            }
-        if delivery.get("status") == "cancelled":
-            return {
-                "status": "blocked",
-                "reason": "qdrant_sync_not_pending",
-                "message": "The promotion projection was cancelled because the scope is no longer pending delivery.",
+                "qdrant_sync": last_qdrant_sync,
+                "scope_sync": last_scope_sync,
+                "outbox": last_outbox,
             }
         return {
             "status": "qdrant_sync_pending",
-            "qdrant_sync": delivery.get("qdrant_sync", {}),
-            "scope_sync": delivery.get("scope_sync", {}),
-            "outbox": delivery.get("outbox"),
+            "qdrant_sync": last_qdrant_sync,
+            "scope_sync": last_scope_sync,
+            "outbox": last_outbox,
             "warnings": ["qdrant_payload_sync_failed"],
         }
 
@@ -4652,6 +5827,8 @@ class MiniAgentClient:
 
         Expected lifecycle: staged | validated -> [reject_ucf_frames] -> rejected
         """
+        import sqlite3
+
         reason = args.get("reason", "").strip()
         if not reason:
             return {
@@ -4662,81 +5839,49 @@ class MiniAgentClient:
         ucf_db_path = self._get_ucf_db_path()
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
-        
-        # Query vector_key, vector_collection, vector_backend, video_hash for frames to be rejected before updating
-        import sqlite3
-        conn = sqlite3.connect(str(ucf_db_path))
 
-        # Check for already-promoted or superseded frames in target scope
-        check_query = "SELECT count(*) FROM context_frames WHERE promotion_status IN ('promoted', 'superseded')"
-        check_params = []
-        if video_hash:
-            check_query += " AND video_hash = ?"
-            check_params.append(video_hash)
-        if epoch_id:
-            check_query += " AND epoch_id = ?"
-            check_params.append(epoch_id)
-        
-        promoted_or_superseded_count = conn.execute(check_query, tuple(check_params)).fetchone()[0]
-        if promoted_or_superseded_count > 0:
+        conn = sqlite3.connect(str(ucf_db_path))
+        try:
+            check_query = "SELECT count(*) FROM context_frames WHERE promotion_status IN ('promoted', 'superseded')"
+            check_params: List[Any] = []
+            if video_hash:
+                check_query += " AND video_hash = ?"
+                check_params.append(video_hash)
+            if epoch_id:
+                check_query += " AND epoch_id = ?"
+                check_params.append(epoch_id)
+            promoted_or_superseded_count = conn.execute(check_query, tuple(check_params)).fetchone()[0]
+        finally:
             conn.close()
+
+        if promoted_or_superseded_count > 0:
             return {
                 "status": "blocked",
                 "reason": "cannot_reject_promoted_frames",
-                "message": "Cannot reject: frames in the scope are already promoted or superseded. Use supersede_ucf_frames instead."
+                "message": "Cannot reject: frames in the scope are already promoted or superseded. Use supersede_ucf_frames instead.",
             }
 
-        query_sync = "SELECT * FROM context_frames WHERE promotion_status IN ('staged', 'validated')"
-        params_sync = []
-        if video_hash:
-            query_sync += " AND video_hash = ?"
-            params_sync.append(video_hash)
-        if epoch_id:
-            query_sync += " AND epoch_id = ?"
-            params_sync.append(epoch_id)
-        cursor = conn.execute(query_sync, tuple(params_sync))
-        frames_to_sync = _ucf_frame_rows(cursor)
-        frames_for_sync = vector_sync_references(frames_to_sync)
-        conn.close()
-
-        ucf_module = _load_ucf_ledger()
-        UCFLedgerClient = ucf_module.UCFLedgerClient
-        client = UCFLedgerClient(str(ucf_db_path))
-        client.init_schema()
-        rejected_count = client.mark_frames_rejected(
-            reason=reason,
+        rejected_count, delivery = self._transition_and_deliver_lifecycle(
+            operation="reject_ucf_frames",
+            old_statuses=("staged", "validated"),
+            target_status="rejected",
             video_hash=video_hash,
             epoch_id=epoch_id,
+            reason=reason,
         )
-        client.close()
-        
-        qdrant_sync = self._sync_ucf_status_to_qdrant(
-            frames_for_sync,
-            "rejected",
-            expected_video_hash=video_hash,
-            expected_epoch_id=epoch_id,
-        )
-        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="rejected", video_hash=video_hash)
-        
-        # Dematerialize active views
-        affected_video_hashes = set()
-        if video_hash:
-            affected_video_hashes.add(video_hash)
-        else:
-            for f in frames_to_sync:
-                if f.get("video_hash"):
-                    affected_video_hashes.add(f["video_hash"])
-        for vh in affected_video_hashes:
-            self._dematerialize_active_views(video_hash=vh)
-
-        res = {
+        is_complete = delivery.get("status") == "complete"
+        res: Dict[str, Any] = {
             "rejected_count": rejected_count,
-            "status": "rejected_complete",
+            "status": "rejected_complete" if is_complete else "rejected_committed_sync_pending",
             "reason": reason,
-            "qdrant_sync": qdrant_sync,
-            "scope_sync": scope_sync,
+            "qdrant_sync": delivery.get("qdrant_sync", {}),
+            "scope_sync": delivery.get("scope_sync", {}),
         }
-        if qdrant_sync["status"] == "warning":
+        if delivery.get("outbox") is not None:
+            res["outbox"] = delivery["outbox"]
+        if delivery.get("error"):
+            res["delivery_error"] = delivery["error"]
+        if not is_complete or res["qdrant_sync"].get("status") == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]
         return res
 
@@ -4832,7 +5977,8 @@ class MiniAgentClient:
         worker = frame["worker_name"]
         if worker not in {"image_embed_clip", "image_embed_dino", "audio_embed_clap"}:
             raise ValueError(f"Cannot reconstruct shared vector payload for {worker}")
-        memory_path = Path(self.config["paths"]["db_path"])
+        scoped_db_path, _ = self._resolve_scoped_view_paths()
+        memory_path = Path(scoped_db_path or self.config["paths"]["db_path"])
         with sqlite3.connect(f"{memory_path.resolve().as_uri()}?mode=ro", uri=True) as conn:
             owners = conn.execute(
                 "SELECT DISTINCT s.id,s.start,s.end,s.meta FROM scenes s JOIN ucf_provenance_mapping p "
@@ -4903,7 +6049,7 @@ class MiniAgentClient:
                     point_id = int(key) if key.isdigit() else str(uuid.uuid5(uuid.UUID("2058b732-6666-5424-a820-5cf54ef071c4"), key))
                 host = self.config.get("qdrant", {}).get("host", "http://127.0.0.1:6333")
                 url = f"{host}/collections/{vector['collection']}/points"
-                result = requests.post(url, json={"ids": [point_id], "with_payload": True, "with_vector": False}, timeout=10)
+                result = self._qdrant_http_request("POST", host, url, json={"ids": [point_id], "with_payload": True, "with_vector": False}, timeout=10)
                 result.raise_for_status()
                 points = result.json().get("result", [])
                 known = {(evidence["video_hash"], alias, evidence["epoch_id"]) for alias in evidence["aliases"]}
@@ -4917,9 +6063,9 @@ class MiniAgentClient:
                     raise ValueError("Shared vector current payload does not match captured owners")
                 # PUT overwrites the full payload atomically. POST would merge and
                 # leave retiring captions, transcripts or people on the survivor.
-                result = requests.put(url + "/payload?wait=true", json={"points": [point_id], "payload": payload}, timeout=10)
+                result = self._qdrant_http_request("PUT", host, url + "/payload?wait=true", json={"points": [point_id], "payload": payload}, timeout=10)
                 result.raise_for_status()
-                result = requests.post(url, json={"ids": [point_id], "with_payload": True, "with_vector": False}, timeout=10)
+                result = self._qdrant_http_request("POST", host, url, json={"ids": [point_id], "with_payload": True, "with_vector": False}, timeout=10)
                 result.raise_for_status()
                 points = result.json().get("result", [])
                 if len(points) != 1 or points[0].get("payload") != payload:
@@ -5143,68 +6289,28 @@ class MiniAgentClient:
         """
         if "scene_id" in args:
             return self._execute_scene_retirement(args)
-        ucf_db_path = self._get_ucf_db_path()
         video_hash = args.get("video_hash") or args.get("video_id")
         epoch_id = args.get("epoch_id")
-        
-        # Query vector_key, vector_collection, vector_backend, video_hash for frames to be superseded before updating
-        import sqlite3
-        conn = sqlite3.connect(str(ucf_db_path))
-        query_sync = "SELECT * FROM context_frames WHERE promotion_status IN ('promoted', 'validated')"
-        params_sync = []
-        if video_hash:
-            query_sync += " AND video_hash = ?"
-            params_sync.append(video_hash)
-        if epoch_id:
-            query_sync += " AND epoch_id = ?"
-            params_sync.append(epoch_id)
-        cursor = conn.execute(query_sync, tuple(params_sync))
-        frames_to_sync = _ucf_frame_rows(cursor)
-        frames_for_sync = vector_sync_references(frames_to_sync)
-        conn.close()
 
-        ucf_module = _load_ucf_ledger()
-        UCFLedgerClient = ucf_module.UCFLedgerClient
-        client = UCFLedgerClient(str(ucf_db_path))
-        client.init_schema()
-        superseded_count = client.mark_frames_superseded(
+        superseded_count, delivery = self._transition_and_deliver_lifecycle(
+            operation="supersede_ucf_frames",
+            old_statuses=("promoted", "validated"),
+            target_status="superseded",
             video_hash=video_hash,
             epoch_id=epoch_id,
         )
-        client.close()
-        if superseded_count and video_hash and epoch_id:
-            self._cancel_pending_promotion_qdrant_sync(
-                video_hash=video_hash,
-                epoch_id=epoch_id,
-                reason="promotion_scope_superseded",
-            )
-        
-        qdrant_sync = self._sync_ucf_status_to_qdrant(
-            frames_for_sync,
-            "superseded",
-            expected_video_hash=video_hash,
-            expected_epoch_id=epoch_id,
-        )
-        scope_sync = self._sync_qdrant_by_scope(epoch_id=epoch_id or "", status_val="superseded", video_hash=video_hash)
-        
-        # Dematerialize active views
-        affected_video_hashes = set()
-        if video_hash:
-            affected_video_hashes.add(video_hash)
-        else:
-            for f in frames_to_sync:
-                if f.get("video_hash"):
-                    affected_video_hashes.add(f["video_hash"])
-        for vh in affected_video_hashes:
-            self._dematerialize_active_views(video_hash=vh)
-
-        res = {
+        is_complete = delivery.get("status") == "complete"
+        res: Dict[str, Any] = {
             "superseded_count": superseded_count,
-            "status": "superseded_complete",
-            "qdrant_sync": qdrant_sync,
-            "scope_sync": scope_sync,
+            "status": "superseded_complete" if is_complete else "superseded_committed_sync_pending",
+            "qdrant_sync": delivery.get("qdrant_sync", {}),
+            "scope_sync": delivery.get("scope_sync", {}),
         }
-        if qdrant_sync["status"] == "warning":
+        if delivery.get("outbox") is not None:
+            res["outbox"] = delivery["outbox"]
+        if delivery.get("error"):
+            res["delivery_error"] = delivery["error"]
+        if not is_complete or res["qdrant_sync"].get("status") == "warning":
             res["warnings"] = ["qdrant_payload_sync_failed"]
         return res
 
@@ -5229,7 +6335,11 @@ class MiniAgentClient:
         return {"deleted": True}
 
     def _execute_qdrant_query(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        import copy
+        from api.utils.loaders import scene_is_retired
+        from scripts.ucf.ucf_ledger import read_scene_retirements
         from steps.common.qdrant_client import build_qdrant_client
+
         collection = args.get("collection", "text").lower()
         key = "text"
         if "audio" in collection:
@@ -5238,7 +6348,7 @@ class MiniAgentClient:
             key = "clip"
         elif "dino" in collection:
             key = "dino"
-            
+
         vector = args["query_vector"]
         top_k = args.get("top_k", 5)
 
@@ -5254,10 +6364,10 @@ class MiniAgentClient:
                 "message": f"ucf_status_filter must be one of {sorted(VALID_UCF_FILTERS)}, got '{ucf_status_filter}'",
             }
 
-        payload_filter = args.get("payload_filter") or {}
-        # Ensure payload_filter is a copy to avoid mutating source args
-        import copy
-        payload_filter = copy.deepcopy(payload_filter)
+        payload_filter = copy.deepcopy(args.get("payload_filter") or {})
+        active_epoch = self._resolve_active_epoch_id()
+        q_collections = ((self.config.get("qdrant") or {}).get("collections") or {}) if isinstance(self.config, dict) else {}
+        configured_collection = str(q_collections.get(key, f"goodq_{key}"))
 
         if ucf_status_filter:
             # Explicit exact-match; suppress default exclusion
@@ -5265,22 +6375,55 @@ class MiniAgentClient:
                 {"key": "ucf_promotion_status", "match": {"value": ucf_status_filter}}
             )
         elif not ucf_include_terminal:
-            # Default: exclude explicitly rejected or superseded frames
+            # Default: enforce promoted-only authority (and active epoch on shared collections),
+            # while retaining explicit terminal exclusions for legacy filter consumers.
+            must_list = payload_filter.setdefault("must", [])
+            if not any(isinstance(item, dict) and item.get("key") == "ucf_promotion_status" for item in must_list):
+                must_list.append({"key": "ucf_promotion_status", "match": {"value": "promoted"}})
+            if (
+                active_epoch
+                and configured_collection != f"goodq_{key}_{active_epoch}"
+                and not any(isinstance(item, dict) and item.get("key") == "epoch_id" for item in must_list)
+            ):
+                must_list.append({"key": "epoch_id", "match": {"value": active_epoch}})
             payload_filter.setdefault("must_not", []).extend([
                 {"key": "ucf_promotion_status", "match": {"value": "rejected"}},
                 {"key": "ucf_promotion_status", "match": {"value": "superseded"}},
             ])
-        
+
         q_client = build_qdrant_client(self.config, dim=len(vector), key=key)
         if not q_client:
             raise RuntimeError("Qdrant client could not be built from config")
-            
+
         hits = q_client.query(
             vector,
             top_k=top_k,
             payload_filter=payload_filter,
             retrieval_context="agent.reasoning",
         )
+        if not ucf_include_terminal and ucf_status_filter in (None, "promoted") and hits:
+            try:
+                ucf_db_path = self._get_ucf_db_path()
+                if ucf_db_path and Path(ucf_db_path).is_file():
+                    retirements_cache: Dict[tuple[str, Optional[str]], list] = {}
+                    filtered_hits = []
+                    for hit in hits:
+                        p = hit.get("payload") if isinstance(hit, dict) and isinstance(hit.get("payload"), dict) else {}
+                        vh = p.get("video_hash") or p.get("video_id")
+                        ep = p.get("epoch_id") or active_epoch
+                        if vh:
+                            cache_key = (str(vh), str(ep) if ep else None)
+                            if cache_key not in retirements_cache:
+                                retirements_cache[cache_key] = read_scene_retirements(
+                                    ucf_db_path, video_hash=cache_key[0], epoch_id=cache_key[1]
+                                )
+                            if retirements_cache[cache_key] and scene_is_retired(p, retirements_cache[cache_key]):
+                                continue
+                        filtered_hits.append(hit)
+                    hits = filtered_hits
+            except Exception as exc:
+                logger.warning("Qdrant scene retirement post-filter failed closed: %s", exc)
+                return {"matches": []}
         return {"matches": hits}
 
     def _execute_qdrant_upsert(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -5309,29 +6452,199 @@ class MiniAgentClient:
         success = q_client.upsert(points)
         return {"written": len(points) if success else 0}
 
+    def _resolve_promoted_faiss_ids(self, index_path: str) -> Optional[set[int]]:
+        """Resolve promoted, non-retired active-epoch FAISS IDs when index_path is bound to a local store."""
+        from api.utils.loaders import scene_is_retired
+        from steps.common.memory import to_faiss_id
+        from steps.common.sqlite_read_authority import open_sqlite_read_connection
+        from steps.common.ucf_retirement import _read_scene_retirements
+
+        idx_file = Path(index_path)
+        idx_parent = idx_file.parent
+        paths_cfg = self.config.get("paths", {}) if isinstance(self.config, dict) else {}
+        mem_path: Optional[Path] = None
+        ucf_path: Optional[Path] = None
+
+        # 1. Check sibling / parent store layout around index_path first when index_path is a real file on disk.
+        if Path(index_path).is_file():
+            for base in (idx_parent, idx_parent.parent):
+                cand_mem = base / "memory.db"
+                cand_ucf = base / "ucf" / "ucf_ledger.db"
+                if cand_mem.is_file() or cand_ucf.is_file():
+                    mem_path = cand_mem if cand_mem.is_file() else None
+                    ucf_path = cand_ucf if cand_ucf.is_file() else None
+                    break
+
+        # 2. Fall back to explicit config paths (never implicit live workstation config on unbound paths).
+        if mem_path is None and ucf_path is None and self._explicit_config:
+            scoped_db, _ = self._resolve_scoped_view_paths()
+            if scoped_db is not None and scoped_db.is_file():
+                mem_path = scoped_db
+            cand_ucf = self._get_ucf_db_path()
+            if cand_ucf and Path(cand_ucf).is_file():
+                ucf_path = Path(cand_ucf)
+
+        if mem_path is None and ucf_path is None:
+            return None
+
+        active_epoch = self._resolve_active_epoch_id()
+        if active_epoch is None and ucf_path is not None and ucf_path.parent.name == "ucf":
+            ep_dir = ucf_path.parent.parent
+            if ep_dir.name.startswith("epoch_") or ep_dir.parent.name == "epochs":
+                active_epoch = ep_dir.name
+
+        promoted_video_hashes: Optional[set[str]] = None
+        retirements_by_vh: Dict[str, list] = {}
+        allowed_from_ledger: set[int] = set()
+        has_ledger_vectors = False
+
+        if ucf_path is not None and ucf_path.is_file():
+            with open_sqlite_read_connection(ucf_path) as conn:
+                if active_epoch:
+                    rows = _ucf_frame_rows(
+                        conn.execute(
+                            "SELECT * FROM context_frames WHERE promotion_status = 'promoted' AND epoch_id = ?",
+                            (active_epoch,),
+                        )
+                    )
+                else:
+                    rows = _ucf_frame_rows(
+                        conn.execute("SELECT * FROM context_frames WHERE promotion_status = 'promoted'")
+                    )
+                promoted_video_hashes = {str(r["video_hash"]) for r in rows if r.get("video_hash")}
+                for vh in promoted_video_hashes:
+                    retirements_by_vh[vh] = _read_scene_retirements(
+                        conn, video_hash=vh, epoch_id=active_epoch
+                    )
+                for r in rows:
+                    vh = str(r.get("video_hash") or "")
+                    sid = str(r.get("source_artifact_id") or "")
+                    ret_list = retirements_by_vh.get(vh, [])
+                    if ret_list and scene_is_retired(
+                        {"scene_id": sid, "t_start": r.get("t_start"), "t_end": r.get("t_end")},
+                        ret_list,
+                    ):
+                        continue
+                    for ref in expand_embedding_references(r):
+                        vk = ref.get("vector_key")
+                        rp = ref.get("payload") if isinstance(ref.get("payload"), dict) else {}
+                        emb_id = rp.get("embedding_id")
+                        explicit_fid = rp.get("faiss_id")
+                        if isinstance(explicit_fid, int):
+                            allowed_from_ledger.add(int(explicit_fid))
+                            has_ledger_vectors = True
+                        if vk:
+                            allowed_from_ledger.add(int(to_faiss_id(str(vk if emb_id is None else emb_id))))
+                            allowed_from_ledger.add(int(to_faiss_id(str(vk))))
+                            has_ledger_vectors = True
+
+        allowed_from_mem: set[int] = set()
+        has_mem_embeddings = False
+        if mem_path is not None and mem_path.is_file():
+            with open_sqlite_read_connection(mem_path) as conn:
+                has_emb = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='embeddings'"
+                ).fetchone()
+                has_sc = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='scenes'"
+                ).fetchone()
+                if has_emb and has_sc:
+                    total_emb = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+                    has_mem_embeddings = total_emb > 0
+                    for fid_val, h_val, sid_val, vh_val, st_val, en_val in conn.execute(
+                        "SELECT e.faiss_id, e.hash, e.scene_id, s.video_hash, s.start, s.end "
+                        "FROM embeddings e JOIN scenes s ON s.id = e.scene_id"
+                    ).fetchall():
+                        if promoted_video_hashes is not None and str(vh_val) not in promoted_video_hashes:
+                            continue
+                        ret_list = retirements_by_vh.get(str(vh_val or ""), [])
+                        if ret_list and scene_is_retired(
+                            {"scene_id": sid_val, "start": st_val, "end": en_val}, ret_list
+                        ):
+                            continue
+                        if fid_val is not None:
+                            allowed_from_mem.add(int(fid_val))
+                        elif h_val:
+                            allowed_from_mem.add(int(to_faiss_id(str(h_val))))
+
+        for map_key, table in (
+            ("clip_id_map_db", "clip_id_map"),
+            ("dino_id_map_db", "dino_id_map"),
+            ("clap_id_map_db", "clap_id_map"),
+        ):
+            raw_map = paths_cfg.get(map_key)
+            if not raw_map or not self._explicit_config:
+                continue
+            mp = Path(raw_map)
+            if not mp.is_file():
+                continue
+            with open_sqlite_read_connection(mp) as conn:
+                cols = {r[1] for r in conn.execute(f"PRAGMA table_info('{table}')").fetchall()}
+                if "faiss_id" not in cols and "hash" not in cols:
+                    continue
+                sel_cols = [c for c in ("faiss_id", "hash", "video_hash", "scene_id", "epoch_id") if c in cols]
+                for row in conn.execute(f"SELECT {', '.join(sel_cols)} FROM {table}").fetchall():
+                    rmap = dict(zip(sel_cols, row))
+                    r_ep = rmap.get("epoch_id")
+                    if active_epoch and r_ep and str(r_ep) != active_epoch:
+                        continue
+                    r_vh = rmap.get("video_hash")
+                    if promoted_video_hashes is not None and r_vh and str(r_vh) not in promoted_video_hashes:
+                        continue
+                    r_sid = rmap.get("scene_id")
+                    ret_list = retirements_by_vh.get(str(r_vh or ""), [])
+                    if ret_list and r_sid and scene_is_retired({"scene_id": r_sid}, ret_list):
+                        continue
+                    has_mem_embeddings = True
+                    if rmap.get("faiss_id") is not None:
+                        allowed_from_mem.add(int(rmap["faiss_id"]))
+                    elif rmap.get("hash"):
+                        allowed_from_mem.add(int(to_faiss_id(str(rmap["hash"]))))
+
+        if has_mem_embeddings and has_ledger_vectors:
+            return allowed_from_mem | allowed_from_ledger
+        if has_mem_embeddings:
+            return allowed_from_mem
+        if promoted_video_hashes is not None:
+            return allowed_from_ledger
+        return allowed_from_mem
+
     def _execute_faiss_search(self, args: Dict[str, Any]) -> Dict[str, Any]:
         import faiss
         import numpy as np
         from steps.common.faiss_utils import FaissLock
-        
+
         index_path = args["index_path"]
         query_vector = args["query_vector"]
-        top_k = args.get("top_k", 5)
-        
+        top_k = int(args.get("top_k", 5))
+
         if not os.path.exists(index_path):
             raise FileNotFoundError(f"FAISS index not found: {index_path}")
-            
+
+        allowed_ids = self._resolve_promoted_faiss_ids(str(index_path))
+
         with FaissLock(index_path):
             idx = faiss.read_index(str(index_path))
             vec_np = np.array([query_vector], dtype="float32")
-            D, I = idx.search(vec_np, k=top_k)
-            
+            search_k = top_k
+            ntotal = getattr(idx, "ntotal", None)
+            if allowed_ids is not None and isinstance(ntotal, int) and ntotal > top_k:
+                search_k = min(ntotal, max(top_k * 8, 32))
+            D, I = idx.search(vec_np, k=search_k)
+
         matches = []
         for score, fid in zip(D[0], I[0]):
+            fid_int = int(fid)
+            if fid_int < 0:
+                continue
+            if allowed_ids is not None and fid_int not in allowed_ids:
+                continue
             matches.append({
-                "id": int(fid),
-                "score": float(score)
+                "id": fid_int,
+                "score": float(score),
             })
+            if len(matches) >= top_k:
+                break
         return {"matches": matches}
 
     def _execute_llm_chat_local(self, args: Dict[str, Any]) -> Dict[str, Any]:

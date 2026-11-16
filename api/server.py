@@ -126,12 +126,45 @@ def _resolve_api_bind_defaults() -> tuple[str, int]:
     return host, port
 
 
-def _find_available_port(host: str, start_port: int) -> int:
+def _has_configured_saved_library_sources() -> bool:
+    try:
+        from steps.common.config_loader import load_configs
+
+        cfg = load_configs({})
+        if not isinstance(cfg, dict):
+            return False
+        ui_cfg = cfg.get("ui")
+        if isinstance(ui_cfg, dict) and ui_cfg.get("library_sources"):
+            return True
+        saved_lib = cfg.get("saved_library")
+        if isinstance(saved_lib, dict) and saved_lib.get("sources"):
+            return True
+        if isinstance(saved_lib, list) and len(saved_lib) > 0:
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _find_available_port(
+    host: str,
+    start_port: int,
+    *,
+    allow_fallback: bool | None = None,
+) -> int:
     import socket
     try:
         is_loopback = ipaddress.ip_address(host).is_loopback
     except ValueError:
         is_loopback = host.lower() == "localhost"
+    if allow_fallback is None:
+        explicit_env_port = os.environ.get("GOODQ_API_PORT") is not None
+        has_library_sources = _has_configured_saved_library_sources()
+        allow_fallback = (
+            is_loopback
+            and not explicit_env_port
+            and not has_library_sources
+        )
     for p in range(start_port, start_port + 100):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -147,6 +180,16 @@ def _find_available_port(host: str, start_port: int) -> int:
                 raise OSError(
                     "Configured non-loopback API endpoint is unavailable; "
                     "refusing port fallback"
+                ) from exc
+            if not allow_fallback:
+                print(
+                    f"[api] [ERROR] Configured API endpoint {host}:{start_port} is "
+                    "unavailable; refusing silent port fallback when GOODQ_API_PORT "
+                    "or saved-library reader sources are configured"
+                )
+                raise OSError(
+                    f"Configured API endpoint {host}:{start_port} is unavailable; "
+                    "refusing silent port fallback"
                 ) from exc
             print(f"[api] [WARNING] Port {p} is occupied. Probing fallback port...")
             continue

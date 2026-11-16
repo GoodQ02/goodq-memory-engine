@@ -18,7 +18,8 @@ from pathlib import Path
 
 from steps.common.atomic_io import atomic_write_json
 from steps.common.config_loader import get_runtime_paths
-from lib.llm_client import LLMClient
+from lib.grounding_markup import strip_grounding_markup
+from lib.llm_client import LLMClient, unload_attempted_ollama_models
 from steps.common.llm_model_factory import build_llm_models
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ except ImportError:
 try:
     from steps.common.context_analyzer_llm import (
         analyze_scene_context_llm,
+        is_scene_transcript_restricted,
         _caption_is_low_signal as _scene_context_caption_is_low_signal,
         _extract_transcript_topic_hints as _scene_context_extract_transcript_topic_hints,
         _is_low_value_topic_fragment as _scene_context_is_low_value_topic_fragment,
@@ -41,6 +43,8 @@ try:
     SCENE_CONTEXT_LLM_AVAILABLE = True
 except ImportError:
     SCENE_CONTEXT_LLM_AVAILABLE = False
+    def is_scene_transcript_restricted(_scene_meta: Any) -> bool:
+        return False
     logger.warning("Scene context analyzer not available")
 
     def _scene_context_caption_is_low_signal(caption: str) -> bool:
@@ -784,9 +788,33 @@ def _build_entity_channels(scene_entities: List[Dict[str, Any]]) -> Dict[str, Li
 def _resolve_scene_faces(scene: Dict[str, Any]) -> List[Dict[str, Any]]:
     keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
     payload_faces = keyframe_payload.get("faces")
-    if isinstance(payload_faces, list):
-        return payload_faces
-    return []
+    best_sample_faces: List[Dict[str, Any]] = (
+        [f for f in payload_faces if isinstance(f, dict)]
+        if isinstance(payload_faces, list)
+        else []
+    )
+    raw_observations = (
+        keyframe_payload.get("face_observations")
+        if isinstance(keyframe_payload.get("face_observations"), list)
+        else scene.get("face_observations")
+    )
+    if isinstance(raw_observations, list) and raw_observations:
+        grouped_flat: Dict[tuple[str, Any], List[Dict[str, Any]]] = {}
+        for obs in raw_observations:
+            if not isinstance(obs, dict):
+                continue
+            sample_faces = obs.get("faces")
+            if isinstance(sample_faces, list):
+                valid_faces = [f for f in sample_faces if isinstance(f, dict)]
+                if len(valid_faces) > len(best_sample_faces):
+                    best_sample_faces = valid_faces
+            else:
+                frame_key = _person_observation_frame_key(obs)
+                grouped_flat.setdefault(frame_key, []).append(obs)
+        for sample_group in grouped_flat.values():
+            if len(sample_group) > len(best_sample_faces):
+                best_sample_faces = sample_group
+    return best_sample_faces
 
 
 def _person_observation_frame_key(obj: Dict[str, Any]) -> tuple[str, Any]:
@@ -2285,60 +2313,14 @@ def _apply_conversation_owner_window(unified_segments: List[Dict[str, Any]]) -> 
             chain_segment["conversation_owner"] = owner_payload
 
 
-def _unload_ollama_model_if_used(client: Any) -> bool:
+def _unload_ollama_model_if_used(
+    client: Any,
+    *,
+    timeout: float = 5.0,
+    retries: int = 1,
+) -> bool:
     """Release all attempted Ollama models from VRAM before subsequent window GPU steps run."""
-    session = getattr(client, "session", None)
-    if session is None:
-        return False
-    candidates: List[Any] = list(getattr(client, "attempted_models", None) or [])
-    last_used = getattr(client, "last_model_used", None)
-    if last_used is not None:
-        candidates.append(last_used)
-
-    targets: List[tuple[str, str]] = []
-    seen_targets: set[tuple[str, str]] = set()
-    for model in candidates:
-        if getattr(model, "backend", None) != "ollama":
-            continue
-        endpoint = str(getattr(model, "endpoint", "") or "").rstrip("/")
-        base_url = endpoint[:-3] if endpoint.endswith("/v1") else endpoint
-        model_id = str(getattr(model, "model_id", "") or "").strip()
-        if not base_url or not model_id:
-            continue
-        key = (base_url, model_id)
-        if key not in seen_targets:
-            seen_targets.add(key)
-            targets.append(key)
-
-    if not targets:
-        return False
-
-    all_unloaded = True
-    for base_url, model_id in targets:
-        try:
-            response = session.post(
-                f"{base_url}/api/generate",
-                json={"model": model_id, "keep_alive": 0},
-                timeout=5,
-            )
-            status_code = getattr(response, "status_code", None)
-            if isinstance(status_code, int) and not (200 <= status_code < 300):
-                detail = str(getattr(response, "text", "") or "").strip()[:200]
-                logger.warning(
-                    "[HARMONIZER] Failed to unload Ollama model %s from VRAM (HTTP %s)%s",
-                    model_id,
-                    status_code,
-                    f": {detail}" if detail else "",
-                )
-                all_unloaded = False
-                continue
-            if hasattr(response, "raise_for_status"):
-                response.raise_for_status()
-            logger.info("[HARMONIZER] Unloaded Ollama model %s from VRAM", model_id)
-        except Exception as exc:
-            logger.warning("[HARMONIZER] Failed to unload Ollama model %s from VRAM: %s", model_id, exc)
-            all_unloaded = False
-    return all_unloaded
+    return unload_attempted_ollama_models(client, timeout=timeout, retries=retries)
 
 
 
@@ -2371,9 +2353,6 @@ def _apply_scene_context_llm(
             reused_count += 1
             continue
 
-        if _normalize_content_state(segment.get("content_state")) != "signal":
-            continue
-
         scene = scene_lookup.get(str(segment.get("scene_id") or ""))
         if not isinstance(scene, dict):
             continue
@@ -2381,6 +2360,43 @@ def _apply_scene_context_llm(
         keyframe_payload = scene.get("keyframe") if isinstance(scene.get("keyframe"), dict) else {}
         scene_audio_payload = scene.get("audio") if isinstance(scene.get("audio"), dict) else {}
         transcript_text = str(segment.get("full_transcript") or "").strip()
+        caption_text = strip_grounding_markup(
+            str(scene.get("caption") or keyframe_payload.get("caption") or "")
+        ).strip()
+        distinct_captions: List[str] = []
+        seen_distinct: set[str] = set()
+        for raw_cap_list in (
+            [caption_text] if caption_text else [],
+            ((keyframe_payload.get("caption_meta") or {}).get("distinct_captions")
+             if isinstance(keyframe_payload.get("caption_meta"), dict) else None) or [],
+            [
+                obs.get("caption")
+                for obs in (keyframe_payload.get("caption_observations") or scene.get("caption_observations") or [])
+                if isinstance(obs, dict)
+            ],
+        ):
+            if not isinstance(raw_cap_list, list):
+                continue
+            for raw_cap in raw_cap_list:
+                if not isinstance(raw_cap, str):
+                    continue
+                cleaned_cap = strip_grounding_markup(raw_cap).strip()
+                if cleaned_cap and cleaned_cap.casefold() not in seen_distinct:
+                    seen_distinct.add(cleaned_cap.casefold())
+                    distinct_captions.append(cleaned_cap)
+
+        normalized_state = _normalize_content_state(segment.get("content_state"))
+        if normalized_state != "signal":
+            has_usable_transcript = bool(transcript_text) and not is_scene_transcript_restricted({
+                "transcript": transcript_text,
+                "transcript_meta": segment.get("transcript_meta") or scene_audio_payload.get("transcript_meta"),
+                "transcript_outcome": segment.get("transcript_outcome") or scene_audio_payload.get("transcript_outcome"),
+                "audio_evidence": segment.get("audio_evidence") or scene_audio_payload.get("audio_evidence"),
+            })
+            has_usable_caption = bool(caption_text or distinct_captions)
+            if normalized_state != "processing_error" or not (has_usable_transcript or has_usable_caption):
+                continue
+
         scene_objects = segment.get("detected_objects")
         if not isinstance(scene_objects, list):
             scene_objects = scene.get("objects")
@@ -2389,8 +2405,9 @@ def _apply_scene_context_llm(
         if not isinstance(scene_objects, list):
             scene_objects = []
         face_count = int(segment.get("visible_face_count") or 0)
-        caption_text = str(scene.get("caption") or keyframe_payload.get("caption") or "").strip()
-        ocr_text = str(segment.get("ocr_text") or scene.get("ocr_text") or keyframe_payload.get("ocr_text") or "").strip()
+        ocr_text = strip_grounding_markup(
+            str(segment.get("ocr_text") or scene.get("ocr_text") or keyframe_payload.get("ocr_text") or "")
+        ).strip()
         music_events = segment.get("music_events") or scene.get("music_events") or scene_audio_payload.get("music_events") or []
         time_hints = (
             segment.get("time_hints")
@@ -2447,6 +2464,8 @@ def _apply_scene_context_llm(
             "start": segment.get("start"),
             "end": segment.get("end"),
             "caption": caption_text,
+            "distinct_captions": distinct_captions,
+            "caption_observations": keyframe_payload.get("caption_observations") or scene.get("caption_observations"),
             "transcript": transcript_text,
             "objects": scene_objects,
             "ocr_text": ocr_text,
@@ -2456,6 +2475,7 @@ def _apply_scene_context_llm(
             "time_hints_meta": segment.get("time_hints_meta"),
             "metadata_time_hints": metadata_time_hints,
             "face_count": face_count,
+            "visible_person_object_count": int(segment.get("visible_person_object_count") or 0),
             "emotions": emotions_payload,
             "text_emotion_ranking": segment.get("text_emotion_ranking") or [],
             "text_emotion_meta": segment.get("text_emotion_meta"),
@@ -3239,7 +3259,7 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
 
         # Prefer live scene payload truth; fallback to the legacy Phase 6 object artifact.
         keyframe_payload = scene.get('keyframe') if isinstance(scene.get('keyframe'), dict) else {}
-        visual_caption = (
+        visual_caption = strip_grounding_markup(
             scene.get('visual_caption')
             or scene.get('caption')
             or keyframe_payload.get('caption')
@@ -3317,6 +3337,22 @@ def run_cross_modal_harmonization(item: Dict[str, Any], cfg: Dict[str, Any]) -> 
             'ocr_meta': scene.get('ocr_meta') or keyframe_payload.get('ocr_meta'),
             'ocr_observations': scene.get('ocr_observations') or keyframe_payload.get('ocr_observations') or [],
             'ocr_date_candidates': ocr_date_candidates,
+            'faces_meta': scene.get('faces_meta') or keyframe_payload.get('faces_meta'),
+            'errors': scene.get('errors') or keyframe_payload.get('errors') or None,
+            'optional_stage_errors': (
+                scene.get('optional_stage_errors')
+                or {
+                    err_key: (scene.get(err_key) or keyframe_payload.get(err_key))
+                    for err_key in (
+                        'ocr_sampling_errors',
+                        'caption_sampling_errors',
+                        'object_sampling_errors',
+                        'face_sampling_errors',
+                    )
+                    if (scene.get(err_key) or keyframe_payload.get(err_key))
+                }
+                or None
+            ),
             
             # Audio alignment
             'audio_chunks': audio_chunk_ids,

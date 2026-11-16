@@ -587,14 +587,16 @@ class QdrantClient:
             info["available"] = False
             return info
         try:
-            if self.ensure_collection():
+            if self.collection_exists():
                 r = self.session.get(f"{self.cfg.host}/collections/{self.cfg.collection}", timeout=3)
                 if r.status_code == 200:
                     res = r.json().get("result", {}) or {}
                     points = res.get("points_count") or res.get("vectors_count") or 0
                     self._points_cached = points
-                    info.update({"available": True, "vectors": points, "dim": self.cfg.dim, "distance": self.cfg.distance})
+                    info.update({"available": True, "exists": True, "vectors": points, "dim": self.cfg.dim, "distance": self.cfg.distance})
                     return info
+            else:
+                info["exists"] = False
         except Exception as e:
             logger.warning(
                 "qdrant operation failed operation=%s collection=%s exc_type=%s exc=%s",

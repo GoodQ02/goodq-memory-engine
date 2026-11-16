@@ -3,9 +3,11 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from retrieval.temporal_reasoning import temporal_search
+from lib.grounding_markup import strip_grounding_markup
+from retrieval.temporal_reasoning import _scene_transcript_is_restricted, temporal_search
 from steps.common.config_loader import load_configs
 from steps.common.llm_model_factory import build_llm_models
+from steps.video.cross_modal_harmonizer import _unload_ollama_model_if_used
 from lib.llm_client import LLMClient, ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -18,14 +20,17 @@ def clean_scene_description(summary: str) -> str:
     """
     if not summary:
         return ""
-    if "Visual:" in summary:
-        parts = summary.split("Visual:", 1)
+    cleaned = str(strip_grounding_markup(str(summary))).strip()
+    if not cleaned:
+        return ""
+    if "Visual:" in cleaned:
+        parts = cleaned.split("Visual:", 1)
         desc = parts[1].strip()
         for marker in ["Objects:", "Transcript:", "Emotions:", "Sentiment:", "Tags:", "Entities:"]:
             if marker in desc:
                 desc = desc.split(marker, 1)[0].strip()
-        return desc.rstrip(".;, ")
-    return summary
+        return str(strip_grounding_markup(desc.rstrip(".;, "))).strip()
+    return cleaned
 
 
 def parse_narrative_segments(raw_text: str, source_scenes: list) -> tuple[str, list[dict]]:
@@ -219,7 +224,11 @@ def synthesize_narrative(
             # Filter out bounding boxes and system voice patterns from entity list
             clean_entities = []
             for ent in r.get("entities", []):
-                ent_str = str(ent).strip()
+                if isinstance(ent, dict):
+                    ent_str = str(ent.get("label") or ent.get("name") or ent.get("entity") or "").strip()
+                else:
+                    ent_str = str(ent).strip()
+                ent_str = str(strip_grounding_markup(ent_str)).strip()
                 if not ent_str or ent_str.startswith("{") or "bbox" in ent_str or "voice_pattern" in ent_str:
                     continue
                 clean_entities.append(ent_str)
@@ -234,7 +243,14 @@ def synthesize_narrative(
             if summary_val:
                 scenes_str += f"  Description: {summary_val}\n"
             
-            transcript = r.get("evidence", {}).get("transcript", "")
+            evidence_obj = r.get("evidence") if isinstance(r.get("evidence"), dict) else {}
+            transcript_restricted = (
+                bool(r.get("transcript_restricted"))
+                or bool(evidence_obj.get("transcript_restricted"))
+                or _scene_transcript_is_restricted(r)
+                or _scene_transcript_is_restricted(evidence_obj)
+            )
+            transcript = "" if transcript_restricted else str(strip_grounding_markup(str(evidence_obj.get("transcript", "")))).strip()
             if transcript:
                 if len(transcript) > 200:
                     transcript = transcript[:200] + "... [truncated]"
@@ -405,6 +421,7 @@ def synthesize_narrative(
                 "warnings": ["model_failover_blocked"],
             }
 
+        summary_text = str(strip_grounding_markup(summary_text)).strip()
         segments = None
         if summary_style == "narrative":
             summary_text, segments = parse_narrative_segments(summary_text, sliced_results)
@@ -444,3 +461,5 @@ def synthesize_narrative(
             "truncated": truncated,
             "warnings": ["llm_inference_error"],
         }
+    finally:
+        _unload_ollama_model_if_used(client)

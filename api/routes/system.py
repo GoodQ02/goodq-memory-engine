@@ -436,20 +436,62 @@ async def get_unstitched_patterns():
         raise HTTPException(status_code=500, detail="stitch_failed")
 
 
+def _restore_file_snapshot(path: Path, prior_bytes: bytes | None) -> None:
+    """Restore or remove a sidecar file if a paired SQLite transaction rolls back."""
+    import tempfile
+
+    if prior_bytes is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".rollback",
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            handle.write(prior_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
 @router.get("/identity/speaker-reviews")
 async def get_speaker_change_reviews():
     """Read scene evidence independently of signature eligibility or identity mappings."""
+    from lib.identity_resolver import retired_identity_scene_ids
     from lib.knowledge_graph import KnowledgeGraph
+    from lib.summary_aggregator import _retirement_graph_projection
+
     db_path = _get_kg_db_path()
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="knowledge_graph_not_found")
     with KnowledgeGraph(str(db_path), read_only=True, read_live_wal=True) as kg:
+        retired_media, _ = _retirement_graph_projection(kg.conn, db_path)
+        retired_scenes = set(retired_identity_scene_ids(db_path.parent / "ucf" / "ucf_ledger.db"))
+        if retired_media:
+            placeholders = ",".join("?" for _ in retired_media)
+            for (sid,) in kg.conn.execute(
+                f"SELECT scene_id FROM media_nodes WHERE id IN ({placeholders}) AND scene_id IS NOT NULL",
+                tuple(retired_media),
+            ):
+                retired_scenes.add(str(sid))
         results = []
         for row in kg.conn.execute("SELECT name, properties FROM nodes WHERE node_type = 'scene' ORDER BY id"):
             props = json.loads(row["properties"] or "{}")
+            scene_id = props.get("scene_id", row["name"])
+            if str(scene_id) in retired_scenes or str(row["name"]) in retired_scenes:
+                continue
             review = props.get("speaker_change_review")
             if isinstance(review, dict) and review:
-                results.append({"scene_id": props.get("scene_id", row["name"]),
+                results.append({"scene_id": scene_id,
                                 "video_id": props.get("video_id"), "review": review})
         return results
 
@@ -458,7 +500,9 @@ async def get_speaker_change_reviews():
 async def preview_stitch(request: StitchPreviewRequest):
     """Preview mapping impact and identify potential name or mapping conflicts."""
     db_path = _get_kg_db_path()
+    from lib.identity_resolver import retired_identity_scene_ids
     from lib.knowledge_graph import KnowledgeGraph
+    from lib.summary_aggregator import _retirement_graph_projection
     
     if not db_path.exists():
         logger.error("Knowledge graph database not found (preview): %s", db_path)
@@ -479,20 +523,25 @@ async def preview_stitch(request: StitchPreviewRequest):
 
             source_id = int(source_row["id"])
 
-            # Calculate affected scenes and episodes
-            counts_row = cur.execute(
+            # Calculate affected scenes and episodes excluding retired scenes
+            retired_media, _ = _retirement_graph_projection(kg.conn, db_path)
+            retired_scenes = retired_identity_scene_ids(db_path.parent / "ucf" / "ucf_ledger.db")
+            media_rows = cur.execute(
                 """
-                SELECT COUNT(DISTINCT nm.media_id) AS scene_count,
-                       COUNT(DISTINCT mn.media_path) AS episode_count
+                SELECT DISTINCT nm.media_id, mn.scene_id, mn.media_path
                 FROM node_media nm
                 JOIN media_nodes mn ON nm.media_id = mn.id
                 WHERE nm.node_id = ?
                 """,
                 (source_id,)
-            ).fetchone()
-            
-            scenes_affected = int(counts_row["scene_count"] or 0) if counts_row else 0
-            episodes_affected = int(counts_row["episode_count"] or 0) if counts_row else 0
+            ).fetchall()
+            active_rows = [
+                r for r in media_rows
+                if r["media_id"] not in retired_media
+                and (not r["scene_id"] or str(r["scene_id"]) not in retired_scenes)
+            ]
+            scenes_affected = len({r["media_id"] for r in active_rows})
+            episodes_affected = len({r["media_path"] for r in active_rows if r["media_path"] is not None})
             
             # Identify conflicts (any existing mappings from this pattern to a different person name)
             conflict_rows = cur.execute(
@@ -578,77 +627,112 @@ async def execute_stitch(request: StitchRequest):
                 raise HTTPException(status_code=404, detail="speaker_pattern_not_found")
                 
             source_id = int(source_row["id"])
-            
-            # Resolve or create target_id for the person node
-            target_id = kg.add_node(
-                node_type="person",
-                name=request.target_person_name,
-                properties={"source": "operator_manual_override"},
-                timestamp=None
-            )
-            
-            # Load, update, and save manual mappings JSON
+            mappings_file = db_path.parent / "manual_identity_mappings.json"
+            prior_mappings = mappings_file.read_bytes() if mappings_file.is_file() else None
+
             mappings_data = load_manual_mappings(db_path)
             mappings = mappings_data.setdefault("mappings", [])
-            
-            # Find if there is an existing mapping for this source_node_name
+            now_iso = datetime.utcnow().isoformat() + "Z"
+
+            for m in mappings:
+                if (
+                    m.get("source_node_name") == request.source_node_name
+                    and m.get("status") == "active"
+                    and m.get("target_person_name") != request.target_person_name
+                ):
+                    m["status"] = "revoked"
+                    m.setdefault("history", []).append(
+                        {
+                            "status": "revoked",
+                            "timestamp_utc": now_iso,
+                            "operator_note": f"Superseded by stitch to {request.target_person_name}",
+                        }
+                    )
+
             existing_mapping = next(
-                (m for m in mappings if m.get("source_node_name") == request.source_node_name),
-                None
+                (
+                    m
+                    for m in mappings
+                    if m.get("source_node_name") == request.source_node_name
+                    and m.get("target_person_name") == request.target_person_name
+                ),
+                None,
             )
-            
-            mapping_id = f"map_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+
             history_entry = {
                 "status": "active",
-                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
-                "operator_note": request.operator_note or ""
+                "timestamp_utc": now_iso,
+                "operator_note": request.operator_note or "",
             }
-            
-            if existing_mapping:
-                mapping_id = existing_mapping.get("mapping_id", mapping_id)
-                existing_mapping["target_person_name"] = request.target_person_name
+
+            if existing_mapping is not None:
+                mapping_id = str(
+                    existing_mapping.get("mapping_id")
+                    or f"map_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                )
+                existing_mapping["mapping_id"] = mapping_id
                 existing_mapping["status"] = "active"
                 existing_mapping.setdefault("history", []).append(history_entry)
             else:
-                mappings.append({
-                    "mapping_id": mapping_id,
-                    "source_node_type": "speaker_pattern",
-                    "source_node_name": request.source_node_name,
-                    "target_person_name": request.target_person_name,
-                    "status": "active",
-                    "history": [history_entry]
-                })
-                
-            save_manual_mappings(db_path, mappings_data)
-            
-            # Delete any existing manual override edges for this source pattern in the graph database
-            rows = cur.execute(
-                "SELECT id, properties FROM edges WHERE source_id = ? AND edge_type = 'identity_evidence'",
-                (source_id,)
-            ).fetchall()
-            edge_ids_to_delete = []
-            for r in rows:
-                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
-                if props.get("source") == "operator_manual_override":
-                    edge_ids_to_delete.append(int(r["id"]))
-            if edge_ids_to_delete:
-                placeholders = ",".join("?" for _ in edge_ids_to_delete)
-                cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
-                kg.conn.commit()
+                base_id = f"map_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                existing_ids = {str(m.get("mapping_id")) for m in mappings if m.get("mapping_id")}
+                mapping_id = base_id
+                suffix = 1
+                while mapping_id in existing_ids:
+                    mapping_id = f"{base_id}_{suffix}"
+                    suffix += 1
+                mappings.append(
+                    {
+                        "mapping_id": mapping_id,
+                        "source_node_type": "speaker_pattern",
+                        "source_node_name": request.source_node_name,
+                        "target_person_name": request.target_person_name,
+                        "status": "active",
+                        "history": [history_entry],
+                    }
+                )
 
-            # Add mapping to graph database
-            edge_id = kg.add_edge(
-                source_id=source_id,
-                target_id=target_id,
-                edge_type="identity_evidence",
-                weight=1.0,
-                properties={
-                    "source": "operator_manual_override",
-                    "mapping_id": mapping_id,
-                    "operator_note": request.operator_note or ""
-                }
-            )
-            
+            try:
+                with kg.transaction():
+                    # Resolve or create target_id for the person node
+                    target_id = kg.add_node(
+                        node_type="person",
+                        name=request.target_person_name,
+                        properties={"source": "operator_manual_override"},
+                        timestamp=None,
+                    )
+
+                    # Delete any existing manual override edges for this source pattern in the graph database
+                    rows = cur.execute(
+                        "SELECT id, properties FROM edges WHERE source_id = ? AND edge_type = 'identity_evidence'",
+                        (source_id,),
+                    ).fetchall()
+                    edge_ids_to_delete = []
+                    for r in rows:
+                        props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                        if props.get("source") == "operator_manual_override":
+                            edge_ids_to_delete.append(int(r["id"]))
+                    if edge_ids_to_delete:
+                        placeholders = ",".join("?" for _ in edge_ids_to_delete)
+                        cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
+
+                    # Add mapping to graph database
+                    edge_id = kg.add_edge(
+                        source_id=source_id,
+                        target_id=target_id,
+                        edge_type="identity_evidence",
+                        weight=1.0,
+                        properties={
+                            "source": "operator_manual_override",
+                            "mapping_id": mapping_id,
+                            "operator_note": request.operator_note or "",
+                        },
+                    )
+                    save_manual_mappings(db_path, mappings_data)
+            except BaseException:
+                _restore_file_snapshot(mappings_file, prior_mappings)
+                raise
+
             # Build scene_episode_map from media_nodes table to refresh ledger metrics
             media_rows = cur.execute("SELECT scene_id, properties FROM media_nodes").fetchall()
             scene_episode_map = {}
@@ -662,28 +746,26 @@ async def execute_stitch(request: StitchRequest):
                 if video_id:
                     scene_episode_map[scene_id] = video_id
                     episodes_set.add(video_id)
-                    
+
             episodes = [{"episode": ep} for ep in sorted(episodes_set)]
-            
+
             # Regenerate ledger reports
             ledger = build_identity_ledger(
                 graph_db_path=db_path,
                 scene_episode_map=scene_episode_map,
                 episodes=episodes,
             )
-            
+
             # Save ledger json and markdown next to knowledge_graph.db
             ledger_json_path = db_path.parent / "identity_ledger.json"
             ledger_json_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            
-            from lib.identity_ledger import write_identity_ledger_markdown
             write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
-            
+
             _response = StitchResponse(
                 success=True,
                 message=f"Successfully stitched {request.source_node_name} to {request.target_person_name}.",
                 mapping_id=mapping_id,
-                edge_id=edge_id
+                edge_id=edge_id,
             )
             _request_id = _result.get("request_id") if isinstance(_result, dict) else ""
             authority.record_external_execution_outcome(
@@ -694,7 +776,15 @@ async def execute_stitch(request: StitchRequest):
                 status="succeeded",
                 return_code=0,
                 duration_ms=int((_time.time() - _start) * 1000),
-                side_effect_report={"mutated": True, "targets": [str(db_path), "manual_identity_mappings.json"]},
+                side_effect_report={
+                    "mutated": True,
+                    "targets": [
+                        str(db_path),
+                        "manual_identity_mappings.json",
+                        "identity_ledger.json",
+                        "identity_ledger.md",
+                    ],
+                },
             )
             return _response
     except Exception as e:
@@ -785,6 +875,9 @@ async def revoke_stitch(request: StitchRevokeRequest):
                 message=f"Mapping {target_mapping.get('mapping_id')} is already revoked."
             )
             
+        mappings_file = db_path.parent / "manual_identity_mappings.json"
+        prior_mappings = mappings_file.read_bytes() if mappings_file.is_file() else None
+
         # Update status and append to history (retaining previous history)
         target_mapping["status"] = "revoked"
         history_entry = {
@@ -793,30 +886,32 @@ async def revoke_stitch(request: StitchRevokeRequest):
             "operator_note": request.operator_note or "Revoked by operator"
         }
         target_mapping.setdefault("history", []).append(history_entry)
-        
-        # Save JSON changes
-        save_manual_mappings(db_path, mappings_data)
-        
-        # Database changes must be projection-only.
-        # Find and delete matching manual override edge in graph database
+
+        # Database changes must be projection-only and atomic with manual mappings persistence.
         with KnowledgeGraph(str(db_path)) as kg:
             cur = kg.conn.cursor()
-            
-            rows = cur.execute(
-                "SELECT id, properties FROM edges WHERE edge_type = 'identity_evidence'"
-            ).fetchall()
-            
-            edge_ids_to_delete = []
-            for r in rows:
-                props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
-                if props.get("source") == "operator_manual_override" and props.get("mapping_id") == target_mapping["mapping_id"]:
-                    edge_ids_to_delete.append(int(r["id"]))
-                    
-            if edge_ids_to_delete:
-                placeholders = ",".join("?" for _ in edge_ids_to_delete)
-                cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
-                kg.conn.commit()
-                
+
+            try:
+                with kg.transaction():
+                    rows = cur.execute(
+                        "SELECT id, properties FROM edges WHERE edge_type = 'identity_evidence'"
+                    ).fetchall()
+
+                    edge_ids_to_delete = []
+                    for r in rows:
+                        props = json.loads(r["properties"]) if isinstance(r["properties"], str) else (r["properties"] or {})
+                        if props.get("source") == "operator_manual_override" and props.get("mapping_id") == target_mapping["mapping_id"]:
+                            edge_ids_to_delete.append(int(r["id"]))
+
+                    if edge_ids_to_delete:
+                        placeholders = ",".join("?" for _ in edge_ids_to_delete)
+                        cur.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", edge_ids_to_delete)
+
+                    save_manual_mappings(db_path, mappings_data)
+            except BaseException:
+                _restore_file_snapshot(mappings_file, prior_mappings)
+                raise
+
             # Rebuild the identity ledger / read-model only
             media_rows = cur.execute("SELECT scene_id, properties FROM media_nodes").fetchall()
             scene_episode_map = {}
@@ -830,21 +925,19 @@ async def revoke_stitch(request: StitchRevokeRequest):
                 if video_id:
                     scene_episode_map[scene_id] = video_id
                     episodes_set.add(video_id)
-                    
+
             episodes = [{"episode": ep} for ep in sorted(episodes_set)]
-            
+
             ledger = build_identity_ledger(
                 graph_db_path=db_path,
                 scene_episode_map=scene_episode_map,
                 episodes=episodes,
             )
-            
+
             ledger_json_path = db_path.parent / "identity_ledger.json"
             ledger_json_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            
-            from lib.identity_ledger import write_identity_ledger_markdown
             write_identity_ledger_markdown(ledger, db_path.parent / "identity_ledger.md")
-            
+
         _revoke_response = StitchRevokeResponse(
             success=True,
             message=f"Successfully revoked mapping {target_mapping.get('mapping_id')} for {target_mapping.get('source_node_name')}."
@@ -858,7 +951,15 @@ async def revoke_stitch(request: StitchRevokeRequest):
             status="succeeded",
             return_code=0,
             duration_ms=int((_time.time() - _start) * 1000),
-            side_effect_report={"mutated": True, "targets": ["manual_identity_mappings.json"]},
+            side_effect_report={
+                "mutated": True,
+                "targets": [
+                    str(db_path),
+                    "manual_identity_mappings.json",
+                    "identity_ledger.json",
+                    "identity_ledger.md",
+                ],
+            },
         )
         return _revoke_response
     except HTTPException:

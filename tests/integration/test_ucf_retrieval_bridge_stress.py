@@ -6,8 +6,28 @@ import copy
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
+import json
+from steps.common.memory import _make_id
 from steps.common.qdrant_client import QdrantClient, QdrantConfig
 from agents.mini_agent_client import MiniAgentClient
+
+
+def _configure_scene_materialization(client, tmp_path):
+    """Bind the historical ledger alias to one source-scoped manifest scene."""
+    db_dir = tmp_path / "GoodQ_Data" / "epochs" / "epoch_test"
+    client.config["paths"].update({
+        "db_dir": str(db_dir),
+        "db_path": str(db_dir / "memory.db"),
+        "knowledge_graph_db": str(db_dir / "knowledge_graph.db"),
+        "processing": str(db_dir / "processing"),
+    })
+    video_dir = db_dir / "processing" / "test" / "video"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    scene_id = _make_id("scene", ["vh_test_001", "0.000", "1.000"])
+    (video_dir / "scene_manifest.json").write_text(json.dumps({
+        "video_hash": "vh_test_001",
+        "scenes": [{"id": scene_id, "index": 1, "start": 0.0, "end": 1.0}],
+    }), encoding="utf-8")
 
 # Helper: Create a mock database with frame records
 def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key="vector-key-1", vector_collection="goodq_clip", vector_backend="qdrant"):
@@ -50,8 +70,10 @@ def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key=
         payload TEXT NOT NULL,
         payload_hash TEXT NOT NULL,
         promotion_status TEXT NOT NULL DEFAULT 'staged',
+        occurrence_id TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash)
+        FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash),
+        UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id)
     );
     """)
     conn.execute("INSERT OR REPLACE INTO media_sources VALUES ('vh_test_001', 'test.mp4', 10.0, 30.0, 1920, 1080, '2026-06-15')")
@@ -257,13 +279,14 @@ def test_qdrant_query_filter_override_composition(mock_build):
     _, kwargs = mock_q.query.call_args
     p_filter = kwargs["payload_filter"]
     
-    # Must_not should contain the original clause AND the two defaults
+    # Must_not should contain the original clause AND the two defaults,
+    # and RS-04 enforces must=[ucf_promotion_status == 'promoted'] by default:
     must_not = p_filter.get("must_not", [])
     assert len(must_not) == 3
     assert must_not[0] == {"key": "is_draft", "match": {"value": True}}
     assert must_not[1] == {"key": "ucf_promotion_status", "match": {"value": "rejected"}}
     assert must_not[2] == {"key": "ucf_promotion_status", "match": {"value": "superseded"}}
-    assert "must" not in p_filter
+    assert p_filter.get("must") == [{"key": "ucf_promotion_status", "match": {"value": "promoted"}}]
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +304,7 @@ def test_lifecycle_promote_qdrant_outage_resilience(mock_post, tmp_path, monkeyp
     mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(client, "_fetch_vector_from_qdrant", lambda *_: None)
     monkeypatch.setattr(
@@ -333,6 +357,7 @@ def test_lifecycle_reject_qdrant_outage_resilience(mock_post, tmp_path, monkeypa
     mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(
         client,
@@ -342,20 +367,21 @@ def test_lifecycle_reject_qdrant_outage_resilience(mock_post, tmp_path, monkeypa
 
     # Invoke reject_ucf_frames
     res, rc = _confirm_tool_directly(client, "reject_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test", "reason": "outage test"})
-    assert rc == 0
-    assert res["status"] == "success"
+    assert rc == 1
+    assert res["status"] == "error"
+    assert res["errors"][0]["code"] == "rejected_committed_sync_pending"
 
     output = res["output"]
-    assert output["status"] == "rejected_complete"
+    assert output["status"] == "rejected_committed_sync_pending"
 
-    # Verify qdrant sync details are logged as warning
+    # Verify qdrant sync details are logged as warning and durable outbox stays pending
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "warning"
+    assert "goodq_clip" in q_sync["failed_collections"]
 
-    # Verify warning in envelope
-    assert "warnings" in res
-    assert "qdrant_payload_sync_failed" in res["warnings"]
+    assert "qdrant_payload_sync_failed" in output["warnings"]
+    assert output["outbox"]["delivery_state"] == "pending"
 
     # Verify SQLite row was rejected anyway
     conn = sqlite3.connect(str(db_path))
@@ -367,7 +393,7 @@ def test_lifecycle_reject_qdrant_outage_resilience(mock_post, tmp_path, monkeypa
 @patch("requests.post")
 def test_lifecycle_supersede_qdrant_outage_resilience(mock_post, tmp_path, monkeypatch):
     """Simulate Qdrant network outage (raises Timeout) during supersede_ucf_frames.
-    Verify SQLite succeeds and warning is returned.
+    Verify SQLite succeeds and pending sync status is surfaced via durable outbox.
     """
     db_path = _create_mock_db_for_test(tmp_path, "promoted", vector_key="vec-key-outage", vector_collection="goodq_clip")
     monkeypatch.setenv("GOODQ_DATA_ROOT", str(tmp_path))
@@ -375,6 +401,7 @@ def test_lifecycle_supersede_qdrant_outage_resilience(mock_post, tmp_path, monke
     mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
 
     client = MiniAgentClient(profile="safe")
+    _configure_scene_materialization(client, tmp_path)
     monkeypatch.setattr(client, "_get_ucf_db_path", lambda: db_path)
     monkeypatch.setattr(
         client,
@@ -384,20 +411,21 @@ def test_lifecycle_supersede_qdrant_outage_resilience(mock_post, tmp_path, monke
 
     # Invoke supersede_ucf_frames
     res, rc = _confirm_tool_directly(client, "supersede_ucf_frames", {"video_hash": "vh_test_001", "epoch_id": "epoch_test"})
-    assert rc == 0
-    assert res["status"] == "success"
+    assert rc == 1
+    assert res["status"] == "error"
+    assert res["errors"][0]["code"] == "superseded_committed_sync_pending"
 
     output = res["output"]
-    assert output["status"] == "superseded_complete"
+    assert output["status"] == "superseded_committed_sync_pending"
 
-    # Verify qdrant sync details are logged as warning
+    # Verify qdrant sync details are logged as warning and durable outbox stays pending
     q_sync = output["qdrant_sync"]
     assert q_sync["attempted"] is True
     assert q_sync["status"] == "warning"
+    assert "goodq_clip" in q_sync["failed_collections"]
 
-    # Verify warning in envelope
-    assert "warnings" in res
-    assert "qdrant_payload_sync_failed" in res["warnings"]
+    assert "qdrant_payload_sync_failed" in output["warnings"]
+    assert output["outbox"]["delivery_state"] == "pending"
 
     # Verify SQLite row was superseded anyway
     conn = sqlite3.connect(str(db_path))

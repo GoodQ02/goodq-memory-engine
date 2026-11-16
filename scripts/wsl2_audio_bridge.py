@@ -1020,9 +1020,14 @@ class NativeAudioRunner(AudioRunner):
         import uuid
         request_uuid = str(uuid.uuid4())
         
-        # Ensure output directory exists
+        # Ensure output directory exists and clear any stale fallback result.json
         out_path = Path(self.output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
+        result_json_file = out_path / "result.json"
+        try:
+            result_json_file.unlink(missing_ok=True)
+        except OSError:
+            pass
         
         cmd = [
             sys.executable,
@@ -1063,26 +1068,37 @@ class NativeAudioRunner(AudioRunner):
             )
             
             output = None
+            used_fallback_result_json = False
             if result.returncode == 0:
                 try:
                     output = json.loads(result.stdout)
                 except json.JSONDecodeError:
                     pass
 
-            if output is None:
-                result_json_file = out_path / "result.json"
-                if result_json_file.exists():
+                if output is None and result_json_file.exists():
                     try:
-                        output = json.loads(result_json_file.read_text())
-                    except json.JSONDecodeError:
+                        candidate = json.loads(result_json_file.read_text())
+                        if isinstance(candidate, dict):
+                            candidate_audio = str(candidate.get("audio_file") or "").strip()
+                            if not candidate_audio or Path(candidate_audio).name == requested_scene_file:
+                                output = candidate
+                                used_fallback_result_json = True
+                    except (OSError, json.JSONDecodeError):
                         pass
+
+            try:
+                result_json_file.unlink(missing_ok=True)
+            except OSError:
+                pass
 
             if output is None:
                 error_msg = result.stderr or "No valid JSON output from audio processor"
                 return {
                     "status": "error",
                     "error": error_msg,
-                    "bridge_error_reason": "stdout_json_parse_failed",
+                    "bridge_error_reason": (
+                        "native_process_failed" if result.returncode != 0 else "stdout_json_parse_failed"
+                    ),
                     "returncode": result.returncode,
                     "requested_scene_file": requested_scene_file
                 }
@@ -1092,7 +1108,7 @@ class NativeAudioRunner(AudioRunner):
             output.setdefault("returned_scene_file", Path(output.get("audio_file", "")).name)
             output.setdefault("requested_request_uuid", request_uuid)
             output.setdefault("returned_request_uuid", output.get("request_uuid", request_uuid))
-            output.setdefault("used_fallback_result_json", result.returncode != 0)
+            output.setdefault("used_fallback_result_json", used_fallback_result_json)
             return output
 
         except subprocess.TimeoutExpired:

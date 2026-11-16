@@ -142,12 +142,13 @@ function getFrameEndpoint(videoId, representativeFrame) {
   if (typeof representativeFrame !== 'string') return '';
   // Preserve explicit original-image URLs; do not reinterpret them as frame filenames.
   if (/^\/api\/media\/video\/[^/?#]+\/(?:source|frame\/[^/?#]+)$/.test(representativeFrame)) {
-    return representativeFrame;
+    return typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(representativeFrame) : representativeFrame;
   }
   // Extract frame filename (e.g., scene_0000_frame_01.jpg)
   const parts = representativeFrame.split(/[\\/]/);
   const filename = parts[parts.length - 1];
-  return `/api/media/video/${encodeURIComponent(videoId)}/frame/${encodeURIComponent(filename)}`;
+  const rawFrameUrl = `/api/media/video/${encodeURIComponent(videoId)}/frame/${encodeURIComponent(filename)}`;
+  return typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(rawFrameUrl) : rawFrameUrl;
 }
 
 // Initial boot
@@ -241,7 +242,9 @@ async function createSummaryCollection(payload) {
   const confirmed = window.confirm(`Save collection "${payload.name}"?`);
   if (!confirmed) return null;
 
-  const endpoint = '/api/summary/collections';
+  const endpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary
+    ? GoodQLibrary.url('/api/summary/collections')
+    : '/api/summary/collections';
   const prepareResp = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -302,7 +305,10 @@ async function bootSummaryConsole() {
     status.textContent = 'Status: LOADING';
     status.className = 'header-status';
     
-    const resp = await fetch('/api/summary/dashboard');
+    const dashboardEndpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary
+      ? GoodQLibrary.url('/api/summary/dashboard')
+      : '/api/summary/dashboard';
+    const resp = await fetch(dashboardEndpoint);
     if (!resp.ok) throw new Error('API server returned error on dashboard.');
     
     state.dashboard = await resp.json();
@@ -494,7 +500,10 @@ async function loadEntityProfile(entityId) {
   state.currentVideoHash = null;
   
   try {
-    const resp = await fetch(`/api/summary/entity/${encodeURIComponent(entityId)}`);
+    const entityEndpoint = `/api/summary/entity/${encodeURIComponent(entityId)}`;
+    const resp = await fetch(
+      typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(entityEndpoint) : entityEndpoint
+    );
     if (!resp.ok) throw new Error('Failed to load entity profile details.');
     
     const profile = await resp.json();
@@ -687,7 +696,10 @@ async function loadCustomCollections() {
   container.innerHTML = '';
   
   try {
-    const resp = await fetch('/api/summary/collections');
+    const collectionsEndpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary
+      ? GoodQLibrary.url('/api/summary/collections')
+      : '/api/summary/collections';
+    const resp = await fetch(collectionsEndpoint);
     if (!resp.ok) throw new Error('Failed to load custom collections.');
     
     state.collections = await resp.json();
@@ -783,7 +795,8 @@ async function handleDeleteCollection(collectionId) {
   const confirmed = window.confirm(`Are you sure you want to delete collection ${collectionId}?`);
   if (!confirmed) return;
 
-  const endpoint = `/api/summary/collections/${encodeURIComponent(collectionId)}`;
+  const rawEndpoint = `/api/summary/collections/${encodeURIComponent(collectionId)}`;
+  const endpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(rawEndpoint) : rawEndpoint;
   const deleteButtons = document.querySelectorAll('.col-delete-btn');
   deleteButtons.forEach(button => { button.disabled = true; });
   try {
@@ -901,7 +914,10 @@ async function handleDeleteCollection(collectionId) {
 
 async function checkCapabilities() {
   try {
-    const resp = await fetch('/api/summary/capabilities');
+    const capsEndpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary
+      ? GoodQLibrary.url('/api/summary/capabilities')
+      : '/api/summary/capabilities';
+    const resp = await fetch(capsEndpoint);
     if (resp.ok) {
       const caps = await resp.json();
       state.llmSummarizationEnabled = !!caps.video_summarization_enabled;
@@ -918,10 +934,19 @@ async function loadVideos() {
   container.innerHTML = '<div class="empty-state">Loading processed sources...</div>';
   
   try {
-    const resp = await fetch('/api/system/videos');
+    const videosEndpoint = typeof GoodQLibrary !== 'undefined' && GoodQLibrary
+      ? GoodQLibrary.url('/api/system/videos')
+      : '/api/system/videos';
+    const resp = await fetch(videosEndpoint);
+    if (typeof GoodQLibrary !== 'undefined' && GoodQLibrary && typeof GoodQLibrary.observeResponse === 'function') {
+      GoodQLibrary.observeResponse(resp, '/api/system/videos');
+    }
     if (!resp.ok) throw new Error('Failed to load videos list.');
     
     const videos = await resp.json();
+    if (typeof GoodQLibrary !== 'undefined' && GoodQLibrary && typeof GoodQLibrary.catalog === 'function' && Array.isArray(videos)) {
+      GoodQLibrary.catalog(videos);
+    }
     container.innerHTML = '';
     
     if (!videos || !videos.length) {
@@ -956,6 +981,9 @@ function handleVideoSelect(video, element) {
   document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('selected'));
   
   element.classList.add('selected');
+  if (typeof GoodQLibrary !== 'undefined' && GoodQLibrary && typeof GoodQLibrary.select === 'function' && video && video.library_source) {
+    GoodQLibrary.select(video);
+  }
   loadVideoProfile(video.video_id, video.title, video.source_kind || 'video');
 }
 
@@ -993,7 +1021,8 @@ async function loadVideoProfile(videoId, videoTitle, sourceKind = 'video') {
     summaryBox.hidden = sourceKind !== 'video';
     regenBtn.hidden = sourceKind !== 'video';
     if (sourceKind === 'video') {
-      const sumResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}`);
+      const rawSumUrl = `/api/summary/video/${encodeURIComponent(videoId)}`;
+      const sumResp = await fetch(typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(rawSumUrl) : rawSumUrl);
       if (state.currentVideoHash !== videoId || state.currentSourceKind !== sourceKind) return;
       if (sumResp.ok) {
         const sumData = await sumResp.json();
@@ -1023,7 +1052,8 @@ async function loadVideoProfile(videoId, videoTitle, sourceKind = 'video') {
         summaryBox.hidden = false;
         regenBtn.hidden = false;
 
-        const statusResp = await fetch(`/api/summary/video/${encodeURIComponent(videoId)}/status`);
+        const rawStatusUrl = `/api/summary/video/${encodeURIComponent(videoId)}/status`;
+        const statusResp = await fetch(typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(rawStatusUrl) : rawStatusUrl);
         if (statusResp.ok) {
           const statusData = await statusResp.json();
           resumeExistingSummaryJobStatus(videoId, statusData, regenBtn);
@@ -1038,7 +1068,8 @@ async function loadVideoProfile(videoId, videoTitle, sourceKind = 'video') {
 
     if (coOccurBox) coOccurBox.hidden = true;
     
-    const timelineResp = await fetch(`/api/videos/${encodeURIComponent(videoId)}/timeline`);
+    const rawTimelineUrl = `/api/videos/${encodeURIComponent(videoId)}/timeline`;
+    const timelineResp = await fetch(typeof GoodQLibrary !== 'undefined' && GoodQLibrary ? GoodQLibrary.url(rawTimelineUrl) : rawTimelineUrl);
     if (state.currentVideoHash !== videoId || state.currentSourceKind !== sourceKind) return;
     if (!timelineResp.ok) throw new Error('Failed to load video timeline segments.');
     
@@ -1135,8 +1166,9 @@ async function pollSummaryJobStatus(videoHash, jobId, failureCount = 0) {
   if (state.activeSummaryJobId !== jobId) return;
   const regenBtn = document.getElementById("regen-summary-btn");
   try {
+    const rawPollUrl = `/api/summary/video/${encodeURIComponent(videoHash)}/status?job_id=${encodeURIComponent(jobId)}`;
     const resp = await fetch(
-      `/api/summary/video/${encodeURIComponent(videoHash)}/status?job_id=${encodeURIComponent(jobId)}`
+      typeof GoodQLibrary !== "undefined" && GoodQLibrary ? GoodQLibrary.url(rawPollUrl) : rawPollUrl
     );
     if (!resp.ok) throw new Error("summary_status_request_failed");
     const data = await resp.json();
@@ -1270,7 +1302,8 @@ function setupRegenListener() {
     regenBtn.innerText = "PREPARING...";
     
     try {
-      const endpoint = `/api/summary/video/${encodeURIComponent(videoHash)}/generate`;
+      const rawEndpoint = `/api/summary/video/${encodeURIComponent(videoHash)}/generate`;
+      const endpoint = typeof GoodQLibrary !== "undefined" && GoodQLibrary ? GoodQLibrary.url(rawEndpoint) : rawEndpoint;
       const prepareResp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -1,13 +1,13 @@
 <!-- DOC_BADGE: OPERATIONAL -->
 <!-- DOC_STATUS: ACTIVE_MANIFEST -->
-<!-- DOC_LAST_VERIFIED: 2026-11-11 -->
+<!-- DOC_LAST_VERIFIED: 2026-11-16 -->
 
 # Public release sanitization manifest
 
 ## Source and authority
 
-- Private development source: `e9cd221ed84fb3e72a78b5f6d5d114f1030e0bf2` (`dev`).
-- Public parent: `4ca9f8b716b88a7cb074b062e4ada81874e74c6f` (`main`).
+- Private development source: `c4d2b28f1263d19cb200274a2ca0bda83bec9739` (`dev`).
+- Public parent: `d471a200e614819a2172cccdd084fcefdefdb692` (`main`).
 - Public destination: `GoodQ02/goodq-memory-engine`, branch `main`.
 - The public commit is a sanitized snapshot, not a merge of private history.
 - Workstation deployment continues to use the private checkout. This mirror is
@@ -207,3 +207,11 @@ Mirrors pinned private commit `1d52c44a` onto `GoodQ02/goodq-memory-engine` `mai
 - **Progressive-Window Ollama Failover VRAM Unload**: Tracks `attempted_models` in `LLMClient.chat` (`lib/llm_client.py`) and unloads every attempted Ollama `(base_url, model_id)` pair in `CrossModalHarmonizer._unload_ollama_model_if_used` (`steps/video/cross_modal_harmonizer.py`) so primary Ollama weights do not remain resident during failover windows.
 - **Architecture Contracts & Parity Gates**: Syncs `IDENTITY_STITCHING_CONTRACT.md`, `INGEST_ORCHESTRATION_CONTRACT.md`, `REPOSITORY_MAP.md` (preserving public-only exclusions), and focused unit tests (`test_identity_cross_film.py`, `test_identity_workbench_behavior.py`, `test_scene_context_fallback_boundary.py`). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, unconfigured-template truth checks, personal-term/path privacy inspection (`0` hits), and focused unit checks pass before publication.
 - **Attested Prior-Film Cluster Carry-Forward & Single-Read Manifest Cache (`e9cd221e`)**: Carries attested Phase 1 Face Cluster curation (`epoch_attested_identity_dir` + `read_attested_cluster_faces` in `lib/identity_matching.py`) forward across `reviewed_face_sources` into downstream `known_people`, `suggested_matches`, `cross-film-scan`, and `POST /api/identity/matches/refresh`; refreshes same-movie `suggested_matches` immediately after saving a cluster label (`ui/identity_workbench/static/js/identity.js`); and threads a request-scoped `manifest_cache` with a zero-source fast path so `GET /api/identity/face-clusters` reads `scene_manifest.json` once per request (`api/utils/identity_read_projection.py`, `api/utils/identity_cross_film.py`, `scripts/identity/build_face_clusters.py`). All 9 changed source/test/contract files match private `e9cd221e` byte for byte.
+
+## Outside-audit repairs, ASR-loop consumer gate, and Windows startup hardening - 2026-11-16
+
+Mirrors pinned private commit `c4d2b28f` onto `GoodQ02/goodq-memory-engine` `main` (parent `d471a200`):
+- **Scene Truth, Audio Bridge, Vision & Orchestration Repairs**: Enforces strict scene boundary monotonicity, `<= 600s` max-duration subdivision, and grounding-markup stripping across producer and API projections (`steps/video_scene_detect/`, `lib/grounding_markup.py`, `steps/common/context_analyzer_llm.py`); hardens WSL2 audio bridge retry/status timeouts, stereo preservation, and ECAPA speaker-change review propagation (`steps/audio/`, `steps/audio_speaker_merge/step.py`, `scripts/wsl2_audio_bridge.py`); and closes progressive-window VRAM allocation, Ollama unload, `face_embed` `128`-d SFace dimension hygiene, and `ocr_meta` / `faces_meta` timeline/scene projections (`common/vram_allocator.py`, `steps/video/`, `steps/face_embed/step.py`, `steps/object_detect/step.py`, `api/routes/`).
+- **Unified ASR-Restriction & Runaway-Decoder Loop Consumer Gate**: Filters per-phrase repetition loops, `< 8`-word residual loop-tail fragments (`>= 80%` overlap with dropped loop tokens), and multi-segment concatenated `< 8`-word repetition loops in `steps/common/tag_utils.py`, short-circuits `reliable_transcript_for_entities` when `is_scene_transcript_restricted(item)` is `True`, and gates `sentiment`, `emotion_classify`, `tagger`, `scene_summarizer`, and `audio_transcript` `text_embed` uniformly on unrestricted reliable speech while preserving multimodal `ocr_text` / `caption` fallbacks and `1:1` UCF `audio_transcribe` raw-receipt reconciliation (`cli/run_ingestion.py`).
+- **UCF Ledger, Identity Projection & Windows Supervisor Startup Hardening**: Hardens UCF promotion transaction atomicity, Qdrant outbox reconciliation, and retrieval bridge pagination/filtering (`lib/kg_realtime_integration.py`, `retrieval/`, `steps/common/`); refines Identity Workbench cluster/match projections, dark-theme contrast, and operator/summary console Escape/navigation handling (`api/utils/identity_*.py`, `ui/`); and hardens `start_goodq_dev.ps1` against recycled Windows PIDs (`HasExited` / `StartTime` guards) and cold-process `Write-GoodQReceiptText` Attempt-1 `Add-Type` JIT compilation stalls (`tests/unit/test_dev_startup.py`).
+- **Parity & Privacy Gates**: All 78 changed/added product, UI, walkthrough, and unit/integration test files (including the six `tests/unit/test_audit_*_repairs.py` suites) match private `c4d2b28f` byte for byte, with public-only exclusions and docstring/link sanitizations preserved (`VISION_PIPELINE.md`, `build_face_clusters.py`, `promote_identity_layer.py`, `PROJECT.md`, `ROADMAP.md`, and omitted private checkpoint docs). Documentation drift, authority, dependency drift, banned-token, all 15 installer semantic checks, PNG metadata checks, deep personal-term/secret/path privacy inspection (`0` hits), and focused public-checkout unit suites pass prior to publication.

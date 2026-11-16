@@ -217,6 +217,27 @@ def two_movie_workbench(reference_source, face_pipeline, tmp_path, monkeypatch):
     }
 
 
+@pytest.mark.parametrize("initial, updated, expected", [("staged", "promoted", 200), ("promoted", "staged", 404)])
+def test_cross_film_media_observes_wal_promotion_changes(two_movie_workbench, initial, updated, expected):
+    movie = two_movie_workbench["movie2"]
+    client = two_movie_workbench["client"]
+    frame_id = movie["provenance"][1][1][0]
+    route = f"/api/identity/cross-film-media/{movie['epoch'].name}/{frame_id}_0"
+    with closing(sqlite3.connect(movie["ledger"])) as db:
+        assert db.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        db.execute("PRAGMA wal_autocheckpoint=0")
+        db.execute("UPDATE context_frames SET promotion_status=? WHERE frame_id=?", (initial, frame_id))
+        db.commit()
+        assert client.get(route).status_code == (200 if initial == "promoted" else 404)
+        before = movie["ledger"].stat()
+        db.execute("UPDATE context_frames SET promotion_status=? WHERE frame_id=?", (updated, frame_id))
+        db.commit()
+        after = movie["ledger"].stat()
+        assert (before.st_mtime_ns, before.st_size) == (after.st_mtime_ns, after.st_size)
+        response = client.get(route)
+        assert response.status_code == expected
+
+
 def test_inline_new_roster_person_assigns_in_match_review_and_carries_forward_to_next_film(
     two_movie_workbench, tmp_path
 ):

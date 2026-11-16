@@ -27,6 +27,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from wsl2_audio.audio_bridge import transcribe_wsl2, transcribe_and_diarize_wsl2
+from steps.audio.audio_wsl2_bridge import audio_unified_wsl2, unified_transcription_options
 
 logger = logging.getLogger(__name__)
 
@@ -259,32 +260,52 @@ class Phase4AudioProcessor:
         
         enhanced = segment.copy()
         
-        # Step 1: Transcription + Diarization (combined WSL2 call)
+        # Step 1: Transcription + Diarization (unified WSL2 bridge with prompt-echo sanitization)
         try:
-            result = transcribe_and_diarize_wsl2(
+            tx_options = unified_transcription_options(self.cfg)
+            result = audio_unified_wsl2(
                 chunk_path,
+                scene_id=str(segment_id),
+                duration=segment.get('duration'),
+                timeout=self.chunk_timeout,
                 language=self.language,
                 beam_size=self.beam_size,
-                timeout=self.chunk_timeout,
                 run_id=self.run_id,
+                **tx_options,
             )
-            
+
             if result.get('status') == 'success':
+                transcript_segments = result.get('segments')
+                if not isinstance(transcript_segments, list):
+                    transcript_segments = result.get('transcription', [])
+                info = result.get('info') if isinstance(result.get('info'), dict) else {}
+
                 # Extract transcription
-                enhanced['transcript'] = result.get('full_text', '')
-                enhanced['transcript_segments'] = result.get('transcription', [])
-                enhanced['language'] = result.get('info', {}).get('language')
-                enhanced['language_probability'] = result.get('info', {}).get('language_probability')
-                
+                enhanced['transcript'] = result.get('transcript', result.get('full_text', ''))
+                enhanced['transcript_segments'] = transcript_segments
+                enhanced['language'] = (
+                    result.get('language') if 'language' in result else info.get('language')
+                )
+                enhanced['language_probability'] = (
+                    result.get('language_probability')
+                    if 'language_probability' in result
+                    else info.get('language_probability')
+                )
+                if isinstance(result.get('transcript_meta'), dict):
+                    enhanced['transcript_meta'] = result['transcript_meta']
+                if 'transcript_outcome' in result:
+                    enhanced['transcript_outcome'] = result['transcript_outcome']
+
                 # Extract diarization
-                enhanced['diarization'] = result.get('diarization', [])
+                diarization_rows = result.get('diarization', [])
+                enhanced['diarization'] = diarization_rows
                 enhanced['speaker_count'] = result.get('speaker_count', 0)
-                enhanced['speakers'] = self._extract_speaker_stats(result.get('diarization', []))
-                
+                enhanced['speakers'] = self._extract_speaker_stats(diarization_rows)
+
                 # Merge transcription with speakers
                 enhanced['merged_transcript'] = self._merge_transcript_speakers(
-                    result.get('transcription', []),
-                    result.get('diarization', [])
+                    transcript_segments,
+                    diarization_rows,
                 )
                 
                 logger.info(f"[PHASE 4] Segment {segment_id}: transcription complete")

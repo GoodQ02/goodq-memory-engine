@@ -39,6 +39,7 @@ STEP_VRAM_FRACTIONS = {
     "text_embed": 0.15,
     "image_embed_clip": 0.25,
     "image_embed_dino": 0.15,
+    "scene_visual_embeddings": 0.35,
     "object_detect": 0.25,
     "object_track_yolo": 0.25,
     "image_caption": 0.40,

@@ -42,6 +42,11 @@ def get_step_name():
                 steps_idx = parts.index('steps')
                 if steps_idx + 1 < len(parts):
                     step_name = parts[steps_idx + 1]
+                    if step_name == 'common':
+                        frame = frame.f_back
+                        continue
+                    if step_name == 'video' and steps_idx + 2 < len(parts):
+                        return Path(parts[steps_idx + 2]).stem
                     # Map step names to GPU config names
                     return step_name
             
@@ -67,12 +72,16 @@ def configure_gpu(step_name=None, force_fraction=None):
         "text_embed": 0.15,              # Sentence transformers
         "image_embed_clip": 0.25,        # CLIP ViT
         "image_embed_dino": 0.25,        # DINOv2
+        "scene_visual_embeddings": 0.35, # Phase 6a CLIP ViT-L + DINOv2-Large
+        "scene_embedder": 0.35,          # Phase 6a scene embedder worker
+        "scene_embedder_clip": 0.35,     # Phase 6a CLIP ViT-L
+        "scene_embedder_dino": 0.35,     # Phase 6a DINOv2-Large
         "object_detect": 0.25,           # OpenCV DNN
         "object_track_yolo": 0.25,       # YOLO tracking
-        "image_caption": 0.20,           # BLIP or similar
+        "image_caption": 0.40,           # Qwen/BLIP captioning (matches vram_allocator)
         "audio_embed_clap": 0.20,        # CLAP audio embeddings
         "audio_emotion": 0.15,           # Audio emotion model
-        "image_ocr": 0.15,               # OCR model
+        "image_ocr": 0.25,               # OCR model (matches vram_allocator)
         "llm_chat": 0.40,                # LLM (if local)
     }
     

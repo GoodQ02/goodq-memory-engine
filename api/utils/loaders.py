@@ -316,12 +316,46 @@ class DataLoader:
     def is_search_result_active(self, payload: dict) -> bool:
         """Do not expose a stale candidate for a locally governed source."""
         source_id = str(payload.get("video_id") or payload.get("video_hash") or "")
-        if source_id and any((root / source_id).is_dir() for root in (self.processing_dir, self.completed_dir)):
-            return self.is_video_active(source_id) and not scene_is_retired(payload, self._scene_retirements(source_id))
-        # Legacy video vectors may use an identity alias instead of a directory ID.
-        return (payload.get("source_kind") or "video") == "video" and not scene_is_retired(
-            payload, self._scene_retirements(str(payload.get("video_hash") or source_id))
+        explicit_hash = str(payload.get("video_hash") or "")
+        has_local_dir = bool(
+            source_id and any((root / source_id).is_dir() for root in (self.processing_dir, self.completed_dir))
         )
+        if has_local_dir:
+            if not self.is_video_active(source_id) or scene_is_retired(payload, self._scene_retirements(source_id)):
+                return False
+        video_hash = explicit_hash or source_id
+        standalone = (payload.get("source_kind") or "video") != "video"
+        if self._ucf_scope is not None:
+            _, ledger_path, epoch_id = self._ucf_scope
+            if not ledger_path.exists() and not any(
+                root.is_dir() for root in (self.processing_dir, self.completed_dir)
+            ):
+                return False
+            if video_hash and (not has_local_dir or explicit_hash):
+                try:
+                    with closing(sqlite3.connect(f"{ledger_path.as_uri()}?mode=ro", uri=True)) as conn:
+                        rows = conn.execute(
+                            "SELECT DISTINCT promotion_status FROM context_frames WHERE epoch_id = ? AND video_hash = ?",
+                            (epoch_id, video_hash),
+                        ).fetchall()
+                except (OSError, ValueError, sqlite3.Error) as exc:
+                    logger.error("UCF lifecycle visibility unavailable for search result %s: %s", video_hash, exc)
+                    raise RuntimeError("UCF lifecycle visibility unavailable") from exc
+                if standalone:
+                    if not any(row[0] == "promoted" for row in rows):
+                        return False
+                elif rows and all(row[0] in {"rejected", "superseded"} for row in rows):
+                    return False
+                if explicit_hash and scene_is_retired(
+                    payload, self._scene_retirements(explicit_hash, {"video_hash": explicit_hash})
+                ):
+                    return False
+        elif standalone and not has_local_dir:
+            return False
+        if has_local_dir:
+            return True
+        # Legacy video vectors may use an identity alias instead of a directory ID.
+        return not scene_is_retired(payload, self._scene_retirements(video_hash))
     
     def load_temporal_index(self, video_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -354,8 +388,53 @@ class DataLoader:
             return None
         record = self._filter_retired_scenes(video_id, record)
         if isinstance(record.get("segments"), list):
-            record["segments"] = [project_legacy_name_matches(row) if isinstance(row, dict) else row
-                                  for row in record["segments"]]
+            needs_manifest_backfill = any(
+                isinstance(row, dict) and ("faces_meta" not in row or "optional_stage_errors" not in row)
+                for row in record["segments"]
+            )
+            manifest_by_scene_id: Dict[str, Dict[str, Any]] = {}
+            if needs_manifest_backfill:
+                manifest = self.load_scene_manifest(video_id)
+                if isinstance(manifest, dict) and isinstance(manifest.get("scenes"), list):
+                    manifest_by_scene_id = {
+                        str(sc.get("scene_id")): sc
+                        for sc in manifest["scenes"]
+                        if isinstance(sc, dict) and sc.get("scene_id") is not None
+                    }
+            hydrated_segments = []
+            for row in record["segments"]:
+                if isinstance(row, dict):
+                    m_scene = manifest_by_scene_id.get(str(row.get("scene_id")))
+                    if isinstance(m_scene, dict):
+                        kf = m_scene.get("keyframe") if isinstance(m_scene.get("keyframe"), dict) else {}
+                        if row.get("ocr_meta") is None:
+                            ocr_m = m_scene.get("ocr_meta") or kf.get("ocr_meta")
+                            if ocr_m is not None:
+                                row = {**row, "ocr_meta": ocr_m}
+                        if row.get("faces_meta") is None:
+                            faces_m = m_scene.get("faces_meta") or kf.get("faces_meta")
+                            if faces_m is not None:
+                                row = {**row, "faces_meta": faces_m}
+                        if row.get("errors") is None:
+                            errs = m_scene.get("errors") or kf.get("errors")
+                            if errs:
+                                row = {**row, "errors": errs}
+                        if row.get("optional_stage_errors") is None:
+                            opt_errs = m_scene.get("optional_stage_errors") or {
+                                err_key: (m_scene.get(err_key) or kf.get(err_key))
+                                for err_key in (
+                                    "ocr_sampling_errors",
+                                    "caption_sampling_errors",
+                                    "object_sampling_errors",
+                                    "face_sampling_errors",
+                                )
+                                if (m_scene.get(err_key) or kf.get(err_key))
+                            }
+                            if opt_errs:
+                                row = {**row, "optional_stage_errors": opt_errs}
+                    row = project_legacy_name_matches(row)
+                hydrated_segments.append(row)
+            record["segments"] = hydrated_segments
         return record
 
     def get_temporal_index_path(self, video_id: str) -> Optional[Path]:

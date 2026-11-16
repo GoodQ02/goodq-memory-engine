@@ -132,6 +132,115 @@ def _segment_word_probabilities(segment: dict) -> list[float]:
     return probs
 
 
+def _finite_interval(item: object) -> tuple[float, float] | None:
+    if not isinstance(item, dict):
+        return None
+    start = item.get("start")
+    end = item.get("end")
+    if (
+        isinstance(start, (int, float))
+        and not isinstance(start, bool)
+        and isinstance(end, (int, float))
+        and not isinstance(end, bool)
+        and math.isfinite(start)
+        and math.isfinite(end)
+        and float(end) > float(start)
+    ):
+        return float(start), float(end)
+    return None
+
+
+def _subtract_intervals(
+    span: tuple[float, float],
+    exclusions: list[tuple[float, float]],
+    *,
+    tol: float = 1e-6,
+) -> list[tuple[float, float]]:
+    pieces: list[tuple[float, float]] = [span]
+    for ex_start, ex_end in exclusions:
+        if ex_end <= ex_start + tol:
+            continue
+        next_pieces: list[tuple[float, float]] = []
+        for cur_start, cur_end in pieces:
+            if ex_end <= cur_start + tol or ex_start >= cur_end - tol:
+                next_pieces.append((cur_start, cur_end))
+                continue
+            if ex_start > cur_start + tol:
+                next_pieces.append((cur_start, min(cur_end, ex_start)))
+            if ex_end < cur_end - tol:
+                next_pieces.append((max(cur_start, ex_end), cur_end))
+        pieces = next_pieces
+        if not pieces:
+            break
+    return [(s, e) for s, e in pieces if e - s > tol]
+
+
+def _overlaps_any_interval(
+    span: tuple[float, float],
+    intervals: list[tuple[float, float]],
+    *,
+    tol: float = 1e-3,
+) -> bool:
+    return any(min(span[1], other[1]) - max(span[0], other[0]) > tol for other in intervals)
+
+
+def _has_aligned_word_support(segment: dict) -> bool:
+    words = segment.get("words")
+    if not isinstance(words, list) or not words:
+        return False
+    if not _segment_word_probabilities(segment):
+        return False
+    dict_words = [w for w in words if isinstance(w, dict)]
+    if not dict_words:
+        return False
+    for word in dict_words:
+        if _finite_interval(word) is None:
+            return False
+        status = str(word.get("timing_status") or "aligned").strip().lower()
+        if status != "aligned":
+            return False
+    return True
+
+
+def _has_repeated_vocabulary_loop(
+    tokens: list[str],
+    vocab_terms: list[str],
+    vocab_tokens: set[str],
+) -> bool:
+    term_seqs = sorted(
+        {
+            tuple(tok.lower() for tok in _WORD_TOKEN_RE.findall(term))
+            for term in vocab_terms
+            if isinstance(term, str) and _WORD_TOKEN_RE.findall(term)
+        },
+        key=lambda seq: (-len(seq), seq),
+    )
+    matched_terms: list[tuple[str, ...]] = []
+    idx = 0
+    total = len(tokens)
+    while idx < total:
+        matched: tuple[str, ...] | None = None
+        for seq in term_seqs:
+            seq_len = len(seq)
+            if idx + seq_len <= total and tuple(tokens[idx : idx + seq_len]) == seq:
+                matched = seq
+                break
+        if matched is not None:
+            matched_terms.append(matched)
+            idx += len(matched)
+        else:
+            idx += 1
+    repeated_terms = len(matched_terms) - len(set(matched_terms))
+    if repeated_terms >= 2:
+        return True
+    consecutive_vocab_dups = sum(
+        1
+        for i in range(1, total)
+        if tokens[i] == tokens[i - 1] and tokens[i] in vocab_tokens
+    )
+    return consecutive_vocab_dups >= 2
+
+
 def _trim_trailing_vocabulary_loop(segment: dict, vocab_tokens: set[str]) -> tuple[dict, int]:
     text = str(segment.get("text") or "")
     matches = list(_WORD_TOKEN_RE.finditer(text))
@@ -207,6 +316,8 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
     kept_segments: list[dict] = []
     old_to_new_index: dict[int, int] = {}
     dropped_indices: set[int] = set()
+    unbounded_trimmed_indices: set[int] = set()
+    rejected_spans: list[tuple[float, float]] = []
     filtered_records: list[dict] = []
     trimmed_segment_count = 0
 
@@ -258,7 +369,20 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
                 drop_reason = "stock_boilerplate_hallucination"
 
         if drop_reason is None and vocab_tokens and len(tokens) >= 4:
-            vocab_hits = [t for t in tokens if t in vocab_tokens]
+            multi_term_seqs = sorted(
+                {
+                    tuple(tok.lower() for tok in _WORD_TOKEN_RE.findall(term))
+                    for term in vocab_terms
+                    if isinstance(term, str) and len(_WORD_TOKEN_RE.findall(term)) >= 2
+                },
+                key=lambda seq: (-len(seq), seq),
+            )
+            hit_indices = {i for i, tok in enumerate(tokens) if tok in vocab_tokens}
+            for i in range(len(tokens)):
+                for seq in multi_term_seqs:
+                    if i + len(seq) <= len(tokens) and tuple(tokens[i : i + len(seq)]) == seq:
+                        hit_indices.update(range(i, i + len(seq)))
+            vocab_hits = [tokens[i] for i in sorted(hit_indices)]
             vocab_ratio = len(vocab_hits) / len(tokens)
             distinct_vocab = len(set(vocab_hits))
             if vocab_ratio >= 0.80:
@@ -268,9 +392,12 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
                     or (gmean_prob is not None and gmean_prob < 0.35)
                     or (min_prob is not None and min_prob < 0.02 and len(tokens) >= 6)
                 )
-                roster_or_loop = (
-                    (distinct_vocab >= 3 and "," in text)
-                    or (len(tokens) >= 6 and (len(vocab_hits) - distinct_vocab) >= 2)
+                aligned_high_conf = _has_aligned_word_support(seg) and not low_confidence
+                repeated_loop = _has_repeated_vocabulary_loop(tokens, vocab_terms, vocab_tokens) or (
+                    not aligned_high_conf and len(tokens) >= 6 and (len(vocab_hits) - distinct_vocab) >= 2
+                )
+                roster_or_loop = repeated_loop or (
+                    not aligned_high_conf and distinct_vocab >= 3 and "," in text
                 )
                 if low_confidence or roster_or_loop:
                     drop_reason = "vocabulary_prompt_echo"
@@ -285,6 +412,13 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
 
         if drop_reason is not None:
             dropped_indices.add(idx)
+            seg_span = _finite_interval(seg)
+            if seg_span is not None:
+                rejected_spans.append(seg_span)
+            for w in seg.get("words") or []:
+                w_span = _finite_interval(w)
+                if w_span is not None:
+                    rejected_spans.append(w_span)
             filtered_records.append({
                 "segment_index": idx,
                 "reason": drop_reason,
@@ -300,6 +434,27 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
             candidate, trimmed_tokens = _trim_trailing_vocabulary_loop(candidate, vocab_tokens)
             if trimmed_tokens > 0:
                 trimmed_segment_count += 1
+                orig_span = _finite_interval(seg)
+                cand_span = _finite_interval(candidate)
+                if (
+                    orig_span is not None
+                    and cand_span is not None
+                    and cand_span[1] < orig_span[1] - 1e-6
+                ):
+                    rejected_spans.append((cand_span[1], orig_span[1]))
+                else:
+                    orig_words = seg.get("words") if isinstance(seg.get("words"), list) else []
+                    tail_spans = [
+                        ws
+                        for ws in (_finite_interval(w) for w in orig_words[max(0, len(orig_words) - trimmed_tokens) :])
+                        if ws is not None
+                    ]
+                    if tail_spans:
+                        rejected_spans.extend(tail_spans)
+                    else:
+                        unbounded_trimmed_indices.add(idx)
+                        if orig_span is not None:
+                            rejected_spans.append(orig_span)
         old_to_new_index[idx] = len(kept_segments)
         kept_segments.append(candidate)
 
@@ -345,7 +500,7 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
                         and float(ws) >= float(segments[d_idx]["start"]) - 1e-3
                         and float(we) <= float(segments[d_idx]["end"]) + 1e-3
                         for d_idx in dropped_indices
-                    )
+                    ) or _overlaps_any_interval((float(ws), float(we)), rejected_spans)
                     if in_dropped and not in_kept:
                         continue
                 rebuilt_words.append(dict(w))
@@ -359,36 +514,185 @@ def _sanitize_transcription_result(result: dict, *, fallback_vocabulary: object 
             "status": "available" if rebuilt_words else "no_word_alignment",
         }
 
-    emotion_segments = sanitized.get("emotion_segments")
-    if dropped_indices and isinstance(emotion_segments, list) and emotion_segments:
-        kept_emotions: list[dict] = []
-        for es in emotion_segments:
-            if not isinstance(es, dict):
+    kept_speech_spans: list[tuple[float, float]] = []
+    for ks in kept_segments:
+        ks_span = _finite_interval(ks)
+        if ks_span is not None:
+            kept_speech_spans.append(ks_span)
+        for kw in ks.get("words") or []:
+            kw_span = _finite_interval(kw)
+            if kw_span is not None:
+                kept_speech_spans.append(kw_span)
+
+    def _prune_phrase_items(items: object, *, subtract_partial: bool = False) -> list[dict]:
+        if not isinstance(items, list):
+            return []
+        if not kept_segments:
+            return []
+        pruned: list[dict] = []
+        for item in items:
+            if not isinstance(item, dict):
                 continue
-            ssi = es.get("source_segment_index")
-            if isinstance(ssi, int) and ssi in dropped_indices:
+            ssi = item.get("source_segment_index")
+            if isinstance(ssi, int) and (ssi in dropped_indices or ssi in unbounded_trimmed_indices):
                 continue
-            updated_es = dict(es)
+            span = _finite_interval(item)
+            if span is not None and rejected_spans and _overlaps_any_interval(span, rejected_spans):
+                if subtract_partial:
+                    for sub_start, sub_end in _subtract_intervals(span, rejected_spans):
+                        updated_piece = {
+                            **item,
+                            "start": sub_start,
+                            "end": sub_end,
+                            "duration": round(sub_end - sub_start, 6),
+                        }
+                        if isinstance(ssi, int) and ssi in old_to_new_index:
+                            updated_piece["source_segment_index"] = old_to_new_index[ssi]
+                        pruned.append(updated_piece)
+                continue
+            updated_item = dict(item)
             if isinstance(ssi, int) and ssi in old_to_new_index:
-                updated_es["source_segment_index"] = old_to_new_index[ssi]
-            kept_emotions.append(updated_es)
+                updated_item["source_segment_index"] = old_to_new_index[ssi]
+            pruned.append(updated_item)
+        return pruned
+
+    emo_input = sanitized.get("emotion_input")
+    if isinstance(emo_input, dict):
+        updated_emo_input = dict(emo_input)
+        if isinstance(emo_input.get("selected"), list):
+            updated_emo_input["selected"] = _prune_phrase_items(
+                emo_input["selected"],
+                subtract_partial=True,
+            )
+        if isinstance(emo_input.get("phrase_selection"), dict):
+            phrase_sel = dict(emo_input["phrase_selection"])
+            if isinstance(phrase_sel.get("selected"), list):
+                phrase_sel["selected"] = _prune_phrase_items(
+                    phrase_sel["selected"],
+                    subtract_partial=False,
+                )
+            updated_emo_input["phrase_selection"] = phrase_sel
+        sanitized["emotion_input"] = updated_emo_input
+
+    emotion_segments = sanitized.get("emotion_segments")
+    if isinstance(emotion_segments, list) and emotion_segments:
+        kept_emotions = _prune_phrase_items(emotion_segments, subtract_partial=False)
         sanitized["emotion_segments"] = kept_emotions
-        if (
-            not kept_emotions
-            and str(sanitized.get("emotion_status") or "").lower() == "success"
-            and not str(sanitized.get("emotion") or "").strip()
-        ):
-            sanitized["emotion_status"] = "insufficient_evidence"
-            sanitized["emotion_note"] = "no_complete_supported_phrase"
-            emo_input = sanitized.get("emotion_input")
-            if isinstance(emo_input, dict):
-                updated_input = {**emo_input, "selected": []}
-                if isinstance(emo_input.get("phrase_selection"), dict):
-                    updated_input["phrase_selection"] = {
-                        **emo_input["phrase_selection"],
+        if not kept_emotions and str(sanitized.get("emotion_status") or "").lower() == "success":
+            if not kept_segments:
+                sanitized["emotion"] = None
+                sanitized["emotion_scores"] = {}
+            if not str(sanitized.get("emotion") or "").strip():
+                sanitized["emotion_status"] = "insufficient_evidence"
+                sanitized["emotion_note"] = "no_complete_supported_phrase"
+                cur_emo_input = sanitized.get("emotion_input")
+                if isinstance(cur_emo_input, dict):
+                    cleared_input = {**cur_emo_input, "selected": []}
+                    if isinstance(cur_emo_input.get("phrase_selection"), dict):
+                        cleared_input["phrase_selection"] = {
+                            **cur_emo_input["phrase_selection"],
+                            "selected": [],
+                        }
+                    sanitized["emotion_input"] = cleared_input
+                else:
+                    sanitized["emotion_input"] = {
+                        "status": "ok",
+                        "policy": "clear_speech_only_v2",
                         "selected": [],
+                        "phrase_selection": {
+                            "policy": "complete_observed_phrases_v1",
+                            "selected": [],
+                        },
                     }
-                sanitized["emotion_input"] = updated_input
+    elif not kept_segments and str(sanitized.get("emotion_status") or "").lower() == "success":
+        sanitized["emotion"] = None
+        sanitized["emotion_scores"] = {}
+        sanitized["emotion_status"] = "insufficient_evidence"
+        sanitized["emotion_note"] = "no_complete_supported_phrase"
+        cur_emo_input = sanitized.get("emotion_input")
+        if isinstance(cur_emo_input, dict):
+            cleared_input = {**cur_emo_input, "selected": []}
+            if isinstance(cur_emo_input.get("phrase_selection"), dict):
+                cleared_input["phrase_selection"] = {
+                    **cur_emo_input["phrase_selection"],
+                    "selected": [],
+                }
+            sanitized["emotion_input"] = cleared_input
+        else:
+            sanitized["emotion_input"] = {
+                "status": "ok",
+                "policy": "clear_speech_only_v2",
+                "selected": [],
+                "phrase_selection": {
+                    "policy": "complete_observed_phrases_v1",
+                    "selected": [],
+                },
+            }
+
+    raw_signatures = sanitized.get("speaker_voice_signatures")
+    if isinstance(raw_signatures, list) and raw_signatures:
+        diar_turns = sanitized.get("diarization") if isinstance(sanitized.get("diarization"), list) else []
+        kept_signatures: list[dict] = []
+        for sig in raw_signatures:
+            if not isinstance(sig, dict) or not kept_segments:
+                continue
+            sel_segs = sig.get("selected_segments")
+            if isinstance(sel_segs, list) and sel_segs:
+                sel_spans = [sp for sp in (_finite_interval(item) for item in sel_segs) if sp is not None]
+                if not sel_spans:
+                    continue
+                if rejected_spans and any(_overlaps_any_interval(sp, rejected_spans) for sp in sel_spans):
+                    continue
+                if kept_speech_spans and not any(_overlaps_any_interval(sp, kept_speech_spans) for sp in sel_spans):
+                    continue
+                kept_signatures.append(dict(sig))
+                continue
+            sig_span = _finite_interval(sig)
+            if sig_span is not None:
+                if rejected_spans and _overlaps_any_interval(sig_span, rejected_spans):
+                    continue
+                if kept_speech_spans and not _overlaps_any_interval(sig_span, kept_speech_spans):
+                    continue
+                kept_signatures.append(dict(sig))
+                continue
+            speaker_id = str(sig.get("speaker") or "").strip()
+            if speaker_id and diar_turns:
+                spk_spans = [
+                    sp
+                    for turn in diar_turns
+                    if isinstance(turn, dict) and str(turn.get("speaker") or "").strip() == speaker_id
+                    for sp in (_finite_interval(turn),)
+                    if sp is not None
+                ]
+                if spk_spans:
+                    clean_spk_spans = [
+                        sub
+                        for sp in spk_spans
+                        for sub in _subtract_intervals(sp, rejected_spans)
+                    ]
+                    if not clean_spk_spans or (
+                        kept_speech_spans
+                        and not any(_overlaps_any_interval(sub, kept_speech_spans) for sub in clean_spk_spans)
+                    ):
+                        continue
+            kept_signatures.append(dict(sig))
+
+        pruned_sig_count = len(raw_signatures) - len(kept_signatures)
+        if pruned_sig_count > 0:
+            sanitized["speaker_voice_signatures"] = kept_signatures
+            svs_meta = (
+                dict(sanitized["speaker_voice_signature_meta"])
+                if isinstance(sanitized.get("speaker_voice_signature_meta"), dict)
+                else {}
+            )
+            svs_meta["emitted"] = len(kept_signatures)
+            svs_meta["pruned_prompt_echo_count"] = pruned_sig_count
+            if kept_signatures:
+                svs_meta["status"] = "ok"
+            else:
+                svs_meta["status"] = "skipped"
+                svs_meta["reason"] = "prompt_echo_filtered"
+            sanitized["speaker_voice_signature_meta"] = svs_meta
 
     sanitized["prompt_echo_filter"] = {
         "policy": "bridge_prompt_echo_filter_v1",

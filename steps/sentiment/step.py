@@ -7,6 +7,8 @@ import unicodedata
 from pathlib import Path
 
 from steps.common.config_loader import get_runtime_paths, load_configs
+from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+from steps.common.tag_utils import reliable_transcript_for_entities
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +129,14 @@ def _load(preferred_device: Optional[str] = None) -> bool:
 
 
 def _gather_text(item: Dict[str, Any]) -> str:
+    has_transcript_meta = isinstance(item.get("transcript_meta"), dict)
     for k in ("document_text", "transcript", "ocr_text", "caption"):
-        v = item.get(k)
+        if k == "transcript" and has_transcript_meta:
+            if is_scene_transcript_restricted(item):
+                continue
+            v = reliable_transcript_for_entities(item)
+        else:
+            v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v
     return ""

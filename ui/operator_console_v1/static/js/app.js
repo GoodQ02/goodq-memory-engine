@@ -16,11 +16,14 @@
 
   const state = {
     apiBase: DEFAULT_API_BASE,
+    librarySource: "",
+    unavailableSources: [],
     viewMode: "guided",
     selectedVideoId: null,
     selectedSceneKey: null,
     retrieval: {
       query: "",
+      librarySource: "",
       limit: 10,
       loading: false,
       hasRun: false,
@@ -271,8 +274,19 @@
     });
   }
 
-  function endpointUrl(path) {
-    return `${state.apiBase}${path}`;
+  function endpointUrl(path, explicitSource) {
+    const raw = `${state.apiBase}${path}`;
+    const activeSource = explicitSource !== undefined ? explicitSource : state.librarySource;
+    if (!activeSource) return raw;
+    try {
+      const url = new URL(raw);
+      if (!url.searchParams.has("library_source")) {
+        url.searchParams.set("library_source", activeSource);
+      }
+      return url.toString();
+    } catch (_e) {
+      return raw;
+    }
   }
 
   function withCacheBuster(urlText, key, value) {
@@ -983,6 +997,87 @@
     state.selectedVideoId = next;
   }
 
+  function observeUnavailableSources(response, path) {
+    if (!response || !response.ok || !response.headers || typeof response.headers.get !== "function") return;
+    const raw = response.headers.get("x-goodq-unavailable-sources");
+    if (raw == null) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        state.unavailableSources = parsed.filter((s) => s && typeof s === "object" && s.id);
+      }
+    } catch (_e) {
+      return;
+    }
+    try {
+      if (window.GoodQLibrary && typeof window.GoodQLibrary.observeResponse === "function" && window.location.origin === state.apiBase) {
+        window.GoodQLibrary.observeResponse(response, path);
+        return;
+      }
+    } catch (_e) {}
+    let notice = document.getElementById("library-availability");
+    if (!notice && state.unavailableSources.length) {
+      notice = document.createElement("div");
+      notice.id = "library-availability";
+      notice.setAttribute("role", "status");
+      notice.setAttribute("aria-live", "polite");
+      notice.style.cssText = "padding:10px 16px;background:#332811;color:#ffe3a1;border-bottom:1px solid #a88438;flex-shrink:0;";
+      (qs("main.content") || document.body).prepend(notice);
+    }
+    if (notice) {
+      notice.hidden = !state.unavailableSources.length;
+      notice.textContent = state.unavailableSources.length
+        ? `${state.unavailableSources.map((s) => s.name || s.id).join(", ")} unavailable. Showing available collections only; library totals are incomplete. Reload to retry.`
+        : "";
+    }
+  }
+
+  function syncRetrievalLibrarySources() {
+    const select = qs("#retrieval-library-source");
+    const note = qs("#retrieval-scope-note");
+    if (!select) return;
+    const videos = Array.isArray(state.data.videos) ? state.data.videos : [];
+    const unavailable = Array.isArray(state.unavailableSources) ? state.unavailableSources : [];
+    const bySource = new Map();
+    videos.forEach((video) => {
+      const src = (video && video.library_source) || "local";
+      if (!bySource.has(src)) {
+        bySource.set(src, safeVideoTitle(video));
+      }
+    });
+    if (!bySource.size) {
+      bySource.set("local", "Local reader collection");
+    }
+    const desired = state.retrieval.librarySource || state.librarySource || "local";
+    clear(select);
+    bySource.forEach((label, src) => {
+      const opt = document.createElement("option");
+      opt.value = src;
+      opt.textContent = src === "local" ? `Local reader (${label})` : `${label} [${src}]`;
+      if (src === desired) opt.selected = true;
+      select.appendChild(opt);
+    });
+    unavailable.forEach((source) => {
+      if (bySource.has(source.id)) return;
+      const opt = document.createElement("option");
+      opt.value = source.id;
+      opt.textContent = `${source.name || source.id} — unavailable`;
+      opt.disabled = true;
+      if (source.id === desired) opt.selected = true;
+      select.appendChild(opt);
+    });
+    state.retrieval.librarySource = select.value || "local";
+    if (note) {
+      if (unavailable.length > 0) {
+        note.textContent = `Partial library: ${unavailable.map((s) => s.name || s.id).join(", ")} unavailable. Multimodal search queries the selected collection only.`;
+      } else if (bySource.size > 1) {
+        note.textContent = "Combined library detected: multimodal search queries the selected collection reader only (no silent cross-movie fusion).";
+      } else {
+        note.textContent = "Multimodal search queries this reader's active collection.";
+      }
+    }
+  }
+
   async function fetchJson(name, path) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), endpointTimeoutMs[name] || 12000);
@@ -993,6 +1088,7 @@
         headers: { Accept: "application/json", "Cache-Control": "no-store" },
         signal: controller.signal,
       });
+      observeUnavailableSources(response, path);
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       state.errors[name] = null;
       return await response.json();
@@ -1001,11 +1097,11 @@
     }
   }
 
-  async function postJson(name, path, payload) {
+  async function postJson(name, path, payload, explicitSource) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), endpointTimeoutMs[name] || 12000);
     try {
-      const response = await fetch(endpointUrl(path), {
+      const response = await fetch(endpointUrl(path, explicitSource), {
         method: "POST",
         cache: "no-store",
         headers: {
@@ -1231,6 +1327,17 @@
       connected ? "local read surface" : state.errors.status || "status endpoint unavailable",
       state.apiBase
     );
+    if (state.unavailableSources.length > 0) {
+      const offlineNames = state.unavailableSources.map((s) => s.name || s.id).join(", ");
+      appendScopeItem(
+        grid,
+        "Saved Library",
+        "Incomplete",
+        "warn",
+        `${offlineNames} unavailable; totals are partial`,
+        offlineNames
+      );
+    }
     appendScopeItem(
       grid,
       "Latest Run",
@@ -4427,11 +4534,17 @@
     state.retrieval.loading = true;
     renderRetrievalConsole();
     try {
-      const response = await postJson("retrieval", "/api/search/multimodal", {
-        query,
-        top_k: state.retrieval.limit,
-        modalities: retrievalModalitiesForRequest(),
-      });
+      const retrievalSource = state.retrieval.librarySource || state.librarySource || "";
+      const response = await postJson(
+        "retrieval",
+        "/api/search/multimodal",
+        {
+          query,
+          top_k: state.retrieval.limit,
+          modalities: retrievalModalitiesForRequest(),
+        },
+        retrievalSource
+      );
       state.retrieval.response = response;
       state.retrieval.results = normalizeSearchResults(response);
       state.retrieval.error = null;
@@ -4523,9 +4636,29 @@
   function renderVideos() {
     const node = qs("#video-panel");
     clear(node);
+    syncRetrievalLibrarySources();
     if (state.errors.videos) return showError(node, `Video inventory unavailable: ${state.errors.videos}`);
     const videos = Array.isArray(state.data.videos) ? state.data.videos : [];
-    node.appendChild(panelHeader("Video inventory", `${videos.length} videos`, "read-only"));
+    const partial = state.unavailableSources.length > 0;
+    node.appendChild(
+      panelHeader(
+        "Video inventory",
+        partial ? `${videos.length} available videos (incomplete library)` : `${videos.length} videos`,
+        partial ? "partial" : "read-only"
+      )
+    );
+    if (partial) {
+      const warn = document.createElement("div");
+      warn.className = "empty-state";
+      warn.setAttribute("role", "status");
+      warn.setAttribute("data-testid", "video-inventory-unavailable-sources");
+      appendText(
+        warn,
+        "span",
+        `Unavailable collections: ${state.unavailableSources.map((s) => s.name || s.id).join(", ")}. Showing available collections only.`
+      );
+      node.appendChild(warn);
+    }
 
     const list = document.createElement("div");
     list.className = "video-list";
@@ -6007,9 +6140,21 @@
   }
 
   function init() {
+    const initParams = new URLSearchParams(window.location.search);
+    state.librarySource = initParams.get("library_source") || "";
+    state.retrieval.librarySource = state.librarySource || "local";
     state.apiBase = readInitialApiBase();
     state.viewMode = readInitialViewMode();
     qs("#api-base").value = state.apiBase;
+    const retrievalSourceSelect = qs("#retrieval-library-source");
+    if (retrievalSourceSelect) {
+      retrievalSourceSelect.addEventListener("change", () => {
+        state.retrieval.librarySource = retrievalSourceSelect.value || "local";
+        if (state.retrieval.hasRun && state.retrieval.query) {
+          runRetrievalQuery({ useExistingQuery: true, resetLimit: true });
+        }
+      });
+    }
     applyViewMode();
     document.querySelectorAll("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => setViewMode(button.getAttribute("data-mode")));

@@ -141,10 +141,13 @@ if ($StopCurrent -or $CheckStart -or $CheckRunning) {
             catch [ArgumentException] { $writer = $null }
             if ($writer) {
                 try {
-                    if (-not $writer.HasExited -and $writer.StartTime.ToUniversalTime().Ticks -eq
+                    if ($writer.HasExited -eq $false -and $null -ne $writer.StartTime -and
+                        $writer.StartTime.ToUniversalTime().Ticks -eq
                         (Get-GoodQUtcTicks $record.supervisor_started_at_utc)) {
                         $armedSupervisors += $writer.Id
                     }
+                } catch [ComponentModel.Win32Exception], [InvalidOperationException] {
+                    # Historical PID was reused by a protected/system process or exited mid-probe.
                 } finally { $writer.Dispose() }
             }
         }
@@ -197,14 +200,16 @@ if ($StopReceipt) {
         catch [ArgumentException] { continue } # This owner has already exited.
         try {
             $null = $child.Handle
-            if ($child.HasExited) { continue }
-            if ($child.StartTime.ToUniversalTime().Ticks -ne (Get-GoodQUtcTicks $identity.started_at_utc)) {
+            if ($child.HasExited -eq $true) { continue }
+            if ($null -eq $child.StartTime -or $child.StartTime.ToUniversalTime().Ticks -ne (Get-GoodQUtcTicks $identity.started_at_utc)) {
                 throw 'Stop receipt process identity no longer matches; refusing request.'
             }
             if (-not [GoodQ.RuntimeJobQuery]::Contains("$($receipt.stop_event).$role.$($child.Id)", $child.Handle)) {
                 throw 'Stop receipt event does not match the child lifecycle ownership.'
             }
             $matched++
+        } catch [ComponentModel.Win32Exception], [InvalidOperationException] {
+            throw 'Stop receipt process identity no longer matches; refusing request.'
         } finally { $child.Dispose() }
     }
     if (-not $matched) { throw 'Stop receipt has no surviving owned runtime.' }
@@ -280,7 +285,9 @@ function Write-GoodQReceiptText([string]$Path, [string]$Record) {
     [IO.File]::WriteAllText($temporary, $Record, [Text.UTF8Encoding]::new($false))
     $publicationTimer = [Diagnostics.Stopwatch]::StartNew()
     $warned = $false
+    $attempt = 0
     while ($true) {
+        $attempt++
         try {
             # Windows PowerShell coerces $null to an empty .NET string. Use an
             # explicit null string for no backup; never remove the old receipt.
@@ -289,13 +296,23 @@ function Write-GoodQReceiptText([string]$Path, [string]$Record) {
             } else { [IO.File]::Move($temporary, $Path) }
             return
         } catch {
-            $code = $_.Exception.GetBaseException().HResult -band 0xffff
+            $baseEx = $_.Exception.GetBaseException()
+            $hresultHex = ('0x{0:X8}' -f ([int64]$baseEx.HResult -band 0xffffffffL))
+            $code = $baseEx.HResult -band 0xffff
+            $elapsedMs = [int][Math]::Round($publicationTimer.Elapsed.TotalMilliseconds)
             # Concurrent Windows readers may briefly prevent replacement. These
             # errors retain both original names; other failures are not retried.
-            if ($code -notin @(5, 32, 33, 1175) -or $publicationTimer.Elapsed.TotalSeconds -ge 1) { throw }
+            if ($code -notin @(5, 32, 33, 1175)) {
+                Write-Warning "Receipt replacement failed without retry (win32=$code, hresult=$hresultHex, attempt=$attempt, elapsed_ms=$elapsedMs)."
+                throw
+            }
             if (-not $warned) {
                 Write-Warning "Receipt replacement temporarily blocked (win32=$code); retrying for at most one second."
                 $warned = $true
+            }
+            if ($attempt -ge 2 -and $publicationTimer.Elapsed.TotalSeconds -ge 1) {
+                Write-Warning "Receipt replacement retry budget exhausted (win32=$code, hresult=$hresultHex, attempts=$attempt, elapsed_ms=$elapsedMs)."
+                throw
             }
             Start-Sleep -Milliseconds 50
         }

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import tempfile
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
+from filelock import FileLock
+
 from lib.kg_realtime_integration import update_kg_for_scene
 
+
+logger = logging.getLogger(__name__)
 
 IDENTITY_EDGE_TYPES = ("identity_candidate", "identity_supported", "identity_evidence")
 
@@ -413,19 +421,38 @@ def load_manual_mappings(graph_db_path: Path) -> Dict[str, Any]:
 def save_manual_mappings(graph_db_path: Path, data: Dict[str, Any]) -> None:
     """Save operator manual identity mappings to a json file next to knowledge_graph.db."""
     mappings_file = Path(graph_db_path).parent / "manual_identity_mappings.json"
+    lock_file = Path(f"{mappings_file}.lock")
+    temp_file: Path | None = None
     try:
         mappings_file.parent.mkdir(parents=True, exist_ok=True)
-        # Write to temporary file first and rename to ensure atomicity
-        temp_file = mappings_file.with_suffix(".tmp")
-        with temp_file.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        if temp_file.exists():
-            if mappings_file.exists():
-                mappings_file.unlink()
-            temp_file.rename(mappings_file)
+        with FileLock(str(lock_file), timeout=10):
+            with tempfile.NamedTemporaryFile(
+                "w",
+                dir=mappings_file.parent,
+                prefix=".manual_identity_mappings.",
+                suffix=".tmp",
+                delete=False,
+                encoding="utf-8",
+            ) as f:
+                temp_file = Path(f.name)
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            for attempt in range(5):
+                try:
+                    os.replace(temp_file, mappings_file)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.02)
     except Exception as e:
         logger.error("Failed to save manual identity mappings to %s: %s", mappings_file, e)
         raise RuntimeError(f"Failed to save manual identity mappings: {e}")
+    finally:
+        if temp_file is not None and temp_file.exists():
+            temp_file.unlink(missing_ok=True)
 
 
 def apply_manual_mappings(kg: KnowledgeGraph, graph_db_path: Path) -> int:

@@ -555,6 +555,81 @@ def upsert_link(cfg: Dict[str, Any], parent_hash: Optional[str], child_hash: Opt
 
 
 
+def _max_single_sample_face_count(frame_data: Dict[str, Any], scene: Dict[str, Any]) -> int:
+    for key in ('face_count', 'visible_face_count'):
+        raw = frame_data.get(key) if frame_data.get(key) is not None else scene.get(key)
+        if raw is not None:
+            try:
+                return max(0, int(raw))
+            except (TypeError, ValueError):
+                pass
+    best = 0
+    faces = frame_data.get('faces')
+    if isinstance(faces, list):
+        best = max(best, sum(1 for item in faces if isinstance(item, dict)))
+    observations = frame_data.get('face_observations') or scene.get('face_observations')
+    if isinstance(observations, list):
+        flat_groups: Dict[Any, int] = {}
+        for obs in observations:
+            if not isinstance(obs, dict):
+                continue
+            sample_faces = obs.get('faces')
+            if isinstance(sample_faces, list):
+                best = max(best, sum(1 for item in sample_faces if isinstance(item, dict)))
+            else:
+                frame_key = obs.get('sample_index')
+                if frame_key is None:
+                    frame_key = obs.get('source_path') or obs.get('timestamp') or 'default'
+                flat_groups[frame_key] = flat_groups.get(frame_key, 0) + 1
+        if flat_groups:
+            best = max(best, max(flat_groups.values()))
+    return best
+
+
+def _extract_bundle_speaker_ids(
+    explicit_speaker_ids: Optional[List[str]],
+    scene: Dict[str, Any],
+    audio_data: Dict[str, Any],
+    diarization: Any,
+) -> List[str]:
+    resolved: List[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: Any) -> None:
+        candidate = raw
+        if isinstance(raw, dict):
+            candidate = (
+                raw.get('name')
+                or raw.get('identity')
+                or raw.get('person')
+                or raw.get('speaker_id')
+                or raw.get('speaker')
+                or raw.get('label')
+            )
+        if not isinstance(candidate, str):
+            return
+        cleaned = candidate.strip()
+        if not cleaned:
+            return
+        key = cleaned.casefold()
+        if key not in seen:
+            seen.add(key)
+            resolved.append(cleaned)
+
+    for source in (
+        explicit_speaker_ids,
+        scene.get('speaker_ids'),
+        scene.get('speakers'),
+        audio_data.get('speaker_ids'),
+        audio_data.get('speakers'),
+        diarization if isinstance(diarization, list) else None,
+    ):
+        if isinstance(source, list):
+            for entry in source:
+                _add(entry)
+    return resolved
+
+
 def register_scene_bundle(
     cfg: Dict[str, Any],
     *,
@@ -566,8 +641,12 @@ def register_scene_bundle(
     frame: Optional[Dict[str, Any]] = None,
     audio: Optional[Dict[str, Any]] = None,
     errors: Optional[Dict[str, Any]] = None,
+    face_count: Optional[int] = None,
+    speaker_ids: Optional[List[str]] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
+    from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+
     summary_text = None
     scene_start = _coerce_time(scene.get('start'), 0.0)
     scene_end = _coerce_time(scene.get('end'), scene_start)
@@ -588,6 +667,7 @@ def register_scene_bundle(
     if errors:
         scene_meta['errors'] = errors
 
+    resolved_face_count: Optional[int] = max(0, int(face_count)) if face_count is not None else None
     frame_hash = None
     frame_timestamp = scene_start + (scene_duration / 2.0) if scene_duration > 0 else scene_start
     ocr_text = None
@@ -611,21 +691,32 @@ def register_scene_bundle(
                 'object_observations',
                 'ocr_meta',
                 'ocr_observations',
+                'faces',
+                'faces_meta',
+                'face_observations',
             ):
                 if frame_data.get(optional_key) is not None:
                     frame_meta[optional_key] = frame_data.get(optional_key)
+            if resolved_face_count is None:
+                resolved_face_count = _max_single_sample_face_count(frame_data, scene)
+            frame_meta['face_count'] = resolved_face_count
             ocr_text = frame_data.get('ocr_text')
             if frame_data.get('timestamp') is not None:
                 frame_timestamp = float(frame_data.get('timestamp'))
         elif frame and frame.get('timestamp') is not None:
             frame_timestamp = float(frame.get('timestamp'))
         scene_meta['keyframe'] = frame_meta
+    if resolved_face_count is None:
+        resolved_face_count = _max_single_sample_face_count({}, scene)
+    if resolved_face_count > 0 or face_count is not None:
+        scene_meta['face_count'] = resolved_face_count
 
     audio_hash = None
     audio_start = scene_start
     audio_end = scene_end
     diarization: List[Dict[str, Any]] = []
     transcript_text = None
+    audio_data_dict: Dict[str, Any] = {}
     if isinstance(audio, dict):
         audio_path = audio.get('path')
         audio_hash = compute_file_hash(audio_path)
@@ -633,6 +724,7 @@ def register_scene_bundle(
         audio_end = _coerce_time(audio.get('end'), scene_end)
         audio_data = audio.get('data') if isinstance(audio.get('data'), dict) else {}
         if isinstance(audio_data, dict):
+            audio_data_dict = audio_data
             audio_meta = {
                 'path': audio_path,
                 'hash': audio_hash,
@@ -644,11 +736,28 @@ def register_scene_bundle(
                 'audio_emotion': audio_data.get('audio_emotion'),
             }
             transcript_text = audio_data.get('transcript')
-            if audio_data.get('transcript_meta') is not None:
-                audio_meta['transcript_meta'] = audio_data.get('transcript_meta')
+            for optional_audio_key in (
+                'transcript_meta',
+                'transcript_outcome',
+                'transcript_outcome_reason',
+                'transcription_coverage',
+                'audio_evidence',
+                'speakers',
+                'speaker_ids',
+                'speaker_transcript',
+                'diarization',
+            ):
+                if audio_data.get(optional_audio_key) is not None:
+                    audio_meta[optional_audio_key] = audio_data.get(optional_audio_key)
             scene_meta['audio'] = audio_meta
             # FIX: Use speaker_transcript (has text) instead of diarization (speaker labels only)
             diarization = audio_data.get('speaker_transcript') or audio_data.get('diarization') or []
+
+    resolved_speaker_ids = _extract_bundle_speaker_ids(speaker_ids, scene, audio_data_dict, diarization)
+    if resolved_speaker_ids or speaker_ids is not None:
+        scene_meta['speaker_ids'] = resolved_speaker_ids
+
+    transcript_restricted = is_scene_transcript_restricted(scene_meta)
 
     segments_created: List[str] = []
     if cfg.get('ingestion_isolation', False):
@@ -703,17 +812,22 @@ def register_scene_bundle(
 
                     # Update FTS text index inside the transaction
                     try:
+                        from lib.grounding_markup import strip_grounding_markup
                         conn.execute("DELETE FROM scene_text_fts WHERE scene_id=?", (persisted_scene_id,))
                         if ocr_text:
-                            conn.execute(
-                                "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
-                                (persisted_scene_id, video_hash, 'ocr', str(ocr_text)),
-                            )
-                        if transcript_text:
-                            conn.execute(
-                                "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
-                                (persisted_scene_id, video_hash, 'transcript', str(transcript_text)),
-                            )
+                            cleaned_ocr_fts = strip_grounding_markup(str(ocr_text))
+                            if cleaned_ocr_fts.strip():
+                                conn.execute(
+                                    "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                                    (persisted_scene_id, video_hash, 'ocr', cleaned_ocr_fts),
+                                )
+                        if transcript_text and not transcript_restricted:
+                            cleaned_tx_fts = strip_grounding_markup(str(transcript_text))
+                            if cleaned_tx_fts.strip():
+                                conn.execute(
+                                    "INSERT INTO scene_text_fts(scene_id, video_hash, content_type, text) VALUES (?,?,?,?)",
+                                    (persisted_scene_id, video_hash, 'transcript', cleaned_tx_fts),
+                                )
                     except Exception as e:
                         logger.warning(
                             "FTS index update failed for scene_id=%s exc=%s",

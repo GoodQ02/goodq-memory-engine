@@ -187,18 +187,23 @@ def _read_only_kg_conn(kg_path: Path) -> sqlite3.Connection:
 
 def _scene_authority(
     conn: sqlite3.Connection,
+    retired_scenes: set[str] | None = None,
 ) -> tuple[dict[int, list[tuple[int, str]]], dict[str, list[int]]]:
+    retired = retired_scenes or set()
     frame_to_scenes: dict[int, list[tuple[int, str]]] = defaultdict(list)
     name_to_ids: dict[str, list[int]] = defaultdict(list)
     rows = conn.execute(
         "SELECT id, name, properties FROM nodes WHERE node_type = 'scene'"
     ).fetchall()
     for scene_id, scene_name, properties_json in rows:
-        name_to_ids[str(scene_name)].append(int(scene_id))
         try:
             properties = json.loads(properties_json or "{}")
         except (TypeError, json.JSONDecodeError):
             properties = {}
+        prop_scene_id = str(properties.get("scene_id") or "").strip()
+        if str(scene_name) in retired or (prop_scene_id and prop_scene_id in retired):
+            continue
+        name_to_ids[str(scene_name)].append(int(scene_id))
         provenance = properties.get("ucf_provenance")
         if not isinstance(provenance, list):
             continue
@@ -362,9 +367,32 @@ def promote(
         "errors": [],
     }
 
+    from lib.identity_resolver import retired_identity_scene_ids
+
+    retired_scenes = retired_identity_scene_ids(kg_path.parent / "ucf" / "ucf_ledger.db")
+
     with (nullcontext(projection_connection) if projection_connection is not None
           else _read_only_kg_conn(kg_path)) as projection_conn:
-        frame_to_scenes, scene_name_to_ids = _scene_authority(projection_conn)
+        retired_frame_ids: set[int] = set()
+        if retired_scenes:
+            for _, sname, pjson in projection_conn.execute(
+                "SELECT id, name, properties FROM nodes WHERE node_type = 'scene'"
+            ).fetchall():
+                try:
+                    sprops = json.loads(pjson or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    sprops = {}
+                psid = str(sprops.get("scene_id") or "").strip()
+                if str(sname) in retired_scenes or (psid and psid in retired_scenes):
+                    for fid in (sprops.get("ucf_provenance") or []):
+                        try:
+                            retired_frame_ids.add(int(fid))
+                        except (TypeError, ValueError):
+                            pass
+        frame_to_scenes, scene_name_to_ids = _scene_authority(
+            projection_conn,
+            retired_scenes=retired_scenes,
+        )
         for identity in identities:
             iid = identity["id"]
             dname = identity.get("display_name", iid)
@@ -489,6 +517,18 @@ def promote(
                         meta = json.loads(meta_json)
                     except (json.JSONDecodeError, TypeError):
                         continue
+                    seg_scene_id = str(meta.get("scene_id") or "").strip()
+                    if seg_scene_id and seg_scene_id in retired_scenes:
+                        continue
+                    if not seg_scene_id and retired_frame_ids and isinstance(meta.get("ucf_provenance"), list):
+                        seg_frames = []
+                        for fid in meta["ucf_provenance"]:
+                            try:
+                                seg_frames.append(int(fid))
+                            except (TypeError, ValueError):
+                                pass
+                        if seg_frames and all(fid in retired_frame_ids for fid in seg_frames):
+                            continue
                     transcript = (meta.get("text") or meta.get("transcript", "")).strip()
                     if not transcript:
                         continue

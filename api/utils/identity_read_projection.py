@@ -95,23 +95,52 @@ def _epoch_root(cfg: Mapping[str, Any]) -> Path | None:
     return Path(db_path).parent if db_path else None
 
 
-def _context_frame(epoch_root: Path, frame_id: int) -> tuple[Path, float] | None:
+def _context_frame(
+    epoch_root: Path,
+    frame_id: int,
+    *,
+    retired_scenes: set[str] | None = None,
+) -> tuple[Path, float] | None:
+    from lib.identity_resolver import retired_identity_scene_ids
+
     ledger = epoch_root / "ucf" / "ucf_ledger.db"
     if not ledger.is_file():
         return None
+    effective_retired = (
+        retired_identity_scene_ids(ledger) if retired_scenes is None else retired_scenes
+    )
     try:
         uri = f"{ledger.resolve().as_uri()}?mode=ro"
         with sqlite3.connect(uri, uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            columns = {
+                str(col[1]) for col in conn.execute("PRAGMA table_info(context_frames)").fetchall()
+            }
+            select_cols = ["raw_ref", "t_start"]
+            for opt_col in ("promotion_status", "epoch_id", "source_artifact_id"):
+                if opt_col in columns:
+                    select_cols.append(opt_col)
             row = conn.execute(
-                "SELECT raw_ref, t_start FROM context_frames WHERE frame_id = ? LIMIT 1",
+                f"SELECT {', '.join(select_cols)} FROM context_frames WHERE frame_id = ? LIMIT 1",
                 (frame_id,),
             ).fetchone()
     except (OSError, sqlite3.Error):
         return None
-    if not row or not row[0]:
+    if not row or not row["raw_ref"]:
+        return None
+    row_keys = set(row.keys())
+    if "promotion_status" in row_keys and row["promotion_status"] != "promoted":
+        return None
+    if "epoch_id" in row_keys and row["epoch_id"] is not None and str(row["epoch_id"]) != epoch_root.name:
+        return None
+    if (
+        "source_artifact_id" in row_keys
+        and row["source_artifact_id"]
+        and str(row["source_artifact_id"]) in effective_retired
+    ):
         return None
     try:
-        return Path(str(row[0])), float(row[1])
+        return Path(str(row["raw_ref"])), float(row["t_start"])
     except (TypeError, ValueError):
         return None
 
@@ -175,9 +204,14 @@ def _face_evidence(raw_ref: Path, face_id: str, face_index: int) -> dict[str, An
 
 
 def _sampled_representative(epoch_root: Path, frame_id: int, face_index: int | None = None,
-                            manifest_cache: dict | None = None) -> tuple[str, Path, float] | None:
+                            manifest_cache: dict | None = None,
+                            retired_scenes: set[str] | None = None) -> tuple[str, Path, float] | None:
     from lib.face_observation import resolve_sampled_face
+    from lib.identity_resolver import retired_identity_scene_ids
     ledger = epoch_root / 'ucf/ucf_ledger.db'
+    effective_retired = (
+        retired_identity_scene_ids(ledger) if retired_scenes is None else retired_scenes
+    )
     try:
         with sqlite3.connect(f'{ledger.resolve().as_uri()}?mode=ro', uri=True) as conn:
             conn.row_factory = sqlite3.Row
@@ -192,8 +226,10 @@ def _sampled_representative(epoch_root: Path, frame_id: int, face_index: int | N
         return None
     record = dict(row)
     record['payload'] = json.loads(record['payload'])
-    if 'observation_timestamp' in record['payload'] and record['promotion_status'] != 'promoted':
+    if record['promotion_status'] != 'promoted':
         raise ValueError('Face observation is not promoted')
+    if record.get('source_artifact_id') and str(record['source_artifact_id']) in effective_retired:
+        raise ValueError('Face observation belongs to a retired scene')
     raw = Path(record['raw_ref'])
     sampled = resolve_sampled_face(epoch_root, raw, [record], manifest_cache=manifest_cache)
     if sampled is None:
@@ -209,17 +245,19 @@ def _sampled_representative(epoch_root: Path, frame_id: int, face_index: int | N
     return video_id, sampled[0], sampled[1]
 
 
-def _project_face_member(epoch_root: Path, face_id: str, manifest_cache: dict) -> tuple[dict | None, dict]:
+def _project_face_member(epoch_root: Path, face_id: str, manifest_cache: dict,
+                         *, retired_scenes: set[str] | None = None) -> tuple[dict | None, dict]:
     """Keep one entry per saved member, even when its exact evidence is unavailable."""
     member = {"target_face_id": face_id, "evidence_status": "unavailable",
               "reason": "saved_evidence_unavailable"}
     try:
         raw_frame_id, raw_face_index = face_id.split("_", 1)
         frame_id, face_index = int(raw_frame_id), int(raw_face_index)
-        context = _context_frame(epoch_root, frame_id)
+        context = _context_frame(epoch_root, frame_id, retired_scenes=retired_scenes)
         if context is None:
             return None, member
-        sampled = _sampled_representative(epoch_root, frame_id, face_index, manifest_cache)
+        sampled = _sampled_representative(epoch_root, frame_id, face_index, manifest_cache,
+                                          retired_scenes=retired_scenes)
         representative = sampled[:2] if sampled else _representative_frame(epoch_root, *context)
         if representative is None:
             return None, member
@@ -257,6 +295,8 @@ def project_face_cluster_images(
     cfg: Mapping[str, Any],
     authority: Mapping[str, Any],
 ) -> dict[str, Any]:
+    from lib.identity_resolver import retired_identity_scene_ids
+
     projected = dict(data)
     clusters = [dict(cluster) for cluster in data.get("clusters", []) if isinstance(cluster, dict)]
     projected["clusters"] = clusters
@@ -265,6 +305,7 @@ def project_face_cluster_images(
     epoch_root = _epoch_root(cfg)
     if epoch_root is None:
         return projected
+    retired_scenes = retired_identity_scene_ids(epoch_root / "ucf" / "ucf_ledger.db")
     manifest_cache: dict = {}
     for cluster in clusters:
         cluster["suggested_matches"] = []
@@ -273,7 +314,9 @@ def project_face_cluster_images(
             continue
         members = []
         for index, face_id in enumerate(face_ids):
-            evidence, member = _project_face_member(epoch_root, str(face_id), manifest_cache)
+            evidence, member = _project_face_member(
+                epoch_root, str(face_id), manifest_cache, retired_scenes=retired_scenes
+            )
             members.append(member)
             if index == 0 and evidence:
                 cluster["representative_frames"] = [evidence]
@@ -396,22 +439,25 @@ def known_people_projection(
     if epoch_root is not None:
         reports_dir = epoch_root / "identity_matching" / "reports"
         if reports_dir.is_dir():
+            from api.utils import identity_matching as matching_projection
+
+            cfg_dict = dict(cfg)
             for report_path in sorted(
                 reports_dir.glob("*.json"),
                 key=lambda path: (-path.stat().st_mtime_ns, path.stem),
-            )[:1]:
+            ):
                 try:
-                    report = json.loads(report_path.read_text(encoding="utf-8"))
-                except (OSError, UnicodeError, json.JSONDecodeError):
+                    report = matching_projection.read_report(cfg_dict, report_path.stem)
+                    report_people = matching_projection.merged_report_people(cfg_dict, report)
+                except (OSError, UnicodeError, ValueError, KeyError, json.JSONDecodeError):
                     continue
-                if isinstance(report, dict):
-                    for person in report.get("people") or []:
-                        if isinstance(person, dict):
-                            _register(
-                                person.get("id"),
-                                person.get("display_name"),
-                                in_active_roster=False,
-                            )
+                for person in report_people:
+                    if isinstance(person, dict):
+                        _register(
+                            person.get("id"),
+                            person.get("display_name"),
+                            in_active_roster=False,
+                        )
 
     try:
         from lib.identity_matching import epoch_attested_identity_dir, reviewed_source_roots
@@ -525,40 +571,7 @@ def _collect_reference_face_vectors(
             "exclude_cluster_id": exclude_cluster_id,
         })
 
-    reports_dir = active_epoch_root / "identity_matching" / "reports"
-    if reports_dir.is_dir():
-        for report_path in sorted(
-            reports_dir.glob("*.json"),
-            key=lambda path: (-path.stat().st_mtime_ns, path.stem),
-        )[:1]:
-            try:
-                report = json.loads(report_path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                report = None
-            if isinstance(report, dict):
-                policy_sim = (report.get("policy") or {}).get("face_similarity")
-                if isinstance(policy_sim, (int, float)) and math.isfinite(policy_sim):
-                    threshold = float(policy_sim)
-                for ref in report.get("references") or []:
-                    if not isinstance(ref, dict):
-                        continue
-                    if (ref.get("media") or {}).get("kind") != "image":
-                        continue
-                    _add_ref(
-                        ref.get("person_id"),
-                        ref.get("display_name"),
-                        ref.get("space"),
-                        ref.get("embedding"),
-                        source="prior_films",
-                        origin_key=f"{ref.get('epoch_id')}:{ref.get('observation_id') or ref.get('id')}",
-                    )
-
-    had_report_refs = bool(refs)
-    ref_source_epochs = {
-        Path(str(s.get("epoch_root") or "")).resolve()
-        for s in (options.get("reference_sources") or [])
-        if isinstance(s, Mapping) and s.get("epoch_root")
-    }
+    live_covered_epochs: set[str] = set()
     try:
         from api.utils.identity_cross_film import _load_epoch_detections, _read_epoch_kg_metadata
         from lib.identity_matching import epoch_attested_identity_dir, reviewed_source_roots
@@ -592,6 +605,7 @@ def _collect_reference_face_vectors(
             clusters_doc = json.loads(clusters_file.read_text(encoding="utf-8"))
             if clusters_doc.get("epoch_id") != src_epoch.name:
                 continue
+            live_covered_epochs.add(src_epoch.name)
             group_map = {
                 str(c.get("cluster_id")): c
                 for c in (clusters_doc.get("clusters") or [])
@@ -621,8 +635,7 @@ def _collect_reference_face_vectors(
             resolved = Path(other_root).resolve()
             if resolved == active_epoch_root.resolve() or not resolved.is_dir():
                 continue
-            if had_report_refs and resolved in ref_source_epochs:
-                continue
+            live_covered_epochs.add(resolved.name)
             meta = _read_epoch_kg_metadata(resolved)
             if not meta.get("person_faces"):
                 continue
@@ -643,6 +656,42 @@ def _collect_reference_face_vectors(
                         )
     except Exception:
         pass
+
+    reports_dir = active_epoch_root / "identity_matching" / "reports"
+    if reports_dir.is_dir():
+        from api.utils import identity_matching as matching_projection
+
+        cfg_dict = dict(cfg)
+        threshold_set = False
+        for report_path in sorted(
+            reports_dir.glob("*.json"),
+            key=lambda path: (-path.stat().st_mtime_ns, path.stem),
+        ):
+            try:
+                report = matching_projection.read_report(cfg_dict, report_path.stem)
+            except (OSError, UnicodeError, ValueError, KeyError, json.JSONDecodeError):
+                continue
+            if not threshold_set:
+                policy_sim = (report.get("policy") or {}).get("face_similarity")
+                if isinstance(policy_sim, (int, float)) and math.isfinite(policy_sim):
+                    threshold = float(policy_sim)
+                threshold_set = True
+            for ref in report.get("references") or []:
+                if not isinstance(ref, dict):
+                    continue
+                if (ref.get("media") or {}).get("kind") != "image":
+                    continue
+                ref_epoch = str(ref.get("epoch_id") or "")
+                if ref_epoch and ref_epoch in live_covered_epochs:
+                    continue
+                _add_ref(
+                    ref.get("person_id"),
+                    ref.get("display_name"),
+                    ref.get("space"),
+                    ref.get("embedding"),
+                    source="prior_films",
+                    origin_key=f"{ref_epoch}:{ref.get('observation_id') or ref.get('id')}",
+                )
 
     active_roster_file = identity_data_path(cfg) / "family_roster.yaml"
     if active_roster_file.is_file() and active_det_by_id:

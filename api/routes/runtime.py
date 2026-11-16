@@ -24,6 +24,19 @@ from urllib.parse import urlparse
 
 import requests
 from steps.common.qdrant_client import build_qdrant_session
+
+_ORIG_BUILD_QDRANT_SESSION = build_qdrant_session
+_ORIG_REQUESTS_GET = requests.get
+_ORIG_REQUESTS_POST = requests.post
+
+
+def _qdrant_transport(base_url: str) -> Any:
+    """Return a proxy-safe loopback Qdrant session while honoring legacy requests monkeypatches in tests."""
+    if build_qdrant_session is not _ORIG_BUILD_QDRANT_SESSION:
+        return build_qdrant_session(base_url)
+    if requests.get is not _ORIG_REQUESTS_GET or requests.post is not _ORIG_REQUESTS_POST:
+        return requests
+    return build_qdrant_session(base_url)
 from fastapi import APIRouter, HTTPException, Query
 
 from api.utils.ingest_requests import is_supported_ingest_path
@@ -384,11 +397,40 @@ def _collect_engine_details() -> Dict[str, Any]:
         "gpu": False,
     }
 
+    import importlib.util
+
+    diarization_disabled = (
+        os.environ.get("GOODQ_ENABLE_WSL", "").strip().lower() in {"0", "false", "no"}
+        or os.environ.get("GOODQ_RUNTIME_PROFILE", "").strip().lower() in {"isolated", "cpu_only"}
+        or (_CFG.get("audio") or {}).get("enable_diarization") is False
+        or (_CFG.get("wsl") or {}).get("enabled") is False
+    )
+    if diarization_disabled:
+        diarization_status = "disabled"
+        diarization_desc = "Pyannote speaker separation disabled by runtime configuration"
+    elif wsl_audio_ready:
+        diarization_status = "ready"
+        diarization_desc = "Pyannote speaker separation available via WSL audio worker"
+    elif wsl_audio_component == "cold":
+        diarization_status = "cold"
+        diarization_desc = "WSL audio worker cold; read-only status probe did not wake distro"
+    else:
+        try:
+            has_local_pyannote = importlib.util.find_spec("pyannote.audio") is not None
+        except Exception:
+            has_local_pyannote = False
+        if has_local_pyannote:
+            diarization_status = "ready"
+            diarization_desc = "Pyannote speaker separation with OSD"
+        else:
+            diarization_status = "unavailable"
+            diarization_desc = "Pyannote speaker separation unavailable (no pyannote.audio or active WSL2 audio worker)"
+
     engines["audio_diarization"] = {
         "name": "Audio Diarization",
         "category": "Audio Processing",
-        "description": "Pyannote speaker separation with OSD",
-        "status": "ready",
+        "description": diarization_desc,
+        "status": diarization_status,
         "gpu": True,
     }
 
@@ -779,7 +821,18 @@ def get_status() -> Dict[str, Any]:
         "database": database_data,
         "epoch_authority": epoch_authority_projection(_CFG),
         "wsl": wsl_status,
-        "elevenlabs_agent_id": os.environ.get("ELEVENLABS_AGENT_ID"),
+        "elevenlabs_widget_enabled": bool(
+            (_CFG.get("ui") or {}).get("enable_elevenlabs_widget") is True
+            or os.environ.get("GOODQ_ENABLE_ELEVENLABS_WIDGET", "").strip() == "1"
+        ),
+        "elevenlabs_agent_id": (
+            os.environ.get("ELEVENLABS_AGENT_ID")
+            if (
+                (_CFG.get("ui") or {}).get("enable_elevenlabs_widget") is True
+                or os.environ.get("GOODQ_ENABLE_ELEVENLABS_WIDGET", "").strip() == "1"
+            )
+            else None
+        ),
     }
 
 
@@ -3121,6 +3174,7 @@ def _qdrant_base_url() -> str:
 
 def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: List[str]) -> Dict[str, Any]:
     base_url = _qdrant_base_url()
+    session = _qdrant_transport(base_url)
     last_error: str | None = None
     for collection in collection_candidates:
         payloads: List[Dict[str, Any]] = []
@@ -3140,7 +3194,7 @@ def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: Li
                 }
                 if offset is not None:
                     body["offset"] = offset
-                resp = requests.post(
+                resp = session.post(
                     f"{base_url}/collections/{collection}/points/scroll",
                     json=body,
                     timeout=5,
@@ -3172,7 +3226,7 @@ def _scroll_qdrant_audio_payloads(runtime_run_id: str, collection_candidates: Li
 def _qdrant_audio_collection_names() -> Dict[str, Any]:
     base_url = _qdrant_base_url()
     try:
-        resp = requests.get(f"{base_url}/collections", timeout=5)
+        resp = _qdrant_transport(base_url).get(f"{base_url}/collections", timeout=5)
         if resp.status_code != 200:
             return {"status": f"qdrant_status_{resp.status_code}", "collections": []}
         collections = resp.json().get("result", {}).get("collections", []) or []
@@ -3192,6 +3246,7 @@ def _scroll_qdrant_audio_collection_payloads(collection: str, *, max_pages: int 
     payloads: List[Dict[str, Any]] = []
     offset = None
     try:
+        session = _qdrant_transport(base_url)
         for _ in range(max_pages):
             body: Dict[str, Any] = {
                 "limit": 256,
@@ -3201,7 +3256,7 @@ def _scroll_qdrant_audio_collection_payloads(collection: str, *, max_pages: int 
             }
             if offset is not None:
                 body["offset"] = offset
-            resp = requests.post(
+            resp = session.post(
                 f"{base_url}/collections/{collection}/points/scroll",
                 json=body,
                 timeout=5,
@@ -3404,6 +3459,7 @@ def _sample_qdrant_audio_payloads(collection_candidates: List[str]) -> Dict[str,
     """Sample audio payload shape without exposing raw Qdrant payload values."""
 
     base_url = _qdrant_base_url()
+    session = _qdrant_transport(base_url)
     last_error: str | None = None
     for collection in collection_candidates:
         try:
@@ -3413,7 +3469,7 @@ def _sample_qdrant_audio_payloads(collection_candidates: List[str]) -> Dict[str,
                 "with_vector": False,
                 "filter": {"must": [{"key": "modality", "match": {"value": "audio"}}]},
             }
-            resp = requests.post(
+            resp = session.post(
                 f"{base_url}/collections/{collection}/points/scroll",
                 json=body,
                 timeout=5,

@@ -1349,3 +1349,211 @@ def test_restore_discovery_receipt_handles_republished_and_locked_targets(tmp_pa
     _restore_discovery_receipt(held, receipt, timeout=1.0)
     assert not held.exists()
     assert json.loads(receipt.read_text(encoding="utf-8")) == {"cycle": 4, "state": "stopping"}
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_control_discovery_ignores_stale_supervisor_pid_reused_by_system_process(launch, shell):
+    def exercise(sandbox, process):
+        initial = _supervisor_snapshot(sandbox, process, lambda s: s["state"] == "monitoring")
+        stale = sandbox / "goodq-startup-system-reused"
+        stale.mkdir()
+        (stale / "supervisor.json").write_text(
+            json.dumps(
+                dict(
+                    initial,
+                    supervisor_pid=4,
+                    stop_event="Local\\GoodQRuntime-" + "0" * 32,
+                )
+            ),
+            encoding="utf-8",
+        )
+        port = int(initial["api_endpoint"].rsplit(":", 1)[1])
+        for action in ("CheckRunning", "StopCurrent"):
+            with _stop_current(sandbox, port, timeout=12, action=action, shell=shell) as controller:
+                assert controller.wait(timeout=CONTROL_TIMEOUT_SECONDS) == 0, (
+                    sandbox / "stop-current.log"
+                ).read_text(encoding="utf-8-sig")
+
+    launch(supervise=exercise)
+
+
+def _run_write_goodq_receipt_text_scenario(tmp_path: Path, shell: str, mode: str) -> dict:
+    harness = tmp_path / f"write-receipt-{mode}.ps1"
+    output_json = tmp_path / f"write-receipt-{mode}-result.json"
+    harness.write_text(
+        r'''
+param(
+    [string]$LauncherPath,
+    [string]$WorkDir,
+    [string]$Mode,
+    [string]$ResultPath
+)
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($LauncherPath, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors -and $parseErrors.Count -gt 0) {
+    throw "Failed to parse launcher AST: $($parseErrors[0].Message)"
+}
+$fnAst = $ast.Find({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-GoodQReceiptText'
+}, $true)
+if ($null -eq $fnAst) {
+    throw 'Write-GoodQReceiptText definition not found in start_goodq_dev.ps1'
+}
+. ([ScriptBlock]::Create($fnAst.Extent.Text))
+
+$origWriteWarning = Get-Command Write-Warning -CommandType Cmdlet
+$origStartSleep = Get-Command Start-Sleep -CommandType Cmdlet
+$script:warnings = New-Object System.Collections.Generic.List[string]
+$script:sleepCount = 0
+$script:reader = $null
+
+$targetPath = Join-Path $WorkDir 'supervisor.json'
+if ($Mode -eq 'non_retryable') {
+    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+} else {
+    [IO.File]::WriteAllText($targetPath, '{"cycle":1,"state":"monitoring"}', [Text.UTF8Encoding]::new($false))
+    $script:reader = [IO.File]::Open($targetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+}
+
+function Write-Warning {
+    param([Parameter(Position = 0, Mandatory = $true)][string]$Message)
+    $script:warnings.Add($Message)
+    & $origWriteWarning $Message
+    if ($Message -like 'Receipt replacement temporarily blocked*') {
+        # Deterministically stall Attempt 1 past the 1.0s publication budget.
+        & $origStartSleep -Milliseconds 1100
+        if ($Mode -eq 'stalled_unlock' -and $null -ne $script:reader) {
+            $script:reader.Dispose()
+            $script:reader = $null
+        }
+    }
+}
+
+function Start-Sleep {
+    param([int]$Milliseconds = 0)
+    $script:sleepCount++
+    & $origStartSleep -Milliseconds $Milliseconds
+}
+
+$threw = $false
+$errorText = $null
+$errorWin32 = $null
+$errorHResult = $null
+try {
+    Write-GoodQReceiptText $targetPath '{"cycle":2,"state":"monitoring"}'
+} catch {
+    $threw = $true
+    $base = $_.Exception.GetBaseException()
+    $errorText = $base.Message
+    $errorWin32 = $base.HResult -band 0xffff
+    $errorHResult = ('0x{0:X8}' -f ([int64]$base.HResult -band 0xffffffffL))
+} finally {
+    if ($null -ne $script:reader) {
+        $script:reader.Dispose()
+        $script:reader = $null
+    }
+}
+
+$finalContent = $null
+if ([IO.File]::Exists($targetPath)) {
+    $finalContent = [IO.File]::ReadAllText($targetPath, [Text.UTF8Encoding]::new($false))
+}
+$result = [ordered]@{
+    mode = $Mode
+    edition = [string]$PSVersionTable.PSEdition
+    threw = $threw
+    error_text = $errorText
+    error_win32 = $errorWin32
+    error_hresult = $errorHResult
+    sleep_count = $script:sleepCount
+    warnings = @($script:warnings)
+    final_content = $finalContent
+    tmp_exists = [IO.File]::Exists($targetPath + '.tmp')
+} | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText($ResultPath, $result, [Text.UTF8Encoding]::new($false))
+''',
+        encoding="utf-8-sig",
+    )
+    work_dir = tmp_path / f"work-{mode}-{shell.replace('.', '_')}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    if shell.lower().startswith("powershell"):
+        env = {k: v for k, v in os.environ.items() if k.casefold() != "psmodulepath"}
+        env["PSMODULEPATH"] = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/Modules")
+    completed = subprocess.run(
+        [
+            shell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(harness),
+            "-LauncherPath",
+            str(REPO_ROOT / "start_goodq_dev.ps1"),
+            "-WorkDir",
+            str(work_dir),
+            "-Mode",
+            mode,
+            "-ResultPath",
+            str(output_json),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=CONTROL_TIMEOUT_SECONDS,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    assert completed.returncode == 0, f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+    return json.loads(output_json.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_write_goodq_receipt_text_recovers_when_attempt_one_stalls_past_deadline(tmp_path: Path, shell: str) -> None:
+    result = _run_write_goodq_receipt_text_scenario(tmp_path, shell, "stalled_unlock")
+    assert result["threw"] is False
+    assert result["sleep_count"] == 1
+    assert result["warnings"] == [
+        "Receipt replacement temporarily blocked (win32=32); retrying for at most one second."
+    ]
+    assert json.loads(result["final_content"]) == {"cycle": 2, "state": "monitoring"}
+    assert result["tmp_exists"] is False
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_write_goodq_receipt_text_exhausts_after_stalled_attempt_one_when_permanently_locked(
+    tmp_path: Path, shell: str
+) -> None:
+    result = _run_write_goodq_receipt_text_scenario(tmp_path, shell, "stalled_locked")
+    assert result["threw"] is True
+    assert result["error_win32"] == 32
+    assert result["error_hresult"] == "0x80070020"
+    assert result["sleep_count"] == 1
+    assert len(result["warnings"]) == 2
+    assert result["warnings"][0] == (
+        "Receipt replacement temporarily blocked (win32=32); retrying for at most one second."
+    )
+    assert result["warnings"][1].startswith(
+        "Receipt replacement retry budget exhausted (win32=32, hresult=0x80070020, attempts=2, elapsed_ms="
+    )
+    assert json.loads(result["final_content"]) == {"cycle": 1, "state": "monitoring"}
+
+
+@pytest.mark.parametrize("shell", ["powershell.exe", "pwsh.exe"])
+def test_write_goodq_receipt_text_throws_without_retry_on_non_retryable_win32_error(
+    tmp_path: Path, shell: str
+) -> None:
+    result = _run_write_goodq_receipt_text_scenario(tmp_path, shell, "non_retryable")
+    assert result["threw"] is True
+    assert result["error_win32"] not in (5, 32, 33, 1175)
+    assert result["sleep_count"] == 0
+    assert len(result["warnings"]) == 1
+    assert result["warnings"][0].startswith(
+        f"Receipt replacement failed without retry (win32={result['error_win32']}, "
+        f"hresult={result['error_hresult']}, attempt=1, elapsed_ms="
+    )
+
+

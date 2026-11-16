@@ -75,7 +75,7 @@ def _model_emotion_meta() -> Dict[str, Any]:
     }
 
 
-def _rank_model_emotions(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _rank_model_emotions(item: Dict[str, Any], cfg: Dict[str, Any], text: str | None = None) -> Dict[str, Any]:
     """Run the cached model and preserve every score with its model-owned label."""
 
     import json as _json
@@ -84,7 +84,8 @@ def _rank_model_emotions(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str,
     from steps.common.memory import update_fields
     from steps.text_embed.step import _content_fingerprint
 
-    inputs = _EMO["tok"](_gather_text(item), return_tensors="pt", truncation=True, max_length=512).to(_EMO["device"])
+    scored_text = text if isinstance(text, str) else _gather_text(item)
+    inputs = _EMO["tok"](scored_text, return_tensors="pt", truncation=True, max_length=512).to(_EMO["device"])
     with torch.no_grad():
         if _EMO.get("device") == "cuda":
             with torch.cuda.amp.autocast():
@@ -432,8 +433,17 @@ def _load_emotion():
 
 
 def _gather_text(item: Dict[str, Any]) -> str:
+    from steps.common.context_analyzer_llm import is_scene_transcript_restricted
+    from steps.common.tag_utils import reliable_transcript_for_entities
+
+    has_transcript_meta = isinstance(item.get("transcript_meta"), dict)
     for k in ("document_text", "transcript", "ocr_text", "caption"):
-        v = item.get(k)
+        if k == "transcript" and has_transcript_meta:
+            if is_scene_transcript_restricted(item):
+                continue
+            v = reliable_transcript_for_entities(item)
+        else:
+            v = item.get(k)
         if isinstance(v, str) and v.strip():
             return v
     return ""
@@ -441,8 +451,8 @@ def _gather_text(item: Dict[str, Any]) -> str:
 
 def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     text = _gather_text(item)
-    if not text:
-        return {"emotions": None, "emotion_meta": {"status": "no_text"}}
+    if not text or not text.strip():
+        return {"emotions": None, "emotion_meta": {"status": "no_text", "reason": "no_text"}}
     _load_emotion()
     use_nrc_cfg = bool(((cfg.get("config", {}) or {}).get("analysis", {}) or {}).get("use_nrc_lexicon", False))
     # A verified local model remains usable in offline mode; only provisioning may
@@ -451,7 +461,7 @@ def emotion_classify(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any
     model_error: Exception | None = None
     if _EMO["model"] is not None:
         try:
-            return _rank_model_emotions(item, cfg)
+            return _rank_model_emotions(item, cfg, text=text)
         except Exception as exc:
             model_failed = True
             model_error = exc

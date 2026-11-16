@@ -478,6 +478,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             clip_state = _scene_embedder._MODELS.get("clip") or {}
             clip_model_loaded = bool(clip_state.get("model") is not None)
             clip_device = str(clip_state.get("device") or clip_device)
+            _unload_fn = getattr(_scene_embedder, "unload_model", None)
+            if callable(_unload_fn):
+                _unload_fn("clip", only_if_loaded_by_embedder=True)
         except Exception as e:
             _stage10_18_debug("clip_model_probe_error:", f"{type(e).__name__}: {e}")
         _stage10_18_debug(f"clip_model_loaded={clip_model_loaded}")
@@ -511,6 +514,9 @@ def run_scene_visual_embeddings(item: Dict[str, Any], cfg: Dict[str, Any]) -> Di
             if _scene_embedder is None:
                 from steps.video import scene_embedder as _scene_embedder
             dino_model_loaded = bool((_scene_embedder._MODELS.get("dino") or {}).get("model") is not None)
+            _unload_fn = getattr(_scene_embedder, "unload_model", None)
+            if callable(_unload_fn):
+                _unload_fn("dino", only_if_loaded_by_embedder=True)
         except Exception as e:
             _stage10_18_debug("dino_model_probe_error:", f"{type(e).__name__}: {e}")
         _stage10_18_debug(f"dino_model_loaded={dino_model_loaded}")

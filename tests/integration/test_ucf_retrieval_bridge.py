@@ -53,7 +53,9 @@ def _create_mock_db_for_test(tmp_path, promotion_status="validated", vector_key=
         payload_hash TEXT NOT NULL,
         promotion_status TEXT NOT NULL DEFAULT 'staged',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash)
+        occurrence_id TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (video_hash) REFERENCES media_sources(video_hash),
+        UNIQUE(video_hash, epoch_id, modality, worker_name, t_start, t_end, occurrence_id)
     );
     """)
     conn.execute("INSERT OR REPLACE INTO media_sources VALUES ('vh_test_001', 'test.mp4', 10.0, 30.0, 1920, 1080, '2026-06-15')")
@@ -234,6 +236,7 @@ def test_promote_syncs_ucf_promotion_status_to_qdrant(mock_post, tmp_path, monke
         _qdrant_verify_response("vec-key-1", "staged"),
         _qdrant_update_response(),
         _qdrant_verify_response("vec-key-1", "promoted"),
+        _qdrant_verify_response("vec-key-1", "validated"),
     ]
 
     client = MiniAgentClient(profile="safe")
@@ -622,6 +625,7 @@ def test_materialization_bridge_lifecycle(mock_run_validation, mock_post, tmp_pa
         _qdrant_verify_response("vec-key-1", "staged"),
         _qdrant_update_response(),
         _qdrant_verify_response("vec-key-1", "promoted"),
+        _qdrant_verify_response("vec-key-1", "validated"),
         _qdrant_update_response(),
         _qdrant_verify_response("vec-key-1", "rejected"),
     ]

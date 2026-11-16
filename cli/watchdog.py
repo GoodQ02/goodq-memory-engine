@@ -202,7 +202,7 @@ except ImportError:
 SUPPORTED_VIDEO = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
 SUPPORTED_AUDIO = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma'}
 SUPPORTED_IMAGE = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
-SUPPORTED_DOCUMENT = {'.pdf', '.txt', '.md', '.doc', '.docx'}
+SUPPORTED_DOCUMENT = {'.pdf', '.txt', '.md', '.docx'}
 
 # Processing configuration
 POLL_INTERVAL = 2.0  # seconds
@@ -421,42 +421,93 @@ class WatchdogProcessor:
             logger.info("[BOT] Control Agent disabled: no llm_client injection")
         
         # Ensure directories exist
+        self.staging_dir = self.processing_dir / ".watchdog_staging"
         self.watch_dir.mkdir(parents=True, exist_ok=True)
         self.processing_dir.mkdir(parents=True, exist_ok=True)
+        self.staging_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.failed_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Watching directory: {self.watch_dir}")
 
+    @staticmethod
+    def _has_retained_processing_evidence(directory: Path) -> bool:
+        """Return True if a processing directory holds retained manifests, checkpoints, frames, or audio reviews."""
+        manifest_relpaths = (
+            "temporal_index.json",
+            "video/temporal_index.json",
+            "scene_results.json",
+            "video/scene_results.json",
+            "scene_manifest.json",
+            "video/scene_manifest.json",
+            "progressive_ingestion_state.json",
+            "video/progressive_ingestion_state.json",
+            "progressive_ingestion_timings.json",
+            "video/progressive_ingestion_timings.json",
+            "capability_receipt.json",
+            "video/capability_receipt.json",
+            "image_ingest_result.json",
+            "document_ingest_result.json",
+            "audio_result.json",
+            "audio_ingest_result.json",
+        )
+        for rel in manifest_relpaths:
+            if (directory / rel).is_file():
+                return True
+        if (directory / f"{directory.name}.wav").is_file():
+            return True
+        retained_subdirs = (
+            "review_audio",
+            "voice_reviews",
+            "keyframes",
+            "video/keyframes",
+            "frames",
+            "video/frames",
+            "ucf_raw_refs",
+            "video/ucf_raw_refs",
+        )
+        for retained_sub in retained_subdirs:
+            sub = directory / retained_sub
+            if sub.is_dir() and any(sub.iterdir()):
+                return True
+        return False
+
     def cleanup_stale_processing_files(self):
-        """Clean up leftover temp files or folders in the processing directory from previous runs."""
-        logger.info("Checking for stale temporary files in processing directory...")
+        """Clean up leftover Watchdog staging items and unmanifested temp artifacts without touching retained evidence."""
+        logger.info("Checking for stale temporary files in watchdog staging directory...")
         if not self.processing_dir.exists():
             return
-        
+
         cleaned_count = 0
+        staging_dir = getattr(self, "staging_dir", self.processing_dir / ".watchdog_staging")
         try:
+            if staging_dir.exists():
+                for item in staging_dir.iterdir():
+                    try:
+                        logger.info(f"Removing stale staging item: {item.name}")
+                        if item.is_dir():
+                            shutil.rmtree(item)
+                        else:
+                            item.unlink()
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to remove stale staging item {item.name}: {e}")
+
             for item in self.processing_dir.iterdir():
-                if item.name.startswith('.'):
+                if item.name.startswith("."):
                     continue
-                
-                # Check if it's a temp/processing folder or file
                 is_stale = False
                 if item.is_dir():
-                    # Temporary folders start with prefixes or match standard subdirs
-                    if (item.name.startswith("video_") or 
-                        item.name.startswith("audio_") or 
-                        item.name.startswith("image_") or 
-                        item.name.startswith("doc_") or
-                        item.name in ("chunks", "audio", "video", "metadata")):
+                    if (
+                        item.name.startswith(("video_", "audio_", "image_", "doc_"))
+                        or item.name in ("chunks", "audio", "video", "metadata")
+                    ) and not self._has_retained_processing_evidence(item):
                         is_stale = True
                 elif item.is_file():
-                    # Direct ingestion leaves files directly in processing dir
                     ext = item.suffix.lower()
                     if ext in SUPPORTED_VIDEO.union(SUPPORTED_AUDIO) or ext == ".tmp":
                         is_stale = True
-                
                 if is_stale:
                     try:
                         logger.info(f"Removing stale processing item: {item.name}")
@@ -469,9 +520,9 @@ class WatchdogProcessor:
                         logger.warning(f"Failed to remove stale item {item.name}: {e}")
         except Exception as e:
             logger.error(f"Error scanning processing directory: {e}")
-            
+
         if cleaned_count > 0:
-            logger.info(f"Cleaned up {cleaned_count} stale items from the processing directory.")
+            logger.info(f"Cleaned up {cleaned_count} stale items from watchdog staging.")
         else:
             logger.info("Processing directory is clean.")
     
@@ -604,17 +655,36 @@ class WatchdogProcessor:
             logger.warning(f"Error checking video completion on disk for {file_path.name}: {e}")
         return False
 
-    def _finalize_retained_completion(self, file_path: Path, file_hash: str):
+    def _finalize_retained_completion(
+        self,
+        file_path: Path,
+        file_hash: str,
+        *,
+        run_id: Optional[str] = None,
+        start_progress: bool = True,
+        expected_source_hash: Optional[str] = None,
+    ):
         """Journal the final move in the existing registry before publishing Done."""
         from steps.common.progress_tracker import start_processing, finish_processing, add_error
 
         def persist(record):
             self.registry.store_record(file_hash, record)
 
-        start_processing(file_path.name, total_steps=1, run_id='pre-existing-on-disk')
+        effective_run_id = (
+            run_id
+            or self.registry.processed.get(file_hash, {}).get('run_id')
+            or 'pre-existing-on-disk'
+        )
+        if start_progress:
+            start_processing(file_path.name, total_steps=1, run_id=effective_run_id)
         try:
             record = self.registry.processed.get(file_hash, {})
             pending = record.get('finalization')
+            content_hash = (
+                expected_source_hash
+                or (pending.get('content_hash') if isinstance(pending, dict) else None)
+                or file_hash
+            )
             if pending:
                 target_name = pending['target_name']
                 if Path(target_name).name != target_name or not target_name.startswith('PROCESSED_'):
@@ -623,41 +693,55 @@ class WatchdogProcessor:
             else:
                 target = self.processed_dir / f"PROCESSED_{file_path.name}"
                 counter = 0
-                while target.exists() and FileState(target).compute_hash() != file_hash:
+                while target.exists() and FileState(target).compute_hash() != content_hash:
                     counter += 1
                     if counter > 1000:
                         raise RuntimeError('Too many retained-completion naming collisions')
                     target = self.processed_dir / f"PROCESSED_{file_path.stem}_{counter}{file_path.suffix}"
+                finalization_meta = {'target_name': target.name}
+                if content_hash != file_hash:
+                    finalization_meta['content_hash'] = content_hash
                 persist({
-                    **record, 'original_name': file_path.name, 'status': 'finalizing',
-                    'run_id': record.get('run_id') or 'pre-existing-on-disk',
-                    'finalization': {'target_name': target.name},
+                    **record,
+                    'original_name': file_path.name,
+                    'status': 'finalizing',
+                    'run_id': effective_run_id,
+                    'timestamp': record.get('timestamp') or datetime.now().isoformat(),
+                    'finalization': finalization_meta,
                 })
             if target.exists():
-                if FileState(target).compute_hash() != file_hash:
+                if FileState(target).compute_hash() != content_hash:
                     raise ValueError('Retained-completion destination content changed')
                 if file_path.exists():
-                    if FileState(file_path).compute_hash() != file_hash:
+                    if FileState(file_path).compute_hash() != content_hash:
                         raise ValueError('Retained-completion inbox content changed')
                     file_path.unlink()  # An exact byte-identical retained copy already exists.
             else:
-                if not file_path.is_file() or FileState(file_path).compute_hash() != file_hash:
+                if not file_path.is_file() or FileState(file_path).compute_hash() != content_hash:
                     raise ValueError('Retained-completion source missing or changed')
                 actual_path = safe_move_file(file_path, target)
                 if actual_path != target:
                     raise RuntimeError('Retained-completion destination changed during movement')
-            persist({**self.registry.processed[file_hash], 'status': 'success', 'finalization': None})
+            persist({
+                **self.registry.processed[file_hash],
+                'status': 'success',
+                'run_id': effective_run_id,
+                'timestamp': datetime.now().isoformat(),
+                'finalization': None,
+            })
             finish_processing('completed')
         except Exception as error:
             add_error(str(error), 'completion_finalization')
             finish_processing('failed')
             raise
 
-    def _resume_retained_finalizations(self):
+    def _resume_retained_finalizations(self) -> Set[str]:
         from steps.common.progress_tracker import start_processing, add_error, finish_processing
+        attempted: Set[str] = set()
         for file_hash, record in list(self.registry.processed.items()):
             if record.get('status') != 'finalizing' or not record.get('finalization'):
                 continue
+            attempted.add(file_hash)
             name = record.get('original_name', '')
             try:
                 if not name or Path(name).name != name:
@@ -672,11 +756,12 @@ class WatchdogProcessor:
                 add_error(str(error), 'completion_recovery')
                 finish_processing('failed')
                 logger.error('Cannot reconcile retained completion: %s', error)
+        return attempted
 
     def monitor_loop(self):
         """Main monitoring loop"""
         logger.info("Starting file monitor...")
-        self._resume_retained_finalizations()
+        startup_attempted = self._resume_retained_finalizations() or set()
         
         while not self.shutdown.is_set():
             try:
@@ -711,6 +796,20 @@ class WatchdogProcessor:
                         file_hash = state.compute_hash()
                         if self.registry.processed.get(file_hash, {}).get('status') == 'finalizing':
                             # Failed finalization stays recoverable; never dispatch it as new work.
+                            if file_hash in startup_attempted:
+                                startup_attempted.discard(file_hash)
+                                state.stable = False
+                                continue
+                            try:
+                                if (
+                                    self.get_file_type(file_path) == 'video'
+                                    and not self.check_video_completion_on_disk(file_path, file_hash)
+                                ):
+                                    raise ValueError('Pending completion no longer has valid persisted evidence')
+                                self._finalize_retained_completion(file_path, file_hash)
+                            except Exception as retry_err:
+                                state.stable = False
+                                logger.error('Cannot reconcile retained completion: %s', retry_err)
                             continue
                         
                         # A registry success cannot overrule contradictory video evidence.
@@ -773,11 +872,15 @@ class WatchdogProcessor:
         total_steps = 20  # Estimate for video processing
         start_processing(file_path.name, total_steps, run_id=run_id)
         
-        # Move to processing directory
-        processing_path = self.processing_dir / file_path.name
+        # Stage inbox copy inside isolated watchdog staging directory
+        staging_dir = getattr(self, "staging_dir", self.processing_dir / ".watchdog_staging")
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        processing_path = staging_dir / file_path.name
+        source_content_hash: Optional[str] = None
         try:
+            source_content_hash = FileState(file_path).compute_hash()
             shutil.copy2(file_path, processing_path)
-            logger.debug(f"Copied to processing: {processing_path}")
+            logger.debug(f"Copied to staging: {processing_path}")
         except Exception as e:
             logger.error(f"Failed to copy file: {e}")
             add_error(f"Failed to copy file: {e}", "file_copy")
@@ -809,7 +912,7 @@ class WatchdogProcessor:
                 success = self.ingest_audio(processing_path, run_id)
             elif file_type == 'image':
                 success = self.ingest_image(processing_path, run_id)
-            elif file_type == 'document':
+            elif file_type == 'document' or file_path.suffix.lower() == '.doc':
                 success = self.ingest_document(processing_path, run_id)
             else:
                 error_msg = f"Unsupported file type: {file_type}"
@@ -832,28 +935,37 @@ class WatchdogProcessor:
         
         # Handle result
         if success:
-            logger.info(f"[OK] Successfully processed: {file_path.name}")
-            finish_processing("completed")
-            self.registry.mark_processed(file_hash, file_path.name, 'success', run_id=run_id)
-            
-            # Notify Control Agent of success
-            if self.control_agent:
-                self.control_agent.on_processing_complete(file_path.name, success=True)
-            
-            # Move original to processed
-            processed_path = self.processed_dir / f"PROCESSED_{file_path.name}"
-            try:
-                actual_processed_path = safe_move_file(file_path, processed_path)
-                logger.debug(f"Moved to processed: {actual_processed_path}")
-            except Exception as e:
-                logger.error(f"Failed to move to processed: {e}")
-            
-            # Clean up processing copy
             try:
                 processing_path.unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"Failed to clean up processing file: {e}")
-                
+
+            try:
+                self._finalize_retained_completion(
+                    file_path,
+                    file_hash,
+                    run_id=run_id,
+                    start_progress=False,
+                    expected_source_hash=source_content_hash,
+                )
+            except Exception as finalize_err:
+                state_entry = self.file_states.get(str(file_path))
+                if state_entry is not None:
+                    state_entry.stable = False
+                logger.error(
+                    f"[FAIL] Finalization failed after ingestion for {file_path.name}: {finalize_err}"
+                )
+                if self.control_agent:
+                    self.control_agent.on_processing_complete(
+                        file_path.name,
+                        success=False,
+                        error=str(finalize_err),
+                    )
+                return False
+
+            logger.info(f"[OK] Successfully processed: {file_path.name}")
+            if self.control_agent:
+                self.control_agent.on_processing_complete(file_path.name, success=True)
         else:
             logger.error(f"[FAIL] Failed to process: {file_path.name}")
             add_error(error_msg or 'Unknown error', "processing")
@@ -884,11 +996,13 @@ class WatchdogProcessor:
         """Ingest video file via CLI"""
         import subprocess
         
-        # Create a stable input directory for this specific video
+        # Create a stable input directory for this specific video inside watchdog staging
         # Use video hash to ensure uniqueness and avoid cleanup issues
         import hashlib
         video_hash = hashlib.sha256(video_path.name.encode()).hexdigest()[:16]
-        temp_input = self.processing_dir / f"video_{video_hash}"
+        staging_dir = getattr(self, "staging_dir", self.processing_dir / ".watchdog_staging")
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        temp_input = staging_dir / f"video_{video_hash}"
         temp_input.mkdir(parents=True, exist_ok=True)
         
         # Copy video to temp location (must stay there for entire ingestion)

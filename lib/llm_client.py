@@ -646,6 +646,79 @@ def get_status(*, client: LLMClient) -> Dict[str, Any]:
     return client.get_status()
 
 
+def unload_attempted_ollama_models(
+    llm_client: Any,
+    *,
+    timeout: float = 5.0,
+    retries: int = 1,
+) -> bool:
+    """Release all attempted Ollama models from VRAM with bounded timeout and retry."""
+    session = getattr(llm_client, "session", None)
+    if session is None:
+        return False
+
+    candidates: List[Any] = list(getattr(llm_client, "attempted_models", None) or [])
+    last_used = getattr(llm_client, "last_model_used", None)
+    if last_used is not None:
+        candidates.append(last_used)
+
+    targets: List[tuple[str, str]] = []
+    seen_targets: set[tuple[str, str]] = set()
+    for model in candidates:
+        if getattr(model, "backend", None) != "ollama":
+            continue
+        endpoint = str(getattr(model, "endpoint", "") or "").rstrip("/")
+        base_url = endpoint[:-3] if endpoint.endswith("/v1") else endpoint
+        model_id = str(getattr(model, "model_id", "") or "").strip()
+        if not base_url or not model_id:
+            continue
+        key = (base_url, model_id)
+        if key not in seen_targets:
+            seen_targets.add(key)
+            targets.append(key)
+
+    if not targets:
+        return False
+
+    max_attempts = max(0, int(retries)) + 1
+    all_unloaded = True
+    for base_url, model_id in targets:
+        unloaded = False
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                time.sleep(0.2)
+            try:
+                response = session.post(
+                    f"{base_url}/api/generate",
+                    json={"model": model_id, "keep_alive": 0},
+                    timeout=timeout,
+                )
+                status_code = getattr(response, "status_code", None)
+                if isinstance(status_code, int) and not (200 <= status_code < 300):
+                    if attempt + 1 < max_attempts:
+                        continue
+                    detail = str(getattr(response, "text", "") or "").strip()[:200]
+                    logger.warning(
+                        "[LLM] Failed to unload Ollama model %s from VRAM (HTTP %s)%s",
+                        model_id,
+                        status_code,
+                        f": {detail}" if detail else "",
+                    )
+                    break
+                if hasattr(response, "raise_for_status"):
+                    response.raise_for_status()
+                logger.info("[LLM] Unloaded Ollama model %s from VRAM", model_id)
+                unloaded = True
+                break
+            except Exception as exc:
+                if attempt + 1 < max_attempts:
+                    continue
+                logger.warning("[LLM] Failed to unload Ollama model %s from VRAM: %s", model_id, exc)
+        if not unloaded:
+            all_unloaded = False
+    return all_unloaded
+
+
 if __name__ == "__main__":
     # Test harness requires explicit injection
     logging.basicConfig(

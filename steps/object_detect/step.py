@@ -53,6 +53,21 @@ COCO_CLASSES = (
 class DetectorUnavailable(RuntimeError):
     """Raised when a sealed detector asset or its local runtime is unavailable."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        invalid_pack: bool = False,
+        model_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.invalid_pack = invalid_pack
+        self.model_id = model_id
+
+
+def _model_engine(model_id: str | None) -> str:
+    return YOLOX_ENGINE if model_id == GPU_MODEL_ID else ENGINE
+
 
 @dataclass
 class DetectorRuntime:
@@ -89,7 +104,9 @@ def _select_model_id(cfg: Dict[str, Any], *, env: Dict[str, str] | None = None) 
 
     try:
         _sealed_model_path(GPU_MODEL_ID)
-    except DetectorUnavailable:
+    except DetectorUnavailable as exc:
+        if getattr(exc, "invalid_pack", False):
+            raise
         return CPU_MODEL_ID
     return GPU_MODEL_ID
 
@@ -113,10 +130,19 @@ def _sealed_model_path(model_id: str) -> Path:
 
     result = ensure_model_cached(model_id, offline=True)
     if result.status != "cached" or not result.local_path:
-        raise DetectorUnavailable(result.error or f"{model_id} is not installed as a sealed asset")
+        is_invalid_pack = result.status not in {"bundled_missing", "offline_missing"}
+        raise DetectorUnavailable(
+            result.error or f"{model_id} is not installed as a sealed asset",
+            invalid_pack=is_invalid_pack,
+            model_id=model_id,
+        )
     path = Path(result.local_path)
     if not path.is_file():
-        raise DetectorUnavailable(f"{model_id} resolved to a missing file")
+        raise DetectorUnavailable(
+            f"{model_id} resolved to a missing file",
+            invalid_pack=True,
+            model_id=model_id,
+        )
     return path
 
 
@@ -448,6 +474,8 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     path = item.get("source_path")
     if not isinstance(path, str) or not os.path.isfile(path):
         return {"objects": [], "detect_meta": {"status": "no_file", **sample_provenance}}
+    selected: str | None = None
+    runtime: DetectorRuntime | None = None
     try:
         selected = _select_model_id(cfg)
         model_loaded_now = not any(key.split(":")[0] == selected for key in _RUNTIMES)
@@ -471,8 +499,10 @@ def object_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         return {"objects": detections, "detect_meta": {"status": "ok", **metadata, **sample_provenance}}
     except DetectorUnavailable as exc:
         logger.warning("object detection unavailable: %s", exc)
-        return {"objects": [], "detect_meta": {"status": "unavailable", "engine": ENGINE, "error": str(exc), **sample_provenance}}
+        err_engine = getattr(runtime, "engine", None) or _model_engine(selected or getattr(exc, "model_id", None))
+        return {"objects": [], "detect_meta": {"status": "unavailable", "engine": err_engine, "error": str(exc), **sample_provenance}}
     except Exception as exc:
         logger.exception("object detection failed")
         GPUManager.clear_cache()
-        return {"objects": [], "detect_meta": {"status": "error", "engine": ENGINE, "error": str(exc), "exc_type": type(exc).__name__, **sample_provenance}}
+        err_engine = getattr(runtime, "engine", None) or _model_engine(selected)
+        return {"objects": [], "detect_meta": {"status": "error", "engine": err_engine, "error": str(exc), "exc_type": type(exc).__name__, **sample_provenance}}

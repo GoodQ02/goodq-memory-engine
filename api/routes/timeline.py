@@ -4,6 +4,8 @@ Provides unified temporal index access.
 """
 from __future__ import annotations
 import logging
+import re
+from typing import Any, Dict, List
 from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Path as PathParam
 from starlette.concurrency import run_in_threadpool
@@ -21,6 +23,64 @@ from api.utils.media_projection import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class ProjectedTimelineSegment(TimelineSegment):
+    """Timeline segment preserving visual/face stage metadata and stage error projections."""
+
+    ocr_meta: Dict[str, Any] | None = None
+    faces_meta: Dict[str, Any] | None = None
+    errors: Dict[str, Any] | List[Any] | None = None
+    optional_stage_errors: Dict[str, Any] | List[Any] | None = None
+
+
+class ProjectedTimelineResponse(TimelineResponse):
+    """Timeline response carrying projected stage metadata on segments."""
+
+    segments: List[ProjectedTimelineSegment]
+
+
+ProjectedTimelineSegment.model_rebuild(_types_namespace=globals())
+ProjectedTimelineResponse.model_rebuild(_types_namespace=globals())
+
+
+_HOST_PATH_RE = re.compile(
+    r"(?:file://[^\s\"'<>]+|(?<![A-Za-z])[A-Za-z]:[\\/][^\s\"'<>]+|\\\\[^\s\"'<>]+|/(?:mnt|home|Users|tmp|var|opt|etc)/[^\s\"'<>]+)"
+)
+_REDACTED_STAGE_KEY_SUFFIXES = ("_path", "_dir", "_file", "_root")
+_REDACTED_STAGE_KEYS = {"path", "dir", "file", "root"}
+
+
+def _sanitize_stage_payload(video_id: str, value: Any) -> Any:
+    """Sanitize projected stage metadata/errors without leaking local filesystem paths."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        base = sanitize_visual_meta(video_id, value) or {}
+        cleaned: Dict[str, Any] = {}
+        for k, v in base.items():
+            key_str = str(k)
+            key_low = key_str.lower()
+            if key_str not in {"frame_endpoint", "frame_name"} and (
+                key_low in _REDACTED_STAGE_KEYS or key_low.endswith(_REDACTED_STAGE_KEY_SUFFIXES)
+            ):
+                continue
+            cleaned[key_str] = _sanitize_stage_payload(video_id, v)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_stage_payload(video_id, item) for item in value]
+    if isinstance(value, str):
+        return _HOST_PATH_RE.sub("<redacted-path>", value)
+    return value
+
+
+def _resolve_visual_stage_meta(video_id: str, seg: dict, key: str) -> Dict[str, Any] | None:
+    raw = seg.get(key)
+    if raw is None and isinstance(seg.get("keyframe"), dict):
+        raw = seg["keyframe"].get(key)
+    if not isinstance(raw, dict):
+        return None
+    return _sanitize_stage_payload(video_id, raw)
 
 router = APIRouter(prefix="/api/videos/{video_id}/timeline", tags=["timeline"])
 
@@ -80,7 +140,7 @@ def _segment_object_labels(segment: dict) -> list[str]:
 
 
 def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool = False,
-                            source_kind: str = "video", original_image_available: bool = False) -> TimelineSegment:
+                            source_kind: str = "video", original_image_available: bool = False) -> ProjectedTimelineSegment:
     """Project one persisted segment into the stable timeline API contract."""
     full_transcript = seg.get("full_transcript") or seg.get("transcript")
     transcript = full_transcript
@@ -95,7 +155,7 @@ def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool 
         }
     frame_paths = frame_paths_projection(video_id, seg.get('frame_paths', []))
 
-    return TimelineSegment(
+    return ProjectedTimelineSegment(
         source_kind=seg.get("source_kind") or source_kind,
         document_text=seg.get("document_text"),
         document_meta=document_meta_projection(seg.get("document_meta")),
@@ -117,10 +177,22 @@ def _build_timeline_segment(video_id: str, seg: dict, truncate_transcript: bool 
         ocr_date_candidates=seg.get('ocr_date_candidates', []),
         caption_meta=sanitize_visual_meta(video_id, seg.get('caption_meta')),
         caption_observations=sanitize_visual_observations(video_id, seg.get('caption_observations')),
+        ocr_meta=_resolve_visual_stage_meta(video_id, seg, 'ocr_meta'),
         ocr_observations=sanitize_visual_observations(video_id, seg.get('ocr_observations')),
         detect_meta=sanitize_visual_meta(video_id, seg.get('detect_meta')),
         detected_objects=sanitize_detected_objects(video_id, seg.get('detected_objects')),
         object_observations=sanitize_visual_observations(video_id, seg.get('object_observations')),
+        faces_meta=_resolve_visual_stage_meta(video_id, seg, 'faces_meta'),
+        errors=(
+            _sanitize_stage_payload(video_id, seg.get('errors'))
+            if isinstance(seg.get('errors'), (dict, list))
+            else None
+        ),
+        optional_stage_errors=(
+            _sanitize_stage_payload(video_id, seg.get('optional_stage_errors'))
+            if isinstance(seg.get('optional_stage_errors'), (dict, list))
+            else None
+        ),
         speaker_count=seg.get('speaker_count'),
         dominant_speaker_id=seg.get('dominant_speaker_id'),
         continuity_key=seg.get('continuity_key'),
@@ -198,7 +270,7 @@ def get_data_loader():
     return _data_loader
 
 
-@router.get("", response_model=TimelineResponse)
+@router.get("", response_model=ProjectedTimelineResponse)
 async def get_timeline(
     video_id: str = PathParam(..., description="Video identifier")
 ):
@@ -225,7 +297,7 @@ async def get_timeline(
             segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=True,
                             source_kind=source_kind, original_image_available=original_image_available))
         
-        return TimelineResponse(
+        return ProjectedTimelineResponse(
             video_id=video_id,
             source_kind=temporal_index.get("source_kind") or "video",
             duration=temporal_index.get('total_duration', temporal_index.get('duration', 0.0)),
@@ -242,7 +314,7 @@ async def get_timeline(
         raise HTTPException(status_code=500, detail=f"Failed to get timeline: {str(e)}")
 
 
-@router.get("/full", response_model=TimelineResponse)
+@router.get("/full", response_model=ProjectedTimelineResponse)
 async def get_full_timeline(
     video_id: str = PathParam(..., description="Video identifier")
 ):
@@ -269,7 +341,7 @@ async def get_full_timeline(
             segments.append(_build_timeline_segment(video_id, seg, truncate_transcript=False,
                             source_kind=source_kind, original_image_available=original_image_available))
         
-        return TimelineResponse(
+        return ProjectedTimelineResponse(
             video_id=video_id,
             source_kind=temporal_index.get("source_kind") or "video",
             duration=temporal_index.get('total_duration', temporal_index.get('duration', 0.0)),

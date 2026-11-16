@@ -1346,6 +1346,50 @@ def _resolve_scene_time_hints(audio_payload: Dict[str, Any], frame_payload: Dict
     return audio_hints if isinstance(audio_hints, dict) else {}
 
 
+def _prepare_scene_bundle_identity_kwargs(
+    frame_info: Optional[Dict[str, Any]],
+    audio_info: Optional[Dict[str, Any]],
+    *,
+    register_fn: Any = register_scene_bundle,
+) -> Dict[str, Any]:
+    bundle_face_count: Optional[int] = None
+    if isinstance(frame_info, dict) and isinstance(frame_info.get('data'), dict):
+        f_data = frame_info['data']
+        face_counts: List[int] = []
+        if isinstance(f_data.get('faces'), list):
+            face_counts.append(sum(1 for f in f_data['faces'] if isinstance(f, dict)))
+        if isinstance(f_data.get('face_observations'), list):
+            for f_obs in f_data['face_observations']:
+                if isinstance(f_obs, dict) and isinstance(f_obs.get('faces'), list):
+                    face_counts.append(sum(1 for f in f_obs['faces'] if isinstance(f, dict)))
+        if face_counts:
+            bundle_face_count = max(face_counts)
+            f_data.setdefault('face_count', bundle_face_count)
+    bundle_speaker_ids: List[str] = []
+    if isinstance(audio_info, dict):
+        a_data = audio_info.get('data') if isinstance(audio_info.get('data'), dict) else audio_info
+        bundle_speaker_ids = _extract_speaker_ids(a_data)
+        if isinstance(audio_info.get('data'), dict):
+            audio_info['data'].setdefault('speaker_ids', bundle_speaker_ids)
+            audio_info['data'].setdefault('speaker_count', len(bundle_speaker_ids))
+    extra_kwargs: Dict[str, Any] = {}
+    try:
+        import inspect as _inspect_mod
+
+        bundle_sig = _inspect_mod.signature(register_fn)
+        has_var_kw = any(
+            p.kind == _inspect_mod.Parameter.VAR_KEYWORD
+            for p in bundle_sig.parameters.values()
+        )
+        if has_var_kw or 'face_count' in bundle_sig.parameters:
+            extra_kwargs['face_count'] = bundle_face_count
+        if has_var_kw or 'speaker_ids' in bundle_sig.parameters:
+            extra_kwargs['speaker_ids'] = bundle_speaker_ids
+    except (TypeError, ValueError):
+        pass
+    return extra_kwargs
+
+
 def _build_kg_scene_data(
     scene: Dict[str, Any],
     *,
@@ -1396,6 +1440,7 @@ def _build_kg_scene_data(
         'speaker_segments': audio_payload.get('speaker_segments'),
         'speaker_voice_signatures': audio_payload.get('speaker_voice_signatures'),
         'speaker_voice_signature_meta': audio_payload.get('speaker_voice_signature_meta'),
+        'speaker_change_review': audio_payload.get('speaker_change_review'),
         'music_events': audio_payload.get('music_events'),
         'time_hints': _resolve_scene_time_hints(audio_payload, frame_payload),
         'metadata_time_hints': audio_payload.get('metadata_time_hints'),
@@ -1644,6 +1689,48 @@ def _normalize_local_transcription_result(result: Any) -> Dict[str, Any]:
     return normalized
 
 
+def _is_valid_silent_local_transcription(*candidates: Any) -> bool:
+    bad_statuses = {
+        'error',
+        'failed',
+        'failure',
+        'unavailable',
+        'dependency_missing',
+        'model_unavailable',
+        'invalid_worker_result',
+        'no_transcript_output',
+        'no_file',
+        'no_source_path',
+        'skipped',
+    }
+    valid_empty_outcomes = {'no_speech', 'no_speech_detected', 'no_intelligible_speech'}
+    meta_status = ''
+    outcome = ''
+    method = ''
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if not outcome:
+            raw_outcome = str(candidate.get('transcript_outcome') or '').strip().lower()
+            if raw_outcome:
+                outcome = raw_outcome
+        meta = candidate.get('transcript_meta')
+        if isinstance(meta, dict):
+            if not meta_status:
+                meta_status = str(meta.get('status') or '').strip().lower()
+            if not method:
+                method = str(meta.get('method') or '').strip().lower()
+    if method in {'wsl2_gpu', 'wsl_faster_whisper_venv'}:
+        return False
+    if meta_status in bad_statuses:
+        return False
+    if meta_status == 'empty':
+        return True
+    if outcome in valid_empty_outcomes and meta_status in {'', 'ok', 'success', 'not_applicable', 'no_speech'}:
+        return True
+    return False
+
+
 def _infer_audio_backend_fields(
     audio_info: Optional[Dict[str, Any]],
     *,
@@ -1706,7 +1793,7 @@ def _infer_audio_backend_fields(
         reason = f'wsl_transcript_{status}' if status else 'wsl_transcript_selected'
         return {'audio_backend_selected': 'wsl', 'audio_backend_reason': reason}
 
-    if has_transcript or has_segments:
+    if has_transcript or has_segments or _is_valid_silent_local_transcription(*candidates):
         return {
             'audio_backend_selected': 'windows',
             'audio_backend_reason': f'windows_transcript_{status}' if status else 'windows_transcript_available',
@@ -3733,21 +3820,113 @@ def _has_meaningful_audio_segments(segments: List[Dict[str, Any]]) -> bool:
     return False
 
 
+_OPTIONAL_VISION_ERROR_PREFIXES = (
+    'ocr sample at ',
+    'object_detect@',
+    'face sample at ',
+    'caption sample at ',
+)
+
+
+def _scene_has_core_signal(scene: Dict[str, Any]) -> bool:
+    audio_payload = _extract_audio_payload(scene)
+    if _extract_transcript_text(audio_payload) or _has_meaningful_audio_segments(_extract_segments(audio_payload)):
+        return True
+    keyframe = scene.get('keyframe')
+    if isinstance(keyframe, dict):
+        kf_candidates = [keyframe]
+        if isinstance(keyframe.get('data'), dict):
+            kf_candidates.append(keyframe['data'])
+        for kf in kf_candidates:
+            cap = kf.get('caption')
+            if isinstance(cap, str) and cap.strip():
+                return True
+            cap_obs = kf.get('caption_observations')
+            if isinstance(cap_obs, list) and any(
+                isinstance(obs, dict) and isinstance(obs.get('caption'), str) and obs['caption'].strip()
+                for obs in cap_obs
+            ):
+                return True
+            for emb_key in ('clip_embedding', 'dino_embedding', 'clip_id', 'dino_id'):
+                emb_val = kf.get(emb_key)
+                if (isinstance(emb_val, list) and len(emb_val) > 0) or (isinstance(emb_val, str) and emb_val.strip()):
+                    return True
+            for meta_key in ('clip_meta', 'dino_meta'):
+                emb_meta = kf.get(meta_key)
+                if isinstance(emb_meta, dict) and str(emb_meta.get('status') or '').strip().lower() == 'ok':
+                    return True
+    return False
+
+
+_FRAME_STEP_ERROR_BOUNDARY_RE = re.compile(
+    r";\s+(?=(?:ocr sample at |object_detect@|face sample at |caption sample at |image_embed_|tagger\b|text_embed\b|Step\s+(?:image_embed_|tagger\b|text_embed\b)))"
+)
+
+
+def _is_optional_vision_only_error_text(
+    raw: str,
+    optional_stage_errors: Optional[Dict[str, Any]] = None,
+) -> bool:
+    remaining = raw.strip()
+    if not remaining:
+        return False
+    matched_any = False
+    if isinstance(optional_stage_errors, dict):
+        for errs in optional_stage_errors.values():
+            if not isinstance(errs, list):
+                continue
+            for err_item in errs:
+                err_str = str(err_item or '').strip()
+                if err_str and err_str in remaining:
+                    remaining = remaining.replace(err_str, '')
+                    matched_any = True
+        remaining = remaining.strip(' ;')
+        if not remaining:
+            return matched_any
+    parts = [part.strip() for part in _FRAME_STEP_ERROR_BOUNDARY_RE.split(remaining) if part.strip()]
+    if not parts:
+        return False
+    return all(any(part.startswith(prefix) for prefix in _OPTIONAL_VISION_ERROR_PREFIXES) for part in parts)
+
+
 def _scene_has_processing_error(scene: Dict[str, Any]) -> bool:
     for key in ('audio_error', 'frame_error', 'keyframe_error', 'step_error'):
         value = scene.get(key)
         if isinstance(value, str) and value.strip():
             return True
 
-    errors = scene.get('errors')
-    if isinstance(errors, dict):
-        for value in errors.values():
-            if isinstance(value, str) and value.strip():
-                return True
-
     reason = scene.get('audio_backend_reason')
     if isinstance(reason, str) and reason == 'audio_processing_error':
         return True
+
+    errors = scene.get('errors')
+    has_optional_vision_error = False
+    if isinstance(errors, dict):
+        opt_stage_errs = errors.get('optional_stage_errors') if isinstance(errors.get('optional_stage_errors'), dict) else None
+        for err_key, value in errors.items():
+            if err_key in {'optional_stage_errors', 'optional_vision'}:
+                if (isinstance(value, (dict, list)) and bool(value)) or (isinstance(value, str) and value.strip()):
+                    has_optional_vision_error = True
+                continue
+            if err_key == 'frame_processing':
+                if isinstance(value, list) and value:
+                    joined_fp = "; ".join(str(v) for v in value if str(v).strip())
+                    if joined_fp and _is_optional_vision_only_error_text(joined_fp, opt_stage_errs):
+                        has_optional_vision_error = True
+                        continue
+                    return True
+                if isinstance(value, str) and value.strip():
+                    if _is_optional_vision_only_error_text(value, opt_stage_errs):
+                        has_optional_vision_error = True
+                        continue
+                    return True
+            if isinstance(value, str) and value.strip():
+                return True
+            if isinstance(value, (dict, list)) and bool(value):
+                return True
+
+    if has_optional_vision_error:
+        return not _scene_has_core_signal(scene)
 
     return False
 
@@ -4407,6 +4586,92 @@ def _record_prelaunch_step_error(
         logger.debug("Pre-launch step ledger write skipped for %s: %s", step_name, exc)
 
 
+def _get_step_runs_offset(cfg_json: Optional[Path]) -> int:
+    if cfg_json is None or not cfg_json.exists():
+        return 0
+    try:
+        raw_cfg = json.loads(cfg_json.read_text(encoding="utf-8"))
+        log_dir = ((raw_cfg.get("paths") or {}).get("log_dir")) if isinstance(raw_cfg, dict) else None
+        if not log_dir:
+            return 0
+        jsonl_path = Path(log_dir) / "step_runs.jsonl"
+        return jsonl_path.stat().st_size if jsonl_path.is_file() else 0
+    except Exception:
+        return 0
+
+
+def _record_postlaunch_step_error(
+    cfg_json: Optional[Path],
+    step_name: str,
+    payload: Any,
+    duration_ms: float,
+    error_msg: str,
+    *,
+    reason: str,
+    start_offset: int = 0,
+) -> None:
+    if cfg_json is None or not cfg_json.exists():
+        return
+    try:
+        raw_cfg = json.loads(cfg_json.read_text(encoding="utf-8"))
+        if not isinstance(raw_cfg, dict):
+            return
+        log_dir = (raw_cfg.get("paths") or {}).get("log_dir")
+        if not log_dir:
+            return
+        already_errored: set[tuple[str, Any, Any, Any]] = set()
+        jsonl_path = Path(log_dir) / "step_runs.jsonl"
+        if jsonl_path.is_file():
+            try:
+                with open(jsonl_path, "rb") as jf:
+                    if start_offset > 0:
+                        jf.seek(min(start_offset, jsonl_path.stat().st_size))
+                    tail = jf.read().decode("utf-8", errors="replace")
+                for line in tail.splitlines():
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    if isinstance(row, dict) and str(row.get("status") or "").strip().lower() == "error":
+                        already_errored.add(
+                            (
+                                str(row.get("step") or ""),
+                                row.get("scene_id"),
+                                row.get("timestamp"),
+                                row.get("source_path"),
+                            )
+                        )
+            except Exception:
+                pass
+
+        items = (
+            payload["_batch_items"]
+            if isinstance(payload, dict) and isinstance(payload.get("_batch_items"), list)
+            else [payload]
+        )
+        per_item_ms = duration_ms / max(1, len(items))
+        for sub_item in items:
+            item_dict = sub_item if isinstance(sub_item, dict) else {}
+            key = (
+                step_name,
+                item_dict.get("scene_id"),
+                item_dict.get("timestamp"),
+                item_dict.get("source_path"),
+            )
+            if key in already_errored:
+                continue
+            log_step_run(
+                raw_cfg,
+                step_name,
+                item_dict,
+                per_item_ms,
+                "error",
+                error_msg,
+                extra={"reason": reason, "post_launch": True},
+            )
+    except Exception as exc:
+        logger.debug("Post-launch step ledger write skipped for %s: %s", step_name, exc)
+
+
 def _run_step(
     env_name: str,
     step_name: str,
@@ -4432,14 +4697,34 @@ def _run_step(
     if step_name == "image_ocr":
         from cli.step_runner import load_step_config
         step_cfg = load_step_config(cfg_json)
-        gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+        try:
+            gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+        except Exception as policy_exc:
+            _record_prelaunch_step_error(
+                cfg_json,
+                step_name,
+                payload,
+                (time.perf_counter() - prelaunch_start_ts) * 1000.0,
+                str(policy_exc),
+                reason="gpu_policy_conflict",
+            )
+            raise
         env_name = "goodq_ocr"
     gpu_auto_enabled = (
         policy_env.get("GOODQ_HOST_PROFILE") != "BASELINE"
         and policy_env.get("GOODQ_NO_AUTO_GPU") != "1"
     )
     if step_name in STEP_VRAM_FRACTIONS and gpu_required and not gpu_auto_enabled:
-        raise RuntimeError(f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled.")
+        err_msg = f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled."
+        _record_prelaunch_step_error(
+            cfg_json,
+            step_name,
+            payload,
+            (time.perf_counter() - prelaunch_start_ts) * 1000.0,
+            err_msg,
+            reason="gpu_auto_config_disabled",
+        )
+        raise RuntimeError(err_msg)
     gpu_enabled = (
         gpu_auto_enabled
         and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
@@ -4533,6 +4818,7 @@ def _run_step(
         direct_env_python, step_env = launch.direct_python, launch.environment
 
         start_ts = time.perf_counter()
+        step_log_offset = _get_step_runs_offset(cfg_json)
         observer = _observer()
         observer_step = f"step.{step_name}"
         observer_meta: Dict[str, Any] = {"env": env_name}
@@ -4608,7 +4894,17 @@ def _run_step(
                 except Exception:
                     pass
                 if process.returncode is None:
-                    raise RuntimeError(f"Step {step_name} timed out; worker exit was not confirmed") from exc
+                    unconfirmed_msg = f"Step {step_name} timed out; worker exit was not confirmed"
+                    _record_postlaunch_step_error(
+                        cfg_json,
+                        step_name,
+                        payload,
+                        (time.perf_counter() - start_ts) * 1000.0,
+                        unconfirmed_msg,
+                        reason="step_timeout",
+                        start_offset=step_log_offset,
+                    )
+                    raise RuntimeError(unconfirmed_msg) from exc
             if observer:
                 _report_step_failure(observer,
                     observer_step,
@@ -4657,8 +4953,18 @@ def _run_step(
                     )
                     typer.echo(f"[heal] [WARN] Healing failed: {heal_error}", err=True)
 
-            raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
-        
+            timeout_msg = f"Step {step_name} timed out after {STEP_TIMEOUT}s"
+            _record_postlaunch_step_error(
+                cfg_json,
+                step_name,
+                payload,
+                (time.perf_counter() - start_ts) * 1000.0,
+                timeout_msg,
+                reason="step_timeout",
+                start_offset=step_log_offset,
+            )
+            raise RuntimeError(timeout_msg) from exc
+
         if result.returncode != 0:
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
@@ -4820,6 +5126,15 @@ def _run_step(
                     )
                     typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
 
+            _record_postlaunch_step_error(
+                cfg_json,
+                step_name,
+                payload,
+                (time.perf_counter() - start_ts) * 1000.0,
+                error_msg,
+                reason="worker_nonzero_exit",
+                start_offset=step_log_offset,
+            )
             raise RuntimeError(error_msg)
         try:
             outputs = read_worker_result(out_path, stdout_text, step_name=step_name, env_name=env_name)
@@ -4830,6 +5145,16 @@ def _run_step(
                 raise WorkerResultError(f"Step {step_name} failed ({env_name}): {outputs.get('_error', log_error)} ({reason})",
                                         step_name=step_name, outputs=outputs)
         except (RuntimeError, OSError) as exc:
+            if not isinstance(exc, WorkerResultError):
+                _record_postlaunch_step_error(
+                    cfg_json,
+                    step_name,
+                    payload,
+                    (time.perf_counter() - start_ts) * 1000.0,
+                    str(exc),
+                    reason="worker_result_read_failed",
+                    start_offset=step_log_offset,
+                )
             if observer:
                 _report_step_failure(observer,observer_step, error=str(exc), metadata=observer_meta)
             raise
@@ -4956,7 +5281,16 @@ def _run_step_batch(
 
     batch_list = batch_out.get("_batch_results") if isinstance(batch_out, dict) else None
     if not isinstance(batch_list, list) or len(batch_list) != len(payloads):
-        return [("error", {}, f"{step_name} returned malformed _batch_results") for _ in payloads]
+        malformed_msg = f"{step_name} returned malformed _batch_results"
+        _record_postlaunch_step_error(
+            cfg_json,
+            step_name,
+            batch_payload,
+            0.0,
+            malformed_msg,
+            reason="batch_result_mismatch",
+        )
+        return [("error", {}, malformed_msg) for _ in payloads]
 
     unpacked: List[Tuple[str, Dict[str, Any], Optional[str]]] = []
     for entry in batch_list:
@@ -5045,14 +5379,34 @@ async def _run_step_async(
         if step_name == "image_ocr":
             from cli.step_runner import load_step_config
             step_cfg = load_step_config(cfg_json)
-            gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+            try:
+                gpu_required = validate_ocr_device_policy(step_cfg, policy_env)
+            except Exception as policy_exc:
+                _record_prelaunch_step_error(
+                    cfg_json,
+                    step_name,
+                    payload,
+                    (time.perf_counter() - start_ts) * 1000.0,
+                    str(policy_exc),
+                    reason="gpu_policy_conflict",
+                )
+                raise
             env_name = "goodq_ocr"
         gpu_auto_enabled = (
             policy_env.get("GOODQ_HOST_PROFILE") != "BASELINE"
             and policy_env.get("GOODQ_NO_AUTO_GPU") != "1"
         )
         if step_name in STEP_VRAM_FRACTIONS and gpu_required and not gpu_auto_enabled:
-            raise RuntimeError(f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled.")
+            err_msg = f"GPU-required step '{step_name}' cannot launch with GPU auto-config disabled."
+            _record_prelaunch_step_error(
+                cfg_json,
+                step_name,
+                payload,
+                (time.perf_counter() - start_ts) * 1000.0,
+                err_msg,
+                reason="gpu_auto_config_disabled",
+            )
+            raise RuntimeError(err_msg)
         gpu_enabled = (
             gpu_auto_enabled
             and ("PYTEST_CURRENT_TEST" not in os.environ or os.getenv("GOODQ_TEST_VRAM_ALLOCATOR") == "1")
@@ -5138,6 +5492,7 @@ async def _run_step_async(
             )
             cmd, launcher_kind = launch.command, launch.kind
             direct_env_python, step_env = launch.direct_python, launch.environment
+            step_log_offset = _get_step_runs_offset(cfg_json)
 
             observer = _observer()
             observer_step = f"step.{step_name}"
@@ -5227,7 +5582,17 @@ async def _run_step_async(
                     if process.returncode is None:
                         if isinstance(exc, asyncio.CancelledError):
                             raise
-                        raise RuntimeError(f"Step {step_name} timed out; worker exit was not confirmed") from exc
+                        unconfirmed_msg = f"Step {step_name} timed out; worker exit was not confirmed"
+                        _record_postlaunch_step_error(
+                            cfg_json,
+                            step_name,
+                            payload,
+                            (time.perf_counter() - start_ts) * 1000.0,
+                            unconfirmed_msg,
+                            reason="step_timeout",
+                            start_offset=step_log_offset,
+                        )
+                        raise RuntimeError(unconfirmed_msg) from exc
                 
                 if observer:
                     _report_step_failure(
@@ -5277,7 +5642,17 @@ async def _run_step_async(
 
                 if isinstance(exc, asyncio.CancelledError):
                     raise
-                raise RuntimeError(f"Step {step_name} timed out after {STEP_TIMEOUT}s") from exc
+                timeout_msg = f"Step {step_name} timed out after {STEP_TIMEOUT}s"
+                _record_postlaunch_step_error(
+                    cfg_json,
+                    step_name,
+                    payload,
+                    (time.perf_counter() - start_ts) * 1000.0,
+                    timeout_msg,
+                    reason="step_timeout",
+                    start_offset=step_log_offset,
+                )
+                raise RuntimeError(timeout_msg) from exc
 
             if result.returncode != 0:
                 stderr = result.stderr.strip()
@@ -5440,11 +5815,30 @@ async def _run_step_async(
                         )
                         typer.echo(f"[heal] [WARN] Healing attempt failed: {heal_error}", err=True)
 
+                _record_postlaunch_step_error(
+                    cfg_json,
+                    step_name,
+                    payload,
+                    (time.perf_counter() - start_ts) * 1000.0,
+                    error_msg,
+                    reason="worker_nonzero_exit",
+                    start_offset=step_log_offset,
+                )
                 raise RuntimeError(error_msg)
 
             try:
                 outputs = read_worker_result(out_path, stdout_bytes, step_name=step_name, env_name=env_name)
             except (RuntimeError, OSError) as exc:
+                if not isinstance(exc, WorkerResultError):
+                    _record_postlaunch_step_error(
+                        cfg_json,
+                        step_name,
+                        payload,
+                        (time.perf_counter() - start_ts) * 1000.0,
+                        str(exc),
+                        reason="worker_result_read_failed",
+                        start_offset=step_log_offset,
+                    )
                 if observer:
                     _report_step_failure(observer,observer_step, error=str(exc), metadata=observer_meta)
                 raise
@@ -5621,6 +6015,16 @@ async def _run_step_batch_async(
         ]
 
     err_str = (envelope.get("errors") if isinstance(envelope, dict) else str(envelope)) or f"{step_name} batch worker failed"
+    if isinstance(envelope, dict) and envelope.get("status") == "ok":
+        err_str = f"{step_name} returned malformed _batch_results"
+        _record_postlaunch_step_error(
+            cfg_json,
+            step_name,
+            batch_payload,
+            float(envelope.get("duration_seconds") or 0.0) * 1000.0,
+            err_str,
+            reason="batch_result_mismatch",
+        )
     return [
         _make_async_step_envelope(
             step_name=step_name,
@@ -5933,21 +6337,51 @@ def _filter_vhs_ocr_regions(
     new_time_hints = time_hints
     if len(kept_dates) != len(date_ev_raw):
         if kept_dates:
-            explicit_dates = list(dict.fromkeys(str(ev["normalized_date"]) for ev in kept_dates if ev.get("normalized_date")))
-            years = list(dict.fromkeys(str(ev["normalized_date"])[:4] for ev in kept_dates if ev.get("normalized_date")))
-            first_seen: Dict[str, float] = {}
+            recomputed_hints: Optional[Dict[str, Any]] = None
+            try:
+                from steps.image_ocr.step import _date_hints as _ocr_date_hints
+
+                normalized_kept_regions = [
+                    dict(r, polygon=r.get("polygon") if "polygon" in r else [])
+                    for r in kept_regions
+                ]
+                recomputed_hints, _ = _ocr_date_hints(normalized_kept_regions, sample_ts)
+            except Exception:
+                recomputed_hints = None
             old_first = time_hints.get("first_seen_ts", {}) if isinstance(time_hints, dict) else {}
-            for key in [*explicit_dates, *years]:
-                first_seen[key] = float(old_first.get(key, sample_ts))
-            new_time_hints = {
-                "explicit_dates": explicit_dates,
-                "years": years,
-                "decades": [],
-                "seasons": [],
-                "holidays": [],
-                "relative": [],
-                "first_seen_ts": first_seen,
-            }
+            if isinstance(recomputed_hints, dict) and _time_hints_have_values(recomputed_hints):
+                merged_first = dict(recomputed_hints.get("first_seen_ts") or {})
+                for key in list(merged_first.keys()):
+                    if key in old_first:
+                        merged_first[key] = float(old_first[key])
+                if merged_first:
+                    recomputed_hints["first_seen_ts"] = merged_first
+                new_time_hints = recomputed_hints
+            else:
+                explicit_dates = list(
+                    dict.fromkeys(
+                        str(ev.get("date") or ev.get("normalized_date"))
+                        for ev in kept_dates
+                        if ev.get("date") or ev.get("normalized_date")
+                    )
+                )
+                years = list(dict.fromkeys(d[:4] for d in explicit_dates if len(d) >= 4 and d[:4].isdigit()))
+                first_seen: Dict[str, float] = {}
+                for key in [*explicit_dates, *years]:
+                    first_seen[key] = float(old_first.get(key, sample_ts))
+                new_time_hints = (
+                    {
+                        "explicit_dates": explicit_dates,
+                        "years": years,
+                        "decades": [],
+                        "seasons": [],
+                        "holidays": [],
+                        "relative": [],
+                        "first_seen_ts": first_seen,
+                    }
+                    if explicit_dates
+                    else None
+                )
         else:
             new_time_hints = None
 
@@ -6015,15 +6449,26 @@ def _aggregate_ocr_sample_results(
 
         ocr_text_raw = outputs.get("ocr_text")
         ocr_text = ocr_text_raw.strip() if isinstance(ocr_text_raw, str) and ocr_text_raw.strip() else None
-        meta_status = str(ocr_meta.get("status") or ("error" if rec.get("error") else "unknown")).strip().lower()
+        meta_status = str(
+            ocr_meta.get("status")
+            or ("error" if (rec_status == "error" or rec.get("error")) else "unknown")
+        ).strip().lower()
         sample_time_hints = outputs.get("time_hints")
         if ocr_text and meta_status == "ok":
             ocr_text, ocr_meta, sample_time_hints = _filter_vhs_ocr_regions(
                 ocr_text, ocr_meta, sample_time_hints, ts
             )
             meta_status = str(ocr_meta.get("status") or meta_status).strip().lower()
-        meta_reason = str(ocr_meta.get("reason") or ("ocr_sample_error" if rec.get("error") else meta_status)).strip()
+        meta_reason = str(
+            ocr_meta.get("reason")
+            or ("ocr_sample_error" if (rec_status == "error" or rec.get("error")) else meta_status)
+        ).strip()
         sample_err = rec.get("error") or ocr_meta.get("fallback_error") or ocr_meta.get("error")
+        if not ocr_meta.get("status") and (rec_status == "error" or rec.get("error")):
+            ocr_meta["status"] = "error"
+            ocr_meta.setdefault("reason", meta_reason or "ocr_sample_error")
+            if sample_err:
+                ocr_meta.setdefault("error", str(sample_err))
 
         if rec_status == "error" or meta_status in {"error", "dependency_missing", "no_source_path"} or ocr_meta.get("fallback_error"):
             err_msg = str(sample_err or f"ocr sample failed ({meta_status}:{meta_reason})")
@@ -6100,7 +6545,9 @@ def _aggregate_ocr_sample_results(
         combined_meta["accepted_sample_timestamps"] = [obs["timestamp"] for obs in observations]
         combined_meta["non_midpoint_text_observed"] = any(not obs["is_midpoint_sample"] for obs in observations)
     else:
-        combined_meta = dict(best_non_ok_meta or {"status": "no_text", "reason": "empty_ocr_text"})
+        combined_meta = dict(best_non_ok_meta or {"status": "error" if errors else "no_text", "reason": "ocr_sample_error" if errors else "empty_ocr_text"})
+        if not combined_meta.get("status"):
+            combined_meta["status"] = "error" if errors else "no_text"
         combined_meta["accepted_sample_timestamps"] = []
         combined_meta["non_midpoint_text_observed"] = False
 
@@ -6372,9 +6819,18 @@ def _aggregate_object_detect_sample_results(
             sample_objects.append(annotated_obj)
             all_objects.append(annotated_obj)
 
-        meta_status = str(det_meta.get("status") or ("ok" if rec_status == "ok" else "error")).strip().lower()
-        meta_reason = det_meta.get("reason")
+        meta_status = str(
+            det_meta.get("status")
+            or ("ok" if (rec_status == "ok" and not rec.get("error")) else "error")
+        ).strip().lower()
+        meta_reason = det_meta.get("reason") or ("object_detect_sample_error" if meta_status == "error" else None)
         sample_err = rec.get("error") or det_meta.get("error")
+        if not det_meta.get("status"):
+            det_meta["status"] = meta_status
+            if meta_status == "error":
+                det_meta.setdefault("reason", meta_reason or "object_detect_sample_error")
+                if sample_err:
+                    det_meta.setdefault("error", str(sample_err))
 
         if rec_status == "error" or meta_status in {"error", "dependency_missing", "model_unavailable"}:
             err_msg = str(sample_err or meta_reason or meta_status or "object_detect sample error")
@@ -6420,7 +6876,9 @@ def _aggregate_object_detect_sample_results(
         combined_meta["accepted_sample_timestamps"] = [obs["timestamp"] for obs in observations]
         combined_meta["non_midpoint_objects_observed"] = any(not obs["is_midpoint_sample"] for obs in observations)
     else:
-        combined_meta = dict(best_non_ok_meta or {"status": "ok", "engine": "opencv-dnn"})
+        combined_meta = dict(best_non_ok_meta or {"status": "error" if errors else "ok", "engine": "opencv-dnn"})
+        if not combined_meta.get("status"):
+            combined_meta["status"] = "error" if errors else "not_applicable"
         if combined_meta.get("status") == "ok":
             # A successful detector run with no observations is supported absence,
             # matching the step ledger's no_detected_object outcome.
@@ -6645,7 +7103,28 @@ def _process_frame(
     object_sample_records.sort(key=lambda record: record['sample_index'])
     item.update(_aggregate_object_detect_sample_results(object_sample_records, frame_timestamp))
 
-    merge('goodq_face_embed', 'face_embed')
+    try:
+        merge('goodq_face_embed', 'face_embed')
+    except Exception as face_exc:
+        item.setdefault('faces', [])
+        item['faces_meta'] = {
+            'status': 'error',
+            'reason': 'face_sample_error',
+            'error': str(face_exc),
+        }
+        item.setdefault('face_sampling_errors', []).append(str(face_exc))
+    sync_optional_errors: Dict[str, List[str]] = {}
+    for opt_stage, opt_key in (
+        ('face_embed', 'face_sampling_errors'),
+        ('image_ocr', 'ocr_sampling_errors'),
+        ('image_caption', 'caption_sampling_errors'),
+        ('object_detect', 'object_sampling_errors'),
+    ):
+        errs = item.get(opt_key)
+        if isinstance(errs, list) and errs:
+            sync_optional_errors[opt_stage] = [str(e) for e in errs]
+    if sync_optional_errors:
+        item['optional_stage_errors'] = sync_optional_errors
     merge('goodq_image_caption', 'image_embed_dino')
     merge('goodq_image_caption', 'image_embed_clip')
     merge('goodq_core', 'tagger')
@@ -8100,7 +8579,7 @@ def _process_audio(
                         item['segments'] = transcript_segments
             has_transcript = isinstance(item.get('transcript'), str) and bool(item.get('transcript', '').strip())
             has_segments = isinstance(item.get('segments'), list) and len(item.get('segments')) > 0
-            if has_transcript or has_segments:
+            if has_transcript or has_segments or _is_valid_silent_local_transcription(item):
                 _set_effective_backend('windows', reason)
             else:
                 transcript_meta = item.get('transcript_meta') if isinstance(item.get('transcript_meta'), dict) else {}
@@ -8340,8 +8819,14 @@ def _process_audio(
         merge_optional_audio_step('goodq_audio_embed', 'audio_embed_clap')
 
     canonicalize_taxonomy(item)
-    transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
-    if transcript:
+    raw_transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
+    if isinstance(item.get('transcript_meta'), dict):
+        from steps.common.tag_utils import reliable_transcript_for_entities
+
+        transcript = reliable_transcript_for_entities(item)
+    else:
+        transcript = raw_transcript
+    if transcript and transcript.strip():
         text_payload = {
             'modality': 'audio_transcript',
             'source_path': str(audio_path or video_path),
@@ -8366,6 +8851,11 @@ def _process_audio(
             audio_text_embed_meta = text_embed_result.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
+    elif raw_transcript and raw_transcript.strip():
+        item['audio_text_embed_meta'] = {
+            'status': 'skipped',
+            'reason': 'transcript_restricted_or_unreliable',
+        }
 
     # Call UCF Audio logging hook AFTER optional enrichment steps so embedding IDs are available
     _log_audio_to_ucf_ledger(
@@ -8475,15 +8965,45 @@ async def _process_frame_async(
         # step back 50ms (>= 1 frame at 23.976/24/25/30 fps) from scene end.
         observations, errors, warnings = [], [], []
         midpoint_output = {}
+        step_log_cfg: Optional[Dict[str, Any]] = None
         t_start = time.perf_counter()
         sampled_batch: List[Tuple[float, Path, Dict[str, Any]]] = []
         for sample_index, timestamp in enumerate(sample_timestamps):
+            is_midpoint = (timestamp == frame_timestamp)
             try:
                 sampled_path = await sample_frame(timestamp, sample_index)
                 sampled_batch.append(
-                    (timestamp, sampled_path, {**item, 'source_path': str(sampled_path), 'timestamp': timestamp})
+                    (
+                        timestamp,
+                        sampled_path,
+                        {**item, 'source_path': str(sampled_path), 'timestamp': timestamp, 'is_midpoint_sample': is_midpoint},
+                    )
                 )
             except Exception as exc:
+                if step_log_cfg is None:
+                    try:
+                        step_log_cfg = json.loads(cfg_json.read_text(encoding='utf-8'))
+                    except Exception:
+                        step_log_cfg = {}
+                err_meta = {
+                    'status': 'error',
+                    'reason': 'keyframe_extract_failed',
+                    'error': str(exc),
+                    'sample_timestamp': timestamp,
+                    'is_midpoint_sample': is_midpoint,
+                }
+                log_step_run(
+                    step_log_cfg,
+                    'face_embed',
+                    {**item, 'timestamp': timestamp, 'is_midpoint_sample': is_midpoint},
+                    0.0,
+                    'error',
+                    str(exc),
+                    extra={
+                        'reason': 'face_embed_keyframe_extract_failed',
+                        'result_meta': {'faces_meta': err_meta},
+                    },
+                )
                 errors.append(f'face sample at {timestamp:.3f}s: {exc}')
         if sampled_batch:
             batch_results = await _run_step_batch_async(
@@ -8494,10 +9014,12 @@ async def _process_frame_async(
             )
             for (timestamp, sampled_path, _), result in zip(sampled_batch, batch_results):
                 try:
-                    if result.get('status') != 'ok':
-                        raise RuntimeError(result.get('errors') or 'face worker failed')
-                    outputs = result.get('outputs', {})
-                    face_status = outputs.get('faces_meta', {}).get('status')
+                    res_status = result.get('status') if isinstance(result, dict) else 'error'
+                    outputs = (result.get('outputs') or {}) if isinstance(result, dict) else {}
+                    face_status = (outputs.get('faces_meta') or {}).get('status') if isinstance(outputs, dict) else None
+                    is_degraded_skip = (res_status == 'skipped' and face_status == 'degraded')
+                    if res_status != 'ok' and not is_degraded_skip:
+                        raise RuntimeError((result.get('errors') if isinstance(result, dict) else None) or 'face worker failed')
                     if face_status not in {'ok', 'degraded'}:
                         raise RuntimeError(f"face computation failed: {outputs.get('faces_meta')}")
                     if face_status == 'degraded':
@@ -8507,6 +9029,15 @@ async def _process_frame_async(
                         midpoint_output = outputs
                 except Exception as exc:
                     errors.append(f'face sample at {timestamp:.3f}s: {exc}')
+        if not midpoint_output and errors:
+            midpoint_output = {
+                'faces': [],
+                'faces_meta': {
+                    'status': 'error',
+                    'reason': 'face_sample_error',
+                    'error': str(errors[0]),
+                },
+            }
         step_timings['face_embed'] = time.perf_counter() - t_start
         return {'status': 'ok', 'outputs': {**midpoint_output, 'face_observations': observations,
                                           'face_sampling_errors': errors,
@@ -8812,6 +9343,18 @@ async def _process_frame_async(
     step_errors.extend(item.get('ocr_sampling_errors', []))
     step_errors.extend(item.get('caption_sampling_errors', []))
     step_errors.extend(item.get('object_sampling_errors', []))
+    optional_stage_errors: Dict[str, List[str]] = {}
+    for opt_stage, opt_key in (
+        ('face_embed', 'face_sampling_errors'),
+        ('image_ocr', 'ocr_sampling_errors'),
+        ('image_caption', 'caption_sampling_errors'),
+        ('object_detect', 'object_sampling_errors'),
+    ):
+        errs = item.get(opt_key)
+        if isinstance(errs, list) and errs:
+            optional_stage_errors[opt_stage] = [str(e) for e in errs]
+    if optional_stage_errors:
+        item['optional_stage_errors'] = optional_stage_errors
     tagger_res = await run_frame_step('goodq_core', 'tagger')
     if isinstance(tagger_res, dict):
         status = tagger_res.get("status")
@@ -9257,7 +9800,7 @@ async def _process_audio_async(
             
             has_transcript = isinstance(item.get('transcript'), str) and bool(item.get('transcript', '').strip())
             has_segments = isinstance(item.get('segments'), list) and len(item.get('segments')) > 0
-            if has_transcript or has_segments:
+            if has_transcript or has_segments or _is_valid_silent_local_transcription(item):
                 _set_effective_backend('windows', reason)
             else:
                 transcript_meta = item.get('transcript_meta') if isinstance(item.get('transcript_meta'), dict) else {}
@@ -9478,8 +10021,14 @@ async def _process_audio_async(
 
     canonicalize_taxonomy(item)
     
-    transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
-    if transcript:
+    raw_transcript = item.get('transcript') if isinstance(item.get('transcript'), str) else ''
+    if isinstance(item.get('transcript_meta'), dict):
+        from steps.common.tag_utils import reliable_transcript_for_entities
+
+        transcript = reliable_transcript_for_entities(item)
+    else:
+        transcript = raw_transcript
+    if transcript and transcript.strip():
         text_payload = {
             'modality': 'audio_transcript',
             'source_path': str(audio_path or video_path),
@@ -9510,6 +10059,11 @@ async def _process_audio_async(
             audio_text_embed_meta = embed_outputs.get('embedding_meta')
             if isinstance(audio_text_embed_meta, dict):
                 item['audio_text_embed_meta'] = audio_text_embed_meta
+    elif raw_transcript and raw_transcript.strip():
+        item['audio_text_embed_meta'] = {
+            'status': 'skipped',
+            'reason': 'transcript_restricted_or_unreliable',
+        }
 
     if has_audio_file or recording_audio is not None:
         # Call UCF Audio logging hook after optional enrichment steps so embedding IDs are available
@@ -10717,6 +11271,10 @@ def run_with_config(
                         error_payload['frame_env'] = frame_error_env
                 if frame_processing_error:
                     error_payload['frame_processing'] = frame_processing_error
+                if isinstance(frame_info, dict) and isinstance(frame_info.get('data'), dict):
+                    opt_errs = frame_info['data'].get('optional_stage_errors')
+                    if isinstance(opt_errs, dict) and opt_errs:
+                        error_payload['optional_stage_errors'] = opt_errs
                 if audio_error:
                     error_payload['audio'] = audio_error
 
@@ -10777,6 +11335,11 @@ def run_with_config(
                                 scene_res['end'],
                                 scene_res['meta_payload'],
                             )
+                        _bundle_extra_kwargs = _prepare_scene_bundle_identity_kwargs(
+                            scene_res.get('frame_info'),
+                            scene_res.get('audio_info'),
+                            register_fn=register_scene_bundle,
+                        )
                         persist_res = register_scene_bundle(
                             cfg,
                             video_hash=video_hash,
@@ -10787,6 +11350,7 @@ def run_with_config(
                             frame=scene_res['frame_info'],
                             audio=scene_res['audio_info'],
                             errors=scene_res['error_payload'] or None,
+                            **_bundle_extra_kwargs,
                         )
                         scene_res['persistence'] = persist_res
 

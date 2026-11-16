@@ -244,6 +244,20 @@ def _derive_step_log_outcome(
                 if meta_status == "none":
                     extra["reason"] = "content_appropriate_empty"
                     return "not_applicable", None, extra
+            if step_name == "audio_transcribe_local":
+                tx_text = result.get("transcript")
+                has_tx = isinstance(tx_text, str) and bool(tx_text.strip())
+                has_segs = isinstance(result.get("segments"), list) and len(result.get("segments")) > 0
+                tx_outcome = str(result.get("transcript_outcome") or "").strip().lower()
+                if not has_tx and not has_segs and (
+                    meta_status in {"empty", "not_applicable", "no_speech"}
+                    or (
+                        meta_status not in (_META_ERROR_STATUSES | _META_SKIPPED_STATUSES)
+                        and tx_outcome in {"no_speech", "no_speech_detected", "no_intelligible_speech"}
+                    )
+                ):
+                    extra["reason"] = "no_speech_detected"
+                    return "not_applicable", None, extra
             if step_name == "image_caption":
                 extra["requested_implementation"] = result_meta.get("engine") or step_name
                 extra["effective_implementation"] = result_meta.get("engine") or step_name
@@ -291,6 +305,34 @@ def _derive_step_log_outcome(
                 extra["reason"] = f"{step_name}_{skip_reason}"
                 return "skipped", None, extra
             return "ok", None, extra
+
+    if step_name == "scene_visual_embeddings" and isinstance(result, dict):
+        phase6_status = str(result.get("phase6_status") or "").strip().lower()
+        extra_payload: Dict[str, Any] = {
+            "phase6_status": phase6_status or "unknown",
+        }
+        for k in (
+            "scenes_processed",
+            "clip_embeddings",
+            "dino_embeddings",
+            "qdrant_ok",
+            "faiss_ok",
+            "frame_error_summary",
+        ):
+            if k in result and result.get(k) is not None:
+                extra_payload[k] = copy.deepcopy(result.get(k))
+        if phase6_status in _META_ERROR_STATUSES:
+            err_msg = str(
+                result.get("error") or result.get("exception") or "scene_visual_embeddings failed"
+            ).strip()
+            reason_token = str(result.get("error") or phase6_status).strip().lower() or phase6_status
+            extra_payload["reason"] = f"scene_visual_embeddings_{reason_token}"
+            return "error", err_msg, extra_payload
+        if phase6_status in _META_SKIPPED_STATUSES:
+            reason_token = str(result.get("error") or phase6_status).strip().lower() or phase6_status
+            extra_payload["reason"] = f"scene_visual_embeddings_{reason_token}"
+            return "skipped", None, extra_payload
+        return "ok", None, extra_payload
 
     if verbose and isinstance(result, dict):
         meta_keys: List[str] = [

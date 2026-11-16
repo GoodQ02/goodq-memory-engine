@@ -7,9 +7,12 @@ import json
 import requests
 from typing import Dict, Any, List, Optional
 import logging
+import re
 from contextlib import closing
 
-from lib.llm_client import LLMClient
+from lib.grounding_markup import strip_grounding_markup
+from lib.llm_client import LLMClient, unload_attempted_ollama_models
+from steps.common.context_analyzer_llm import is_scene_transcript_restricted
 from steps.common.llm_model_factory import build_llm_models
 from lib.summary_aggregator import active_summary_scene_ids
 
@@ -24,6 +27,49 @@ def _scene_summary_records_for_prompt(
     return records[:MAX_SCENE_SUMMARIES_IN_PROMPT]
 
 
+_TRANSCRIPT_CLAUSE_RE = re.compile(r'(?:\.\s*)?Transcript:\s*"[^"]*"')
+
+
+def _load_scene_meta_by_id(
+    conn: sqlite3.Connection,
+    scene_ids: set[str],
+) -> Dict[str, Dict[str, Any]]:
+    if not scene_ids:
+        return {}
+    placeholders = ",".join("?" for _ in scene_ids)
+    meta_by_id: Dict[str, Dict[str, Any]] = {}
+    try:
+        rows = conn.execute(
+            f"SELECT id, meta FROM scenes WHERE id IN ({placeholders})",
+            tuple(scene_ids),
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    for row_id, raw_meta in rows:
+        if not row_id or not raw_meta:
+            continue
+        try:
+            parsed = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+            if isinstance(parsed, dict):
+                meta_by_id[str(row_id)] = parsed
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return meta_by_id
+
+
+def _sanitize_scene_summary_text(
+    summary: str,
+    scene_meta: Optional[Dict[str, Any]],
+) -> str:
+    cleaned = strip_grounding_markup(summary)
+    if isinstance(scene_meta, dict) and is_scene_transcript_restricted(scene_meta):
+        without_transcript = _TRANSCRIPT_CLAUSE_RE.sub("", cleaned)
+        if without_transcript != cleaned:
+            cleaned = re.sub(r"^\.\s*", "", without_transcript.strip())
+            cleaned = re.sub(r"\.\s*\.", ".", cleaned).strip()
+    return cleaned
+
+
 def _filter_target_scene_summary_records(
     db_path: str,
     video_hash: str,
@@ -32,6 +78,7 @@ def _filter_target_scene_summary_records(
     conn = sqlite3.connect(db_path)
     try:
         target_scene_ids = active_summary_scene_ids(conn, db_path, video_hash)
+        scene_meta_by_id = _load_scene_meta_by_id(conn, set(target_scene_ids))
     finally:
         conn.close()
 
@@ -47,7 +94,10 @@ def _filter_target_scene_summary_records(
             or not summary.strip()
         ):
             continue
-        filtered_records.append(record)
+        cleaned_summary = _sanitize_scene_summary_text(summary, scene_meta_by_id.get(str(scene_id)))
+        if not cleaned_summary.strip():
+            continue
+        filtered_records.append({**record, "summary": cleaned_summary})
     return filtered_records
 
 
@@ -60,6 +110,7 @@ def _load_target_scene_summary_records(
     try:
         c = conn.cursor()
         target_scene_ids = active_summary_scene_ids(conn, db_path, video_hash)
+        scene_meta_by_id = _load_scene_meta_by_id(conn, set(target_scene_ids))
 
         c.execute("""
             SELECT id, content, created_at FROM summaries
@@ -85,10 +136,13 @@ def _load_target_scene_summary_records(
                 or not summary.strip()
             ):
                 continue
+            cleaned_summary = _sanitize_scene_summary_text(summary, scene_meta_by_id.get(str(scene_id)))
+            if not cleaned_summary.strip():
+                continue
             records.append({
                 "summary_id": summary_id,
                 "scene_id": scene_id,
-                "summary": summary,
+                "summary": cleaned_summary,
                 "created_at": created_at,
             })
         return records
@@ -207,7 +261,7 @@ VIDEO SUMMARY:"""
             generation_provenance["fallback_reason"] = "no_quality_capable_model_configured"
             logger.warning("No quality-capable model configured for video narrative")
             return None
-        with closing(LLMClient(
+        client = LLMClient(
             models=narrative_models,
             health_check_interval=int(llm_config.get("health_check_interval", 60)),
             max_retries=int(llm_config.get("max_retries", 3)),
@@ -216,22 +270,25 @@ VIDEO SUMMARY:"""
             enable_health_checks=False,
             allow_auto_activation=False,
             allow_environment_proxies=False,
-        )) as client:
+        )
+        try:
             result = client.chat(
                 messages=[
                     {
-                        "role": "system", 
+                        "role": "system",
                         "content": "Summarize supplied evidence conservatively. Preserve its source and uncertainty; do not infer identities or events."
                     },
                     {
-                        "role": "user", 
+                        "role": "user",
                         "content": prompt
                     }
                 ],
                 temperature=llm_config.get('temperature', 0.5),
                 max_tokens=500,
             )
-            summary = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            summary = strip_grounding_markup(
+                result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            ).strip()
             if summary:
                 model = client.last_model_used
                 if model is not None:
@@ -245,6 +302,9 @@ VIDEO SUMMARY:"""
                 logger.info(f"Generated video summary ({len(summary)} chars)")
                 return summary
             generation_provenance["fallback_reason"] = "empty_model_output"
+        finally:
+            unload_attempted_ollama_models(client)
+            client.close()
             
     except requests.Timeout:
         logger.error("LLM request timed out during video summarization")
@@ -275,6 +335,8 @@ def generate_video_summary_template(
     """
     if scene_summary_records is None:
         scene_summary_records = _load_target_scene_summary_records(db_path, video_hash)
+    else:
+        scene_summary_records = _filter_target_scene_summary_records(db_path, video_hash, scene_summary_records)
     with closing(sqlite3.connect(db_path)) as conn:
         active_scene_ids = active_summary_scene_ids(conn, db_path, video_hash)
         rows = conn.execute(

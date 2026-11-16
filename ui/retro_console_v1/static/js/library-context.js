@@ -28,7 +28,12 @@
       notice.setAttribute("role", "status");
       notice.setAttribute("aria-live", "polite");
       notice.style.cssText = "padding:10px 16px;background:#332811;color:#ffe3a1;border-bottom:1px solid #a88438;flex-shrink:0;";
-      (document.querySelector(".workspace-main") || document.body).prepend(notice);
+      (
+        document.querySelector(".workspace-main")
+        || document.querySelector("main.content")
+        || document.querySelector(".crt-screen")
+        || document.body
+      ).prepend(notice);
     }
     if (notice) {
       notice.hidden = !unavailable.length;
@@ -61,30 +66,59 @@
       const resp = await fetch("/api/system/videos");
       observeResponse(resp, "/api/system/videos");
       if (!resp.ok) return;
-      const videos = await resp.json();
-      if (!Array.isArray(videos) || videos.length === 0) return;
-      switcher.innerHTML = "";
-      const activeSource = selected || "local";
+      const rawVideos = await resp.json();
+      const videos = Array.isArray(rawVideos) ? rawVideos : [];
+      const unavailable = unavailableSources();
+      if (videos.length === 0 && unavailable.length === 0) return;
+      const bySource = new Map();
       videos.forEach((v) => {
-        const opt = document.createElement("option");
         const src = v.library_source || "local";
-        opt.value = src;
-        opt.textContent = v.title || v.video_id || src;
-        if (v.review_report_id) opt.setAttribute("data-review-report", v.review_report_id);
-        if (src === activeSource) opt.selected = true;
+        const existing = bySource.get(src);
+        if (!existing) {
+          bySource.set(src, {
+            id: src,
+            label: v.title || v.video_id || src,
+            count: 1,
+            review_report_id: v.review_report_id || "",
+          });
+        } else {
+          existing.count += 1;
+          if (!existing.review_report_id && v.review_report_id) {
+            existing.review_report_id = v.review_report_id;
+          }
+        }
+      });
+      switcher.innerHTML = "";
+      const totalSources = bySource.size + unavailable.filter((s) => !bySource.has(s.id)).length;
+      if (totalSources > 1) {
+        const allOpt = document.createElement("option");
+        allOpt.value = "";
+        allOpt.textContent = "All Collections";
+        if (selected === "") allOpt.selected = true;
+        switcher.appendChild(allOpt);
+      }
+      bySource.forEach((entry) => {
+        const opt = document.createElement("option");
+        opt.value = entry.id;
+        opt.textContent = entry.count > 1 ? `${entry.label} (+${entry.count - 1} more)` : entry.label;
+        if (entry.review_report_id) opt.setAttribute("data-review-report", entry.review_report_id);
+        if (selected === entry.id || (totalSources === 1 && selected === "" && entry.id === "local")) {
+          opt.selected = true;
+        }
         switcher.appendChild(opt);
       });
-      unavailableSources().forEach(source => {
+      unavailable.forEach((source) => {
+        if (bySource.has(source.id)) return;
         const opt = document.createElement("option");
         opt.value = source.id;
         opt.textContent = `${source.name} — unavailable`;
         opt.disabled = true;
-        opt.selected = source.id === activeSource;
+        opt.selected = source.id === selected;
         switcher.appendChild(opt);
       });
       if (pill) pill.hidden = false;
       switcher.addEventListener("change", () => {
-        const nextSource = switcher.value === "local" ? "" : switcher.value;
+        const nextSource = switcher.value;
         const selectedOpt = switcher.options[switcher.selectedIndex];
         const reportId = selectedOpt ? selectedOpt.getAttribute("data-review-report") : "";
         const nextUrl = new URL(window.location.href);

@@ -184,7 +184,7 @@ def read_attested_cluster_faces(epoch, people):
     if not ucf_db.is_file():
         return [], None
     retired = retired_identity_scene_ids(ucf_db)
-    provenance = load_face_ucf_provenance(ucf_db)
+    provenance = load_face_ucf_provenance(ucf_db, include_retired=True)
     retired_frames = {
         r["frame_id"]
         for rows in provenance.values()
@@ -400,7 +400,7 @@ def load_reference_catalog(options):
         else:
             group_map = {}
             groups_sha256 = None
-        provenance = load_face_ucf_provenance(epoch / "ucf/ucf_ledger.db")
+        provenance = load_face_ucf_provenance(epoch / "ucf/ucf_ledger.db", include_retired=True)
         required = {int(group_map[group_id]["face_ids"][0].split("_", 1)[0])
                     for person in roster.get("identities", []) for group_id in person.get("face_cluster_ids", [])}
         retired_frames = {r["frame_id"] for rows in provenance.values() for r in rows if r["source_artifact_id"] in retired}
@@ -649,16 +649,29 @@ def refresh_epoch_matches(cfg):
     catalog = load_reference_catalog(options)
     catalog_sha256 = digest(catalog)
     reports_dir = report_root(cfg) / "reports"
-    existing_by_video: dict[str, dict] = {}
+    newest_by_video: dict[str, dict] = {}
+    max_existing_mtime_ns = 0
     if reports_dir.is_dir():
-        for rpath in sorted(reports_dir.glob("*.json")):
-            rep = read_json(rpath)
-            if rep.get("epoch_id") == epoch.name and rep.get("references_sha256") == catalog_sha256:
-                existing_by_video[str(rep.get("video_hash") or "")] = rep
+        for rpath in sorted(reports_dir.glob("*.json"), key=lambda p: (-p.stat().st_mtime_ns, p.stem)):
+            mtime_ns = rpath.stat().st_mtime_ns
+            if mtime_ns > max_existing_mtime_ns:
+                max_existing_mtime_ns = mtime_ns
+            try:
+                rep = read_json(rpath)
+            except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+                continue
+            if not isinstance(rep, dict) or rep.get("epoch_id") != epoch.name:
+                continue
+            vhash = str(rep.get("video_hash") or "")
+            if vhash and vhash not in newest_by_video:
+                newest_by_video[vhash] = rep
 
     target_hashes = [str(v.get("video_hash") or "") for v in videos]
-    if target_hashes and all(vhash in existing_by_video for vhash in target_hashes):
-        matched_ids = [existing_by_video[vhash]["id"] for vhash in target_hashes]
+    if target_hashes and all(
+        vhash in newest_by_video and newest_by_video[vhash].get("references_sha256") == catalog_sha256
+        for vhash in target_hashes
+    ):
+        matched_ids = [newest_by_video[vhash]["id"] for vhash in target_hashes]
         return {
             "refreshed": False,
             "mutated": False,
@@ -673,6 +686,14 @@ def refresh_epoch_matches(cfg):
     run_id = f"refresh_{uuid.uuid4().hex[:12]}"
     frozen = prepare_matching(cfg, run_id)
     summaries = [write_video_matches(cfg, frozen, video) for video in videos]
+    import os
+    for idx, item in enumerate(summaries, start=1):
+        rfile = reports_dir / f"{item['id']}.json"
+        if rfile.is_file():
+            cur_ns = rfile.stat().st_mtime_ns
+            desired_ns = max(cur_ns, max_existing_mtime_ns + idx * 1_000_000)
+            if desired_ns > cur_ns:
+                os.utime(rfile, ns=(desired_ns, desired_ns))
     return {
         "refreshed": True,
         "mutated": True,

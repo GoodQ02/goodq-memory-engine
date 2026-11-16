@@ -103,7 +103,10 @@ def _public_receipt(receipt):
 
 
 def _build(cfg, conn):
+    from lib.identity_resolver import retired_identity_scene_ids
+
     epoch, kg, root = _paths(cfg)
+    retired_scenes = retired_identity_scene_ids(kg.parent / "ucf" / "ucf_ledger.db")
     ready = artifact_readiness(cfg, "face_clusters.json")
     if not ready["ready"]:
         raise AppearanceConflict(ready["message"])
@@ -164,6 +167,8 @@ def _build(cfg, conn):
         target = by_key.get(target_key)
         props = {"confidence": "candidate"}
         if kind == "person_appears_in_scene":
+            if str(edge["to"]) in retired_scenes:
+                raise AppearanceConflict("A selected face group references a retired scene. Review those group members first.")
             props.update(via_face_clusters=edge["via_face_clusters"], evidence_face_ids=edge["evidence_face_ids"])
             appearances.append({
                 "person_id": edge["from"], "scene_id": edge["to"],

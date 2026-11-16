@@ -280,19 +280,95 @@ def entity_scene_ids(conn: sqlite3.Connection, node_ids, retired_media=()) -> se
         if row[1] and row[0] not in retired_media}
 
 
+def _resolve_promoted_temporal_scope(
+    db_path: Path, data_loader: DataLoader
+) -> Tuple[List[str], List[Tuple[str, Dict[str, Any], List[Dict[str, Any]]]]]:
+    """Return (active_video_ids, [(video_id, temporal_index, active_segments)]) gated by promoted UCF authority when ledger exists."""
+    from steps.common.ucf_retirement import _read_scene_retirements
+
+    video_ids = data_loader.list_processed_videos()
+    ledger_path = db_path.parent / "ucf" / "ucf_ledger.db"
+    if not ledger_path.exists():
+        entries: List[Tuple[str, Dict[str, Any], List[Dict[str, Any]]]] = []
+        for vid in video_ids:
+            idx = data_loader.load_temporal_index(vid)
+            if idx:
+                entries.append(
+                    (vid, idx, [s for s in idx.get("segments", []) if isinstance(s, dict)])
+                )
+        return list(video_ids), entries
+
+    epoch_id = db_path.parent.name
+    ledger = open_summary_read_connection(ledger_path)
+    active_video_ids: List[str] = []
+    entries = []
+    try:
+        for vid in video_ids:
+            idx = data_loader.load_temporal_index(vid)
+            manifest = (
+                data_loader.load_scene_manifest(vid)
+                if idx is None and hasattr(data_loader, "load_scene_manifest")
+                else None
+            )
+            record = idx or manifest or {}
+            source = str(record.get("video_hash") or record.get("video_id") or vid)
+            if not source:
+                continue
+            promoted_rows = ledger.execute(
+                "SELECT source_artifact_id, t_start, t_end FROM context_frames "
+                "WHERE video_hash = ? AND epoch_id = ? AND promotion_status = 'promoted'",
+                (source, epoch_id),
+            ).fetchall()
+            if not promoted_rows:
+                continue
+            active_video_ids.append(vid)
+            if not idx:
+                continue
+            retired = _read_scene_retirements(ledger, video_hash=source, epoch_id=epoch_id)
+            promoted_ids = {str(r[0]) for r in promoted_rows if r[0] is not None and str(r[0])}
+            promoted_bounds = [
+                (float(r[1]), float(r[2]))
+                for r in promoted_rows
+                if isinstance(r[1], (int, float))
+                and not isinstance(r[1], bool)
+                and isinstance(r[2], (int, float))
+                and not isinstance(r[2], bool)
+                and math.isfinite(r[1])
+                and math.isfinite(r[2])
+            ]
+            active_segments: List[Dict[str, Any]] = []
+            for seg in idx.get("segments", []):
+                if not isinstance(seg, dict) or scene_is_retired(seg, retired):
+                    continue
+                sid = seg.get("scene_id")
+                start, end = seg.get("start"), seg.get("end")
+                has_id_support = sid is not None and str(sid) in promoted_ids
+                has_bound_support = (
+                    isinstance(start, (int, float))
+                    and not isinstance(start, bool)
+                    and isinstance(end, (int, float))
+                    and not isinstance(end, bool)
+                    and math.isfinite(start)
+                    and math.isfinite(end)
+                    and any(
+                        start - 0.001 <= b_start <= b_end <= end + 0.001
+                        for b_start, b_end in promoted_bounds
+                    )
+                )
+                if has_id_support or has_bound_support or (not promoted_ids and not promoted_bounds):
+                    active_segments.append(seg)
+            entries.append((vid, idx, active_segments))
+        return active_video_ids, entries
+    finally:
+        ledger.close()
+
+
 def get_scope_metadata(db_path: Path, data_loader: DataLoader) -> Dict[str, Any]:
     """Compile execution scope metadata."""
-    video_ids = data_loader.list_processed_videos()
+    video_ids, temporal_entries = _resolve_promoted_temporal_scope(db_path, data_loader)
     video_count = len(video_ids)
-    
-    # Load all temporal indices to count scenes
-    scene_count = 0
-    temporal_index_count = 0
-    for vid in video_ids:
-        idx = data_loader.load_temporal_index(vid)
-        if idx:
-            temporal_index_count += 1
-            scene_count += len(idx.get("segments", []))
+    temporal_index_count = len(temporal_entries)
+    scene_count = sum(len(active_segments) for _, _, active_segments in temporal_entries)
 
     return {
         "epoch": db_path.parent.name,
@@ -463,15 +539,11 @@ def _get_summary_dashboard_with_connection(
     negative_moments = []
     multi_person_gatherings = []
     
-    video_ids = data_loader.list_processed_videos()
-    for vid in video_ids:
-        temporal_index = data_loader.load_temporal_index(vid)
-        if not temporal_index:
-            continue
-        
+    _, temporal_entries = _resolve_promoted_temporal_scope(db_path, data_loader)
+    for vid, temporal_index, active_segments in temporal_entries:
         video_title = Path(temporal_index.get("video_path") or vid).stem
-        
-        for seg in temporal_index.get("segments", []):
+
+        for seg in active_segments:
             scene_id = seg.get("scene_id")
             if not scene_id:
                 continue
@@ -668,15 +740,11 @@ def _get_entity_profile_with_connection(
     sentiment_unavailable = 0
     emotion_counts = {}
     
-    video_ids = data_loader.list_processed_videos()
+    _, temporal_entries = _resolve_promoted_temporal_scope(db_path, data_loader)
     seen_scenes = set()
-    for vid in video_ids:
-        temporal_index = data_loader.load_temporal_index(vid)
-        if not temporal_index:
-            continue
-        
+    for vid, temporal_index, active_segments in temporal_entries:
         video_title = Path(temporal_index.get("video_path") or vid).stem
-        for seg in temporal_index.get("segments", []):
+        for seg in active_segments:
             seg_scene_id = seg.get("scene_id")
             if seg_scene_id in scene_ids and seg_scene_id not in seen_scenes:
                 seen_scenes.add(seg_scene_id)

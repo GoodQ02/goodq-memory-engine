@@ -3,9 +3,12 @@ Scene Summarization Module
 Generates natural language summaries of video scenes from rich metadata.
 """
 from __future__ import annotations
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import json
 import re
+
+from lib.grounding_markup import strip_grounding_markup
+from steps.common.context_analyzer_llm import is_scene_transcript_restricted
 
 try:
     from steps.common.tag_utils import (
@@ -14,6 +17,7 @@ try:
         is_valid_tag_token,
         normalize_entity_token,
         normalize_tag_token,
+        reliable_transcript_for_entities,
     )
 except Exception:
     def dedupe_tokens(tokens, **_kwargs):
@@ -28,6 +32,8 @@ except Exception:
     def normalize_tag_token(token):
         text = str(token or "").strip()
         return text or None
+    def reliable_transcript_for_entities(item):
+        return str((item or {}).get("transcript") or "")
 
 def _format_list(items: list, max_items: int = 5) -> str:
     """Format a list for display"""
@@ -294,6 +300,30 @@ def _speaker_summary(scene_meta: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _reliable_scene_transcript(scene_meta: Dict[str, Any], audio_meta: Dict[str, Any]) -> str:
+    if is_scene_transcript_restricted(scene_meta):
+        return ""
+    raw_transcript = _first_non_empty(scene_meta.get("transcript"), audio_meta.get("transcript")) or ""
+    if not raw_transcript:
+        return ""
+    tmeta = (
+        scene_meta.get("transcript_meta")
+        if isinstance(scene_meta.get("transcript_meta"), dict)
+        else (audio_meta.get("transcript_meta") if isinstance(audio_meta.get("transcript_meta"), dict) else None)
+    )
+    if isinstance(tmeta, dict):
+        filtered = reliable_transcript_for_entities(
+            {
+                **audio_meta,
+                **scene_meta,
+                "transcript": str(raw_transcript),
+                "transcript_meta": tmeta,
+            }
+        )
+        return strip_grounding_markup(re.sub(r"\s+", " ", filtered)).strip() if filtered else ""
+    return strip_grounding_markup(str(raw_transcript)).strip()
+
+
 def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     """
     Generate a template-based natural language summary of a scene.
@@ -314,7 +344,8 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
     audio_meta = _scene_audio(scene_meta)
     
     # Visual information
-    caption = _first_non_empty(scene_meta.get('caption'), keyframe_meta.get('caption')) or ''
+    raw_caption = _first_non_empty(scene_meta.get('caption'), keyframe_meta.get('caption')) or ''
+    caption = strip_grounding_markup(raw_caption) if isinstance(raw_caption, str) else ''
     caption_observations = _first_non_empty(
         scene_meta.get('caption_observations'),
         keyframe_meta.get('caption_observations'),
@@ -328,28 +359,39 @@ def generate_scene_summary_template(scene_meta: Dict[str, Any]) -> str:
         for obs in caption_observations:
             if isinstance(obs, dict):
                 obs_cap = obs.get('caption')
-                if isinstance(obs_cap, str) and obs_cap.strip():
-                    norm_cap = obs_cap.strip().casefold()
-                    if norm_cap not in seen_captions:
-                        seen_captions.add(norm_cap)
-                        distinct_captions.append(obs_cap.strip())
+                if isinstance(obs_cap, str):
+                    cleaned_obs = strip_grounding_markup(obs_cap).strip()
+                    if cleaned_obs:
+                        norm_cap = cleaned_obs.casefold()
+                        if norm_cap not in seen_captions:
+                            seen_captions.add(norm_cap)
+                            distinct_captions.append(cleaned_obs)
     caption_summary = '; '.join(distinct_captions) if distinct_captions else caption
     objects = _first_non_empty(
         scene_meta.get('objects'),
         scene_meta.get('detected_objects'),
         keyframe_meta.get('objects'),
     ) or []
-    face_count = _coerce_numeric(
-        _first_non_empty(
-            scene_meta.get('face_count'),
-            scene_meta.get('visible_face_count'),
-            keyframe_meta.get('face_count'),
-        ),
-        default=0,
+    explicit_face_count = _first_non_empty(
+        scene_meta.get('face_count'),
+        scene_meta.get('visible_face_count'),
+        keyframe_meta.get('face_count'),
     )
-    
+    if explicit_face_count is not None:
+        face_count = _coerce_numeric(explicit_face_count, default=0)
+    else:
+        face_count = 0
+        raw_faces = keyframe_meta.get('faces') or scene_meta.get('faces')
+        if isinstance(raw_faces, list):
+            face_count = max(face_count, sum(1 for f in raw_faces if isinstance(f, dict)))
+        raw_face_obs = keyframe_meta.get('face_observations') or scene_meta.get('face_observations')
+        if isinstance(raw_face_obs, list):
+            for obs in raw_face_obs:
+                if isinstance(obs, dict) and isinstance(obs.get('faces'), list):
+                    face_count = max(face_count, sum(1 for f in obs['faces'] if isinstance(f, dict)))
+
     # Audio information
-    transcript = _first_non_empty(scene_meta.get('transcript'), audio_meta.get('transcript')) or ''
+    transcript = _reliable_scene_transcript(scene_meta, audio_meta)
     
     # Emotional context - check both top level and audio nested
     sentiment_label, sentiment_score = _sentiment(scene_meta, audio_meta)
@@ -431,8 +473,10 @@ def generate_scene_summary_llm(scene_meta: Dict[str, Any], cfg: Dict[str, Any]) 
         start = scene_meta.get('start', 0.0)
         end = scene_meta.get('end', 0.0)
         duration = scene_meta.get('duration', end - start)
-        caption = scene_meta.get('caption', 'No visual description')
-        transcript = scene_meta.get('transcript', 'No audio')
+        caption = strip_grounding_markup(str(scene_meta.get('caption', 'No visual description')))
+        audio_meta = _scene_audio(scene_meta)
+        reliable_tx = _reliable_scene_transcript(scene_meta, audio_meta)
+        transcript = reliable_tx if reliable_tx else 'No audio'
         speakers = scene_meta.get('speakers', [])
         emotions = scene_meta.get('emotions', [])
         sentiment_label = scene_meta.get('sentiment_label', 'neutral')
@@ -480,7 +524,9 @@ Summary:"""
         
         if response.status_code == 200:
             result = response.json()
-            summary = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            summary = strip_grounding_markup(
+                result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            ).strip()
             return summary if summary else None
         
         return None

@@ -206,7 +206,7 @@ class SavedLibraryMiddleware:
                 raise ValueError("Unknown saved-library collection")
             path = scope["path"]
             video = None
-            for prefix in ("/api/videos/", "/api/media/video/", "/api/media/audio/"):
+            for prefix in ("/api/videos/", "/api/media/video/", "/api/media/audio/", "/api/summary/video/"):
                 if path.startswith(prefix):
                     video = unquote(path[len(prefix):].split("/", 1)[0])
                     break

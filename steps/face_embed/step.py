@@ -64,10 +64,10 @@ def _opencv_yunet_sface_embed(path: str) -> List[Dict[str, Any]]:
     detector_path, recognizer_path = _sealed_model_paths()
     image = cv2.imread(path)
     if image is None:
-        raise PrimaryFaceEngineUnavailable("OpenCV could not decode the source image")
+        raise RuntimeError("OpenCV could not decode the source image")
     height, width = image.shape[:2]
     if not width or not height:
-        raise PrimaryFaceEngineUnavailable("OpenCV decoded an empty source image")
+        raise RuntimeError("OpenCV decoded an empty source image")
     cache_key = (
         str(detector_path),
         str(recognizer_path),
@@ -75,18 +75,21 @@ def _opencv_yunet_sface_embed(path: str) -> List[Dict[str, Any]]:
         id(cv2.FaceRecognizerSF.create),
     )
     cached = _YUNET_SFACE_CACHE.get(cache_key)
-    try:
-        if cached is None:
+    if cached is None:
+        try:
             detector = cv2.FaceDetectorYN.create(str(detector_path), "", (width, height))
             recognizer = cv2.FaceRecognizerSF.create(str(recognizer_path), "")
             _YUNET_SFACE_CACHE[cache_key] = (detector, recognizer)
-        else:
-            detector, recognizer = cached
+        except Exception as exc:
+            _YUNET_SFACE_CACHE.pop(cache_key, None)
+            raise PrimaryFaceEngineUnavailable(f"YuNet/SFace initialization failed: {exc}") from exc
+    else:
+        detector, recognizer = cached
+    try:
         detector.setInputSize((width, height))
         _count, detections = detector.detect(image)
     except Exception as exc:
-        _YUNET_SFACE_CACHE.pop(cache_key, None)
-        raise PrimaryFaceEngineUnavailable(f"YuNet/SFace initialization failed: {exc}") from exc
+        raise RuntimeError(f"YuNet face detection failed: {exc}") from exc
     if detections is None:
         return []
 
@@ -97,9 +100,9 @@ def _opencv_yunet_sface_embed(path: str) -> List[Dict[str, Any]]:
             aligned = recognizer.alignCrop(image, detection)
             vector = np.asarray(recognizer.feature(aligned), dtype=float).reshape(-1)
         except Exception as exc:
-            raise PrimaryFaceEngineUnavailable(f"SFace feature extraction failed: {exc}") from exc
+            raise RuntimeError(f"SFace feature extraction failed: {exc}") from exc
         if vector.size == 0:
-            raise PrimaryFaceEngineUnavailable("SFace returned an empty embedding")
+            raise RuntimeError("SFace returned an empty embedding")
         faces.append(
             {
                 "bbox": [x, y, x + box_width, y + box_height],

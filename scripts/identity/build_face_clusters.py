@@ -11,7 +11,7 @@ a human labels it in family_roster.yaml.
 
 Usage:
     conda run -n goodq_core python scripts/identity/build_face_clusters.py \\
-        --epoch-id epoch_2026_07_05_home_memory_clean_01 \\
+        --epoch-id epoch_public_example \\
         [--eps 0.4] \\
         [--min-samples 2] \\
         [--data-path L:/_DATA/GoodQ_Data/identity]
@@ -91,8 +91,11 @@ def _ucf_db(epoch_dir: Path) -> Path:
     return p
 
 
-def load_face_ucf_provenance(ucf_db_path: Path) -> dict:
+def load_face_ucf_provenance(ucf_db_path: Path, *, include_retired: bool = False) -> dict:
     """Read every promoted face row in this epoch, without modifying the ledger."""
+    from lib.identity_resolver import retired_identity_scene_ids
+
+    retired = set() if include_retired else retired_identity_scene_ids(ucf_db_path)
     with closing(sqlite3.connect(f"{ucf_db_path.resolve().as_uri()}?mode=ro", uri=True)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -101,8 +104,11 @@ def load_face_ucf_provenance(ucf_db_path: Path) -> dict:
             "AND epoch_id=? ORDER BY frame_id", (ucf_db_path.parent.parent.name,),
         ).fetchall()
     provenance = defaultdict(list)
+    kept_count = 0
     for row in rows:
         record = dict(row)
+        if retired and str(record.get("source_artifact_id") or "") in retired:
+            continue
         payload = json.loads(record["payload"])
         if not isinstance(payload, dict):
             raise ValueError("Face UCF payload must be an object")
@@ -112,7 +118,8 @@ def load_face_ucf_provenance(ucf_db_path: Path) -> dict:
             raise ValueError("Promoted face row has no raw reference")
         record["payload"] = payload
         provenance[os.path.normcase(str(Path(record["raw_ref"]).resolve()))].append(record)
-    log.info("Loaded %d promoted face_embed UCF frames", len(rows))
+        kept_count += 1
+    log.info("Loaded %d promoted face_embed UCF frames", kept_count)
     return dict(provenance)
 
 

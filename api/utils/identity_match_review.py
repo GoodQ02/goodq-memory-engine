@@ -23,20 +23,37 @@ def _same_reference_facts(cfg, report, source, pair):
     Aliases or display-only group labels can change file bytes after a
     comparison is frozen. The current labels must still produce exactly the
     frozen references (person, name, group, representative observation, pixels
-    and encoding) and the same names for every person from this source.
+    and encoding) and the same names for every person across configured sources.
     """
-    options = next(s for s in (cfg.get("identity_matching") or {}).get("reference_sources", [])
-                   if (str(Path(s["epoch_root"]).resolve()), str(Path(s["identity_path"]).resolve())) == pair)
+    matching_cfg = cfg.get("identity_matching") or {}
+    options = next(
+        s for s in matching_cfg.get("reference_sources", [])
+        if (str(Path(s["epoch_root"]).resolve()), str(Path(s["identity_path"]).resolve())) == pair
+    )
     try:
         current = load_reference_catalog({"reference_sources": [options]})
+        full_current = load_reference_catalog(matching_cfg)
     except (OSError, ValueError, KeyError):
         return False
     epoch = Path(source["epoch_root"]).resolve().name
-    frozen = sorted((r for r in report["references"] if r.get("epoch_id") == epoch
-                     and ("group_id" in r or "pattern_name" in r)), key=lambda r: r["id"])
-    names = {p["id"]: p["display_name"] for p in report["people"]}
-    return (json.loads(json.dumps(frozen)) == json.loads(json.dumps(sorted(current["faces"] + current["voices"], key=lambda r: r["id"])))
-            and all(names.get(p["id"]) == p["display_name"] for p in current["people"]))
+    has_reviewed_for_epoch = any(
+        r.get("epoch_id") == epoch and "review" in r for r in report["references"]
+    )
+    allowed_kinds = ("group_id", "pattern_name", "review") if has_reviewed_for_epoch else ("group_id", "pattern_name")
+    frozen = sorted(
+        (r for r in report["references"] if r.get("epoch_id") == epoch and any(k in r for k in allowed_kinds)),
+        key=lambda r: r["id"],
+    )
+    current_refs = sorted(
+        (r for r in current["faces"] + current["voices"] if r.get("epoch_id") == epoch and any(k in r for k in allowed_kinds)),
+        key=lambda r: r["id"],
+    )
+    frozen_names = {p["id"]: p["display_name"] for p in report["people"]}
+    current_names = {p["id"]: p["display_name"] for p in full_current["people"]}
+    return (
+        json.loads(json.dumps(frozen)) == json.loads(json.dumps(current_refs))
+        and current_names == frozen_names
+    )
 
 
 def build(cfg, conn, review):

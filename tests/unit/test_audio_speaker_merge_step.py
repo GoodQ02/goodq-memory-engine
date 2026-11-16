@@ -139,6 +139,6 @@ def test_untimed_containing_segment_words_coalesce_into_single_turn():
     assert (turn["start"], turn["end"]) == (1.0, 3.0)
     assert turn["timing_scope"] == "containing_segment"
     assert len(turn["words"]) == 4
-    assert turn["speaker"] is None
-    assert turn["attribution_status"] == "unresolved"
-    assert turn["attribution_reason"] == "timing_unavailable"
+    assert turn["speaker"] == "SPEAKER_00"
+    assert turn["attribution_status"] == "unreviewed"
+    assert turn["attribution_reason"] is None

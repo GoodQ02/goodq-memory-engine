@@ -113,3 +113,73 @@ def test_speech_framing_does_not_license_changed_meaning_in_persisted_summary(ph
     assert result['narrative_summary'] == result['activity_description'] == quote
     assert result['key_moments'] == [quote]
     assert result['claim_provenance']['narrative_summary']['qualification'] == 'unverified_model_transcript'
+
+
+@pytest.mark.parametrize('with_audio_evidence', [False, True])
+@pytest.mark.parametrize('phrase,claim', [
+    ('Person A is not six months old today.', 'Speaker says Person A is six months old today.'),
+    ('Person A did not call Person B.', 'Speaker says Person A called Person B.'),
+    ('Person A hit Person B.', 'Speaker says Person B hit Person A.'),
+    ('The dog chased the cat.', 'Speaker says the cat chased the dog.'),
+])
+def test_multimodal_video_scene_rejects_polarity_drop_and_role_reversal(with_audio_evidence, phrase, claim):
+    if with_audio_evidence:
+        evidence = recording()
+        evidence['utterances'][0]['text'] = phrase
+        projection = project_audio(evidence, [{'scene_id': 's', 'start': 0., 'end': 2.}])['s']
+        audio = legacy_audio(projection)
+        segment = dict(
+            audio,
+            scene_id='s',
+            start=0.,
+            end=2.,
+            content_state='signal',
+            full_transcript=audio['transcript'],
+            visible_face_count=1,
+            detected_objects=[{'label': 'person'}, {'label': 'couch'}],
+        )
+    else:
+        audio = {'transcript': phrase, 'speakers': ['SPEAKER_00']}
+        segment = {
+            'scene_id': 's',
+            'start': 0.,
+            'end': 2.,
+            'content_state': 'signal',
+            'full_transcript': phrase,
+            'visible_face_count': 1,
+            'detected_objects': [{'label': 'person'}, {'label': 'couch'}],
+            'speaker_ids': ['SPEAKER_00'],
+        }
+    lookup = {
+        's': {
+            'scene_id': 's',
+            'index': 0,
+            'caption': 'A person sits on a couch in a room.',
+            'keyframe': {'caption': 'A person sits on a couch in a room.', 'faces': [{'bbox': [0, 0, 10, 10]}]},
+            'audio': audio,
+        }
+    }
+
+    class Reversed(Client):
+        def chat(self, **kwargs):
+            return {'choices': [{'message': {'content': json.dumps({
+                'narrative_summary': claim,
+                'activity_description': claim,
+                'key_moments': [claim],
+                'emotional_arc': 'unqualified',
+                'context_tags': [],
+            })}}]}
+
+    harmonizer._apply_scene_context_llm(
+        [segment],
+        lookup,
+        {'llm': {'features': {'scene_context_analysis': True}}},
+        llm_client=Reversed(),
+    )
+    manifest = {'scenes': [lookup['s']]}
+    harmonizer._persist_harmonized_scene_fields(manifest, [segment])
+    result = manifest['scenes'][0]['scene_context_llm']
+    quote = f'Transcript: "{phrase}"'
+    assert result['narrative_summary'] == result['activity_description'] == quote
+    assert result['key_moments'] == [quote]
+    assert result['claim_provenance']['narrative_summary']['qualification'] == 'unverified_model_transcript'

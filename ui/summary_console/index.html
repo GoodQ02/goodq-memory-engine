@@ -24,6 +24,10 @@
         </div>
 
         <div class="header-controls">
+          <label class="collection-switcher-pill" id="collection-switcher-pill" hidden>
+            <span>SOURCE:</span>
+            <select id="collection-source-select" aria-label="Active movie collection"></select>
+          </label>
           <a class="nav-back-link" href="/ui/retro_console_v1/" title="Return to Retro Memory Explorer">&lt; RETRO EXPLORER</a>
         </div>
       </header>
@@ -219,6 +223,7 @@
       <div class="toast-container" id="toast-container"></div>
     </div>
 
+    <script src="/ui/retro_console_v1/static/js/library-context.js"></script>
     <script src="./static/js/summary.js?v=20261012-retained-cues"></script>
   </body>
 </html>

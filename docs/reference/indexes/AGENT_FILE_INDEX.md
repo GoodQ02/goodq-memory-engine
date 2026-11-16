@@ -15,7 +15,7 @@ Regenerate with:
 conda run --no-capture-output -n goodq_core python scripts/docs/doc_authority_lint.py render-index
 ```
 
-Indexed active tracked paths: **1370**
+Indexed active tracked paths: **1376**
 
 | File Path | Component | Purpose |
 |---|---|---|
@@ -954,6 +954,12 @@ Indexed active tracked paths: **1370**
 | `/tests/unit/test_audio_timing_stereo_followup.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_transcribe_terminal_chunk_receipts.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_audio_transcribe_windows_cpu_threads.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_audio_speech_repairs.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_identity_repairs.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_operator_ui_repairs.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_retrieval_ucf_repairs.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_scene_truth_repairs.py` | Verification | Test, fixture, or verification asset. |
+| `/tests/unit/test_audit_vision_ingestion_repairs.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_banned_token_lint.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_baseline_audio_profile_invariant.py` | Verification | Test, fixture, or verification asset. |
 | `/tests/unit/test_bootstrap_hardening.py` | Verification | Test, fixture, or verification asset. |

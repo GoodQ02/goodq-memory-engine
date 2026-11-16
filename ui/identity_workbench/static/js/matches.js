@@ -1009,6 +1009,7 @@
     draftReadFailed = false;
     notice = null;
     openScanIds.clear();
+    scanCache.clear();
     invalidatePreview();
     pauseClips();
     list.replaceChildren();

@@ -3,7 +3,10 @@ Scene API routes for GoodQ4All.
 Provides access to scene-level data and metadata.
 """
 from __future__ import annotations
+from contextlib import closing
 from pathlib import Path
+import re
+import sqlite3
 from typing import Any, Dict, List
 from urllib.parse import quote
 import logging
@@ -27,6 +30,108 @@ from retrieval.multimodal_search import MultimodalSearchEngine
 from steps.common.config_loader import load_configs
 
 logger = logging.getLogger(__name__)
+
+
+class ProjectedSceneResponse(SceneResponse):
+    """Scene response preserving visual/face stage metadata and stage error projections."""
+
+    ocr_meta: Dict[str, Any] | None = None
+    faces_meta: Dict[str, Any] | None = None
+    errors: Dict[str, Any] | List[Any] | None = None
+    optional_stage_errors: Dict[str, Any] | List[Any] | None = None
+
+
+ProjectedSceneResponse.model_rebuild(_types_namespace=globals())
+
+
+_HOST_PATH_RE = re.compile(
+    r"(?:file://[^\s\"'<>]+|(?<![A-Za-z])[A-Za-z]:[\\/][^\s\"'<>]+|\\\\[^\s\"'<>]+|/(?:mnt|home|Users|tmp|var|opt|etc)/[^\s\"'<>]+)"
+)
+_REDACTED_STAGE_KEY_SUFFIXES = ("_path", "_dir", "_file", "_root")
+_REDACTED_STAGE_KEYS = {"path", "dir", "file", "root"}
+
+
+def _sanitize_stage_payload(video_id: str, value: Any) -> Any:
+    """Sanitize projected stage metadata/errors without leaking local filesystem paths."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        base = sanitize_visual_meta(video_id, value) or {}
+        cleaned: Dict[str, Any] = {}
+        for k, v in base.items():
+            key_str = str(k)
+            key_low = key_str.lower()
+            if key_str not in {"frame_endpoint", "frame_name"} and (
+                key_low in _REDACTED_STAGE_KEYS or key_low.endswith(_REDACTED_STAGE_KEY_SUFFIXES)
+            ):
+                continue
+            cleaned[key_str] = _sanitize_stage_payload(video_id, v)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_stage_payload(video_id, item) for item in value]
+    if isinstance(value, str):
+        return _HOST_PATH_RE.sub("<redacted-path>", value)
+    return value
+
+
+def _resolve_visual_stage_meta(video_id: str, segment: dict, key: str) -> Dict[str, Any] | None:
+    raw = segment.get(key)
+    if raw is None and isinstance(segment.get("keyframe"), dict):
+        raw = segment["keyframe"].get(key)
+    if not isinstance(raw, dict):
+        return None
+    return _sanitize_stage_payload(video_id, raw)
+
+
+def _is_promoted_in_ucf_scope(
+    loader: Any,
+    video_id: str,
+    record: dict | None = None,
+    *,
+    raise_on_unavailable: bool = False,
+) -> bool:
+    """Require promoted UCF frame visibility when a UCF ledger governs this reader."""
+    ucf_scope = getattr(loader, "_ucf_scope", None)
+    if ucf_scope is None:
+        return True
+    _, ledger_path, epoch_id = ucf_scope
+    candidates: set[str] = {str(video_id)}
+    if isinstance(record, dict):
+        for key in ("video_hash", "video_id"):
+            val = record.get(key)
+            if val:
+                candidates.add(str(val))
+    if not (isinstance(record, dict) and record.get("video_hash")):
+        for loader_method in ("load_temporal_index", "load_scene_manifest"):
+            fn = getattr(loader, loader_method, None)
+            if not callable(fn):
+                continue
+            loaded = fn(str(video_id))
+            if isinstance(loaded, dict):
+                for key in ("video_hash", "video_id"):
+                    val = loaded.get(key)
+                    if val:
+                        candidates.add(str(val))
+                if loaded.get("video_hash"):
+                    break
+    ordered_candidates = sorted(candidates)
+    placeholders = ",".join("?" for _ in ordered_candidates)
+    try:
+        with closing(sqlite3.connect(f"{Path(ledger_path).as_uri()}?mode=ro", uri=True)) as conn:
+            rows = conn.execute(
+                f"SELECT DISTINCT promotion_status FROM context_frames "
+                f"WHERE epoch_id = ? AND video_hash IN ({placeholders})",
+                (epoch_id, *ordered_candidates),
+            ).fetchall()
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        logger.error("UCF promotion visibility unavailable for %s: %s", video_id, exc)
+        if raise_on_unavailable:
+            raise HTTPException(
+                status_code=503,
+                detail="UCF promotion visibility unavailable",
+            ) from exc
+        return False
+    return any(row[0] == "promoted" for row in rows)
 
 router = APIRouter(prefix="/api/videos/{video_id}/scenes", tags=["scenes"])
 
@@ -88,7 +193,7 @@ def _find_temporal_segment(temporal_index: dict, scene_id: object) -> dict | Non
 
 def _build_scene_response(video_id: str, segment: dict, *, original_audio_available: bool = False,
                           original_video_available: bool = False, original_source_path=None,
-                          source_kind: str = "video") -> SceneResponse:
+                          source_kind: str = "video") -> ProjectedSceneResponse:
     """Project one persisted timeline segment into the stable scene API contract."""
     start = segment.get("start", 0.0)
     end = segment.get("end", 0.0)
@@ -104,7 +209,7 @@ def _build_scene_response(video_id: str, segment: dict, *, original_audio_availa
         }
     frame_paths = frame_paths_projection(video_id, segment.get("frame_paths", []))
     sentiment_payload, sentiment_label = _scene_sentiment_payload(segment)
-    return SceneResponse(
+    return ProjectedSceneResponse(
         video_id=video_id,
         source_kind=source_kind,
         document_text=segment.get("document_text"),
@@ -136,10 +241,22 @@ def _build_scene_response(video_id: str, segment: dict, *, original_audio_availa
         objects=_segment_object_labels(segment),
         caption_meta=sanitize_visual_meta(video_id, segment.get("caption_meta")),
         caption_observations=sanitize_visual_observations(video_id, segment.get("caption_observations")),
+        ocr_meta=_resolve_visual_stage_meta(video_id, segment, "ocr_meta"),
         ocr_observations=sanitize_visual_observations(video_id, segment.get("ocr_observations")),
         detect_meta=sanitize_visual_meta(video_id, segment.get("detect_meta")),
         detected_objects=sanitize_detected_objects(video_id, segment.get("detected_objects")),
         object_observations=sanitize_visual_observations(video_id, segment.get("object_observations")),
+        faces_meta=_resolve_visual_stage_meta(video_id, segment, "faces_meta"),
+        errors=(
+            _sanitize_stage_payload(video_id, segment.get("errors"))
+            if isinstance(segment.get("errors"), (dict, list))
+            else None
+        ),
+        optional_stage_errors=(
+            _sanitize_stage_payload(video_id, segment.get("optional_stage_errors"))
+            if isinstance(segment.get("optional_stage_errors"), (dict, list))
+            else None
+        ),
         transcript=segment.get("full_transcript") or segment.get("transcript"),
         speakers=segment.get("speaker_ids", []),
         audio_chunks=segment.get("audio_chunks", []),
@@ -218,7 +335,7 @@ def get_search_engine():
     return _search_engine
 
 
-@router.get("", response_model=List[SceneResponse])
+@router.get("", response_model=List[ProjectedSceneResponse])
 async def list_scenes(
     video_id: str = PathParam(..., description="Video identifier")
 ):
@@ -260,7 +377,7 @@ async def list_scenes(
         raise HTTPException(status_code=500, detail=f"Failed to list scenes: {str(e)}")
 
 
-@router.get("/{scene_id}", response_model=SceneResponse)
+@router.get("/{scene_id}", response_model=ProjectedSceneResponse)
 async def get_scene(
     video_id: str = PathParam(..., description="Video identifier"),
     scene_id: str = PathParam(..., description="Scene identifier")
@@ -308,10 +425,35 @@ async def get_audio_evidence(video_id: str, scene_id: str, review_id: str):
     segment = _find_temporal_segment(loader.load_temporal_index(video_id) or {}, scene_id)
     if segment is None or not loader.is_search_result_active({**segment, 'video_id': video_id}):
         raise HTTPException(status_code=404, detail='Active scene evidence not found')
+    candidates: list[Path] = []
+    loader_proc = getattr(loader, "processing_dir", None)
+    if loader_proc is not None:
+        candidates.append(Path(loader_proc))
+    cfg = _config if isinstance(_config, dict) else None
+    if cfg is None and not candidates:
+        try:
+            cfg = load_configs({})
+        except Exception:
+            cfg = {}
+    paths_cfg = (cfg.get("paths") or {}) if isinstance(cfg, dict) else {}
+    if paths_cfg.get("processing"):
+        candidates.append(Path(paths_cfg["processing"]))
+    if paths_cfg.get("db_path"):
+        candidates.append(Path(paths_cfg["db_path"]).resolve().parent / "processing")
+    processing_root = next(
+        (cand for cand in candidates if cand.is_dir()),
+        candidates[0] if candidates else None,
+    )
+    if processing_root is None:
+        raise HTTPException(status_code=503, detail="Processing root is not configured")
     try:
-        root = Path(_config['paths']['db_path']).resolve().parent / 'processing'
-        path = await run_in_threadpool(review_media, segment.get('audio_evidence'), review_id, root)
-    except (ValueError, KeyError, TypeError, OSError):
+        path = await run_in_threadpool(
+            review_media,
+            segment.get('audio_evidence'),
+            review_id,
+            Path(processing_root).resolve(),
+        )
+    except (ValueError, OSError):
         raise HTTPException(status_code=409, detail='Retained audio evidence is unavailable or changed')
     return FileResponse(path, media_type='audio/wav', headers={'Cache-Control': 'no-store'})
 
@@ -346,7 +488,7 @@ async def get_scene_relationships(video_id: str, scene_id: str,
     return result
 
 
-@router.get("/{scene_id}/similar", response_model=List[SceneResponse])
+@router.get("/{scene_id}/similar", response_model=List[ProjectedSceneResponse])
 async def find_similar_scenes(
     video_id: str = PathParam(..., description="Video identifier"),
     scene_id: str = PathParam(..., description="Scene identifier"),
@@ -375,6 +517,17 @@ async def find_similar_scenes(
         
         if not source_segment:
             raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
+
+        if isinstance(loader, DataLoader):
+            if not loader.is_search_result_active({**source_segment, "video_id": video_id}):
+                raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
+            if not _is_promoted_in_ucf_scope(
+                loader,
+                video_id,
+                temporal_index,
+                raise_on_unavailable=True,
+            ):
+                raise HTTPException(status_code=404, detail=f"Promoted scene not found: {scene_id}")
 
         engine = get_search_engine()
         similar_results = engine.search_similar_scene(
@@ -416,10 +569,21 @@ async def find_similar_scenes(
                 else result_source_video or video_id
             )
             result_video_id = str(result_video_id)
-            if isinstance(loader, DataLoader) and not loader.is_search_result_active({
-                **scene_payload, "video_id": result_video_id,
-            }):
-                continue
+            if isinstance(loader, DataLoader):
+                if not loader.is_search_result_active({
+                    **scene_payload, "video_id": result_video_id,
+                }):
+                    continue
+                candidate_record = {
+                    **scene_payload,
+                    "video_hash": (
+                        scene_payload.get("video_hash")
+                        or (payload or {}).get("video_hash")
+                        or (temporal_index.get("video_hash") if hydrated_from_current_video else None)
+                    ),
+                }
+                if not _is_promoted_in_ucf_scope(loader, result_video_id, candidate_record):
+                    continue
             if result_video_id not in audio_paths_by_video:
                 audio_paths_by_video[result_video_id] = loader.get_scene_audio_paths(result_video_id)
                 kind = scene_payload.get("source_kind") or "video"

@@ -180,6 +180,55 @@ def _fallback_single_scene(duration: Optional[float], path: Optional[str] = None
     ]
 
 
+def _subdivide_overlong_scenes(
+    scenes: List[Dict[str, Any]],
+    max_scene_len_sec: float,
+) -> List[Dict[str, Any]]:
+    if not scenes or not max_scene_len_sec or max_scene_len_sec <= 0:
+        return scenes
+
+    needs_split = any(
+        (float(entry.get('end', 0.0) or 0.0) - float(entry.get('start', 0.0) or 0.0)) > (max_scene_len_sec + 1e-3)
+        for entry in scenes
+        if isinstance(entry, dict)
+    )
+    if not needs_split:
+        return scenes
+
+    subdivided: List[Dict[str, Any]] = []
+    for entry in scenes:
+        if not isinstance(entry, dict):
+            continue
+        start = float(entry.get('start', 0.0) or 0.0)
+        end = float(entry.get('end', start) or start)
+        if (end - start) <= (max_scene_len_sec + 1e-3):
+            copied = dict(entry)
+            copied['index'] = len(subdivided)
+            subdivided.append(copied)
+            continue
+
+        offset = start
+        while offset < end - 1e-6:
+            chunk_end = min(offset + max_scene_len_sec, end)
+            if (end - chunk_end) < 1e-3:
+                chunk_end = end
+            chunk = dict(entry)
+            chunk['index'] = len(subdivided)
+            chunk['start'] = round(offset, 3)
+            chunk['end'] = round(chunk_end, 3)
+            chunk['duration'] = round(chunk_end - offset, 3)
+            if 'strategy' not in chunk:
+                chunk['strategy'] = 'max_len_split'
+            subdivided.append(chunk)
+            offset = chunk_end
+
+    print(
+        f"[SCENE] Subdivided overlong detected scenes into {len(subdivided)} sub-scenes "
+        f"of <={max_scene_len_sec}s"
+    )
+    return subdivided
+
+
 def _detect_with_scenedetect(path: str, threshold: float, min_scene_len_sec: float) -> Dict[str, Any]:
     """
     Scene detection with GPU acceleration when available
@@ -296,6 +345,7 @@ def video_scene_detect(item: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, A
             status = 'fallback_single_scene'
             print(f"[SCENE] No scenes detected, using fallback single scene")
         else:
+            scenes = _subdivide_overlong_scenes(scenes, params['max_scene_len_sec'])
             status = 'ok'
             print(f"[SCENE] Detected {len(scenes)} scenes")
         error_msg = None

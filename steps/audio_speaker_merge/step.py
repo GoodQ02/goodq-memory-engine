@@ -37,12 +37,19 @@ def _attribution(start, end, diar):
 
 def _word_turns(segment, diar):
     turns = []
-    for word in segment["words"]:
-        if not isinstance(word, dict):
-            continue
+    valid_words = [w for w in segment["words"] if isinstance(w, dict)]
+    all_untimed = bool(valid_words) and not any(
+        _timed(w.get("start"), w.get("end")) for w in valid_words
+    )
+    for word in valid_words:
         start, end = word.get("start"), word.get("end")
         timed = _timed(start, end)
-        attribution = _attribution(start, end, diar)
+        attr_start, attr_end = (
+            (start, end)
+            if timed
+            else ((segment.get("start"), segment.get("end")) if all_untimed else (None, None))
+        )
+        attribution = _attribution(attr_start, attr_end, diar)
         speaker = attribution['speaker']
         row = {"start": start if timed else segment.get("start"),
                "end": end if timed else segment.get("end"), "text": word.get("text", ""),
